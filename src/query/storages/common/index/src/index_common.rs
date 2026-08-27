@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct IndexMeta {
@@ -114,56 +114,48 @@ macro_rules! impl_bincode_codec_for_file {
 impl_bincode_codec_for_meta!(IndexMeta, "index");
 impl_bincode_codec_for_file!(IndexFile, "index");
 
-impl TryFrom<FileMetaData> for IndexMeta {
+pub(crate) fn index_columns_from_parquet_meta(
+    meta: &ParquetMetaData,
+) -> Vec<(String, SingleColumnMeta)> {
+    let row_group = &meta.row_groups()[0];
+    let mut col_metas = Vec::with_capacity(row_group.columns().len());
+    for chunk_meta in row_group.columns() {
+        let (offset, len) = chunk_meta.byte_range();
+        let num_values = chunk_meta.num_values() as u64;
+        let column_name = chunk_meta.column_path().parts()[0].to_owned();
+        col_metas.push((column_name, SingleColumnMeta {
+            offset,
+            len,
+            num_values,
+        }));
+    }
+    col_metas.shrink_to_fit();
+    col_metas
+}
+
+pub(crate) fn user_metadata_from_parquet_meta(meta: &ParquetMetaData) -> BTreeMap<String, String> {
+    let mut metadata = BTreeMap::new();
+    if let Some(key_value_metadata) = meta.file_metadata().key_value_metadata() {
+        for key_value in key_value_metadata {
+            let Some(value) = &key_value.value else {
+                continue;
+            };
+            if key_value.key == "ARROW:schema" {
+                continue;
+            }
+            metadata.insert(key_value.key.clone(), value.clone());
+        }
+    }
+    metadata
+}
+
+impl TryFrom<ParquetMetaData> for IndexMeta {
     type Error = ErrorCode;
 
-    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
-        let rg = meta.row_groups.remove(0);
-        let mut col_metas = Vec::with_capacity(rg.columns.len());
-        for x in &rg.columns {
-            match &x.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = SingleColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    let column_name = chunk_meta.path_in_schema[0].to_owned();
-                    col_metas.push((column_name, res));
-                }
-                None => {
-                    panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to IndexMeta"
-                    )
-                }
-            }
-        }
-        col_metas.shrink_to_fit();
-        let mut metadata = BTreeMap::new();
-        if let Some(key_value_metadata) = meta.key_value_metadata {
-            for key_value in &key_value_metadata {
-                if key_value.key == "ARROW:schema" || key_value.value.is_none() {
-                    continue;
-                }
-                metadata.insert(key_value.key.clone(), key_value.value.clone().unwrap());
-            }
-        }
-
+    fn try_from(meta: ParquetMetaData) -> std::result::Result<Self, Self::Error> {
         Ok(IndexMeta {
-            columns: col_metas,
-            metadata,
+            columns: index_columns_from_parquet_meta(&meta),
+            metadata: user_metadata_from_parquet_meta(&meta),
         })
     }
 }

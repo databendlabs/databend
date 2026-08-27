@@ -3,7 +3,7 @@ description: A set-returning function over an aggregate should stay above the ag
 sql: SELECT unnest(max([11, 12]))
 status: ok
 EvalScalar
-├── scalars: [get(unnest(max([11, 12])) (#2)) AS (#3)]
+├── scalars: [get(1)(unnest(max([11, 12])) (#2)) AS (#3)]
 └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..28), func_name: "unnest", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(14..27), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "max([11, 12])", column_name_lower: None, index: 1, data_type: Nullable(Array(Number(UInt8))), visibility: InVisible, virtual_expr: None, is_srf: false } })] }), index: 2 }] })
     └── Aggregate(Initial)
         ├── group items: []
@@ -18,152 +18,9 @@ description: Repeated identical SRF expressions should reuse the registered Proj
 sql: SELECT unnest([1, 2, 3]), unnest([1, 2, 3])
 status: ok
 EvalScalar
-├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1), get(unnest([1, 2, 3]) (#0)) AS (#2)]
+├── scalars: [get(1)(unnest([1, 2, 3]) (#0)) AS (#1), get(1)(unnest([1, 2, 3]) (#0)) AS (#2)]
 └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
     └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
-
-
-=== group_by_srf_alias_from_sqllogictest_binds ===
-description: A sqllogictest GROUP BY pattern that groups by an SRF select alias should bind successfully.
-sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3
-status: ok
-Sort
-├── sort keys: [col3 (#4) ASC NULLS LAST]
-├── limit: [NONE]
-└── EvalScalar
-    ├── scalars: [t_str.col1 (#0) AS (#0), col3 (#3) AS (#4)]
-    └── Aggregate(Initial)
-        ├── group items: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
-        ├── aggregate functions: []
-        └── EvalScalar
-            ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
-            └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
-                └── Scan
-                    ├── table: default.t_str (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
-
-
-=== group_by_prefers_input_column_over_same_name_srf_alias ===
-description: GROUP BY should keep a same-name input column ahead of an SRF alias, while still allowing non-conflicting SRF aliases.
-sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2
-status: ok
-Sort
-├── sort keys: [col2 (#3) ASC NULLS LAST]
-├── limit: [NONE]
-└── EvalScalar
-    ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
-    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
-        └── Aggregate(Initial)
-            ├── group items: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
-            ├── aggregate functions: []
-            └── EvalScalar
-                ├── scalars: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
-                └── Scan
-                    ├── table: default.t_str (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
-
-
-=== group_by_prefers_select_alias_over_same_name_base_column ===
-description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.
-sql: SELECT a AS b, count(*) FROM t GROUP BY b
-status: ok
-EvalScalar
-├── scalars: [t.a (#0) AS (#0), COUNT(*) (#2) AS (#2)]
-└── Aggregate(Initial)
-    ├── group items: [t.a (#0) AS (#0)]
-    ├── aggregate functions: [count() AS (#2)]
-    └── EvalScalar
-        ├── scalars: [t.a (#0) AS (#0)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
-=== group_by_prefers_input_column_over_aggregate_alias ===
-description: GROUP BY should keep a same-name input column ahead of an aggregate alias, because the alias itself is not a valid grouping key.
-sql: SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x
-status: ok
-EvalScalar
-├── scalars: [COUNT(*) (#3) AS (#3)]
-└── Aggregate(Initial)
-    ├── group items: [x (#2) AS (#2)]
-    ├── aggregate functions: [count() AS (#3)]
-    └── EvalScalar
-        ├── scalars: [x (#2) AS (#2)]
-        └── UnionAll
-            ├── output: [x (#2)]
-            ├── left: [x (#0)]
-            ├── right: [x (#1)]
-            ├── cte_scan_names: []
-            ├── logical_recursive_cte_id: None
-            ├── EvalScalar
-            │   ├── scalars: [1 AS (#0)]
-            │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
-            └── EvalScalar
-                ├── scalars: [2 AS (#1)]
-                └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
-
-
-=== group_by_prefers_input_column_over_same_name_aggregate_alias_in_subquery ===
-description: GROUP BY inside a subquery should still resolve a same-name source column before an aggregate alias.
-sql: SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s
-status: ok
-EvalScalar
-├── scalars: [sum(number) (#1) AS (#1)]
-└── EvalScalar
-    ├── scalars: [sum(number) (#1) AS (#1)]
-    └── Aggregate(Initial)
-        ├── group items: [t.number (#0) AS (#0)]
-        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
-        └── EvalScalar
-            ├── scalars: [t.number (#0) AS (#0)]
-            └── Scan
-                ├── table: default.t (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
-
-
-=== group_by_complex_expr_does_not_shadow_column_with_same_name_alias ===
-description: A complex GROUP BY expression should resolve internal column refs from FROM, not from a same-name SELECT alias.
-sql: SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END
-status: ok
-EvalScalar
-├── scalars: [COUNT(*) (#2) AS (#2), CASE WHEN type = 0 THEN 'A' ELSE 'B' END (#1) AS (#3)]
-└── Aggregate(Initial)
-    ├── group items: [if(eq(t.type (#0), 0), 'A', 'B') AS (#1)]
-    ├── aggregate functions: [count() AS (#2)]
-    └── EvalScalar
-        ├── scalars: [if(eq(t.type (#0), 0), 'A', 'B') AS (#1)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
-=== group_by_complex_expr_falls_back_to_select_alias ===
-description: A complex GROUP BY expression should still resolve SELECT aliases when no input column matches.
-sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
-status: ok
-EvalScalar
-├── scalars: [t.i (#0) AS (#0), COUNT(*) (#2) AS (#2), abs(t.i (#0)) AS (#3)]
-└── Aggregate(Initial)
-    ├── group items: [t.i (#0) AS (#0)]
-    ├── aggregate functions: [count() AS (#2)]
-    └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#0)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
 
 
 === group_by_all_collects_non_aggregate_select_items ===
@@ -300,7 +157,7 @@ description: CUBE should expand into grouping sets and allow grouping(...) to bi
 sql: SELECT a, b, sum(c) AS sc, grouping(a, b) FROM g GROUP BY CUBE(a, b)
 status: ok
 EvalScalar
-├── scalars: [g.a (#0) AS (#0), g.b (#1) AS (#1), sum(c) (#6) AS (#6), grouping(_grouping_id (#5)) AS (#7)]
+├── scalars: [g.a (#0) AS (#0), g.b (#1) AS (#1), sum(c) (#6) AS (#6), grouping(0, 1)(_grouping_id (#5)) AS (#7)]
 └── Aggregate(Initial)
     ├── group items: [g.a (#0) AS (#0), g.b (#1) AS (#1), _grouping_id (#5) AS (#5)]
     ├── aggregate functions: [sum(g.c (#2)) AS (#6)]
@@ -323,7 +180,7 @@ EvalScalar
     ├── group items: []
     ├── aggregate functions: [max(max_arg_0 (#2)) AS (#3)]
     └── EvalScalar
-        ├── scalars: [get(unnest(split(t.col2 (#0), ',')) (#1)) AS (#2)]
+        ├── scalars: [get(1)(unnest(split(t.col2 (#0), ',')) (#1)) AS (#2)]
         └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(11..37), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(18..36), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 0, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(32..35), value: String(",") })] })] }), index: 1 }] })
             └── Scan
                 ├── table: default.t_str (#0)
@@ -337,7 +194,7 @@ description: A sqllogictest SRF-over-aggregate pattern with an extra scalar wrap
 sql: SELECT unnest(split(max(t.col2), ',')) FROM t_str AS t
 status: ok
 EvalScalar
-├── scalars: [get(unnest(split(max(t.col2), ',')) (#2)) AS (#3)]
+├── scalars: [get(1)(unnest(split(max(t.col2), ',')) (#2)) AS (#3)]
 └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..38), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(14..37), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(20..31), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "max(t.col2)", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: InVisible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(33..36), value: String(",") })] })] }), index: 2 }] })
     └── Aggregate(Initial)
         ├── group items: []
@@ -356,11 +213,11 @@ description: A sqllogictest grouping() pattern should still rewrite correctly wh
 sql: SELECT grouping(salary), grouping(depname), sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) FROM empsalary GROUP BY ROLLUP(depname, salary)
 status: ok
 EvalScalar
-├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), grouping(_grouping_id (#4)) AS (#9), grouping(_grouping_id (#4)) AS (#10)]
+├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), grouping(1)(_grouping_id (#4)) AS (#9), grouping(0)(_grouping_id (#4)) AS (#10)]
 └── Window
     ├── aggregate function: sum
-    ├── partition items: [plus(grouping(_grouping_id (#4)), grouping(_grouping_id (#4))) AS (#6)]
-    ├── order by items: [grouping(_grouping_id (#4)) AS (#7) DESC]
+    ├── partition items: [plus(grouping(1)(_grouping_id (#4)), grouping(0)(_grouping_id (#4))) AS (#6)]
+    ├── order by items: [grouping(0)(_grouping_id (#4)) AS (#7) DESC]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
     └── Sort
         ├── sort keys: [sum_part_0 (#6) ASC NULLS LAST, sum_order_0 (#7) DESC NULLS LAST]
@@ -368,7 +225,7 @@ EvalScalar
         ├── window top: NONE
         ├── window function: Aggregate(AggregateFunction { span: Some(44..154), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(48..64), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 5, data_type: Number(UInt32), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC)" })
         └── EvalScalar
-            ├── scalars: [grouping(_grouping_id (#4)) AS (#5), plus(grouping(_grouping_id (#4)), grouping(_grouping_id (#4))) AS (#6), grouping(_grouping_id (#4)) AS (#7)]
+            ├── scalars: [grouping(1)(_grouping_id (#4)) AS (#5), plus(grouping(1)(_grouping_id (#4)), grouping(0)(_grouping_id (#4))) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
             └── Aggregate(Initial)
                 ├── group items: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1), _grouping_id (#4) AS (#4)]
                 ├── aggregate functions: []
@@ -397,5 +254,127 @@ EvalScalar
             ├── filters: []
             ├── order by: []
             └── limit: NONE
+
+
+=== grouping_sets_select_alias_with_grouping_func_does_not_shadow_column ===
+description: A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d))
+status: ok
+EvalScalar
+├── scalars: [t.d (#1) AS (#1), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [t.d (#1) AS (#1), t.k (#0) AS (#0), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.d (#1) AS (#1), t.v (#2) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== grouping_alias_in_order_by_prefers_group_column ===
+description: ORDER BY alias prebinding must resolve grouping() arguments to input group columns.
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY k, d
+status: ok
+Sort
+├── sort keys: [k (#7) ASC NULLS LAST, t.d (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.d (#1) AS (#1), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [t.d (#1) AS (#1), t.k (#0) AS (#0), _grouping_id (#5) AS (#5)]
+        ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.d (#1) AS (#1), t.v (#2) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_alias_in_having_prefers_group_column ===
+description: HAVING alias prebinding must resolve grouping() arguments to input group columns.
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING k IS NOT NULL
+status: ok
+EvalScalar
+├── scalars: [t.d (#1) AS (#1), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)) AS (#7)]
+└── Filter
+    ├── filters: [is_not_null(if(eq(grouping(1)(_grouping_id (#5)), 1), 0, t.k (#0)))]
+    └── Aggregate(Initial)
+        ├── group items: [t.d (#1) AS (#1), t.k (#0) AS (#0), _grouping_id (#5) AS (#5)]
+        ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.d (#1) AS (#1), t.v (#2) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_in_order_by_falls_back_to_group_alias ===
+description: GROUPING arguments should still fall back to a valid group alias when no input column has that name.
+sql: SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k
+status: ok
+Sort
+├── sort keys: [g (#7) ASC NULLS LAST, k (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(v) (#5) AS (#5), k (#2) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [plus(t.i (#0), 1) AS (#2), _grouping_id (#4) AS (#4)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_in_order_by_keeps_alias_that_is_group_item ===
+description: GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.
+sql: SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i
+status: ok
+Sort
+├── sort keys: [grouping(i) (#7) ASC NULLS LAST, i (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(v) (#5) AS (#5), i + 1 (#2) AS (#6), grouping(0)(_grouping_id (#4)) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [plus(t.i (#0), 1) AS (#2), _grouping_id (#4) AS (#4)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_alias_case_when_with_lateral_alias ===
+description: CASE WHEN grouping() aliases over string group columns must bind in ORDER BY together with lateral aliases.
+sql: SELECT CASE WHEN grouping(k) = 1 THEN 'all' ELSE k END AS k, count(*) AS c, sum(v) AS s, s / nullif(c, 0) AS ratio FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY k
+status: ok
+Sort
+├── sort keys: [k (#6) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [COUNT(*) (#4) AS (#4), sum(v) (#5) AS (#5), if(eq(grouping(0)(_grouping_id (#3)), 1), 'all', t.k (#0)) AS (#6), divide(sum(v) (#5), if(eq(COUNT(*) (#4), 0), NULL, COUNT(*) (#4))) AS (#7)]
+    └── Aggregate(Initial)
+        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4), sum(t.v (#1)) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 

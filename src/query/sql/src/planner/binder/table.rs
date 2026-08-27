@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
@@ -81,7 +82,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::binder::split_conjunctions;
+use crate::binder::conjunctions;
 use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::TypeChecker;
@@ -205,8 +206,8 @@ impl Binder {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            group_by_column_first: bind_context.group_by_column_first,
             planning_agg_index: false,
+            planning_materialized_view_rewrite: false,
             window_definitions: DashMap::new(),
         };
 
@@ -382,7 +383,6 @@ impl Binder {
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
-        let columns = self.metadata.read().columns_by_table_index(table_index);
         let scan_id = self.metadata.write().next_scan_id();
         log::info!(
             "RUNTIME-FILTER: bind_base_table scan_id: {},table_entry: {:?}",
@@ -390,64 +390,69 @@ impl Binder {
             table
         );
         let mut base_column_scan_id = HashMap::new();
-        for column in columns.iter() {
-            match column {
-                ColumnEntry::BaseTableColumn(BaseTableColumn {
-                    column_name,
-                    column_index,
-                    path_indices,
-                    data_type,
-                    table_index,
-                    column_position,
-                    virtual_expr,
-                    ..
-                }) => {
-                    let column_binding = ColumnBindingBuilder::new(
-                        column_name.clone(),
-                        *column_index,
-                        Box::new(DataType::from(data_type)),
-                        if path_indices.is_some() || is_stream_column(column_name) {
-                            Visibility::InVisible
-                        } else {
-                            Visibility::Visible
-                        },
-                    )
-                    .table_name(Some(table_name.to_string()))
-                    .database_name(Some(database_name.to_string()))
-                    .table_index(Some(*table_index))
-                    .column_position(*column_position)
-                    .virtual_expr(virtual_expr.clone())
-                    .case_sensitive(case_sensitive)
-                    .build();
-                    bind_context.add_column_binding(column_binding);
-                    base_column_scan_id.insert(*column_index, scan_id);
-                }
-                ColumnEntry::VirtualColumn(VirtualColumn {
-                    table_index,
-                    column_index,
-                    column_name,
-                    data_type,
-                    ..
-                }) => {
-                    let column_binding = ColumnBindingBuilder::new(
-                        column_name.clone(),
-                        *column_index,
-                        Box::new(DataType::from(data_type)),
-                        Visibility::InVisible,
-                    )
-                    .table_name(Some(table_name.to_string()))
-                    .database_name(Some(database_name.to_string()))
-                    .table_index(Some(*table_index))
-                    .build();
-                    bind_context.add_column_binding(column_binding);
-                    base_column_scan_id.insert(*column_index, scan_id);
-                }
-                other => {
-                    return Err(ErrorCode::Internal(format!(
-                        "Invalid column entry '{:?}' encountered while binding the base table '{}'. Ensure that the table definition and column references are correct.",
-                        other.name(),
-                        table_name
-                    )));
+        let mut scan_columns = Vec::new();
+        {
+            let metadata = self.metadata.read();
+            for column in metadata.columns_by_table_index(table_index) {
+                scan_columns.push(column.index());
+                match column {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn {
+                        column_name,
+                        column_index,
+                        path_indices,
+                        data_type,
+                        table_index,
+                        column_position,
+                        virtual_expr,
+                        ..
+                    }) => {
+                        let column_binding = ColumnBindingBuilder::new(
+                            column_name.clone(),
+                            *column_index,
+                            Box::new(DataType::from(data_type)),
+                            if path_indices.is_some() || is_stream_column(column_name) {
+                                Visibility::InVisible
+                            } else {
+                                Visibility::Visible
+                            },
+                        )
+                        .table_name(Some(table_name.to_string()))
+                        .database_name(Some(database_name.to_string()))
+                        .table_index(Some(*table_index))
+                        .column_position(*column_position)
+                        .virtual_expr(virtual_expr.clone())
+                        .case_sensitive(case_sensitive)
+                        .build();
+                        bind_context.add_column_binding(column_binding);
+                        base_column_scan_id.insert(*column_index, scan_id);
+                    }
+                    ColumnEntry::VirtualColumn(VirtualColumn {
+                        table_index,
+                        column_index,
+                        column_name,
+                        data_type,
+                        ..
+                    }) => {
+                        let column_binding = ColumnBindingBuilder::new(
+                            column_name.clone(),
+                            *column_index,
+                            Box::new(DataType::from(data_type)),
+                            Visibility::InVisible,
+                        )
+                        .table_name(Some(table_name.to_string()))
+                        .database_name(Some(database_name.to_string()))
+                        .table_index(Some(*table_index))
+                        .build();
+                        bind_context.add_column_binding(column_binding);
+                        base_column_scan_id.insert(*column_index, scan_id);
+                    }
+                    other => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Invalid column entry '{:?}' encountered while binding the base table '{}'. Ensure that the table definition and column references are correct.",
+                            other.name(),
+                            table_name
+                        )));
+                    }
                 }
             }
         }
@@ -458,7 +463,7 @@ impl Binder {
         let scan_s_expr = SExpr::create_leaf(Arc::new(
             Scan {
                 table_index,
-                columns: columns.into_iter().map(|col| col.index()).collect(),
+                columns: scan_columns.into_iter().collect(),
                 change_type,
                 sample: sample.clone(),
                 scan_id,
@@ -562,7 +567,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&res.expr, |nest_expr| {
+        let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match
@@ -598,7 +603,7 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
 
-        let secure_predicates = split_conjunctions(&scalar);
+        let secure_predicates = conjunctions(&scalar).cloned().collect();
 
         // Write secure predicates directly into the Scan node.
         let new_expr =
@@ -676,9 +681,12 @@ impl Binder {
         temporal: &Option<TemporalClause>,
     ) -> Result<Option<TimeNavigation>> {
         match temporal {
-            Some(TemporalClause::TimeTravel(point)) => {
+            Some(TemporalClause::TimeTravel { point, no_check }) => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
-                Ok(Some(TimeNavigation::TimeTravel(point)))
+                Ok(Some(TimeNavigation::TimeTravel {
+                    point,
+                    no_check: *no_check,
+                }))
             }
             Some(TemporalClause::Changes(interval)) => {
                 let end = match &interval.end_point {
@@ -713,11 +721,11 @@ impl Binder {
         let box (scalar, _) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;
         let (new_expr, _) = ConstantFolder::fold(
-            &scalar_expr,
+            Cow::Owned(scalar_expr),
             &self.ctx.get_function_context()?,
             &BUILTIN_FUNCTIONS,
         );
-        Ok(new_expr)
+        Ok(new_expr.into_owned())
     }
 
     pub(crate) fn resolve_data_travel_point(
@@ -786,7 +794,7 @@ impl Binder {
                 let v: i64 = check_number(
                     None,
                     &FunctionContext::default(),
-                    &new_expr,
+                    new_expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
                 if v > 0 {

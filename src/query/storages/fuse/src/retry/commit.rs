@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
@@ -31,6 +32,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
 use tokio::time::sleep;
 
@@ -40,10 +42,9 @@ use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 
-const FUSE_ENGINE: &str = "FUSE";
-
 pub async fn commit_with_backoff(
     ctx: Arc<dyn TableContext>,
+    tenant: &Tenant,
     mut req: UpdateMultiTableMetaReq,
 ) -> Result<()> {
     let catalog = ctx.get_default_catalog()?;
@@ -59,7 +60,7 @@ pub async fn commit_with_backoff(
 
     loop {
         let ret = catalog
-            .retryable_update_multi_table_meta(req.clone())
+            .retryable_update_multi_table_meta(tenant, req.clone())
             .await?;
         let Err(update_failed_tbls) = ret else {
             return Ok(());
@@ -100,7 +101,7 @@ async fn compute_table_segments_diffs(
         let tid = update_table_meta_req.table_id;
         let engine = update_table_meta_req.new_table_meta.engine.as_str();
 
-        if engine != FUSE_ENGINE {
+        if !is_fuse_backed_engine(engine) {
             log::info!(
                 "Skipping segments diff pre-compute for table {} with engine {}",
                 tid,
@@ -162,9 +163,8 @@ async fn try_rebuild_req(
         update_failed_tbls
     );
     let insert_rows = {
-        let stats = ctx.mutation_state().multi_table_insert_status();
-        let status = stats.lock().unwrap();
-        status.insert_rows.clone()
+        let txn_mgr = ctx.txn_mgr();
+        txn_mgr.lock().multi_table_insert_rows()
     };
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
@@ -187,7 +187,7 @@ async fn try_rebuild_req(
             storage_class,
             table_info.desc.as_str(),
         )?;
-        let default_cluster_key_id = latest_table.cluster_key_id();
+        let cluster_key_info = latest_table.cluster_key_info();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
         let (update_table_meta_req, _) = req
             .update_table_metas
@@ -222,11 +222,23 @@ async fn try_rebuild_req(
                 ErrorCode::Internal(format!("Missing original snapshot for table {}", tid))
             })?
             .clone();
+        // `new_snapshot` is generated directly from `base_snapshot`. A legacy
+        // base has no counters, while its counter-aware child starts from zero.
+        let (new_updated_rows, new_deleted_rows) = new_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.logical_change_counters())
+            .ok_or_else(|| ErrorCode::Internal("new snapshot lacks logical change counters"))?;
+        let (base_updated_rows, base_deleted_rows) = base_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.logical_change_counters())
+            .unwrap_or_default();
+        let logical_updated_rows = new_updated_rows - base_updated_rows;
+        let logical_deleted_rows = new_deleted_rows - base_deleted_rows;
 
         let s = merge_statistics(
             new_snapshot.summary(),
             &latest_snapshot.summary(),
-            default_cluster_key_id,
+            cluster_key_info.as_ref(),
         );
         let mut merged_summary = deduct_statistics(&s, &base_snapshot.summary());
         let mut additional_stats_meta = latest_snapshot.additional_stats_meta();
@@ -310,17 +322,17 @@ async fn try_rebuild_req(
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(latest_table.as_ref(), latest_snapshot.clone())?;
-        let merged_snapshot = TableSnapshot::try_new(
+        let mut merged_snapshot = TableSnapshot::try_new(
             Some(seq),
             latest_snapshot.clone(),
             latest_table.schema().as_ref().clone(),
             merged_summary,
             merged_segments,
-            latest_table.cluster_key_meta(),
-            latest_table.cluster_type(),
-            latest_snapshot.table_statistics_location(),
+            latest_table.cluster_key_info(),
+            None,
             table_meta_timestamps,
         )?;
+        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows);
         merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot

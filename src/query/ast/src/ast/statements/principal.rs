@@ -100,6 +100,7 @@ pub enum CatalogType {
     Default,
     Hive,
     Iceberg,
+    Paimon,
 }
 
 impl Display for CatalogType {
@@ -108,6 +109,7 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
             CatalogType::Iceberg => write!(f, "ICEBERG"),
+            CatalogType::Paimon => write!(f, "PAIMON"),
         }
     }
 }
@@ -216,7 +218,7 @@ impl Display for UserPrivilegeType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ShareGrantObjectPrivilege {
     // For DATABASE or SCHEMA
     Usage,

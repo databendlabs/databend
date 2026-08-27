@@ -264,6 +264,31 @@ DROP AGGREGATING INDEX testi
 statement ok
 DROP TABLE t
 
+# scalar function params should participate in the agg index expression key
+statement ok
+CREATE TABLE t (d DECIMAL(10, 3), v INT)
+
+statement ok
+INSERT INTO t VALUES (1.241, 10), (1.249, 20)
+
+statement ok
+CREATE ASYNC AGGREGATING INDEX testi AS SELECT round(d, 1) AS r, sum(v) FROM t GROUP BY r
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query RI rowsort
+SELECT round(d, 2), sum(v) FROM t GROUP BY round(d, 2)
+----
+1.24 10
+1.25 20
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
 statement ok
 CREATE TABLE t(id int, user_id int, event_name varchar)
 

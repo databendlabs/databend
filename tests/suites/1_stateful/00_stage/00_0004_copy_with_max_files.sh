@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_bendsql() {
-  $BENDSQL_CLIENT_CONNECT <<SQL
+  bendsql_connect_root <<SQL
 $1
 SQL
 }
@@ -61,11 +61,11 @@ do
 			do
 				table="test_max_files_force_${force}_purge_${purge}_transform_${transform}"
 				if [ "$transform" = true ]; then
-					copied=$(echo "copy into ${table} from 'fs:///tmp/00_0004/' FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | $BENDSQL_CLIENT_CONNECT | wc -l |  sed 's/ //g')
+					copied=$(echo "copy into ${table} from 'fs:///tmp/00_0004/' FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | bendsql_connect_root | wc -l |  sed 's/ //g')
         else
-					copied=$(echo "copy into ${table} from (select \$1, \$2 from 'fs:///tmp/00_0004/') FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | $BENDSQL_CLIENT_CONNECT | wc -l |  sed 's/ //g')
+					copied=$(echo "copy into ${table} from (select \$1, \$2 from 'fs:///tmp/00_0004/') FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | bendsql_connect_root | wc -l |  sed 's/ //g')
         fi
-				copied_rows=$(echo "select count(*) from ${table}" | $BENDSQL_CLIENT_CONNECT)
+				copied_rows=$(echo "select count(*) from ${table}" | bendsql_connect_root)
 				remain=$(ls -1 /tmp/00_0004/ | wc -l |  sed 's/ //g')
 				echo "copied ${copied} files with ${copied_rows} rows, remain ${remain} files"
 			done

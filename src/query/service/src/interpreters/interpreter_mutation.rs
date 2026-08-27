@@ -63,6 +63,7 @@ pub struct MutationInterpreter {
     s_expr: SExpr,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    materialized_view_refresh_target: Option<u64>,
 }
 
 impl MutationInterpreter {
@@ -77,6 +78,23 @@ impl MutationInterpreter {
             s_expr,
             schema,
             metadata,
+            materialized_view_refresh_target: None,
+        })
+    }
+
+    pub fn try_create_materialized_view_refresh(
+        ctx: Arc<QueryContext>,
+        s_expr: SExpr,
+        schema: DataSchemaRef,
+        metadata: MetadataRef,
+        target_table_id: u64,
+    ) -> Result<MutationInterpreter> {
+        Ok(MutationInterpreter {
+            ctx,
+            s_expr,
+            schema,
+            metadata,
+            materialized_view_refresh_target: Some(target_table_id),
         })
     }
 }
@@ -94,6 +112,7 @@ impl Interpreter for MutationInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 
@@ -173,7 +192,13 @@ impl MutationInterpreter {
         dry_run: bool,
     ) -> Result<PhysicalPlan> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let mutation_build_info = build_mutation_info(self.ctx.clone(), mutation, dry_run).await?;
+        let mutation_build_info = build_mutation_info(
+            self.ctx.clone(),
+            mutation,
+            dry_run,
+            self.materialized_view_refresh_target,
+        )
+        .await?;
         // Build physical plan.
         let mut builder =
             PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), dry_run);
@@ -205,6 +230,7 @@ pub async fn build_mutation_info(
     ctx: Arc<QueryContext>,
     mutation: &Mutation,
     dry_run: bool,
+    materialized_view_refresh_target: Option<u64>,
 ) -> Result<MutationBuildInfo> {
     let table = ctx
         .get_table(
@@ -214,7 +240,9 @@ pub async fn build_mutation_info(
         )
         .await?;
     // Check if the table supports mutation.
-    table.check_mutable()?;
+    if materialized_view_refresh_target != Some(table.get_id()) {
+        table.check_mutable()?;
+    }
     let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
         ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support {}",

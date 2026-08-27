@@ -36,7 +36,9 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
@@ -222,6 +224,9 @@ pub struct AnalyzeTablePlan {
     pub database: String,
     pub table: String,
     pub no_scan: bool,
+    pub histogram_requested: bool,
+    pub histogram_algorithm: Option<String>,
+    pub histogram_kll_relative_error: Option<f64>,
 }
 
 impl AnalyzeTablePlan {
@@ -273,6 +278,7 @@ pub struct ModifyTableCommentPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl ModifyTableCommentPlan {
@@ -303,6 +309,7 @@ pub struct SetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl SetOptionsPlan {
@@ -317,6 +324,7 @@ pub struct UnsetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl UnsetOptionsPlan {
@@ -531,12 +539,30 @@ pub struct AlterTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
     pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
-    pub cluster_type: String,
+    pub cluster_type: ClusterType,
 }
 
 impl AlterTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AlterTablePartitionByPlan {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub table_id: Option<u64>,
+    pub partition_keys: Vec<String>,
+}
+
+impl AlterTablePartitionByPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
@@ -548,6 +574,7 @@ pub struct DropTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
     pub branch: Option<String>,
 }
 

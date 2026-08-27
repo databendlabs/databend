@@ -8,7 +8,9 @@ edition.workspace = true
 
 [dependencies]
 databend-common-exception = { workspace = true }
+log = { workspace = true }
 opendal = { workspace = true }
+parking_lot = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 

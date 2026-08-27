@@ -203,6 +203,10 @@ impl TableContextPartitionStats for QueryContext {
         self.shared.set_pruned_partitions_stats(plan_id, stats);
     }
 
+    fn clear_pruned_partitions_stats(&self) {
+        self.shared.clear_pruned_partitions_stats();
+    }
+
     fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
         self.shared.merge_pruned_partitions_stats(other);
     }
@@ -213,10 +217,14 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.clear();
     }
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        self.shared
-            .runtime_filter_state
-            .assert_empty(&self.get_id())
+    fn register_runtime_scan_filter(&self, scan_id: usize, filter: Arc<dyn RuntimeScanFilter>) {
+        let state = &self.shared.runtime_filter_state;
+        state.register_runtime_scan_filter(scan_id, filter);
+    }
+
+    fn get_runtime_scan_filters(&self, scan_id: usize) -> RuntimeScanFilters {
+        let state = &self.shared.runtime_filter_state;
+        state.get_runtime_scan_filters(scan_id)
     }
 
     fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
@@ -239,7 +247,10 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.get_runtime_filters(id)
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        id: IndexType,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         self.shared
             .runtime_filter_state
             .get_bloom_runtime_filter_with_id(id)

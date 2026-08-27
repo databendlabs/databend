@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -26,6 +27,7 @@ use log::warn;
 use parking_lot::RwLock;
 use tokio::task::JoinHandle;
 
+use crate::BUILTIN_ROLE_PUBLIC;
 use crate::UserApiProvider;
 use crate::role_util::find_all_related_roles;
 
@@ -131,45 +133,58 @@ impl RoleCacheManager {
         tenant: &Tenant,
         roles: &[String],
     ) -> Result<Vec<RoleInfo>> {
-        self.maybe_reload(tenant).await?;
-        let cached = self.cache.read();
-        let cached_roles = match cached.get(tenant) {
-            None => return Ok(vec![]),
-            Some(cached_roles) => cached_roles,
-        };
-        Ok(find_all_related_roles(&cached_roles.roles, roles))
+        if self.need_reload(tenant) {
+            return self.load_cache_and_find_related_roles(tenant, roles).await;
+        }
+
+        {
+            let cached = self.cache.read();
+            if let Some(cached_roles) = cached.get(tenant) {
+                return Ok(find_all_related_roles(&cached_roles.roles, roles));
+            }
+        }
+
+        // The tenant cache may be invalidated after need_reload() returns false.
+        self.load_cache_and_find_related_roles(tenant, roles).await
     }
 
     #[async_backtrace::framed]
     pub async fn force_reload(&self, tenant: &Tenant) -> Result<()> {
         let data = load_roles_data(&self.user_manager, tenant).await?;
-        let mut cached = self.cache.write();
-        cached.insert(tenant.clone(), data);
+        self.cache_roles_data(tenant, data);
         Ok(())
     }
 
-    // Load roles data if not found in cache. Watch this tenant's role data in background if
-    // once it loads successfully.
     #[async_backtrace::framed]
-    async fn maybe_reload(&self, tenant: &Tenant) -> Result<()> {
-        let need_reload = {
-            let cached = self.cache.read();
-            match cached.get(tenant) {
-                None => true,
-                Some(cached_roles) => {
-                    // force reload the data when:
-                    // - if the cache is too old (the background polling task
-                    //   may got some network errors, leaves the cache outdated)
-                    // - if the cache is empty
-                    cached_roles.cached_at.elapsed() >= self.polling_interval * 2
-                        || cached_roles.roles.is_empty()
-                }
+    async fn load_cache_and_find_related_roles(
+        &self,
+        tenant: &Tenant,
+        roles: &[String],
+    ) -> Result<Vec<RoleInfo>> {
+        let data = load_roles_data(&self.user_manager, tenant).await?;
+        let related_roles = find_all_related_roles(&data.roles, roles);
+        self.cache_roles_data(tenant, data);
+        Ok(related_roles)
+    }
+
+    fn cache_roles_data(&self, tenant: &Tenant, data: CachedRoles) {
+        let mut cached = self.cache.write();
+        cached.insert(tenant.clone(), data);
+    }
+
+    fn need_reload(&self, tenant: &Tenant) -> bool {
+        let cached = self.cache.read();
+        match cached.get(tenant) {
+            None => true,
+            Some(cached_roles) => {
+                // force reload the data when:
+                // - if the cache is too old (the background polling task
+                //   may got some network errors, leaves the cache outdated)
+                // - if the cache is empty
+                cached_roles.cached_at.elapsed() >= self.polling_interval * 2
+                    || cached_roles.roles.is_empty()
             }
-        };
-        if need_reload {
-            self.force_reload(tenant).await?;
         }
-        Ok(())
     }
 }
 
@@ -179,6 +194,14 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &Tenant) -> Re
         .into_iter()
         .map(|r| (r.identity().to_string(), r))
         .collect::<HashMap<_, _>>();
+    let configured_tenant = &GlobalConfig::instance().query.tenant_id;
+    if tenant == configured_tenant && !roles_map.contains_key(BUILTIN_ROLE_PUBLIC) {
+        warn!(
+            "role_cache_mgr loaded roles data without public role for configured tenant {}, roles_count={}",
+            tenant.display(),
+            roles_map.len()
+        );
+    }
     Ok(CachedRoles {
         roles: roles_map,
         cached_at: Instant::now(),

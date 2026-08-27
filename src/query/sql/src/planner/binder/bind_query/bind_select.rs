@@ -28,6 +28,7 @@ use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Join;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Pivot;
@@ -46,11 +47,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use log::warn;
+use unicase::Ascii;
 
 use crate::AsyncFunctionRewriter;
+use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
@@ -112,6 +115,24 @@ struct SelectGlobalView {
     order_by: Vec<SelectClauseFact>,
 }
 
+impl SelectGlobalView {
+    fn where_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.semantic_alias.all_aliases()
+    }
+
+    fn having_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.rewritten_alias.all_aliases()
+    }
+
+    fn qualify_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.semantic_alias.all_aliases()
+    }
+
+    fn order_by_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.semantic_alias.all_aliases()
+    }
+}
+
 struct SelectPreparation<'a> {
     s_expr: SExpr,
     from_context: BindContext,
@@ -138,7 +159,7 @@ impl Binder {
             return self.bind_dummy_table(bind_context, &stmt.select_list);
         }
 
-        let mut max_column_position = MaxColumnPosition::default();
+        let mut max_column_position = MaxColumnPosition::new(self.name_resolution_ctx.clone());
         stmt.walk(&mut max_column_position)?;
         self.metadata.write().set_stage_column_references(
             max_column_position.max_pos,
@@ -184,8 +205,8 @@ impl Binder {
         // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
         // pre-window expressions behind aliases, but SRF aliases must already point
         // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
-        let mut semantic_alias_catalog = select_list.alias_catalog();
-        let group_by_aliases = semantic_alias_catalog.bindings_for(ExprContext::GroupClaue);
+        let mut semantic_alias = select_list.alias_catalog();
+        let group_by_aliases = semantic_alias.group_by_bindings();
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -200,7 +221,7 @@ impl Binder {
             stmt.qualify.as_ref(),
             order_by,
         )?;
-        semantic_alias_catalog.analyze_aggregate_prepass_exprs(
+        semantic_alias.analyze_aggregate_prepass_exprs(
             &select_list,
             &self.name_resolution_ctx,
             &udaf_names,
@@ -212,7 +233,7 @@ impl Binder {
             aggregate_prepass_inputs,
         } = self.build_select_clause_facts(
             &udaf_names,
-            &semantic_alias_catalog,
+            &semantic_alias,
             stmt.having.as_ref(),
             stmt.qualify.as_ref(),
             order_by,
@@ -220,12 +241,12 @@ impl Binder {
 
         let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
             &udaf_names,
-            &semantic_alias_catalog,
+            &semantic_alias,
             aggregate_prepass_inputs.into_iter(),
         );
         self.bind_aggregate_prepass_facts(
             &mut from_context,
-            semantic_alias_catalog.all_aliases(),
+            semantic_alias.all_aliases(),
             &aggregate_prepass_facts,
         )?;
 
@@ -242,7 +263,7 @@ impl Binder {
         );
 
         let global_view = SelectGlobalView {
-            semantic_alias: semantic_alias_catalog,
+            semantic_alias,
             rewritten_alias: select_list.alias_catalog(),
             qualify,
             order_by,
@@ -284,12 +305,8 @@ impl Binder {
         // Bind WHERE after select-list analysis so aliases are available, but
         // resolve them against the original pre-rewrite select-item semantics.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self.bind_where(
-                &mut from_context,
-                global_view.semantic_alias.all_aliases(),
-                expr,
-                s_expr,
-            )?;
+            let (new_expr, scalar) =
+                self.bind_where(&mut from_context, global_view.where_aliases(), expr, s_expr)?;
             s_expr = new_expr;
             Some(scalar)
         } else {
@@ -302,7 +319,7 @@ impl Binder {
         let having = if let Some(having) = &stmt.having {
             Some(self.analyze_aggregate_having(
                 &mut from_context,
-                global_view.rewritten_alias.all_aliases(),
+                global_view.having_aliases(),
                 having,
             )?)
         } else {
@@ -312,7 +329,7 @@ impl Binder {
         let qualify = if let Some(qualify) = global_view.qualify.as_ref() {
             Some(self.analyze_window_qualify(
                 &mut from_context,
-                global_view.semantic_alias.all_aliases(),
+                global_view.qualify_aliases(),
                 &qualify.expr_info.ast,
                 qualify.contains_or_references_window(),
             )?)
@@ -327,7 +344,7 @@ impl Binder {
             // snapshot used by the clause prepass. This avoids binding against
             // already-rewritten select-item scalars when a later clause only
             // needs the original alias semantics.
-            global_view.semantic_alias.all_aliases(),
+            global_view.order_by_aliases(),
             Some(&global_view.order_by),
             order_by,
             stmt.distinct,
@@ -413,14 +430,7 @@ impl Binder {
         }
 
         // whether allow rewrite virtual column and pushdown
-        bind_context.allow_virtual_column = self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_virtual_column()
-            .unwrap_or_default()
-            && LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
-                .is_ok();
+        bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
         let mut rewriter =
             SelectRewriter::new(self.name_resolution_ctx.unquoted_ident_case_sensitive)
@@ -450,8 +460,9 @@ impl Binder {
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
-        for window_info in &from_context.windows.window_functions {
-            s_expr = self.bind_window_function(window_info, s_expr)?;
+        if !from_context.windows.window_functions.is_empty() {
+            let window_functions = from_context.windows.window_functions.clone();
+            s_expr = self.bind_window_functions(&window_functions, s_expr)?;
         }
 
         // Bind lazy Set-returning functions after aggregate plan.
@@ -482,16 +493,15 @@ impl Binder {
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
-        // add internal column binding into expr
-        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
-
-        s_expr = self.add_virtual_column_into_expr(&mut from_context, s_expr)?;
+        // add internal and virtual column bindings into expr
+        s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context
             .cte_context
             .set_cte_context(from_context.cte_context.clone());
+        output_context.allow_virtual_column = from_context.allow_virtual_column;
         output_context.columns = from_context.columns;
 
         Ok((s_expr, output_context))
@@ -511,9 +521,19 @@ impl SelectRewriter {
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
-                func: FunctionCall { name, args, .. },
+                func: FunctionCall {
+                    name, args, filter, ..
+                },
                 ..
-            } => Ok((name, args)),
+            } => {
+                if filter.is_some() {
+                    return Err(ErrorCode::Unimplemented(
+                        "PIVOT aggregate FILTER is not supported yet",
+                    )
+                    .set_span(expr.span()));
+                }
+                Ok((name, args))
+            }
             _ => {
                 Err(ErrorCode::SyntaxException("Aggregate function is required")
                     .set_span(expr.span()))
@@ -551,6 +571,7 @@ impl SelectRewriter {
                     args,
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },
@@ -717,7 +738,7 @@ impl SelectRewriter {
                     // Build a query to get all distinct values from the pivot column
                     let mut query_sql = format!(
                         "SELECT DISTINCT {} FROM ({}) AS pivot_source",
-                        pivot.value_column.name,
+                        pivot.value_column,
                         self.build_pivot_source_query(stmt)?
                     );
 
@@ -836,36 +857,29 @@ impl SelectRewriter {
                 .set_span(span));
             }
             let columns = block.columns();
-            // TODO: support more scalar into expr types
             for row in 0..block.num_rows() {
                 let s = columns[0].index(row).unwrap();
                 let data_type = columns[0].data_type();
+                let value = scalar_ref_to_string(&s);
                 match s {
-                    ScalarRef::String(s) => {
-                        let literal = Expr::Literal {
-                            span,
-                            value: Literal::String(s.to_string()),
-                        };
-                        values.push((literal, s.to_string()));
-                    }
                     ScalarRef::Null => {
                         let literal = Expr::Literal {
                             span,
                             value: Literal::Null,
                         };
-                        values.push((literal, "NULL".to_string()));
+                        values.push((literal, value));
                     }
-                    other => {
+                    _ => {
                         let e = Expr::Cast {
                             span,
                             expr: Box::new(Expr::Literal {
                                 span,
-                                value: Literal::String(other.to_string()),
+                                value: Literal::String(value.clone()),
                             }),
                             target_type: data_type.to_type_name()?,
                             pg_style: false,
                         };
-                        values.push((e, other.to_string()));
+                        values.push((e, value));
                     }
                 }
             }
@@ -930,57 +944,9 @@ impl SelectRewriter {
                 if i > 0 {
                     source_query.push_str(", ");
                 }
-                // Remove pivot from the from clause
-                match from_item {
-                    TableReference::Table {
-                        span: _,
-                        table,
-                        alias,
-                        temporal,
-                        with_options,
-                        pivot: _,
-                        unpivot,
-                        sample,
-                    } => {
-                        if let Some(catalog) = &table.catalog {
-                            source_query.push_str(&catalog.name);
-                            source_query.push('.');
-                        }
-                        if let Some(database) = &table.database {
-                            source_query.push_str(&database.name);
-                            source_query.push('.');
-                        }
-                        source_query.push_str(&table.table.name);
-                        if let Some(branch) = &table.branch {
-                            source_query.push('/');
-                            source_query.push_str(&branch.name);
-                        }
-
-                        if let Some(temporal) = temporal {
-                            source_query.push(' ');
-                            source_query.push_str(&temporal.to_string());
-                        }
-                        if let Some(with_options) = with_options {
-                            source_query.push(' ');
-                            source_query.push_str(&with_options.to_string());
-                        }
-                        if let Some(alias) = alias {
-                            source_query.push_str(" AS ");
-                            source_query.push_str(&alias.to_string());
-                        }
-                        if let Some(unpivot) = unpivot {
-                            source_query.push(' ');
-                            source_query.push_str(&unpivot.to_string());
-                        }
-                        if let Some(sample) = sample {
-                            source_query.push(' ');
-                            source_query.push_str(&sample.to_string());
-                        }
-                    }
-                    _ => {
-                        source_query.push_str(&from_item.to_string());
-                    }
-                }
+                let mut from_item = from_item.clone();
+                Self::strip_pivot(&mut from_item);
+                source_query.push_str(&from_item.to_string());
             }
         } else {
             return Err(ErrorCode::SemanticError(
@@ -1054,6 +1020,17 @@ impl SelectRewriter {
 pub struct MaxColumnPosition {
     pub max_pos: usize,
     pub has_name_ref: bool,
+    name_resolution_ctx: NameResolutionContext,
+    lambda_params: Vec<HashSet<String>>,
+}
+
+impl MaxColumnPosition {
+    pub fn new(name_resolution_ctx: NameResolutionContext) -> Self {
+        Self {
+            name_resolution_ctx,
+            ..Default::default()
+        }
+    }
 }
 
 impl Visitor for MaxColumnPosition {
@@ -1063,6 +1040,17 @@ impl Visitor for MaxColumnPosition {
                 ColumnID::Position(pos) if pos.pos > self.max_pos => {
                     self.max_pos = pos.pos;
                 }
+                ColumnID::Name(name)
+                    if column.database.is_none()
+                        && column.table.is_none()
+                        && self.lambda_params.iter().rev().any(|params| {
+                            params
+                                .contains(&self.name_resolution_ctx.normalize_identifier(name).name)
+                        }) =>
+                {
+                    // Lambda parameters are resolved locally and do not refer
+                    // to columns in the stage schema.
+                }
                 ColumnID::Name(_) => {
                     self.has_name_ref = true;
                 }
@@ -1070,5 +1058,77 @@ impl Visitor for MaxColumnPosition {
             }
         }
         Ok(VisitControl::Continue)
+    }
+
+    fn visit_function_call(&mut self, func: &FunctionCall) -> std::result::Result<VisitControl, !> {
+        let Some(lambda_arg) = &func.lambda else {
+            return Ok(VisitControl::Continue);
+        };
+
+        let semantic_lambda = match lambda_arg {
+            LambdaArgument::Lambda(lambda) => Some((func.args.as_slice(), lambda)),
+            LambdaArgument::Ambiguous(lambda)
+                if GENERAL_LAMBDA_FUNCTIONS.contains(&Ascii::new(func.name.name.as_str())) =>
+            {
+                let Some((_, args)) = func.args.split_last() else {
+                    return Ok(VisitControl::Continue);
+                };
+                Some((args, lambda))
+            }
+            // For non-lambda functions the trailing arrow remains an ordinary
+            // JSON expression, so let the normal AST walk visit `args`.
+            LambdaArgument::Ambiguous(_) => None,
+        };
+        let Some((args, lambda)) = semantic_lambda else {
+            return Ok(VisitControl::Continue);
+        };
+
+        for arg in args {
+            if let VisitControl::Break(value) = arg.walk(self)? {
+                return Ok(VisitControl::Break(value));
+            }
+        }
+
+        self.lambda_params.push(
+            lambda
+                .params
+                .iter()
+                .map(|param| self.name_resolution_ctx.normalize_identifier(param).name)
+                .collect(),
+        );
+        let result = lambda.expr.walk(self);
+        self.lambda_params.pop();
+        match result? {
+            VisitControl::Break(value) => Ok(VisitControl::Break(value)),
+            VisitControl::Continue | VisitControl::SkipChildren => Ok(VisitControl::SkipChildren),
+        }
+    }
+}
+
+#[cfg(test)]
+mod max_column_position_tests {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::*;
+
+    fn has_column_name_ref(sql: &str) -> bool {
+        let tokens = tokenize_sql(sql).unwrap();
+        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let mut visitor = MaxColumnPosition::default();
+        expr.walk(&mut visitor).unwrap();
+        visitor.has_name_ref
+    }
+
+    #[test]
+    fn ignores_lambda_params_but_preserves_ordinary_json_arrow_columns() {
+        assert!(!has_column_name_ref("array_transform([1], x -> 1)"));
+        assert!(!has_column_name_ref("array_transform([1], x -> x)"));
+        assert!(!has_column_name_ref("array_transform([1], X -> x)"));
+        assert!(has_column_name_ref(
+            "array_transform([1], x -> x + stage_column)"
+        ));
+        assert!(has_column_name_ref("concat(1, 2, doc -> 'key')"));
     }
 }

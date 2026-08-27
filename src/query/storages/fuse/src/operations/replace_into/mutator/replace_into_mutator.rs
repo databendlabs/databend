@@ -426,11 +426,10 @@ impl Partitioner {
         let column_bloom_hashes = self
             .bloom_filter_column_info
             .iter()
-            .filter_map(|(idx, typ)| {
-                let maybe_col = on_conflict_column_values[*idx].as_column();
-                maybe_col.map(|col| {
-                    BloomIndex::calculate_nullable_column_digest(&self.func_ctx, col, typ)
-                })
+            .map(|(idx, typ)| {
+                let column = on_conflict_column_values[*idx]
+                    .convert_to_full_column(typ, data_block.num_rows());
+                BloomIndex::calculate_nullable_column_digest(&self.func_ctx, &column, typ)
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -487,11 +486,18 @@ fn on_conflict_key_column_values(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::NumberType;
     use databend_common_expression::types::StringType;
+    use databend_common_expression::types::UInt64Type;
 
     use super::*;
+    use crate::operations::replace_into::mutator::DeletionAccumulator;
 
     #[test]
     fn test_column_digest() -> Result<()> {
@@ -552,6 +558,70 @@ mod tests {
         assert_eq!(min.to_string(), "'a'");
         assert_eq!(max.to_string(), "'d'");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_partition_bloom_hashes_with_scalar_column() -> Result<()> {
+        let data_type = DataType::Number(NumberDataType::UInt64);
+        let on_conflict_fields = ["row_no", "fixed_no", "middle_no", "right_no"]
+            .into_iter()
+            .enumerate()
+            .map(|(idx, name)| OnConflictField {
+                table_field: TableField::new(name, TableDataType::Number(NumberDataType::UInt64)),
+                field_index: idx,
+            })
+            .collect::<Vec<_>>();
+        let partitioner = Partitioner {
+            on_conflict_fields,
+            func_ctx: FunctionContext::default(),
+            left_most_cluster_key: Expr::constant(
+                Scalar::Number(NumberScalar::UInt64(0)),
+                Some(data_type.clone()),
+            ),
+            bloom_filter_column_info: (0..4).map(|idx| (idx, data_type.clone())).collect(),
+        };
+
+        // A literal in the REPLACE source is represented as a scalar entry. The same value is
+        // materialized as a column after the block is serialized through a remote exchange.
+        let scalar_block = DataBlock::new(
+            vec![
+                UInt64Type::from_data(vec![1, 2]).into(),
+                BlockEntry::new_const_column_arg::<UInt64Type>(42, 2),
+                UInt64Type::from_data(vec![10, 11]).into(),
+                UInt64Type::from_data(vec![20, 21]).into(),
+            ],
+            2,
+        );
+        let materialized_block = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1, 2]),
+            UInt64Type::from_data(vec![42, 42]),
+            UInt64Type::from_data(vec![10, 11]),
+            UInt64Type::from_data(vec![20, 21]),
+        ]);
+
+        let scalar_partition = partitioner.partition(&scalar_block)?.pop().unwrap();
+        let materialized_partition = partitioner.partition(&materialized_block)?.pop().unwrap();
+
+        let mut accumulator = DeletionAccumulator::default();
+        accumulator.add_block_deletion(
+            0,
+            0,
+            &scalar_partition.digests,
+            &scalar_partition.bloom_hashes,
+        );
+        accumulator.add_block_deletion(
+            0,
+            0,
+            &materialized_partition.digests,
+            &materialized_partition.bloom_hashes,
+        );
+
+        assert_eq!(scalar_partition.bloom_hashes.len(), 4);
+        assert_eq!(
+            scalar_partition.bloom_hashes,
+            materialized_partition.bloom_hashes
+        );
         Ok(())
     }
 }

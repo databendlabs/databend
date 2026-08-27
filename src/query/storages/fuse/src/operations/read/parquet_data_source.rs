@@ -13,11 +13,16 @@
 // limitations under the License.
 
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_expression::BlockMetaInfo;
 
 use crate::io::BlockReadResult;
 use crate::io::VirtualBlockReadResult;
+use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
 pub enum ParquetDataSource {
     AggIndex((PartInfoPtr, BlockReadResult)),
     Normal((BlockReadResult, Option<VirtualBlockReadResult>)),
 }
+
+#[typetag::serde(name = "fuse_data_source")]
+impl BlockMetaInfo for DataSourceWithMeta<ParquetDataSource> {}

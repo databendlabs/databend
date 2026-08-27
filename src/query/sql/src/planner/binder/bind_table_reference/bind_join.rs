@@ -24,12 +24,13 @@ use databend_common_ast::ast::split_equivalent_predicate_expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnSet;
 use crate::MetadataRef;
-use crate::binder::Finder;
+use crate::binder::Any;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::binder::reject_grouping_functions;
@@ -46,6 +47,7 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
@@ -60,6 +62,8 @@ pub struct JoinConditions {
     pub(crate) non_equi_conditions: Vec<ScalarExpr>,
     pub(crate) other_conditions: Vec<ScalarExpr>,
 }
+
+const ASOF_USING_RANGE_FUNC: &str = "gte";
 
 impl Binder {
     pub(crate) fn bind_join(
@@ -377,7 +381,7 @@ impl Binder {
 
         let mut other_condition_columns = ColumnSet::new();
         for predicate in other_conditions.iter() {
-            other_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut other_condition_columns);
         }
 
         self.push_down_other_conditions(
@@ -446,13 +450,13 @@ impl Binder {
             };
         let mut join_condition_columns = ColumnSet::new();
         for predicate in left_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         for predicate in right_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         for predicate in non_equi_conditions.iter() {
-            join_condition_columns.extend(predicate.used_columns());
+            predicate.collect_used_columns(&mut join_condition_columns);
         }
         join_condition_columns.extend(other_condition_columns);
         if !join_condition_columns.is_empty() {
@@ -475,6 +479,7 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
+            spatial_join: None,
         };
 
         if logical_join.join_type.is_asof_join() {
@@ -732,6 +737,7 @@ impl<'a> JoinConditionResolver<'a> {
                     using_columns,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     join_op,
                 )?;
             }
@@ -746,6 +752,7 @@ impl<'a> JoinConditionResolver<'a> {
                     using_columns,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     join_op,
                 )?
             }
@@ -778,9 +785,9 @@ impl<'a> JoinConditionResolver<'a> {
             )
         };
         for scalar in scalars {
-            let mut finder = Finder::new(&f);
-            finder.visit(scalar)?;
-            if !finder.scalars().is_empty() {
+            let mut any = Any::new(&f);
+            any.visit(scalar)?;
+            if any.result() {
                 return Err(ErrorCode::SemanticError(
                     "Join condition can't contain aggregate or window functions".to_string(),
                 )
@@ -907,6 +914,7 @@ impl<'a> JoinConditionResolver<'a> {
         using_columns: Vec<(Span, String)>,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
+        non_equi_conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
     ) -> Result<()> {
         bind_join_columns(
@@ -915,7 +923,18 @@ impl<'a> JoinConditionResolver<'a> {
             self.join_context,
         );
         let left_columns_len = self.left_column_bindings.len();
-        for (span, join_key) in using_columns.iter() {
+        let asof_range_column = if matches!(
+            join_op,
+            JoinOperator::Asof
+                | JoinOperator::LeftAsof
+                | JoinOperator::RightAsof
+                | JoinOperator::FullAsof
+        ) {
+            using_columns.len().checked_sub(1)
+        } else {
+            None
+        };
+        for (index, (span, join_key)) in using_columns.iter().enumerate() {
             let join_key_name = join_key.as_str();
             let left_scalar = if let Some(col_binding) = self.join_context.columns
                 [0..left_columns_len]
@@ -950,7 +969,8 @@ impl<'a> JoinConditionResolver<'a> {
                 ))
                 .set_span(*span));
             };
-            let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
+            let idx =
+                !matches!(join_op, JoinOperator::RightOuter | JoinOperator::RightAsof) as usize;
             if let Some(col_binding) = self
                 .join_context
                 .columns
@@ -961,16 +981,30 @@ impl<'a> JoinConditionResolver<'a> {
                 })
                 .nth(idx)
             {
-                // Always make the second using column in the join_context invisible in unqualified wildcard.
+                // Make the duplicate USING column invisible in unqualified wildcard.
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
             }
 
-            self.add_equi_conditions(
-                left_scalar,
-                right_scalar,
-                left_join_conditions,
-                right_join_conditions,
-            )?;
+            if Some(index) == asof_range_column {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                    &left_scalar,
+                    &right_scalar,
+                ]);
+                non_equi_conditions.push(ScalarExpr::FunctionCall(FunctionCall {
+                    span: *span,
+                    func_name: ASOF_USING_RANGE_FUNC.to_string(),
+                    params: vec![],
+                    arguments: vec![left_scalar, right_scalar],
+                    return_type: Box::new(return_type),
+                }));
+            } else {
+                self.add_equi_conditions(
+                    left_scalar,
+                    right_scalar,
+                    left_join_conditions,
+                    right_join_conditions,
+                )?;
+            }
         }
         Ok(())
     }

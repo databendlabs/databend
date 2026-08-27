@@ -17,7 +17,10 @@ use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::Bbox;
 use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::UNKNOWN_SRID;
+use databend_common_io::ewkb_to_bbox;
 use databend_common_io::ewkb_to_geo;
 use geo::Geometry;
 use geozero::ToGeo;
@@ -224,7 +227,7 @@ pub(crate) fn compare_geometry(left: &[u8], right: &[u8]) -> Option<Ordering> {
 
 pub fn extract_geometry_geo_and_srid(value: &[u8]) -> Result<(Geometry<f64>, i32)> {
     let (geo, srid) = ewkb_to_geo(&mut Ewkb(value))?;
-    Ok((geo, srid.unwrap_or(0)))
+    Ok((geo, srid.unwrap_or(UNKNOWN_SRID)))
 }
 
 pub fn extract_geo_and_srid(value: ScalarRef) -> Result<Option<(Geometry<f64>, i32)>> {
@@ -241,4 +244,22 @@ pub fn extract_geo_and_srid(value: ScalarRef) -> Result<Option<(Geometry<f64>, i
         }
     };
     Ok(Some((geo, srid)))
+}
+
+/// Compute the bounding box of a geometry/geography scalar by streaming over its
+/// EWKB coordinates, avoiding the cost of materializing a `geo::Geometry`.
+///
+/// SRID follows the same rule as [`extract_geo_and_srid`]: geometries carry their
+/// own SRID (0 when absent), geographies are always [`GEOGRAPHY_SRID`].
+pub fn extract_bbox_and_srid(value: ScalarRef) -> Result<Option<(Option<Bbox>, i32)>> {
+    let (ewkb, geography_srid) = match value {
+        ScalarRef::Geometry(buf) => (buf, None),
+        ScalarRef::Geography(buf) => (buf.0, Some(GEOGRAPHY_SRID)),
+        _ => return Ok(None),
+    };
+    let Some(result) = ewkb_to_bbox(ewkb) else {
+        return Err(ErrorCode::GeometryError("invalid EWKB input"));
+    };
+    let srid = geography_srid.unwrap_or_else(|| result.srid.unwrap_or(UNKNOWN_SRID));
+    Ok(Some((result.bbox, srid)))
 }

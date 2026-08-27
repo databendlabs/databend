@@ -18,16 +18,17 @@ use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::Finder;
+use super::Any;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
-use crate::binder::split_conjunctions;
+use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::into_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
-use crate::plans::Visitor;
+use crate::plans::Visitor as _;
 use crate::plans::VisitorMut as _;
 
 impl Binder {
@@ -50,24 +51,29 @@ impl Binder {
     pub fn bind_having(
         &mut self,
         bind_context: &mut BindContext,
-        having: ScalarExpr,
+        mut having: ScalarExpr,
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.expr_context = ExprContext::HavingClause;
 
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
-        let mut finder = Finder::new(&f);
-        finder.visit(&having)?;
-        if !finder.scalars().is_empty() {
+        let mut any = Any::new(&f);
+        any.visit(&having)?;
+        if any.result() {
             return Err(ErrorCode::SemanticError(
                 "Having clause can't contain window functions".to_string(),
             )
             .set_span(having.span()));
         }
 
+        AggregateRewriter::rewrite_existing_expr(
+            &bind_context.aggregate_info,
+            &mut having,
+            "Invalid aggregate function in HAVING clause",
+        )?;
+
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
-            let mut having = having;
             let mut grouping_checker = GroupingChecker::new(bind_context, None);
             grouping_checker.visit(&mut having)?;
             having
@@ -77,7 +83,7 @@ impl Binder {
             having
         };
 
-        let predicates = split_conjunctions(&scalar);
+        let predicates = into_conjunctions(scalar).collect();
 
         let filter = Filter { predicates };
 

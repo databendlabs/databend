@@ -396,6 +396,7 @@ impl Column {
                     .collect::<Result<Vec<_>>>()?;
                 Column::Tuple(columns)
             }
+            DataType::AggregateState(state) => Column::from_arrow_rs(array, state.physical_type())?,
 
             DataType::Binary => Column::Binary(try_to_binary_column(array)?),
             DataType::Opaque(size) => Column::Opaque(try_to_opaque_column(array, *size)?),

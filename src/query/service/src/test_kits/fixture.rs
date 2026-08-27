@@ -61,6 +61,7 @@ use databend_common_pipeline::sources::BlocksSource;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_tracing::set_panic_hook;
 use databend_common_version::BUILD_INFO;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -455,6 +456,10 @@ impl TestFixture {
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                (
+                    FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN.to_owned(),
+                    "true".to_owned(),
+                ),
             ]
             .into(),
             field_comments: vec![],

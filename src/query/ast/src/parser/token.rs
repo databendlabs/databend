@@ -320,7 +320,7 @@ pub enum TokenKind {
     #[token("~*")]
     TildeAsterisk,
     /// A case sensitive not match regular expression operator in PostgreSQL
-    #[token("!*")]
+    #[token("!~")]
     ExclamationMarkTilde,
     /// A case insensitive not match regular expression operator in PostgreSQL
     #[token("!~*")]
@@ -392,6 +392,8 @@ pub enum TokenKind {
     //    so, uncomment the keyword in the reserved list.
     #[token("ACCOUNT", ignore(ascii_case))]
     ACCOUNT,
+    #[token("ACCOUNTS", ignore(ascii_case))]
+    ACCOUNTS,
     #[token("ALL", ignore(ascii_case))]
     ALL,
     #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
@@ -430,6 +432,10 @@ pub enum TokenKind {
     AND,
     #[token("ARRAY", ignore(ascii_case))]
     ARRAY,
+    #[token("ARROW_STREAM", ignore(ascii_case))]
+    ARROW_STREAM,
+    #[token("ARROW", ignore(ascii_case))]
+    ARROW,
     #[token("AS", ignore(ascii_case))]
     AS,
     #[token("ASOF", ignore(ascii_case))]
@@ -709,6 +715,8 @@ pub enum TokenKind {
     ELSEIF,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("NO_CHECK", ignore(ascii_case))]
+    NO_CHECK,
     #[token("FETCH", ignore(ascii_case))]
     FETCH,
     #[token("FIELDS", ignore(ascii_case))]
@@ -727,6 +735,8 @@ pub enum TokenKind {
     FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FILTER", ignore(ascii_case))]
+    FILTER,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
     #[token("FINGERPRINT", ignore(ascii_case))]
@@ -803,6 +813,8 @@ pub enum TokenKind {
     HOURS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
+    #[token("PAIMON", ignore(ascii_case))]
+    PAIMON,
     #[token("INTERSECT", ignore(ascii_case))]
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
@@ -815,6 +827,8 @@ pub enum TokenKind {
     IF,
     #[token("IMMUTABLE", ignore(ascii_case))]
     IMMUTABLE,
+    #[token("ILIKE", ignore(ascii_case))]
+    ILIKE,
     #[token("IN", ignore(ascii_case))]
     IN,
     #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
@@ -1112,6 +1126,8 @@ pub enum TokenKind {
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]
     REFERENCE_USAGE,
+    #[token("LINEAGE", ignore(ascii_case))]
+    LINEAGE,
     #[token("REFRESH", ignore(ascii_case))]
     REFRESH,
     #[token("REGEXP", ignore(ascii_case))]
@@ -1194,6 +1210,8 @@ pub enum TokenKind {
     SATURDAY,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
+    #[token("SCHEMA_EVOLUTION", ignore(ascii_case))]
+    SCHEMA_EVOLUTION,
     #[token("SCHEMAS", ignore(ascii_case))]
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
@@ -1466,6 +1484,8 @@ pub enum TokenKind {
     COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
+    #[token("PROXY", ignore(ascii_case))]
+    PROXY,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
     #[token("NULLS", ignore(ascii_case))]

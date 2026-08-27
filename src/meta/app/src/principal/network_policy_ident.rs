@@ -25,7 +25,6 @@ mod kvapi_impl {
     use databend_meta_client::kvapi;
 
     use crate::principal::NetworkPolicy;
-    use crate::principal::NetworkPolicyIdent;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
@@ -36,10 +35,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "NetworkPolicyIdent";
         const HAS_TENANT: bool = true;
         type ValueType = NetworkPolicy;
-    }
-
-    impl kvapi::Value for NetworkPolicy {
-        type KeyType = NetworkPolicyIdent;
     }
 
     impl kvapi::ValueWithName for NetworkPolicy {

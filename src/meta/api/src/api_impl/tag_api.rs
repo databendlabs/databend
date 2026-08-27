@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::ProcedureIdentity;
@@ -69,10 +70,10 @@ use log::debug;
 use log::warn;
 use seq_marked::SeqValue;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
@@ -179,9 +180,9 @@ where
         let mut txn = TxnRequest::default();
         txn.condition.push(txn_cond_eq_seq(&name_ident, 0));
         txn.if_then.extend(vec![
-            txn_put_pb_with_ttl(&name_ident, &tag_id, None)?, // name -> id
-            txn_put_pb_with_ttl(&id_ident, &meta, None)?,     // id -> meta
-            txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None)?, // id -> name
+            txn_put_pb_with_ttl(&name_ident, &tag_id, None), // name -> id
+            txn_put_pb_with_ttl(&id_ident, &meta, None),     // id -> meta
+            txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None), // id -> name
         ]);
 
         let (succ, _) = send_txn(self, txn).await?;
@@ -271,7 +272,7 @@ where
     async fn get_tag(&self, name_ident: &TagNameIdent) -> Result<Option<GetTagReply>, MetaError> {
         debug!(name_ident :? =(name_ident); "SchemaApi: {}", func_name!());
 
-        match self.get_id_value(name_ident).await? {
+        match self.get_id_and_value(name_ident).await? {
             Some((id_seqv, meta_seqv)) => Ok(Some(GetTagReply {
                 tag_id: id_seqv,
                 meta: meta_seqv,
@@ -413,8 +414,8 @@ where
                         tag_allowed_value: tag_value.clone(),
                     },
                     None,
-                )?);
-                txn_ops.push(txn_put_pb_with_ttl(&tag_ref_key, &EmptyProto {}, None)?);
+                ));
+                txn_ops.push(txn_put_pb_with_ttl(&tag_ref_key, &EmptyProto {}, None));
             }
 
             let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;

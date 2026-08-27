@@ -212,7 +212,7 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
     }
 
     fn should_use_sort_limit(&self) -> bool {
-        self.limit.map(|limit| limit < 10000).unwrap_or_default()
+        self.limit.map(|limit| limit <= 10000).unwrap_or_default()
     }
 
     fn new_base(&self) -> Base<S> {

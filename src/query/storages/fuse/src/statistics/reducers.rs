@@ -16,18 +16,22 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+pub use databend_storages_common_table_meta::meta::reduce_cluster_statistics;
+use databend_storages_common_table_meta::meta::validate_segment_partition_statistics;
 
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 
@@ -270,74 +274,29 @@ pub fn reduce_spatial_statistics<T: Borrow<Option<StatisticsOfSpatialColumns>>>(
     (!merged.is_empty()).then_some(merged)
 }
 
-pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
-    blocks_cluster_stats: &[T],
-    default_cluster_key_id: Option<u32>,
-) -> Option<ClusterStatistics> {
-    if blocks_cluster_stats.is_empty() || default_cluster_key_id.is_none() {
-        return None;
+fn merge_partition_statistics(
+    left: Option<&PartitionStatistics>,
+    right: Option<&PartitionStatistics>,
+) -> Option<PartitionStatistics> {
+    match (left, right) {
+        (Some(left), Some(right)) if left == right => Some(left.clone()),
+        _ => None,
     }
-
-    let cluster_key_id = default_cluster_key_id.unwrap();
-    let len = blocks_cluster_stats.len();
-    let mut min_stats = Vec::with_capacity(len);
-    let mut max_stats = Vec::with_capacity(len);
-    let mut levels = Vec::with_capacity(len);
-
-    for cluster_stats in blocks_cluster_stats.iter() {
-        if let Some(stat) = cluster_stats.borrow() {
-            if stat.cluster_key_id != cluster_key_id {
-                return None;
-            }
-
-            min_stats.push(stat.min());
-            max_stats.push(stat.max());
-            levels.push(stat.level);
-        } else {
-            return None;
-        }
-    }
-
-    let min = min_stats
-        .into_iter()
-        .min_by(|x, y| {
-            x.iter()
-                .map(Scalar::as_ref)
-                .cmp(y.iter().map(Scalar::as_ref))
-        })
-        .unwrap();
-    let max = max_stats
-        .into_iter()
-        .max_by(|x, y| {
-            x.iter()
-                .map(Scalar::as_ref)
-                .cmp(y.iter().map(Scalar::as_ref))
-        })
-        .unwrap();
-    let level = levels.into_iter().max().unwrap_or(0);
-
-    Some(ClusterStatistics::new(
-        cluster_key_id,
-        min.clone(),
-        max.clone(),
-        level,
-        None,
-    ))
 }
 
 pub fn merge_statistics(
     mut l: Statistics,
     r: &Statistics,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<&ClusterKeyInfo>,
 ) -> Statistics {
-    merge_statistics_mut(&mut l, r, default_cluster_key_id);
+    merge_statistics_mut(&mut l, r, cluster_key_info);
     l
 }
 
 pub fn merge_statistics_mut(
     l: &mut Statistics,
     r: &Statistics,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<&ClusterKeyInfo>,
 ) {
     l.additional_stats_meta = None;
     if l.row_count == 0 {
@@ -345,15 +304,16 @@ pub fn merge_statistics_mut(
         l.virtual_col_stats = r.virtual_col_stats.clone();
         l.spatial_stats = r.spatial_stats.clone();
         l.cluster_stats = r.cluster_stats.clone();
+        l.partition_stats = r.partition_stats.clone();
     } else {
         l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
         l.virtual_col_stats =
             reduce_virtual_column_statistics(&[&l.virtual_col_stats, &r.virtual_col_stats]);
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
-        l.cluster_stats = reduce_cluster_statistics(
-            &[&l.cluster_stats, &r.cluster_stats],
-            default_cluster_key_id,
-        );
+        l.cluster_stats =
+            reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
+        l.partition_stats =
+            merge_partition_statistics(l.partition_stats.as_ref(), r.partition_stats.as_ref());
     }
 
     l.row_count += r.row_count;
@@ -394,6 +354,8 @@ pub fn deduct_statistics(l: &Statistics, r: &Statistics) -> Statistics {
 
 // Deduct statistics, only be used for calculate snapshot summary.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
+    // Exact partition identity cannot be reconstructed after subtraction.
+    l.partition_stats = None;
     l.row_count -= r.row_count;
     l.block_count -= r.block_count;
     l.perfect_block_count -= r.perfect_block_count;
@@ -443,8 +405,8 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas: &[T],
     thresholds: BlockThresholds,
-    default_cluster_key_id: Option<u32>,
-) -> Statistics {
+    cluster_key_info: Option<&ClusterKeyInfo>,
+) -> Result<Statistics> {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;
     let mut uncompressed_byte_size: u64 = 0;
@@ -462,6 +424,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     let len = block_metas.len();
     let mut col_stats = Vec::with_capacity(len);
     let mut cluster_stats = Vec::with_capacity(len);
+    let mut partition_stats = Vec::with_capacity(len);
     let mut virtual_col_stats = Vec::with_capacity(len);
     let mut spatial_col_stats = Vec::with_capacity(len);
 
@@ -506,12 +469,16 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         }
         col_stats.push(&b.col_stats);
         cluster_stats.push(&b.cluster_stats);
+        partition_stats.push(&b.partition_stats);
         spatial_col_stats.push(&b.spatial_stats);
     });
 
     let merged_col_stats = reduce_block_statistics(&col_stats);
     let merged_spatial_stats = reduce_spatial_statistics(&spatial_col_stats);
-    let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, default_cluster_key_id);
+    let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, cluster_key_info);
+    let merged_partition_stats = validate_segment_partition_statistics(
+        partition_stats.into_iter().map(|stats| stats.as_ref()),
+    )?;
     let merged_virtual_col_stats = if block_count > 0 && virtual_block_count == block_count {
         let virtual_col_stats = generate_virtual_column_statistics(&virtual_col_stats);
         Some(virtual_col_stats)
@@ -527,7 +494,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     let spatial_index_size = Option::from(spatial_index_size).filter(|&x| x > 0);
     let virtual_column_size = Option::from(virtual_column_size).filter(|&x| x > 0);
 
-    Statistics {
+    Ok(Statistics {
         row_count,
         block_count,
         perfect_block_count,
@@ -544,7 +511,8 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         virtual_col_stats: merged_virtual_col_stats,
         spatial_stats: merged_spatial_stats,
         cluster_stats: merged_cluster_stats,
+        partition_stats: merged_partition_stats,
         virtual_block_count: merged_virtual_block_count,
         additional_stats_meta: None,
-    }
+    })
 }

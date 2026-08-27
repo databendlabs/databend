@@ -16,9 +16,6 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
-set global enable_planner_cache = 0;
-
-statement ok
 drop table if exists rap_multi_test;
 
 statement ok
@@ -1164,6 +1161,3 @@ DROP ROLE rap_role_7_day;
 
 statement ok
 DROP ROLE rap_role_1_day;
-
-statement ok
-unset global enable_planner_cache;

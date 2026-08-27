@@ -28,10 +28,7 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::principal::client_session::ClientSession;
-    use crate::principal::client_session_ident::ClientSessionIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -40,10 +37,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "ClientSession";
         const HAS_TENANT: bool = true;
         type ValueType = ClientSession;
-    }
-
-    impl kvapi::Value for ClientSession {
-        type KeyType = ClientSessionIdent;
     }
 }
 

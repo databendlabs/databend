@@ -60,7 +60,7 @@ impl FromToProto for mt::RowAccessPolicyMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::RowAccessPolicyMeta, Incompatible> {
+    fn to_pb(&self) -> pb::RowAccessPolicyMeta {
         // Write to args_v2 (new format that preserves order)
         let args_v2: Vec<pb::RowAccessPolicyArg> = self
             .args
@@ -71,16 +71,15 @@ impl FromToProto for mt::RowAccessPolicyMeta {
             })
             .collect();
 
-        let p = pb::RowAccessPolicyMeta {
+        pb::RowAccessPolicyMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             args: BTreeMap::new(), // Keep empty for backward compatibility
             args_v2,
             body: self.body.clone(),
             comment: self.comment.clone(),
-            create_on: self.create_on.to_pb()?,
-            update_on: self.update_on.to_pb_opt()?,
-        };
-        Ok(p)
+            create_on: self.create_on.to_pb(),
+            update_on: self.update_on.to_pb_opt(),
+        }
     }
 }

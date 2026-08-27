@@ -1,0 +1,55 @@
+statement ok
+drop table if exists hash_join_empty_build;
+
+statement ok
+create table hash_join_empty_build(a UInt64);
+
+# An empty INNER JOIN build side must finish the probe input without scanning it.
+# The absent execution metrics on TableScan(Probe) distinguish the fast return
+# from consuming every numbers block and returning an empty stream per block.
+query T
+explain analyze
+select n.number
+from numbers(1000000) as n
+inner join hash_join_empty_build as e on n.number = e.a;
+----
+HashJoin
+<slt:ignore>
+├── join type: INNER
+<slt:ignore>
+├── TableScan(Build)
+<slt:ignore>
+│   ├── read rows: 0
+<slt:ignore>
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+<slt:ignore>
+
+statement ok
+set force_join_data_spill = 1;
+
+# Spilling resets the in-memory build row count, but an empty logical build side
+# must still skip the probe input.
+query T
+explain analyze
+select n.number
+from numbers(1000000) as n
+inner join hash_join_empty_build as e on n.number = e.a;
+----
+HashJoin
+<slt:ignore>
+├── join type: INNER
+<slt:ignore>
+├── TableScan(Build)
+<slt:ignore>
+│   ├── read rows: 0
+<slt:ignore>
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+<slt:ignore>
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+drop table hash_join_empty_build;

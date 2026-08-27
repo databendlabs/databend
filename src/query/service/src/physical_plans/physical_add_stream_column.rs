@@ -22,6 +22,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
@@ -136,7 +137,7 @@ impl AddStreamColumn {
     ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
         let num_fields = input_schema.fields().len();
-        let column_entries = metadata.read().columns_by_table_index(table_index);
+        let metadata = metadata.read();
 
         let stream_columns = [
             StreamColumn::new(ORIGIN_VERSION_COL_NAME, StreamColumnType::OriginVersion),
@@ -151,7 +152,7 @@ impl AddStreamColumn {
         let mut exprs = Vec::with_capacity(stream_columns.len());
         for stream_column in stream_columns.iter() {
             let column_index =
-                Binder::find_column_index(&column_entries, stream_column.column_name())?;
+                Binder::find_column_index(&metadata, table_index, stream_column.column_name())?;
             let schema_index = input_schema.index_of(&column_index.to_string()).unwrap();
 
             let origin_stream_column_scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -211,10 +212,12 @@ impl AddStreamColumn {
                         func_name: "is_not_null".to_string(),
                         params: vec![],
                         arguments: vec![origin_stream_column_scalar_expr.clone()],
+                        return_type: Box::new(DataType::Boolean),
                     }),
                     origin_stream_column_scalar_expr,
                     current_stream_column_scalar_expr,
                 ],
+                return_type: Box::new(stream_column.data_type()),
             });
 
             exprs.push(

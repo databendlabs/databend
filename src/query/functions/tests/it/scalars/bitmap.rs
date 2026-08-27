@@ -99,6 +99,7 @@ fn test_bitmap_min(file: &mut impl Write) {
 
 fn test_sub_bitmap(file: &mut impl Write) {
     run_ast(file, "sub_bitmap(build_bitmap([1, 2, 3, 4, 5]), 1, 3)", &[]);
+    run_ast(file, "sub_bitmap(build_bitmap([1]), 2, 1)", &[]);
 }
 
 fn test_bitmap_subset_limit(file: &mut impl Write) {

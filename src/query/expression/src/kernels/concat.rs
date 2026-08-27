@@ -147,7 +147,7 @@ impl Column {
             Column::Boolean(_) => Column::Boolean(Self::concat_boolean_types(
                 columns.map(|col| col.into_boolean().unwrap()),
                 capacity,
-            )),
+            )?),
             Column::Timestamp(_) => {
                 let buffer = Self::concat_primitive_types(
                     columns.map(|col| TimestampType::try_downcast_column(&col).unwrap()),
@@ -211,7 +211,7 @@ impl Column {
                     .map(|col| col.into_nullable().unwrap().destructure())
                     .unzip(); // break the recursion type
                 let column = Self::concat_columns_impl(inner.into_iter())?;
-                let validity = Self::concat_boolean_types(validity.into_iter(), capacity);
+                let validity = Self::concat_boolean_types(validity.into_iter(), capacity)?;
                 NullableColumn::new_column(column, validity)
             }
             Column::Tuple(fields) => {
@@ -253,7 +253,7 @@ impl Column {
             | Column::Geography(_)
             | Column::Binary(_)
             | Column::Bitmap(_) => {
-                Self::concat_use_arrow(columns, first_column.data_type(), capacity)
+                Self::concat_use_arrow(columns, first_column.data_type(), capacity)?
             }
         };
         Ok(column)
@@ -297,18 +297,26 @@ impl Column {
         cols: impl Iterator<Item = Column>,
         data_type: DataType,
         _num_rows: usize,
-    ) -> Column {
+    ) -> Result<Column> {
         let arrays: Vec<Arc<dyn Array>> = cols.map(|c| c.into_arrow_rs()).collect();
         let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();
-        let result = arrow_select::concat::concat(&arrays).unwrap();
-        Column::from_arrow_rs(result, &data_type).unwrap()
+        let result = arrow_select::concat::concat(&arrays)?;
+        Column::from_arrow_rs(result, &data_type)
     }
 
-    pub fn concat_boolean_types(bitmaps: impl Iterator<Item = Bitmap>, num_rows: usize) -> Bitmap {
+    pub fn concat_boolean_types(
+        bitmaps: impl Iterator<Item = Bitmap>,
+        num_rows: usize,
+    ) -> Result<Bitmap> {
         let cols = bitmaps.map(Column::Boolean);
-        Self::concat_use_arrow(cols, DataType::Boolean, num_rows)
+        Self::concat_use_arrow(cols, DataType::Boolean, num_rows)?
             .into_boolean()
-            .unwrap()
+            .map_err(|col| {
+                ErrorCode::Internal(format!(
+                    "Arrow boolean concat returned {} column",
+                    col.data_type()
+                ))
+            })
     }
 
     fn concat_value_types<T: ValueType>(
@@ -327,7 +335,26 @@ impl Column {
 #[cfg(test)]
 mod tests {
     use crate::Column;
+    use crate::FromData;
+    use crate::types::BinaryType;
     use crate::types::string::StringColumn;
+
+    #[test]
+    fn test_concat_binary_columns_uses_arrow_path() {
+        let left = BinaryType::from_data(vec![b"left".as_slice(), b"payload".as_slice()]);
+        let right = BinaryType::from_data(vec![b"right".as_slice(), b"bytes".as_slice()]);
+
+        let result = Column::concat_columns(vec![left, right].into_iter()).unwrap();
+        let result = result.into_binary().unwrap();
+        let values = result.iter().collect::<Vec<_>>();
+
+        assert_eq!(values, vec![
+            b"left".as_slice(),
+            b"payload".as_slice(),
+            b"right".as_slice(),
+            b"bytes".as_slice(),
+        ]);
+    }
 
     #[test]
     fn test_concat_string_columns_fast_path() {

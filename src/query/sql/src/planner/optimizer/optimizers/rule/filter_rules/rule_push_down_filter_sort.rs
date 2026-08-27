@@ -66,6 +66,10 @@ impl Rule for RulePushDownFilterSort {
         let sort: Sort = s_expr.child(0)?.plan().clone().try_into()?;
         let sort_expr = s_expr.child(0)?;
 
+        if sort.limit.is_some() {
+            return Ok(());
+        }
+
         let mut result = SExpr::create_unary(
             Arc::new(sort.into()),
             Arc::new(SExpr::create_unary(

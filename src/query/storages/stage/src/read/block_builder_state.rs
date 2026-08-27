@@ -15,6 +15,8 @@
 use std::mem;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table_context::TableContext;
@@ -22,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::NumberScalar;
 use databend_common_storage::FileStatus;
@@ -38,7 +41,8 @@ pub struct BlockBuilderState {
     pub num_rows: usize,
     pub file_status: FileStatus,
     pub file_path: String,
-    pub file_full_path: String,
+    pub file_content_key: Option<String>,
+    pub file_last_modified: Option<DateTime<Utc>>,
 }
 
 impl BlockBuilderState {
@@ -75,7 +79,8 @@ impl BlockBuilderState {
             num_rows: 0,
             file_status: Default::default(),
             file_path: "".to_string(),
-            file_full_path: "".to_string(),
+            file_content_key: None,
+            file_last_modified: None,
         }
     }
 
@@ -126,9 +131,27 @@ impl BlockBuilderState {
     pub(crate) fn add_internals_columns_batch(&mut self, n: usize) {
         for (i, c) in self.internal_columns.iter().enumerate() {
             match c.column_type {
-                InternalColumnType::FileName => {
+                InternalColumnType::FileName | InternalColumnType::FilePath => {
                     self.internal_column_builders[i]
-                        .push_repeat(&ScalarRef::String(&self.file_full_path), n);
+                        .push_repeat(&ScalarRef::String(&self.file_path), n);
+                }
+                InternalColumnType::FileBasename => {
+                    let basename = self.file_path.rsplit('/').next().unwrap_or(&self.file_path);
+                    self.internal_column_builders[i].push_repeat(&ScalarRef::String(basename), n);
+                }
+                InternalColumnType::FileContentKey => {
+                    let scalar = match &self.file_content_key {
+                        Some(key) => Scalar::String(key.clone()),
+                        None => Scalar::Null,
+                    };
+                    self.internal_column_builders[i].push_repeat(&scalar.as_ref(), n);
+                }
+                InternalColumnType::FileLastModified => {
+                    let scalar = match &self.file_last_modified {
+                        Some(ts) => Scalar::Timestamp(ts.timestamp_micros()),
+                        None => Scalar::Null,
+                    };
+                    self.internal_column_builders[i].push_repeat(&scalar.as_ref(), n);
                 }
                 InternalColumnType::FileRowNumber => {}
                 _ => {

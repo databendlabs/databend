@@ -18,10 +18,10 @@ use std::io::BufRead;
 use std::io::Lines;
 use std::iter::Peekable;
 
-use databend_meta::raft_store::key_spaces::RaftStoreEntry;
-use databend_meta::raft_store::ondisk::DATA_VERSION;
-use databend_meta::raft_store::ondisk::DataVersion;
-use databend_meta::raft_store::ondisk::TREE_HEADER;
+use databend_meta::raft_config::data_version::DATA_VERSION;
+use databend_meta::raft_config::data_version::DataVersion;
+use databend_meta::store_compat::ondisk::TREE_HEADER;
+use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
 
 /// Import from lines of exported data and Return the max log id that is found.
 pub fn validate_version<B: BufRead + 'static>(
@@ -60,7 +60,7 @@ pub fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
         // There is a explicit header.
         if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
             assert_eq!(key, "header", "The key can only be 'header'");
-            value.version
+            value.0.version
         } else {
             unreachable!("The header tree can only contain DataHeader");
         }

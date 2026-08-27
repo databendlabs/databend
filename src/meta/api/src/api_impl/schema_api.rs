@@ -41,10 +41,13 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -57,6 +60,7 @@ use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -86,11 +90,11 @@ use super::database_util::get_db_or_err;
 use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
-use super::lock_api::LockApi;
+use super::lock_api2::LockApi2;
+use super::materialized_view_api::MaterializedViewApi;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
@@ -111,7 +115,8 @@ where
     Self: DictionaryApi,
     Self: GarbageCollectionApi,
     Self: IndexApi,
-    Self: LockApi,
+    Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -132,7 +137,8 @@ where
     Self: DictionaryApi,
     Self: GarbageCollectionApi,
     Self: IndexApi,
-    Self: LockApi,
+    Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -165,26 +171,26 @@ pub async fn get_history_table_metas(
     Ok(tb_metas)
 }
 
-pub async fn construct_drop_table_txn_operations(
+pub(crate) struct VersionedTable {
+    pub id: TableId,
+    pub meta: SeqV<TableMeta>,
+}
+
+pub(crate) async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: &Tenant,
     catalog_name: Option<String>,
-    table_id: u64,
+    existing: VersionedTable,
     db_id: u64,
     if_exists: bool,
     if_delete: bool,
     txn: &mut TxnRequest,
 ) -> Result<(u64, u64), KVAppError> {
-    let tbid = TableId { table_id };
-
-    // Check if table exists.
-    let (tb_meta_seq, tb_meta) = kv_api.get_pb_seq_and_value(&tbid).await?;
-    if tb_meta_seq == 0 {
-        return Err(KVAppError::AppError(AppError::UnknownTableId(
-            UnknownTableId::new(table_id, "drop_table_by_id failed to find valid tb_meta"),
-        )));
-    }
+    let VersionedTable { id: tbid, meta } = existing;
+    let table_id = tbid.table_id;
+    let tb_meta_seq = meta.seq;
+    let mut tb_meta = meta.data;
 
     // Get db name, tenant name and related info for tx.
     let table_id_to_name = TableIdToName { table_id };
@@ -207,7 +213,7 @@ pub async fn construct_drop_table_txn_operations(
 
     let db_id = dbid_tbname.db_id;
     let tbname = dbid_tbname.table_name.clone();
-    let (tb_id_seq, _) = get_u64_value(kv_api, &dbid_tbname).await?;
+    let (tb_id_seq, _) = kv_api.get_pb_seq_and_value(&dbid_tbname).await?;
     if tb_id_seq == 0 {
         return if if_exists {
             Ok((0, 0))
@@ -226,7 +232,6 @@ pub async fn construct_drop_table_txn_operations(
         "drop table by id"
     );
 
-    let mut tb_meta = tb_meta.unwrap();
     // drop a table with drop_on time
     if tb_meta.drop_on.is_some() {
         return if if_exists {
@@ -278,6 +283,19 @@ pub async fn construct_drop_table_txn_operations(
             )));
     }
 
+    if is_materialized_view_engine(&tb_meta.engine) {
+        // MVDefinition and the source relationship are immutable and owned by
+        // this table ID. The TableId seq condition below prevents a concurrent
+        // MV lifecycle change; txn_del is idempotent when either key is absent.
+        let source_table_id = tb_meta.materialized_view_source_table_id()?;
+        let def_ident = MVDefinitionIdent::new(tenant, table_id);
+        txn.if_then.push(txn_del(&def_ident));
+        txn.if_then.push(txn_del(&SourceTableMVIdent::new_generic(
+            tenant,
+            SourceTableMV::new(source_table_id, table_id),
+        )));
+    }
+
     // There must NOT be concurrent txn(b) that list-then-delete tables:
     // Otherwise, (b) may not delete all of the tables, if this txn(a) is operating on some table.
     // We guarantee there is no `(b)` so we do not have to assert db seq.
@@ -290,8 +308,8 @@ pub async fn construct_drop_table_txn_operations(
 
     txn.if_then.extend(vec![
         // update db_meta seq so that no other txn can delete this db
-        txn_put_pb(&DatabaseId { db_id }, &db_meta)?, // (db_id) -> db_meta
-        txn_put_pb(&tbid, &tb_meta)?,                 // (tenant, db_id, tb_id) -> tb_meta
+        txn_put_pb(&DatabaseId { db_id }, &db_meta), // (db_id) -> db_meta
+        txn_put_pb(&tbid, &tb_meta),                 // (tenant, db_id, tb_id) -> tb_meta
     ]);
     if if_delete {
         // still this table id
@@ -322,7 +340,7 @@ pub async fn construct_drop_table_txn_operations(
             txn.condition
                 .push(txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq));
             txn.if_then
-                .push(txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?);
+                .push(txn_put_pb(&dbid_tbname_idlist, &tb_id_list));
         }
     }
 
@@ -502,10 +520,10 @@ pub async fn handle_undrop_table(
             table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let (dbid_tbname_seq, table_id) = get_u64_value(kv_api, &dbid_tbname).await?;
+        let (dbid_tbname_seq, table_id) = kv_api.get_pb_seq_and_value(&dbid_tbname).await?;
         if !req.force_replace() {
             // If table id already exists, return error.
-            if dbid_tbname_seq > 0 || table_id > 0 {
+            if dbid_tbname_seq > 0 || table_id.is_some() {
                 return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
                     UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
                 )));
@@ -607,9 +625,9 @@ pub async fn handle_undrop_table(
                     vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
-                        txn_put_pb(&dbid_tbname, &TableId::new(table_id))?, // (tenant, db_id, tb_name) -> tb_id
-                        txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None), // (db_id) -> db_meta
+                        txn_put_pb(&dbid_tbname, &TableId::new(table_id)), // (tenant, db_id, tb_name) -> tb_id
+                        txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None), // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     policy_restore_ops,
                 ]
@@ -679,7 +697,7 @@ pub(crate) async fn restore_policy_references_on_undrop(
                     // Critical: if policy is dropped before txn execution, this prevents
                     // creating a dangling reference to a non-existent policy.
                     conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
-                    ops.push(txn_put_pb_with_ttl(&ref_key, &MaskPolicyTableId, None)?);
+                    ops.push(txn_put_pb_with_ttl(&ref_key, &MaskPolicyTableId, None));
                 }
             }
         }
@@ -727,11 +745,7 @@ pub(crate) async fn restore_policy_references_on_undrop(
                 // Critical: if policy is dropped before txn execution, this prevents
                 // creating a dangling reference to a non-existent policy.
                 conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
-                ops.push(txn_put_pb_with_ttl(
-                    &ref_key,
-                    &RowAccessPolicyTableId,
-                    None,
-                )?);
+                ops.push(txn_put_pb_with_ttl(&ref_key, &RowAccessPolicyTableId, None));
             }
         }
     }
@@ -755,7 +769,7 @@ pub fn mark_index_as_deleted(
 
     Ok((
         marked_deleted_index_id_ident.to_string_key(),
-        serialize_struct(&marked_deleted_index_meta)?,
+        serialize_struct(&marked_deleted_index_meta),
     ))
 }
 
@@ -784,6 +798,6 @@ pub fn mark_table_index_as_deleted(
 
     Ok((
         marked_deleted_table_index_id_ident.to_string_key(),
-        serialize_struct(&marked_deleted_table_index_meta)?,
+        serialize_struct(&marked_deleted_table_index_meta),
     ))
 }

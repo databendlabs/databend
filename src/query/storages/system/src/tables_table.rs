@@ -54,6 +54,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::NullTable;
 use databend_common_storages_basic::view_table::QUERY;
@@ -70,6 +71,7 @@ use log::warn;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::collect_visible_tables;
+use crate::util::disable_catalog_refresh;
 use crate::util::extract_leveled_strings;
 use crate::util::generate_default_catalog_meta;
 use crate::util::should_use_optimized_visibility_path;
@@ -127,6 +129,7 @@ macro_rules! impl_history_aware {
                             ));
                         }
                         CatalogType::Iceberg => "Iceberg".to_string(),
+                        CatalogType::Paimon => "Paimon".to_string(),
                         CatalogType::Hive => "Hive".to_string(),
                     };
 
@@ -181,8 +184,17 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 self.get_table_info().catalog(),
                 ctx.session_state()?,
             )
-            .await?
-            .disable_table_info_refresh()?;
+            .await?;
+        // This implementation is also shared by system.views and the history variants. Only the
+        // current system.tables rows should resolve ATTACH schemas from the latest source snapshot.
+        let refresh = !WITH_HISTORY
+            && WITHOUT_VIEW
+            && ctx.get_settings().get_enable_table_schema_refresh()?;
+        let catalog = if refresh {
+            catalog
+        } else {
+            disable_catalog_refresh(catalog)?
+        };
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
         let func_ctx = ctx.get_function_context()?;
@@ -192,7 +204,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
         } else {
-            self.get_full_data_from_catalogs(ctx, push_downs, catalog)
+            self.get_full_data_from_catalogs(ctx, push_downs, catalog, refresh)
                 .await
         }
     }
@@ -552,6 +564,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         catalog_impl: Arc<dyn Catalog>,
+        refresh: bool,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
@@ -628,31 +641,33 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     &BUILTIN_FUNCTIONS,
                 )?;
 
-                for (i, scalars) in leveld_results.iter().enumerate() {
+                for (i, scalars) in leveld_results.into_iter().enumerate() {
                     if i == 3 {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_number::<u64, usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 tables_ids.push(s);
                             }
                         }
                     } else {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_string::<usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 match i {
                                     0 => catalog_name.push(s),
@@ -1018,8 +1033,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         if WITHOUT_VIEW {
             for tbl in &database_tables {
-                // For performance considerations, allows using stale statistics data.
-                let require_fresh = false;
+                // ATTACH statistics in the meta server are frozen at attach time. Refresh them
+                // from the current source snapshot only when schema refresh is explicitly enabled.
+                let require_fresh =
+                    refresh && FuseTable::is_table_attached(&tbl.get_table_info().meta.options);
                 let stats = if get_stats {
                     match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
                         Ok(stats) => stats,
@@ -1073,6 +1090,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 if v.engine().to_uppercase() == "VIEW" {
                     "VIEW".to_string()
+                } else if is_materialized_view_engine(v.engine()) {
+                    "MATERIALIZED VIEW".to_string()
                 } else {
                     "BASE TABLE".to_string()
                 }
@@ -1343,7 +1362,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         && filtered_db_names.len() == 1
                         && catalog.name() == filtered_catalog_names[0].clone()
                     {
-                        if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                        if matches!(
+                            catalog.info().catalog_type(),
+                            CatalogType::Iceberg | CatalogType::Paimon
+                        ) {
                             return Some((
                                 filtered_catalog_names[0].clone(),
                                 filtered_db_names[0].clone(),

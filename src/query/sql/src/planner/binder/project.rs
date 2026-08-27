@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -24,6 +25,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
@@ -134,7 +136,7 @@ impl SelectInfo {
                 .iter_mut()
                 .find(|column| column.index == item.index)
             {
-                column.data_type = Box::new(item.scalar.data_type()?);
+                column.data_type = Box::new(item.scalar.data_type().into_owned());
             }
         }
 
@@ -268,7 +270,10 @@ impl Binder {
             ScalarExpr::WindowFunction(win) => {
                 find_replaced_window_function(window_info, win, &item.alias).unwrap()
             }
-            _ => self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?),
+            _ => self.create_derived_column_binding(
+                item.alias.clone(),
+                item.scalar.data_type().into_owned(),
+            ),
         };
 
         if is_grouping_sets_item {
@@ -310,7 +315,7 @@ impl Binder {
             };
             let projection_item = self.prepare_select_output_item(bind_context, &source_item)?;
             let mut column_binding = column_binding;
-            column_binding.data_type = Box::new(projection_item.scalar.data_type()?);
+            column_binding.data_type = Box::new(projection_item.scalar.data_type().into_owned());
             source_scalars.insert(source_item.index, source_item);
             projection_scalars.insert(projection_item.index, projection_item);
             columns.push(column_binding);
@@ -665,10 +670,11 @@ impl Binder {
                 func: FunctionCall {
                     name: Identifier::from_name(span, "array_apply"),
                     args: vec![input_array],
-                    lambda: lambda.cloned(),
+                    lambda: lambda.cloned().map(LambdaArgument::Lambda),
                     distinct: false,
                     params: vec![],
                     order_by: vec![],
+                    filter: None,
                     window: None,
                 },
             };
@@ -684,10 +690,13 @@ impl Binder {
             )?;
             let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (new_expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
 
-            match new_expr {
+            match new_expr.into_owned() {
                 databend_common_expression::Expr::Constant(Constant {
                     scalar: Scalar::Array(Column::Boolean(bitmap)),
                     ..
@@ -715,7 +724,7 @@ impl Binder {
                         output.items.push(item);
                     }
                 }
-                _ => {
+                new_expr => {
                     return Err(ErrorCode::SemanticError(format!(
                         "Column lambda expression must be constant folded: {:?}",
                         new_expr
@@ -862,15 +871,17 @@ impl Binder {
             .collect::<Result<_>>()?;
 
         // Replace parameters in the masking policy expression
-        let replaced_expr = TypeChecker::clone_expr_with_replacement(&cached.expr, |nest_expr| {
-            if let Expr::ColumnRef { column, .. } = nest_expr {
+        let replaced_expr =
+            TypeChecker::<()>::clone_expr_with_replacement(&cached.expr, |nest_expr| {
                 // Parameter names are already normalized to lowercase at policy creation
-                if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
-                    return Ok(Some(arg.clone()));
+                if let Expr::ColumnRef { column, .. } = nest_expr
+                    && let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str())
+                {
+                    Ok(Some(arg.clone()))
+                } else {
+                    Ok(None)
                 }
-            }
-            Ok(None)
-        })?;
+            })?;
 
         // Now resolve the replaced expression using TypeChecker
         // IMPORTANT: Use the provided bind_context which has all the necessary column information

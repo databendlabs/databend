@@ -14,5 +14,7 @@
 
 pub mod crud;
 pub mod fetch_util;
+pub mod name_id_value_api;
+pub mod name_value_api;
 pub mod pb_api;
 pub mod pb_crud_api;

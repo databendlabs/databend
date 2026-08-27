@@ -26,13 +26,16 @@ use databend_common_expression::types::VectorScalar;
 use databend_common_meta_app::schema::TableIndexType;
 use unicase::Ascii;
 
+use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::ColumnBinding;
 use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, A> TypeChecker<'a, A>
+where A: TypeCheckAdapter
+{
     fn vector_functions() -> &'static [Ascii<&'static str>] {
         static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("cosine_distance"),
@@ -42,19 +45,23 @@ impl<'a> TypeChecker<'a> {
         VECTOR_FUNCTIONS
     }
 
+    pub(super) fn is_vector_function(func_name: &str) -> bool {
+        Self::vector_functions().contains(&Ascii::new(func_name))
+    }
+
     fn try_fold_cast_to_vector(&self, expr: &ScalarExpr) -> Option<Vec<F32>> {
         if expr.evaluable() {
             let checked_expr = expr.as_expr().ok()?;
-            let folded = self.try_fold_constant(&checked_expr, true)?;
-            let constant = match &folded.0 {
+            let box (folded, _) = self.try_fold_constant(checked_expr).ok()?;
+            let constant = match folded {
                 ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _) => {
-                    constant.clone()
+                    constant
                 }
                 _ => return None,
             };
 
             if let Scalar::Vector(VectorScalar::Float32(values)) = constant.value {
-                return Some(values.clone());
+                return Some(values);
             }
         }
         None
@@ -68,8 +75,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         // Try rewrite vector distance function to vector score internal column,
         // so that the vector index can be used to accelerate the query.
-        let uni_case_func_name = Ascii::new(func_name);
-        if Self::vector_functions().contains(&uni_case_func_name) {
+        if Self::is_vector_function(func_name) {
             match args {
                 [
                     ScalarExpr::BoundColumnRef(BoundColumnRef {

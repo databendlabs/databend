@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -29,7 +31,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::Value;
 use databend_common_expression::types::number::NumberColumn;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
@@ -48,14 +50,18 @@ use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
+use databend_query::sessions::TableContextTableManagement;
 use databend_query::sessions::TableContextTelemetry;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
@@ -63,6 +69,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::table::ClusterType;
 use futures_util::TryStreamExt;
 use rand::Rng;
 use rand::thread_rng;
@@ -91,7 +98,7 @@ async fn test_compact_segment_normal_case() -> anyhow::Result<()> {
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
-    mutator.try_commit(fuse_table).await?;
+    mutator.try_commit_compact(fuse_table, ctx.clone()).await?;
 
     // check segment count
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -136,7 +143,7 @@ async fn test_compact_segment_resolvable_conflict() -> anyhow::Result<()> {
     let num_inserts = 9;
     fixture.append_rows(num_inserts).await?;
 
-    mutator.try_commit(fuse_table).await?;
+    mutator.try_commit_compact(fuse_table, ctx.clone()).await?;
 
     // check segment count
     let count_seg = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -196,11 +203,42 @@ async fn test_compact_segment_unresolvable_conflict() -> anyhow::Result<()> {
     }
 
     // the compact operation committed latter should be failed.
-    let r = mutator.try_commit(fuse_table).await;
+    let r: Result<()> = mutator.try_commit_compact(fuse_table, ctx.clone()).await;
     assert!(r.is_err());
     assert_eq!(r.err().unwrap().code(), ErrorCode::UNRESOLVABLE_CONFLICT);
 
     Ok(())
+}
+
+#[async_trait::async_trait]
+trait TryCommitCompact {
+    async fn try_commit_compact(self, table: &FuseTable, ctx: Arc<QueryContext>) -> Result<()>;
+}
+
+#[async_trait::async_trait]
+impl TryCommitCompact for SegmentCompactMutator {
+    async fn try_commit_compact(self, table: &FuseTable, ctx: Arc<QueryContext>) -> Result<()> {
+        let base_snapshot = self.base_snapshot().clone();
+        let table_meta_timestamps =
+            ctx.get_table_meta_timestamps(table, Some(base_snapshot.clone()))?;
+        let compaction = self.into_compaction_state();
+        if compaction.new_segment_paths.is_empty() {
+            return Ok(());
+        }
+        let mut pipeline = Pipeline::create();
+        table.build_compact_segment_pipeline(
+            ctx.clone(),
+            &mut pipeline,
+            compaction,
+            base_snapshot,
+            table_meta_timestamps,
+        )?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+        let executor = PipelineCompleteExecutor::from_pipelines(vec![pipeline], executor_settings)?;
+        ctx.set_executor(executor.get_inner())?;
+        executor.execute().await?;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -231,10 +269,34 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     }
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_changes_preserve_position() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let threshold = BlockThresholds {
+        block_per_segment: 3,
+        ..Default::default()
+    };
+    let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, threshold)?;
+
+    let (state, _) = case_fixture
+        .run(&[10, 10, 1, 2, 10, 10], None, None)
+        .await?;
+
+    assert_eq!(state.new_segment_paths.len(), 1);
+    let new_segment = (state.new_segment_paths[0].clone(), SegmentInfo::VERSION);
+    assert_eq!(state.replaced_segments.get(&2), Some(&new_segment));
+    assert_eq!(state.removed_segment_indexes, vec![3]);
+    assert_eq!(state.segments_locations[2], new_segment);
+    assert_eq!(state.segments_locations.len(), 5);
+
+    Ok(())
+}
+
 pub async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
-    mutator.try_commit(fuse_table).await
+    mutator.try_commit_compact(fuse_table, ctx).await
 }
 
 async fn build_mutator(
@@ -270,7 +332,7 @@ async fn build_mutator(
         compact_params,
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
-        tbl.cluster_key_id(),
+        tbl.cluster_key_info(),
         table_meta_timestamps,
     )?;
 
@@ -667,9 +729,11 @@ impl CompactSegmentTestFixture {
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
 
+        let cluster_key_info = cluster_key_id
+            .map(|id| ClusterKeyInfo::new((id, "(id)".to_string()), ClusterType::Linear));
         let seg_acc = SegmentCompactor::new(
             self.threshold.block_per_segment as u64,
-            cluster_key_id,
+            cluster_key_info.clone(),
             max_threads,
             &fuse_segment_io,
             data_accessor,
@@ -689,12 +753,18 @@ impl CompactSegmentTestFixture {
         .await?;
         let mut summary = Statistics::default();
         for segment in segments {
-            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_id);
+            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info.as_ref());
         }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
+        let num_locations = locations.len();
+        let reverse_locations = locations
+            .into_iter()
+            .enumerate()
+            .map(|(idx, location)| (num_locations - idx - 1, location))
+            .collect();
         let state = seg_acc
-            .compact(locations, limit, |status| {
+            .compact(reverse_locations, limit, |status| {
                 self.ctx.set_status_info(&status);
             })
             .await?;
@@ -734,7 +804,8 @@ impl CompactSegmentTestFixture {
                         &block,
                         None,
                         &schema,
-                        &std::collections::BTreeMap::new(),
+                        &BTreeMap::new(),
+                        HashMap::new(),
                     )?;
 
                     let cluster_stats = if unclustered && num_blocks % 4 == 0 {
@@ -754,7 +825,7 @@ impl CompactSegmentTestFixture {
                             } else {
                                 0
                             };
-                            ClusterStatistics::new(v, left, right, level, None)
+                            ClusterStatistics::new(v, left, right, level)
                         })
                     };
 
@@ -768,8 +839,7 @@ impl CompactSegmentTestFixture {
                         ..Default::default()
                     };
 
-                    let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                    let col_metas = serialize_block(&write_settings, &schema, block, &mut buf)?;
+                    let (col_metas, buf) = serialize_block(&write_settings, &schema, block)?;
                     let file_size = buf.len() as u64;
 
                     data_accessor.write(&location.0, buf).await?;
@@ -799,7 +869,9 @@ impl CompactSegmentTestFixture {
                     collected_blocks.push(block_meta.clone());
                     stats_acc.add_block(block_meta).unwrap();
                 }
-                let segment_info = stats_acc.build(thresholds, cluster_key_id, None)?;
+                let cluster_key_info = cluster_key_id
+                    .map(|id| ClusterKeyInfo::new((id, "(id)".to_string()), ClusterType::Linear));
+                let segment_info = stats_acc.build(thresholds, cluster_key_info.as_ref(), None)?;
                 let path = location_gen
                     .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
                 segment_info.write_meta(&data_accessor, &path).await?;
@@ -1034,23 +1106,33 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             false,
         )
         .await?;
+        let cluster_key_info = Some(ClusterKeyInfo::new(
+            (cluster_key_id, "(id)".to_string()),
+            ClusterType::Linear,
+        ));
         let mut summary = Statistics::default();
         for segment in &segments {
-            merge_statistics_mut(&mut summary, &segment.summary, Some(cluster_key_id));
+            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info.as_ref());
         }
 
         eprintln!("running compact, limit {}", limit);
         let seg_acc = SegmentCompactor::new(
             threshold.block_per_segment as u64,
-            Some(cluster_key_id),
+            cluster_key_info.clone(),
             chunk_size,
             &fuse_segment_io,
             &data_accessor,
             &location_gen,
             TestFixture::default_table_meta_timestamps(),
         );
+        let num_locations = locations.len();
+        let reverse_locations = locations
+            .into_iter()
+            .enumerate()
+            .map(|(idx, location)| (num_locations - idx - 1, location))
+            .collect();
         let state = seg_acc
-            .compact(locations, limit, |status| {
+            .compact(reverse_locations, limit, |status| {
                 ctx.set_status_info(&status);
             })
             .await?;
@@ -1059,8 +1141,8 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         for chunks in segments.chunks_mut(chunk_size) {
             chunks.sort_by(|a, b| {
                 sort_by_cluster_stats(
-                    &a.summary.cluster_stats,
-                    &b.summary.cluster_stats,
+                    a.summary.cluster_stats.as_ref(),
+                    b.summary.cluster_stats.as_ref(),
                     cluster_key_id,
                 )
             });
@@ -1089,7 +1171,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             merge_statistics_mut(
                 &mut statistics_of_segments,
                 &segment.summary,
-                Some(cluster_key_id),
+                cluster_key_info.as_ref(),
             );
 
             output_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));

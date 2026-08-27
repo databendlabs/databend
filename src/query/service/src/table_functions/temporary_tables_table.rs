@@ -117,16 +117,15 @@ impl SyncSystemTable for TemporaryTablesTable {
                 })
                 .ok_or_else(|| format!("Invalid table desc: {}", desc))?;
 
-            let user = session_key.split('/').next().unwrap().to_string();
-            let session_id = session_key.split('/').nth(1).unwrap().to_string();
+            let (user, session_id) = parse_temp_table_session_key(&session_key, &typ)?;
             let is_current_session = {
                 if current_session_type == SessionType::HTTPQuery {
                     current_client_session_id
                         .as_ref()
-                        .map(|id| id == &session_id)
+                        .map(|id| id.as_str() == session_id)
                         .unwrap_or(false)
                 } else {
-                    current_session_id == session_id
+                    current_session_id.as_str() == session_id
                 }
             };
 
@@ -135,8 +134,8 @@ impl SyncSystemTable for TemporaryTablesTable {
             names.push(table.name);
             table_ids.push(table.ident.table_id);
             engines.push(meta.engine);
-            users.push(user);
-            session_ids.push(session_id);
+            users.push(user.to_string());
+            session_ids.push(session_id.to_string());
             session_types.push(typ.to_string());
             is_current_sessions.push(is_current_session);
             created_ons.push(meta.created_on.timestamp_micros());
@@ -169,6 +168,28 @@ impl SyncSystemTable for TemporaryTablesTable {
         block.add_const_column(Scalar::String(node_id), DataType::String);
         Ok(block)
     }
+}
+
+fn parse_temp_table_session_key<'a>(
+    session_key: &'a str,
+    typ: &SessionType,
+) -> Result<(&'a str, &'a str)> {
+    let mut parts = session_key.split('/');
+    match typ {
+        SessionType::MySQL => match (parts.next(), parts.next(), parts.next()) {
+            (Some(user), Some(session_id), None) => Ok((user, session_id)),
+            _ => invalid_temp_table_session_key(session_key, typ),
+        },
+        SessionType::HTTPQuery => match (parts.next(), parts.next(), parts.next(), parts.next()) {
+            (Some(_tenant), Some(user), Some(session_id), None) => Ok((user, session_id)),
+            _ => invalid_temp_table_session_key(session_key, typ),
+        },
+        _ => invalid_temp_table_session_key(session_key, typ),
+    }
+}
+
+fn invalid_temp_table_session_key<T>(session_key: &str, typ: &SessionType) -> Result<T> {
+    Err(format!("Invalid temporary table session key: {session_key} for session type {typ}").into())
 }
 
 impl TemporaryTablesTable {
@@ -215,5 +236,47 @@ impl TemporaryTablesTable {
             ..Default::default()
         };
         SyncOneBlockSystemTable::create(Self { table_info })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::session_type::SessionType;
+
+    use super::parse_temp_table_session_key;
+
+    #[test]
+    fn test_parse_mysql_temp_table_session_key() {
+        assert_eq!(
+            ("analyst", "mysql-session"),
+            parse_temp_table_session_key("analyst/mysql-session", &SessionType::MySQL).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_http_temp_table_session_key() {
+        assert_eq!(
+            ("analyst", "http-client-session"),
+            parse_temp_table_session_key(
+                "tenant_a/analyst/http-client-session",
+                &SessionType::HTTPQuery
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_rejects_wrong_temp_table_session_key_shape() {
+        assert!(
+            parse_temp_table_session_key(
+                "tenant_a/analyst/http-client-session",
+                &SessionType::MySQL
+            )
+            .is_err()
+        );
+        assert!(
+            parse_temp_table_session_key("analyst/http-client-session", &SessionType::HTTPQuery)
+                .is_err()
+        );
     }
 }

@@ -28,6 +28,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -55,7 +56,6 @@ pub struct SemiLeftHashJoin {
     pub(crate) inlist_threshold: usize,
     pub(crate) bloom_threshold: usize,
     pub(crate) min_max_threshold: usize,
-    pub(crate) spatial_threshold: usize,
 }
 
 impl SemiLeftHashJoin {
@@ -71,7 +71,6 @@ impl SemiLeftHashJoin {
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
@@ -93,7 +92,6 @@ impl SemiLeftHashJoin {
             inlist_threshold,
             bloom_threshold,
             min_max_threshold,
-            spatial_threshold,
         })
     }
 }
@@ -120,7 +118,6 @@ impl Join for SemiLeftHashJoin {
             self.inlist_threshold,
             self.bloom_threshold,
             self.min_max_threshold,
-            self.spatial_threshold,
         )
     }
 
@@ -264,6 +261,8 @@ impl<'a> JoinStream for LeftSemiFilterHashJoinStream<'a> {
         let mut selected = vec![false; num_rows];
 
         loop {
+            check_interrupt()?;
+
             self.probed_rows.clear();
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;

@@ -26,10 +26,11 @@ jobs:
       sha: ${{ steps.sha.outputs.sha }}
       target: ${{ steps.sha.outputs.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
+          allow-unsafe-pr-checkout: true
       - name: Get SHA
         shell: bash
         id: sha
@@ -59,10 +60,11 @@ jobs:
           - { arch: x86_64, runner: X64, opt_level: s }
           - { arch: aarch64, runner: ARM64, opt_level: 3 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: ${{ needs.info.outputs.sha }}
+          allow-unsafe-pr-checkout: true
       - name: Build Release
         uses: ./.github/actions/build_linux
         timeout-minutes: 120
@@ -92,7 +94,7 @@ jobs:
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Download artifact for x86_64
         uses: ./.github/actions/artifact_download
         with:
@@ -124,7 +126,7 @@ jobs:
           echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}-${ts}" >> $GITHUB_OUTPUT
       - name: Get Image Tags
         id: tags
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
@@ -139,7 +141,7 @@ jobs:
             }
             core.setOutput('tags', tags.join(','));
       - name: push service image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           push: true
           tags: ${{ steps.tags.outputs.tags }}

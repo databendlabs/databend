@@ -3,20 +3,20 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop database if exists db_stream" | $BENDSQL_CLIENT_CONNECT
-echo "create database db_stream" | $BENDSQL_CLIENT_CONNECT
-echo "create table db_stream.base(a int) change_tracking = true" | $BENDSQL_CLIENT_CONNECT
-echo "create table db_stream.rand like db_stream.base Engine = Random" | $BENDSQL_CLIENT_CONNECT
-echo "create stream db_stream.s on table db_stream.base" | $BENDSQL_CLIENT_CONNECT
-echo "create table db_stream.sink(a int)" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists db_stream" | bendsql_connect_root
+echo "create database db_stream" | bendsql_connect_root
+echo "create table db_stream.base(a int) change_tracking = true" | bendsql_connect_root
+echo "create table db_stream.rand like db_stream.base Engine = Random" | bendsql_connect_root
+echo "create stream db_stream.s on table db_stream.base" | bendsql_connect_root
+echo "create table db_stream.sink(a int)" | bendsql_connect_root
 
 # Define function to write data into the base table.
 write_to_base() {
   for i in {1..20}; do
-    echo "insert into db_stream.base select * from db_stream.rand limit 10" | $BENDSQL_CLIENT_OUTPUT_NULL
+    echo "insert into db_stream.base select * from db_stream.rand limit 10" | bendsql_connect_root_null
 
     if (( i % 5 == 0 )); then
-      echo "optimize table db_stream.base compact" | $BENDSQL_CLIENT_CONNECT
+      echo "optimize table db_stream.base compact" | bendsql_connect_root
     fi
   done
 }
@@ -24,7 +24,7 @@ write_to_base() {
 # Define function to consume data from the stream into the sink table.
 consume_from_stream() {
   for i in {1..10}; do
-    echo "insert into db_stream.sink select a from db_stream.s" | $BENDSQL_CLIENT_OUTPUT_NULL
+    echo "insert into db_stream.sink select a from db_stream.s" | bendsql_connect_root_null
   done
 }
 
@@ -40,21 +40,21 @@ wait $write_pid
 wait $consume_pid
 
 # Perform a final consume operation from the stream to ensure all data is consumed
-echo "insert into db_stream.sink select a from db_stream.s" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "insert into db_stream.sink select a from db_stream.s" | bendsql_connect_root_null
 
 # Fetch the counts and sums from both base and sink tables
-base_count=$(echo "SELECT COUNT(*) FROM db_stream.base;" | $BENDSQL_CLIENT_CONNECT)
-sink_count=$(echo "SELECT COUNT(*) FROM db_stream.sink;" | $BENDSQL_CLIENT_CONNECT)
-base_sum=$(echo "SELECT SUM(a) FROM db_stream.base;" | $BENDSQL_CLIENT_CONNECT)
-sink_sum=$(echo "SELECT SUM(a) FROM db_stream.sink;" | $BENDSQL_CLIENT_CONNECT)
+base_count=$(echo "SELECT COUNT(*) FROM db_stream.base;" | bendsql_connect_root)
+sink_count=$(echo "SELECT COUNT(*) FROM db_stream.sink;" | bendsql_connect_root)
+base_sum=$(echo "SELECT SUM(a) FROM db_stream.base;" | bendsql_connect_root)
+sink_sum=$(echo "SELECT SUM(a) FROM db_stream.sink;" | bendsql_connect_root)
 
 # Compare the counts and sums to verify consistency between the base and sink tables
 if [ "$base_count" -eq "$sink_count" ] && [ "$base_sum" -eq "$sink_sum" ]; then
   echo "test stream success"
 fi
 
-echo "drop stream if exists db_stream.s" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists db_stream.base all" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists db_stream.rand all" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists db_stream.sink all" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists db_stream" | $BENDSQL_CLIENT_CONNECT
+echo "drop stream if exists db_stream.s" | bendsql_connect_root
+echo "drop table if exists db_stream.base all" | bendsql_connect_root
+echo "drop table if exists db_stream.rand all" | bendsql_connect_root
+echo "drop table if exists db_stream.sink all" | bendsql_connect_root
+echo "drop database if exists db_stream" | bendsql_connect_root

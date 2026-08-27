@@ -59,7 +59,7 @@ export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode
 echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql
 
 # Load the data
-echo "Creating table for benchmark with native storage format..."
+echo "Creating table for benchmark..."
 bendsql <"${BENCHMARK_DATASET}/create_local.sql"
 
 # Detect instance type

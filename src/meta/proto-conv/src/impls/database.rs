@@ -49,23 +49,22 @@ impl FromToProto for mt::DatabaseMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DatabaseMeta, Incompatible> {
-        let p = pb::DatabaseMeta {
+    fn to_pb(&self) -> pb::DatabaseMeta {
+        pb::DatabaseMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
-            created_on: self.created_on.to_pb()?,
-            updated_on: self.updated_on.to_pb()?,
-            drop_on: self.drop_on.to_pb_opt()?,
+            created_on: self.created_on.to_pb(),
+            updated_on: self.updated_on.to_pb(),
+            drop_on: self.drop_on.to_pb_opt(),
             gc_in_progress: self.gc_in_progress,
             comment: self.comment.clone(),
             from_share: None,
             using_share_endpoint: None,
             from_share_db_id: None,
-        };
-        Ok(p)
+        }
     }
 }
 
@@ -86,22 +85,22 @@ impl FromToProto for mt::ShareDbId {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::ShareDbId, Incompatible> {
+    fn to_pb(&self) -> pb::ShareDbId {
         match self {
-            Self::Usage(id) => Ok(Self::PB {
+            Self::Usage(id) => Self::PB {
                 db_id: Some(pb::share_db_id::DbId::Usage(pb::ShareUsageDbId {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     id: *id,
                 })),
-            }),
-            Self::Reference(id) => Ok(Self::PB {
+            },
+            Self::Reference(id) => Self::PB {
                 db_id: Some(pb::share_db_id::DbId::Reference(pb::ShareReferenceDbId {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     id: *id,
                 })),
-            }),
+            },
         }
     }
 }
@@ -118,12 +117,11 @@ impl FromToProto for mt::DbIdList {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
-        let p = pb::DbIdList {
+    fn to_pb(&self) -> pb::DbIdList {
+        pb::DbIdList {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             ids: self.id_list.clone(),
-        };
-        Ok(p)
+        }
     }
 }

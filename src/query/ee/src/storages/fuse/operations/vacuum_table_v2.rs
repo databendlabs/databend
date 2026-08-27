@@ -15,6 +15,7 @@
 // Logs from this module will show up as "[FUSE-VACUUM2] ...".
 databend_common_tracing::register_module_tag!("[FUSE-VACUUM2]");
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -35,6 +36,7 @@ use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_store::MetaStore;
 use databend_common_storages_fuse::FuseTable;
@@ -45,7 +47,8 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ASSUMPTION_MAX_TXN_DURATION;
 use databend_common_storages_fuse::operations::SnapshotGcSelection;
 use databend_common_users::UserApiProvider;
-use databend_meta_client::types::MatchSeq;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -78,6 +81,8 @@ struct BranchGcState {
     gc_root_snapshot_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
 }
+
+const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 
 /// Phase B result for a single branch.
 enum BranchPhaseResult {
@@ -628,7 +633,7 @@ async fn vacuum_base_table(
                 .drop_table_tag(DropTableTagReq {
                     table_id: fuse_table.get_id(),
                     tag_name,
-                    seq: MatchSeq::Exact(seq_tag.seq),
+                    seq: Some(seq_tag.seq),
                 })
                 .await
             {
@@ -924,10 +929,7 @@ async fn cleanup_table_files(
     blocks_to_gc: Vec<String>,
 ) -> Result<Vec<String>> {
     let table_info = fuse_table.get_table_info();
-    let op = Files::create(ctx.clone(), fuse_table.get_operator());
-    let begin = std::time::Instant::now();
-    // Companion files are derived from blocks/segments, so deleting them first keeps the data-file
-    // deletion order aligned with the rest of vacuum2.
+    let start = std::time::Instant::now();
     let stats_to_gc = segments_to_gc
         .iter()
         .map(|path| {
@@ -937,13 +939,10 @@ async fn cleanup_table_files(
     ctx.set_status_info(&format!(
         "Collected stats_to_gc for table {}, elapsed: {:?}, stats_to_gc: {:?}",
         table_info.desc,
-        begin.elapsed(),
+        start.elapsed(),
         slice_summary(&stats_to_gc)
     ));
-    let stats_gc_count = stats_to_gc.len();
-    op.remove_file_in_batch(&stats_to_gc).await?;
 
-    let start = std::time::Instant::now();
     let catalog = ctx.get_default_catalog()?;
     let table_agg_index_ids = catalog
         .list_index_ids_by_table_id(ListIndexesByIdReq::new(
@@ -952,22 +951,135 @@ async fn cleanup_table_files(
         ))
         .await?;
     let inverted_indexes = &table_info.meta.indexes;
-    let indexes_per_block = table_agg_index_ids.len() + inverted_indexes.len() + 2;
+    let op = Files::create(ctx.clone(), fuse_table.get_operator());
+    let mut files_to_gc = Vec::with_capacity(
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 2)
+            + stats_to_gc.len()
+            + segments_to_gc.len()
+            + snapshots_to_gc.len(),
+    );
 
-    // TODO: index_paths pre-allocates blocks_to_gc * indexes_per_block strings, which can be
-    // very large for tables with millions of blocks and many indexes. Consider batched deletion
-    // if OOM becomes an issue.
-    let mut index_paths = Vec::with_capacity(blocks_to_gc.len() * indexes_per_block);
-    for loc in &blocks_to_gc {
-        for index_id in &table_agg_index_ids {
-            index_paths.push(
+    // Index locations are derived from block locations, so remove indexes before blocks.
+    // Process bounded chunks to avoid materializing all index paths for large tables.
+    purge_block_chunks(
+        &op,
+        &ctx,
+        table_info.desc.as_str(),
+        &blocks_to_gc,
+        &table_agg_index_ids,
+        inverted_indexes,
+        &mut files_to_gc,
+        start,
+    )
+    .await?;
+
+    // Segment stats are derived from segment locations, so remove them before segments.
+    if !stats_to_gc.is_empty() {
+        op.remove_file_in_batch(&stats_to_gc).await?;
+        files_to_gc.extend(stats_to_gc);
+    }
+    if !segments_to_gc.is_empty() {
+        op.remove_file_in_batch(&segments_to_gc).await?;
+        files_to_gc.extend(segments_to_gc);
+    }
+
+    if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
+        for path in &snapshots_to_gc {
+            snapshot_cache.evict(path);
+        }
+    }
+    if !snapshots_to_gc.is_empty() {
+        op.remove_file_in_batch(&snapshots_to_gc).await?;
+        files_to_gc.extend(snapshots_to_gc);
+    }
+
+    // Legacy branch/tag refs were removed without compatibility guarantees.
+    let legacy_ref_dir = fuse_table
+        .meta_location_generator()
+        .ref_snapshot_location_prefix();
+    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
+
+    ctx.set_status_info(&format!(
+        "Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&files_to_gc),
+    ));
+    Ok(files_to_gc)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn purge_block_chunks(
+    op: &Files,
+    ctx: &Arc<dyn TableContext>,
+    table_desc: &str,
+    blocks_to_gc: &[String],
+    table_agg_index_ids: &[u64],
+    inverted_indexes: &BTreeMap<String, TableIndex>,
+    files_to_gc: &mut Vec<String>,
+    start: std::time::Instant,
+) -> Result<()> {
+    if blocks_to_gc.is_empty() {
+        return Ok(());
+    }
+
+    let total_chunks = blocks_to_gc.len().div_ceil(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    for (chunk_idx, block_chunk) in blocks_to_gc
+        .chunks(VACUUM2_BLOCK_DELETE_CHUNK_SIZE)
+        .enumerate()
+    {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context("failed to vacuum block chunk"));
+        }
+
+        let indexes_to_gc =
+            collect_block_index_locations(block_chunk, table_agg_index_ids, inverted_indexes);
+        ctx.set_status_info(&format!(
+            "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}/{}, blocks in chunk: {}, indexes_to_gc: {:?}",
+            table_desc,
+            start.elapsed(),
+            chunk_idx + 1,
+            total_chunks,
+            block_chunk.len(),
+            slice_summary(&indexes_to_gc)
+        ));
+        if !indexes_to_gc.is_empty() {
+            op.remove_file_in_batch(&indexes_to_gc).await?;
+            files_to_gc.extend(indexes_to_gc);
+        }
+
+        op.remove_file_in_batch(block_chunk).await?;
+        files_to_gc.extend(block_chunk.iter().cloned());
+        ctx.set_status_info(&format!(
+            "Removed block chunk for table {}, elapsed: {:?}, block chunk: {}/{}, blocks removed in chunk: {}",
+            table_desc,
+            start.elapsed(),
+            chunk_idx + 1,
+            total_chunks,
+            block_chunk.len(),
+        ));
+    }
+    Ok(())
+}
+
+fn collect_block_index_locations(
+    blocks_to_gc: &[String],
+    table_agg_index_ids: &[u64],
+    inverted_indexes: &BTreeMap<String, TableIndex>,
+) -> Vec<String> {
+    let mut indexes_to_gc = Vec::with_capacity(
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
+    );
+    for loc in blocks_to_gc {
+        for index_id in table_agg_index_ids {
+            indexes_to_gc.push(
                 TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                     loc, *index_id,
                 ),
             );
         }
         for idx in inverted_indexes.values() {
-            index_paths.push(
+            indexes_to_gc.push(
                 TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                     loc,
                     idx.name.as_str(),
@@ -975,54 +1087,10 @@ async fn cleanup_table_files(
                 ),
             );
         }
-        index_paths
+        indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
-        // vacuum by refresh virtual column.
-        // index_paths.push(TableMetaLocationGenerator::gen_virtual_block_location(loc));
     }
-    ctx.set_status_info(&format!(
-        "Collected indexes_to_gc for table {}, elapsed: {:?}, indexes_to_gc: {:?}",
-        table_info.desc,
-        start.elapsed(),
-        slice_summary(&index_paths)
-    ));
-    let indexes_gc_count = index_paths.len();
-    op.remove_file_in_batch(&index_paths).await?;
-
-    let subject_files_to_gc = segments_to_gc
-        .into_iter()
-        .chain(blocks_to_gc)
-        .collect::<Vec<_>>();
-
-    op.remove_file_in_batch(&subject_files_to_gc).await?;
-    if !snapshots_to_gc.is_empty() {
-        fuse_table
-            .cleanup_snapshot_files(&ctx, &snapshots_to_gc, false)
-            .await?;
-    }
-
-    info!(
-        "cleanup_table_files: subject_files={}, snapshots={}, indexes={}, stats_files={}",
-        subject_files_to_gc.len(),
-        snapshots_to_gc.len(),
-        indexes_gc_count,
-        stats_gc_count,
-    );
-
-    let files_to_gc: Vec<_> = subject_files_to_gc
-        .into_iter()
-        .chain(stats_to_gc)
-        .chain(snapshots_to_gc)
-        .chain(index_paths)
-        .collect();
-    ctx.set_status_info(&format!(
-        "Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
-        table_info.desc,
-        begin.elapsed(),
-        slice_summary(&files_to_gc),
-    ));
-
-    Ok(files_to_gc)
+    indexes_to_gc
 }
 
 pub async fn prepare_snapshot_gc_selection(
@@ -1347,5 +1415,48 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
         )
     } else {
         format!("{:?}", s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::schema::TableIndexType;
+
+    use super::*;
+
+    #[test]
+    fn test_collect_block_index_locations_keeps_per_block_order() {
+        let blocks = vec![
+            "1/2/_b/g0123456789abcdef0123456789abcdef_v2.parquet".to_string(),
+            "1/2/_b/hfedcba9876543210fedcba9876543210_v2.parquet".to_string(),
+        ];
+        let mut inverted_indexes = BTreeMap::new();
+        inverted_indexes.insert("idx".to_string(), TableIndex {
+            index_type: TableIndexType::Inverted,
+            name: "idx".to_string(),
+            column_ids: vec![0],
+            sync_creation: true,
+            version: "123456789".to_string(),
+            options: BTreeMap::new(),
+        });
+
+        let indexes = collect_block_index_locations(&blocks, &[7], &inverted_indexes);
+
+        assert_eq!(indexes, vec![
+            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[0], 7),
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &blocks[0],
+                "idx",
+                "123456789",
+            ),
+            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
+            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[1], 7),
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &blocks[1],
+                "idx",
+                "123456789",
+            ),
+            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
+        ]);
     }
 }

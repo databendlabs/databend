@@ -42,24 +42,30 @@ Sort(Single)
 query T
 explain select number from (select t.number from numbers(10) as t order by number desc limit 8) order by number asc limit 9
 ----
-Limit
+TopN(Final)
 ├── output columns: [t.number (#0)]
+├── sort keys: [number ASC NULLS LAST]
 ├── limit: 9
 ├── offset: 0
 ├── estimated rows: 8.00
-└── Sort(Single)
+└── TopN(Partial)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
+    ├── limit: 9
+    ├── offset: 0
     ├── estimated rows: 8.00
-    └── Limit
+    └── TopN(Final)
         ├── output columns: [t.number (#0)]
+        ├── sort keys: [number DESC NULLS LAST]
         ├── limit: 8
         ├── offset: 0
         ├── estimated rows: 8.00
-        └── Sort(Single)
+        └── TopN(Partial)
             ├── output columns: [t.number (#0)]
             ├── sort keys: [number DESC NULLS LAST]
-            ├── estimated rows: 10.00
+            ├── limit: 8
+            ├── offset: 0
+            ├── estimated rows: 8.00
             └── TableScan
                 ├── table: default.system.numbers
                 ├── scan id: 0
@@ -72,16 +78,45 @@ Limit
                 └── estimated rows: 10.00
 
 query T
+explain select number from numbers(10) order by number asc limit 3
+----
+TopN(Final)
+├── output columns: [numbers.number (#0)]
+├── sort keys: [number ASC NULLS LAST]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── TopN(Partial)
+    ├── output columns: [numbers.number (#0)]
+    ├── sort keys: [number ASC NULLS LAST]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 3.00
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── scan id: 0
+        ├── output columns: [number (#0)]
+        ├── read rows: 10
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: 3]
+        └── estimated rows: 10.00
+
+query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3
 ----
-Limit
+TopN(Final)
 ├── output columns: [t.number (#0)]
+├── sort keys: [number DESC NULLS LAST]
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort(Single)
+└── TopN(Partial)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number DESC NULLS LAST]
+    ├── limit: 3
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── AggregateFinal
         ├── output columns: [t.number (#0)]
@@ -174,14 +209,17 @@ Limit
 query T
 explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1
 ----
-Limit
+TopN(Final)
 ├── output columns: [count(t1.number) (#1), c (#4)]
+├── sort keys: [count(t1.number) ASC NULLS LAST]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort(Single)
+└── TopN(Partial)
     ├── output columns: [count(t1.number) (#1), c (#4)]
     ├── sort keys: [count(t1.number) ASC NULLS LAST]
+    ├── limit: 1
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── HashJoin
         ├── output columns: [count(t1.number) (#1), c (#4)]
@@ -193,7 +231,7 @@ Limit
         ├── estimated rows: 1.00
         ├── EvalScalar(Build)
         │   ├── output columns: [c (#4)]
-        │   ├── expressions: [CAST(t4.c (#3) AS UInt64 NULL)]
+        │   ├── expressions: [CAST(count(t.number) (#3) AS UInt64 NULL)]
         │   ├── estimated rows: 1.00
         │   └── AggregateFinal
         │       ├── output columns: [count(t.number) (#3), t.number (#2)]
@@ -249,13 +287,13 @@ digraph {
     3 [ label = "CompoundBlockOperator(Map)" ]
     4 [ label = "TransformRankLimitSort" ]
     5 [ label = "TransformRankLimitSort" ]
-    6 [ label = "NewTransformPartialAggregate" ]
-    7 [ label = "NewTransformPartialAggregate" ]
+    6 [ label = "TransformPartialAggregate" ]
+    7 [ label = "TransformPartialAggregate" ]
     8 [ label = "LocalScatterTransform(Bucket)" ]
     9 [ label = "LocalScatterTransform(Bucket)" ]
     10 [ label = "ExchangeShuffleTransform" ]
-    11 [ label = "NewTransformFinalAggregate" ]
-    12 [ label = "NewTransformFinalAggregate" ]
+    11 [ label = "TransformFinalAggregate" ]
+    12 [ label = "TransformFinalAggregate" ]
     13 [ label = "Resize" ]
     14 [ label = "Resize" ]
     15 [ label = "LimitTransform" ]

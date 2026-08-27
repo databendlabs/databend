@@ -34,10 +34,7 @@ impl DictionaryIdIdent {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::DictionaryMeta;
-    use crate::schema::dictionary_id_ident::DictionaryIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DictionaryIdRsc;
@@ -46,10 +43,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "DictionaryId";
         const HAS_TENANT: bool = false;
         type ValueType = DictionaryMeta;
-    }
-
-    impl kvapi::Value for DictionaryMeta {
-        type KeyType = DictionaryIdIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

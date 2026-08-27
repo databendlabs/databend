@@ -142,7 +142,7 @@ where
 
             txn.condition.push(txn_cond_eq_seq(name_ident, seq));
             txn.if_then
-                .push(txn_put_pb_with_ttl(name_ident, &updated, ttl)?);
+                .push(txn_put_pb_with_ttl(name_ident, &updated, ttl));
 
             let (succ, _responses) = send_txn(self, txn).await?;
 

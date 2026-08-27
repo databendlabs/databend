@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::is_range_join_condition;
@@ -26,6 +27,30 @@ use databend_common_sql::plans::JoinType;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+
+fn is_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
+    matches!(stat_info.statistics.precise_cardinality, Some(1)) || stat_info.cardinality == 1.0
+}
+
+fn is_precise_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInfo) -> bool {
+    matches!(stat_info.statistics.precise_cardinality, Some(1))
+}
+
+fn single_join_scalar_side_is_precise_single_row(join: &Join, s_expr: &SExpr) -> Result<bool> {
+    match join.single_to_inner {
+        Some(JoinType::LeftSingle) => {
+            let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+            let right_stat_info = right_rel_expr.derive_cardinality()?;
+            Ok(is_precise_single_row(&right_stat_info))
+        }
+        Some(JoinType::RightSingle) => {
+            let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+            let left_stat_info = left_rel_expr.derive_cardinality()?;
+            Ok(is_precise_single_row(&left_stat_info))
+        }
+        _ => Ok(false),
+    }
+}
 
 enum PhysicalJoinType {
     Hash,
@@ -63,6 +88,7 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+    let left_stat_info = left_rel_expr.derive_cardinality()?;
     let right_stat_info = right_rel_expr.derive_cardinality()?;
 
     if !join.equi_conditions.is_empty() {
@@ -75,10 +101,10 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
-        || right_stat_info.cardinality == 1.0
-    {
-        // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
+    if is_single_row(&left_stat_info) || is_single_row(&right_stat_info) {
+        // Prefer CROSS JOIN + FILTER when statistics prove or estimate one side at one row.
+        // HashJoin remains correct if the estimate is wrong and avoids the result-block
+        // overhead that RangeJoin can incur for this shape after join commutation.
         return Ok(PhysicalJoinType::Hash);
     }
 
@@ -111,12 +137,10 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let mut others_required = join
-            .non_equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.used_columns()).cloned().collect()
-            });
+        let mut others_required = required.clone();
+        for condition in &join.non_equi_conditions {
+            condition.collect_used_columns(&mut others_required);
+        }
         if let Some(cache_info) = &join.build_side_cache_info {
             for column in &cache_info.columns {
                 others_required.insert(*column);
@@ -124,28 +148,30 @@ impl PhysicalPlanBuilder {
         }
 
         // Include columns referenced in left conditions and right conditions.
-        let left_required: ColumnSet = join
-            .equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.left.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let right_required: ColumnSet = join
-            .equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.right.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let left_required = left_required.union(&others_required).cloned().collect();
-        let right_required = right_required.union(&others_required).cloned().collect();
+        let mut left_required = others_required.clone();
+        let mut right_required = others_required.clone();
+        for condition in &join.equi_conditions {
+            condition.left.collect_used_columns(&mut left_required);
+            condition.right.collect_used_columns(&mut right_required);
+        }
 
-        // 2. Build physical plan.
+        // 2. Try Build physical spatial join plan.
+        if let Some(candidate) = join.spatial_join.clone() {
+            if let Some(plan) = self
+                .try_build_spatial_join(
+                    *candidate,
+                    s_expr,
+                    required.clone(),
+                    left_required.clone(),
+                    right_required.clone(),
+                )
+                .await?
+            {
+                return Ok(plan);
+            }
+        }
+
+        // 3. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
             if !join.equi_conditions.is_empty() {
@@ -181,11 +207,16 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .cloned()
                 .chain(join.equi_conditions.iter().cloned().map(|condition| {
+                    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                        &condition.left,
+                        &condition.right,
+                    ]);
                     FunctionCall {
                         span: condition.left.span(),
                         func_name: "eq".to_string(),
                         params: vec![],
                         arguments: vec![condition.left, condition.right],
+                        return_type: Box::new(return_type),
                     }
                     .into()
                 }))
@@ -205,8 +236,25 @@ impl PhysicalPlanBuilder {
         } else {
             match physical_join(join, s_expr)? {
                 PhysicalJoinType::Hash => {
+                    // When a LeftSingle/RightSingle join (scalar subquery) has no
+                    // equi-conditions, the hash join executes as a cross join + filter.
+                    // The single-join runtime check can fire during the cross-product
+                    // matching phase before the filter is applied. It is only safe to
+                    // clear the marker when the scalar side itself is proven to produce
+                    // exactly one row. A precise one-row cardinality on the other input
+                    // does not prove that.
+                    let join = if join.equi_conditions.is_empty()
+                        && join.single_to_inner.is_some()
+                        && single_join_scalar_side_is_precise_single_row(join, s_expr)?
+                    {
+                        let mut j = join.clone();
+                        j.single_to_inner = None;
+                        j
+                    } else {
+                        join.clone()
+                    };
                     self.build_hash_join(
-                        join,
+                        &join,
                         s_expr,
                         required,
                         others_required,

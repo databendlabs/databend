@@ -3,10 +3,10 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop table if exists sample_table" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists sample_table" | bendsql_connect_root
 
 ## Create table
-cat <<EOF | $BENDSQL_CLIENT_CONNECT
+cat <<EOF | bendsql_connect_root
 CREATE TABLE sample_table
 (
     Id     INT,
@@ -23,10 +23,10 @@ copy_from_test_csv=(
 
 echo "---test csv field with computed columns"
 for i in "${copy_from_test_csv[@]}"; do
-  echo "$i" | $BENDSQL_CLIENT_CONNECT
-  echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT
-  echo "truncate table sample_table" | $BENDSQL_CLIENT_CONNECT
+  echo "$i" | bendsql_connect_root
+  echo "select * from sample_table" | bendsql_connect_root
+  echo "truncate table sample_table" | bendsql_connect_root
 done
 
 ## Drop table
-echo "drop table if exists sample_table;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists sample_table;" | bendsql_connect_root

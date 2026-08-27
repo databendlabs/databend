@@ -19,8 +19,6 @@ use std::iter::TrustedLen;
 use std::ops::Range;
 use std::sync::Arc;
 
-use databend_common_base::vec_ext::VecExt;
-
 use super::Bitmap;
 use super::utils::BitChunk;
 use super::utils::BitChunksExactMut;
@@ -267,14 +265,12 @@ impl MutableBitmap {
     /// The caller must ensure that the [`MutableBitmap`] has sufficient capacity.
     #[inline]
     pub unsafe fn push_unchecked(&mut self, value: bool) {
-        unsafe {
-            if self.length.is_multiple_of(8) {
-                self.buffer.push_unchecked(0);
-            }
-            let byte = self.buffer.as_mut_slice().last_mut().unwrap();
-            *byte = set(*byte, self.length % 8, value);
-            self.length += 1;
+        if self.length.is_multiple_of(8) {
+            self.buffer.push(0);
         }
+        let byte = self.buffer.as_mut_slice().last_mut().unwrap();
+        *byte = set(*byte, self.length % 8, value);
+        self.length += 1;
     }
 
     /// Returns the number of unset bits on this [`MutableBitmap`].
@@ -525,20 +521,20 @@ unsafe fn extend_aligned_trusted_iter_unchecked(
         // chunks of 64 bits
         for _ in 0..chunks {
             let chunk = get_chunk_unchecked(&mut iterator);
-            buffer.extend_from_slice_unchecked(&chunk.to_le_bytes());
+            buffer.extend_from_slice(&chunk.to_le_bytes());
         }
 
         // remaining complete bytes
         for _ in 0..(remainder / 8) {
             let byte = get_byte_unchecked(8, &mut iterator);
-            buffer.push_unchecked(byte)
+            buffer.push(byte)
         }
 
         // remaining bits
         let remainder = remainder % 8;
         if remainder > 0 {
             let byte = get_byte_unchecked(remainder, &mut iterator);
-            buffer.push_unchecked(byte)
+            buffer.push(byte)
         }
         additional_bits
     }
@@ -744,7 +740,7 @@ impl MutableBitmap {
             }
 
             // SAFETY: Already allocated sufficient capacity
-            unsafe { buffer.extend_from_slice_unchecked(&packed.to_le_bytes()) }
+            buffer.extend_from_slice(&packed.to_le_bytes())
         }
 
         if remainder != 0 {
@@ -755,7 +751,7 @@ impl MutableBitmap {
             }
 
             // SAFETY: Already allocated sufficient capacity
-            unsafe { buffer.extend_from_slice_unchecked(&packed.to_le_bytes()) }
+            buffer.extend_from_slice(&packed.to_le_bytes())
         }
 
         buffer.truncate(len.div_ceil(8));

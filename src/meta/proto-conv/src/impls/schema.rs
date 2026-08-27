@@ -18,8 +18,17 @@
 use databend_common_expression as ex;
 use databend_common_expression::TableDataType;
 use databend_common_expression::VariantDataType;
+use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::OrderedFloat;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::decimal::i256;
 use databend_common_protos::pb;
+use databend_common_protos::pb::aggregate_decimal_param;
+use databend_common_protos::pb::aggregate_function_param;
+use databend_common_protos::pb::aggregate_number_param;
 use databend_common_protos::pb::data_type::Dt;
 use databend_common_protos::pb::data_type::Dt24;
 use databend_common_protos::pb::number::Num;
@@ -32,6 +41,291 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 use crate::reader_check_msg;
+
+fn aggregate_param_from_pb(
+    param: pb::AggregateFunctionParam,
+) -> Result<AggregateFunctionParam, Incompatible> {
+    reader_check_msg(param.ver, param.min_reader_ver)?;
+    let value = param.value.ok_or_else(|| {
+        Incompatible::new("AggregateFunctionParam.value can not be None".to_string())
+    })?;
+
+    match value {
+        aggregate_function_param::Value::NullValue(_) => Ok(AggregateFunctionParam::Null),
+        aggregate_function_param::Value::Number(number) => {
+            reader_check_msg(number.ver, number.min_reader_ver)?;
+            let value = number.value.ok_or_else(|| {
+                Incompatible::new("AggregateNumberParam.value can not be None".to_string())
+            })?;
+            let number = match value {
+                aggregate_number_param::Value::Uint8(value) => {
+                    NumberScalar::UInt8(value.try_into().map_err(|_| {
+                        Incompatible::new(format!(
+                            "Aggregate uint8 parameter is out of range: {value}"
+                        ))
+                    })?)
+                }
+                aggregate_number_param::Value::Uint16(value) => {
+                    NumberScalar::UInt16(value.try_into().map_err(|_| {
+                        Incompatible::new(format!(
+                            "Aggregate uint16 parameter is out of range: {value}"
+                        ))
+                    })?)
+                }
+                aggregate_number_param::Value::Uint32(value) => NumberScalar::UInt32(value),
+                aggregate_number_param::Value::Uint64(value) => NumberScalar::UInt64(value),
+                aggregate_number_param::Value::Int8(value) => {
+                    NumberScalar::Int8(value.try_into().map_err(|_| {
+                        Incompatible::new(format!(
+                            "Aggregate int8 parameter is out of range: {value}"
+                        ))
+                    })?)
+                }
+                aggregate_number_param::Value::Int16(value) => {
+                    NumberScalar::Int16(value.try_into().map_err(|_| {
+                        Incompatible::new(format!(
+                            "Aggregate int16 parameter is out of range: {value}"
+                        ))
+                    })?)
+                }
+                aggregate_number_param::Value::Int32(value) => NumberScalar::Int32(value),
+                aggregate_number_param::Value::Int64(value) => NumberScalar::Int64(value),
+                aggregate_number_param::Value::Float32Bits(value) => {
+                    NumberScalar::Float32(OrderedFloat(f32::from_bits(value)))
+                }
+                aggregate_number_param::Value::Float64Bits(value) => {
+                    NumberScalar::Float64(OrderedFloat(f64::from_bits(value)))
+                }
+            };
+            Ok(AggregateFunctionParam::Number(number))
+        }
+        aggregate_function_param::Value::Decimal(decimal) => {
+            reader_check_msg(decimal.ver, decimal.min_reader_ver)?;
+            let value = decimal.value.ok_or_else(|| {
+                Incompatible::new("AggregateDecimalParam.value can not be None".to_string())
+            })?;
+            let decimal = match value {
+                aggregate_decimal_param::Value::Decimal64(value) => {
+                    let (bytes, size) = aggregate_decimal_value_from_pb(value, 8, 18)?;
+                    DecimalScalar::Decimal64(i64::from_be_bytes(bytes.try_into().unwrap()), size)
+                }
+                aggregate_decimal_param::Value::Decimal128(value) => {
+                    let (bytes, size) = aggregate_decimal_value_from_pb(value, 16, 38)?;
+                    DecimalScalar::Decimal128(i128::from_be_bytes(bytes.try_into().unwrap()), size)
+                }
+                aggregate_decimal_param::Value::Decimal256(value) => {
+                    let (bytes, size) = aggregate_decimal_value_from_pb(value, 32, 76)?;
+                    DecimalScalar::Decimal256(i256::from_be_bytes(bytes.try_into().unwrap()), size)
+                }
+            };
+            Ok(AggregateFunctionParam::Decimal(decimal))
+        }
+        aggregate_function_param::Value::Timestamp(value) => {
+            Ok(AggregateFunctionParam::Timestamp(value))
+        }
+        aggregate_function_param::Value::TimestampTz(value) => {
+            reader_check_msg(value.ver, value.min_reader_ver)?;
+            Ok(AggregateFunctionParam::timestamp_tz_from_parts(
+                value.timestamp,
+                value.offset,
+            ))
+        }
+        aggregate_function_param::Value::Date(value) => Ok(AggregateFunctionParam::Date(value)),
+        aggregate_function_param::Value::Interval(value) => {
+            reader_check_msg(value.ver, value.min_reader_ver)?;
+            Ok(AggregateFunctionParam::interval_from_parts(
+                value.months,
+                value.days,
+                value.microseconds,
+            ))
+        }
+        aggregate_function_param::Value::Boolean(value) => {
+            Ok(AggregateFunctionParam::Boolean(value))
+        }
+        aggregate_function_param::Value::Binary(value) => Ok(AggregateFunctionParam::Binary(value)),
+        aggregate_function_param::Value::String(value) => Ok(AggregateFunctionParam::String(value)),
+        aggregate_function_param::Value::Bitmap(value) => Ok(AggregateFunctionParam::Bitmap(value)),
+        aggregate_function_param::Value::Tuple(tuple) => {
+            reader_check_msg(tuple.ver, tuple.min_reader_ver)?;
+            let fields = tuple
+                .fields
+                .into_iter()
+                .map(aggregate_param_from_pb)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(AggregateFunctionParam::Tuple(fields))
+        }
+        aggregate_function_param::Value::Variant(value) => {
+            Ok(AggregateFunctionParam::Variant(value))
+        }
+        aggregate_function_param::Value::Geometry(value) => {
+            Ok(AggregateFunctionParam::Geometry(value))
+        }
+    }
+}
+
+fn aggregate_decimal_value_from_pb(
+    value: pb::AggregateDecimalValue,
+    expected_bytes: usize,
+    max_precision: u8,
+) -> Result<(Vec<u8>, DecimalSize), Incompatible> {
+    reader_check_msg(value.ver, value.min_reader_ver)?;
+    if value.value.len() != expected_bytes {
+        return Err(Incompatible::new(format!(
+            "Aggregate decimal parameter expects {expected_bytes} bytes, but got {}",
+            value.value.len()
+        )));
+    }
+    let precision = value.precision.try_into().map_err(|_| {
+        Incompatible::new(format!(
+            "Aggregate decimal precision is out of range: {}",
+            value.precision
+        ))
+    })?;
+    let scale = value.scale.try_into().map_err(|_| {
+        Incompatible::new(format!(
+            "Aggregate decimal scale is out of range: {}",
+            value.scale
+        ))
+    })?;
+    let size = DecimalSize::new(precision, scale)
+        .map_err(|error| Incompatible::new(format!("Invalid aggregate decimal size: {error}")))?;
+    if size.precision() > max_precision {
+        return Err(Incompatible::new(format!(
+            "Aggregate decimal parameter precision {} exceeds the maximum {max_precision}",
+            size.precision()
+        )));
+    }
+    Ok((value.value, size))
+}
+
+fn aggregate_param_to_pb(param: &AggregateFunctionParam) -> pb::AggregateFunctionParam {
+    let value = match param {
+        AggregateFunctionParam::Null => aggregate_function_param::Value::NullValue(pb::Empty {}),
+        AggregateFunctionParam::Number(number) => {
+            let value = match number {
+                NumberScalar::UInt8(value) => aggregate_number_param::Value::Uint8(*value as u32),
+                NumberScalar::UInt16(value) => aggregate_number_param::Value::Uint16(*value as u32),
+                NumberScalar::UInt32(value) => aggregate_number_param::Value::Uint32(*value),
+                NumberScalar::UInt64(value) => aggregate_number_param::Value::Uint64(*value),
+                NumberScalar::Int8(value) => aggregate_number_param::Value::Int8(*value as i32),
+                NumberScalar::Int16(value) => aggregate_number_param::Value::Int16(*value as i32),
+                NumberScalar::Int32(value) => aggregate_number_param::Value::Int32(*value),
+                NumberScalar::Int64(value) => aggregate_number_param::Value::Int64(*value),
+                NumberScalar::Float32(value) => {
+                    aggregate_number_param::Value::Float32Bits(value.0.to_bits())
+                }
+                NumberScalar::Float64(value) => {
+                    aggregate_number_param::Value::Float64Bits(value.0.to_bits())
+                }
+            };
+            aggregate_function_param::Value::Number(pb::AggregateNumberParam {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                value: Some(value),
+            })
+        }
+        AggregateFunctionParam::Decimal(decimal) => {
+            let value = match decimal {
+                DecimalScalar::Decimal64(value, size) => aggregate_decimal_param::Value::Decimal64(
+                    aggregate_decimal_value_to_pb(value.to_be_bytes().to_vec(), *size),
+                ),
+                DecimalScalar::Decimal128(value, size) => {
+                    aggregate_decimal_param::Value::Decimal128(aggregate_decimal_value_to_pb(
+                        value.to_be_bytes().to_vec(),
+                        *size,
+                    ))
+                }
+                DecimalScalar::Decimal256(value, size) => {
+                    aggregate_decimal_param::Value::Decimal256(aggregate_decimal_value_to_pb(
+                        value.to_be_bytes().to_vec(),
+                        *size,
+                    ))
+                }
+            };
+            aggregate_function_param::Value::Decimal(pb::AggregateDecimalParam {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                value: Some(value),
+            })
+        }
+        AggregateFunctionParam::Timestamp(value) => {
+            aggregate_function_param::Value::Timestamp(*value)
+        }
+        AggregateFunctionParam::TimestampTz(value) => {
+            aggregate_function_param::Value::TimestampTz(pb::AggregateTimestampTzParam {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                timestamp: value.timestamp(),
+                offset: value.seconds_offset(),
+            })
+        }
+        AggregateFunctionParam::Date(value) => aggregate_function_param::Value::Date(*value),
+        AggregateFunctionParam::Interval(value) => {
+            aggregate_function_param::Value::Interval(pb::AggregateIntervalParam {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                months: value.months(),
+                days: value.days(),
+                microseconds: value.microseconds(),
+            })
+        }
+        AggregateFunctionParam::Boolean(value) => aggregate_function_param::Value::Boolean(*value),
+        AggregateFunctionParam::Binary(value) => {
+            aggregate_function_param::Value::Binary(value.clone())
+        }
+        AggregateFunctionParam::String(value) => {
+            aggregate_function_param::Value::String(value.clone())
+        }
+        AggregateFunctionParam::Bitmap(value) => {
+            aggregate_function_param::Value::Bitmap(value.clone())
+        }
+        AggregateFunctionParam::Tuple(fields) => {
+            aggregate_function_param::Value::Tuple(pb::AggregateTupleParam {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                fields: fields.iter().map(aggregate_param_to_pb).collect(),
+            })
+        }
+        AggregateFunctionParam::Variant(value) => {
+            aggregate_function_param::Value::Variant(value.clone())
+        }
+        AggregateFunctionParam::Geometry(value) => {
+            aggregate_function_param::Value::Geometry(value.clone())
+        }
+    };
+
+    pb::AggregateFunctionParam {
+        ver: VER,
+        min_reader_ver: MIN_READER_VER,
+        value: Some(value),
+    }
+}
+
+fn aggregate_decimal_value_to_pb(value: Vec<u8>, size: DecimalSize) -> pb::AggregateDecimalValue {
+    pb::AggregateDecimalValue {
+        ver: VER,
+        min_reader_ver: MIN_READER_VER,
+        value,
+        precision: size.precision() as u32,
+        scale: size.scale() as u32,
+    }
+}
+
+impl FromToProto for AggregateFunctionParam {
+    type PB = pb::AggregateFunctionParam;
+
+    fn get_pb_ver(param: &Self::PB) -> u64 {
+        param.ver
+    }
+
+    fn from_pb(param: Self::PB) -> Result<Self, Incompatible> {
+        aggregate_param_from_pb(param)
+    }
+
+    fn to_pb(&self) -> Self::PB {
+        aggregate_param_to_pb(self)
+    }
+}
 
 impl FromToProto for ex::TableSchema {
     type PB = pb::DataSchema;
@@ -50,20 +344,19 @@ impl FromToProto for ex::TableSchema {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DataSchema, Incompatible> {
+    fn to_pb(&self) -> pb::DataSchema {
         let mut fs = Vec::with_capacity(self.fields().len());
         for f in self.fields() {
-            fs.push(f.to_pb()?);
+            fs.push(f.to_pb());
         }
 
-        let p = pb::DataSchema {
+        pb::DataSchema {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             fields: fs,
             metadata: self.meta().clone(),
             next_column_id: self.next_column_id(),
-        };
-        Ok(p)
+        }
     }
 }
 
@@ -94,23 +387,20 @@ impl FromToProto for ex::TableField {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
-        let computed_expr = self.computed_expr().map(FromToProto::to_pb).transpose()?;
-        let auto_increment_expr = self
-            .auto_increment_expr()
-            .map(FromToProto::to_pb)
-            .transpose()?;
-        let p = pb::DataField {
+    fn to_pb(&self) -> pb::DataField {
+        let computed_expr = self.computed_expr().map(FromToProto::to_pb);
+        let auto_increment_expr = self.auto_increment_expr().map(FromToProto::to_pb);
+
+        pb::DataField {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name().clone(),
             default_expr: self.default_expr().cloned(),
-            data_type: Some(self.data_type().to_pb()?),
+            data_type: Some(self.data_type().to_pb()),
             column_id: self.column_id(),
             computed_expr,
             auto_increment_expr,
-        };
-        Ok(p)
+        }
     }
 }
 
@@ -135,7 +425,7 @@ impl FromToProto for ex::ComputedExpr {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::ComputedExpr, Incompatible> {
+    fn to_pb(&self) -> pb::ComputedExpr {
         let x = match self {
             ex::ComputedExpr::Virtual(expr) => {
                 pb::computed_expr::ComputedExpr::Virtual(expr.clone())
@@ -143,12 +433,12 @@ impl FromToProto for ex::ComputedExpr {
             ex::ComputedExpr::Stored(expr) => pb::computed_expr::ComputedExpr::Stored(expr.clone()),
         };
 
-        Ok(pb::ComputedExpr {
+        pb::ComputedExpr {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             computed_expr: Some(x),
-        })
+        }
     }
 }
 
@@ -171,15 +461,15 @@ impl FromToProto for ex::AutoIncrementExpr {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::AutoIncrementExpr {
+    fn to_pb(&self) -> Self::PB {
+        pb::AutoIncrementExpr {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             start: self.start,
             step: self.step,
             column_id: self.column_id,
             is_ordered: self.is_ordered,
-        })
+        }
     }
 }
 
@@ -309,6 +599,30 @@ impl FromToProto for ex::TableDataType {
                     }
                     Dt24::StageLocationT(_) => ex::TableDataType::StageLocation,
                     Dt24::TimestampTzT(_) => ex::TableDataType::TimestampTz,
+                    Dt24::AggregateStateT(state) => {
+                        reader_check_msg(state.ver, state.min_reader_ver)?;
+                        let argument_types = state
+                            .argument_types
+                            .into_iter()
+                            .map(ex::TableDataType::from_pb)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let params = state
+                            .params
+                            .into_iter()
+                            .map(AggregateFunctionParam::from_pb)
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let state_type = state.state_type.ok_or_else(|| {
+                            Incompatible::new(
+                                "AggregateState.state_type can not be None".to_string(),
+                            )
+                        })?;
+                        ex::TableDataType::AggregateState {
+                            function_name: state.function_name,
+                            params,
+                            argument_types,
+                            state_type: Box::new(ex::TableDataType::from_pb(*state_type)?),
+                        }
+                    }
                 };
                 Ok(x)
             }
@@ -318,8 +632,8 @@ impl FromToProto for ex::TableDataType {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::DataType, Incompatible> {
-        let x = match self {
+    fn to_pb(&self) -> pb::DataType {
+        match self {
             TableDataType::Null => new_pb_dt24(Dt24::NullT(pb::Empty {})),
             TableDataType::EmptyArray => new_pb_dt24(Dt24::EmptyArrayT(pb::Empty {})),
             TableDataType::EmptyMap => new_pb_dt24(Dt24::EmptyMapT(pb::Empty {})),
@@ -328,26 +642,26 @@ impl FromToProto for ex::TableDataType {
             TableDataType::String => new_pb_dt24(Dt24::StringT(pb::Empty {})),
             TableDataType::Opaque(size) => new_pb_dt24(Dt24::OpaqueT(*size as _)),
             TableDataType::Number(n) => {
-                let x = n.to_pb()?;
+                let x = n.to_pb();
                 new_pb_dt24(Dt24::NumberT(x))
             }
             TableDataType::Decimal(n) => {
-                let x = n.to_pb()?;
+                let x = n.to_pb();
                 new_pb_dt24(Dt24::DecimalT(x))
             }
             TableDataType::Timestamp => new_pb_dt24(Dt24::TimestampT(pb::Empty {})),
             TableDataType::Date => new_pb_dt24(Dt24::DateT(pb::Empty {})),
             TableDataType::Interval => new_pb_dt24(Dt24::IntervalT(pb::Empty {})),
             TableDataType::Nullable(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::NullableT(Box::new(x)))
             }
             TableDataType::Array(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::ArrayT(Box::new(x)))
             }
             TableDataType::Map(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::MapT(Box::new(x)))
             }
             TableDataType::Bitmap => new_pb_dt24(Dt24::BitmapT(pb::Empty {})),
@@ -358,7 +672,7 @@ impl FromToProto for ex::TableDataType {
                 //
                 let mut types = vec![];
                 for t in fields_type {
-                    let p = t.to_pb()?;
+                    let p = t.to_pb();
                     types.push(p);
                 }
 
@@ -374,13 +688,25 @@ impl FromToProto for ex::TableDataType {
             TableDataType::Geometry => new_pb_dt24(Dt24::GeometryT(pb::Empty {})),
             TableDataType::Geography => new_pb_dt24(Dt24::GeographyT(pb::Empty {})),
             TableDataType::Vector(v) => {
-                let x = v.to_pb()?;
+                let x = v.to_pb();
                 new_pb_dt24(Dt24::VectorT(x))
             }
             TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
             TableDataType::TimestampTz => new_pb_dt24(Dt24::TimestampTzT(pb::Empty {})),
-        };
-        Ok(x)
+            TableDataType::AggregateState {
+                function_name,
+                params,
+                argument_types,
+                state_type,
+            } => new_pb_dt24(Dt24::AggregateStateT(Box::new(pb::AggregateState {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                function_name: function_name.clone(),
+                params: params.iter().map(FromToProto::to_pb).collect(),
+                argument_types: argument_types.iter().map(FromToProto::to_pb).collect(),
+                state_type: Some(Box::new(state_type.to_pb())),
+            }))),
+        }
     }
 }
 
@@ -413,7 +739,7 @@ impl FromToProto for ex::types::NumberDataType {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::Number, Incompatible> {
+    fn to_pb(&self) -> pb::Number {
         let x = match self {
             ex::types::NumberDataType::UInt8 => Num::Uint8Type(pb::Empty {}),
             ex::types::NumberDataType::UInt16 => Num::Uint16Type(pb::Empty {}),
@@ -426,12 +752,12 @@ impl FromToProto for ex::types::NumberDataType {
             ex::types::NumberDataType::Float32 => Num::Float32Type(pb::Empty {}),
             ex::types::NumberDataType::Float64 => Num::Float64Type(pb::Empty {}),
         };
-        Ok(pb::Number {
+        pb::Number {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             num: Some(x),
-        })
+        }
     }
 }
 
@@ -460,22 +786,22 @@ impl FromToProto for ex::types::DecimalDataType {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
+    fn to_pb(&self) -> pb::Decimal {
         let x = match self {
             ex::types::DecimalDataType::Decimal64(size)
             | ex::types::DecimalDataType::Decimal128(size) => {
-                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(size)?)
+                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(size))
             }
             ex::types::DecimalDataType::Decimal256(size) => {
-                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(size)?)
+                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(size))
             }
         };
-        Ok(pb::Decimal {
+        pb::Decimal {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             decimal: Some(x),
-        })
+        }
     }
 }
 
@@ -495,13 +821,13 @@ impl FromToProto for ex::types::decimal::DecimalSize {
         ))
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::DecimalSize {
+    fn to_pb(&self) -> Self::PB {
+        pb::DecimalSize {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             precision: self.precision() as i32,
             scale: self.scale() as i32,
-        })
+        }
     }
 }
 
@@ -534,7 +860,7 @@ impl FromToProtoEnum for ex::VariantDataType {
         })
     }
 
-    fn to_pb_enum(&self) -> Result<pb::VariantDataType, Incompatible> {
+    fn to_pb_enum(&self) -> pb::VariantDataType {
         let dt = match self {
             VariantDataType::Jsonb => pb::variant_data_type::Dt::JsonbT(pb::Empty {}),
             VariantDataType::Boolean => pb::variant_data_type::Dt::BoolT(pb::Empty {}),
@@ -543,10 +869,10 @@ impl FromToProtoEnum for ex::VariantDataType {
             VariantDataType::Float64 => pb::variant_data_type::Dt::Float64T(pb::Empty {}),
             VariantDataType::String => pb::variant_data_type::Dt::StringT(pb::Empty {}),
             VariantDataType::Array(dt) => {
-                pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?))
+                pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()))
             }
             VariantDataType::Decimal(n) => {
-                let x = n.to_pb()?;
+                let x = n.to_pb();
                 pb::variant_data_type::Dt::DecimalT(x)
             }
             VariantDataType::Binary => pb::variant_data_type::Dt::BinaryT(pb::Empty {}),
@@ -555,7 +881,7 @@ impl FromToProtoEnum for ex::VariantDataType {
             VariantDataType::Interval => pb::variant_data_type::Dt::IntervalT(pb::Empty {}),
         };
 
-        Ok(pb::VariantDataType { dt: Some(dt) })
+        pb::VariantDataType { dt: Some(dt) }
     }
 }
 
@@ -597,7 +923,7 @@ impl FromToProto for ex::VirtualDataSchema {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let fields = self
             .fields
             .iter()
@@ -606,25 +932,25 @@ impl FromToProto for ex::VirtualDataSchema {
                     .data_types
                     .iter()
                     .map(ex::VariantDataType::to_pb_enum)
-                    .collect::<Result<Vec<pb::VariantDataType>, Incompatible>>()?;
+                    .collect();
 
-                Ok(pb::VirtualDataField {
+                pb::VirtualDataField {
                     name: field.name.clone(),
                     data_types,
                     source_column_id: field.source_column_id,
                     column_id: field.column_id,
-                })
+                }
             })
-            .collect::<Result<Vec<pb::VirtualDataField>, Incompatible>>()?;
+            .collect();
 
-        Ok(pb::VirtualDataSchema {
+        pb::VirtualDataSchema {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             fields,
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
             number_of_blocks: self.number_of_blocks,
-        })
+        }
     }
 }
 
@@ -650,20 +976,20 @@ impl FromToProto for ex::types::VectorDataType {
         Ok(x)
     }
 
-    fn to_pb(&self) -> Result<pb::Vector, Incompatible> {
+    fn to_pb(&self) -> pb::Vector {
         let (number_ty, dimension) = match self {
             ex::types::VectorDataType::Int8(d) => (ex::types::NumberDataType::Int8, *d),
             ex::types::VectorDataType::Float32(d) => (ex::types::NumberDataType::Float32, *d),
         };
-        let num = number_ty.to_pb()?;
+        let num = number_ty.to_pb();
 
-        Ok(pb::Vector {
+        pb::Vector {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             num: Some(num),
             dimension,
-        })
+        }
     }
 }
 

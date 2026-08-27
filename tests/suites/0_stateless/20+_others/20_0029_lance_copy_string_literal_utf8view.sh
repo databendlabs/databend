@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-cat <<'EOF' | $BENDSQL_CLIENT_CONNECT > /dev/null
+cat <<'EOF' | bendsql_connect_root > /dev/null
 create or replace stage test_lance_utf8view;
 copy into @test_lance_utf8view/t_wubx/
 from (
@@ -17,12 +17,12 @@ detailed_output=true;
 EOF
 
 echo "list @test_lance_utf8view/t_wubx PATTERN = '.*[.]lance';" \
-    | $BENDSQL_CLIENT_CONNECT \
+    | bendsql_connect_root \
     | grep -q '[.]lance' \
     && echo 1 || echo 0
 echo "list @test_lance_utf8view/t_wubx PATTERN = '.*/_versions/.*manifest';" \
-    | $BENDSQL_CLIENT_CONNECT \
+    | bendsql_connect_root \
     | grep -q 'manifest' \
     && echo 1 || echo 0
 
-echo "drop stage if exists test_lance_utf8view" | $BENDSQL_CLIENT_CONNECT > /dev/null
+echo "drop stage if exists test_lance_utf8view" | bendsql_connect_root > /dev/null

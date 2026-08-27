@@ -21,6 +21,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
@@ -416,6 +417,9 @@ impl HttpSessionConf {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)
             }
+        }
+        http_ctx.restore_client_session_state(session);
+        if let Some(state) = &self.internal {
             if let Some(id) = state.last_query_ids.first() {
                 if let Some(last_query) = http_query_manager.get_query(id) {
                     let state = *last_query.client_state.lock();
@@ -650,7 +654,8 @@ impl HttpQuery {
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "Creating new query");
+        let masked_sql = mask_connection_info(sql);
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql.as_str(); "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,

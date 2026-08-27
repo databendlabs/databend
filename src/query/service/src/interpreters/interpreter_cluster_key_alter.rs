@@ -15,13 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -57,25 +58,20 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let table = catalog
             .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
             .await?;
-        // check mutability
-        table.check_mutable()?;
+        check_maintenance_target(table.as_ref(), &plan.target)?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
-        // if new cluster_key_str is the same with old one,
-        // no need to change
-        if let Some(old_cluster_key_str) = fuse_table.cluster_key_str()
-            && old_cluster_key_str == cluster_key_str
+        if fuse_table.cluster_key_str() == Some(cluster_key_str.as_str())
+            && fuse_table.cluster_type() == Some(plan.cluster_type)
         {
-            let old_cluster_type = fuse_table.cluster_type();
-            if old_cluster_type.is_some_and(|v| v.to_string().to_lowercase() == plan.cluster_type) {
-                return Ok(PipelineBuildResult::create());
-            }
+            return Ok(PipelineBuildResult::create());
         }
 
         let mut new_table_meta = fuse_table.get_table_info().meta.clone();
         new_table_meta.cluster_key_seq += 1;
-        let cluster_key_meta = Some((new_table_meta.cluster_key_seq, cluster_key_str.clone()));
+        let cluster_key_meta = Some((new_table_meta.cluster_key_seq, cluster_key_str));
+        let cluster_type = plan.cluster_type;
         commit_table_meta(
             self.ctx.as_ref(),
             table.as_ref(),
@@ -84,10 +80,15 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             |snapshot_opt, meta| {
                 if let Some(snapshot) = snapshot_opt {
                     snapshot.cluster_key_meta = cluster_key_meta.clone();
+                    snapshot.cluster_type = Some(cluster_type);
+                    snapshot.summary.cluster_stats = None;
                 }
                 meta.cluster_key_v2 = cluster_key_meta;
                 meta.options
-                    .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
+                    .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
+                meta.options
+                    .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                    .or_insert_with(|| "1".to_owned());
             },
         )
         .await?;

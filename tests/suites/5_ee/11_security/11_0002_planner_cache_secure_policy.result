@@ -1,0 +1,11 @@
+#### Test: planner cache secure policy key includes current user
+#### setup
+#### user a populates a plan with unmasked policy body
+ok
+#### user a can reuse its own secure plan
+ok
+#### same role user b must not reuse user a's secure plan
+ok
+#### user b can reuse its own secure plan
+ok
+#### cleanup

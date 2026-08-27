@@ -15,10 +15,11 @@
 use std::any::type_name;
 use std::fmt;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use crate::KeyExistsBuilder;
+use crate::KeyUnknownBuilder;
 use crate::KeyWithTenant;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -167,15 +168,25 @@ impl<R, N> TIdent<R, N> {
     where N: fmt::Display {
         format!("'{}'/'{}'", self.tenant.tenant_name(), self.name)
     }
+}
 
-    pub fn unknown_error(&self, ctx: impl Display) -> UnknownError<R, N>
-    where N: Clone {
-        UnknownError::new(self.name.clone(), ctx)
+impl<R, N> KeyUnknownBuilder for TIdent<R, N>
+where N: Clone
+{
+    type UnknownError = UnknownError<R, N>;
+
+    fn unknown_error(&self, ctx: impl fmt::Display) -> Self::UnknownError {
+        UnknownError::new(self.name().clone(), ctx)
     }
+}
 
-    pub fn exist_error(&self, ctx: impl Display) -> ExistError<R, N>
-    where N: Clone {
-        ExistError::new(self.name.clone(), ctx)
+impl<R, N> KeyExistsBuilder for TIdent<R, N>
+where N: Clone
+{
+    type ExistError = ExistError<R, N>;
+
+    fn exist_error(&self, ctx: impl fmt::Display) -> Self::ExistError {
+        ExistError::new(self.name().clone(), ctx)
     }
 }
 
@@ -266,7 +277,6 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
 
-    use databend_meta_client::kvapi;
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::tenant::Tenant;
@@ -284,10 +294,6 @@ mod tests {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
             type ValueType = FooValue;
-        }
-
-        impl kvapi::Value for FooValue {
-            type KeyType = TIdent<Foo>;
         }
 
         let tenant = Tenant::new_literal("test");
@@ -316,10 +322,6 @@ mod tests {
             const PREFIX: &'static str = "foo";
             const HAS_TENANT: bool = true;
             type ValueType = FooValue;
-        }
-
-        impl kvapi::Value for FooValue {
-            type KeyType = TIdent<Foo, u64>;
         }
 
         let tenant = Tenant::new_literal("test");

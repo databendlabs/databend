@@ -33,10 +33,10 @@ use crate::plans::Sequence;
 ///
 /// # Example
 /// If path is [0, 1], this will replace the second child (index 1) of the first child (index 0) of root.
-pub fn replace_at_path(root: &SExpr, path: &[usize], replacement: Arc<SExpr>) -> Result<SExpr> {
+pub fn replace_at_path(mut root: SExpr, path: &[usize], replacement: Arc<SExpr>) -> Result<SExpr> {
     if path.is_empty() {
         // Replace the root itself
-        return Ok((*replacement).clone());
+        return Ok(Arc::unwrap_or_clone(replacement));
     }
 
     let first_index = path[0];
@@ -49,15 +49,19 @@ pub fn replace_at_path(root: &SExpr, path: &[usize], replacement: Arc<SExpr>) ->
 
     // Recursively replace in the subtree
     let remaining_path = &path[1..];
-    let old_child = &root.children[first_index];
-    let new_child = Arc::new(replace_at_path(old_child, remaining_path, replacement)?);
+    let mut children = std::mem::take(&mut root.children);
+    let old_child = children.remove(first_index);
+    let new_child = Arc::new(replace_at_path(
+        Arc::unwrap_or_clone(old_child),
+        remaining_path,
+        replacement,
+    )?);
 
     // Create new children with the replaced child
-    let mut new_children = root.children.clone();
-    new_children[first_index] = new_child;
+    children.insert(first_index, new_child);
 
     // Return a new SExpr with updated children
-    Ok(root.replace_children(new_children))
+    Ok(root.replace_children(children))
 }
 
 pub fn wrap_with_sequence(materialized_cte: SExpr, s_expr: SExpr) -> SExpr {
@@ -70,14 +74,14 @@ pub fn wrap_with_sequence(materialized_cte: SExpr, s_expr: SExpr) -> SExpr {
 }
 
 pub fn rewrite_sexpr(
-    s_expr: &SExpr,
+    s_expr: SExpr,
     replacements: Vec<SExprReplacement>,
     materialized_ctes: Vec<SExpr>,
 ) -> Result<SExpr> {
-    let mut result = s_expr.clone();
+    let mut result = s_expr;
 
     for replacement in replacements {
-        result = replace_at_path(&result, &replacement.path, replacement.new_expr)?;
+        result = replace_at_path(result, &replacement.path, replacement.new_expr)?;
     }
 
     for cte_expr in materialized_ctes {
@@ -127,6 +131,7 @@ mod tests {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            spatial_join: None,
         };
         SExpr::create_binary(Arc::new(RelOperator::Join(join)), left, right)
     }
@@ -136,7 +141,7 @@ mod tests {
         let original = create_scan_expr(1);
         let replacement = Arc::new(create_scan_expr(2));
 
-        let result = replace_at_path(&original, &[], replacement).unwrap();
+        let result = replace_at_path(original, &[], replacement).unwrap();
 
         if let RelOperator::Scan(scan) = result.plan.as_ref() {
             assert_eq!(scan.table_index, 2);
@@ -152,7 +157,7 @@ mod tests {
         let original = create_join_expr(left, right);
 
         let replacement = Arc::new(create_scan_expr(3));
-        let result = replace_at_path(&original, &[0], replacement).unwrap();
+        let result = replace_at_path(original, &[0], replacement).unwrap();
 
         // Check that the left child was replaced
         let new_left = result.child(0).unwrap();
@@ -182,7 +187,7 @@ mod tests {
 
         // Replace the right child of the left child (path [0, 1])
         let replacement = Arc::new(create_scan_expr(4));
-        let result = replace_at_path(&outer_join, &[0, 1], replacement).unwrap();
+        let result = replace_at_path(outer_join, &[0, 1], replacement).unwrap();
 
         // Navigate to the replaced position
         let left_child = result.child(0).unwrap();
@@ -208,7 +213,7 @@ mod tests {
         let original = create_scan_expr(1);
         let replacement = Arc::new(create_scan_expr(2));
 
-        let result = replace_at_path(&original, &[0], replacement);
+        let result = replace_at_path(original, &[0], replacement);
 
         assert!(result.is_err());
     }
@@ -220,7 +225,7 @@ mod tests {
         let original = create_join_expr(left, right);
 
         let replacement = Arc::new(create_scan_expr(3));
-        let result = replace_at_path(&original, &[0, 0], replacement);
+        let result = replace_at_path(original, &[0, 0], replacement);
 
         assert!(result.is_err());
     }

@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -51,12 +53,10 @@ fn run_parser_with_dialect<P, O>(
     let src = unindent::unindent(src);
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
-    let backtrace = Backtrace::new();
     let input = Input {
         tokens: &tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -238,6 +238,8 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"undrop table test_db.test;"#,
         r#"analyze table test_db.test noscan;"#,
+        r#"analyze table test_db.test with histogram;"#,
+        r#"analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;"#,
         r#"exists table test_db.test;"#,
         r#"create role role1 comment='test';"#,
         r#"alter role role1 set comment='test';"#,
@@ -367,6 +369,7 @@ SELECT * from s;"#,
         r#"OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;"#,
         r#"OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
@@ -439,6 +442,9 @@ SELECT * from s;"#,
         r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
         r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
         r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
+        r#"REFRESH LINEAGE FOR ALL VIEWS;"#,
+        r#"refresh lineage for all views dry run;"#,
+        r#"SELECT lineage FROM lineage;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"COMMENT IF EXISTS ON TABLE t IS 'test'"#,
         r#"COMMENT ON COLUMN t.C1 IS 'test'"#,
@@ -474,6 +480,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';"#,
+        r#"DROP SHARE IF EXISTS share1;"#,
+        r#"ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE share1;"#,
+        r#"GRANT SELECT ON TABLE db1.t1 TO SHARE share1;"#,
         r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
@@ -491,6 +502,8 @@ SELECT * from s;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE share1;"#,
+        r#"REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;"#,
         r#"drop role 'role1';"#,
         r#"GRANT ROLE test TO ROLE 'test-user';"#,
         r#"GRANT ROLE test TO ROLE `test-user`;"#,
@@ -607,6 +620,16 @@ SELECT * from s;"#,
         r#"
             COPY INTO mytable
                 FROM @my_stage
+                FILE_FORMAT = (type = NDJSON)
+                SCHEMA_EVOLUTION = (
+                    sample_files = 64,
+                    sample_records_per_file = AUTO,
+                    sample_total_records = 10000
+                );
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @my_stage
                 FILE_FORMAT = (
                     type = CSV,
                     field_delimiter = ',',
@@ -645,6 +668,22 @@ SELECT * from s;"#,
                 FROM (SELECT * FROM numbers(10))
                 FILE_FORMAT = (
                     type = LANCE
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow
+                FILE_FORMAT = (
+                    type = ARROW
+                    missing_field_as = FIELD_DEFAULT
+                )
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @external_stage/path/to/file.arrow_stream
+                FILE_FORMAT = (
+                    type = ARROW_STREAM
+                    missing_field_as = FIELD_DEFAULT
                 )
         "#,
         r#"
@@ -1355,6 +1394,32 @@ fn test_file_format_trim_space_option() {
 }
 
 #[test]
+fn test_create_table_options_before_partition_by() {
+    let cases = [
+        "CREATE TABLE t(c INT) ENGINE=ICEBERG LOCATION='s3://bucket/path' CONNECTION_NAME='conn' PARTITION BY (c)",
+        "CREATE TABLE iceberg.db.t(c INT) LOCATION='s3://bucket/path' PARTITION BY (c)",
+        "CREATE TABLE t(a INT) ENGINE=FUSE ROW_PER_BLOCK=1 PARTITION BY (a)",
+        "CREATE TABLE t(a INT) ROW_PER_BLOCK=1 PARTITION BY (a)",
+    ];
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+        let displayed = stmt.to_string();
+        let displayed_uppercase = displayed.to_uppercase();
+        let partition_pos = displayed_uppercase.find("PARTITION BY").unwrap();
+        for option in ["LOCATION", "CONNECTION_NAME", "ROW_PER_BLOCK"] {
+            if let Some(option_pos) = displayed_uppercase.find(option) {
+                assert!(partition_pos < option_pos);
+            }
+        }
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
 fn test_stage_local_filesystem_uri_errors() {
     let cases = [
         (
@@ -1412,6 +1477,9 @@ fn test_query() {
         r#"select * from t12_0004 at (TIMESTAMP => 'xxxx') as t"#,
         r#"select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t"#,
         r#"select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => true)"#,
+        r#"select * from t at (timestamp => '2024-01-01'::TIMESTAMP, NO_CHECK => true)"#,
+        r#"select * from t at (snapshot => 'abc123', NO_CHECK => false)"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,
@@ -1490,6 +1558,14 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        // Issue #20093: PostgreSQL aggregate syntax should parse in full queries.
+        r#"SELECT array_agg(a ORDER BY b) FROM (VALUES (1,4),(2,3),(3,1),(4,2)) v(a,b)"#,
+        r#"SELECT array_agg(DISTINCT a ORDER BY a DESC NULLS LAST) FROM (VALUES (1),(2),(1),(3),(NULL),(2)) v(a)"#,
+        r#"SELECT string_agg(DISTINCT f1::text, ',' ORDER BY f1) FROM varchar_tbl"#,
+        r#"SELECT min(unique1) FILTER (WHERE unique1 > 100) FROM tenk1"#,
+        r#"SELECT sum(DISTINCT four) FILTER (WHERE four::text ~ '123') FROM onek a GROUP BY ten"#,
+        r#"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY income) FROM households"#,
+        r#"SELECT rank(42) WITHIN GROUP (ORDER BY score) FROM scores"#,
         r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
         r#"select * from t, lateral flatten(input => u.col) f"#,
         r#"select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)"#,
@@ -1619,8 +1695,12 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"a ~ '^11'"#,
+        r#"a !~ '^11'"#,
         r#"a like '%1$%1%' escape '$'"#,
         r#"a not like '%1$%1%' escape '$'"#,
+        r#"a ilike '%1$%1%' escape '$'"#,
+        r#"a not ilike '%1$%1%' escape '$'"#,
         r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
@@ -1633,6 +1713,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"'中文'::text LIKE ANY ('a', 'b')"#,
         r#"'中文'::text LIKE ANY ('a', 'b') ESCAPE '$'"#,
+        r#"'中文'::text ILIKE ANY ('a', 'b')"#,
+        r#"'中文'::text ILIKE ANY ('a', 'b') ESCAPE '$'"#,
         r#"'中文'::text LIKE ANY (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE ALL (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE SOME (SELECT 'a', 'b')"#,
@@ -1647,8 +1729,16 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        // PostgreSQL aggregate syntax
+        r#"ARRAY_AGG(a ORDER BY b)"#,
+        r#"ARRAY_AGG(DISTINCT a ORDER BY a DESC NULLS LAST)"#,
+        r#"STRING_AGG(name, ',' ORDER BY name)"#,
+        r#"SUM(amount) FILTER (WHERE status = 'paid')"#,
+        r#"COUNT(*) FILTER (WHERE amount > 0)"#,
         // within group
         r#"LISTAGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)"#,
+        r#"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY income)"#,
+        r#"RANK(42) WITHIN GROUP (ORDER BY score)"#,
         // window expr
         r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
         r#"SUM(salary) OVER ()"#,
@@ -1669,6 +1759,17 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(col, '$[*].name', v -> upper(v))"#,
+        r#"ARRAY_MAP(v -> v + 1)"#,
+        r#"ARRAY_FILTER(a, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v -> 'name')"#,
+        r#"ARRAY_TRANSFORM(a, (v -> v) + 1)"#,
+        r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
+        r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
+        r#"TO_STRING(col -> 'name')"#,
+        r#"CONCAT(a, b, doc -> 'key')"#,
+        r#"CONCAT(a -> 'k', b)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
         r#"@test_stage/input/34"#,
@@ -1677,6 +1778,47 @@ fn test_expr() {
     for case in cases {
         run_parser(file, expr, case);
     }
+}
+
+#[test]
+fn test_ambiguous_trailing_lambda_argument() {
+    let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 3);
+    assert!(matches!(func.args[2], Expr::JsonOp { .. }));
+    let Some(LambdaArgument::Ambiguous(lambda)) = func.lambda else {
+        panic!("expected an ambiguous trailing lambda argument");
+    };
+    assert_eq!(lambda.params[0].name, "doc");
+    assert!(matches!(*lambda.expr, Expr::Literal { .. }));
+}
+
+#[test]
+fn test_json_arrow_argument_before_aggregate_filter() {
+    let tokens = tokenize_sql("json_object_agg('k', doc -> 'v') FILTER (WHERE ok)").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 2);
+    assert!(matches!(func.args[1], Expr::JsonOp { .. }));
+    assert!(func.lambda.is_none());
+    assert!(func.filter.is_some());
 }
 
 // FIXME: this test cause stack overflow
@@ -1706,6 +1848,9 @@ fn test_expr_error() {
         r#"CAST(col1 AS foo)"#,
         r#"1 a"#,
         r#"CAST(col1)"#,
+        r#"SUBSTRING(col, 1"#,
+        r#"EXTRACT(YEAR)"#,
+        r#"TRIM(foo,"#,
         r#"a.add(b)"#,
         r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,

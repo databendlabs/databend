@@ -52,11 +52,9 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UDTFServer;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -107,6 +105,7 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -125,8 +124,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -455,11 +452,36 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_meta_by_id(table_id).await
     }
 
-    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
-        todo!()
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat.get_mv_definition(tenant, mv_id).await
     }
 
-    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.cat
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
         todo!()
     }
 
@@ -553,10 +575,6 @@ impl TableContext for CtxDelegation {
         self.ctx.written_segment_locations()
     }
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        self.ctx.selected_segment_locations()
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -573,6 +591,10 @@ impl TableContextQueryState for CtxDelegation {
 
     fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         todo!()
+    }
+
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.ctx.get_nodes_memory_usage()
     }
 
     fn push_warning(&self, _warn: String) {
@@ -727,7 +749,7 @@ impl TableContextAuthorization for CtxDelegation {
     }
 
     fn get_current_role(&self) -> Option<RoleInfo> {
-        todo!()
+        None
     }
 
     fn get_secondary_roles(&self) -> Option<Vec<String>> {
@@ -872,17 +894,8 @@ impl TableContextCopy for CtxDelegation {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for CtxDelegation {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        todo!()
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        todo!()
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
 }
@@ -1089,10 +1102,6 @@ impl TableContextRuntimeFilter for CtxDelegation {
         todo!()
     }
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        Ok(())
-    }
-
     fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
         Vec::<RuntimeFilterEntry>::new()
     }
@@ -1101,7 +1110,10 @@ impl TableContextRuntimeFilter for CtxDelegation {
         HashMap::new()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        _id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         todo!()
     }
 

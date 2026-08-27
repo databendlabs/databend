@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod csv;
 mod infer_schema_table;
+mod json;
 mod merge;
 mod parquet;
 mod separator;
 mod table_args;
+mod text;
 
 pub use infer_schema_table::InferSchemaTable;
+pub(crate) use json::InferredJsonSchema;
+pub(crate) use merge::merge_schema;
+pub(crate) use separator::InferSchemaSeparator;

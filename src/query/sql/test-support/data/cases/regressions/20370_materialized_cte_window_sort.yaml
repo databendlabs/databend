@@ -1,0 +1,21 @@
+name: "20370_materialized_cte_window_sort"
+description: "A serial materialized CTE producer must force local planning before window sort staging"
+
+node_num: 3
+
+sql: |
+  SETTINGS (enable_auto_materialize_cte = 1) WITH queries AS (
+      SELECT
+          CAST('2026-01-01 00:00:01' AS TIMESTAMP NULL) AS start_time,
+          CAST('2026-01-01 00:00:02' AS TIMESTAMP NULL) AS end_time
+  ),
+  timeline AS (
+      SELECT start_time AS ts, 1 AS delta FROM queries
+      UNION ALL
+      SELECT end_time AS ts, -1 AS delta FROM queries
+  )
+  SELECT
+      ts,
+      delta,
+      sum(delta) OVER (ORDER BY ts) AS running
+  FROM timeline;

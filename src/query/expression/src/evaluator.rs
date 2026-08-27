@@ -24,6 +24,8 @@ use databend_common_exception::Result;
 use itertools::Itertools;
 use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
+use jsonb::jsonpath::JsonPath;
+use jsonb::jsonpath::parse_json_path;
 
 use crate::BlockEntry;
 use crate::FunctionContext;
@@ -57,6 +59,9 @@ use crate::types::boolean;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::utils::filter_helper::FilterHelpers;
+use crate::utils::json_path_transform::PathStep;
+use crate::utils::json_path_transform::replace_at_locations;
+use crate::utils::json_path_transform::select_locations;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -101,6 +106,77 @@ impl<'a> EvaluateOptions<'a> {
     }
 }
 
+/// Merge a source error set into a target error set, keeping the union of
+/// error rows and the first error message. Error sets travel upward through
+/// nested calls while suppression is active, so both sibling arguments and
+/// parent calls must accumulate instead of overwrite.
+///
+/// A length-1 source bitmap comes from a scalar subexpression (evaluated in
+/// a one-row block, e.g. a constant cast in `run_simple_cast`); a scalar
+/// error applies to every row, so it is broadcast to `num_rows` instead of
+/// marking only row 0.
+fn merge_eval_errors(
+    target: &mut Option<(MutableBitmap, String)>,
+    source: Option<(MutableBitmap, String)>,
+    num_rows: usize,
+) {
+    let Some((src_valids, src_msg)) = source else {
+        return;
+    };
+    if src_valids.len() == 1 && num_rows > 1 {
+        if !src_valids.get(0) {
+            *target = Some((Bitmap::new_constant(false, num_rows).make_mut(), src_msg));
+        }
+        return;
+    }
+    match target {
+        Some((valids, _)) => {
+            for (row, valid) in src_valids.iter().enumerate() {
+                if !valid && row < valids.len() {
+                    valids.set(row, false);
+                }
+            }
+        }
+        None => *target = Some((src_valids, src_msg)),
+    }
+}
+
+/// Expand the error set of an all-scalar evaluation over the rows the
+/// evaluation ran for: the rows enabled by `validity`, or every row when
+/// there is no partial selection.
+///
+/// A scalar evaluation records its error at row 0, which is
+/// indistinguishable from a row-0-only column error; expanding here, where
+/// the scalar-ness of the evaluation is still known, lets `merge_eval_errors`
+/// and `render_error` treat every incoming bitmap as row-aligned. When no
+/// row is enabled the error is dropped: the expression ran for nobody.
+fn expand_scalar_error(
+    errors: &mut Option<(MutableBitmap, String)>,
+    validity: Option<&Bitmap>,
+    num_rows: usize,
+) {
+    let Some((valids, msg)) = errors.take() else {
+        return;
+    };
+    let has_enabled_rows = match validity {
+        Some(validity) => validity.null_count() < validity.len(),
+        None => true,
+    };
+    if !has_enabled_rows {
+        return;
+    }
+    if valids.null_count() == 0 {
+        // No error recorded; keep the (empty) error set.
+        *errors = Some((valids, msg));
+        return;
+    }
+    let expanded = match validity {
+        Some(validity) => validity.not().make_mut(),
+        None => Bitmap::new_constant(false, num_rows).make_mut(),
+    };
+    *errors = Some((expanded, msg));
+}
+
 pub struct Evaluator<'a> {
     data_block: &'a DataBlock,
     func_ctx: &'a FunctionContext,
@@ -133,6 +209,9 @@ impl<'a> Evaluator<'a> {
         let column_refs = expr.column_refs();
         for (index, data_type) in column_refs.iter() {
             let column = self.data_block.get_by_offset(*index);
+            if data_type.matches_physical_type(&column.data_type()) {
+                continue;
+            }
             if (column.data_type() == DataType::Null && data_type.is_nullable())
                 || (column.data_type().is_nullable() && data_type == &DataType::Null)
             {
@@ -164,6 +243,7 @@ impl<'a> Evaluator<'a> {
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
+    #[recursive::recursive]
     pub fn partial_run(
         &self,
         expr: &Expr,
@@ -247,7 +327,7 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
 
-                self.run_lambda(name, args, data_types, lambda_expr, return_type)?
+                self.run_lambda(name, args, data_types, lambda_expr, return_type, validity)?
             }
         };
 
@@ -260,7 +340,12 @@ impl<'a> Evaluator<'a> {
                     expr.data_type()
                 )
             }
-            Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
+            Value::Column(col) => assert!(
+                expr.data_type().matches_physical_type(&col.data_type()),
+                "column result type mismatch: physical {}, logical {}",
+                col.data_type(),
+                expr.data_type()
+            ),
         }
 
         if !expr.is_column_ref() && !expr.is_constant() && options.strict_eval {
@@ -290,7 +375,11 @@ impl<'a> Evaluator<'a> {
             ..
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
-        let mut child_option = options.with_suppress_error(child_suppress_error);
+        // Suppression is sticky downward: once a boundary function opts in
+        // (is_not_error), nested evaluations stay suppressed so row errors
+        // bubble up to the boundary as data instead of raising midway.
+        let mut child_option =
+            options.with_suppress_error(options.suppress_error || child_suppress_error);
         if child_option.strict_eval && call.generics.is_empty() {
             child_option.strict_eval = false;
         }
@@ -325,10 +414,17 @@ impl<'a> Evaluator<'a> {
         } else {
             None
         };
+        // A call whose arguments are all scalars is evaluated once, and an
+        // error it records applies to every row the call runs for. Strip the
+        // validity mask during eval so the error is always recorded — a
+        // scalar reports at row 0, which the validity gate in `set_error`
+        // would otherwise drop whenever row 0 is not enabled — then expand
+        // the recorded error over the enabled rows.
+        let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
         let mut ctx = EvalContext {
             generics,
             num_rows: self.data_block.num_rows(),
-            validity,
+            validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
             suppress_error: options.suppress_error,
@@ -338,9 +434,21 @@ impl<'a> Evaluator<'a> {
         let (_, _, eval) = function.eval.as_scalar().unwrap();
         let result = eval.eval(&args, &mut ctx);
 
+        if all_scalar {
+            expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
+        }
+
+        // Non-boundary calls are transparent to suppression: errors from
+        // nested evaluations keep bubbling up so a boundary function
+        // (is_not_error) observes errors from its whole subtree, not only
+        // from its direct children.
+        if !child_suppress_error {
+            merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
+        }
+
         if options.suppress_error {
             // inject errors into options, parent will handle it
-            options.errors = ctx.errors.take();
+            merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
         } else {
             EvalContext::render_error(
                 *span,
@@ -397,6 +505,9 @@ impl<'a> Evaluator<'a> {
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
+            return Ok(value);
+        }
+        if src_type.matches_physical_type(dest_type) {
             return Ok(value);
         }
 
@@ -618,6 +729,15 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Column(NullableColumn::new_column(column, validity)))
                 }
             },
+            (DataType::AggregateState(state), _) => self.run_cast(
+                span,
+                state.physical_type(),
+                dest_type,
+                value,
+                validity,
+                expr_display,
+                options,
+            ),
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyArray) => {
@@ -1564,7 +1684,18 @@ impl<'a> Evaluator<'a> {
         let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
         let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;
+        // The cast may run on a one-row temporary block for scalar values, so
+        // its error bitmap is scoped to that block. Collect it in local
+        // options first, then merge into the shared options with the outer
+        // row count so a scalar error broadcasts to every row.
+        let mut local_options = options.with_suppress_error(options.suppress_error);
+        let result =
+            evaluator.eval_common_call(&call, validity, expr_display, &mut local_options)?;
+        merge_eval_errors(
+            &mut options.errors,
+            local_options.errors.take(),
+            self.data_block.num_rows(),
+        );
         Ok(Some(result))
     }
 
@@ -1901,8 +2032,14 @@ impl<'a> Evaluator<'a> {
         data_types: Vec<DataType>,
         lambda_expr: &RemoteExpr,
         return_type: &DataType,
+        validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         let expr = lambda_expr.as_expr(self.fn_registry);
+
+        if func_name == "json_path_transform" {
+            return self.run_json_path_transform(args, data_types, &expr, return_type, validity);
+        }
+
         // array_reduce differs
         if func_name == "array_reduce" {
             let len = args.iter().find_map(|arg| match arg {
@@ -2134,6 +2271,210 @@ impl<'a> Evaluator<'a> {
         Ok(res)
     }
 
+    /// Evaluates `json_path_transform(<json>, <path>, <lambda>)`.
+    ///
+    /// Arguments are laid out as `[json, path, captures...]` and the lambda
+    /// body was cast to `Nullable(Variant)` during type checking. Rows
+    /// outside `validity` (e.g. masked out of an IF/CASE branch) are passed
+    /// through unchanged: their paths are never parsed or selected and their
+    /// matches never reach the lambda, so they cannot fail the query.
+    fn run_json_path_transform(
+        &self,
+        args: Vec<Value<AnyType>>,
+        data_types: Vec<DataType>,
+        expr: &Expr,
+        return_type: &DataType,
+        validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>> {
+        debug_assert!(args.len() >= 2);
+        let json_idx = 0;
+        let path_idx = 1;
+
+        let len = args.iter().find_map(|arg| match arg {
+            Value::Column(col) => Some(col.len()),
+            _ => None,
+        });
+        let num_rows = len.unwrap_or(1);
+        debug_assert!(len.is_none() || validity.as_ref().is_none_or(|v| v.len() == num_rows));
+
+        // The branch is fully masked out: the caller discards every row, so
+        // pass the json argument through without locating any match.
+        if let Some(v) = &validity {
+            if v.null_count() == v.len() {
+                let json = args.into_iter().next().unwrap();
+                return Ok(match json {
+                    Value::Column(col) if col.data_type() != *return_type => {
+                        debug_assert!(return_type.is_nullable());
+                        Value::Column(NullableColumn::new_column(
+                            col,
+                            Bitmap::new_constant(true, num_rows),
+                        ))
+                    }
+                    json => json,
+                });
+            }
+        }
+
+        // `None` means every row is active. A partially masked scalar row is
+        // a broadcast picked by at least one row, so it stays active.
+        let validity = match len {
+            Some(_) => validity.filter(|v| v.null_count() > 0),
+            None => None,
+        };
+
+        fn parse_path(path_str: &str) -> Result<JsonPath<'_>> {
+            parse_json_path(path_str.as_bytes())
+                .map_err(|_| ErrorCode::BadArguments(format!("Invalid JSON Path '{path_str}'")))
+        }
+
+        // A constant path is parsed lazily on the first row that needs it, so
+        // an invalid constant path does not fail queries whose rows never
+        // evaluate it, matching the per-row handling of a non-constant path.
+        let const_path_str = match &args[path_idx] {
+            Value::Scalar(Scalar::String(path_str)) => Some(path_str.as_str()),
+            _ => None,
+        };
+        let mut const_path: Option<JsonPath> = None;
+
+        enum JsonTransformRow {
+            Null,
+            Unchanged,
+            Matched {
+                locations: Vec<Vec<PathStep>>,
+                count: usize,
+            },
+        }
+
+        // Phase 1: locate matched values in every row.
+        let mut rows = Vec::with_capacity(num_rows);
+        let mut matched_values = VariantType::create_builder(num_rows, &[]);
+        let mut total_matches = 0usize;
+        for idx in 0..num_rows {
+            let json_scalar = unsafe { args[json_idx].index_unchecked(idx) };
+            let path_scalar = unsafe { args[path_idx].index_unchecked(idx) };
+            let (data, path_str) = match (json_scalar, path_scalar) {
+                (ScalarRef::Null, _) | (_, ScalarRef::Null) => {
+                    rows.push(JsonTransformRow::Null);
+                    continue;
+                }
+                (ScalarRef::Variant(data), ScalarRef::String(path_str)) => (data, path_str),
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "json_path_transform: unexpected argument types",
+                    ));
+                }
+            };
+            if let Some(validity) = &validity {
+                if !unsafe { validity.get_bit_unchecked(idx) } {
+                    rows.push(JsonTransformRow::Unchanged);
+                    continue;
+                }
+            }
+            if let Some(path_str) = const_path_str
+                && const_path.is_none()
+            {
+                const_path = Some(parse_path(path_str)?);
+            }
+            let matches = match &const_path {
+                Some(json_path) => select_locations(data, json_path)?,
+                None => select_locations(data, &parse_path(path_str)?)?,
+            };
+            if matches.is_empty() {
+                rows.push(JsonTransformRow::Unchanged);
+            } else {
+                let count = matches.len();
+                let mut locations = Vec::with_capacity(count);
+                for m in matches {
+                    locations.push(m.location);
+                    matched_values.put_slice(&m.value);
+                    matched_values.commit_row();
+                }
+                total_matches += count;
+                rows.push(JsonTransformRow::Matched { locations, count });
+            }
+        }
+
+        // Phase 2: evaluate the lambda once over all matched values.
+        let result_col = if total_matches > 0 {
+            let mut entries = Vec::with_capacity(args.len() - 1);
+            for i in 2..args.len() {
+                let entry = match &args[i] {
+                    Value::Scalar(scalar) => BlockEntry::new_const_column(
+                        data_types[i].clone(),
+                        scalar.clone(),
+                        total_matches,
+                    ),
+                    Value::Column(_) => {
+                        // Repeat the captured value of each row once per match.
+                        let mut builder =
+                            ColumnBuilder::with_capacity(&data_types[i], total_matches);
+                        for (row, transform_row) in rows.iter().enumerate() {
+                            if let JsonTransformRow::Matched { count, .. } = transform_row {
+                                let scalar = unsafe { args[i].index_unchecked(row) };
+                                for _ in 0..*count {
+                                    builder.push(scalar.clone());
+                                }
+                            }
+                        }
+                        builder.build().into()
+                    }
+                };
+                entries.push(entry);
+            }
+            let elem_col = NullableColumn::new_column(
+                Column::Variant(matched_values.build()),
+                Bitmap::new_constant(true, total_matches),
+            );
+            entries.push(elem_col.into());
+            let block = DataBlock::new(entries, total_matches);
+            Some(self.eval_lambda_block(&block, expr)?)
+        } else {
+            None
+        };
+
+        // Phase 3: rebuild each row with its matched values replaced.
+        let mut builder = ColumnBuilder::with_capacity(return_type, num_rows);
+        let mut cursor = 0usize;
+        for (row, transform_row) in rows.iter().enumerate() {
+            match transform_row {
+                JsonTransformRow::Null => {
+                    debug_assert!(return_type.is_nullable());
+                    builder.push_default();
+                }
+                JsonTransformRow::Unchanged => {
+                    let json_scalar = unsafe { args[json_idx].index_unchecked(row) };
+                    builder.push(json_scalar);
+                }
+                JsonTransformRow::Matched { locations, count } => {
+                    let result_col = result_col.as_ref().unwrap();
+                    let mut replacements: Vec<Option<&[u8]>> = Vec::with_capacity(*count);
+                    for i in cursor..cursor + count {
+                        match unsafe { result_col.index_unchecked(i) } {
+                            ScalarRef::Null => replacements.push(None),
+                            ScalarRef::Variant(data) => replacements.push(Some(data)),
+                            _ => {
+                                return Err(ErrorCode::Internal(
+                                    "json_path_transform: lambda result must be variant",
+                                ));
+                            }
+                        }
+                    }
+                    cursor += count;
+                    let json_scalar = unsafe { args[json_idx].index_unchecked(row) };
+                    let ScalarRef::Variant(data) = json_scalar else {
+                        unreachable!()
+                    };
+                    let new_data = replace_at_locations(data, locations, &replacements)?;
+                    builder.push(ScalarRef::Variant(&new_data));
+                }
+            }
+        }
+        match len {
+            Some(_) => Ok(Value::Column(builder.build())),
+            None => Ok(Value::Scalar(builder.build_scalar())),
+        }
+    }
+
     pub fn get_children(
         &self,
         args: &[Expr],
@@ -2169,6 +2510,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    #[recursive::recursive]
     pub fn get_select_child(
         &self,
         expr: &Expr,
@@ -2251,7 +2593,11 @@ impl<'a> Evaluator<'a> {
                 ..
             }) => {
                 let child_suppress_error = function.signature.name == "is_not_error";
-                let mut child_option = options.with_suppress_error(child_suppress_error);
+                // Suppression is sticky downward: once a boundary function
+                // opts in (is_not_error), nested evaluations stay suppressed
+                // so row errors bubble up to the boundary as data.
+                let mut child_option =
+                    options.with_suppress_error(options.suppress_error || child_suppress_error);
                 let args = args
                     .iter()
                     .map(|expr| self.get_select_child(expr, &mut child_option))
@@ -2284,9 +2630,24 @@ impl<'a> Evaluator<'a> {
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
                 let result = eval.eval(&args, &mut ctx);
 
+                // Same all-scalar rule as `eval_common_call`: an error from a
+                // scalar evaluation applies to every row. This path carries no
+                // branch validity mask, so expand over the whole block.
+                if args.iter().all(|arg| matches!(arg, Value::Scalar(_))) {
+                    expand_scalar_error(&mut ctx.errors, None, ctx.num_rows);
+                }
+
+                // Non-boundary calls are transparent to suppression: errors
+                // from nested evaluations keep bubbling up so a boundary
+                // function (is_not_error) observes errors from its whole
+                // subtree, not only from its direct children.
+                if !child_suppress_error {
+                    merge_eval_errors(&mut ctx.errors, child_option.errors.take(), ctx.num_rows);
+                }
+
                 // inject errors into options, parent will handle it
                 if options.suppress_error {
-                    options.errors = ctx.errors.take();
+                    merge_eval_errors(&mut options.errors, ctx.errors.take(), ctx.num_rows);
                 } else {
                     EvalContext::render_error(
                         *span,
@@ -2325,7 +2686,7 @@ impl<'a> Evaluator<'a> {
                 );
 
                 Ok((
-                    self.run_lambda(name, args, data_types, lambda_expr, return_type)?,
+                    self.run_lambda(name, args, data_types, lambda_expr, return_type, None)?,
                     return_type.clone(),
                 ))
             }

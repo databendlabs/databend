@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::binder::JoinPredicate;
@@ -31,6 +32,7 @@ use crate::optimizer::optimizers::rule::can_filter_null;
 use crate::optimizer::optimizers::rule::constant::false_constant;
 use crate::optimizer::optimizers::rule::constant::is_falsy;
 use crate::optimizer::optimizers::rule::convert_mark_to_semi_join;
+use crate::optimizer::optimizers::rule::outer_join_to_anti_join;
 use crate::optimizer::optimizers::rule::outer_join_to_inner_join;
 use crate::optimizer::optimizers::rule::rewrite_predicates;
 use crate::plans::ComparisonOp;
@@ -45,7 +47,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
 
 pub struct RulePushDownFilterJoin {
-    id: RuleID,
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
 }
@@ -53,7 +54,6 @@ pub struct RulePushDownFilterJoin {
 impl RulePushDownFilterJoin {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
-            id: RuleID::PushDownFilterJoin,
             // Filter
             //  \
             //   Join
@@ -74,14 +74,21 @@ impl RulePushDownFilterJoin {
 
 impl Rule for RulePushDownFilterJoin {
     fn id(&self) -> RuleID {
-        self.id
+        RuleID::PushDownFilterJoin
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        // First, try to convert outer join to inner join
+        // First, try to convert the outer join exclusion pattern to an anti join.
+        if let Some(mut result) = outer_join_to_anti_join(s_expr, self.metadata.clone())? {
+            result.set_applied_rule(&self.id());
+            state.add_result(result);
+            return Ok(());
+        }
+
+        // Second, try to convert outer join to inner join
         let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.metadata.clone())?;
 
-        // Second, check if can convert mark join to semi join
+        // Third, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr, self.metadata.clone())?;
         if s_expr.plan().rel_op() != RelOp::Filter {
             state.add_result(s_expr);
@@ -99,7 +106,7 @@ impl Rule for RulePushDownFilterJoin {
             return Ok(());
         }
 
-        result.set_applied_rule(&self.id);
+        result.set_applied_rule(&self.id());
         state.add_result(result);
 
         Ok(())
@@ -220,11 +227,14 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
         for equi_condition in join.equi_conditions.iter() {
             let left = equi_condition.left.clone();
             let right = equi_condition.right.clone();
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
             push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
                 arguments: vec![left, right],
+                return_type: Box::new(return_type),
             }));
         }
         join.equi_conditions.clear();

@@ -42,6 +42,7 @@ use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::materialized_view::CreateMaterializedViewMeta;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -519,6 +520,16 @@ pub struct CreateTableReq {
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 
+    /// An optional update to another table's options that must be committed atomically with this
+    /// table creation.
+    ///
+    /// This is used by `CREATE STREAM` and `CREATE MATERIALIZED VIEW`: publishing the new object
+    /// and enabling change tracking on its source table must be one metadata transaction. The
+    /// update is applied only when the target is actually created or replaced; `CREATE IF NOT
+    /// EXISTS` that finds an existing target leaves the source table unchanged. It is `None` for
+    /// ordinary table creation and when change tracking is already enabled.
+    pub source_table_option: Option<UpsertTableOptionReq>,
+
     /// Set it to true if a dropped table needs to be created,
     ///
     /// since [CreateOption] is used by various scenarios, we use
@@ -526,6 +537,13 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
+
+    /// Definition and source binding for a materialized-view table.
+    ///
+    /// `create_table` persists only the definition. The source-index sequence
+    /// validates that the definition is still bound to the source metadata
+    /// recorded in the CREATE plan. It is `None` for non-MV tables.
+    pub materialized_view: Option<CreateMaterializedViewMeta>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,
@@ -1246,26 +1264,6 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for TableCopiedFileNameIdent {
         type ValueType = TableCopiedFileInfo;
-    }
-
-    impl kvapi::Value for TableId {
-        type KeyType = DBIdTableName;
-    }
-
-    impl kvapi::Value for DBIdTableName {
-        type KeyType = TableIdToName;
-    }
-
-    impl kvapi::Value for TableMeta {
-        type KeyType = TableId;
-    }
-
-    impl kvapi::Value for TableIdList {
-        type KeyType = TableIdHistoryIdent;
-    }
-
-    impl kvapi::Value for TableCopiedFileInfo {
-        type KeyType = TableCopiedFileNameIdent;
     }
 }
 

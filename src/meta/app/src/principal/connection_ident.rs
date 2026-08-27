@@ -25,7 +25,6 @@ mod kvapi_impl {
     use databend_meta_client::kvapi;
 
     use crate::principal::UserDefinedConnection;
-    use crate::principal::connection_ident::ConnectionIdent;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
@@ -36,10 +35,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "ConnectionIdent";
         const HAS_TENANT: bool = true;
         type ValueType = UserDefinedConnection;
-    }
-
-    impl kvapi::Value for UserDefinedConnection {
-        type KeyType = ConnectionIdent;
     }
 
     impl kvapi::ValueWithName for UserDefinedConnection {

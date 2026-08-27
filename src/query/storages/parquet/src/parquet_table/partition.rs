@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 
 use super::table::ParquetTable;
+use crate::parquet_part::ParquetFileMeta;
 use crate::parquet_part::collect_parts;
 
 impl ParquetTable {
@@ -66,7 +67,12 @@ impl ParquetTable {
                 Some(files) => files
                     .iter()
                     .filter(|f| f.size > 0)
-                    .map(|f| (f.path.clone(), f.size, f.dedup_key()))
+                    .map(|f| {
+                        (f.path.clone(), f.size, f.dedup_key(), ParquetFileMeta {
+                            content_key: f.etag.clone().or_else(|| f.md5.clone()),
+                            last_modified: f.last_modified,
+                        })
+                    })
                     .collect::<Vec<_>>(),
                 None => self
                     .files_info
@@ -74,7 +80,12 @@ impl ParquetTable {
                     .await?
                     .into_iter()
                     .filter(|f| f.size > 0)
-                    .map(|f| (f.path.clone(), f.size, f.dedup_key()))
+                    .map(|f| {
+                        (f.path.clone(), f.size, f.dedup_key(), ParquetFileMeta {
+                            content_key: f.etag.clone().or_else(|| f.md5.clone()),
+                            last_modified: f.last_modified,
+                        })
+                    })
                     .collect::<Vec<_>>(),
             }
         };

@@ -25,7 +25,6 @@ mod kvapi_impl {
     use databend_meta_client::kvapi;
 
     use crate::principal::PasswordPolicy;
-    use crate::principal::PasswordPolicyIdent;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
@@ -37,10 +36,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "PasswordPolicyIdent";
         const HAS_TENANT: bool = true;
         type ValueType = PasswordPolicy;
-    }
-
-    impl kvapi::Value for PasswordPolicy {
-        type KeyType = PasswordPolicyIdent;
     }
 
     impl kvapi::ValueWithName for PasswordPolicy {

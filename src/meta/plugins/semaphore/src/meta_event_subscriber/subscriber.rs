@@ -28,7 +28,7 @@ use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
-use tonic::Status;
+use tonic_013::Status;
 
 use crate::errors::ConnectionClosed;
 use crate::errors::ProcessorError;
@@ -88,7 +88,7 @@ impl MetaEventSubscriber {
     pub(crate) async fn new_watch_stream(
         &self,
         ctx: impl fmt::Display,
-    ) -> Result<tonic::Streaming<WatchResponse>, ConnectionClosed> {
+    ) -> Result<tonic_013::Streaming<WatchResponse>, ConnectionClosed> {
         let watch =
             WatchRequest::new(self.left.clone(), Some(self.right.clone())).with_initial_flush(true);
 

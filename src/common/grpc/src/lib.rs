@@ -14,8 +14,10 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+pub use client_conf::IN_PROCESS_GRPC_SCHEME;
 pub use client_conf::RpcClientConf;
 pub use client_conf::RpcClientTlsConfig;
+pub use client_conf::is_in_process_grpc_address;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use dns_resolver::DNSService;

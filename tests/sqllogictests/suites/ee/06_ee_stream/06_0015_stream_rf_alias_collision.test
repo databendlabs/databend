@@ -1,0 +1,129 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+## Test: runtime filter must resolve hidden stream columns by schema_with_stream().
+## Mutations populate _origin_block_row_num; plain inserts leave it NULL.
+## The subquery aliases _origin_block_row_num as row_num, colliding with a physical column.
+## Bug scenario: RF resolves row_num to the physical column instead of the hidden stream column.
+## Expected: 3 matches.
+
+statement ok
+DROP DATABASE IF EXISTS test_stream_rf_alias_collision
+
+statement ok
+CREATE DATABASE test_stream_rf_alias_collision
+
+statement ok
+USE test_stream_rf_alias_collision
+
+statement ok
+CREATE TABLE t_stream_probe(row_num UInt64, val UInt64) ROW_PER_BLOCK = 10
+
+statement ok
+ALTER TABLE t_stream_probe SET OPTIONS(change_tracking = true)
+
+statement ok
+INSERT INTO t_stream_probe VALUES (100, 1), (101, 2), (102, 3), (103, 4), (104, 5), (105, 6), (106, 7), (107, 8)
+
+statement ok
+DELETE FROM t_stream_probe WHERE val >= 7
+
+statement ok
+CREATE TABLE t_stream_build(row_num UInt64)
+
+statement ok
+INSERT INTO t_stream_build VALUES (0), (1), (2)
+
+## Sanity check: the mutation rewrites the surviving rows with origin row numbers.
+query II
+SELECT row_num, _origin_block_row_num FROM t_stream_probe ORDER BY row_num
+----
+100 0
+101 1
+102 2
+103 3
+104 4
+105 5
+
+query T
+EXPLAIN SELECT count()
+FROM t_stream_build AS b
+INNER JOIN (
+    SELECT _origin_block_row_num AS row_num
+    FROM t_stream_probe
+    WHERE _origin_block_row_num IS NOT NULL
+) AS p
+ON b.row_num = p.row_num
+----
+AggregateFinal
+├── output columns: [count() (#6)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── HashJoin
+        ├── output columns: []
+        ├── join type: INNER
+        ├── build keys: [b.row_num (#0)]
+        ├── probe keys: [p.row_num (#5)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters:
+        │   └── filter id:0, build key:b.row_num (#0), probe targets:[p.row_num (#5)@scan1], filter type:bloom,inlist,min_max
+        ├── estimated rows: 3.00
+        ├── TableScan(Build)
+        │   ├── table: default.test_stream_rf_alias_collision.t_stream_build
+        │   ├── scan id: 0
+        │   ├── output columns: [row_num (#0)]
+        │   ├── read rows: 3
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        │   ├── push downs: [filters: [is_not_null(t_stream_build.row_num (#0))], limit: NONE]
+        │   └── estimated rows: 3.00
+        └── Filter(Probe)
+            ├── output columns: [t_stream_probe._origin_block_row_num (#5)]
+            ├── filters: [is_not_null(t_stream_probe._origin_block_row_num (#5))]
+            ├── estimated rows: 6.00
+            └── TableScan
+                ├── table: default.test_stream_rf_alias_collision.t_stream_probe
+                ├── scan id: 1
+                ├── output columns: [_origin_block_row_num (#5)]
+                ├── read rows: 6
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [is_not_null(t_stream_probe._origin_block_row_num (#5))], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: 6.00
+
+query I
+SELECT count()
+FROM t_stream_build AS b
+INNER JOIN (
+    SELECT _origin_block_row_num AS row_num
+    FROM t_stream_probe
+    WHERE _origin_block_row_num IS NOT NULL
+) AS p
+ON b.row_num = p.row_num
+----
+3
+
+statement ok
+DROP DATABASE test_stream_rf_alias_collision

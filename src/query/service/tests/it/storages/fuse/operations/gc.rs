@@ -91,6 +91,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> anyhow::Result<()> {
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
         let orphan_snapshot = TableSnapshot::try_from_previous(
             current_snapshot.clone(),
+            fuse_table.cluster_key_info(),
             None,
             TestFixture::default_table_meta_timestamps(),
         )?;

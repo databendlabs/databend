@@ -17,11 +17,8 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::hint::unlikely;
 use std::marker::PhantomData;
 use std::mem;
-use std::sync::atomic;
-use std::sync::atomic::AtomicBool;
 
 use databend_common_base::runtime::JoinHandle;
 use databend_common_base::runtime::spawn;
@@ -33,6 +30,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::sampler::FixedRateSampler;
+use databend_common_pipeline::core::check_interrupt;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -136,13 +134,12 @@ where
         &mut self,
         input_data: Vec<DataBlock>,
         need_spill: bool,
-        aborting: &AtomicBool,
     ) -> Result<()> {
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
         collect
-            .sort_input_data(&self.base, input_data, need_spill, aborting)
+            .sort_input_data(&self.base, input_data, need_spill)
             .await
     }
 
@@ -247,7 +244,6 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
         base: &Base<S>,
         mut input_data: Vec<DataBlock>,
         need_spill: bool,
-        aborting: &AtomicBool,
     ) -> Result<()> {
         let batch_rows = self.params.batch_rows;
 
@@ -269,9 +265,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
 
             let mut sorted = VecDeque::new();
             while let Some(data) = merger.next_block()? {
-                if unlikely(aborting.load(atomic::Ordering::Relaxed)) {
-                    return Err(ErrorCode::aborting());
-                }
+                check_interrupt()?;
 
                 let mut block = base.new_block(data);
                 if need_spill {

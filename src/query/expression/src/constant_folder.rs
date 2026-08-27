@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_ast::Span;
@@ -50,14 +51,341 @@ pub struct ConstantFolder<'a, Index: ColumnIndex> {
     fn_registry: &'a FunctionRegistry,
 }
 
+enum FoldResult<'e, Index: ColumnIndex> {
+    Unchanged(Cow<'e, Expr<Index>>),
+    Changed(Expr<Index>),
+}
+
+impl<'e, Index: ColumnIndex> FoldResult<'e, Index> {
+    fn as_ref(&self) -> &Expr<Index> {
+        match self {
+            FoldResult::Unchanged(expr) => expr.as_ref(),
+            FoldResult::Changed(expr) => expr,
+        }
+    }
+
+    fn is_changed(&self) -> bool {
+        matches!(self, FoldResult::Changed(_))
+    }
+
+    fn into_expr(self) -> Expr<Index> {
+        match self {
+            FoldResult::Unchanged(expr) => expr.into_owned(),
+            FoldResult::Changed(expr) => expr,
+        }
+    }
+}
+
+enum ExprArgs<'e, Index: ColumnIndex> {
+    Borrowed(std::slice::Iter<'e, Expr<Index>>),
+    Owned(std::vec::IntoIter<Expr<Index>>),
+}
+
+impl<'e, Index: ColumnIndex> Iterator for ExprArgs<'e, Index> {
+    type Item = Cow<'e, Expr<Index>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ExprArgs::Borrowed(args) => args.next().map(Cow::Borrowed),
+            ExprArgs::Owned(args) => args.next().map(Cow::Owned),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            ExprArgs::Borrowed(args) => args.size_hint(),
+            ExprArgs::Owned(args) => args.size_hint(),
+        }
+    }
+}
+
+impl<Index: ColumnIndex> ExactSizeIterator for ExprArgs<'_, Index> {}
+
+enum FunctionNode<'e, Index: ColumnIndex> {
+    Borrowed {
+        expr: &'e Expr<Index>,
+        call: &'e FunctionCall<Index>,
+    },
+    Owned(FunctionCall<Index>),
+}
+
+impl<'e, Index: ColumnIndex> FunctionNode<'e, Index> {
+    fn call(&self) -> &FunctionCall<Index> {
+        match self {
+            FunctionNode::Borrowed { call, .. } => call,
+            FunctionNode::Owned(call) => call,
+        }
+    }
+
+    fn args_len(&self) -> usize {
+        self.call().args.len()
+    }
+
+    fn into_args(self) -> (Self, ExprArgs<'e, Index>) {
+        match self {
+            FunctionNode::Borrowed { expr, call } => (
+                FunctionNode::Borrowed { expr, call },
+                ExprArgs::Borrowed(call.args.iter()),
+            ),
+            FunctionNode::Owned(mut call) => {
+                let args = ExprArgs::Owned(std::mem::take(&mut call.args).into_iter());
+                (FunctionNode::Owned(call), args)
+            }
+        }
+    }
+
+    fn into_cow(self) -> Cow<'e, Expr<Index>> {
+        match self {
+            FunctionNode::Borrowed { expr, .. } => Cow::Borrowed(expr),
+            FunctionNode::Owned(call) => Cow::Owned(Expr::FunctionCall(call)),
+        }
+    }
+
+    fn finish(self, args: impl IntoIterator<Item = Expr<Index>>) -> Expr<Index> {
+        let args = args.into_iter().collect();
+        match self {
+            FunctionNode::Borrowed { call, .. } => Expr::FunctionCall(FunctionCall {
+                span: call.span,
+                id: call.id.clone(),
+                function: call.function.clone(),
+                generics: call.generics.clone(),
+                args,
+                return_type: call.return_type.clone(),
+            }),
+            FunctionNode::Owned(mut call) => {
+                call.args = args;
+                Expr::FunctionCall(call)
+            }
+        }
+    }
+
+    fn borrowed_expr(&self) -> Option<&'e Expr<Index>> {
+        match self {
+            FunctionNode::Borrowed { expr, .. } => Some(expr),
+            FunctionNode::Owned(_) => None,
+        }
+    }
+
+    fn finish_fold(self, args: Vec<FoldResult<'e, Index>>, changed: bool) -> FoldResult<'e, Index> {
+        match (changed, self) {
+            (false, FunctionNode::Borrowed { expr, .. }) => {
+                FoldResult::Unchanged(Cow::Borrowed(expr))
+            }
+            (changed, node) => {
+                let expr = node.finish(args.into_iter().map(FoldResult::into_expr));
+                if changed {
+                    FoldResult::Changed(expr)
+                } else {
+                    FoldResult::Unchanged(Cow::Owned(expr))
+                }
+            }
+        }
+    }
+}
+
+enum LambdaNode<'e, Index: ColumnIndex> {
+    Borrowed {
+        expr: &'e Expr<Index>,
+        call: &'e LambdaFunctionCall<Index>,
+    },
+    Owned(LambdaFunctionCall<Index>),
+}
+
+impl<'e, Index: ColumnIndex> LambdaNode<'e, Index> {
+    fn args_len(&self) -> usize {
+        match self {
+            LambdaNode::Borrowed { call, .. } => call.args.len(),
+            LambdaNode::Owned(call) => call.args.len(),
+        }
+    }
+
+    fn into_args(self) -> (Self, ExprArgs<'e, Index>) {
+        match self {
+            LambdaNode::Borrowed { expr, call } => (
+                LambdaNode::Borrowed { expr, call },
+                ExprArgs::Borrowed(call.args.iter()),
+            ),
+            LambdaNode::Owned(mut call) => {
+                let args = ExprArgs::Owned(std::mem::take(&mut call.args).into_iter());
+                (LambdaNode::Owned(call), args)
+            }
+        }
+    }
+
+    fn into_cow(self) -> Cow<'e, Expr<Index>> {
+        match self {
+            LambdaNode::Borrowed { expr, .. } => Cow::Borrowed(expr),
+            LambdaNode::Owned(call) => Cow::Owned(Expr::LambdaFunctionCall(call)),
+        }
+    }
+
+    fn finish(self, args: impl IntoIterator<Item = Expr<Index>>) -> Expr<Index> {
+        let args = args.into_iter().collect();
+        match self {
+            LambdaNode::Borrowed { call, .. } => Expr::LambdaFunctionCall(LambdaFunctionCall {
+                span: call.span,
+                name: call.name.clone(),
+                args,
+                lambda_expr: call.lambda_expr.clone(),
+                lambda_display: call.lambda_display.clone(),
+                return_type: call.return_type.clone(),
+            }),
+            LambdaNode::Owned(mut call) => {
+                call.args = args;
+                Expr::LambdaFunctionCall(call)
+            }
+        }
+    }
+
+    fn borrowed_expr(&self) -> Option<&'e Expr<Index>> {
+        match self {
+            LambdaNode::Borrowed { expr, .. } => Some(expr),
+            LambdaNode::Owned(_) => None,
+        }
+    }
+
+    fn finish_fold(self, args: Vec<FoldResult<'e, Index>>, changed: bool) -> FoldResult<'e, Index> {
+        match (changed, self) {
+            (false, LambdaNode::Borrowed { expr, .. }) => {
+                FoldResult::Unchanged(Cow::Borrowed(expr))
+            }
+            (changed, node) => {
+                let expr = node.finish(args.into_iter().map(FoldResult::into_expr));
+                if changed {
+                    FoldResult::Changed(expr)
+                } else {
+                    FoldResult::Unchanged(Cow::Owned(expr))
+                }
+            }
+        }
+    }
+}
+
+enum CastNode<'e, Index: ColumnIndex> {
+    Borrowed(&'e Expr<Index>),
+    Owned {
+        span: Span,
+        is_try: bool,
+        dest_type: DataType,
+    },
+}
+
+impl<'e, Index: ColumnIndex> CastNode<'e, Index> {
+    fn parts(&self) -> (Span, bool, &DataType) {
+        match self {
+            CastNode::Borrowed(Expr::Cast(cast)) => (cast.span, cast.is_try, &cast.dest_type),
+            CastNode::Owned {
+                span,
+                is_try,
+                dest_type,
+            } => (*span, *is_try, dest_type),
+            CastNode::Borrowed(_) => unreachable!(),
+        }
+    }
+
+    fn finish(self, expr: Expr<Index>) -> Expr<Index> {
+        match self {
+            CastNode::Borrowed(Expr::Cast(cast)) => Expr::Cast(Cast {
+                span: cast.span,
+                is_try: cast.is_try,
+                expr: Box::new(expr),
+                dest_type: cast.dest_type.clone(),
+            }),
+            CastNode::Owned {
+                span,
+                is_try,
+                dest_type,
+            } => Expr::Cast(Cast {
+                span,
+                is_try,
+                expr: Box::new(expr),
+                dest_type,
+            }),
+            CastNode::Borrowed(_) => unreachable!(),
+        }
+    }
+
+    fn borrowed_expr(&self) -> Option<&'e Expr<Index>> {
+        match self {
+            CastNode::Borrowed(expr) => Some(expr),
+            CastNode::Owned { .. } => None,
+        }
+    }
+
+    fn finish_fold(self, expr: FoldResult<'e, Index>, changed: bool) -> FoldResult<'e, Index> {
+        if changed {
+            return FoldResult::Changed(self.finish(expr.into_expr()));
+        }
+
+        match self {
+            CastNode::Borrowed(expr) => FoldResult::Unchanged(Cow::Borrowed(expr)),
+            CastNode::Owned {
+                span,
+                is_try,
+                dest_type,
+            } => FoldResult::Unchanged(Cow::Owned(Expr::Cast(Cast {
+                span,
+                is_try,
+                expr: Box::new(expr.into_expr()),
+                dest_type,
+            }))),
+        }
+    }
+}
+
+enum FoldNode<'e, Index: ColumnIndex> {
+    Constant(Cow<'e, Expr<Index>>),
+    ColumnRef(Cow<'e, Expr<Index>>),
+    Cast(CastNode<'e, Index>, Cow<'e, Expr<Index>>),
+    FunctionCall(FunctionNode<'e, Index>),
+    LambdaFunctionCall(LambdaNode<'e, Index>),
+}
+
+impl<'e, Index: ColumnIndex> FoldNode<'e, Index> {
+    fn from_cow(expr: Cow<'e, Expr<Index>>) -> Self {
+        match expr {
+            Cow::Borrowed(expr @ Expr::Constant(_)) => FoldNode::Constant(Cow::Borrowed(expr)),
+            Cow::Owned(expr @ Expr::Constant(_)) => FoldNode::Constant(Cow::Owned(expr)),
+            Cow::Borrowed(expr @ Expr::ColumnRef(_)) => FoldNode::ColumnRef(Cow::Borrowed(expr)),
+            Cow::Owned(expr @ Expr::ColumnRef(_)) => FoldNode::ColumnRef(Cow::Owned(expr)),
+            Cow::Borrowed(expr @ Expr::Cast(cast)) => {
+                FoldNode::Cast(CastNode::Borrowed(expr), Cow::Borrowed(cast.expr.as_ref()))
+            }
+            Cow::Owned(Expr::Cast(cast)) => FoldNode::Cast(
+                CastNode::Owned {
+                    span: cast.span,
+                    is_try: cast.is_try,
+                    dest_type: cast.dest_type,
+                },
+                Cow::Owned(*cast.expr),
+            ),
+            Cow::Borrowed(expr @ Expr::FunctionCall(call)) => {
+                FoldNode::FunctionCall(FunctionNode::Borrowed { expr, call })
+            }
+            Cow::Owned(Expr::FunctionCall(call)) => {
+                FoldNode::FunctionCall(FunctionNode::Owned(call))
+            }
+            Cow::Borrowed(expr @ Expr::LambdaFunctionCall(call)) => {
+                FoldNode::LambdaFunctionCall(LambdaNode::Borrowed { expr, call })
+            }
+            Cow::Owned(Expr::LambdaFunctionCall(call)) => {
+                FoldNode::LambdaFunctionCall(LambdaNode::Owned(call))
+            }
+        }
+    }
+}
+
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
-    /// Fold a single expression, returning the new expression and the domain of the new expression.
-    pub fn fold(
-        expr: &Expr<Index>,
+    /// Fold a single expression, returning the new expression and its domain.
+    ///
+    /// A borrowed input remains borrowed when folding does not rewrite it. An owned input is
+    /// consumed and rebuilt by moving its unchanged subtrees whenever possible.
+    pub fn fold<'e>(
+        expr: Cow<'e, Expr<Index>>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
-    ) -> (Expr<Index>, Option<Domain>) {
-        let input_domains = Self::full_input_domains(expr);
+    ) -> (Cow<'e, Expr<Index>>, Option<Domain>) {
+        let input_domains = Self::full_input_domains(expr.as_ref());
 
         let folder = ConstantFolder {
             input_domains: &input_domains,
@@ -68,14 +396,16 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         folder.fold_to_stable(expr)
     }
 
-    /// Fold a single expression with columns' domain, and then return the new expression and the
-    /// domain of the new expression.
-    pub fn fold_with_domain(
-        expr: &Expr<Index>,
+    /// Fold a single expression with columns' domains, returning the new expression and its domain.
+    ///
+    /// A borrowed input remains borrowed when folding does not rewrite it. An owned input is
+    /// consumed and rebuilt by moving its unchanged subtrees whenever possible.
+    pub fn fold_with_domain<'e>(
+        expr: Cow<'e, Expr<Index>>,
         input_domains: &'a HashMap<Index, Domain>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
-    ) -> (Expr<Index>, Option<Domain>) {
+    ) -> (Cow<'e, Expr<Index>>, Option<Domain>) {
         let folder = ConstantFolder {
             input_domains,
             func_ctx,
@@ -97,155 +427,170 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
     /// Running `fold_once()` for only one time may not reach the simplest form of expression,
     /// therefore we need to call it repeatedly until the expression becomes stable.
-    fn fold_to_stable(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
+    fn fold_to_stable<'e>(
+        &self,
+        mut expr: Cow<'e, Expr<Index>>,
+    ) -> (Cow<'e, Expr<Index>>, Option<Domain>) {
         const MAX_ITERATIONS: usize = 1024;
 
-        let mut old_expr = expr.clone();
-        let mut old_domain = None;
+        let mut domain = None;
         for _ in 0..MAX_ITERATIONS {
-            let (new_expr, new_domain) = self.fold_once(&old_expr);
-
-            if new_expr == old_expr {
-                return (new_expr, new_domain);
+            let (result, new_domain) = self.fold_once(expr);
+            match result {
+                FoldResult::Unchanged(current) => return (current, new_domain),
+                FoldResult::Changed(replacement) => expr = Cow::Owned(replacement),
             }
-            old_expr = new_expr;
-            old_domain = new_domain;
+            domain = new_domain;
         }
 
         error!("maximum iterations reached while folding expression");
 
-        (old_expr, old_domain)
+        (expr, domain)
     }
 
     /// Fold expression by one step, specifically, by reducing expression by domain calculation and then
     /// folding the function calls whose all arguments are constants.
     #[recursive::recursive]
-    fn fold_once(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
-        let (new_expr, domain) = match expr {
-            Expr::Constant(Constant {
-                scalar, data_type, ..
-            }) => (expr.clone(), Some(scalar.as_ref().domain(data_type))),
-            Expr::ColumnRef(ColumnRef {
-                span,
-                id,
-                data_type,
-                ..
-            }) => {
-                let domain = &self.input_domains[id];
-                let expr = domain
-                    .as_singleton()
-                    .map(|scalar| {
-                        Expr::Constant(Constant {
-                            span: *span,
-                            scalar,
-                            data_type: data_type.clone(),
-                        })
-                    })
-                    .unwrap_or_else(|| expr.clone());
-                (expr, Some(domain.clone()))
+    fn fold_once<'e>(&self, expr: Cow<'e, Expr<Index>>) -> (FoldResult<'e, Index>, Option<Domain>) {
+        let data_type = expr.data_type().clone();
+        let (result, domain) = match FoldNode::from_cow(expr) {
+            FoldNode::Constant(expr) => {
+                let Expr::Constant(constant) = expr.as_ref() else {
+                    unreachable!()
+                };
+                let domain = constant.scalar.as_ref().domain(&constant.data_type);
+                (FoldResult::Unchanged(expr), Some(domain))
             }
-            Expr::Cast(Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            }) => {
-                let (inner_expr, inner_domain) = self.fold_once(expr);
+            FoldNode::ColumnRef(expr) => {
+                let Expr::ColumnRef(column_ref) = expr.as_ref() else {
+                    unreachable!()
+                };
+                let domain = &self.input_domains[&column_ref.id];
+                if let Some(scalar) = domain.as_singleton() {
+                    (
+                        FoldResult::Changed(Expr::Constant(Constant {
+                            span: column_ref.span,
+                            scalar,
+                            data_type: column_ref.data_type.clone(),
+                        })),
+                        Some(domain.clone()),
+                    )
+                } else {
+                    (FoldResult::Unchanged(expr), Some(domain.clone()))
+                }
+            }
+            FoldNode::Cast(node, expr) => {
+                let (span, is_try, dest_type) = node.parts();
+                let src_type = expr.data_type().clone();
+                let (inner_result, inner_domain) = self.fold_once(expr);
+                let inner_changed = inner_result.is_changed();
 
-                let new_domain = if *is_try {
+                let new_domain = if is_try {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_try_cast(*span, expr.data_type(), dest_type, &inner_domain)
+                        self.calculate_try_cast(span, &src_type, dest_type, &inner_domain)
                     })
                 } else {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_cast(*span, expr.data_type(), dest_type, &inner_domain)
+                        self.calculate_cast(span, &src_type, dest_type, &inner_domain)
                     })
                 };
 
-                let cast_expr = Expr::Cast(Cast {
-                    span: *span,
-                    is_try: *is_try,
-                    expr: Box::new(inner_expr.clone()),
-                    dest_type: dest_type.clone(),
-                });
+                let inner_is_constant = inner_result.as_ref().as_constant().is_some();
+                if inner_is_constant {
+                    if !inner_changed && let Some(cast_expr) = node.borrowed_expr() {
+                        let (cast_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Borrowed(cast_expr));
+                        if folded {
+                            return (FoldResult::Changed(cast_expr.into_owned()), None);
+                        }
+                    } else {
+                        let cast_expr = node.finish(inner_result.into_expr());
+                        let (cast_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Owned(cast_expr));
+                        if folded {
+                            return (FoldResult::Changed(cast_expr.into_owned()), None);
+                        }
 
-                if inner_expr.as_constant().is_some() {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let cast_expr = cast_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: dest_type.clone(),
-                            }),
-                            None,
-                        );
+                        if let Some(scalar) = new_domain.as_ref().and_then(Domain::as_singleton) {
+                            let Expr::Cast(cast) = cast_expr.into_owned() else {
+                                unreachable!()
+                            };
+                            return (
+                                FoldResult::Changed(Expr::Constant(Constant {
+                                    span: cast.span,
+                                    scalar,
+                                    data_type: cast.dest_type,
+                                })),
+                                new_domain,
+                            );
+                        }
+
+                        let result = if inner_changed {
+                            FoldResult::Changed(cast_expr.into_owned())
+                        } else {
+                            FoldResult::Unchanged(cast_expr)
+                        };
+                        return (result, new_domain);
                     }
                 }
 
-                (
-                    new_domain
-                        .as_ref()
-                        .and_then(Domain::as_singleton)
-                        .map(|scalar| {
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: dest_type.clone(),
-                            })
-                        })
-                        .unwrap_or(cast_expr),
-                    new_domain,
-                )
-            }
-            Expr::FunctionCall(FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            }) if matches!(
-                function.signature.name.as_str(),
-                "and_filters" | "or_filters"
-            ) =>
-            {
-                let is_or = function.signature.name.starts_with("or_");
-
-                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
-                    return (expr.clone(), None);
+                if let Some(scalar) = new_domain.as_ref().and_then(Domain::as_singleton) {
+                    (
+                        FoldResult::Changed(Expr::Constant(Constant {
+                            span,
+                            scalar,
+                            data_type: dest_type.clone(),
+                        })),
+                        new_domain,
+                    )
+                } else {
+                    (node.finish_fold(inner_result, inner_changed), new_domain)
                 }
+            }
+            FoldNode::FunctionCall(node)
+                if matches!(
+                    node.call().function.signature.name.as_str(),
+                    "and_filters" | "or_filters"
+                ) =>
+            {
+                let call = node.call();
+                let is_or = call.function.signature.name.starts_with("or_");
+                let span = call.span;
 
-                let mut args_expr = Vec::new();
+                if node.args_len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (FoldResult::Unchanged(node.into_cow()), None);
+                }
+                let (node, args) = node.into_args();
+
+                let mut changed = false;
+                let mut args_expr = Vec::with_capacity(args.len());
                 let mut result_domain = Some(BooleanDomain {
                     has_true: true,
                     has_false: true,
                 });
 
                 for arg in args {
-                    let (expr, domain) = self.fold_once(arg);
+                    let (arg, domain) = self.fold_once(arg);
+                    changed |= arg.is_changed();
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
                     if let Expr::Constant(Constant {
                         scalar: Scalar::Boolean(result),
                         ..
-                    }) = &expr
+                    }) = arg.as_ref()
                     {
                         if is_or == *result {
                             return (
-                                Expr::Constant(Constant {
-                                    span: *span,
+                                FoldResult::Changed(Expr::Constant(Constant {
+                                    span,
                                     scalar: Scalar::Boolean(is_or),
                                     data_type: DataType::Boolean,
-                                }),
+                                })),
                                 None,
                             );
                         }
                     }
-                    args_expr.push(expr);
+                    args_expr.push(arg);
 
                     result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
                         let (domain_has_true, domain_has_false) = match &domain {
@@ -287,11 +632,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     {
                         if is_or == result {
                             return (
-                                Expr::Constant(Constant {
-                                    span: *span,
+                                FoldResult::Changed(Expr::Constant(Constant {
+                                    span,
                                     scalar: Scalar::Boolean(result),
                                     data_type: DataType::Boolean,
-                                }),
+                                })),
                                 None,
                             );
                         }
@@ -305,11 +650,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     {
                         if is_mutually_exclusive {
                             return (
-                                Expr::Constant(Constant {
-                                    span: *span,
+                                FoldResult::Changed(Expr::Constant(Constant {
+                                    span,
                                     scalar: Scalar::Boolean(false),
                                     data_type: DataType::Boolean,
-                                }),
+                                })),
                                 None,
                             );
                         }
@@ -321,135 +666,222 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .and_then(|domain| Domain::Boolean(*domain).as_singleton())
                 {
                     return (
-                        Expr::Constant(Constant {
-                            span: *span,
+                        FoldResult::Changed(Expr::Constant(Constant {
+                            span,
                             scalar,
                             data_type: DataType::Boolean,
-                        }),
+                        })),
                         None,
                     );
                 }
 
-                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
-
-                let func_expr = Expr::FunctionCall(FunctionCall {
-                    span: *span,
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                    return_type: return_type.clone(),
-                });
+                let all_args_is_scalar = args_expr
+                    .iter()
+                    .all(|arg| arg.as_ref().as_constant().is_some());
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                    if !changed && let Some(func_expr) = node.borrowed_expr() {
+                        let (func_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Borrowed(func_expr));
+                        if folded {
+                            return (FoldResult::Changed(func_expr.into_owned()), None);
+                        }
+                    } else {
+                        let func_expr =
+                            node.finish(args_expr.into_iter().map(FoldResult::into_expr));
+                        let (func_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Owned(func_expr));
+                        let result = if folded || changed {
+                            FoldResult::Changed(func_expr.into_owned())
+                        } else {
+                            FoldResult::Unchanged(func_expr)
+                        };
                         return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: return_type.clone(),
-                            }),
-                            None,
+                            result,
+                            if folded {
+                                None
+                            } else {
+                                result_domain.map(Domain::Boolean)
+                            },
                         );
                     }
                 }
 
-                (func_expr, result_domain.map(Domain::Boolean))
+                let result = node.finish_fold(args_expr, changed);
+                (result, result_domain.map(Domain::Boolean))
             }
-            Expr::FunctionCall(FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            }) => {
-                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
-                    return (expr.clone(), None);
+            FoldNode::FunctionCall(node) => {
+                if node.args_len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (FoldResult::Unchanged(node.into_cow()), None);
                 }
+                let (node, args) = node.into_args();
 
-                let (mut args_expr, mut args_domain) = (
-                    Vec::with_capacity(args.len()),
-                    Some(Vec::with_capacity(args.len())),
-                );
+                let mut changed = false;
+                let mut args_expr = Vec::with_capacity(args.len());
+                let mut args_domain = Some(Vec::with_capacity(args.len()));
                 for arg in args {
-                    let (expr, domain) = self.fold_once(arg);
-                    args_expr.push(expr);
+                    let (arg, domain) = self.fold_once(arg);
+                    changed |= arg.is_changed();
+                    args_expr.push(arg);
                     args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
                         domains.push(domain);
                         domains
                     });
                 }
-                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let call = node.call();
+
+                if call.function.signature.name == "if" {
+                    if args_expr.len() < 3 || args_expr.len().is_multiple_of(2) {
+                        let result = node.finish_fold(args_expr, changed);
+                        return (result, None);
+                    }
+
+                    let mut simplified_indices = Vec::with_capacity(args_expr.len());
+                    let mut found_true_branch = false;
+                    for cond_idx in (0..args_expr.len() - 1).step_by(2) {
+                        match args_expr[cond_idx]
+                            .as_ref()
+                            .as_constant()
+                            .map(|c| &c.scalar)
+                        {
+                            Some(Scalar::Boolean(true)) => {
+                                if simplified_indices.is_empty() {
+                                    return (
+                                        FoldResult::Changed(
+                                            args_expr.remove(cond_idx + 1).into_expr(),
+                                        ),
+                                        None,
+                                    );
+                                }
+                                simplified_indices.push(cond_idx + 1);
+                                found_true_branch = true;
+                                break;
+                            }
+                            Some(Scalar::Boolean(false) | Scalar::Null) => {}
+                            _ => {
+                                simplified_indices.push(cond_idx);
+                                simplified_indices.push(cond_idx + 1);
+                            }
+                        }
+                    }
+
+                    if simplified_indices.is_empty() {
+                        return (
+                            FoldResult::Changed(args_expr.pop().unwrap().into_expr()),
+                            None,
+                        );
+                    }
+                    if !found_true_branch {
+                        simplified_indices.push(args_expr.len() - 1);
+                    }
+                    if simplified_indices.len() != args_expr.len() {
+                        let mut original_args = args_expr.into_iter().map(Some).collect::<Vec<_>>();
+                        let simplified_args = simplified_indices
+                            .iter()
+                            .map(|&index| original_args[index].take().unwrap().into_expr())
+                            .collect::<Vec<_>>();
+                        match check_function(
+                            call.span,
+                            "if",
+                            call.id.params(),
+                            &simplified_args,
+                            self.fn_registry,
+                        ) {
+                            Ok(Expr::FunctionCall(mut call)) => {
+                                call.args = simplified_args;
+                                return (FoldResult::Changed(Expr::FunctionCall(call)), None);
+                            }
+                            Ok(func_expr) => return (FoldResult::Changed(func_expr), None),
+                            Err(_) => {
+                                for (index, arg) in
+                                    simplified_indices.into_iter().zip(simplified_args)
+                                {
+                                    original_args[index] =
+                                        Some(FoldResult::Unchanged(Cow::Owned(arg)));
+                                }
+                                args_expr = original_args.into_iter().map(Option::unwrap).collect();
+                            }
+                        }
+                    }
+                }
+
+                let all_args_is_scalar = args_expr
+                    .iter()
+                    .all(|arg| arg.as_ref().as_constant().is_some());
                 let is_monotonicity = self
                     .fn_registry
                     .properties
-                    .get(&function.signature.name)
+                    .get(&call.function.signature.name)
                     .map(|p| {
                         args_expr.len() == 1
                             && (p.monotonicity
-                                || p.monotonicity_by_type.contains(args_expr[0].data_type()))
+                                || p.monotonicity_by_type
+                                    .contains(args_expr[0].as_ref().data_type()))
                     })
                     .unwrap_or_default();
+                let monotonicity_check = self
+                    .fn_registry
+                    .properties
+                    .get(&call.function.signature.name)
+                    .and_then(|p| p.monotonicity_check)
+                    .filter(|_| args_expr.len() == 1);
 
                 // Check for mutually exclusive ranges in AND function
-                if function.signature.name == "and"
+                if call.function.signature.name == "and"
                     && args_expr.len() >= 2
                     && args_expr
                         .iter()
-                        .all(|arg| !arg.data_type().is_nullable_or_null())
+                        .all(|arg| !arg.as_ref().data_type().is_nullable_or_null())
                 {
                     if let Some(is_mutually_exclusive) =
                         self.check_mutually_exclusive_ranges(&args_expr)
                     {
                         if is_mutually_exclusive {
                             return (
-                                Expr::Constant(Constant {
-                                    span: *span,
+                                FoldResult::Changed(Expr::Constant(Constant {
+                                    span: call.span,
                                     scalar: Scalar::Boolean(false),
                                     data_type: DataType::Boolean,
-                                }),
+                                })),
                                 None,
                             );
                         }
                     }
                 }
 
-                let func_expr = Expr::FunctionCall(FunctionCall {
-                    span: *span,
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                    return_type: return_type.clone(),
-                });
-
-                let (calc_domain, eval) = match &function.eval {
+                let (calc_domain, eval) = match &call.function.eval {
                     FunctionEval::Scalar {
                         calc_domain, eval, ..
                     } => (calc_domain, eval),
                     FunctionEval::SRF { .. } => {
-                        return (func_expr, None);
+                        let result = node.finish_fold(args_expr, changed);
+                        return (result, None);
                     }
                 };
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
                     let res = calc_domain.domain_eval(self.func_ctx, &domains);
-                    match (res, is_monotonicity) {
+                    // Range-sensitive checks complement the static flags: they may prove
+                    // monotonicity for this specific argument range and context only.
+                    let is_monotonic = is_monotonicity
+                        || monotonicity_check
+                            .is_some_and(|check| check(self.func_ctx, &domains) == Some(0));
+                    match (res, is_monotonic) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
-                            let (min, max) = domains.iter().map(Domain::to_minmax).next().unwrap();
+                            let domain = domains.first().unwrap();
+                            if args_expr[0].as_ref().data_type().is_nullable_or_null() {
+                                return None;
+                            }
 
-                            if (min.is_null() || max.is_null())
-                                && !args[0].data_type().is_nullable_or_null()
+                            let (min, max) = domain.to_minmax();
+                            if min.is_null() || max.is_null() {
+                                return None;
+                            }
+
                             {
-                                None
-                            } else {
                                 let mut ctx = EvalContext {
-                                    generics,
+                                    generics: &call.generics,
                                     num_rows: 2,
                                     validity: None,
                                     errors: None,
@@ -457,8 +889,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     suppress_error: false,
                                     strict_eval: true,
                                 };
-                                let mut builder =
-                                    ColumnBuilder::with_capacity(args[0].data_type(), 2);
+                                let mut builder = ColumnBuilder::with_capacity(
+                                    args_expr[0].as_ref().data_type(),
+                                    2,
+                                );
                                 builder.push(min.as_ref());
                                 builder.push(max.as_ref());
 
@@ -474,13 +908,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     let col = result.as_column().unwrap();
                                     let d = if ctx.has_error(0) || ctx.has_error(1) {
                                         let (full_min, full_max) =
-                                            Domain::full(return_type).to_minmax();
+                                            Domain::full(&call.return_type).to_minmax();
                                         if full_min.is_null() || full_max.is_null() {
                                             return None;
                                         }
 
                                         let mut builder =
-                                            ColumnBuilder::with_capacity(return_type, 2);
+                                            ColumnBuilder::with_capacity(&call.return_type, 2);
 
                                         for (i, (v, f)) in
                                             col.iter().zip([full_min, full_max].iter()).enumerate()
@@ -495,105 +929,139 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     } else {
                                         result.as_column().unwrap().domain()
                                     };
-                                    let (min, max) = d.to_minmax();
-                                    Some(Domain::from_min_max(min, max, return_type))
+                                    Some(d)
                                 }
                             }
                         }
                         (FunctionDomain::MayThrow, _) => None,
-                        (FunctionDomain::Full, _) => Some(Domain::full(return_type)),
+                        (FunctionDomain::Full, _) => Some(Domain::full(&call.return_type)),
                         (FunctionDomain::Domain(domain), _) => Some(domain),
                     }
                 });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
-                        Expr::Constant(Constant {
-                            span: *span,
+                        FoldResult::Changed(Expr::Constant(Constant {
+                            span: call.span,
                             scalar,
-                            data_type: return_type.clone(),
-                        }),
+                            data_type: call.return_type.clone(),
+                        })),
                         None,
                     );
                 }
 
+                let is_grouping = call.function.signature.name == "grouping";
+
                 // `grouping` is a placeholder before the aggregate rewriter rewrites it to
                 // `grouping<...>(_grouping_id)`. Folding it here can reach the dummy
                 // implementation and panic on invalid queries.
-                if function.signature.name == "grouping" {
-                    return (func_expr, func_domain);
+                if is_grouping {
+                    let result = node.finish_fold(args_expr, changed);
+                    return (result, func_domain);
                 }
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: return_type.clone(),
-                            }),
-                            None,
-                        );
+                    if !changed && let Some(func_expr) = node.borrowed_expr() {
+                        let (func_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Borrowed(func_expr));
+                        if folded {
+                            return (FoldResult::Changed(func_expr.into_owned()), None);
+                        }
+                    } else {
+                        let func_expr =
+                            node.finish(args_expr.into_iter().map(FoldResult::into_expr));
+                        let (func_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Owned(func_expr));
+                        let result = if folded || changed {
+                            FoldResult::Changed(func_expr.into_owned())
+                        } else {
+                            FoldResult::Unchanged(func_expr)
+                        };
+                        return (result, if folded { None } else { func_domain });
                     }
                 }
 
-                (func_expr, func_domain)
+                let result = node.finish_fold(args_expr, changed);
+                (result, func_domain)
             }
-            Expr::LambdaFunctionCall(LambdaFunctionCall {
-                span,
-                name,
-                args,
-                lambda_expr,
-                lambda_display,
-                return_type,
-            }) => {
-                if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
-                    return (expr.clone(), None);
+            FoldNode::LambdaFunctionCall(node) => {
+                if node.args_len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                    return (FoldResult::Unchanged(node.into_cow()), None);
                 }
+                let (node, args) = node.into_args();
 
+                let mut changed = false;
                 let mut args_expr = Vec::with_capacity(args.len());
                 for arg in args {
-                    let (expr, _) = self.fold_once(arg);
-                    args_expr.push(expr);
+                    let (arg, _) = self.fold_once(arg);
+                    changed |= arg.is_changed();
+                    args_expr.push(arg);
                 }
-                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
-
-                let func_expr = Expr::LambdaFunctionCall(LambdaFunctionCall {
-                    span: *span,
-                    name: name.clone(),
-                    args: args_expr,
-                    lambda_expr: lambda_expr.clone(),
-                    lambda_display: lambda_display.clone(),
-                    return_type: return_type.clone(),
-                });
+                let all_args_is_scalar = args_expr
+                    .iter()
+                    .all(|arg| arg.as_ref().as_constant().is_some());
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty_with_rows(1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar,
-                                data_type: return_type.clone(),
-                            }),
-                            None,
-                        );
+                    if !changed && let Some(func_expr) = node.borrowed_expr() {
+                        let (func_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Borrowed(func_expr));
+                        if folded {
+                            return (FoldResult::Changed(func_expr.into_owned()), None);
+                        }
+                    } else {
+                        let func_expr =
+                            node.finish(args_expr.into_iter().map(FoldResult::into_expr));
+                        let (func_expr, folded) =
+                            self.try_fold_constant_expr(Cow::Owned(func_expr));
+                        let result = if folded || changed {
+                            FoldResult::Changed(func_expr.into_owned())
+                        } else {
+                            FoldResult::Unchanged(func_expr)
+                        };
+                        return (result, None);
                     }
                 }
-                (func_expr, None)
+                let result = node.finish_fold(args_expr, changed);
+                (result, None)
             }
         };
 
-        debug_assert_eq!(expr.data_type(), new_expr.data_type());
+        let result_type = match &result {
+            FoldResult::Unchanged(expr) => expr.data_type(),
+            FoldResult::Changed(expr) => expr.data_type(),
+        };
+        debug_assert_eq!(&data_type, result_type);
 
-        (new_expr, domain)
+        (result, domain)
+    }
+
+    fn try_fold_constant_expr<'e>(
+        &self,
+        expr: Cow<'e, Expr<Index>>,
+    ) -> (Cow<'e, Expr<Index>>, bool) {
+        let block = DataBlock::empty_with_rows(1);
+        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+        // Since the expression is constant, it is safe to change its column index type.
+        let projected_expr = expr
+            .as_ref()
+            .project_column_ref(|_| unreachable!())
+            .unwrap();
+        let Ok(Value::Scalar(scalar)) = evaluator.run(&projected_expr) else {
+            return (expr, false);
+        };
+        let span = expr.span();
+        let data_type = match expr {
+            Cow::Borrowed(expr) => expr.data_type().clone(),
+            Cow::Owned(expr) => expr.into_data_type(),
+        };
+        (
+            Cow::Owned(Expr::Constant(Constant {
+                span,
+                scalar,
+                data_type,
+            })),
+            true,
+        )
     }
 
     fn calculate_cast(
@@ -794,7 +1262,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
 
         let (_, output_domain) = ConstantFolder::fold_with_domain(
-            &cast_expr,
+            Cow::Owned(cast_expr),
             &[(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,
@@ -807,13 +1275,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// Returns Some(true) if the expressions are mutually exclusive (should return false)
     /// Returns Some(false) if they are not mutually exclusive
     /// Returns None if analysis is inconclusive
-    fn check_mutually_exclusive_ranges(&self, args: &[Expr<Index>]) -> Option<bool> {
+    fn check_mutually_exclusive_ranges(&self, args: &[FoldResult<'_, Index>]) -> Option<bool> {
         // Track constraints for each column
         let mut column_constraints: HashMap<Index, Vec<RangeConstraint<Index>>> = HashMap::new();
 
         // Extract constraints from each expression
         for arg in args {
-            if let Some(constraint) = self.extract_range_constraint(arg) {
+            if let Some(constraint) = RangeConstraint::try_from_expr(arg.as_ref()) {
                 column_constraints
                     .entry(constraint.column_id.clone())
                     .or_default()
@@ -835,57 +1303,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                 }
             }
+
+            if self.are_combined_constraints_mutually_exclusive(&constraints) {
+                return Some(true);
+            }
         }
 
         None // No conclusive mutual exclusion found
-    }
-
-    /// Extract range constraint from a comparison expression
-    fn extract_range_constraint(&self, expr: &Expr<Index>) -> Option<RangeConstraint<Index>> {
-        if let Expr::FunctionCall(FunctionCall { function, args, .. }) = expr {
-            if args.len() != 2 {
-                return None;
-            }
-
-            let op = function.signature.name.as_str();
-            if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
-                return None;
-            }
-
-            // Try both orders: column op constant and constant op column
-            if let (Some(column_ref), Some(constant)) =
-                (args[0].as_column_ref(), args[1].as_constant())
-            {
-                return Some(RangeConstraint {
-                    column_id: column_ref.id.clone(),
-                    data_type: column_ref.data_type.clone(),
-                    operator: op.to_string(),
-                    constant: constant.scalar.clone(),
-                    is_flipped: false,
-                });
-            } else if let (Some(constant), Some(column_ref)) =
-                (args[0].as_constant(), args[1].as_column_ref())
-            {
-                // Flip the operator for constant op column
-                let flipped_op = match op {
-                    "gt" => "lt",
-                    "gte" => "lte",
-                    "lt" => "gt",
-                    "lte" => "gte",
-                    "eq" => "eq",
-                    "noteq" => "noteq",
-                    _ => return None,
-                };
-                return Some(RangeConstraint {
-                    column_id: column_ref.id.clone(),
-                    data_type: column_ref.data_type.clone(),
-                    operator: flipped_op.to_string(),
-                    constant: constant.scalar.clone(),
-                    is_flipped: true,
-                });
-            }
-        }
-        None
     }
 
     /// Check if two range constraints are mutually exclusive
@@ -960,6 +1384,43 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
     }
 
+    fn are_combined_constraints_mutually_exclusive(
+        &self,
+        constraints: &[RangeConstraint<Index>],
+    ) -> bool {
+        let mut lower = None;
+        let mut upper = None;
+        let mut not_eq_constants = Vec::new();
+
+        for constraint in constraints {
+            match constraint.operator.as_str() {
+                "gt" => tighten_lower_bound(&mut lower, &constraint.constant, false),
+                "gte" => tighten_lower_bound(&mut lower, &constraint.constant, true),
+                "lt" => tighten_upper_bound(&mut upper, &constraint.constant, false),
+                "lte" => tighten_upper_bound(&mut upper, &constraint.constant, true),
+                "noteq" => not_eq_constants.push(&constraint.constant),
+                _ => {}
+            }
+        }
+
+        let (Some((lower, lower_inclusive)), Some((upper, upper_inclusive))) = (&lower, &upper)
+        else {
+            return false;
+        };
+
+        if lower > upper {
+            return true;
+        }
+        if lower != upper {
+            return false;
+        }
+        if !lower_inclusive || !upper_inclusive {
+            return true;
+        }
+
+        not_eq_constants.contains(&lower)
+    }
+
     #[cfg(test)]
     pub fn new_for_test(
         input_domains: &'a HashMap<Index, Domain>,
@@ -974,6 +1435,49 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     }
 }
 
+fn tighten_lower_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
+        constant > current || (constant == current && !inclusive && *current_inclusive)
+    });
+    if should_update {
+        *bound = Some((constant.clone(), inclusive));
+    }
+}
+
+fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
+        constant < current || (constant == current && !inclusive && *current_inclusive)
+    });
+    if should_update {
+        *bound = Some((constant.clone(), inclusive));
+    }
+}
+
+fn constant_behind_nullable_cast<Index: ColumnIndex>(expr: &Expr<Index>) -> Option<&Constant> {
+    if let Expr::Constant(constant) = expr {
+        return Some(constant);
+    }
+
+    let Expr::Cast(Cast {
+        is_try: false,
+        expr,
+        dest_type,
+        ..
+    }) = expr
+    else {
+        return None;
+    };
+
+    let Expr::Constant(constant) = expr.as_ref() else {
+        return None;
+    };
+
+    (dest_type.is_nullable()
+        && !constant.data_type.is_nullable()
+        && dest_type.remove_nullable() == constant.data_type)
+        .then_some(constant)
+}
+
 /// Represents a range constraint extracted from a comparison expression
 #[derive(Debug, Clone)]
 pub struct RangeConstraint<Index> {
@@ -982,4 +1486,63 @@ pub struct RangeConstraint<Index> {
     pub operator: String, // "gt", "gte", "lt", "lte", "eq"
     pub constant: Scalar,
     pub is_flipped: bool, // true if original was constant op column
+}
+
+impl<Index: ColumnIndex> RangeConstraint<Index> {
+    /// Extracts a normalized column-to-constant comparison. Comparisons with
+    /// the constant on the left are flipped so the column is always the lhs.
+    pub fn try_from_expr(expr: &Expr<Index>) -> Option<Self> {
+        let Expr::FunctionCall(call) = expr else {
+            return None;
+        };
+        Self::try_from_function_call(call)
+    }
+
+    pub fn try_from_function_call(call: &FunctionCall<Index>) -> Option<Self> {
+        let FunctionCall { function, args, .. } = call;
+        if args.len() != 2 {
+            return None;
+        }
+
+        let op = function.signature.name.as_str();
+        if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
+            return None;
+        }
+
+        if let (Some(column_ref), Some(constant)) = (
+            args[0].as_column_ref(),
+            constant_behind_nullable_cast(&args[1]),
+        ) {
+            return Some(Self {
+                column_id: column_ref.id.clone(),
+                data_type: column_ref.data_type.clone(),
+                operator: op.to_string(),
+                constant: constant.scalar.clone(),
+                is_flipped: false,
+            });
+        }
+
+        let (Some(constant), Some(column_ref)) = (
+            constant_behind_nullable_cast(&args[0]),
+            args[1].as_column_ref(),
+        ) else {
+            return None;
+        };
+        let operator = match op {
+            "gt" => "lt",
+            "gte" => "lte",
+            "lt" => "gt",
+            "lte" => "gte",
+            "eq" => "eq",
+            "noteq" => "noteq",
+            _ => unreachable!(),
+        };
+        Some(Self {
+            column_id: column_ref.id.clone(),
+            data_type: column_ref.data_type.clone(),
+            operator: operator.to_string(),
+            constant: constant.scalar.clone(),
+            is_flipped: true,
+        })
+    }
 }

@@ -1,0 +1,52 @@
+matrix: select_list_alias
+local_dimensions:
+  - name: relation
+    values: [input-conflict, no-input]
+regions:
+  - description: prior SELECT-list aliases consumed by later SELECT-list items
+    main:
+      consumers: [S0]
+      name_shapes: [N0, N2, N1]
+      producers: [S0]
+    local:
+      relation: [no-input]
+    masks:
+      - when:
+          main:
+            name_shapes: [N1]
+          local:
+            relation: [no-input]
+        reason: qualified names in a SELECT item bind relation scope, not earlier SELECT output aliases
+    cases:
+      - key: S0N0S0_0_1
+        name: select_list_bare_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, k FROM t"
+      - key: S0N2S0_0_1
+        name: select_list_expression_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number + 1 AS s, s + 1 AS next FROM t"
+  - description: SELECT-list main-coordinate closure outside positive coverage obligations
+    excluded: true
+    reason: this coarse region closes SELECT-list main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
+    main:
+      consumers: [S0]
+      name_shapes: [N0, N1, N2, N3, N4, N5]
+      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+    cases:
+      - key: S0N1S0_1_
+        name: select_list_qualified_name_binds_relation_not_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, k Int32)"
+        runs:
+          - sql: "SELECT i AS k, t.k FROM t"
+      - key: S0N4N0_1_
+        name: select_list_ordinal_is_literal_expression_not_alias_lookup
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, 1 FROM t"

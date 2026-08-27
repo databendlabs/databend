@@ -20,6 +20,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
@@ -66,7 +67,7 @@ impl AggregatingIndexRewriter {
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
                     .contains(&name.name.to_ascii_lowercase().to_lowercase().as_str())
                 && window.is_none()
-                && lambda.is_none() =>
+                && !matches!(lambda, Some(LambdaArgument::Lambda(_))) =>
             {
                 self.agg_func_positions
                     .insert(self.current_position.unwrap());
@@ -83,7 +84,7 @@ impl AggregatingIndexRewriter {
                     self.extracted_aggs.insert(agg);
                 }
             }
-            Expr::CountAll { window, .. } if window.is_none() => {
+            Expr::CountAll { filter, window, .. } if filter.is_none() && window.is_none() => {
                 self.agg_func_positions
                     .insert(self.current_position.unwrap());
                 self.extracted_aggs.insert("COUNT()".to_string());
@@ -196,7 +197,7 @@ impl AggregatingIndexRewriter {
 }
 
 #[derive(Debug, Clone, Default, Visitor)]
-#[visitor(FunctionCall(enter), SelectStmt(enter), Query(enter))]
+#[visitor(Expr(enter), FunctionCall(enter), SelectStmt(enter), Query(enter))]
 pub struct AggregatingIndexChecker {
     has_agg_function: bool,
     has_group_by: bool,
@@ -211,6 +212,18 @@ impl AggregatingIndexChecker {
         !self.not_support && (self.has_agg_function || self.has_group_by || self.has_selection)
     }
 
+    fn enter_expr(&mut self, expr: &Expr) {
+        if self.not_support {
+            return;
+        }
+        if let Expr::CountAll { filter, window, .. } = expr {
+            self.has_agg_function = true;
+            if filter.is_some() || window.is_some() {
+                self.not_support = true;
+            }
+        }
+    }
+
     fn enter_function_call(&mut self, func: &FunctionCall) {
         if self.not_support {
             return;
@@ -221,6 +234,7 @@ impl AggregatingIndexChecker {
             params: _,
             args: _,
             order_by: _,
+            filter,
             window,
             lambda: _,
         } = func;
@@ -230,7 +244,10 @@ impl AggregatingIndexChecker {
         if AggregateFunctionFactory::instance().contains(func_name) {
             self.has_agg_function = true;
             // is agg func but not support now.
-            if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name) || window.is_some() {
+            if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name)
+                || filter.is_some()
+                || window.is_some()
+            {
                 self.not_support = true;
             }
         } else if let Some(func_property) = BUILTIN_FUNCTIONS.get_property(func_name) {
@@ -311,11 +328,13 @@ impl RefreshAggregatingIndexRewriter {
                     FunctionCall {
                         distinct,
                         name,
+                        filter,
                         window,
                         ..
                     },
                 ..
             } if !*distinct
+                && filter.is_none()
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
                     .contains(&name.name.to_ascii_lowercase().to_lowercase().as_str())
                 && window.is_none() =>
@@ -323,7 +342,12 @@ impl RefreshAggregatingIndexRewriter {
                 self.has_agg_function = true;
                 name.name = format!("{}_STATE", name.name);
             }
-            Expr::CountAll { span, window, .. } if window.is_none() => {
+            Expr::CountAll {
+                span,
+                filter,
+                window,
+                ..
+            } if filter.is_none() && window.is_none() => {
                 self.has_agg_function = true;
                 *expr = Expr::FunctionCall {
                     span: None,
@@ -333,6 +357,7 @@ impl RefreshAggregatingIndexRewriter {
                         args: vec![],
                         params: vec![],
                         order_by: vec![],
+                        filter: None,
                         window: None,
                         lambda: None,
                     },

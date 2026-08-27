@@ -129,7 +129,7 @@ fn is_valid_frame(frame: &WindowFuncFrame) -> bool {
 
 fn child_has_window(child: &SExpr) -> bool {
     match child.plan() {
-        RelOperator::Window(_) => true,
+        RelOperator::Window(_) | RelOperator::WindowGroup(_) => true,
         RelOperator::Scan(_) => false, // finish recursion
         _ => child.children().any(child_has_window),
     }

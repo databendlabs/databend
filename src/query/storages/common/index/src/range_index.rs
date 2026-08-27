@@ -166,7 +166,7 @@ impl RangeIndex {
         };
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
-            &expr,
+            expr,
             &visitor.input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -174,7 +174,7 @@ impl RangeIndex {
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(
-            new_expr,
+            new_expr.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -296,6 +296,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
             let inner_domain = statistics_to_domain(stats, inner_ty);
             Domain::Map(Some(Box::new(inner_domain)))
         }
+        DataType::Vector(_) => Domain::full(data_type),
         _ => {
             let stat = stats[0];
             let min = stat.min();

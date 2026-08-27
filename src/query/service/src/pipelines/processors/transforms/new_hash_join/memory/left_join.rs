@@ -28,6 +28,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -186,6 +187,8 @@ unsafe impl<'a, const CONJUNCT: bool> Sync for OuterLeftHashJoinStream<'a, CONJU
 impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUNCT> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         loop {
+            check_interrupt()?;
+
             self.probed_rows.clear();
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;

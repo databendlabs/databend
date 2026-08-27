@@ -18,12 +18,12 @@ use std::sync::Arc;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::expr::*;
 use databend_common_meta_app::principal::NullAs;
-use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_storages_common_stage::project_columnar;
 use opendal::Operator;
@@ -88,7 +88,6 @@ impl RowGroupReaderForCopy {
             &default_exprs,
             location,
             case_sensitive,
-            StageFileFormatType::Parquet,
         )?;
         pushdown_columns.sort();
         let mapping = pushdown_columns
@@ -97,16 +96,18 @@ impl RowGroupReaderForCopy {
             .enumerate()
             .map(|(i, pos)| (pos, i))
             .collect::<HashMap<_, _>>();
-        for expr in output_projection.iter_mut() {
-            match expr {
-                Expr::ColumnRef(ColumnRef { id, .. }) => *id = mapping[id],
-                Expr::Cast(Cast {
-                    expr: box Expr::ColumnRef(ColumnRef { id, .. }),
-                    ..
-                }) => *id = mapping[id],
-                _ => {}
-            }
-        }
+        output_projection = output_projection
+            .into_iter()
+            .map(|expr| {
+                expr.project_column_ref(|id| {
+                    mapping.get(id).copied().ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "missing parquet projection mapping for column {id}"
+                        ))
+                    })
+                })
+            })
+            .collect::<Result<_>>()?;
         let pushdowns = PushDownInfo {
             projection: Some(Projection::Columns(pushdown_columns)),
             ..Default::default()

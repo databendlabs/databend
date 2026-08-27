@@ -168,7 +168,7 @@ impl BlockThresholds {
         total_bytes: usize,
         total_compressed: usize,
     ) -> (usize, usize) {
-        debug_assert!(total_rows > 0);
+        debug_assert!(total_rows > 0 && total_bytes > 0 && total_compressed > 0);
 
         let default_bytes_per_block = self
             .max_bytes_per_block
@@ -182,31 +182,28 @@ impl BlockThresholds {
 
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
         let block_num_by_compressed = total_compressed.div_ceil(self.max_compressed_per_block);
-        // If row-based block count exceeds compressed-based block count, use max rows per block.
-        if block_num_by_rows >= block_num_by_compressed {
-            return (self.max_rows_per_block, default_bytes_per_block);
-        }
 
-        let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
-        // Adjust the number of blocks based on block size thresholds.
         let max_bytes_per_block =
             default_bytes_per_block + default_bytes_per_block.min(DEFAULT_BLOCK_BUFFER_SIZE);
-        if bytes_per_block > max_bytes_per_block {
-            // Case 1: If the block size is too bigger.
-            let bytes_per_block = max_bytes_per_block;
-            let block_nums = total_bytes.div_ceil(bytes_per_block);
-            (total_rows.div_ceil(block_nums).max(1), bytes_per_block)
-        } else if bytes_per_block < self.min_bytes_per_block {
-            // Case 2: If the block size is too smaller.
-            let bytes_per_block = self.min_bytes_per_block;
-            let block_nums = std::cmp::max(total_bytes / bytes_per_block, 1);
-            (total_rows.div_ceil(block_nums).max(1), bytes_per_block)
+        let min_block_num_by_bytes = total_bytes.div_ceil(max_bytes_per_block);
+
+        // When rows require the most blocks, preserve the row-based sizing decision.
+        let block_nums = if block_num_by_rows >= block_num_by_compressed
+            && block_num_by_rows >= min_block_num_by_bytes
+        {
+            block_num_by_rows
         } else {
-            // Case 3: Otherwise, use the compressed-based block count.
-            (
-                total_rows.div_ceil(block_num_by_compressed).max(1),
-                bytes_per_block,
-            )
-        }
+            // Otherwise, choose the block count closest to the compressed-size target while
+            // keeping the uncompressed block size within the configured range.
+            let max_block_num_by_bytes =
+                (total_bytes / self.min_bytes_per_block).max(min_block_num_by_bytes);
+            block_num_by_compressed.clamp(min_block_num_by_bytes, max_block_num_by_bytes)
+        };
+        let block_nums = block_nums.max(1);
+
+        (
+            total_rows.div_ceil(block_nums),
+            total_bytes.div_ceil(block_nums),
+        )
     }
 }

@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -29,7 +30,9 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
+use crate::databases::SharedTable;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::log_lineage_object_deletion;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -89,6 +92,8 @@ impl Interpreter for DropTableInterpreter {
         };
         let is_temp = tbl.is_temp();
         let table_id = tbl.get_table_info().ident.table_id;
+        let delete_lineage = !is_temp
+            && FuseTable::try_from_table(tbl.as_ref()).is_ok_and(|table| table.is_transient());
 
         let engine = tbl.get_table_info().engine();
         if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
@@ -101,6 +106,15 @@ impl Interpreter for DropTableInterpreter {
                 &self.plan.database,
                 &self.plan.table
             )));
+        }
+        if is_materialized_view_engine(tbl.engine()) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW {}.{}` instead",
+                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+            )));
+        }
+        if tbl.as_any().is::<SharedTable>() {
+            tbl.check_mutable()?;
         }
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
@@ -133,6 +147,9 @@ impl Interpreter for DropTableInterpreter {
                     .unwrap_or_default(),
             })
             .await?;
+        if delete_lineage {
+            log_lineage_object_deletion(&self.ctx, table_id);
+        }
 
         if !is_temp && !catalog.is_external() {
             // iceberg table do not need to generate ownership

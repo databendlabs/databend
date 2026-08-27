@@ -547,6 +547,8 @@ impl Binder {
             index_type: *index_type,
             create_option: create_option.clone().into(),
             catalog,
+            database,
+            table: table.name().to_string(),
             index_name,
             column_ids,
             table_id,
@@ -923,6 +925,8 @@ impl Binder {
             index_type: *index_type,
             if_exists: *if_exists,
             catalog,
+            database,
+            table: table.name().to_string(),
             index_name,
             table_id,
         };

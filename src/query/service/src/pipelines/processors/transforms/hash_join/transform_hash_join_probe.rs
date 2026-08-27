@@ -331,10 +331,6 @@ impl Processor for TransformHashJoinProbe {
         }
     }
 
-    fn interrupt(&self) {
-        self.join_probe_state.hash_join_state.interrupt()
-    }
-
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Probe) => {

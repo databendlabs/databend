@@ -38,14 +38,17 @@ AggregateFinal
 query T
 explain select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1
 ----
-Limit
+TopN(Final)
 ├── output columns: [numbers.number (#0)]
+├── sort keys: [number ASC NULLS LAST]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort(Single)
+└── TopN(Partial)
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
+    ├── limit: 1
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── AggregateFinal
         ├── output columns: [numbers.number (#0)]
@@ -266,7 +269,7 @@ AggregateFinal
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(t.b (#1) = 2)], limit: NONE]
         └── estimated rows: 1.00
 

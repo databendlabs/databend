@@ -18,5 +18,7 @@ mod collect_ndv_source;
 mod histogram_info_sink;
 
 pub use analyze_ndv_meta::AnalyzeNDVMeta;
+pub use analyze_state_sink::AnalyzeHistogramInfo;
+pub use collect_ndv_source::AnalyzeCollectHistogramInfo;
 pub use collect_ndv_source::AnalyzeCollectNDVSource;
 pub use histogram_info_sink::HistogramInfoSink;

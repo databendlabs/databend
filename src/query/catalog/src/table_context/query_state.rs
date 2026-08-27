@@ -45,5 +45,7 @@ pub trait TableContextQueryState: Send + Sync {
 
     fn get_error(&self) -> Option<ErrorCode<ContextError>>;
 
+    fn get_nodes_memory_usage(&self) -> usize;
+
     fn push_warning(&self, warning: String);
 }

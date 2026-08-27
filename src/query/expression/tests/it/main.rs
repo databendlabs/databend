@@ -23,11 +23,14 @@ use databend_common_expression::types::NumberDataType;
 
 extern crate core;
 
+mod aggregate;
 mod arrow;
 mod block;
 mod block_thresholds;
 mod block_vec;
 mod common;
+mod constant_folder;
+mod conversion;
 mod decimal;
 mod display;
 mod evaluator;

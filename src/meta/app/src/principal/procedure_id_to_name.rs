@@ -36,10 +36,7 @@ impl ProcedureIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::principal::ProcedureIdentity;
-    use crate::principal::procedure_id_to_name::ProcedureIdToNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     // TODO(TIdent): parent should return Some(ProcedureIdIdent::new(self.procedure_id).to_string_key())
@@ -49,10 +46,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "ProcedureIdToNameIdent";
         const HAS_TENANT: bool = false;
         type ValueType = ProcedureIdentity;
-    }
-
-    impl kvapi::Value for ProcedureIdentity {
-        type KeyType = ProcedureIdToNameIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

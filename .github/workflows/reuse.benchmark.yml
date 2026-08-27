@@ -56,16 +56,17 @@ jobs:
     env:
       RUNNER_PROVIDER: aws
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'release'
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
+          ref: ${{ inputs.sha }}
+          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup_bendsql
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Download artifact
@@ -95,14 +96,15 @@ jobs:
   load:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'release'
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
+          ref: ${{ inputs.sha }}
+          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         if: inputs.target == 'load' || inputs.target == 'all'
@@ -139,8 +141,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small, database: hits, timeout: 10, cache_size: 0, tries: 3 }
-          - { dataset: hits, size: Large, database: hits, timeout: 10, cache_size: 0, tries: 3 }
+          # The query suite completed before the previous 10m timeout. Allow another 10m
+          # for queued system-history collection and cleanup without changing benchmark code.
+          - { dataset: hits, size: Small, database: hits, timeout: 20, cache_size: 0, tries: 3 }
+          - { dataset: hits, size: Large, database: hits, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
           - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 0, tries: 1 }
@@ -148,14 +152,15 @@ jobs:
       fail-fast: true
       max-parallel: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'release'
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: inputs.source == 'pr'
         with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
+          ref: ${{ inputs.sha }}
+          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         if: inputs.target == 'cloud' || inputs.target == 'all'
@@ -188,9 +193,9 @@ jobs:
     if: inputs.source == 'pr'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           path: benchmark/results
           pattern: benchmark-*
@@ -251,9 +256,9 @@ jobs:
           - "tpch1000"
           - "internal"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v8
         with:
           path: benchmark/results
           pattern: benchmark-${{ matrix.dataset }}-*

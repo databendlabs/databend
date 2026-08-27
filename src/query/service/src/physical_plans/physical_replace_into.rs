@@ -114,12 +114,8 @@ impl IPhysicalPlan for ReplaceInto {
             .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let schema = DataSchema::from(table.schema()).into();
-        let cluster_stats_gen = table.get_cluster_stats_gen(
-            builder.ctx.clone(),
-            0,
-            self.block_thresholds,
-            Some(schema),
-        )?;
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, self.block_thresholds, schema)?;
 
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(

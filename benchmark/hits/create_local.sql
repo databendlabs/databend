@@ -104,4 +104,4 @@ CREATE TRANSIENT TABLE hits (
     RefererHash BIGINT NOT NULL,
     URLHash BIGINT NOT NULL,
     CLID INTEGER NOT NULL
-) storage_format = 'native' compression = 'lz4';
+) storage_format = 'parquet' compression = 'lz4';

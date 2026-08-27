@@ -16,7 +16,7 @@ runs:
 
     - uses: wntrblm/nox@2025.05.01
 
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v5
       if: ${{ inputs.nox_session == 'java_client' }}
       with:
         distribution: temurin
@@ -24,13 +24,36 @@ runs:
 
     - name: Set up Maven
       if: ${{ inputs.nox_session == 'java_client' }}
-      uses: stCarolas/setup-maven@v5
-      with:
-        maven-version: 3.9.9
+      shell: bash
+      run: |
+        set -euo pipefail
+        maven_version=3.9.9
+        maven_home="${RUNNER_TEMP}/apache-maven-${maven_version}"
+        archive="${RUNNER_TEMP}/apache-maven-${maven_version}-bin.tar.gz"
+        urls=(
+          "https://archive.apache.org/dist/maven/maven-3/${maven_version}/binaries/apache-maven-${maven_version}-bin.tar.gz"
+          "https://downloads.apache.org/maven/maven-3/${maven_version}/binaries/apache-maven-${maven_version}-bin.tar.gz"
+          "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${maven_version}/apache-maven-${maven_version}-bin.tar.gz"
+        )
+        for attempt in 1 2 3 4 5; do
+          for url in "${urls[@]}"; do
+            if curl -fsSL --retry 3 --retry-delay 2 -o "${archive}" "${url}"; then
+              tar -xzf "${archive}" -C "${RUNNER_TEMP}"
+              echo "${maven_home}/bin" >> "$GITHUB_PATH"
+              echo "MAVEN_HOME=${maven_home}" >> "$GITHUB_ENV"
+              "${maven_home}/bin/mvn" -version
+              exit 0
+            fi
+            echo "WARN: download ${url} failed (attempt ${attempt})"
+          done
+          sleep $((attempt * 3))
+        done
+        echo "FAIL: could not download Maven ${maven_version}"
+        exit 1
 
     - name: Setup Go
       if: ${{ inputs.nox_session == 'go_client' }}
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: "1.25"
 

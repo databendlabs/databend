@@ -28,6 +28,7 @@ use crate::binder::Binder;
 use crate::binder::CteContext;
 use crate::binder::CteInfo;
 use crate::binder::MaterializedCTEInfo;
+use crate::binder::Visibility;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::MaterializedCTE;
@@ -83,6 +84,11 @@ impl Binder {
 
             let cte_info = CteInfo {
                 columns_alias: column_name,
+                virtual_column_outputs: bind_context
+                    .cte_context
+                    .virtual_column_outputs
+                    .remove(&cte_name)
+                    .unwrap_or_default(),
                 query: *cte.query.clone(),
                 recursive: with.recursive,
                 logical_recursive_cte_id,
@@ -130,14 +136,21 @@ impl Binder {
             None => (table_name.to_string(), cte_info.columns_alias.clone()),
         };
 
-        if !column_alias.is_empty() && column_alias.len() != cte_bind_context.columns.len() {
+        let virtual_column_outputs = &cte_info.virtual_column_outputs;
+        let user_output_len = cte_bind_context
+            .columns
+            .iter()
+            .filter(|column| !virtual_column_outputs.contains(&column.column_name))
+            .count();
+        if !column_alias.is_empty() && column_alias.len() != user_output_len {
             return Err(ErrorCode::SemanticError(format!(
                 "The CTE '{}' has {} columns ({:?}), but {} aliases ({:?}) were provided. Ensure the number of aliases matches the number of columns in the CTE.",
                 table_name,
-                cte_bind_context.columns.len(),
+                user_output_len,
                 cte_bind_context
                     .columns
                     .iter()
+                    .filter(|column| !virtual_column_outputs.contains(&column.column_name))
                     .map(|c| &c.column_name)
                     .collect::<Vec<_>>(),
                 column_alias.len(),
@@ -149,6 +162,9 @@ impl Binder {
         for column in cte_output_columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(table_alias.clone());
+            if virtual_column_outputs.contains(&column.column_name) {
+                column.visibility = Visibility::InVisible;
+            }
         }
         for (index, column_name) in column_alias.iter().enumerate() {
             cte_output_columns[index].column_name = column_name.clone();
@@ -203,6 +219,7 @@ impl Binder {
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
+                virtual_column_outputs: HashMap::new(),
             },
             ..Default::default()
         };

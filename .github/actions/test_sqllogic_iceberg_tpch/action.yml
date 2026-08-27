@@ -22,7 +22,20 @@ runs:
     - name: Iceberg Setup for (ubuntu-latest only)
       shell: bash
       run: |
-        docker compose -f tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml up -d
+        set -euo pipefail
+        compose_file=tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml
+        for attempt in 1 2 3; do
+          if docker compose -f "${compose_file}" up -d --build; then
+            break
+          fi
+          if [ "${attempt}" -eq 3 ]; then
+            echo "FAIL: docker compose iceberg-tpch failed after 3 attempts"
+            exit 1
+          fi
+          echo "WARN: docker compose iceberg-tpch failed (attempt ${attempt}/3), retrying..."
+          docker compose -f "${compose_file}" down -v || true
+          sleep $((attempt * 5))
+        done
         # Wait for rustfs to be ready
         for i in $(seq 1 30); do
           curl -sf http://127.0.0.1:9002/health/ready && break
@@ -41,6 +54,16 @@ runs:
 
         script_dir="tests/sqllogictests/scripts"
         (cd "$script_dir" && uv sync)
+        java_home_17="${JAVA_HOME_17_ARM64:-${JAVA_HOME_17_X64:-}}"
+        if [ -z "$java_home_17" ]; then
+          echo "Java 17 is required for Spark 4 based Iceberg variant test data" >&2
+          exit 1
+        fi
+        export JAVA_HOME="$java_home_17"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        export SPARK_LOCAL_HOSTNAME=localhost
+        export SPARK_LOCAL_IP=127.0.0.1
+        java -version
         echo "Running prepare_iceberg_tpch_data.py..."
         uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."

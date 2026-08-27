@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
 
@@ -25,9 +23,13 @@ use super::loader::LoadParams;
 use crate::CacheAccessor;
 use crate::Loader;
 use crate::caches::CacheValue;
+use crate::caches::IcebergTableCacheValue;
 
 pub trait TTLValue {
     fn is_expired(&self, ttl: &Duration) -> bool;
+    fn requires_sync_refresh(&self) -> bool {
+        false
+    }
     fn is_refreshing(&self) -> bool;
     fn set_refreshing(&self);
 }
@@ -53,7 +55,7 @@ where
         }
     }
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
-    /// If the value is expired, it triggers an asynchronous refresh logic and returns the expired data.
+    /// Expired values are refreshed asynchronously unless they require a synchronous refresh.
     #[async_backtrace::framed]
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<V>> {
         match &self.cache {
@@ -63,6 +65,19 @@ where
                 match cache.get(cache_key.as_str()) {
                     Some(item) => {
                         if item.is_expired(&self.ttl) {
+                            if item.requires_sync_refresh() {
+                                let start = Instant::now();
+                                let v = self.loader.load(params).await?;
+                                metrics_inc_cache_miss_load_millisecond(
+                                    start.elapsed().as_millis() as u64,
+                                    cache.name(),
+                                );
+                                return match params.put_cache {
+                                    true => Ok(cache.insert(cache_key, v)),
+                                    false => Ok(Arc::new(v)),
+                                };
+                            }
+
                             // Trigger async refresh logic
                             if !item.is_refreshing() {
                                 item.set_refreshing();
@@ -156,18 +171,21 @@ where
     }
 }
 
-impl TTLValue for (Arc<dyn Table>, AtomicBool, Instant) {
+impl TTLValue for IcebergTableCacheValue {
     fn is_expired(&self, ttl: &Duration) -> bool {
-        Instant::now() > self.2 + *ttl
+        Instant::now() > self.loaded_at() + *ttl || self.requires_sync_refresh()
+    }
+
+    fn requires_sync_refresh(&self) -> bool {
+        self.credential_refresh_at()
+            .is_some_and(|refresh_at| Instant::now() >= refresh_at)
     }
 
     fn is_refreshing(&self) -> bool {
-        // Check the value of the AtomicBool
-        self.1.load(std::sync::atomic::Ordering::Relaxed)
+        self.is_refreshing()
     }
 
     fn set_refreshing(&self) {
-        // Set the AtomicBool to true
-        self.1.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.set_refreshing();
     }
 }

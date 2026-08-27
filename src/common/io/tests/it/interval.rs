@@ -67,11 +67,72 @@ fn test_interval_from_string() {
             days: -1,
             micros: -5025000000,
         }),
+        ("P1Y2M3DT4H5M6S", Interval {
+            months: 14,
+            days: 3,
+            micros: 14_706_000_000,
+        }),
+        ("p1y2m3dt4h5m6s", Interval {
+            months: 14,
+            days: 3,
+            micros: 14_706_000_000,
+        }),
+        ("P3W", Interval {
+            months: 0,
+            days: 21,
+            micros: 0,
+        }),
+        ("PT0.123456S", Interval {
+            months: 0,
+            days: 0,
+            micros: 123_456,
+        }),
+        ("PT1.5M", Interval {
+            months: 0,
+            days: 0,
+            micros: 90_000_000,
+        }),
+        ("+P2D", Interval {
+            months: 0,
+            days: 2,
+            micros: 0,
+        }),
+        ("@ P1Y", Interval {
+            months: 12,
+            days: 0,
+            micros: 0,
+        }),
+        ("PT0.123456000S", Interval {
+            months: 0,
+            days: 0,
+            micros: 123_456,
+        }),
+        ("-P1DT2H", Interval {
+            months: 0,
+            days: -1,
+            micros: -7_200_000_000,
+        }),
     ];
 
     for (input, expected) in tests {
         let interval = Interval::from_string(input).unwrap();
         assert_eq!(interval, expected);
+    }
+
+    for input in [
+        "P",
+        "PT",
+        "P0.5D",
+        "P1.5Y",
+        "P1.5M",
+        "P1D2Y",
+        "PT1H2Y",
+        "PT0.123456789S",
+    ] {
+        assert!(
+            Interval::from_string(input).is_err(),
+            "{input} should be rejected"
+        );
     }
 }
 

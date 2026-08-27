@@ -19,5 +19,5 @@ for scale in `seq 0 ${MAX_SCALE}`;do
 	done
 done >> /tmp/decimal.sql
 
-cat /tmp/decimal.sql | $BENDSQL_CLIENT_OUTPUT_NULL
+cat /tmp/decimal.sql | bendsql_connect_root_null
 echo "1"

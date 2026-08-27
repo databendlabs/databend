@@ -195,10 +195,9 @@ impl StageApi for StageMgr {
     #[fastrace::trace]
     async fn update_stage(&self, stage: StageInfo, seq: u64) -> Result<()> {
         let ident = self.stage_ident(&stage.stage_name);
-        let txn_req = TxnRequest::new(vec![txn_cond_eq_seq(&ident, seq)], vec![
-            txn_put_pb(&ident, &stage)
-                .map_err(|e| ErrorCode::IllegalUserStageFormat(e.to_string()))?,
-        ]);
+        let txn_req = TxnRequest::new(vec![txn_cond_eq_seq(&ident, seq)], vec![txn_put_pb(
+            &ident, &stage,
+        )]);
         let tx_reply = self
             .kv_api
             .transaction(txn_req)
@@ -263,10 +262,8 @@ impl StageApi for StageMgr {
                     txn_cond_seq(&stage_ident, Eq, stage_seq),
                 ],
                 vec![
-                    txn_put_pb(&file_ident, &file)
-                        .map_err(|e| ErrorCode::IllegalStageFileFormat(e.to_string()))?,
-                    txn_put_pb(&stage_ident, &old_stage)
-                        .map_err(|e| ErrorCode::IllegalUserStageFormat(e.to_string()))?,
+                    txn_put_pb(&file_ident, &file),
+                    txn_put_pb(&stage_ident, &old_stage),
                 ],
             );
 
@@ -331,10 +328,7 @@ impl StageApi for StageMgr {
                 if_then.push(txn_del(&key));
             }
             old_stage.number_of_files -= paths.len() as u64;
-            if_then.push(
-                txn_put_pb(&stage_ident, &old_stage)
-                    .map_err(|e| ErrorCode::IllegalUserStageFormat(e.to_string()))?,
-            );
+            if_then.push(txn_put_pb(&stage_ident, &old_stage));
 
             let txn_req = TxnRequest::new(
                 vec![

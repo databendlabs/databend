@@ -15,19 +15,18 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::ScalarExpr;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
-use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -51,7 +50,7 @@ impl PullUpFilterOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let mut s_expr = self.pull_up(s_expr)?;
         s_expr = self.finish(s_expr)?;
         Ok(s_expr)
@@ -72,26 +71,34 @@ impl PullUpFilterOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn pull_up(&mut self, s_expr: SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
-            RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
+            RelOperator::Filter(_) => self.pull_up_filter(s_expr),
             RelOperator::Join(join) if !join.is_lateral && !join.has_null_equi_condition() => {
-                self.pull_up_join(s_expr, join)
+                self.pull_up_join(s_expr)
             }
-            RelOperator::EvalScalar(eval_scalar) => self.pull_up_eval_scalar(s_expr, eval_scalar),
+            RelOperator::EvalScalar(_) => self.pull_up_eval_scalar(s_expr),
             _ => self.pull_up_others(s_expr),
         }
     }
 
-    fn pull_up_filter(&mut self, s_expr: &SExpr, filter: &Filter) -> Result<SExpr> {
-        let child = self.pull_up(s_expr.child(0)?)?;
-        for predicate in filter.predicates.iter() {
-            self.predicates.extend(split_conjunctions(predicate));
+    fn pull_up_filter(&mut self, mut s_expr: SExpr) -> Result<SExpr> {
+        let RelOperator::Filter(filter) = Arc::make_mut(&mut s_expr.plan) else {
+            unreachable!()
+        };
+        let predicates = std::mem::take(&mut filter.predicates);
+        assert_eq!(s_expr.children.len(), 1);
+        let child = self.pull_up(Arc::unwrap_or_clone(s_expr.children.pop().unwrap()))?;
+        for predicate in predicates {
+            self.predicates.extend(into_conjunctions(predicate));
         }
         Ok(child)
     }
 
-    fn pull_up_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
+    fn pull_up_join(&mut self, mut s_expr: SExpr) -> Result<SExpr> {
+        let RelOperator::Join(join) = s_expr.plan.as_ref() else {
+            unreachable!()
+        };
         let (left_need_pull_up, right_need_pull_up) = match join.join_type {
             JoinType::Inner | JoinType::Cross => (true, true),
             JoinType::Left | JoinType::LeftSingle | JoinType::LeftSemi | JoinType::LeftAnti => {
@@ -105,60 +112,68 @@ impl PullUpFilterOptimizer {
 
         let mut left_pull_up = PullUpFilterOptimizer::new(self.opt_ctx.clone());
         let mut right_pull_up = PullUpFilterOptimizer::new(self.opt_ctx.clone());
-        let mut left = left_pull_up.pull_up(s_expr.child(0)?)?;
-        let mut right = right_pull_up.pull_up(s_expr.child(1)?)?;
+        assert_eq!(s_expr.children.len(), 2);
+        let right_child = Arc::unwrap_or_clone(s_expr.children.pop().unwrap());
+        let left_child = Arc::unwrap_or_clone(s_expr.children.pop().unwrap());
+        let mut left = left_pull_up.pull_up(left_child)?;
+        let mut right = right_pull_up.pull_up(right_child)?;
         if left_need_pull_up {
             for predicate in left_pull_up.predicates {
-                self.predicates.extend(split_conjunctions(&predicate));
+                self.predicates.extend(into_conjunctions(predicate));
             }
         } else {
             left = left_pull_up.finish(left)?;
         }
         if right_need_pull_up {
             for predicate in right_pull_up.predicates {
-                self.predicates.extend(split_conjunctions(&predicate));
+                self.predicates.extend(into_conjunctions(predicate));
             }
         } else {
             right = right_pull_up.finish(right)?;
         }
-        let mut join = join.clone();
+        let RelOperator::Join(join) = Arc::make_mut(&mut s_expr.plan) else {
+            unreachable!()
+        };
         if left_need_pull_up && right_need_pull_up {
-            for condition in join.equi_conditions.iter() {
-                let left_condition = condition.left.clone();
-                let right_condition = condition.right.clone();
+            for condition in std::mem::take(&mut join.equi_conditions) {
+                let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                    &condition.left,
+                    &condition.right,
+                ]);
                 let predicate = ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: "eq".to_string(),
                     params: vec![],
-                    arguments: vec![left_condition, right_condition],
+                    arguments: vec![condition.left, condition.right],
+                    return_type: Box::new(return_type),
                 });
                 self.predicates.push(predicate);
             }
-            for predicate in join.non_equi_conditions.iter() {
-                self.predicates.extend(split_conjunctions(predicate));
+            for predicate in std::mem::take(&mut join.non_equi_conditions) {
+                self.predicates.extend(into_conjunctions(predicate));
             }
-            join.equi_conditions.clear();
-            join.non_equi_conditions.clear();
             join.join_type = JoinType::Cross;
         }
-        let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
         Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
     }
 
-    fn pull_up_eval_scalar(&mut self, s_expr: &SExpr, eval_scalar: &EvalScalar) -> Result<SExpr> {
-        let child = self.pull_up(s_expr.child(0)?)?;
-        let mut eval_scalar = eval_scalar.clone();
+    fn pull_up_eval_scalar(&mut self, mut s_expr: SExpr) -> Result<SExpr> {
+        assert_eq!(s_expr.children.len(), 1);
+        let child = self.pull_up(Arc::unwrap_or_clone(s_expr.children.pop().unwrap()))?;
+        let RelOperator::EvalScalar(eval_scalar) = Arc::make_mut(&mut s_expr.plan) else {
+            unreachable!()
+        };
         for predicate in self.predicates.iter_mut() {
             Self::replace_predicate(predicate, &mut eval_scalar.items, &self.metadata)?;
         }
-        let s_expr = s_expr.replace_plan(Arc::new(RelOperator::EvalScalar(eval_scalar)));
         Ok(s_expr.replace_children(vec![Arc::new(child)]))
     }
 
-    pub fn pull_up_others(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.arity());
-        for child in s_expr.children() {
-            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone()).optimize_sync(child)?;
+    pub fn pull_up_others(&mut self, mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            let child = PullUpFilterOptimizer::new(self.opt_ctx.clone())
+                .optimize_sync(Arc::unwrap_or_clone(child))?;
             children.push(Arc::new(child));
         }
         Ok(s_expr.replace_children(children))
@@ -260,7 +275,7 @@ impl Optimizer for PullUpFilterOptimizer {
         "PullUpFilterOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 }

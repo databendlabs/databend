@@ -71,6 +71,7 @@ impl Binder {
             | RelOperator::Limit(_)
             | RelOperator::Aggregate(_)
             | RelOperator::Window(_)
+            | RelOperator::WindowGroup(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
             | RelOperator::CompactBlock(_) => {

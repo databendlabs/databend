@@ -15,15 +15,21 @@
 use std::io::Write;
 
 use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::types::Decimal64Type;
+use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
 use goldenfile::Mint;
 
+use super::TestContext;
 use super::run_ast;
+use super::run_ast_with_context;
 
 #[test]
 fn test_arithmetic() {
@@ -172,6 +178,124 @@ fn test_modulo(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "c % (d - 3)", columns);
     run_ast(file, "c % 0", columns);
     run_ast(file, "c % d2", columns);
+    run_ast_with_context(file, "lhs_i8 % rhs_i8", TestContext {
+        entries: &[
+            ("lhs_i8", Int8Type::from_data(vec![-127i8, -2, -1]).into()),
+            ("rhs_i8", Int8Type::from_data(vec![i8::MIN, -2, -1]).into()),
+        ],
+        input_domains: Some(&[
+            (
+                "lhs_i8",
+                Domain::Number(NumberDomain::Int8(SimpleDomain {
+                    min: i8::MIN + 1,
+                    max: -1,
+                })),
+            ),
+            (
+                "rhs_i8",
+                Domain::Number(NumberDomain::Int8(SimpleDomain {
+                    min: i8::MIN,
+                    max: -1,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+    run_ast_with_context(file, "lhs_i64 % rhs_i64", TestContext {
+        entries: &[
+            (
+                "lhs_i64",
+                Int64Type::from_data(vec![i64::MIN + 1, -2, -1]).into(),
+            ),
+            (
+                "rhs_i64",
+                Int64Type::from_data(vec![i64::MIN, -2, -1]).into(),
+            ),
+        ],
+        input_domains: Some(&[
+            (
+                "lhs_i64",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: i64::MIN + 1,
+                    max: -1,
+                })),
+            ),
+            (
+                "rhs_i64",
+                Domain::Number(NumberDomain::Int64(SimpleDomain {
+                    min: i64::MIN,
+                    max: -1,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+    run_ast_with_context(file, "lhs_u8_wrap % rhs_i8_wrap", TestContext {
+        entries: &[
+            ("lhs_u8_wrap", UInt8Type::from_data(vec![1u8, 2, 3]).into()),
+            (
+                "rhs_i8_wrap",
+                Int8Type::from_data(vec![-1i8, -1, -1]).into(),
+            ),
+        ],
+        input_domains: Some(&[
+            (
+                "lhs_u8_wrap",
+                Domain::Number(NumberDomain::UInt8(SimpleDomain { min: 127, max: 128 })),
+            ),
+            (
+                "rhs_i8_wrap",
+                Domain::Number(NumberDomain::Int8(SimpleDomain { min: -1, max: -1 })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+    run_ast(file, "lhs_u8_min_as_i8 % rhs_i8_minus_one", &[
+        ("lhs_u8_min_as_i8", UInt8Type::from_data(vec![128u8])),
+        ("rhs_i8_minus_one", Int8Type::from_data(vec![-1i8])),
+    ]);
+    run_ast_with_context(file, "lhs_i8_wrap % rhs_u8_wrap", TestContext {
+        entries: &[
+            (
+                "lhs_i8_wrap",
+                Int8Type::from_data(vec![-1i8, -2, -3]).into(),
+            ),
+            ("rhs_u8_wrap", UInt8Type::from_data(vec![1u8, 1, 1]).into()),
+        ],
+        input_domains: Some(&[
+            (
+                "lhs_i8_wrap",
+                Domain::Number(NumberDomain::Int8(SimpleDomain {
+                    min: i8::MIN,
+                    max: i8::MIN + 1,
+                })),
+            ),
+            (
+                "rhs_u8_wrap",
+                Domain::Number(NumberDomain::UInt8(SimpleDomain {
+                    min: u8::MAX - 1,
+                    max: u8::MAX,
+                })),
+            ),
+        ]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: true,
+    });
+    run_ast(file, "lhs_i64_min % rhs_i64_minus_one", &[
+        ("lhs_i64_min", Int64Type::from_data(vec![i64::MIN])),
+        ("rhs_i64_minus_one", Int64Type::from_data(vec![-1i64])),
+    ]);
+    run_ast(file, "wide_lhs % narrow_rhs", &[
+        ("wide_lhs", UInt16Type::from_data(vec![256u16, 511, 512])),
+        ("narrow_rhs", UInt8Type::from_data(vec![255u8, 255, 255])),
+    ]);
+    run_ast(file, "small_lhs % wide_rhs", &[
+        ("small_lhs", Int64Type::from_data(vec![-2i64, 0, 2])),
+        ("wide_rhs", Int64Type::from_data(vec![100i64, 101, 102])),
+    ]);
 }
 
 fn test_to_string(file: &mut impl Write, columns: &[(&str, Column)]) {

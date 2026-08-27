@@ -73,7 +73,7 @@ impl NumbersTable {
         let total = check_number::<_, usize>(
             None,
             &FunctionContext::default(),
-            &Expr::constant(args[0].clone(), None),
+            Expr::constant(args.into_iter().next().unwrap(), None),
             &BUILTIN_FUNCTIONS,
         )?;
         let engine = match table_func_name {

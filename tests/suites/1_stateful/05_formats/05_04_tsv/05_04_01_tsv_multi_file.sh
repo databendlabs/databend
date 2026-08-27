@@ -15,7 +15,7 @@ done
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp /tmp/multi_tsv s3://testbucket/tmp/multi_tsv --recursive > /dev/null 2>&1
 
 ## prepare table
-echo "drop table if exists test_tsv" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists test_tsv" | bendsql_connect_root
 echo "CREATE TABLE test_tsv
 (
     c0 int,
@@ -28,14 +28,14 @@ echo "CREATE TABLE test_tsv
     c7 int,
     c8 int,
     c9 int
-);" | $BENDSQL_CLIENT_CONNECT
+);" | bendsql_connect_root
 
 # do copy
-echo "SET GLOBAL input_read_buffer_size = 111;" | $BENDSQL_CLIENT_CONNECT
+echo "SET GLOBAL input_read_buffer_size = 111;" | bendsql_connect_root
 COPY_SQL="copy into test_tsv from 's3://testbucket/tmp/multi_tsv/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900/') PATTERN = '.*' FILE_FORMAT = (type = TEXT) force=true"
-echo "${COPY_SQL}" |  $BENDSQL_CLIENT_CONNECT
-echo "SET GLOBAL input_read_buffer_size = 1048576;" | $BENDSQL_CLIENT_CONNECT
+echo "${COPY_SQL}" |  bendsql_connect_root
+echo "SET GLOBAL input_read_buffer_size = 1048576;" | bendsql_connect_root
 
 # check
-echo "select count(*) from test_tsv" |  $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists test_tsv" | $BENDSQL_CLIENT_CONNECT
+echo "select count(*) from test_tsv" |  bendsql_connect_root
+echo "drop table if exists test_tsv" | bendsql_connect_root

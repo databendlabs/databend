@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -65,32 +65,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
         let storage_value = ValueId::<SequenceStorageValue>::new(req.start);
 
-        let conditions = if req.create_option == CreateOption::CreateOrReplace {
+        let conditions = if req.override_existing {
             vec![]
         } else {
             vec![txn_cond_eq_seq(&req.ident, 0)]
         };
 
         let txn = TxnRequest::new(conditions, vec![
-            txn_put_pb(&req.ident, &meta)?,
-            txn_put_pb(&storage_ident, &storage_value)?,
+            txn_put_pb(&req.ident, &meta),
+            txn_put_pb(&storage_ident, &storage_value),
         ]);
 
         let (succ, _response) = send_txn(self, txn).await?;
 
-        if succ {
-            return Ok(CreateSequenceReply {});
-        }
-
-        match req.create_option {
-            CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
-                SequenceError::SequenceAlreadyExists(req.ident.exist_error(func_name!())),
-            ))),
-            CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
-            CreateOption::CreateOrReplace => {
-                unreachable!("CreateOrReplace should always success")
-            }
-        }
+        Ok(CreateSequenceReply { success: succ })
     }
 
     async fn get_sequence(

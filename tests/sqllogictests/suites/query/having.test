@@ -7,3 +7,64 @@ query I
 select sum(number) from numbers(10) group by number % 2 having avg(number) = 5
 ----
 25
+
+query TI
+select creative_name, sum(cost) as cost
+from (
+    select 'creative_a' as creative_name, 1 as impressions, 0 as clicks, 3 as cost, 0 as installs
+    union all
+    select 'creative_a' as creative_name, 0 as impressions, 1 as clicks, 4 as cost, 0 as installs
+    union all
+    select 'creative_b' as creative_name, 0 as impressions, 0 as clicks, 0 as cost, 0 as installs
+)
+group by creative_name
+having sum(impressions) > 0
+    or sum(clicks) > 0
+    or sum(cost) > 0
+    or sum(installs) > 0
+----
+creative_a 7
+
+statement ok
+CREATE or REPLACE FUNCTION weighted_avg (INT, INT) STATE {sum INT, weight INT} RETURNS FLOAT
+LANGUAGE javascript AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$;
+
+query TR
+select creative_name, weighted_avg(cost, weight) as cost
+from (
+    select 'creative_a' as creative_name, 1 as score, 2 as weight, 3 as cost
+    union all
+    select 'creative_a' as creative_name, 0 as score, 1 as weight, 9 as cost
+    union all
+    select 'creative_b' as creative_name, 0 as score, 1 as weight, 0 as cost
+)
+group by creative_name
+having weighted_avg(score, weight) > 0
+    or weighted_avg(cost, weight) > 0
+----
+creative_a 5.0
+
+statement ok
+drop function weighted_avg

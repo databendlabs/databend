@@ -12,26 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::conversion::classify_conversion;
+use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_statistics::Datum;
-use databend_common_statistics::DatumKind;
-use databend_common_statistics::Histogram;
 
 use crate::ColumnSet;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::JoinConditionColumns;
+use crate::optimizer::ir::JoinStats;
+use crate::optimizer::ir::JoinStatsEstimator;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -39,10 +43,14 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
-use crate::optimizer::ir::UniformSampleSet;
+use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::SpatialJoinCandidate;
+use crate::plans::has_spatial_join_preconditions;
+use crate::plans::is_spatial_join_shape;
+use crate::plans::spatial_join_gate;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -233,6 +241,13 @@ impl Side {
             Side::Right => &cond.right,
         }
     }
+
+    fn join_column(self, columns: JoinConditionColumns) -> Symbol {
+        match self {
+            Side::Left => columns.left,
+            Side::Right => columns.right,
+        }
+    }
 }
 
 impl JoinEquiCondition {
@@ -260,12 +275,106 @@ impl JoinEquiCondition {
             .collect()
     }
 
-    fn single_columns(&self) -> Option<JoinConditionColumns> {
-        Some(JoinConditionColumns {
-            left: single_used_column(&self.left)?,
-            right: single_used_column(&self.right)?,
-        })
+    /// Return the equality-preserving key expressions used by both statistics and execution.
+    pub fn canonical_keys(&self) -> (&ScalarExpr, &ScalarExpr) {
+        if let Some(right) = unwrap_integer_to_string_cast(&self.left, &self.right) {
+            return (&self.left, right);
+        }
+        if let Some(left) = unwrap_integer_to_string_cast(&self.right, &self.left) {
+            return (left, &self.right);
+        }
+        (&self.left, &self.right)
     }
+}
+
+/// Remove an integer-to-string round trip when the other equality key is an integer.
+///
+/// Mixed string/integer equality normally uses `Decimal(38, 5)` as the hash key. That coercion is
+/// needed for arbitrary strings such as `"1.2"`, but it is unnecessary when the string is produced
+/// directly from another integer. Both integers must fit losslessly in their normal common numeric
+/// type, so formatting and parsing the value cannot change equality.
+fn unwrap_integer_to_string_cast<'a>(
+    integer_expr: &ScalarExpr,
+    string_expr: &'a ScalarExpr,
+) -> Option<&'a ScalarExpr> {
+    let ScalarExpr::CastExpr(cast) = string_expr else {
+        return None;
+    };
+    if cast.is_try || !matches!(cast.target_type.remove_nullable(), DataType::String) {
+        return None;
+    }
+
+    let integer_type = integer_expr.data_type();
+    let DataType::Number(integer_type) = integer_type.remove_nullable() else {
+        return None;
+    };
+    if !integer_type.is_integer() {
+        return None;
+    }
+
+    let source_type = cast.argument.data_type();
+    let DataType::Number(source_type) = source_type.remove_nullable() else {
+        return None;
+    };
+    if !source_type.is_integer() {
+        return None;
+    }
+
+    let integer_type = DataType::Number(integer_type);
+    let source_type = DataType::Number(source_type);
+    let common_type = common_super_type(
+        integer_type.clone(),
+        source_type.clone(),
+        &BUILTIN_FUNCTIONS.default_cast_rules,
+    );
+    let Some(common_type @ DataType::Number(_)) = common_type else {
+        return None;
+    };
+    let preserves_equality = classify_conversion(&integer_type, &common_type)
+        .is_safe_for_equality_inference()
+        && classify_conversion(&source_type, &common_type).is_safe_for_equality_inference();
+    preserves_equality.then_some(cast.argument.as_ref())
+}
+
+fn direct_column(expr: &ScalarExpr) -> Option<Symbol> {
+    match expr {
+        ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
+        _ => None,
+    }
+}
+
+// This whitelist is only for propagating NULL rejection to output source columns.
+// It must not be used to write expression bounds, NDV, or histograms back to them.
+fn null_rejected_column(expr: &ScalarExpr) -> Option<Symbol> {
+    match expr {
+        ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
+        ScalarExpr::CastExpr(cast) if !cast.is_try => {
+            let source_type = cast.argument.data_type();
+            if classify_conversion(source_type.as_ref(), cast.target_type.as_ref())
+                .is_lossless_injective()
+            {
+                direct_column(&cast.argument)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn join_condition_stat<'a>(
+    expr: &ScalarExpr,
+    input_statistics: &'a Statistics,
+    cardinality: StatCardinality,
+) -> Result<Option<Cow<'a, ColumnStat>>> {
+    if let Some(column) = direct_column(expr) {
+        return Ok(input_statistics
+            .column_stats
+            .get(&column)
+            .map(Cow::Borrowed));
+    }
+
+    Ok(EvalScalar::derive_item_stat(expr, input_statistics, cardinality)?.map(Cow::Owned))
 }
 
 /// Join operator. We will choose hash join by default.
@@ -289,6 +398,9 @@ pub struct Join {
     pub single_to_inner: Option<JoinType>,
     // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+    // Derived annotation. The canonical join condition remains
+    // `non_equi_conditions`; this is finalized after logical rewrites.
+    pub spatial_join: Option<Box<SpatialJoinCandidate>>,
 }
 
 impl Default for Join {
@@ -303,61 +415,517 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            spatial_join: None,
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum JoinKeyStatOutput {
+    Input,
+    Estimated,
+    EstimatedWithoutHistograms,
+}
+
+struct JoinSideColumnStats {
+    side: Side,
+    join_keys: ColumnStatSet,
+    non_keys: ColumnStatSet,
+    input_join_stats: ColumnStatSet,
+}
+
+impl JoinSideColumnStats {
+    fn split(side: Side, mut column_stats: ColumnStatSet, join_keys: &ColumnSet) -> Self {
+        let join_keys = join_keys
+            .iter()
+            .filter_map(|column| column_stats.remove(column).map(|stat| (*column, stat)))
+            .collect();
+        Self {
+            side,
+            join_keys,
+            non_keys: column_stats,
+            input_join_stats: HashMap::new(),
+        }
+    }
+
+    fn join_key_output(&self, join_type: JoinType) -> JoinKeyStatOutput {
+        match (join_type, self.side) {
+            (
+                JoinType::Inner
+                | JoinType::InnerAny
+                | JoinType::Asof
+                | JoinType::LeftSemi
+                | JoinType::RightSemi,
+                _,
+            ) => JoinKeyStatOutput::Estimated,
+            (JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle, Side::Right)
+            | (JoinType::Right | JoinType::RightAny | JoinType::RightSingle, Side::Left)
+            | (JoinType::LeftAsof, Side::Left)
+            | (JoinType::RightAsof, Side::Right) => JoinKeyStatOutput::EstimatedWithoutHistograms,
+            _ => JoinKeyStatOutput::Input,
+        }
+    }
+
+    fn take_join_keys_for_estimation(&mut self, join_type: JoinType) -> ColumnStatSet {
+        if matches!(self.join_key_output(join_type), JoinKeyStatOutput::Input) {
+            return self.join_keys.clone();
+        }
+
+        if matches!(
+            (join_type, self.side),
+            (JoinType::LeftSemi, Side::Left) | (JoinType::RightSemi, Side::Right)
+        ) {
+            self.input_join_stats = self.join_keys.clone();
+        }
+        std::mem::take(&mut self.join_keys)
+    }
+
+    fn set_estimated_join_keys(&mut self, join_type: JoinType, mut estimated: ColumnStatSet) {
+        match self.join_key_output(join_type) {
+            JoinKeyStatOutput::Input => {}
+            JoinKeyStatOutput::Estimated => self.join_keys = estimated,
+            JoinKeyStatOutput::EstimatedWithoutHistograms => {
+                for stat in estimated.values_mut() {
+                    stat.clear_histogram();
+                }
+                self.join_keys = estimated;
+            }
+        }
+    }
+
+    fn clear_null_count(&mut self, estimated_join_keys: &mut ColumnStatSet, column: Symbol) {
+        let stat = estimated_join_keys
+            .get_mut(&column)
+            .or_else(|| self.join_keys.get_mut(&column))
+            .or_else(|| self.non_keys.get_mut(&column));
+        if let Some(stat) = stat {
+            stat.set_null_count(StatCount::exact(0));
+        }
+    }
+
+    fn propagate_non_key_stats(
+        mut self,
+        input_cardinality: f64,
+        output_cardinality: f64,
+        matched_rows: f64,
+    ) -> Self {
+        if input_cardinality <= 0.0 || output_cardinality <= 0.0 {
+            return self;
+        }
+
+        // Selection changes NDV, while join fanout only duplicates surviving
+        // values. NULL counts are row counts, so selection and fanout combine
+        // into the total output/input row scale under the independence model.
+        let survival_rate = (matched_rows / input_cardinality).clamp(0.0, 1.0);
+        let row_scale = output_cardinality / input_cardinality;
+        for stat in self.non_keys.values_mut() {
+            match stat {
+                ColumnStat::Boolean {
+                    ndv, null_count, ..
+                } => {
+                    let input_non_null =
+                        (input_cardinality - null_count.expected()).clamp(0.0, input_cardinality);
+                    *ndv = ndv.reduce_by_selectivity(input_non_null, survival_rate);
+                    *null_count = Self::scale_count(*null_count, row_scale, output_cardinality);
+                }
+                ColumnStat::Int {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::UInt {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::Float {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::Bytes {
+                    ndv, null_count, ..
+                } => {
+                    let input_non_null =
+                        (input_cardinality - null_count.expected()).clamp(0.0, input_cardinality);
+                    *ndv = ndv.reduce_by_selectivity(input_non_null, survival_rate);
+                    *null_count = Self::scale_count(*null_count, row_scale, output_cardinality);
+                    stat.clear_histogram();
+                }
+                ColumnStat::AllNull { null_count } => {
+                    *null_count = Self::scale_count(*null_count, row_scale, output_cardinality);
+                }
+            }
+        }
+        self
+    }
+
+    fn into_column_stats(self) -> ColumnStatSet {
+        self.join_keys.into_iter().chain(self.non_keys).collect()
+    }
+
+    fn cap_counts(mut self, cardinality: f64) -> Self {
+        for stat in self
+            .join_keys
+            .values_mut()
+            .chain(self.non_keys.values_mut())
+        {
+            match stat {
+                ColumnStat::Boolean {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::Int {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::UInt {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::Float {
+                    ndv, null_count, ..
+                }
+                | ColumnStat::Bytes {
+                    ndv, null_count, ..
+                } => {
+                    *ndv = ndv.reduce(cardinality);
+                    *null_count = null_count.reduce(cardinality);
+                }
+                ColumnStat::AllNull { null_count } => {
+                    *null_count = null_count.reduce(cardinality);
+                }
+            }
+        }
+        self
+    }
+
+    fn apply_outer_null_extension(
+        mut self,
+        join_type: JoinType,
+        output_cardinality: f64,
+        stats: &JoinStats,
+    ) -> Self {
+        let null_extension_rows = match (join_type, self.side) {
+            (JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle, Side::Right) => {
+                stats.left.unmatched_rows()
+            }
+            (JoinType::Right | JoinType::RightAny | JoinType::RightSingle, Side::Left) => {
+                stats.right.unmatched_rows()
+            }
+            (JoinType::LeftAsof, Side::Left) => stats.right.unmatched_rows(),
+            (JoinType::RightAsof, Side::Right) => stats.left.unmatched_rows(),
+            (JoinType::Full | JoinType::FullAsof, Side::Left) => stats.right.unmatched_rows(),
+            (JoinType::Full | JoinType::FullAsof, Side::Right) => stats.left.unmatched_rows(),
+            _ => 0.0,
+        };
+        if null_extension_rows <= 0.0 {
+            return self;
+        }
+
+        for stat in self
+            .join_keys
+            .values_mut()
+            .chain(self.non_keys.values_mut())
+        {
+            if null_extension_rows >= output_cardinality {
+                *stat = ColumnStat::AllNull {
+                    null_count: StatCount::estimate(output_cardinality, output_cardinality),
+                };
+                continue;
+            }
+
+            let null_count = stat.null_count();
+            stat.set_null_count(StatCount::estimate(
+                (null_count.expected() + null_extension_rows).min(output_cardinality),
+                (null_count.upper() + null_extension_rows).min(output_cardinality),
+            ));
+        }
+        self
+    }
+
+    fn clear_inconsistent_histograms(mut self, output_cardinality: f64) -> Self {
+        for stat in self
+            .join_keys
+            .values_mut()
+            .chain(self.non_keys.values_mut())
+        {
+            let Some(histogram_rows) = stat.histogram().map(|histogram| histogram.num_values())
+            else {
+                continue;
+            };
+            let expected_non_null_rows =
+                (output_cardinality - stat.null_count().expected()).max(0.0);
+            let tolerance = output_cardinality.max(1.0) * 1e-9;
+            if (histogram_rows - expected_non_null_rows).abs() > tolerance {
+                stat.clear_histogram();
+            }
+        }
+        self
+    }
+
+    fn finish_histograms(
+        mut self,
+        join_type: JoinType,
+        cardinality: f64,
+        stats: &JoinStats,
+    ) -> Result<Self> {
+        let Some(columns) = stats.updated_columns else {
+            return Ok(self);
+        };
+
+        for stat in self.non_keys.values_mut() {
+            stat.clear_histogram();
+        }
+
+        let joined_column = self.side.join_column(columns);
+        let keeps_semi_join_histogram = matches!(
+            (join_type, self.side),
+            (JoinType::LeftSemi, Side::Left) | (JoinType::RightSemi, Side::Right)
+        );
+        let keep_join_histogram = keeps_semi_join_histogram || join_type == JoinType::Inner;
+        for (column, stat) in self.join_keys.iter_mut() {
+            if !keep_join_histogram || *column != joined_column {
+                // Other columns' histograms are inaccurate after the join cardinality update.
+                stat.clear_histogram();
+            }
+        }
+
+        if keeps_semi_join_histogram && let Some(stat) = self.join_keys.get_mut(&joined_column) {
+            let side_stats = match self.side {
+                Side::Left => &stats.left,
+                Side::Right => &stats.right,
+            };
+            if let Some(histogram) = &side_stats.matched_histogram {
+                stat.set_histogram(Some(histogram.clone()))
+                    .map_err(ErrorCode::Internal)?;
+            } else if !matches!(stat, ColumnStat::AllNull { .. })
+                && let Some(input_stat) = self.input_join_stats.get(&joined_column)
+            {
+                stat.replace_histogram_from(input_stat, cardinality)
+                    .map_err(ErrorCode::Internal)?;
+            }
+        }
+        Ok(self)
+    }
+
+    fn into_output_column_stats(
+        self,
+        join_type: JoinType,
+        input_cardinality: f64,
+        output_cardinality: f64,
+        stats: &JoinStats,
+    ) -> Result<ColumnStatSet> {
+        let side_stats = match self.side {
+            Side::Left => &stats.left,
+            Side::Right => &stats.right,
+        };
+        let side_matched_rows = side_stats.matched_rows;
+        let (surviving_input_rows, value_output_rows) = match (join_type, self.side) {
+            (JoinType::Inner | JoinType::InnerAny | JoinType::Asof, _) => {
+                (side_matched_rows, output_cardinality)
+            }
+            (JoinType::Cross, _) => (input_cardinality, output_cardinality),
+            (JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle, Side::Left)
+            | (JoinType::Right | JoinType::RightAny | JoinType::RightSingle, Side::Right) => {
+                (input_cardinality, output_cardinality)
+            }
+            (JoinType::Left, Side::Right) | (JoinType::Right, Side::Left) => {
+                (side_matched_rows, stats.cardinality)
+            }
+            (JoinType::LeftAny | JoinType::LeftSingle, Side::Right) => {
+                (side_matched_rows, stats.left.matched_rows)
+            }
+            (JoinType::RightAny | JoinType::RightSingle, Side::Left) => {
+                (side_matched_rows, stats.right.matched_rows)
+            }
+            (JoinType::Full, Side::Left) => (
+                input_cardinality,
+                stats.cardinality + stats.left.unmatched_rows(),
+            ),
+            (JoinType::Full, Side::Right) => (
+                input_cardinality,
+                stats.cardinality + stats.right.unmatched_rows(),
+            ),
+            (JoinType::LeftSemi, Side::Left) | (JoinType::RightSemi, Side::Right) => {
+                (side_matched_rows, output_cardinality)
+            }
+            (JoinType::LeftAnti, Side::Left) | (JoinType::RightAnti, Side::Right) => {
+                (output_cardinality, output_cardinality)
+            }
+            (JoinType::LeftAsof, Side::Right) | (JoinType::RightAsof, Side::Left) => {
+                (input_cardinality, output_cardinality)
+            }
+            (JoinType::LeftAsof, Side::Left) => (side_matched_rows, stats.right.matched_rows),
+            (JoinType::RightAsof, Side::Right) => (side_matched_rows, stats.left.matched_rows),
+            (JoinType::FullAsof, Side::Left) => (
+                input_cardinality,
+                stats.right.matched_rows + stats.left.unmatched_rows(),
+            ),
+            (JoinType::FullAsof, Side::Right) => (input_cardinality, input_cardinality),
+            _ => (0.0, 0.0),
+        };
+        let output = self
+            .propagate_non_key_stats(input_cardinality, value_output_rows, surviving_input_rows)
+            .cap_counts(output_cardinality)
+            .apply_outer_null_extension(join_type, output_cardinality, stats)
+            .finish_histograms(join_type, output_cardinality, stats)?
+            .clear_inconsistent_histograms(output_cardinality);
+        Ok(output.into_column_stats())
+    }
+
+    fn scale_count(count: StatCount, factor: f64, upper: f64) -> StatCount {
+        if count == StatCount::exact(0) {
+            return count;
+        }
+        StatCount::estimate(
+            (count.expected() * factor).min(upper),
+            (count.upper() * factor).min(upper),
+        )
     }
 }
 
 impl Join {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for condition in self.equi_conditions.iter() {
-            used_columns = used_columns
-                .union(&condition.left.used_columns())
-                .cloned()
-                .collect();
-            used_columns = used_columns
-                .union(&condition.right.used_columns())
-                .cloned()
-                .collect();
+        for condition in &self.equi_conditions {
+            condition.left.collect_used_columns(&mut used_columns);
+            condition.right.collect_used_columns(&mut used_columns);
         }
-        for condition in self.non_equi_conditions.iter() {
-            used_columns = used_columns
-                .union(&condition.used_columns())
-                .cloned()
-                .collect();
+        for condition in &self.non_equi_conditions {
+            condition.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
 
-    fn inner_join_cardinality(
+    fn join_key_columns(&self, side: Side) -> ColumnSet {
+        self.equi_conditions
+            .iter()
+            .filter_map(|condition| {
+                let (left, right) = condition.canonical_keys();
+                Some(JoinConditionColumns {
+                    left: direct_column(left)?,
+                    right: direct_column(right)?,
+                })
+            })
+            .map(|columns| side.join_column(columns))
+            .collect()
+    }
+
+    fn estimate_inner_join_key_stats(
         &self,
         left_cardinality: f64,
         right_cardinality: f64,
-        left_statistics: &mut Statistics,
-        right_statistics: &mut Statistics,
-    ) -> Result<f64> {
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality,
-            right_cardinality,
-            join_card: left_cardinality * right_cardinality,
-            updated_columns: None,
-            drop_null_join_keys: matches!(
-                self.join_type,
-                JoinType::Inner
-                    | JoinType::InnerAny
-                    | JoinType::Asof
-                    | JoinType::LeftSemi
-                    | JoinType::RightSemi
-            ),
-        };
-        estimator.estimate(&self.equi_conditions, left_statistics, right_statistics)?;
-        let Some(columns) = estimator.updated_columns else {
-            return Ok(estimator.join_card);
-        };
+        left_input_statistics: &Statistics,
+        right_input_statistics: &Statistics,
+        left: &mut JoinSideColumnStats,
+        right: &mut JoinSideColumnStats,
+    ) -> Result<JoinStats> {
+        let mut left_join_keys = left.take_join_keys_for_estimation(self.join_type);
+        let mut right_join_keys = right.take_join_keys_for_estimation(self.join_type);
+        let drop_null_join_keys = matches!(
+            self.join_type,
+            JoinType::Inner
+                | JoinType::InnerAny
+                | JoinType::Asof
+                | JoinType::LeftSemi
+                | JoinType::RightSemi
+        );
+        let mut estimator =
+            JoinStatsEstimator::new(left_cardinality, right_cardinality, drop_null_join_keys);
+        let left_stat_cardinality = left_input_statistics
+            .precise_cardinality
+            .map(StatCardinality::exact)
+            .unwrap_or_else(|| StatCardinality::estimate(left_cardinality));
+        let right_stat_cardinality = right_input_statistics
+            .precise_cardinality
+            .map(StatCardinality::exact)
+            .unwrap_or_else(|| StatCardinality::estimate(right_cardinality));
+        for condition in &self.equi_conditions {
+            if estimator.has_no_matches() {
+                break;
+            }
+            let (left_condition, right_condition) = condition.canonical_keys();
+            let output_columns = match (
+                direct_column(left_condition),
+                direct_column(right_condition),
+            ) {
+                (Some(left), Some(right)) => Some(JoinConditionColumns { left, right }),
+                _ => None,
+            };
+            if drop_null_join_keys && !condition.is_null_equal {
+                if let Some(column) = null_rejected_column(left_condition) {
+                    left.clear_null_count(&mut left_join_keys, column);
+                }
+                if let Some(column) = null_rejected_column(right_condition) {
+                    right.clear_null_count(&mut right_join_keys, column);
+                }
+            }
+            let left_condition_stat =
+                join_condition_stat(left_condition, left_input_statistics, left_stat_cardinality)?;
+            let right_condition_stat = join_condition_stat(
+                right_condition,
+                right_input_statistics,
+                right_stat_cardinality,
+            )?;
+            let (Some(left_condition_stat), Some(right_condition_stat)) =
+                (&left_condition_stat, &right_condition_stat)
+            else {
+                estimator.apply_missing_condition_statistics(
+                    left_condition_stat.as_deref(),
+                    right_condition_stat.as_deref(),
+                    condition.is_null_equal,
+                );
+                continue;
+            };
+            estimator.apply_condition(
+                output_columns,
+                left_condition.data_type().as_ref(),
+                right_condition.data_type().as_ref(),
+                left_condition_stat.as_ref(),
+                right_condition_stat.as_ref(),
+                condition.is_null_equal,
+                &mut left_join_keys,
+                &mut right_join_keys,
+            )?;
+        }
+        left.set_estimated_join_keys(self.join_type, left_join_keys);
+        right.set_estimated_join_keys(self.join_type, right_join_keys);
+        Ok(estimator.finish())
+    }
 
-        NewStatistic::finish_join_histograms(left_statistics, columns.left)?;
-        NewStatistic::finish_join_histograms(right_statistics, columns.right)?;
-        Ok(estimator.join_card)
+    fn join_cardinality(
+        &self,
+        left_cardinality: f64,
+        right_cardinality: f64,
+        stats: &JoinStats,
+    ) -> f64 {
+        let inner_join_cardinality = stats.cardinality;
+        match self.join_type {
+            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
+            JoinType::InnerAny => stats
+                .ndv
+                .and_then(|ndv| ndv.expected)
+                .unwrap_or_else(|| stats.left.matched_rows.min(stats.right.matched_rows)),
+            // ASOF plans have swapped logical children: the right child is the
+            // original probe side and contributes at most one output per row.
+            JoinType::Asof => stats.right.matched_rows,
+            JoinType::Left => inner_join_cardinality + stats.left.unmatched_rows(),
+            JoinType::Right => inner_join_cardinality + stats.right.unmatched_rows(),
+            JoinType::Full => {
+                inner_join_cardinality + stats.left.unmatched_rows() + stats.right.unmatched_rows()
+            }
+            JoinType::LeftAny => left_cardinality,
+            JoinType::RightAny => right_cardinality,
+            JoinType::LeftAsof => right_cardinality,
+            JoinType::RightAsof => left_cardinality,
+            JoinType::FullAsof => right_cardinality + stats.left.unmatched_rows(),
+            JoinType::LeftSemi => stats.left.matched_rows,
+            JoinType::RightSemi => stats.right.matched_rows,
+            JoinType::LeftAnti => estimate_anti_join_cardinality(
+                left_cardinality,
+                stats.left.matched_rows,
+                stats.left.estimated_matched_rows,
+            ),
+            JoinType::RightAnti => estimate_anti_join_cardinality(
+                right_cardinality,
+                stats.right.matched_rows,
+                stats.right.estimated_matched_rows,
+            ),
+            JoinType::LeftSingle | JoinType::RightMark => left_cardinality,
+            JoinType::RightSingle | JoinType::LeftMark => right_cardinality,
+        }
     }
 
     pub fn has_null_equi_condition(&self) -> bool {
@@ -371,55 +939,49 @@ impl Join {
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
     ) -> Result<Arc<StatInfo>> {
-        let (left_cardinality, mut left_statistics) = (
-            left_stat_info.cardinality,
-            left_stat_info.statistics.clone(),
+        let left_cardinality = left_stat_info.cardinality;
+        let right_cardinality = right_stat_info.cardinality;
+        let mut left_column_stats = JoinSideColumnStats::split(
+            Side::Left,
+            left_stat_info.statistics.column_stats.clone(),
+            &self.join_key_columns(Side::Left),
         );
-        let (right_cardinality, mut right_statistics) = (
-            right_stat_info.cardinality,
-            right_stat_info.statistics.clone(),
+        let mut right_column_stats = JoinSideColumnStats::split(
+            Side::Right,
+            right_stat_info.statistics.column_stats.clone(),
+            &self.join_key_columns(Side::Right),
         );
+
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
-        let inner_join_cardinality = self.inner_join_cardinality(
+        let join_stats = self.estimate_inner_join_key_stats(
             left_cardinality,
             right_cardinality,
-            &mut left_statistics,
-            &mut right_statistics,
+            &left_stat_info.statistics,
+            &right_stat_info.statistics,
+            &mut left_column_stats,
+            &mut right_column_stats,
         )?;
-        let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::InnerAny | JoinType::Asof | JoinType::Cross => {
-                inner_join_cardinality
-            }
-            JoinType::Left | JoinType::LeftAny | JoinType::LeftAsof => {
-                f64::max(left_cardinality, inner_join_cardinality)
-            }
-            JoinType::Right | JoinType::RightAny | JoinType::RightAsof => {
-                f64::max(right_cardinality, inner_join_cardinality)
-            }
-            JoinType::Full | JoinType::FullAsof => {
-                f64::max(left_cardinality, inner_join_cardinality)
-                    + f64::max(right_cardinality, inner_join_cardinality)
-                    - inner_join_cardinality
-            }
-            JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
-            JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
-            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
-        };
+        let cardinality = self.join_cardinality(left_cardinality, right_cardinality, &join_stats);
+
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
             HashMap::new()
         } else {
-            left_statistics
-                .column_stats
+            left_column_stats
+                .into_output_column_stats(
+                    self.join_type,
+                    left_cardinality,
+                    cardinality,
+                    &join_stats,
+                )?
                 .into_iter()
-                .chain(right_statistics.column_stats)
-                .map(|(col, mut stat)| {
-                    stat.ndv = stat.ndv.reduce(cardinality);
-                    stat.null_count = stat.null_count.reduce(cardinality);
-                    (col, stat)
-                })
+                .chain(right_column_stats.into_output_column_stats(
+                    self.join_type,
+                    right_cardinality,
+                    cardinality,
+                    &join_stats,
+                )?)
                 .collect()
         };
         Ok(Arc::new(StatInfo {
@@ -427,25 +989,33 @@ impl Join {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
+        self.replace_columns(|column| Ok(if column == old { new } else { column }))
+    }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
         for condition in &mut self.equi_conditions {
-            condition.left.replace_column(old, new)?;
-            condition.right.replace_column(old, new)?;
+            condition.left.replace_columns(&mut replace)?;
+            condition.right.replace_columns(&mut replace)?;
         }
 
         for condition in &mut self.non_equi_conditions {
-            condition.replace_column(old, new)?;
+            condition.replace_columns(&mut replace)?;
         }
 
-        if self.marker_index == Some(old) {
-            self.marker_index = Some(new)
+        if let Some(marker_index) = &mut self.marker_index {
+            *marker_index = replace(*marker_index)?;
         }
 
         self.build_side_cache_info = None;
+        self.spatial_join = None;
 
         Ok(())
     }
@@ -459,6 +1029,54 @@ impl Join {
                 .iter()
                 .any(|expr| expr.has_subquery())
     }
+
+    fn spatial_join_candidate(&self, rel_expr: &RelExpr) -> Result<Option<SpatialJoinCandidate>> {
+        if !has_spatial_join_preconditions(self) {
+            return Ok(None);
+        }
+
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+        Ok(spatial_join_gate(
+            self,
+            &left_prop.output_columns,
+            &right_prop.output_columns,
+        ))
+    }
+
+    fn can_use_distributed_spatial_join(
+        &self,
+        ctx: &dyn TableContext,
+        rel_expr: &RelExpr,
+    ) -> Result<bool> {
+        Ok(ctx.get_settings().get_enable_spatial_join()?
+            && !ctx.get_cluster().is_empty()
+            && self.spatial_join_candidate(rel_expr)?.is_some())
+    }
+}
+
+fn estimate_anti_join_cardinality(
+    input_cardinality: f64,
+    matched_rows: f64,
+    estimated_matched_rows: Option<f64>,
+) -> f64 {
+    if input_cardinality <= 0.0 {
+        return 0.0;
+    }
+
+    let matched_rows = matched_rows.clamp(0.0, input_cardinality);
+    let estimated_matched_rows = estimated_matched_rows
+        .unwrap_or(0.0)
+        .clamp(0.0, matched_rows);
+    // Bucket overlap cannot prove dense value-set coverage. Only cap the
+    // uncertain portion when it would push the total match rate above 90%.
+    const MAX_ANTI_JOIN_ESTIMATED_OVERLAP: f64 = 0.9;
+    let confirmed_matched_rows = matched_rows - estimated_matched_rows;
+    let estimated_match_budget =
+        (input_cardinality * MAX_ANTI_JOIN_ESTIMATED_OVERLAP - confirmed_matched_rows).max(0.0);
+    let adjusted_matched_rows =
+        confirmed_matched_rows + estimated_matched_rows.min(estimated_match_budget);
+    input_cardinality - adjusted_matched_rows
 }
 
 impl Operator for Join {
@@ -489,34 +1107,22 @@ impl Operator for Join {
         if let Some(mark_index) = self.marker_index {
             output_columns.insert(mark_index);
         }
-        output_columns = output_columns
-            .union(&right_prop.output_columns)
-            .cloned()
-            .collect();
+        output_columns.extend(right_prop.output_columns.iter().copied());
 
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
-        outer_columns = outer_columns
-            .union(&right_prop.outer_columns)
-            .cloned()
-            .collect();
+        outer_columns.extend(right_prop.outer_columns.iter().copied());
 
-        for condition in self.equi_conditions.iter() {
-            let left_used_columns = condition.left.used_columns();
-            let right_used_columns = condition.right.used_columns();
-            let used_columns: ColumnSet = left_used_columns
-                .union(&right_used_columns)
-                .cloned()
-                .collect();
-            let outer = used_columns.difference(&output_columns).cloned().collect();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+        for condition in &self.equi_conditions {
+            condition.left.collect_used_columns(&mut outer_columns);
+            condition.right.collect_used_columns(&mut outer_columns);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+        outer_columns.retain(|column| !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(left_prop.used_columns.clone());
-        used_columns.extend(right_prop.used_columns.clone());
+        used_columns.extend(left_prop.used_columns.iter().copied());
+        used_columns.extend(right_prop.used_columns.iter().copied());
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
@@ -545,7 +1151,15 @@ impl Operator for Join {
             });
         }
 
+        let spatial_join_candidate = self.spatial_join_candidate(rel_expr)?;
+
         match (&probe_prop.distribution, &build_prop.distribution) {
+            (Distribution::Broadcast, _) if spatial_join_candidate.is_some() => {
+                Ok(PhysicalProperty {
+                    distribution: build_prop.distribution.clone(),
+                })
+            }
+
             // If any side of the join is Broadcast, pass through the other side.
             (_, Distribution::Broadcast) => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
@@ -587,9 +1201,36 @@ impl Operator for Join {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
+
+        // Spatial join (Cascades fallback path on a concrete `SExpr`): there is
+        // no cost-based enumeration here, so single-select by broadcasting the
+        // smaller input. This matches the physical builder, which also prefers
+        // the smaller side as the R-tree build side. If either side is already
+        // Serial, fall back to a Serial spatial join.
+        if self.can_use_distributed_spatial_join(ctx.as_ref(), rel_expr)? {
+            if probe_physical_prop.distribution == Distribution::Serial
+                || build_physical_prop.distribution == Distribution::Serial
+            {
+                required.distribution = Distribution::Serial;
+                return Ok(required);
+            }
+
+            let left_cardinality = rel_expr.derive_cardinality_child(0)?.cardinality;
+            let right_cardinality = rel_expr.derive_cardinality_child(1)?.cardinality;
+            let broadcast_child = if left_cardinality <= right_cardinality {
+                0
+            } else {
+                1
+            };
+            required.distribution = if child_index == broadcast_child {
+                Distribution::Broadcast
+            } else {
+                Distribution::Any
+            };
+            return Ok(required);
+        }
 
         // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
@@ -602,6 +1243,7 @@ impl Operator for Join {
         }
 
         // Try to use broadcast join
+        let settings = ctx.get_settings();
         if !matches!(
             self.join_type,
             JoinType::Right
@@ -617,7 +1259,6 @@ impl Operator for Join {
                 | JoinType::RightAsof
                 | JoinType::FullAsof
         ) {
-            let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
@@ -669,6 +1310,51 @@ impl Operator for Join {
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
+
+        // Spatial join: enumerate the broadcast alternatives and let the cost
+        // model pick the cheaper build side (broadcasting the smaller input is
+        // cheaper). The physical builder reads the materialized exchange to
+        // decide which side actually builds the R-tree, so we do not pick a
+        // build side here, and we must not peek at child physical properties
+        // (they are not available during Cascades exploration).
+        //
+        // Use `is_spatial_join_shape` (shape-only check) instead of the full
+        // `can_use_distributed_spatial_join` because `derive_relational_prop_child`
+        // on an MExpr returns the current group's properties, not the child
+        // group's. Final column-side validation happens after Cascades in
+        // `FinalizeSpatialJoinOptimizer` which sets `join.spatial_join`; the
+        // physical builder only constructs a spatial join when that field is set.
+        if ctx.get_settings().get_enable_spatial_join()?
+            && !ctx.get_cluster().is_empty()
+            && is_spatial_join_shape(self)
+        {
+            return Ok(vec![
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Any,
+                    },
+                ],
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Any,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Broadcast,
+                    },
+                ],
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Serial,
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Serial,
+                    },
+                ],
+            ]);
+        }
 
         // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
         if self.join_type.is_mark_join()
@@ -783,455 +1469,23 @@ impl Operator for Join {
     }
 }
 
-fn single_used_column(expr: &ScalarExpr) -> Option<Symbol> {
-    match expr {
-        ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
-        ScalarExpr::CastExpr(cast) if !cast.is_try => match cast.argument.as_ref() {
-            ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-struct JoinStatsEstimator {
-    left_cardinality: f64,
-    right_cardinality: f64,
-    join_card: f64,
-    updated_columns: Option<JoinConditionColumns>,
-    drop_null_join_keys: bool,
-}
-
-impl JoinStatsEstimator {
-    fn estimate(
-        &mut self,
-        conditions: &[JoinEquiCondition],
-        left_statistics: &mut Statistics,
-        right_statistics: &mut Statistics,
-    ) -> Result<()> {
-        for condition in conditions {
-            if self.join_card == 0.0 {
-                break;
-            }
-            self.apply_condition(condition, left_statistics, right_statistics)?;
-        }
-        Ok(())
-    }
-
-    fn apply_condition(
-        &mut self,
-        condition: &JoinEquiCondition,
-        left_statistics: &mut Statistics,
-        right_statistics: &mut Statistics,
-    ) -> Result<()> {
-        let Some(columns) = condition.single_columns() else {
-            return Ok(());
-        };
-        let (left_cardinality, right_cardinality) = if !condition.is_null_equal {
-            let left_null_count = left_statistics
-                .column_stats
-                .get(&columns.left)
-                .map(|stat| join_key_null_count_for_cardinality(stat, self.left_cardinality))
-                .unwrap_or(0.0);
-            let right_null_count = right_statistics
-                .column_stats
-                .get(&columns.right)
-                .map(|stat| join_key_null_count_for_cardinality(stat, self.right_cardinality))
-                .unwrap_or(0.0);
-            (
-                (self.left_cardinality - left_null_count).max(0.0),
-                (self.right_cardinality - right_null_count).max(0.0),
-            )
-        } else {
-            (self.left_cardinality, self.right_cardinality)
-        };
-        if self.drop_null_join_keys && !condition.is_null_equal {
-            if let Some(stat) = left_statistics.column_stats.get_mut(&columns.left) {
-                stat.null_count = StatCount::exact(0);
-            }
-            if let Some(stat) = right_statistics.column_stats.get_mut(&columns.right) {
-                stat.null_count = StatCount::exact(0);
-            }
-        }
-
-        let condition_stats = match try {
-            JoinConditionEstimation {
-                condition,
-                left_col_stat: left_statistics.column_stats.get(&columns.left)?,
-                right_col_stat: right_statistics.column_stats.get(&columns.right)?,
-                left_cardinality,
-                right_cardinality,
-            }
-        } {
-            Some(estimation) => estimation.estimate()?,
-            None => return Ok(()),
-        };
-
-        match condition_stats {
-            JoinConditionStats::Skip => {}
-            JoinConditionStats::NoOverlap => {
-                self.join_card = 0.0;
-            }
-            JoinConditionStats::Estimated { new_stat, card } => {
-                let left_stat = left_statistics.column_stats.get_mut(&columns.left).unwrap();
-                let right_stat = right_statistics
-                    .column_stats
-                    .get_mut(&columns.right)
-                    .unwrap();
-                new_stat.apply(left_stat, right_stat);
-
-                if card < self.join_card {
-                    self.join_card = card;
-                    self.updated_columns = Some(columns);
-                }
-            }
-        };
-        Ok(())
-    }
-}
-
-fn join_key_null_count_for_cardinality(stat: &ColumnStat, cardinality: f64) -> f64 {
-    // Keep at least known NDV rows for non-null values; derived filters may
-    // leave a stale null_count that would otherwise be subtracted again.
-    let max_null_count = (cardinality - stat.ndv.lower).max(0.0);
-    stat.null_count.expected().min(max_null_count)
-}
-
-#[derive(Clone, Copy)]
-struct JoinConditionColumns {
-    left: Symbol,
-    right: Symbol,
-}
-
-struct JoinConditionEstimation<'a> {
-    condition: &'a JoinEquiCondition,
-    left_col_stat: &'a ColumnStat,
-    right_col_stat: &'a ColumnStat,
-    left_cardinality: f64,
-    right_cardinality: f64,
-}
-
-impl<'a> JoinConditionEstimation<'a> {
-    fn estimate(&self) -> Result<JoinConditionStats> {
-        let left_input = JoinColumnInput::from_column_stat(self.left_col_stat);
-        let right_input = JoinColumnInput::from_column_stat(self.right_col_stat);
-        if left_input
-            .interval()
-            .has_same_supported_type(&right_input.interval())
-        {
-            let Some(estimation) = JoinEstimate::from_inputs(
-                &left_input,
-                &right_input,
-                self.left_cardinality,
-                self.right_cardinality,
-            )?
-            else {
-                return Ok(JoinConditionStats::NoOverlap);
-            };
-            return Ok(JoinConditionStats::Estimated {
-                new_stat: NewStatistic::same_type(estimation.min, estimation.max, estimation.ndv),
-                card: estimation.card,
-            });
-        }
-
-        let Some(kind) = mixed_numeric_stat_kind(
-            self.left_col_stat,
-            self.right_col_stat,
-            &self.condition.left.data_type()?,
-            &self.condition.right.data_type()?,
-        )?
-        else {
-            return Ok(JoinConditionStats::Skip);
-        };
-        let Some(left_input) = left_input.normalize_to_kind(kind) else {
-            return Ok(JoinConditionStats::Skip);
-        };
-        let Some(right_input) = right_input.normalize_to_kind(kind) else {
-            return Ok(JoinConditionStats::Skip);
-        };
-        let Some(estimation) = JoinEstimate::from_inputs(
-            &left_input,
-            &right_input,
-            self.left_cardinality,
-            self.right_cardinality,
-        )?
-        else {
-            return Ok(JoinConditionStats::NoOverlap);
-        };
-
-        Ok(JoinConditionStats::Estimated {
-            new_stat: NewStatistic::mixed_type(
-                estimation.min,
-                estimation.max,
-                self.left_col_stat,
-                self.right_col_stat,
-                estimation.ndv,
-            ),
-            card: estimation.card,
-        })
-    }
-}
-
-enum JoinConditionStats {
-    Skip,
-    NoOverlap,
-    Estimated { new_stat: NewStatistic, card: f64 },
-}
-
-struct JoinColumnInput<'a> {
-    min: Datum,
-    max: Datum,
-    ndv: StatEstimate,
-    histogram: Option<&'a Histogram>,
-}
-
-impl<'a> JoinColumnInput<'a> {
-    fn from_column_stat(stat: &'a ColumnStat) -> Self {
-        Self {
-            min: stat.min.clone(),
-            max: stat.max.clone(),
-            ndv: stat.ndv,
-            histogram: stat.histogram.as_ref(),
-        }
-    }
-
-    fn normalize_to_kind(&self, kind: DatumKind) -> Option<Self> {
-        let min = self.min.normalize_to_kind(kind)?;
-        let max = self.max.normalize_to_kind(kind)?;
-        if min.compare(&max).ok()? == std::cmp::Ordering::Greater {
-            return None;
-        }
-
-        Some(Self {
-            min,
-            max,
-            ndv: self.ndv,
-            histogram: self.histogram,
-        })
-    }
-
-    fn interval(&self) -> UniformSampleSet {
-        UniformSampleSet::new(self.min.clone(), self.max.clone())
-    }
-}
-
-struct JoinEstimate {
-    min: Option<Datum>,
-    max: Option<Datum>,
-    card: f64,
-    ndv: Option<StatEstimate>,
-}
-
-impl JoinEstimate {
-    fn from_inputs(
-        left: &JoinColumnInput,
-        right: &JoinColumnInput,
-        left_cardinality: f64,
-        right_cardinality: f64,
-    ) -> Result<Option<Self>> {
-        let left_interval = left.interval();
-        let right_interval = right.interval();
-        if !left_interval.has_intersection(&right_interval)? {
-            return Ok(None);
-        }
-
-        if left.min.is_numeric()
-            && let (Some(left_hist), Some(right_hist)) = (left.histogram, right.histogram)
-            && let Some(estimation) = left_hist.estimate_join_numeric_compatible(right_hist)?
-        {
-            let (min, max) = left_interval.intersection(&right_interval)?;
-            return Ok(Some(Self {
-                min,
-                max,
-                card: estimation.cardinality.expected,
-                ndv: Some(estimation.ndv),
-            }));
-        }
-
-        let (max_ndv, ndv) = {
-            let left = left.ndv;
-            let right = right.ndv;
-            fn is_missing_ndv(ndv: StatEstimate) -> bool {
-                ndv.lower == 0.0 && ndv.expected == ndv.upper && ndv.upper > 0.0
-            }
-            match (is_missing_ndv(left), is_missing_ndv(right)) {
-                (false, false) => (left.expected.max(right.expected), Some(left.min(right))),
-                (false, true) => (left.expected, Some(left.min(right))),
-                (true, false) => (right.expected, Some(left.min(right))),
-                (true, true) => {
-                    if left.upper == 0.0 && right.upper == 0.0 {
-                        (0.0, Some(StatEstimate::exact(0.0)))
-                    } else {
-                        (left_cardinality * right_cardinality, None)
-                    }
-                }
-            }
-        };
-
-        let card = if max_ndv == 0.0 {
-            0.0
-        } else {
-            left_cardinality * right_cardinality / max_ndv
-        };
-        let (min, max) = left_interval.intersection(&right_interval)?;
-        Ok(Some(Self {
-            min,
-            max,
-            card,
-            ndv,
-        }))
-    }
-}
-
-fn mixed_numeric_stat_kind(
-    left_stat: &ColumnStat,
-    right_stat: &ColumnStat,
-    left_type: &DataType,
-    right_type: &DataType,
-) -> Result<Option<DatumKind>> {
-    let values = [
-        &left_stat.min,
-        &left_stat.max,
-        &right_stat.min,
-        &right_stat.max,
-    ];
-    if !values.iter().all(|value| value.is_numeric()) {
-        return Ok(None);
-    }
-
-    let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
-    let Some(common_type) = common_super_type(left_type.clone(), right_type.clone(), cast_rules)
-    else {
-        return Ok(None);
-    };
-    if !matches!(
-        common_type.remove_nullable(),
-        DataType::Number(_) | DataType::Decimal(_)
-    ) {
-        return Ok(None);
-    }
-
-    if values.iter().any(|value| matches!(value, Datum::Float(_))) {
-        return Ok(Some(DatumKind::Float));
-    }
-    if values.iter().all(|value| value.as_i64().is_some()) {
-        return Ok(Some(DatumKind::Int));
-    }
-    if values.iter().all(|value| value.as_u64().is_some()) {
-        return Ok(Some(DatumKind::UInt));
-    }
-    Ok(Some(DatumKind::Float))
-}
-
-#[derive(Debug, Clone)]
-struct NewStatistic {
-    left_min: Option<Datum>,
-    left_max: Option<Datum>,
-    right_min: Option<Datum>,
-    right_max: Option<Datum>,
-    ndv: Option<StatEstimate>,
-}
-
-impl NewStatistic {
-    fn same_type(min: Option<Datum>, max: Option<Datum>, ndv: Option<StatEstimate>) -> Self {
-        Self {
-            left_min: min.clone(),
-            left_max: max.clone(),
-            right_min: min,
-            right_max: max,
-            ndv,
-        }
-    }
-
-    fn mixed_type(
-        min: Option<Datum>,
-        max: Option<Datum>,
-        left_stat: &ColumnStat,
-        right_stat: &ColumnStat,
-        ndv: Option<StatEstimate>,
-    ) -> Self {
-        let (left_min, left_max) =
-            Self::normalize_bounds_to_stat_type(min.as_ref(), max.as_ref(), left_stat);
-        let (right_min, right_max) =
-            Self::normalize_bounds_to_stat_type(min.as_ref(), max.as_ref(), right_stat);
-        Self {
-            left_min,
-            left_max,
-            right_min,
-            right_max,
-            ndv,
-        }
-    }
-
-    fn normalize_bounds_to_stat_type(
-        min: Option<&Datum>,
-        max: Option<&Datum>,
-        stat: &ColumnStat,
-    ) -> (Option<Datum>, Option<Datum>) {
-        let Some(kind) = stat.min.kind() else {
-            return (None, None);
-        };
-        let min = min.and_then(|value| value.lower_bound_to_kind(kind));
-        let max = max.and_then(|value| value.upper_bound_to_kind(kind));
-        if let (Some(min), Some(max)) = (&min, &max)
-            && min
-                .compare(max)
-                .is_ok_and(|ordering| ordering == std::cmp::Ordering::Greater)
-        {
-            return (None, None);
-        }
-        (min, max)
-    }
-
-    fn apply(self, left_stat: &mut ColumnStat, right_stat: &mut ColumnStat) {
-        if let Some(new_min) = self.left_min {
-            left_stat.min = new_min;
-        }
-        if let Some(new_max) = self.left_max {
-            left_stat.max = new_max;
-        }
-        if let Some(new_min) = self.right_min {
-            right_stat.min = new_min;
-        }
-        if let Some(new_max) = self.right_max {
-            right_stat.max = new_max;
-        }
-        if let Some(new_ndv) = self.ndv {
-            left_stat.ndv = new_ndv;
-            right_stat.ndv = new_ndv;
-        }
-    }
-
-    fn finish_join_histograms(statistics: &mut Statistics, joined_column: Symbol) -> Result<()> {
-        for (idx, stat) in statistics.column_stats.iter_mut() {
-            stat.histogram = if let Some(histogram) = &stat.histogram
-                && *idx == joined_column
-                && stat.ndv.expected as u64 > 2
-            {
-                histogram.restrict_to_bounds(&stat.min, &stat.max)?
-            } else {
-                // Other columns' histograms are inaccurate after the join cardinality update.
-                None
-            };
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::Scalar;
+    use databend_common_expression::stat_distribution::NdvEstimate;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::NumberScalar;
-    use databend_common_statistics::F64;
+    use databend_common_statistics::TypedHistogram;
+    use databend_common_statistics::TypedHistogramBucket;
 
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+    use crate::optimizer::ir::SExpr;
     use crate::plans::BoundColumnRef;
     use crate::plans::CastExpr;
-    use crate::plans::ConstantExpr;
+    use crate::plans::Exchange;
     use crate::plans::FunctionCall;
+    use crate::plans::Scan;
 
     fn column(index: usize, data_type: DataType) -> ScalarExpr {
         ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -1246,472 +1500,202 @@ mod tests {
         })
     }
 
-    fn cast(expr: ScalarExpr, target_type: DataType) -> ScalarExpr {
-        ScalarExpr::CastExpr(CastExpr {
-            span: None,
-            is_try: false,
-            argument: Box::new(expr),
-            target_type: Box::new(target_type),
-        })
-    }
-
-    fn function_call(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+    fn function_call(
+        func_name: &str,
+        arguments: Vec<ScalarExpr>,
+        return_type: DataType,
+    ) -> ScalarExpr {
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: func_name.to_string(),
             params: vec![],
             arguments,
+            return_type: Box::new(return_type),
+        })
+    }
+
+    fn column_set(indices: &[usize]) -> ColumnSet {
+        indices.iter().copied().map(Symbol::new).collect()
+    }
+
+    fn exchanged_scan(exchange: Exchange, columns: &[usize]) -> SExpr {
+        SExpr::create_unary(
+            exchange,
+            SExpr::create_leaf(Scan {
+                columns: column_set(columns),
+                ..Default::default()
+            }),
+        )
+    }
+
+    fn int_column_stat(min: i64, max: i64, ndv: f64) -> ColumnStat {
+        ColumnStat::Int {
+            min,
+            max,
+            ndv: NdvEstimate::exact(ndv),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }
+    }
+
+    fn stat_info(cardinality: f64, column: Symbol, stat: ColumnStat) -> Arc<StatInfo> {
+        Arc::new(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality: Some(cardinality as u64),
+                column_stats: HashMap::from([(column, stat)]),
+                ..Default::default()
+            },
         })
     }
 
     #[test]
-    fn test_mixed_type_stat_update_uses_original_stat_types() {
-        let left_stat = ColumnStat {
-            min: Datum::Int(0),
-            max: Datum::Int(100),
-            ndv: StatEstimate::exact(100.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        };
-        let right_stat = ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(10),
-            ndv: StatEstimate::exact(10.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        };
-
-        let stat = NewStatistic::mixed_type(
-            Some(Datum::Int(1)),
-            Some(Datum::Int(2)),
-            &left_stat,
-            &right_stat,
-            Some(StatEstimate::exact(2.0)),
+    fn test_anti_join_only_scales_estimated_matched_rows() {
+        assert_eq!(estimate_anti_join_cardinality(100.0, 100.0, None), 0.0);
+        assert_eq!(
+            estimate_anti_join_cardinality(100.0, 100.0, Some(100.0)),
+            10.0
         );
-
-        assert_eq!(stat.left_min, Some(Datum::Int(1)));
-        assert_eq!(stat.left_max, Some(Datum::Int(2)));
-        assert_eq!(stat.right_min, Some(Datum::UInt(1)));
-        assert_eq!(stat.right_max, Some(Datum::UInt(2)));
+        assert_eq!(
+            estimate_anti_join_cardinality(100.0, 60.0, Some(50.0)),
+            40.0
+        );
+        assert_eq!(
+            estimate_anti_join_cardinality(100.0, 95.0, Some(95.0)),
+            10.0
+        );
+        assert_eq!(estimate_anti_join_cardinality(100.0, 0.0, Some(0.0)), 100.0);
     }
 
     #[test]
-    fn test_mixed_type_stat_update_rounds_float_bounds_for_integer_stats() {
-        let int_stat = ColumnStat {
-            min: Datum::Int(0),
-            max: Datum::Int(100),
-            ndv: StatEstimate::exact(100.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        };
-        let float_stat = ColumnStat {
-            min: Datum::Float(F64::from(1.2)),
-            max: Datum::Float(F64::from(8.8)),
-            ndv: StatEstimate::exact(8.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        };
-
-        let stat = NewStatistic::mixed_type(
-            Some(Datum::Float(F64::from(1.2))),
-            Some(Datum::Float(F64::from(8.8))),
-            &int_stat,
-            &float_stat,
-            Some(StatEstimate::exact(8.0)),
-        );
-
-        assert_eq!(stat.left_min, Some(Datum::Int(2)));
-        assert_eq!(stat.left_max, Some(Datum::Int(8)));
-        assert_eq!(stat.right_min, Some(Datum::Float(F64::from(1.2))));
-        assert_eq!(stat.right_max, Some(Datum::Float(F64::from(8.8))));
-    }
-
-    #[test]
-    fn test_mixed_numeric_stats_normalize_to_smaller_common_stat_kind() -> Result<()> {
-        let left_stat = ColumnStat {
-            min: Datum::Int(0),
-            max: Datum::Int(100),
-            ndv: StatEstimate::exact(100.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        };
-        let right_stat = ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(10),
-            ndv: StatEstimate::exact(10.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        };
-
-        let kind = mixed_numeric_stat_kind(
-            &left_stat,
-            &right_stat,
-            &DataType::Number(NumberDataType::Int32),
-            &DataType::Number(NumberDataType::UInt8),
-        )?
-        .expect("mixed numeric stats should be normalized");
-        let left = JoinColumnInput::from_column_stat(&left_stat)
-            .normalize_to_kind(kind)
-            .expect("left stats should normalize");
-        let right = JoinColumnInput::from_column_stat(&right_stat)
-            .normalize_to_kind(kind)
-            .expect("right stats should normalize");
-
-        assert_eq!(left.min, Datum::Int(0));
-        assert_eq!(left.max, Datum::Int(100));
-        assert_eq!(right.min, Datum::Int(0));
-        assert_eq!(right.max, Datum::Int(10));
-        Ok(())
-    }
-
-    #[test]
-    fn test_inner_join_stat_clears_non_null_safe_join_key_null_count() -> Result<()> {
-        let mut left_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut right_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality: 4.0,
-            right_cardinality: 3.0,
-            join_card: 12.0,
-            updated_columns: None,
-            drop_null_join_keys: true,
-        };
-        let condition = JoinEquiCondition::new(
-            column(0, DataType::Number(NumberDataType::Int32)),
-            column(1, DataType::Number(NumberDataType::Int32)),
-            false,
-        );
-
-        estimator.estimate(&[condition], &mut left_statistics, &mut right_statistics)?;
-
-        assert_eq!(estimator.join_card, 2.0);
-        assert_eq!(
-            left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::exact(0)
-        );
-        assert_eq!(
-            right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatCount::exact(0)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_inner_join_stat_ignores_derived_join_key_null_count() -> Result<()> {
-        let mut left_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut right_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(2),
-                ndv: StatEstimate::exact(3.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality: 3.0,
-            right_cardinality: 2.3333333333333335,
-            join_card: 7.0,
-            updated_columns: None,
-            drop_null_join_keys: true,
-        };
-        let condition = JoinEquiCondition::new(
-            column(0, DataType::Number(NumberDataType::Int32)),
-            column(1, DataType::Number(NumberDataType::Int32)),
-            false,
-        );
-
-        estimator.estimate(&[condition], &mut left_statistics, &mut right_statistics)?;
-
-        assert!((estimator.join_card - 2.3333333333333335).abs() < 1e-9);
-        assert_eq!(
-            left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::exact(0)
-        );
-        assert_eq!(
-            right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatCount::exact(0)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_inner_join_stat_clears_join_key_null_count_when_estimation_skips() -> Result<()> {
-        let mut left_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                min: Datum::Bool(false),
-                max: Datum::Bool(true),
-                ndv: StatEstimate::exact(2.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut right_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                min: Datum::Bool(false),
-                max: Datum::Bool(true),
-                ndv: StatEstimate::exact(2.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality: 3.0,
-            right_cardinality: 3.0,
-            join_card: 9.0,
-            updated_columns: None,
-            drop_null_join_keys: true,
-        };
-        let condition = JoinEquiCondition::new(
-            column(0, DataType::Boolean),
-            column(1, DataType::Boolean),
-            false,
-        );
-
-        estimator.estimate(&[condition], &mut left_statistics, &mut right_statistics)?;
-
-        assert_eq!(estimator.join_card, 9.0);
-        assert_eq!(
-            left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::exact(0)
-        );
-        assert_eq!(
-            right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatCount::exact(0)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_inner_join_stat_preserves_null_safe_join_key_null_count() -> Result<()> {
-        let mut left_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut right_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality: 4.0,
-            right_cardinality: 3.0,
-            join_card: 12.0,
-            updated_columns: None,
-            drop_null_join_keys: true,
-        };
-        let condition = JoinEquiCondition::new(
-            column(0, DataType::Number(NumberDataType::Int32)),
-            column(1, DataType::Number(NumberDataType::Int32)),
-            true,
-        );
-
-        estimator.estimate(&[condition], &mut left_statistics, &mut right_statistics)?;
-
-        assert_eq!(
-            left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::exact(1)
-        );
-        assert_eq!(
-            right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatCount::exact(1)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_left_join_stat_excludes_join_key_nulls_from_inner_cardinality() -> Result<()> {
-        let left_stat_info = Arc::new(StatInfo {
-            cardinality: 4.0,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                    min: Datum::Int(42),
-                    max: Datum::Int(44),
-                    ndv: StatEstimate::exact(2.0),
-                    null_count: StatCount::exact(1),
-                    histogram: None,
-                })]),
-            },
-        });
-        let right_stat_info = Arc::new(StatInfo {
-            cardinality: 4.0,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                    min: Datum::Int(42),
-                    max: Datum::Int(45),
-                    ndv: StatEstimate::exact(3.0),
-                    null_count: StatCount::exact(1),
-                    histogram: None,
-                })]),
-            },
+    fn test_canonical_integer_string_keys_drive_join_stats() -> Result<()> {
+        let left_key = column(0, DataType::Number(NumberDataType::Int64));
+        let right_source = column(1, DataType::Number(NumberDataType::Int32));
+        let right_key = ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(right_source),
+            target_type: Box::new(DataType::String),
         });
         let join = Join {
-            equi_conditions: vec![JoinEquiCondition::new(
-                column(0, DataType::Number(NumberDataType::Int32)),
-                column(1, DataType::Number(NumberDataType::Int32)),
-                false,
-            )],
-            join_type: JoinType::Left,
+            join_type: JoinType::Inner,
+            equi_conditions: vec![JoinEquiCondition::new(left_key, right_key, false)],
             ..Default::default()
         };
+        let left = stat_info(4.0, Symbol::new(0), int_column_stat(1, 4, 4.0));
+        let right = stat_info(3.0, Symbol::new(1), int_column_stat(0, 1, 2.0));
 
-        let stat_info = join.derive_join_stats(left_stat_info, right_stat_info)?;
+        let stats = join.derive_join_stats(left, right)?;
 
-        assert_eq!(stat_info.cardinality, 4.0);
-        assert_eq!(
-            stat_info.statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::estimate(1.0, 1.0)
-        );
+        assert_eq!(stats.cardinality, 3.0);
         Ok(())
     }
 
     #[test]
-    fn test_inner_join_stat_accepts_non_try_cast_join_key() -> Result<()> {
-        let mut left_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
+    fn test_finish_semi_join_histogram_skips_all_null_join_key() -> Result<()> {
+        let left_stat = ColumnStat::Int {
+            min: 1,
+            max: 1,
+            ndv: NdvEstimate::exact(1.0),
+            null_count: StatCount::exact(1),
+            histogram: Some(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(1, 1, 1.0, 1.0)],
+                avg_spacing: None,
+            }),
         };
-        let mut right_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
+        let right_stat = ColumnStat::Int {
+            min: 2,
+            max: 2,
+            ndv: NdvEstimate::exact(1.0),
+            null_count: StatCount::exact(1),
+            histogram: None,
         };
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality: 4.0,
-            right_cardinality: 3.0,
-            join_card: 12.0,
-            updated_columns: None,
-            drop_null_join_keys: true,
+        let mut left_stats = HashMap::from([(Symbol::new(0), left_stat.clone())]);
+        let mut right_stats = HashMap::from([(Symbol::new(1), right_stat.clone())]);
+        let mut estimator = JoinStatsEstimator::new(2.0, 2.0, false);
+
+        estimator.apply_condition(
+            Some(JoinConditionColumns {
+                left: Symbol::new(0),
+                right: Symbol::new(1),
+            }),
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &left_stat,
+            &right_stat,
+            true,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
+        let stats = estimator.finish();
+
+        let output = JoinSideColumnStats {
+            side: Side::Left,
+            join_keys: left_stats,
+            non_keys: HashMap::new(),
+            input_join_stats: HashMap::from([(Symbol::new(0), left_stat)]),
+        }
+        .finish_histograms(JoinType::LeftSemi, 1.0, &stats)?;
+
+        assert_eq!(output.join_keys[&Symbol::new(0)], ColumnStat::AllNull {
+            null_count: StatCount::estimate(1.0, 1.0),
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn test_spatial_join_left_broadcast_preserves_right_distribution() -> Result<()> {
+        let right_distribution =
+            Distribution::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]);
+        let join = Join {
+            non_equi_conditions: vec![function_call(
+                "st_intersects",
+                vec![column(0, DataType::Geometry), column(1, DataType::Geometry)],
+                DataType::Boolean,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
         };
-        let condition = JoinEquiCondition::new(
-            cast(
-                column(0, DataType::Number(NumberDataType::Int32)),
-                DataType::Number(NumberDataType::Int64),
+        let s_expr = SExpr::create_binary(
+            join,
+            exchanged_scan(Exchange::Broadcast, &[0]),
+            exchanged_scan(
+                Exchange::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]),
+                &[1, 2],
             ),
-            column(1, DataType::Number(NumberDataType::Int32)),
-            false,
         );
 
-        estimator.estimate(&[condition], &mut left_statistics, &mut right_statistics)?;
+        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
-        assert_eq!(
-            left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::exact(0)
-        );
-        assert_eq!(
-            right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatCount::exact(0)
-        );
-        assert_eq!(estimator.join_card, 2.0);
+        assert_eq!(physical_prop.distribution, right_distribution);
         Ok(())
     }
 
     #[test]
-    fn test_inner_join_stat_skips_function_join_key() -> Result<()> {
-        let mut left_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
+    fn test_spatial_join_same_side_predicate_does_not_preserve_left_broadcast() -> Result<()> {
+        let join = Join {
+            non_equi_conditions: vec![function_call(
+                "st_intersects",
+                vec![column(0, DataType::Geometry), column(1, DataType::Geometry)],
+                DataType::Boolean,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
         };
-        let mut right_statistics = Statistics {
-            precise_cardinality: None,
-            column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
-                min: Datum::Int(1),
-                max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
-                null_count: StatCount::exact(1),
-                histogram: None,
-            })]),
-        };
-        let mut estimator = JoinStatsEstimator {
-            left_cardinality: 4.0,
-            right_cardinality: 3.0,
-            join_card: 12.0,
-            updated_columns: None,
-            drop_null_join_keys: true,
-        };
-        let condition = JoinEquiCondition::new(
-            function_call("coalesce", vec![
-                column(0, DataType::Number(NumberDataType::Int32)),
-                ScalarExpr::ConstantExpr(ConstantExpr {
-                    span: None,
-                    value: Scalar::Number(NumberScalar::Int32(0)),
-                }),
-            ]),
-            column(1, DataType::Number(NumberDataType::Int32)),
-            false,
+        let s_expr = SExpr::create_binary(
+            join,
+            exchanged_scan(Exchange::Broadcast, &[0, 1]),
+            exchanged_scan(
+                Exchange::GlobalHash(vec![column(2, DataType::Number(NumberDataType::Int32))]),
+                &[2],
+            ),
         );
 
-        estimator.estimate(&[condition], &mut left_statistics, &mut right_statistics)?;
+        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
-        assert_eq!(estimator.join_card, 12.0);
-        assert!(estimator.updated_columns.is_none());
-        assert_eq!(
-            left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatCount::exact(1)
-        );
-        assert_eq!(
-            right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatCount::exact(1)
-        );
+        assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())
     }
 }

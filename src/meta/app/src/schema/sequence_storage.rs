@@ -22,8 +22,6 @@ pub type SequenceStorageIdent = TIdent<SequenceStorageRsc>;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::tenant_key::resource::TenantResource;
     use crate::value_id::ValueId;
 
@@ -36,10 +34,6 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_sequence_storage";
         const HAS_TENANT: bool = true;
         type ValueType = ValueId<SequenceStorageValue>;
-    }
-
-    impl kvapi::Value for ValueId<SequenceStorageValue> {
-        type KeyType = super::SequenceStorageIdent;
     }
 
     pub struct SequenceStorageValue;

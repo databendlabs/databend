@@ -1,0 +1,19 @@
+===== catalog registered =====
+paimon_fs
+===== show create catalog =====
+paimon_fs	paimon	METASTORE
+filesystem
+WAREHOUSE
+PAIMON_WAREHOUSE
+===== catalog databases =====
+default
+information_schema
+regression
+system
+===== catalog tables =====
+append_t
+pk_t
+===== fully-qualified resolution (catalog -> db -> table) =====
+4
+===== read-only DDL rejected (database level) =====
+Error: APIError: QueryFailed: [1002]Paimon catalog is read-only: create_database

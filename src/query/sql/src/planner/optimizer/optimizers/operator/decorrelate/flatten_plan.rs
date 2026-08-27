@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -66,6 +65,7 @@ use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 use crate::plans::WindowPartition;
 
 impl SubqueryDecorrelatorOptimizer {
@@ -81,14 +81,10 @@ impl SubqueryDecorrelatorOptimizer {
 
     fn remap_secure_predicates(
         secure_preds: &mut [ScalarExpr],
-        column_mapping: &HashMap<Symbol, Symbol>,
+        derived_columns: &DerivedColumnScope,
     ) -> Result<()> {
         for pred in secure_preds.iter_mut() {
-            for old_col in pred.used_columns() {
-                if let Some(&new_col) = column_mapping.get(&old_col) {
-                    pred.replace_column(old_col, new_col)?;
-                }
-            }
+            pred.replace_columns(|old| Ok(derived_columns.resolve_or_self(old)))?;
         }
         Ok(())
     }
@@ -211,6 +207,14 @@ impl SubqueryDecorrelatorOptimizer {
                 flatten_info,
                 derived_columns,
             ),
+            RelOperator::WindowGroup(op) => self.flatten_sub_window_group(
+                outer,
+                subquery,
+                op,
+                correlated_columns,
+                flatten_info,
+                derived_columns,
+            ),
             RelOperator::ExpressionScan(scan) => self.flatten_sub_expression_scan(
                 subquery,
                 scan,
@@ -248,28 +252,30 @@ impl SubqueryDecorrelatorOptimizer {
 
         let metadata = self.metadata.clone();
         let metadata = metadata.read();
-        let items: Vec<ScalarItem> = eval_scalar
+        let mut output_columns = ColumnSet::new();
+        let mut items: Vec<ScalarItem> = eval_scalar
             .items
             .iter()
             .filter(|item| !correlated_columns.contains(&item.index))
-            .map(Item::Scalar)
-            .chain(correlated_columns.iter().copied().map(Item::Index))
-            .map(|item| match item {
-                Item::Scalar(item) => Ok(ScalarItem {
+            .map(|item| {
+                output_columns.insert(item.index);
+                Ok(ScalarItem {
                     scalar: self.flatten_scalar(
                         &item.scalar,
                         correlated_columns,
                         &derived_columns,
                     )?,
                     index: item.index,
-                }),
-                Item::Index(old) => Ok(Self::scalar_item_from_index(
-                    derived_columns.must_resolve(old)?,
-                    "outer.",
-                    &metadata,
-                )),
+                })
             })
             .collect::<Result<_>>()?;
+
+        for old in correlated_columns {
+            let index = derived_columns.must_resolve(*old)?;
+            if output_columns.insert(index) {
+                items.push(Self::scalar_item_from_index(index, "outer.", &metadata));
+            }
+        }
 
         // Eg1. SELECT c_id, (SELECT count() FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
         // Eg2. SELECT
@@ -442,12 +448,13 @@ impl SubqueryDecorrelatorOptimizer {
                     .iter()
                     .map(|condition| {
                         let mut new_condition = condition.clone();
-                        for col in condition.used_columns() {
+                        new_condition.replace_columns(|col| {
                             if correlated_columns.contains(&col) {
-                                let new_col = derived_columns.must_resolve(col)?;
-                                new_condition.replace_column(col, new_col)?;
+                                derived_columns.must_resolve(col)
+                            } else {
+                                Ok(col)
                             }
-                        }
+                        })?;
                         Ok(new_condition)
                     })
                     .collect()
@@ -542,6 +549,7 @@ impl SubqueryDecorrelatorOptimizer {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    spatial_join: None,
                 },
                 left_flatten_plan,
                 right_flatten_plan,
@@ -787,6 +795,7 @@ impl SubqueryDecorrelatorOptimizer {
                 end_bound: WindowFuncFrameBound::CurrentRow,
             },
             limit: None,
+            top: None,
         };
 
         let window_child = if sort_items.is_empty() {
@@ -835,6 +844,7 @@ impl SubqueryDecorrelatorOptimizer {
                         )),
                     }),
                 ],
+                return_type: Box::new(DataType::Boolean),
             }));
         }
 
@@ -850,6 +860,7 @@ impl SubqueryDecorrelatorOptimizer {
                         value: Scalar::Number(NumberScalar::UInt64(limit.offset as u64)),
                     }),
                 ],
+                return_type: Box::new(DataType::Boolean),
             }));
         }
 
@@ -909,6 +920,72 @@ impl SubqueryDecorrelatorOptimizer {
                 order_by: window.order_by.clone(),
                 frame: window.frame.clone(),
                 limit: window.limit,
+                top: window.top,
+            }),
+            derived_columns,
+        ))
+    }
+
+    fn flatten_sub_window_group(
+        &mut self,
+        outer: &SExpr,
+        subquery: &SExpr,
+        window_group: &WindowGroup,
+        correlated_columns: &ColumnSet,
+        flatten_info: &mut FlattenInfo,
+        derived_columns: &DerivedColumnScope,
+    ) -> Result<FlattenPlanResult> {
+        if !window_group.used_columns()?.is_disjoint(correlated_columns) {
+            return Err(ErrorCode::SemanticError(
+                "correlated columns in window functions not supported",
+            ));
+        }
+        let (flatten_plan, derived_columns) = self.flatten_plan_with_scope(
+            outer,
+            subquery.unary_child(),
+            correlated_columns,
+            flatten_info,
+            true,
+            derived_columns,
+        )?;
+
+        let metadata = self.metadata.read();
+        let windows = window_group
+            .windows
+            .iter()
+            .map(|window| {
+                let partition_by = window
+                    .partition_by
+                    .iter()
+                    .cloned()
+                    .map(Ok)
+                    .chain(correlated_columns.iter().copied().map(|old| {
+                        Ok(Self::scalar_item_from_index(
+                            derived_columns.must_resolve(old)?,
+                            "outer.",
+                            &metadata,
+                        ))
+                    }))
+                    .collect::<Result<_>>()?;
+                Ok(Window {
+                    span: window.span,
+                    index: window.index,
+                    function: window.function.clone(),
+                    arguments: window.arguments.clone(),
+                    partition_by,
+                    order_by: window.order_by.clone(),
+                    frame: window.frame.clone(),
+                    limit: window.limit,
+                    top: window.top,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        drop(metadata);
+
+        Ok((
+            flatten_plan.build_unary(WindowGroup {
+                windows,
+                scalar_items: window_group.scalar_items.clone(),
             }),
             derived_columns,
         ))
@@ -996,7 +1073,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    expr.replace_column(old, new)?;
+                    expr.replace_columns(|column| Ok(if column == old { new } else { column }))?;
                 };
                 Ok((new, expr))
             })
@@ -1105,25 +1182,26 @@ impl SubqueryDecorrelatorOptimizer {
             RelOperator::Limit(limit) => limit.clone().into(),
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
-                for old in sort.used_columns() {
-                    sort.replace_column(old, derived_columns.must_resolve(old)?);
-                }
+                sort.replace_columns(|old| derived_columns.must_resolve(old))?;
                 sort.into()
             }
             RelOperator::Filter(filter) => {
                 let mut filter = filter.clone();
                 for predicate in &mut filter.predicates {
-                    for old in predicate.used_columns() {
-                        predicate.replace_column(old, derived_columns.must_resolve(old)?)?;
-                    }
+                    predicate.replace_columns(|old| derived_columns.must_resolve(old))?;
                 }
                 filter.into()
             }
             RelOperator::Join(join) => {
                 let mut join = join.clone();
-                for old in join.used_columns()? {
-                    join.replace_column(old, derived_columns.must_resolve(old)?)?;
-                }
+                let marker_index = join.marker_index;
+                join.replace_columns(|old| {
+                    if marker_index == Some(old) {
+                        Ok(old)
+                    } else {
+                        derived_columns.must_resolve(old)
+                    }
+                })?;
                 if let Some(mark) = &mut join.marker_index {
                     let mut metadata = self.metadata.write();
                     let column_entry = metadata.column(*mark);
@@ -1220,7 +1298,7 @@ impl SubqueryDecorrelatorOptimizer {
         // new derived column IDs. Without this, RAP predicates would reference
         // stale column symbols after decorrelation.
         if let Some(secure_preds) = &mut new_scan.secure_predicates {
-            Self::remap_secure_predicates(secure_preds, &derived_columns.snapshot())?;
+            Self::remap_secure_predicates(secure_preds, derived_columns)?;
         }
 
         Ok(new_scan.into())
@@ -1270,12 +1348,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    for used_column in expr.used_columns() {
-                        expr.replace_column(
-                            used_column,
-                            derived_columns.must_resolve(used_column)?,
-                        )?;
-                    }
+                    expr.replace_columns(|column| derived_columns.must_resolve(column))?;
                 }
                 Ok((new, expr))
             })
@@ -1288,12 +1361,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    for used_column in expr.used_columns() {
-                        expr.replace_column(
-                            used_column,
-                            derived_columns.must_resolve(used_column)?,
-                        )?;
-                    }
+                    expr.replace_columns(|column| derived_columns.must_resolve(column))?;
                 }
                 Ok((new, expr))
             })
@@ -1354,9 +1422,7 @@ impl SubqueryDecorrelatorOptimizer {
                 })
             }
             _ => {
-                for old in scalar.used_columns() {
-                    scalar.replace_column(old, derived_columns.must_resolve(old)?)?;
-                }
+                scalar.replace_columns(|old| derived_columns.must_resolve(old))?;
                 let column_entry = metadata.column(index);
                 let name = column_entry.name();
                 let data_type = column_entry.data_type();

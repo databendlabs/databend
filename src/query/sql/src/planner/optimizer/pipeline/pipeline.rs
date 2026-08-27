@@ -104,20 +104,27 @@ impl OptimizerPipeline {
         let total_optimizers = self.optimizers.len();
         let trace_collector = self.get_trace_collector();
 
+        #[cfg(debug_assertions)]
+        current_expr.validate_types(&self.opt_ctx.get_metadata())?;
+
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
+            let enable_trace = self.opt_ctx.get_enable_trace();
             // Set trace collector
-            if self.opt_ctx.get_enable_trace() {
+            if enable_trace {
                 optimizer.set_trace_collector(trace_collector.clone());
             }
 
             // Save the expression before optimization
-            let before_expr = current_expr.clone();
+            let before_expr = enable_trace.then(|| current_expr.clone());
 
             // Measure execution time
             let start_time = Instant::now();
 
             // Apply the optimizer
-            current_expr = optimizer.optimize(&current_expr).await?;
+            current_expr = optimizer.optimize(current_expr).await?;
+
+            #[cfg(debug_assertions)]
+            current_expr.validate_types(&self.opt_ctx.get_metadata())?;
 
             // Calculate duration
             let duration = start_time.elapsed();
@@ -127,7 +134,7 @@ impl OptimizerPipeline {
             }
 
             // Only trace if tracing is enabled
-            if self.opt_ctx.get_enable_trace() {
+            if let Some(before_expr) = before_expr {
                 let metadata_ref = self.opt_ctx.get_metadata();
                 self.trace_collector.trace_optimizer(
                     optimizer.name(),

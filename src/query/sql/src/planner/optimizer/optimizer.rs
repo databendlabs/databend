@@ -35,10 +35,10 @@ use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
-use crate::optimizer::optimizers::SyncMaterializedCTERefOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::optimizers::operator::FinalizeSpatialJoinOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -74,14 +74,24 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             rewrite_kind,
             formatted_ast,
             ignore_result,
-        } => Ok(Plan::Query {
-            s_expr: Box::new(optimize_query(opt_ctx, *s_expr).await?),
-            bind_context,
-            metadata,
-            rewrite_kind,
-            formatted_ast,
-            ignore_result,
-        }),
+        } => {
+            let query_output_columns = bind_context
+                .columns
+                .iter()
+                .map(|column| column.index)
+                .collect();
+            Ok(Plan::Query {
+                s_expr: Box::new(
+                    optimize_query_with_output_columns(opt_ctx, *s_expr, query_output_columns)
+                        .await?,
+                ),
+                bind_context,
+                metadata,
+                rewrite_kind,
+                formatted_ast,
+                ignore_result,
+            })
+        }
         Plan::Explain { kind, config, plan } => match kind {
             ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
                 Ok(Plan::Explain { config, kind, plan })
@@ -103,7 +113,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
                 let s_expr = Box::new(
                     SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None)
-                        .optimize_sync(&s_expr)?,
+                        .optimize_sync(*s_expr)?,
                 );
                 Ok(Plan::Explain {
                     kind,
@@ -220,7 +230,14 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
             Ok(Plan::CreateTable(plan))
         }
+        Plan::CreateView(mut plan) => {
+            if let Some(p) = &plan.query_plan {
+                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                plan.query_plan = Some(Box::new(optimized_plan));
+            }
 
+            Ok(Plan::CreateView(plan))
+        }
         Plan::Set(mut plan) => {
             if let SetScalarsOrQuery::Query(q) = plan.values {
                 let optimized_plan = optimize(opt_ctx.clone(), *q.clone()).await?;
@@ -244,6 +261,22 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 }
 
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
+    optimize_query_inner(opt_ctx, s_expr, None).await
+}
+
+async fn optimize_query_with_output_columns(
+    opt_ctx: Arc<OptimizerContext>,
+    s_expr: SExpr,
+    output_columns: std::collections::HashSet<Symbol>,
+) -> Result<SExpr> {
+    optimize_query_inner(opt_ctx, s_expr, Some(output_columns)).await
+}
+
+async fn optimize_query_inner(
+    opt_ctx: Arc<OptimizerContext>,
+    s_expr: SExpr,
+    output_columns: Option<std::collections::HashSet<Symbol>>,
+) -> Result<SExpr> {
     let settings = opt_ctx.get_table_ctx().get_settings();
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr.clone())
         .await?
@@ -263,15 +296,17 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             settings.get_enable_cse_optimizer()?,
             CommonSubexpressionOptimizer::new(opt_ctx.clone()),
         )
-        // Run default rewrite rules
-        .add(RecursiveRuleOptimizer::new(
-            opt_ctx.clone(),
-            &DEFAULT_REWRITE_RULES,
-        ))
+        // Run default rewrite rules. Only an outer Plan::Query supplies authoritative result
+        // columns; internal mutation/query fragments leave them unset.
+        .add(
+            RecursiveRuleOptimizer::new_with_materialized_view_output_columns(
+                opt_ctx.clone(),
+                &DEFAULT_REWRITE_RULES,
+                output_columns,
+            ),
+        )
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
-        // Sync CTE consumer statistics with the latest producer estimates after pushdown rewrites.
-        .add(SyncMaterializedCTERefOptimizer::new())
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
@@ -301,7 +336,9 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
         )
         // Clean up unused CTEs
-        .add(CleanupUnusedCTEOptimizer);
+        .add(CleanupUnusedCTEOptimizer)
+        // Finalize derived join annotations after all logical rewrites.
+        .add(FinalizeSpatialJoinOptimizer::new(opt_ctx.clone()));
 
     // 17. Execute the pipeline
     let s_expr = pipeline.execute().await?;
@@ -327,7 +364,7 @@ fn rewrite_insert_multi_table_whens(
 
         let condition_index = opt_ctx.get_metadata().write().add_derived_column(
             format!("_insert_multi_when_{}", idx),
-            when.condition.data_type()?,
+            when.condition.data_type().into_owned(),
         );
         let eval_expr = source_expr.clone().build_unary(EvalScalar {
             items: vec![ScalarItem {
@@ -337,7 +374,7 @@ fn rewrite_insert_multi_table_whens(
         });
 
         let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None);
-        let rewritten = rewriter.optimize_sync(&eval_expr)?;
+        let rewritten = rewriter.optimize_sync(eval_expr)?;
         let RelOperator::EvalScalar(eval) = rewritten.plan() else {
             return Err(ErrorCode::Internal(
                 "Subquery rewrite for multi-table insert must keep the top eval scalar".to_string(),
@@ -394,7 +431,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     // Optimize the input plan.
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     input_s_expr = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::MergeFilterIntoMutation])
-        .optimize_sync(&input_s_expr)?;
+        .optimize_sync(input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {

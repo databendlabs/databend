@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::FlightData;
 use arrow_flight::flight_service_client::FlightServiceClient;
@@ -29,6 +30,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -63,12 +65,15 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::attach_runtime_filter_logger;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::DoExchangeParams;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
+use crate::servers::flight::FlightOperation;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
+use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
@@ -106,33 +111,49 @@ enum QueryExchange {
 }
 
 async fn create_flight_client(
+    remote_node_id: String,
     address: String,
     use_current_rt: bool,
     keep_alive: FlightKeepAliveParams,
 ) -> Result<FlightClient> {
     let config = GlobalConfig::instance();
+    let local_node_id = config.query.node_id.clone();
     let keep_alive_config = build_keep_alive_config(keep_alive);
     let task = async move {
-        match config.tls_query_cli_enabled() {
-            true => Ok(FlightClient::new(FlightServiceClient::new(
+        let channel = match config.tls_query_cli_enabled() {
+            true => {
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     Some(config.query.to_grpc_tls_config()),
                     keep_alive_config,
                 )
-                .await?,
-            ))),
-            false => Ok(FlightClient::new(FlightServiceClient::new(
+                .await
+            }
+            false => {
                 ConnectionFactory::create_rpc_channel(
                     address.to_owned(),
                     None,
                     None,
                     keep_alive_config,
                 )
-                .await?,
-            ))),
+                .await
+            }
         }
+        .map_err(|error| {
+            add_flight_error_context(
+                ErrorCode::from(error),
+                FlightOperation::Connect,
+                &local_node_id,
+                &remote_node_id,
+            )
+        })?;
+
+        Ok(FlightClient::new(
+            FlightServiceClient::new(channel),
+            local_node_id,
+            remote_node_id,
+        ))
     };
     if use_current_rt {
         task.await
@@ -206,6 +227,36 @@ impl DataExchangeManager {
             .collect()
     }
 
+    pub fn get_queries_top_memory_plan_nodes(
+        &self,
+        limit: usize,
+    ) -> Vec<(String, Vec<PlanNodeMemoryUsage>)> {
+        let mut executors = Vec::new();
+        {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            for (query_id, query_coordinator) in queries_coordinator.iter() {
+                if let Some(info) = &query_coordinator.info {
+                    if let Some(executor) = info.query_executor.clone() {
+                        executors.push((query_id.clone(), executor));
+                    }
+                }
+            }
+        }
+
+        executors
+            .into_iter()
+            .filter_map(|(query_id, executor)| {
+                let plan_nodes = executor.get_inner().top_memory_plan_nodes(limit);
+                if plan_nodes.is_empty() {
+                    None
+                } else {
+                    Some((query_id, plan_nodes))
+                }
+            })
+            .collect()
+    }
+
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -272,14 +323,19 @@ impl DataExchangeManager {
 
                     let query_id = env.query_id.clone();
                     let address = source.flight_address.clone();
+                    let source_id = source.id.clone();
 
                     let keep_alive_params = keep_alive;
                     match edge {
                         Edge::Fragment(channel) => {
                             flight_exchanges.push(Box::pin(async move {
-                                let mut flight_client =
-                                    Self::create_client(&address, with_cur_rt, keep_alive_params)
-                                        .await?;
+                                let mut flight_client = Self::create_client(
+                                    &source_id,
+                                    &address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Fragment {
                                     channel: channel.clone(),
                                     exchange: flight_client.do_get(&query_id, &channel).await?,
@@ -288,11 +344,15 @@ impl DataExchangeManager {
                         }
                         Edge::Statistics => {
                             flight_exchanges.push(Box::pin(async move {
-                                let mut flight_client =
-                                    Self::create_client(&address, with_cur_rt, keep_alive_params)
-                                        .await?;
+                                let mut flight_client = Self::create_client(
+                                    &source_id,
+                                    &address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
                                 Ok::<QueryExchange, ErrorCode>(QueryExchange::Statistics {
-                                    source: source.id.clone(),
+                                    source: source_id,
                                     exchange: flight_client
                                         .request_server_exchange(&query_id, &target.id)
                                         .await?,
@@ -321,6 +381,7 @@ impl DataExchangeManager {
                     } = edge
                     {
                         let target_id = target.id.clone();
+                        let local_node_id = config.query.node_id.clone();
                         let query_id = env.query_id.clone();
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
@@ -332,9 +393,13 @@ impl DataExchangeManager {
 
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
-                                let mut flight_client =
-                                    create_flight_client(address, with_cur_rt, keep_alive_params)
-                                        .await?;
+                                let mut flight_client = create_flight_client(
+                                    target_id.clone(),
+                                    address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                )
+                                .await?;
 
                                 let (send_tx, send_rx) = async_channel::bounded(1);
                                 let response_stream = flight_client
@@ -343,23 +408,19 @@ impl DataExchangeManager {
                                         num_threads,
                                         exchange_id: exchange_id.clone(),
                                     })
-                                    .await
-                                    .map_err(|e| {
-                                        ErrorCode::Internal(format!(
-                                            "PingPong connect failed: {}",
-                                            e
-                                        ))
-                                    })?;
+                                    .await?;
                                 Ok::<_, ErrorCode>((send_tx, response_stream))
                             }?;
 
                             Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
-                                target_id,
+                                target_id: target_id.clone(),
                                 exchange_id,
                                 exchange: PingPongExchange::from_parts(
                                     num_threads,
                                     send_tx,
                                     response_stream,
+                                    local_node_id,
+                                    target_id.clone(),
                                 ),
                             })
                         }));
@@ -496,34 +557,51 @@ impl DataExchangeManager {
 
     #[async_backtrace::framed]
     pub async fn create_client(
+        remote_node_id: &str,
         address: &str,
         use_current_rt: bool,
         keep_alive: FlightKeepAliveParams,
     ) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
+        let local_node_id = config.query.node_id.clone();
         let address = address.to_string();
+        let remote_node_id = remote_node_id.to_string();
         let keep_alive_config = build_keep_alive_config(keep_alive);
         let task = async move {
-            match config.tls_query_cli_enabled() {
-                true => Ok(FlightClient::new(FlightServiceClient::new(
+            let channel = match config.tls_query_cli_enabled() {
+                true => {
                     ConnectionFactory::create_rpc_channel(
                         address.to_owned(),
                         None,
                         Some(config.query.to_grpc_tls_config()),
                         keep_alive_config,
                     )
-                    .await?,
-                ))),
-                false => Ok(FlightClient::new(FlightServiceClient::new(
+                    .await
+                }
+                false => {
                     ConnectionFactory::create_rpc_channel(
                         address.to_owned(),
                         None,
                         None,
                         keep_alive_config,
                     )
-                    .await?,
-                ))),
+                    .await
+                }
             }
+            .map_err(|error| {
+                add_flight_error_context(
+                    ErrorCode::from(error),
+                    FlightOperation::Connect,
+                    &local_node_id,
+                    &remote_node_id,
+                )
+            })?;
+
+            Ok(FlightClient::new(
+                FlightServiceClient::new(channel),
+                local_node_id,
+                remote_node_id,
+            ))
         };
         if use_current_rt {
             task.await
@@ -576,7 +654,6 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        // TODO: When the query is not executed for a long time after submission, we need to remove it
         match queries_coordinator.get_mut(&fragments.query_id) {
             None => Err(ErrorCode::Internal(format!(
                 "Query {} not found in cluster.",
@@ -674,6 +751,28 @@ impl DataExchangeManager {
         }
     }
 
+    /// Return the inbound channels for a ping-pong exchange, creating them when
+    /// the exchange has only local edges and therefore no do_exchange request.
+    pub fn get_or_create_exchange_channel_set(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => {
+                coordinator.get_or_create_inbound_channel_set(channel_id, num_threads)
+            }
+        }
+    }
+
     /// Take the PingPongExchanges for a given query and channel.
     ///
     /// Returns the exchanges that were created during init_query_env.
@@ -709,7 +808,16 @@ impl DataExchangeManager {
 
     #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
+        let lock_start = Instant::now();
         let queries_coordinator_guard = self.queries_coordinator.lock();
+        let lock_wait = lock_start.elapsed();
+        if lock_wait > Duration::from_secs(1) {
+            warn!(
+                "Waited {:?} to acquire queries_coordinator lock in on_finished_query, query_id={}",
+                lock_wait, query_id
+            );
+        }
+
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
@@ -1044,11 +1152,7 @@ impl QueryCoordinator {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        let channel_set = self
-            .inbound_channel_sets
-            .entry(channel_id.to_string())
-            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
-            .clone();
+        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
@@ -1057,6 +1161,27 @@ impl QueryCoordinator {
             &channel_set,
             max_bytes_per_connection,
         ))
+    }
+
+    fn get_or_create_inbound_channel_set(
+        &mut self,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let channel_set = self
+            .inbound_channel_sets
+            .entry(channel_id.to_string())
+            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
+            .clone();
+        if channel_set.channels.len() != num_threads {
+            return Err(ErrorCode::Internal(format!(
+                "NetworkInboundChannelSet {} has {} channels, expected {}",
+                channel_id,
+                channel_set.channels.len(),
+                num_threads
+            )));
+        }
+        Ok(channel_set)
     }
 
     pub fn prepare_pipeline(&mut self, fragments: &QueryFragments) -> Result<()> {
@@ -1259,15 +1384,21 @@ impl QueryCoordinator {
         } else {
             Span::noop()
         };
-        GlobalIORuntime::instance().spawn(
+        GlobalIORuntime::instance().spawn_named(
             async move {
                 let error = executor.execute().await.err();
-                statistics_sender.shutdown(error.clone());
-                query_ctx
-                    .get_exchange_manager()
-                    .on_finished_query(&query_id, error);
+                statistics_sender.shutdown(error.clone()).await;
+                let exchange_manager = query_ctx.get_exchange_manager();
+                if let Err(cause) = spawn_blocking(move || {
+                    exchange_manager.on_finished_query(&query_id, error);
+                })
+                .await
+                {
+                    warn!("on_finished_query cleanup task failed: {:?}", cause);
+                }
             }
             .in_span(span),
+            "Distributed-Executor",
         );
 
         Ok(())

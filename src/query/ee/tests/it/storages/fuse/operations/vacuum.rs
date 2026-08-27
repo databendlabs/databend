@@ -20,7 +20,6 @@ use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::get_u64_value;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::send_txn;
 use databend_common_meta_api::txn_core_util::txn_replace_exact;
@@ -30,12 +29,16 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
@@ -224,7 +227,9 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
 
 mod test_accessor {
     use std::future::Future;
+    use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
     use opendal::raw::MaybeSend;
@@ -379,6 +384,89 @@ mod test_accessor {
                     VecLister(vec![])
                 },
             ))
+        }
+    }
+
+    // Accessor that records batch-delete behaviour, used to verify how
+    // `storage_delete_batch_size` interacts with the backend's `delete_max_size`.
+    //
+    // - `chunk_count` counts calls to `Access::delete()`, i.e. the number of outer
+    //   chunks `remove_file_in_batch` splits into (each becomes one `delete_files`
+    //   future). This reveals whether cross-chunk parallelism is preserved.
+    // - `flush_sizes` records the key count of each opendal flush.
+    #[derive(Debug)]
+    pub(crate) struct RecordingAccessor {
+        // `None` models a backend that advertises no batch-delete capability (like `fs`).
+        delete_max_size: Option<usize>,
+        chunk_count: Arc<AtomicUsize>,
+        flush_sizes: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl RecordingAccessor {
+        pub(crate) fn new(delete_max_size: usize) -> Self {
+            Self::with_capability(Some(delete_max_size))
+        }
+
+        pub(crate) fn with_capability(delete_max_size: Option<usize>) -> Self {
+            Self {
+                delete_max_size,
+                chunk_count: Arc::new(AtomicUsize::new(0)),
+                flush_sizes: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        pub(crate) fn chunk_count(&self) -> usize {
+            self.chunk_count.load(Ordering::Acquire)
+        }
+
+        pub(crate) fn flush_sizes(&self) -> Arc<Mutex<Vec<usize>>> {
+            self.flush_sizes.clone()
+        }
+    }
+
+    pub struct RecordingDeleter {
+        size: usize,
+        flush_sizes: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl oio::Delete for RecordingDeleter {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+            self.size += 1;
+            Ok(())
+        }
+
+        async fn flush(&mut self) -> opendal::Result<usize> {
+            let n = self.size;
+            if n > 0 {
+                self.flush_sizes.lock().unwrap().push(n);
+            }
+            self.size = 0;
+            Ok(n)
+        }
+    }
+
+    impl Access for RecordingAccessor {
+        type Reader = ();
+        type Writer = ();
+        type Lister = ();
+        type Deleter = RecordingDeleter;
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                delete: true,
+                delete_max_size: self.delete_max_size,
+                ..Default::default()
+            });
+            info.into()
+        }
+
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            self.chunk_count.fetch_add(1, Ordering::AcqRel);
+            Ok((RpDelete::default(), RecordingDeleter {
+                size: 0,
+                flush_sizes: self.flush_sizes.clone(),
+            }))
         }
     }
 }
@@ -551,6 +639,118 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> anyhow::Result<()
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_in_batch_respects_delete_batch_size() -> anyhow::Result<()> {
+    // The batch size must come from `storage_delete_batch_size`, not from
+    // `max_threads` (the old `locations.len() / max_threads` behaviour). The
+    // setting is chosen below the backend delete limit so it, and not the
+    // backend cap, is the binding constraint.
+    let recording = Arc::new(test_accessor::RecordingAccessor::new(1000));
+    let flush_sizes = recording.flush_sizes();
+    let operator = OperatorBuilder::new(recording.clone()).finish();
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    // With the old formula this many threads would shrink the batch to
+    // 500 / 32 ~= 15; the setting must override that.
+    ctx.get_settings().set_max_threads(32)?;
+    ctx.get_settings()
+        .set_setting("storage_delete_batch_size".to_string(), "200".to_string())?;
+
+    let file_util = Files::create(ctx, operator);
+
+    // 500 files with batch size 200 -> chunks of [200, 200, 100].
+    let files: Vec<String> = (0..500).map(|i| format!("f{i}")).collect();
+    file_util.remove_file_in_batch(&files).await?;
+
+    let mut sizes = flush_sizes.lock().unwrap().clone();
+    sizes.sort_unstable();
+    assert_eq!(
+        sizes,
+        vec![100, 200, 200],
+        "expected batches of the configured size regardless of max_threads, got {sizes:?}"
+    );
+    // 3 outer chunks -> parallelism preserved.
+    assert_eq!(recording.chunk_count(), 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_in_batch_clamps_to_backend_delete_limit() -> anyhow::Result<()> {
+    // For backends whose batch-delete capability is below `storage_delete_batch_size`
+    // (e.g. Azure=256, GCS=100), the outer chunk size must be clamped to the backend
+    // limit. Otherwise opendal would flush backend-sized sub-batches serially inside a
+    // single delete_files future, bypassing execute_futures_in_parallel and losing
+    // cross-chunk concurrency.
+    let recording = Arc::new(test_accessor::RecordingAccessor::new(100));
+    let flush_sizes = recording.flush_sizes();
+    let operator = OperatorBuilder::new(recording.clone()).finish();
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    ctx.get_settings().set_max_threads(32)?;
+    // Request 1000, but the backend only supports 100 per request.
+    ctx.get_settings()
+        .set_setting("storage_delete_batch_size".to_string(), "1000".to_string())?;
+
+    let file_util = Files::create(ctx, operator);
+
+    // 250 files: clamped to 100 -> chunks of [100, 100, 50], i.e. 3 outer chunks
+    // that can run in parallel, instead of one 250-file future flushing 3 serial batches.
+    let files: Vec<String> = (0..250).map(|i| format!("f{i}")).collect();
+    file_util.remove_file_in_batch(&files).await?;
+
+    let mut sizes = flush_sizes.lock().unwrap().clone();
+    sizes.sort_unstable();
+    assert_eq!(
+        sizes,
+        vec![50, 100, 100],
+        "expected batches clamped to backend delete_max_size, got {sizes:?}"
+    );
+    // 3 outer chunks -> cross-chunk parallelism preserved for small-limit backends.
+    assert_eq!(recording.chunk_count(), 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_in_batch_no_batch_capability() -> anyhow::Result<()> {
+    // A backend advertising no batch-delete capability (`delete_max_size` unset, like `fs`)
+    // deletes one key per request. The chunk size must fall back to 1 so files are split into
+    // single-key tasks that run at `permit` concurrency, instead of collapsing into a single
+    // delete_files future that opendal would then flush one key at a time serially.
+    let recording = Arc::new(test_accessor::RecordingAccessor::with_capability(None));
+    let flush_sizes = recording.flush_sizes();
+    let operator = OperatorBuilder::new(recording.clone()).finish();
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    ctx.get_settings().set_max_threads(32)?;
+    ctx.get_settings()
+        .set_setting("storage_delete_batch_size".to_string(), "1000".to_string())?;
+
+    let file_util = Files::create(ctx, operator);
+
+    // 5 files on a no-batch backend -> batch size 1 -> 5 single-key chunks, not one future.
+    let files: Vec<String> = (0..5).map(|i| format!("f{i}")).collect();
+    file_util.remove_file_in_batch(&files).await?;
+
+    let sizes = flush_sizes.lock().unwrap().clone();
+    assert_eq!(
+        sizes,
+        vec![1, 1, 1, 1, 1],
+        "expected single-key batches on a no-batch backend, got {sizes:?}"
+    );
+    // 5 outer chunks -> each key is an independent task eligible for parallel execution.
+    assert_eq!(recording.chunk_count(), 5);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
@@ -647,6 +847,86 @@ async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_database_cleans_materialized_view() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let endpoints = meta.inner().endpoints.clone();
+
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = endpoints;
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db_name = "test_vacuum_dropped_mv";
+    let source_name = "source";
+    let mv_name = "mv";
+    fixture
+        .execute_command(&format!("create database {db_name}"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "create table {db_name}.{source_name} change_tracking = true as \
+             select number from numbers(3)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "create materialized view {db_name}.{mv_name} as \
+             select number from {db_name}.{source_name} where 1 = 1"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let mv_table = catalog.get_table(&tenant, db_name, mv_name).await?;
+    let mv_table_id = mv_table.get_id();
+    let source_table_id = mv_table
+        .get_table_info()
+        .meta
+        .materialized_view_source_table_id()?;
+    let definition_ident = MVDefinitionIdent::new(&tenant, mv_table_id);
+    let source_index_ident =
+        SourceTableMVIdent::new_generic(&tenant, SourceTableMV::new(source_table_id, mv_table_id));
+
+    assert!(meta.get_pb(&definition_ident).await?.is_some());
+    assert!(meta.get_pb(&source_index_ident).await?.is_some());
+
+    let fuse_table = FuseTable::try_from_table(mv_table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    let storage_prefix = format!(
+        "{}/",
+        FuseTable::parse_storage_prefix_from_table_info(mv_table.get_table_info())?
+    );
+    // Phase 1 creates an empty MV. Simulate data written by maintenance so
+    // vacuum still has physical MV data to remove.
+    operator
+        .write(&format!("{}vacuum-test-data", storage_prefix), vec![1, 2])
+        .await?;
+
+    fixture
+        .execute_command(&format!("drop database {db_name}"))
+        .await?;
+
+    fixture.execute_command("vacuum drop table").await?;
+
+    assert!(meta.get_pb(&definition_ident).await?.is_none());
+    assert!(meta.get_pb(&source_index_ident).await?.is_none());
+    assert!(
+        operator
+            .list_with(&storage_prefix)
+            .recursive(true)
+            .await?
+            .is_empty(),
+        "vacuum must remove materialized view physical data from a dropped database"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
@@ -704,7 +984,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
         table_name: tbl_name.to_owned(),
     };
 
-    let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
+    let (seq, _) = meta.get_pb_seq_and_value(&db_id_table_name).await?;
     assert!(seq > 0);
 
     // 5. Drop test database
@@ -727,7 +1007,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
     assert!(v.is_none());
 
     // 8. Check that DbIdTableName mapping is cleaned up
-    let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
+    let (seq, _) = meta.get_pb_seq_and_value(&db_id_table_name).await?;
     assert_eq!(seq, 0);
 
     Ok(())

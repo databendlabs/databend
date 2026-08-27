@@ -88,6 +88,7 @@ impl CopyIntoTableStmt {
             CopyIntoTableOption::ColumnMatchMode(v) => {
                 self.options.column_match_mode = Some(ColumnMatchMode::from_str(&v)?)
             }
+            CopyIntoTableOption::SchemaEvolution(v) => self.options.schema_evolution = Some(v),
         }
         Ok(())
     }
@@ -146,11 +147,21 @@ pub struct CopyIntoTableOptions {
     pub disable_variant_check: bool,
     pub return_failed_only: bool,
     pub column_match_mode: Option<ColumnMatchMode>,
+    pub schema_evolution: Option<CopySchemaEvolutionOptions>,
 
     // not used for now
     pub size_limit: usize,
     pub split_size: usize,
     pub validation_mode: String,
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, Default, PartialEq, Drive, DriveMut, Eq,
+)]
+pub struct CopySchemaEvolutionOptions {
+    pub sample_files: Option<usize>,
+    pub sample_records_per_file: Option<usize>,
+    pub sample_total_records: Option<usize>,
 }
 
 impl CopyIntoTableOptions {
@@ -238,7 +249,29 @@ impl Display for CopyIntoTableOptions {
         if let Some(mode) = &self.column_match_mode {
             write!(f, " COLUMN_MATCH_MODE = {}", mode)?;
         }
+        if let Some(schema_evolution) = &self.schema_evolution {
+            write!(f, " SCHEMA_EVOLUTION = ({schema_evolution})")?;
+        }
         Ok(())
+    }
+}
+
+impl Display for CopySchemaEvolutionOptions {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let mut opts = BTreeMap::new();
+        if let Some(sample_files) = self.sample_files {
+            opts.insert("sample_files", sample_files.to_string());
+        }
+        if let Some(sample_records_per_file) = self.sample_records_per_file {
+            opts.insert(
+                "sample_records_per_file",
+                sample_records_per_file.to_string(),
+            );
+        }
+        if let Some(sample_total_records) = self.sample_total_records {
+            opts.insert("sample_total_records", sample_total_records.to_string());
+        }
+        write_comma_separated_map(f, &opts)
     }
 }
 
@@ -448,7 +481,7 @@ impl Connection {
     pub fn mask(&self) -> Self {
         let mut conns = BTreeMap::new();
         for (k, v) in &self.conns {
-            conns.insert(k.to_string(), mask_string(v, 3));
+            conns.insert(k.to_string(), mask_string(v));
         }
         Self {
             visited_keys: self.visited_keys.clone(),
@@ -497,14 +530,16 @@ impl Display for Connection {
     }
 }
 
-/// Mask a string by "******", but keep `unmask_len` of suffix.
-fn mask_string(s: &str, unmask_len: usize) -> String {
-    if s.len() <= unmask_len {
-        s.to_string()
+/// Mask a string by showing first 2 and last 2 characters.
+/// For values with 4 or fewer characters, fully mask.
+fn mask_string(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= 4 {
+        "***".to_string()
     } else {
-        let mut ret = "******".to_string();
-        ret.push_str(&s[(s.len() - unmask_len)..]);
-        ret
+        let head: String = chars[..2].iter().collect();
+        let tail: String = chars[chars.len() - 2..].iter().collect();
+        format!("{}***{}", head, tail)
     }
 }
 
@@ -677,6 +712,7 @@ pub enum CopyIntoTableOption {
     ReturnFailedOnly(bool),
     OnError(String),
     ColumnMatchMode(String),
+    SchemaEvolution(CopySchemaEvolutionOptions),
 }
 
 pub enum CopyIntoLocationOption {

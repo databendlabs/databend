@@ -23,9 +23,11 @@ use crate::plans::Limit;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Sort;
+use crate::plans::TopN;
 
 pub struct SortAndLimitPushDownOptimizer {
     sort_matcher: Matcher,
+    topn_matcher: Matcher,
     limit_matcher: Matcher,
 }
 
@@ -33,6 +35,7 @@ impl SortAndLimitPushDownOptimizer {
     pub fn create() -> Self {
         Self {
             sort_matcher: Self::sort_matcher(),
+            topn_matcher: Self::topn_matcher(),
             limit_matcher: Self::limit_matcher(),
         }
     }
@@ -87,6 +90,32 @@ impl SortAndLimitPushDownOptimizer {
         }
     }
 
+    /// TopN fuses `Limit + Sort`; split it into a final stage above the
+    /// exchange and a partial stage below it.
+    fn topn_matcher() -> Matcher {
+        // Input:
+        //   TopN
+        //    \
+        //     Exchange
+        //      \
+        //       *
+        // Output:
+        //   TopN (after_exchange = true)
+        //    \
+        //     Exchange
+        //      \
+        //       TopN (after_exchange = false)
+        //        \
+        //         *
+        Matcher::MatchOp {
+            op_type: RelOp::TopN,
+            children: vec![Matcher::MatchOp {
+                op_type: RelOp::Exchange,
+                children: vec![Matcher::Leaf],
+            }],
+        }
+    }
+
     #[recursive::recursive]
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut replaced_children = Vec::with_capacity(s_expr.arity());
@@ -96,6 +125,7 @@ impl SortAndLimitPushDownOptimizer {
         }
         let new_sexpr = s_expr.replace_children(replaced_children);
         let apply_topn_res = self.apply_sort(&new_sexpr)?;
+        let apply_topn_res = self.apply_topn(&apply_topn_res)?;
         self.apply_limit(&apply_topn_res)
     }
 
@@ -136,6 +166,49 @@ impl SortAndLimitPushDownOptimizer {
                 Sort {
                     after_exchange: Some(true),
                     ..sort.clone()
+                }
+                .into(),
+            ),
+            Arc::new(new_exchange),
+        ))
+    }
+
+    fn apply_topn(&self, s_expr: &SExpr) -> Result<SExpr> {
+        if !self.topn_matcher.matches(s_expr) {
+            return Ok(s_expr.clone());
+        }
+
+        let exchange_sexpr = s_expr.unary_child();
+
+        match exchange_sexpr.plan() {
+            RelOperator::Exchange(exchange) => match exchange {
+                Exchange::NodeToNodeHash(_) | Exchange::GlobalHash(_) => return Ok(s_expr.clone()),
+                Exchange::Merge | Exchange::MergeSort => {}
+                Exchange::Broadcast => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+
+        let top_n = s_expr.plan.as_top_n().unwrap();
+
+        let new_exchange = SExpr::create_unary(
+            Arc::new(Exchange::Merge.into()),
+            SExpr::create_unary(
+                Arc::new(
+                    TopN {
+                        after_exchange: Some(false),
+                        ..top_n.clone()
+                    }
+                    .into(),
+                ),
+                exchange_sexpr.unary_child_arc(),
+            ),
+        );
+        Ok(SExpr::create_unary(
+            Arc::new(
+                TopN {
+                    after_exchange: Some(true),
+                    ..top_n.clone()
                 }
                 .into(),
             ),

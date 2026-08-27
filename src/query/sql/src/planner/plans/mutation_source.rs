@@ -105,6 +105,8 @@ impl Operator for MutationSource {
             statistics: OpStatistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }
@@ -135,10 +137,11 @@ impl MutationSource {
     }
 
     pub fn refresh_read_partition_columns(&mut self) {
-        self.read_partition_columns = self
-            .all_predicates()
-            .flat_map(|predicate| predicate.used_columns())
-            .collect();
+        let mut read_partition_columns = ColumnSet::new();
+        for predicate in self.all_predicates() {
+            predicate.collect_used_columns(&mut read_partition_columns);
+        }
+        self.read_partition_columns = read_partition_columns;
     }
 
     /// Return all predicates (secure + user) as an owned Vec.

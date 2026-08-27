@@ -16,19 +16,20 @@ use std::io;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_meta::raft_store::config::RaftConfig;
-use databend_meta::raft_store::key_spaces::RaftStoreEntry;
-use databend_meta::raft_store::key_spaces::SMEntry;
-use databend_meta::raft_store::ondisk::DataVersion;
-use databend_meta::raft_store::ondisk::Header;
-use databend_meta::raft_store::ondisk::OnDisk;
-use databend_meta::raft_store::raft_log_v004;
-use databend_meta::raft_store::raft_log_v004::RaftLogV004;
-use databend_meta::raft_store::sm_v003::SnapshotStoreV004;
-use databend_meta::raft_store::sm_v003::WriteEntry;
-use databend_meta::raft_store::sm_v003::adapter::SMEntryV002ToV004;
-use databend_meta::raft_store::state_machine::MetaSnapshotId;
+use databend_meta::log_store::RaftLog;
+use databend_meta::raft_config::config::RaftConfig;
+use databend_meta::raft_config::data_dir;
+use databend_meta::raft_config::data_version::DataVersion;
+use databend_meta::raft_config::header::Header;
 use databend_meta::runtime_api::SpawnApi;
+use databend_meta::snapshot_store::MetaSnapshotId;
+use databend_meta::snapshot_store::SnapshotStore;
+use databend_meta::snapshot_store::WriteEntry;
+use databend_meta::store_compat::ondisk::OnDisk;
+use databend_meta::store_compat::sled_compat::adapter::SMEntryV002ToV004;
+use databend_meta::store_compat::sled_compat::key_spaces::RaftStoreEntry;
+use databend_meta::store_compat::sled_compat::key_spaces::SMEntry;
+use databend_meta::store_compat::sled_compat::log_importer::Importer;
 use databend_meta::types::raft_types::LogId;
 use databend_meta::types::sys_data::SysData;
 
@@ -43,19 +44,19 @@ pub async fn import_v004<SP: SpawnApi>(
 ) -> anyhow::Result<Option<LogId>> {
     let data_version = DataVersion::V004;
 
-    OnDisk::ensure_dirs(&raft_config.raft_dir)?;
+    data_dir::ensure_dirs(&raft_config.raft_dir)?;
 
     let mut n = 0;
 
     let mut raft_log_importer = {
         let raft_log_config = raft_config.clone().to_raft_log_config();
         let raft_log_config = Arc::new(raft_log_config);
-        let raft_log = RaftLogV004::open(raft_log_config)?;
+        let raft_log = RaftLog::open(raft_log_config)?;
 
-        raft_log_v004::Importer::new(raft_log)
+        Importer::new(raft_log)
     };
 
-    let snapshot_store: SnapshotStoreV004<SP> = SnapshotStoreV004::new(raft_config.clone());
+    let snapshot_store: SnapshotStore<SP> = SnapshotStore::new(raft_config.clone());
     let writer = snapshot_store.new_writer()?;
     let (tx, join_handle) = writer.spawn_writer_thread("import_v004");
 

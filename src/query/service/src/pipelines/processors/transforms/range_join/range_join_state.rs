@@ -44,6 +44,7 @@ use crate::sessions::TableContextSettings;
 
 pub struct RangeJoinState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) function_context: FunctionContext,
     // The origin data for left/right table
     pub(crate) left_table: RwLock<Vec<DataBlock>>,
     pub(crate) right_table: RwLock<Vec<DataBlock>>,
@@ -76,7 +77,11 @@ pub struct RangeJoinState {
 }
 
 impl RangeJoinState {
-    pub fn new(ctx: Arc<QueryContext>, range_join: &RangeJoin) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        range_join: &RangeJoin,
+        function_context: FunctionContext,
+    ) -> Self {
         let ie_join_state = if matches!(range_join.range_join_type, RangeJoinType::IEJoin) {
             Some(IEJoinState::new(range_join))
         } else {
@@ -84,6 +89,7 @@ impl RangeJoinState {
         };
         Self {
             ctx,
+            function_context,
             left_table: RwLock::new(vec![]),
             right_table: RwLock::new(vec![]),
             right_sorted_blocks: Default::default(),
@@ -252,8 +258,8 @@ impl RangeJoinState {
             let mut columns = Vec::with_capacity(3);
             // Append join keys columns
             for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(left_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator =
+                    Evaluator::new(left_block, &self.function_context, &BUILTIN_FUNCTIONS);
                 let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
@@ -282,8 +288,8 @@ impl RangeJoinState {
             let mut columns = Vec::with_capacity(3);
             // Append join keys columns
             for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(right_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator =
+                    Evaluator::new(right_block, &self.function_context, &BUILTIN_FUNCTIONS);
                 let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
@@ -382,6 +388,7 @@ mod tests {
 
         let state = RangeJoinState {
             ctx,
+            function_context: FunctionContext::default(),
             left_table: RwLock::new(vec![left_block]),
             right_table: RwLock::new(vec![]),
             right_sorted_blocks: Default::default(),

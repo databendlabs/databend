@@ -22,7 +22,7 @@ insert into t1 values(4,4)
 query TTT
 select * exclude(timestamp) from clustering_information('db_09_0016','t1')
 ----
-(a + 1) linear {"average_depth":2.0,"average_overlaps":1.3333,"block_depth_histogram":{"00002":3},"constant_block_count":1,"total_block_count":3}
+(a + 1) linear {"average_depth":2.0,"average_overlaps":1.3333,"block_depth_histogram":{"00002":3},"constant_block_count":1,"p95_depth":2,"p99_depth":2,"total_block_count":3}
 
 statement ok
 ALTER TABLE t1 RECLUSTER FINAL WHERE a != 4
@@ -30,7 +30,7 @@ ALTER TABLE t1 RECLUSTER FINAL WHERE a != 4
 query TTT
 select * exclude(timestamp) from clustering_information('db_09_0016','t1')
 ----
-(a + 1) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":1,"total_block_count":2}
+(a + 1) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":1,"p95_depth":2,"p99_depth":2,"total_block_count":2}
 
 query II
 select * from t1 order by a
@@ -67,7 +67,7 @@ insert into t3 values(1,'a'),(2,null)
 query TTT
 select * exclude(timestamp) from clustering_information('db_09_0016','t3')
 ----
-(b) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":0,"total_block_count":2}
+(b) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":0,"p95_depth":2,"p99_depth":2,"total_block_count":2}
 
 statement ok
 insert into t3 values(3,'a'),(4,'c')
@@ -93,7 +93,7 @@ insert into t3 values(3,'123456782'),(4,'123456783')
 query TTT
 select * exclude(timestamp) from clustering_information('db_09_0016','t3')
 ----
-(b) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":2,"total_block_count":2}
+(b) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":2,"p95_depth":2,"p99_depth":2,"total_block_count":2}
 
 # Fix pr#13332
 statement ok

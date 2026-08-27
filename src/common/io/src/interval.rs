@@ -17,6 +17,8 @@ use std::fmt::Formatter;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use jiff::Span;
+use jiff::fmt::temporal::SpanParser;
 
 pub trait BufferReadIntervalExt {
     fn read_interval_text(&mut self) -> Result<Interval>;
@@ -156,16 +158,23 @@ impl Interval {
         if len == 0 {
             return Err(ErrorCode::BadArguments("Empty string".to_string()));
         }
-        match str[pos] {
-            b'@' => {
-                pos += 1;
-            }
-            b'P' | b'p' => {
-                return Err(ErrorCode::BadArguments(
-                    "Posix intervals not supported yet".to_string(),
-                ));
+        if str[pos] == b'@' {
+            pos += 1;
+        }
+
+        let mut iso_pos = pos;
+        while iso_pos < len && matches!(str[iso_pos], b' ' | b'\t' | b'\n') {
+            iso_pos += 1;
+        }
+        let iso_start = iso_pos;
+        match str.get(iso_pos) {
+            Some(b'-') | Some(b'+') => {
+                iso_pos += 1;
             }
             _ => {}
+        }
+        if iso_pos < len && matches!(str[iso_pos], b'P' | b'p') {
+            return parse_iso8601_duration(&str[iso_start..]);
         }
 
         while pos < len {
@@ -339,6 +348,97 @@ fn parse_time_part_with_micros(bytes: &[u8]) -> Result<(i64, i64, usize)> {
     }
 
     Ok((number, fraction, pos))
+}
+
+fn parse_iso8601_duration(bytes: &[u8]) -> Result<Interval> {
+    SpanParser::new()
+        .parse_span(bytes)
+        .map_err(|e| ErrorCode::BadArguments(format!("Invalid ISO 8601 duration: {}", e)))
+        .and_then(span_to_interval)
+}
+
+fn add_months(result: &mut Interval, months: i64) -> Result<()> {
+    result.months = result
+        .months
+        .checked_add(
+            months
+                .try_into()
+                .map_err(|_| ErrorCode::BadArguments("Overflow".to_string()))?,
+        )
+        .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
+    Ok(())
+}
+
+fn add_days(result: &mut Interval, days: i64) -> Result<()> {
+    result.days = result
+        .days
+        .checked_add(
+            days.try_into()
+                .map_err(|_| ErrorCode::BadArguments("Overflow".to_string()))?,
+        )
+        .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
+    Ok(())
+}
+
+fn add_micros(result: &mut Interval, micros: i64) -> Result<()> {
+    result.micros = result
+        .micros
+        .checked_add(micros)
+        .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
+    Ok(())
+}
+
+fn span_to_interval(span: Span) -> Result<Interval> {
+    let mut result = Interval::default();
+    add_months(
+        &mut result,
+        i64::from(span.get_years())
+            .checked_mul(MONTHS_PER_YEAR as i64)
+            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
+    )?;
+    add_months(&mut result, i64::from(span.get_months()))?;
+    add_days(
+        &mut result,
+        i64::from(span.get_weeks())
+            .checked_mul(DAYS_PER_WEEK as i64)
+            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
+    )?;
+    add_days(&mut result, i64::from(span.get_days()))?;
+    add_micros(
+        &mut result,
+        i64::from(span.get_hours())
+            .checked_mul(MICROS_PER_HOUR)
+            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
+    )?;
+    add_micros(
+        &mut result,
+        span.get_minutes()
+            .checked_mul(MICROS_PER_MINUTE)
+            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
+    )?;
+    add_micros(
+        &mut result,
+        span.get_seconds()
+            .checked_mul(MICROS_PER_SEC)
+            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
+    )?;
+    add_micros(
+        &mut result,
+        span.get_milliseconds()
+            .checked_mul(MICROS_PER_MSEC)
+            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?,
+    )?;
+    add_micros(&mut result, span.get_microseconds())?;
+
+    let nanoseconds = span.get_nanoseconds();
+    if nanoseconds % 1_000 != 0 {
+        return Err(ErrorCode::BadArguments(
+            "ISO 8601 durations with sub-microsecond precision are not supported".to_string(),
+        ));
+    }
+    add_micros(&mut result, nanoseconds / 1_000)?;
+
+    Ok(result)
 }
 
 fn parse_identifier(s: &[u8]) -> (String, usize) {

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_base::runtime::Runtime;
@@ -140,9 +141,12 @@ impl IPhysicalPlan for MutationSource {
                         conflict_resolve_context: ConflictResolveContext::None,
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
+                        logical_updated_rows: 0,
+                        logical_deleted_rows: 0,
                         virtual_schema: None,
                         virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
+                        top_n: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
                     OneBlockSource::create(output, block)
@@ -330,7 +334,8 @@ pub fn create_push_down_filters(
         })?
         .unwrap();
     let expr = cast_expr_to_non_null_boolean(expr)?;
-    let (filter, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+    let (filter, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
+    let filter = filter.into_owned();
     let remote_filter = filter.as_remote_expr();
 
     // prepare the inverse filter expression

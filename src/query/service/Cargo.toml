@@ -26,7 +26,11 @@ storage-stage = [
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
-storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
+storage-hdfs = [
+    "opendal/services-hdfs",
+    "databend-common-storage/storage-hdfs",
+    "databend-common-storages-paimon/storage-hdfs",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -97,6 +101,7 @@ databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
 databend-common-storages-orc = { workspace = true }
+databend-common-storages-paimon = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
@@ -106,13 +111,12 @@ databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
-databend-enterprise-hilbert-clustering = { workspace = true }
+databend-enterprise-materialized-view = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
-databend-enterprise-virtual-column = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
@@ -128,7 +132,6 @@ databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 dyn-clone = { workspace = true }
-either = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }
 flatbuffers = { workspace = true }
@@ -180,13 +183,13 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
-unicase = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
 databend-common-sql-test-support = { workspace = true }
+databend-enterprise-query = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 geo = { workspace = true }
 goldenfile = { workspace = true }
@@ -196,6 +199,7 @@ jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
 p256 = { workspace = true }
+paimon = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }
 reqwest = { workspace = true }

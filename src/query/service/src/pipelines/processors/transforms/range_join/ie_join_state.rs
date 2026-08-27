@@ -40,8 +40,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::sorts::sort_merge;
 
 use crate::physical_plans::RangeJoin;
+use crate::pipelines::processors::transforms::filter_block;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
-use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::sessions::TableContextSettings;
@@ -399,7 +399,7 @@ impl RangeJoinState {
             ));
         }
         for filter in self.other_conditions.iter() {
-            left_result_block = filter_block(left_result_block, filter)?;
+            left_result_block = filter_block(left_result_block, filter, &self.function_context)?;
         }
         if !left_match.is_empty() || !right_match.is_empty() {
             let column = &left_result_block

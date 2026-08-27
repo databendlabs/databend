@@ -1,0 +1,92 @@
+statement ok
+drop database if exists proxy_bloom_pruning_test
+
+statement ok
+create database proxy_bloom_pruning_test
+
+statement ok
+use proxy_bloom_pruning_test
+
+statement ok
+create table spans_default(
+    trace_id string,
+    chat_id string,
+    route string
+) row_per_block=3 block_per_segment=2
+
+statement ok
+create table spans_bloom(
+    trace_id string,
+    chat_id string,
+    route string
+) row_per_block=3 block_per_segment=2
+
+statement ok
+insert into spans_default values
+('trace_0', 'chat_0', 'base0'),
+('trace_1', 'chat_0', 'base0'),
+('trace_2', 'chat_0', 'base0')
+
+statement ok
+insert into spans_default values
+('trace_0', 'chat_1', 'base0'),
+('trace_1', 'chat_1', 'base0'),
+('trace_2', 'chat_1', 'base0')
+
+statement ok
+insert into spans_bloom values
+('trace_0', 'chat_0', 'bloom'),
+('trace_0', 'chat_1', 'bloom'),
+('trace_2', 'chat_0', 'bloom')
+
+statement ok
+insert into spans_bloom values
+('trace_1', 'chat_0', 'bloom'),
+('trace_1', 'chat_1', 'bloom'),
+('trace_2', 'chat_1', 'bloom')
+
+statement ok
+create table spans_proxy(
+    trace_id string,
+    chat_id string,
+    route string
+)
+engine = proxy targets='spans_default,spans_bloom' default='spans_default'
+
+statement ok
+set enable_prune_cache = 0
+
+statement ok
+set enable_distributed_pruning = 0
+
+statement ok
+set proxy_routing_model = 'statistics'
+
+statement ok
+set enable_proxy_bloom_pruning = 0
+
+query I
+select count()
+from spans_proxy
+where trace_id = 'trace_1'
+----
+2
+
+statement ok
+set enable_proxy_bloom_pruning = 1
+
+query TI
+select min(route), count()
+from spans_proxy
+where trace_id = 'trace_1'
+----
+bloom 2
+
+statement ok
+unset enable_proxy_bloom_pruning
+
+statement ok
+use default
+
+statement ok
+drop database proxy_bloom_pruning_test

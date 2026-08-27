@@ -55,7 +55,12 @@ impl AsyncSystemTable for FunctionsTable {
     ) -> Result<DataBlock> {
         let mut scalar_func_names: Vec<String> = BUILTIN_FUNCTIONS.registered_names();
         scalar_func_names.extend(
-            TypeChecker::all_sugar_functions()
+            TypeChecker::<()>::all_special_functions()
+                .iter()
+                .map(|name| name.to_string()),
+        );
+        scalar_func_names.extend(
+            TypeChecker::<()>::all_rewrite_functions()
                 .iter()
                 .map(|name| name.to_string()),
         );

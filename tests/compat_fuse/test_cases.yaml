@@ -1,10 +1,12 @@
 # Fuse table compatibility test matrix.
 #
-# Each entry tests write-then-read across query versions:
+# Each object tests write-then-read across query versions:
 #   writer  — the query version that writes data
 #   reader  — the query version that reads data ("current" = latest build)
 #   meta    — meta-service versions to run in order; used to upgrade on-disk meta data
 #   suite   — sqllogictest sub-directory under tests/compat_fuse/compat-logictest/
+# A top-level array groups complete objects that run in order while sharing the
+# same Meta and Fuse files. Processes still stop between writer/Meta/reader steps.
 #
 # To add a new test case, append an entry to the appropriate section below.
 # To bump a version, edit the version string in place.

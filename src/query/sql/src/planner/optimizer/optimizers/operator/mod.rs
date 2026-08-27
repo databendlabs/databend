@@ -30,4 +30,5 @@ pub use filter::InferFilterOptimizer;
 pub use filter::JoinProperty;
 pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
+pub use join::FinalizeSpatialJoinOptimizer;
 pub use join::SingleToInnerOptimizer;

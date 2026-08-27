@@ -16,15 +16,18 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table::TableExt;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_sql::binder::parse_storage_params_from_uri;
+use databend_common_sql::binder::StageResolver;
 use databend_common_sql::plans::ModifyTableConnectionPlan;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -106,11 +109,12 @@ impl Interpreter for ModifyTableConnectionInterpreter {
             self.plan.new_connection.clone(),
         );
         // NOTE: never use this storage params directly.
-        let updated_sp = parse_storage_params_from_uri(
-            &mut location,
-            Some(self.ctx.as_ref() as _),
-            "when ALTER TABLE CONNECTION",
-        )
+        let updated_sp = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_storage_params_from_uri(&mut location, "when ALTER TABLE CONNECTION")
         .await?;
 
         debug!("storage params used for update: {updated_sp:?}");
@@ -118,11 +122,13 @@ impl Interpreter for ModifyTableConnectionInterpreter {
         debug!("new storage params been updated: {new_sp:?}");
 
         // Check the storage params via init operator.
-        let op = init_operator(&new_sp).map_err(|err| {
-            ErrorCode::InvalidConfig(format!(
-                "Input storage config for stage is invalid: {err:?}"
-            ))
-        })?;
+        let op = init_operator_with_policy_scope(&new_sp, EndpointPolicyScope::External).map_err(
+            |err| {
+                ErrorCode::InvalidConfig(format!(
+                    "Input storage config for stage is invalid: {err:?}"
+                ))
+            },
+        )?;
         check_operator(&op, &new_sp).await?;
 
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;

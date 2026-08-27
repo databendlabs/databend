@@ -275,6 +275,7 @@ impl<T: Walk + ?Sized> Walk for &T {
 impl_noop_walk!(String);
 impl_noop_walk!(crate::span::Span);
 impl_noop_walk!(u64);
+impl_noop_walk!(f64);
 
 impl<T: WalkMut + ?Sized> WalkMut for &mut T {
     fn walk_mut<V: VisitorMut + ?Sized>(

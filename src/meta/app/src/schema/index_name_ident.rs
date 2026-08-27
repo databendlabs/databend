@@ -36,9 +36,7 @@ impl TIdentRaw<IndexName> {
 }
 
 mod kvapi_impl {
-    use databend_meta_client::kvapi;
 
-    use crate::schema::IndexNameIdent;
     use crate::schema::index_id_ident::IndexId;
     use crate::tenant_key::resource::TenantResource;
 
@@ -47,10 +45,6 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_index";
         const HAS_TENANT: bool = true;
         type ValueType = IndexId;
-    }
-
-    impl kvapi::Value for IndexId {
-        type KeyType = IndexNameIdent;
     }
 }
 

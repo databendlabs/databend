@@ -53,8 +53,9 @@ impl AccumulatingTransform for BlockBuilderProcessor {
             .and_then(WholeFileData::downcast_from)
             .unwrap();
         self.state.file_path = data.path.clone();
+        self.state.file_content_key = data.content_key.clone();
+        self.state.file_last_modified = data.last_modified;
         let num_rows = self.state.num_rows;
-        self.state.file_full_path = format!("{}{}", self.ctx.stage_root, data.path);
         self.decoder.read_file(&data.data, &mut self.state)?;
         self.state
             .add_internals_columns_batch(self.state.num_rows - num_rows);

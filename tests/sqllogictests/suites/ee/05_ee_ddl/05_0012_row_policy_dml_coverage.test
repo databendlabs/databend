@@ -16,9 +16,6 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
-set enable_planner_cache = 0;
-
-statement ok
 drop table if exists rap_dml_test;
 
 statement ok

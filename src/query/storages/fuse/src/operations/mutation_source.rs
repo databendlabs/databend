@@ -191,6 +191,7 @@ impl FuseTable {
             self.operator.clone(),
             self.schema_with_stream(),
             &push_down,
+            self.partition_pruning_info(ctx.clone()),
             self.bloom_index_cols(),
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
             spatial_index_columns,
@@ -247,7 +248,6 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (statistics, inner_parts) = self.read_partitions_with_metas(
-            ctx.clone(),
             self.schema_with_stream(),
             None,
             &range_block_metas,

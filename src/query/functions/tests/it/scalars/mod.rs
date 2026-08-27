@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -41,6 +42,7 @@ mod cast;
 mod comparison;
 mod control;
 mod datetime;
+mod deep_expression;
 mod geo;
 // NOTE:(everpcpc) result different on macos
 // TODO: fix this in running on linux
@@ -60,7 +62,7 @@ mod tuple;
 mod variant;
 mod vector;
 
-pub use databend_common_sql_test_support as parser;
+pub use databend_common_expression_test_support as parser;
 
 #[derive(Clone)]
 pub struct TestContext<'a> {
@@ -138,7 +140,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let input_domains = ctx.input_domains();
 
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
-            &expr,
+            Cow::Borrowed(&expr),
             &input_domains,
             &ctx.func_ctx,
             &BUILTIN_FUNCTIONS,
