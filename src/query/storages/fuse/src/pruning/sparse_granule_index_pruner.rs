@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::mem::discriminant;
@@ -431,13 +432,13 @@ impl GranulePredicateEvaluator {
             input_domains.insert(self.key_columns[index].0.clone(), page_domain);
         }
         let (folded, _) = ConstantFolder::fold_with_domain(
-            &self.filter,
+            Cow::Borrowed(&self.filter),
             &input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
         Ok(!matches!(
-            folded,
+            folded.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -553,7 +554,13 @@ fn project_source_domains(
         }
     }
 
-    ConstantFolder::fold_with_domain(key, &input_domains, func_ctx, &BUILTIN_FUNCTIONS).1
+    ConstantFolder::fold_with_domain(
+        Cow::Borrowed(key),
+        &input_domains,
+        func_ctx,
+        &BUILTIN_FUNCTIONS,
+    )
+    .1
 }
 
 fn is_monotonic_key_expr(
@@ -574,9 +581,14 @@ fn is_monotonic_key_expr(
                             domains.insert(name.clone(), domain.clone());
                         }
                     }
-                    ConstantFolder::fold_with_domain(arg, &domains, func_ctx, &BUILTIN_FUNCTIONS)
-                        .1
-                        .unwrap_or_else(|| Domain::full(arg.data_type()))
+                    ConstantFolder::fold_with_domain(
+                        Cow::Borrowed(arg),
+                        &domains,
+                        func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    )
+                    .1
+                    .unwrap_or_else(|| Domain::full(arg.data_type()))
                 })
                 .collect::<Vec<_>>();
             let Some(property) = BUILTIN_FUNCTIONS.get_property(&call.function.signature.name)
@@ -894,16 +906,8 @@ fn constraints_to_domain(constraints: &[RangeConstraint<String>]) -> ConstraintD
         return ConstraintDomain::Empty;
     }
 
-    let Some(lower) = lower.to_datum() else {
-        return ConstraintDomain::Unknown;
-    };
-    let Some(upper) = upper.to_datum() else {
-        return ConstraintDomain::Unknown;
-    };
-    match Domain::from_datum(data_type, lower, upper, false) {
-        Ok(domain) => ConstraintDomain::Domain(domain),
-        Err(_) => ConstraintDomain::Unknown,
-    }
+    let stat = ColumnStatistics::new(lower, upper, 0, 0, None);
+    ConstraintDomain::Domain(statistics_to_domain(vec![&stat], data_type))
 }
 
 fn discrete_successor(value: &Scalar) -> Option<Scalar> {

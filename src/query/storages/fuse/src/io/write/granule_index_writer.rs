@@ -19,6 +19,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_array::Array;
+use arrow_array::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -32,9 +34,12 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_blocks::LeafPageLayout;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::ColumnArrayCache;
 use databend_storages_common_cache::GranuleIndexFileCache;
+use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::RangeReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BytesRange;
@@ -480,33 +485,145 @@ fn granule_mark_ranges(
     (byte_ranges, mark_names)
 }
 
-fn decode_single_column(bytes: Buffer, ty: &DataType, num_rows: usize) -> Result<Column> {
-    let field = TableField::new("c", infer_schema_type(ty)?);
-    let schema = TableSchema::new(vec![field]);
-    let mut chunks: HashMap<ColumnId, DataItem> = HashMap::new();
-    chunks.insert(0, DataItem::RawData(bytes));
-    let batch =
-        column_chunks_to_record_batch(&schema, num_rows, &chunks, &Compression::None, None)?;
-    Column::from_arrow_rs(batch.column(0).clone(), ty)
+type MarkArrayCacheEntry = (TableDataCacheKey, u64);
+type PrefetchedMarkArray = (String, Option<MarkArrayCacheEntry>, Option<ArrayRef>);
+
+/// Prefetched decoded granule mark columns. Cache misses start raw I/O in
+/// [`Self::prefetch`]; [`Self::read`] waits for that I/O and decodes them.
+struct PrefetchedGranuleMarkArrays {
+    marks: Option<PrefetchedGranuleMarks>,
+    columns: Vec<PrefetchedMarkArray>,
+    num_rows: usize,
 }
 
-fn decode_u64_column(bytes: Buffer, num_rows: usize) -> Result<Vec<u64>> {
-    let ty = DataType::Number(NumberDataType::UInt64);
-    let column = decode_single_column(bytes, &ty, num_rows)?;
-    let mut out = Vec::with_capacity(num_rows);
-    for i in 0..num_rows {
-        match column.index(i) {
-            Some(databend_common_expression::ScalarRef::Number(
-                databend_common_expression::types::number::NumberScalar::UInt64(v),
-            )) => out.push(v),
-            other => {
-                return Err(ErrorCode::Internal(format!(
-                    "granule index: expected u64 at {i}, got {other:?}"
-                )));
+impl PrefetchedGranuleMarkArrays {
+    fn prefetch(
+        dal: &Operator,
+        settings: &ReadSettings,
+        layout: &GranuleIndexFileLayout,
+        names: &[String],
+        num_rows: usize,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> Result<Self> {
+        let cache = CacheManager::instance().get_table_data_array_cache();
+        let mut columns = Vec::with_capacity(names.len());
+        let mut misses = Vec::new();
+
+        for name in names {
+            let cache_entry = Self::cache_entry(layout, name);
+            let array = Self::find_cached_array(&cache, &cache_entry, num_rows);
+            if array.is_none() {
+                misses.push(name.clone());
             }
+            columns.push((name.clone(), cache_entry, array));
         }
+
+        let marks = if misses.is_empty() {
+            None
+        } else {
+            PrefetchedGranuleMarks::prefetch_with_stats(dal, settings, layout, &misses, lock_stats)?
+        };
+        Ok(Self {
+            marks,
+            columns,
+            num_rows,
+        })
     }
-    Ok(out)
+
+    fn cache_entry(layout: &GranuleIndexFileLayout, name: &str) -> Option<MarkArrayCacheEntry> {
+        let byte_ranges = layout.columns.get(name)?;
+        if byte_ranges.len() != 1 {
+            return None;
+        }
+        let byte_range = byte_ranges[0];
+        let key = TableDataCacheKey::new(&layout.location.0, 0, byte_range.offset, byte_range.len);
+        Some((key, byte_range.len))
+    }
+
+    fn find_cached_array(
+        cache: &Option<ColumnArrayCache>,
+        cache_entry: &Option<MarkArrayCacheEntry>,
+        num_rows: usize,
+    ) -> Option<ArrayRef> {
+        let cache = cache.as_ref()?;
+        let (key, encoded_len) = cache_entry.as_ref()?;
+        let value = cache.get_sized(key, *encoded_len)?;
+        if value.0.len() != num_rows {
+            return None;
+        }
+        Some(value.0.clone())
+    }
+
+    fn read(self, data_types: &[DataType]) -> Result<Vec<(String, ArrayRef)>> {
+        if self.columns.len() != data_types.len() {
+            return Err(ErrorCode::Internal(format!(
+                "granule index has {} mark columns but {} data types",
+                self.columns.len(),
+                data_types.len()
+            )));
+        }
+        let mut buffers = match self.marks {
+            Some(marks) => marks.read()?,
+            None => HashMap::new(),
+        };
+        let cache = CacheManager::instance().get_table_data_array_cache();
+        let mut result = Vec::with_capacity(self.columns.len());
+
+        for ((name, cache_entry, cached), data_type) in self.columns.into_iter().zip(data_types) {
+            let array = match cached {
+                Some(array) => array,
+                None => {
+                    let bytes = buffers.remove(&name).ok_or_else(|| {
+                        ErrorCode::Internal(format!("granule index missing mark column {name}"))
+                    })?;
+                    let array = Self::decode(bytes, data_type, self.num_rows)?;
+                    if let (Some(cache), Some((key, _))) = (&cache, cache_entry) {
+                        cache.insert(key.into(), (array.clone(), array.get_array_memory_size()));
+                    }
+                    array
+                }
+            };
+            result.push((name, array));
+        }
+        Ok(result)
+    }
+
+    fn read_u64(self) -> Result<HashMap<String, Vec<u64>>> {
+        let data_type = DataType::Number(NumberDataType::UInt64);
+        let data_types = vec![data_type.clone(); self.columns.len()];
+        let num_rows = self.num_rows;
+        let arrays = self.read(&data_types)?;
+        let mut result = HashMap::with_capacity(arrays.len());
+
+        for (name, array) in arrays {
+            let column = Column::from_arrow_rs(array, &data_type)?;
+            let mut values = Vec::with_capacity(num_rows);
+            for index in 0..num_rows {
+                match column.index(index) {
+                    Some(databend_common_expression::ScalarRef::Number(
+                        databend_common_expression::types::number::NumberScalar::UInt64(value),
+                    )) => values.push(value),
+                    other => {
+                        return Err(ErrorCode::Internal(format!(
+                            "granule index: expected u64 at {index}, got {other:?}"
+                        )));
+                    }
+                }
+            }
+            result.insert(name, values);
+        }
+        Ok(result)
+    }
+
+    fn decode(bytes: Buffer, data_type: &DataType, num_rows: usize) -> Result<ArrayRef> {
+        let field = TableField::new("c", infer_schema_type(data_type)?);
+        let schema = TableSchema::new(vec![field]);
+        let mut chunks = HashMap::new();
+        chunks.insert(0, DataItem::RawData(bytes));
+        let batch =
+            column_chunks_to_record_batch(&schema, num_rows, &chunks, &Compression::None, None)?;
+        Ok(batch.column(0).clone())
+    }
 }
 
 /// Marks loaded once for all active granule pruners of a block.
@@ -543,20 +660,15 @@ impl GranulePruningReadContext {
             }
         }
 
-        let raw_marks = match PrefetchedGranuleMarks::prefetch_with_stats(
+        let arrays = PrefetchedGranuleMarkArrays::prefetch(
             dal,
             settings,
             layout,
             &unique_names,
+            num_granules,
             lock_stats,
-        )? {
-            Some(read) => read.read()?,
-            None => HashMap::new(),
-        };
-        let mut marks = HashMap::with_capacity(raw_marks.len());
-        for (name, raw) in raw_marks {
-            marks.insert(name, decode_u64_column(raw, num_granules)?);
-        }
+        )?;
+        let marks = arrays.read_u64()?;
         Ok(Self {
             num_granules,
             marks,
@@ -604,9 +716,7 @@ impl GranuleMins {
 /// Prefetched cluster-key mins for one block. [`Self::read`] awaits the
 /// granule index file request and decodes its columns.
 pub(crate) struct PrefetchedGranuleMins {
-    marks: Option<PrefetchedGranuleMarks>,
-    names: Vec<String>,
-    num_granules: usize,
+    arrays: PrefetchedGranuleMarkArrays,
 }
 
 impl PrefetchedGranuleMins {
@@ -629,39 +739,31 @@ impl PrefetchedGranuleMins {
         num_granules: usize,
         lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
-        let names: Vec<String> = (0..num_keys)
-            .map(|i| format!("{GRANULE_INDEX_MIN_COL_PREFIX}{i}"))
-            .collect();
-        let marks =
-            PrefetchedGranuleMarks::prefetch_with_stats(dal, settings, layout, &names, lock_stats)?;
-        Ok(Self {
-            marks,
-            names,
+        let names = (0..num_keys)
+            .map(|index| format!("{}{}", GRANULE_INDEX_MIN_COL_PREFIX, index))
+            .collect::<Vec<_>>();
+        let arrays = PrefetchedGranuleMarkArrays::prefetch(
+            dal,
+            settings,
+            layout,
+            &names,
             num_granules,
-        })
+            lock_stats,
+        )?;
+        Ok(Self { arrays })
     }
 
     pub(crate) fn read(self, element_types: &[DataType]) -> Result<GranuleMins> {
-        let num_granules = self.num_granules;
-        let mut buffers = match self.marks {
-            Some(marks) => marks.read()?,
-            None => HashMap::new(),
-        };
-
-        let mut columns = Vec::with_capacity(element_types.len());
-        for (i, ty) in element_types.iter().enumerate() {
-            let name = &self.names[i];
-            let bytes = buffers.remove(name).ok_or_else(|| {
-                ErrorCode::Internal(format!("granule index mins missing column {name}"))
-            })?;
-            // Mins were written with the nullable-wrapped element type.
-            columns.push(decode_single_column(
-                bytes,
-                &ty.wrap_nullable(),
-                num_granules,
-            )?);
+        let num_granules = self.arrays.num_rows;
+        let data_types = element_types
+            .iter()
+            .map(DataType::wrap_nullable)
+            .collect::<Vec<_>>();
+        let arrays = self.arrays.read(&data_types)?;
+        let mut columns = Vec::with_capacity(arrays.len());
+        for ((_, array), data_type) in arrays.into_iter().zip(&data_types) {
+            columns.push(Column::from_arrow_rs(array, data_type)?);
         }
-
         Ok(GranuleMins {
             columns,
             num_granules,
@@ -719,14 +821,17 @@ impl OffsetsIndex {
         projected_column_ids.dedup();
         let names = projected_column_ids
             .iter()
-            .map(|id| format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}"))
+            .map(|id| format!("{}{}", GRANULE_INDEX_OFFSET_COL_PREFIX, id))
             .collect::<Vec<_>>();
-        let mut buffers = match PrefetchedGranuleMarks::prefetch_with_stats(
-            dal, settings, layout, &names, lock_stats,
-        )? {
-            Some(read) => read.read()?,
-            None => HashMap::new(),
-        };
+        let arrays = PrefetchedGranuleMarkArrays::prefetch(
+            dal,
+            settings,
+            layout,
+            &names,
+            num_granules,
+            lock_stats,
+        )?;
+        let mut values_by_name = arrays.read_u64()?;
         let mut offsets = HashMap::with_capacity(projected_column_ids.len());
         for id in projected_column_ids {
             let meta = col_metas.get(&id).ok_or_else(|| {
@@ -735,12 +840,11 @@ impl OffsetsIndex {
                 ))
             })?;
             let name = format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}");
-            let bytes = buffers.remove(&name).ok_or_else(|| {
+            let values = values_by_name.remove(&name).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "granule index offsets missing projected leaf column {name}"
                 ))
             })?;
-            let values = decode_u64_column(bytes, num_granules)?;
             let (chunk_start, chunk_len) = meta.offset_length();
             let chunk_end = chunk_start.checked_add(chunk_len).ok_or_else(|| {
                 ErrorCode::Internal(format!("granule index column {id} chunk range overflows"))
@@ -1160,6 +1264,55 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.message().contains("has 1 rows, expected 2"));
+    }
+
+    #[test]
+    fn test_granule_mark_array_cache_roundtrip() {
+        use arrow_array::UInt64Array;
+        use databend_storages_common_cache::InMemoryLruCache;
+
+        let cache = Some(InMemoryLruCache::with_bytes_capacity(
+            "granule-mark-test".to_string(),
+            1024 * 1024,
+        ));
+        let location = "1/2/_gi/test";
+        let byte_range = BytesRange { offset: 4, len: 16 };
+        let mut layout = GranuleIndexFileLayout {
+            location: (location.to_string(), 0),
+            size: 56,
+            columns: HashMap::from([("m0".to_string(), vec![byte_range])]),
+        };
+        assert!(PrefetchedGranuleMarkArrays::cache_entry(&layout, "m0").is_some());
+        layout
+            .columns
+            .insert("m1".to_string(), vec![byte_range, BytesRange {
+                offset: 32,
+                len: 24,
+            }]);
+        assert!(PrefetchedGranuleMarkArrays::cache_entry(&layout, "m1").is_none());
+
+        let key = TableDataCacheKey::new(location, 0, byte_range.offset, byte_range.len);
+        let cache_entry = Some((key.clone(), byte_range.len));
+        let array: ArrayRef = Arc::new(UInt64Array::from(vec![1, 2, 3]));
+        cache
+            .as_ref()
+            .unwrap()
+            .insert(key.into(), (array.clone(), array.get_array_memory_size()));
+
+        let cached =
+            PrefetchedGranuleMarkArrays::find_cached_array(&cache, &cache_entry, 3).unwrap();
+        assert!(Arc::ptr_eq(&cached, &array));
+        assert!(PrefetchedGranuleMarkArrays::find_cached_array(&cache, &cache_entry, 4,).is_none());
+        assert!(PrefetchedGranuleMarkArrays::find_cached_array(&cache, &None, 3,).is_none());
+
+        crate::test_utils::init_test_globals().unwrap();
+        let prefetched = PrefetchedGranuleMarkArrays {
+            marks: None,
+            columns: vec![("g_7".to_string(), cache_entry, Some(array))],
+            num_rows: 3,
+        };
+        let values = prefetched.read_u64().unwrap();
+        assert_eq!(values.get("g_7"), Some(&vec![1, 2, 3]));
     }
 
     // Byte-range bounds: chunk boundaries come from col_metas, dict range from the gap before the

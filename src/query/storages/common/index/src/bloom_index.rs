@@ -179,14 +179,14 @@ impl TryFrom<ParquetMetaData> for BloomIndexMeta {
 /// That is to say, it is legal to have a BlockFilter with zero columns.
 ///
 /// For example, for the source data block as follows:
-/// ```
+/// ```text
 ///         +---name--+--age--+
 ///         | "Alice" |  20   |
 ///         | "Bob"   |  30   |
 ///         +---------+-------+
 /// ```
 /// We will create table of filters as follows:
-/// ```
+/// ```text
 ///         +---Bloom(name)--+--Bloom(age)--+
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+

@@ -188,7 +188,7 @@ impl GranuleIndex {
         };
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
-            &expr,
+            expr,
             &visitor.input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -196,7 +196,7 @@ impl GranuleIndex {
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(
-            new_expr,
+            new_expr.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
