@@ -188,8 +188,14 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &'a SelectStmt,
         order_by: &[OrderByExpr],
+        unpivot_database: Option<&str>,
     ) -> Result<SelectPreparation<'a>> {
         let (s_expr, mut from_context) = self.bind_select_source(bind_context, stmt)?;
+        if let Some(database) = unpivot_database {
+            for column in from_context.columns.iter_mut() {
+                column.database_name = Some(database.to_string());
+            }
+        }
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
@@ -432,13 +438,28 @@ impl Binder {
         // whether allow rewrite virtual column and pushdown
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
+        let unpivot_database = match stmt.from.as_slice() {
+            [
+                TableReference::Table {
+                    table,
+                    alias: None,
+                    unpivot: Some(_),
+                    ..
+                },
+            ] => table
+                .database
+                .as_ref()
+                .map(|database| self.name_resolution_ctx.normalize_identifier(database).name),
+            _ => None,
+        };
         let mut rewriter =
             SelectRewriter::new(self.name_resolution_ctx.unquoted_ident_case_sensitive)
                 .with_subquery_executor(self.subquery_executor.clone());
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
-        let preparation = self.prepare_select_binding(bind_context, stmt, order_by)?;
+        let preparation =
+            self.prepare_select_binding(bind_context, stmt, order_by, unpivot_database.as_deref())?;
         let AnalyzedSelect {
             mut s_expr,
             mut from_context,

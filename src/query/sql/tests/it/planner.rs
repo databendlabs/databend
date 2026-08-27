@@ -523,11 +523,11 @@ async fn test_unpivot_generated_columns_bind_in_same_query_block() -> Result<()>
         "CREATE TABLE repro(game_id UINT64, level UINT32, game_cnt DECIMAL(18, 2), rtp DECIMAL(18, 2))",
     )
     .await?;
-
     for sql in [
         "SELECT game_id, level, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp))",
         "SELECT game_id, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE metric = 'rtp'",
         "SELECT src.game_id, src.metric, src.value FROM repro AS src(game_id, level, game_cnt, rtp) UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE src.metric = 'rtp'",
+        "SELECT default.repro.* FROM default.repro UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE default.repro.metric = 'rtp'",
     ] {
         ctx.bind_sql(sql).await?;
     }

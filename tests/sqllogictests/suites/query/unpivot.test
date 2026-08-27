@@ -67,6 +67,17 @@ ORDER BY m.empid;
 3 feb 400
 
 query ITTI
+SELECT default.monthly_sales_1.*
+FROM default.monthly_sales_1
+UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+WHERE default.monthly_sales_1.month = 'feb'
+ORDER BY default.monthly_sales_1.empid;
+----
+1 electronics feb 200
+2 clothes feb 300
+3 cars feb 400
+
+query ITTI
 SELECT empid,dept,month,sales FROM (
     SELECT * FROM monthly_sales_1
         UNPIVOT(sales FOR month IN (jan as 'Jan', feb As '2', mar 'MARCH', april))
