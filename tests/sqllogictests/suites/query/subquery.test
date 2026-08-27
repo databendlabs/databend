@@ -1303,3 +1303,42 @@ use default;
 
 statement ok
 drop database issue_13716_subquery;
+
+# https://github.com/databendlabs/databend/issues/20380
+# Lambda-function arguments must be flattened while decorrelating a correlated subquery.
+statement ok
+create or replace database issue_20380_subquery;
+
+statement ok
+use issue_20380_subquery;
+
+statement ok
+create table t1(c0array array(varchar) null);
+
+statement ok
+create table t66(c0array array(varchar) null);
+
+statement ok
+insert into t1 values (['other']);
+
+statement ok
+insert into t66 values (['baz', 'ab', 'baz']);
+
+query ?
+select ref0 from (
+    select t1.c0array as ref0,
+           exists (
+               select 1 from t66
+               where t66.c0array = t1.c0array
+                 and array_any(array_filter(t66.c0array, x -> x = 'baz')) = 'baz'
+           ) as ref1
+    from t1
+) as s
+where ref1;
+----
+
+statement ok
+use default;
+
+statement ok
+drop database issue_20380_subquery;
