@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE,RUST_MIN_STACK
 
     - shell: bash
       run: |
@@ -22,8 +22,7 @@ runs:
         grep ' Compiled in ' target/sccache.log || true
       env:
         RUST_LOG: ERROR
-        # 1GiB
-        # RUST_MIN_STACK: 1073741824
+        RUST_MIN_STACK: 33554432
         # RUST_BACKTRACE: 1
 
     - name: Upload failure

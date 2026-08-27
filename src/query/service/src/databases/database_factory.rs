@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::DatabaseInfo;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+use crate::databases::SharedDatabase;
 use crate::databases::default::DefaultDatabase;
 
 pub struct DatabaseFactory {}
@@ -45,6 +46,7 @@ impl DatabaseFactory {
 
         let db = match engine.as_str() {
             DefaultDatabase::NAME => DefaultDatabase::try_create(ctx, db_info.clone())?,
+            SharedDatabase::NAME => SharedDatabase::try_create(ctx, db_info.clone())?,
 
             _ => {
                 let err =
