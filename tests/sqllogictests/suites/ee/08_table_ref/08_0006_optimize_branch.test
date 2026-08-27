@@ -94,7 +94,7 @@ INSERT INTO t_hilbert/dev(a, b, c) VALUES(2, 2, 2), (6, 6, 6)
 statement ok
 INSERT INTO t_hilbert/dev(a, b, c) VALUES(4, 4, 4), (7, 7, 7)
 
-statement ok
+statement error 1002.*Hilbert reclustering is not supported yet
 ALTER TABLE t_hilbert/dev RECLUSTER FINAL
 
 query III

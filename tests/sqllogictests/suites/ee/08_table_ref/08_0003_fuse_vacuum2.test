@@ -423,7 +423,7 @@ statement ok
 remove @vc_branch_stage;
 
 statement ok
-CREATE TABLE t_branch_keep (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_keep/';
+CREATE TABLE t_branch_keep (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_keep/' enable_virtual_column = true;
 
 statement ok
 ALTER TABLE t_branch_keep SET OPTIONS(row_per_block = 2);
@@ -496,7 +496,7 @@ statement ok
 remove @vc_branch_refresh_stage;
 
 statement ok
-CREATE TABLE t_branch_refresh (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_refresh/';
+CREATE TABLE t_branch_refresh (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_refresh/' enable_virtual_column = true;
 
 statement ok
 ALTER TABLE t_branch_refresh SET OPTIONS(row_per_block = 2);
@@ -582,7 +582,7 @@ statement ok
 remove @vc_tag_stage;
 
 statement ok
-CREATE TABLE t_tag_keep (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/tag_keep/';
+CREATE TABLE t_tag_keep (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/tag_keep/' enable_virtual_column = true;
 
 statement ok
 ALTER TABLE t_tag_keep SET OPTIONS(row_per_block = 2);
@@ -649,7 +649,7 @@ statement ok
 remove @vc_expired_tag_stage;
 
 statement ok
-CREATE TABLE t_tag_expired (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/tag_expired/';
+CREATE TABLE t_tag_expired (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/tag_expired/' enable_virtual_column = true;
 
 statement ok
 ALTER TABLE t_tag_expired SET OPTIONS(row_per_block = 2);
@@ -718,7 +718,7 @@ statement ok
 remove @vc_dropped_branch_stage;
 
 statement ok
-CREATE TABLE t_branch_dropped (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_dropped/';
+CREATE TABLE t_branch_dropped (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_dropped/' enable_virtual_column = true;
 
 statement ok
 ALTER TABLE t_branch_dropped SET OPTIONS(row_per_block = 2);
@@ -783,7 +783,7 @@ drop stage vc_dropped_branch_stage;
 ## -------------------------------------------------------
 
 statement ok
-CREATE TABLE t_branch_show_quote (id INT, v VARIANT);
+CREATE TABLE t_branch_show_quote (id INT, v VARIANT) enable_virtual_column = true;
 
 statement ok
 INSERT INTO t_branch_show_quote VALUES (1, '{"k":"base"}');

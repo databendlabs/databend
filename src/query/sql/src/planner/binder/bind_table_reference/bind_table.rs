@@ -259,11 +259,15 @@ impl Binder {
             if change_type.is_some() {
                 let stream_lineage_source = stream_lineage_source_relation(&table_meta);
                 let table_index = {
+                    let metadata_table_name = self
+                        .pre_resolved_tables
+                        .get(&(catalog.clone(), database.clone(), table_name.clone()))
+                        .map_or_else(|| table_name.clone(), |table| table.name().to_string());
                     let mut metadata = self.metadata.write();
                     let table_index = metadata.add_table(
                         catalog,
                         database.clone(),
-                        table_name.clone(),
+                        metadata_table_name,
                         table_meta.clone(),
                         branch_name,
                         table_name_alias,

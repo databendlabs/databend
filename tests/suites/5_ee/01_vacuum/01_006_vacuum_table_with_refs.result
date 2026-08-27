@@ -13,14 +13,14 @@
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp retain 2 seconds
 >>>> set enable_experimental_table_ref=1; insert into test_vacuum_orphan_refs.a/b_live values (4)
 1
-before vacuum
-4
+expired branch snapshot before vacuum
+present
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_exp
 <<<< expected failure happened
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp
 <<<< expected failure happened
-after vacuum
-3
+expired branch snapshot after vacuum
+missing
 >>>> set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a/b_live order by c
 1
 2
@@ -32,4 +32,3 @@ after vacuum
 2
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_exp
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp
-3
