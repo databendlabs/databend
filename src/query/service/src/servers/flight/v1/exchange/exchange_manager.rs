@@ -342,9 +342,8 @@ impl DataExchangeManager {
         let keep_alive = settings.get_flight_keep_alive_params()?;
         let transport = FlightTransportMode::from_settings(&settings)?;
         info!(
-            "Flight transport selected: query_id={}, node_id={}, mode={}",
+            "Flight transport selected: query_id={}, mode={}",
             env.query_id,
-            config.query.node_id,
             transport.name()
         );
 
@@ -485,11 +484,6 @@ impl DataExchangeManager {
                     let address = target.flight_address.clone();
                     let keep_alive_params = keep_alive;
                     let num_threads = channels.len();
-                    warn!(
-                        "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
-                        config.query.node_id, target_id, exchange_id, num_threads
-                    );
-
                     flight_exchanges.push(Box::pin(async move {
                         match transport {
                             FlightTransportMode::Legacy => {
