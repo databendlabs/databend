@@ -327,6 +327,41 @@ select * from t join t1 on t.a = t1.b
 3 1 1
 3 2.0 1
 
+query II
+select l.number, r.number
+from numbers(3) l
+join numbers(3) r
+    on cast(l.number as int64) = cast(cast(r.number as int32) as string)
+order by l.number
+----
+0 0
+1 1
+2 2
+
+query II
+select l.number, r.number
+from numbers(3) l
+join numbers(3) r
+    on cast(cast(l.number as int32) as string) = cast(r.number as int64)
+order by l.number
+----
+0 0
+1 1
+2 2
+
+query II rowsort
+select l.key, r.key
+from (
+    select cast(if(number = 1, null, number) as int64) as key from numbers(2)
+) l
+join (
+    select cast(if(number = 1, null, number) as int32) as key from numbers(2)
+) r
+    on l.key is not distinct from cast(r.key as string)
+----
+0 0
+NULL NULL
+
 statement ok
 drop table if exists t;
 

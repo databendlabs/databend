@@ -100,15 +100,16 @@ impl AsyncSystemTable for LocksTable {
                     )?;
 
                     for scalars in leveld_results {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_number::<u64, usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 table_ids.push(s);
                             }

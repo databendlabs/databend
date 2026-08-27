@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -23,13 +24,13 @@ use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::function_stat::DomainStatBounds;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_statistics::Datum;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -211,9 +212,9 @@ impl Window {
         let expected = (stat_info.cardinality / partitions)
             .ceil()
             .clamp(1.0, upper as f64);
-        ColumnStat {
-            min: Datum::UInt(1),
-            max: Datum::UInt(upper),
+        ColumnStat::UInt {
+            min: 1,
+            max: upper,
             ndv: NdvEstimate::new(expected, upper as f64),
             null_count: StatCount::exact(0),
             histogram: None,
@@ -222,9 +223,9 @@ impl Window {
 
     fn derive_rank_stat(&self, stat_info: &StatInfo) -> ColumnStat {
         let upper = self.ranking_upper(stat_info);
-        ColumnStat {
-            min: Datum::UInt(1),
-            max: Datum::UInt(upper),
+        ColumnStat::UInt {
+            min: 1,
+            max: upper,
             ndv: NdvEstimate::upper_bound(upper as f64),
             null_count: StatCount::exact(0),
             histogram: None,
@@ -233,9 +234,9 @@ impl Window {
 
     fn derive_ntile_stat(&self, stat_info: &StatInfo, buckets: u64) -> ColumnStat {
         let upper = buckets.min(cardinality_upper(stat_info.cardinality)).max(1);
-        ColumnStat {
-            min: Datum::UInt(1),
-            max: Datum::UInt(upper),
+        ColumnStat::UInt {
+            min: 1,
+            max: upper,
             ndv: NdvEstimate::upper_bound(upper as f64),
             null_count: StatCount::exact(0),
             histogram: None,
@@ -261,16 +262,16 @@ impl Window {
         let boundary_rows = (self.estimated_partition_count(stat_info) * lag_lead.offset as f64)
             .min(stat_info.cardinality);
         let source_rows = (stat_info.cardinality - boundary_rows).max(0.0);
-        let argument_may_be_null = output.null_count.upper() > 0.0;
-        let argument_null_rate = output.null_count.expected() / stat_info.cardinality;
+        let argument_may_be_null = output.null_count().upper() > 0.0;
+        let argument_null_rate = output.null_count().expected() / stat_info.cardinality;
         let expected_nulls_from_argument = argument_null_rate * source_rows;
 
         let (expected_null_count, default_may_be_null) = if let Some(default) = &lag_lead.default {
             match self.derive_default_stat(default.as_ref(), stat_info, cardinality)? {
                 Some(FoldedConstantStat::Value(default_stat)) => {
-                    let default_may_be_null = default_stat.null_count.upper() > 0.0;
+                    let default_may_be_null = default_stat.null_count().upper() > 0.0;
                     let default_null_rate =
-                        default_stat.null_count.expected() / stat_info.cardinality;
+                        default_stat.null_count().expected() / stat_info.cardinality;
                     output = merge_column_stats(output, default_stat, stat_info.cardinality)?;
                     (
                         expected_nulls_from_argument + default_null_rate * boundary_rows,
@@ -287,16 +288,16 @@ impl Window {
         };
 
         let nullable = argument_may_be_null || default_may_be_null;
-        output.null_count = if nullable {
+        output.set_null_count(if nullable {
             StatCount::estimate(
                 expected_null_count.min(stat_info.cardinality),
                 stat_info.cardinality,
             )
         } else {
             StatCount::exact(0)
-        };
-        output.ndv = output.ndv.reduce(stat_info.cardinality);
-        output.histogram = None;
+        });
+        output.set_ndv(output.ndv().reduce(stat_info.cardinality));
+        output.clear_histogram();
         Ok(Some(output))
     }
 
@@ -381,7 +382,7 @@ impl Window {
                     .statistics
                     .column_stats
                     .get(&item.index)?
-                    .ndv
+                    .ndv()
                     .expected?;
                 Some((partitions * ndv.max(1.0)).min(cardinality_upper))
             })
@@ -401,18 +402,28 @@ enum FoldedConstantStat {
 
 fn fold_constant_stat(expr: &ScalarExpr) -> Result<Option<FoldedConstantStat>> {
     let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    let Ok(constant) = expr.into_constant() else {
+    let (expr, _) = ConstantFolder::fold(
+        Cow::Owned(expr),
+        &FunctionContext::default(),
+        &BUILTIN_FUNCTIONS,
+    );
+    let Ok(constant) = expr.into_owned().into_constant() else {
         return Ok(None);
     };
     if constant.scalar == Scalar::Null {
         return Ok(Some(FoldedConstantStat::Null));
     }
-    Ok(constant
+    let DomainStatBounds::Bounds(bounds) = constant
         .scalar
-        .to_datum()
-        .map(ColumnStat::from_const)
-        .map(FoldedConstantStat::Value))
+        .as_ref()
+        .domain(&constant.data_type)
+        .stat_bounds()
+    else {
+        return Ok(None);
+    };
+    let stat = ColumnStat::new(bounds, NdvEstimate::exact(1.0), StatCount::exact(0), None)
+        .map_err(ErrorCode::Internal)?;
+    Ok(Some(FoldedConstantStat::Value(stat)))
 }
 
 fn stat_cardinality(stat_info: &StatInfo) -> StatCardinality {
@@ -424,28 +435,43 @@ fn stat_cardinality(stat_info: &StatInfo) -> StatCardinality {
 }
 
 fn merge_column_stats(left: ColumnStat, right: ColumnStat, cardinality: f64) -> Result<ColumnStat> {
-    let min = if left.min.compare(&right.min)?.is_lt() {
-        left.min
-    } else {
-        right.min
+    let left_bounds = left.bounds();
+    let right_bounds = right.bounds();
+    let (left_bounds, right_bounds) = match (left_bounds, right_bounds) {
+        (None, None) => {
+            return Ok(ColumnStat::AllNull {
+                null_count: StatCount::sum(left.null_count(), right.null_count()),
+            });
+        }
+        (None, Some(_)) => {
+            return Ok(merge_all_null_with_values(right, cardinality));
+        }
+        (Some(_), None) => {
+            return Ok(merge_all_null_with_values(left, cardinality));
+        }
+        (Some(left), Some(right)) => (left, right),
     };
-    let max = if left.max.compare(&right.max)?.is_gt() {
-        left.max
-    } else {
-        right.max
-    };
-    let ndv_upper = (left.ndv.upper + right.ndv.upper).min(cardinality);
-    let ndv = match (left.ndv.expected, right.ndv.expected) {
+    let left_ndv = left.ndv();
+    let right_ndv = right.ndv();
+    let ndv_upper = (left_ndv.upper + right_ndv.upper).min(cardinality);
+    let ndv = match (left_ndv.expected, right_ndv.expected) {
         (Some(left), Some(right)) => NdvEstimate::new((left + right).min(ndv_upper), ndv_upper),
         _ => NdvEstimate::upper_bound(ndv_upper),
     };
-    Ok(ColumnStat {
-        min,
-        max,
+    ColumnStat::new(
+        left_bounds.union(right_bounds)?,
         ndv,
-        null_count: StatCount::exact(0),
-        histogram: None,
-    })
+        StatCount::exact(0),
+        None,
+    )
+    .map_err(ErrorCode::Internal)
+}
+
+fn merge_all_null_with_values(mut values: ColumnStat, cardinality: f64) -> ColumnStat {
+    values.set_null_count(StatCount::exact(0));
+    values.set_ndv(values.ndv().reduce(cardinality));
+    values.clear_histogram();
+    values
 }
 
 impl Operator for WindowGroup {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
@@ -421,11 +423,12 @@ impl<'a, A> TypeChecker<'a, A> {
 
     fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
         let expr = interval_expr.as_expr()?;
-        let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (folded, _) =
+            ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
         if let EExpr::Constant(Constant {
             scalar: Scalar::Interval(value),
             ..
-        }) = folded
+        }) = folded.as_ref()
         {
             return Ok(value.microseconds() == 0);
         }

@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::SharedTableSecurityPolicy;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
+use databend_common_meta_app::data_share::ProviderTableShareRefIdent;
+use databend_common_meta_app::data_share::ShareIdIdent;
+use databend_common_meta_app::data_share::ShareNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -30,11 +34,14 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 
 use super::errors::TableError;
@@ -42,6 +49,7 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_del;
@@ -95,6 +103,15 @@ where
                 )));
             }
 
+            let share_ref_prefix = DirName::new(ProviderTableShareRefIdent::new(req.table_id, 0));
+            if matches!(&req.action, SetSecurityPolicyAction::Set(..))
+                && table_is_shared(self, &req.tenant, req.table_id, &share_ref_prefix).await?
+            {
+                return Err(KVAppError::AppError(AppError::from(
+                    SharedTableSecurityPolicy::new(req.table_id),
+                )));
+            }
+
             // upsert column mask policy
             let table_meta = seq_meta.data;
 
@@ -136,6 +153,11 @@ where
                     txn_put_pb(&tbid, &new_table_meta), // tb_id -> tb_meta
                 ],
             );
+            if matches!(&req.action, SetSecurityPolicyAction::Set(..)) {
+                txn_req
+                    .condition
+                    .push(txn_cond_eq_keys_with_prefix(&share_ref_prefix, 0));
+            }
 
             let _ = update_mask_policy(&req.action, &mut txn_req, &req.tenant, req.table_id).await;
 
@@ -180,6 +202,16 @@ where
                 }));
             };
 
+            let share_ref_prefix = DirName::new(ProviderTableShareRefIdent::new(req.table_id, 0));
+            if matches!(&req.action, SetSecurityPolicyAction::Set(..))
+                && table_is_shared(self, &req.tenant, req.table_id, &share_ref_prefix).await?
+            {
+                return Ok(Err(TableError::AlterTableError {
+                    tenant: req.tenant.tenant_name().to_string(),
+                    context: SharedTableSecurityPolicy::new(req.table_id).to_string(),
+                }));
+            }
+
             // upsert row access policy
             let table_meta = seq_meta.data;
             let mut new_table_meta = table_meta.clone();
@@ -206,6 +238,9 @@ where
                             context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.".to_string(),
                         }));
                     }
+                    txn_req
+                        .condition
+                        .push(txn_cond_eq_keys_with_prefix(&share_ref_prefix, 0));
                     new_table_meta.row_access_policy_columns_ids = Some(
                         SecurityPolicyColumnMap::new(*new_policy_id, columns_ids.clone()),
                     );
@@ -266,6 +301,46 @@ where
             }
         }
     }
+}
+
+async fn table_is_shared<KV>(
+    kv: &KV,
+    tenant: &Tenant,
+    table_id: u64,
+    share_ref_prefix: &DirName<ProviderTableShareRefIdent>,
+) -> Result<bool, MetaError>
+where
+    KV: kvapi::KVApi<Error = MetaError> + ?Sized,
+{
+    if !kv
+        .list_pb_vec(ListOptions::limited(share_ref_prefix, 1))
+        .await?
+        .is_empty()
+    {
+        return Ok(true);
+    }
+
+    // Shares created before the reverse index was introduced do not have a
+    // ProviderTableShareRefIdent. Inspect only this provider's shares as an
+    // upgrade fallback.
+    let share_name_dir = DirName::new(ShareNameIdent::new(tenant.clone(), ""));
+    let share_ids = kv
+        .list_pb_values(ListOptions::unlimited(&share_name_dir))
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let share_metas = kv
+        .get_pb_values_vec(
+            share_ids
+                .into_iter()
+                .map(|share_id| ShareIdIdent::new(*share_id)),
+        )
+        .await?;
+
+    Ok(share_metas
+        .into_iter()
+        .flatten()
+        .any(|meta| meta.data.tables.contains_key(&table_id)))
 }
 
 async fn update_mask_policy(
