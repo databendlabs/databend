@@ -149,6 +149,84 @@ Exchange(Merge)
         └── limit: NONE
 
 
+=== small_sorted_serial_build_is_broadcast ===
+description: A small build made Serial by a global window sort should be broadcast without merging the distributed probe.
+sql: SELECT b.k, s.k
+FROM big_table AS b
+LEFT JOIN (
+    SELECT k, row_number() OVER (ORDER BY k) AS row_num
+    FROM small_table
+) AS s
+ON b.k = s.k AND s.row_num <= 10
+raw_plan:
+EvalScalar
+├── scalars: [big_table.k (#0) AS (#0), small_table.k (#1) AS (#1)]
+└── Join(Left)
+    ├── build keys: [small_table.k (#1)]
+    ├── probe keys: [big_table.k (#0)]
+    ├── other filters: []
+    ├── Filter
+    │   ├── filters: [lte(row_num (#3), 10)]
+    │   └── EvalScalar
+    │       ├── scalars: [CAST(row_number() OVER (ORDER BY k) (#2) AS UInt64 NULL) AS (#3)]
+    │       └── EvalScalar
+    │           ├── scalars: [small_table.k (#1) AS (#1), row_number() OVER (ORDER BY k) (#2) AS (#2)]
+    │           └── Window
+    │               ├── aggregate function: row_number
+    │               ├── partition items: []
+    │               ├── order by items: [small_table.k (#1) AS (#1)]
+    │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │               └── Sort
+    │                   ├── sort keys: [small_table.k (#1) ASC NULLS LAST]
+    │                   ├── limit: [NONE]
+    │                   └── EvalScalar
+    │                       ├── scalars: [small_table.k (#1) AS (#1)]
+    │                       └── Scan
+    │                           ├── table: default.small_table (#1)
+    │                           ├── filters: []
+    │                           ├── order by: []
+    │                           └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Exchange(Merge)
+└── Join(Left)
+    ├── build keys: [small_table.k (#1)]
+    ├── probe keys: [big_table.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Broadcast)
+    │   └── EvalScalar
+    │       ├── scalars: [small_table.k (#1) AS (#1), row_number() OVER (ORDER BY k) (#2) AS (#2), CAST(row_number() OVER (ORDER BY k) (#2) AS UInt64 NULL) AS (#3)]
+    │       └── Filter
+    │           ├── filters: [lte(CAST(row_number() OVER (ORDER BY k) (#2) AS UInt64 NULL), 10)]
+    │           └── Window
+    │               ├── aggregate function: row_number
+    │               ├── partition items: []
+    │               ├── order by items: [small_table.k (#1) AS (#1)]
+    │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │               └── Sort
+    │                   ├── sort keys: [small_table.k (#1) ASC NULLS LAST]
+    │                   ├── limit: [NONE]
+    │                   └── Exchange(MergeSort)
+    │                       └── Sort
+    │                           ├── sort keys: [small_table.k (#1) ASC NULLS LAST]
+    │                           ├── limit: [NONE]
+    │                           └── Scan
+    │                               ├── table: default.small_table (#1)
+    │                               ├── filters: []
+    │                               ├── order by: [small_table.k (#1) ASC]
+    │                               └── limit: NONE
+    └── Scan
+        ├── table: default.big_table (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
 === large_serial_build_remains_serial ===
 description: A Serial build that is not smaller than the probe should not be broadcast unconditionally.
 sql: SELECT b.k, s.k

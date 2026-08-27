@@ -109,6 +109,22 @@ CROSS JOIN (SELECT 1 AS x) AS c",
         ),
         (
             SqlTestCase {
+                name: "small_sorted_serial_build_is_broadcast",
+                description: "A small build made Serial by a global window sort should be broadcast without merging the distributed probe.",
+                setup_sqls: &[],
+                sql: "SELECT b.k, s.k
+FROM big_table AS b
+LEFT JOIN (
+    SELECT k, row_number() OVER (ORDER BY k) AS row_num
+    FROM small_table
+) AS s
+ON b.k = s.k AND s.row_num <= 10",
+            },
+            227_000_000,
+            24,
+        ),
+        (
+            SqlTestCase {
                 name: "large_serial_build_remains_serial",
                 description: "A Serial build that is not smaller than the probe should not be broadcast unconditionally.",
                 setup_sqls: &[],
