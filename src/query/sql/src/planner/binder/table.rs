@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
@@ -714,11 +715,11 @@ impl Binder {
         let box (scalar, _) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;
         let (new_expr, _) = ConstantFolder::fold(
-            &scalar_expr,
+            Cow::Owned(scalar_expr),
             &self.ctx.get_function_context()?,
             &BUILTIN_FUNCTIONS,
         );
-        Ok(new_expr)
+        Ok(new_expr.into_owned())
     }
 
     pub(crate) fn resolve_data_travel_point(
@@ -787,7 +788,7 @@ impl Binder {
                 let v: i64 = check_number(
                     None,
                     &FunctionContext::default(),
-                    &new_expr,
+                    new_expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
                 if v > 0 {

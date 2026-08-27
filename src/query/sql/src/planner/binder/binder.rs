@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
@@ -318,6 +319,13 @@ impl Binder {
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
+            Statement::CreateShare(stmt) => self.bind_create_share(stmt).await?,
+            Statement::DropShare(stmt) => self.bind_drop_share(stmt).await?,
+            Statement::AlterShare(stmt) => self.bind_alter_share(stmt).await?,
+            Statement::GrantShare(stmt) => self.bind_grant_share(stmt).await?,
+            Statement::RevokeShare(stmt) => self.bind_revoke_share(stmt).await?,
+            Statement::ShowShares(stmt) => self.bind_show_shares(stmt).await?,
+            Statement::DescShare(stmt) => self.bind_desc_share(stmt).await?,
             Statement::UseDatabase { database } => {
                 let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan { database }))
@@ -978,9 +986,12 @@ impl Binder {
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;
 
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            match new_expr {
+            let (new_expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
+            match new_expr.into_owned() {
                 Expr::Constant(Constant { scalar, .. }) => {
                     let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
