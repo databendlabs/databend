@@ -527,6 +527,7 @@ async fn test_unpivot_generated_columns_bind_in_same_query_block() -> Result<()>
     for sql in [
         "SELECT game_id, level, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp))",
         "SELECT game_id, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE metric = 'rtp'",
+        "SELECT src.game_id, src.metric, src.value FROM repro AS src(game_id, level, game_cnt, rtp) UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE src.metric = 'rtp'",
     ] {
         ctx.bind_sql(sql).await?;
     }

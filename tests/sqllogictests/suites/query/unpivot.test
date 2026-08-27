@@ -55,6 +55,17 @@ ORDER BY empid;
 2 2 300
 3 2 400
 
+query ITI
+SELECT m.empid,m.month,m.sales
+FROM monthly_sales_1 AS m(empid, dept, jan, feb, mar, april)
+UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+WHERE m.month = 'feb'
+ORDER BY m.empid;
+----
+1 feb 200
+2 feb 300
+3 feb 400
+
 query ITTI
 SELECT empid,dept,month,sales FROM (
     SELECT * FROM monthly_sales_1

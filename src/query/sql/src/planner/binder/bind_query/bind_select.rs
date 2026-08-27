@@ -1030,11 +1030,13 @@ impl SelectRewriter {
             offset: None,
             ignore_result: false,
         };
+        let mut outer_alias = Self::table_ref_alias(&stmt.from[0], "__unpivot_subquery");
+        outer_alias.columns.clear();
         let subquery_ref = TableReference::Subquery {
             span: Self::table_ref_span(&stmt.from[0]),
             lateral: false,
             subquery: Box::new(inner_query),
-            alias: Some(Self::table_ref_alias(&stmt.from[0], "__unpivot_subquery")),
+            alias: Some(outer_alias),
             pivot: None,
             unpivot: None,
         };
