@@ -83,58 +83,22 @@ pub struct PlanFragment {
 }
 
 impl PlanFragment {
-    fn without_coordinator_source(&self) -> Result<PhysicalPlan> {
-        let mut plan = self.plan.clone();
-        let exchange = ExchangeSink::from_mut_physical_plan(&mut plan).ok_or_else(|| {
-            ErrorCode::Internal("Coordinator-only source must be an exchange sink")
-        })?;
-        let values = exchange
-            .schema
-            .fields()
-            .iter()
-            .map(|field| ColumnBuilder::with_capacity(field.data_type(), 0).build())
-            .collect();
-
-        exchange.input = PhysicalPlan::new(ConstantTableScan {
-            values,
-            num_rows: 0,
-            output_schema: exchange.schema.clone(),
-            meta: PhysicalPlanMeta::new("ConstantTableScan"),
-        });
-        Ok(plan)
-    }
-
     pub fn get_actions(
         &self,
         ctx: Arc<QueryContext>,
         actions: &mut QueryFragmentsActions,
     ) -> Result<()> {
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let source_on_coordinator = ExchangeSink::from_physical_plan(&self.plan)
-            .is_some_and(|exchange| exchange.source_on_coordinator);
 
-        match (source_on_coordinator, &self.fragment_type) {
-            (true, _) => {
-                let coordinator = Fragmenter::get_local_executor(ctx.clone());
-                for executor in Fragmenter::get_executors(ctx) {
-                    let plan = if executor == coordinator {
-                        self.plan.clone()
-                    } else {
-                        // ExchangeSource subscribes to this fragment locally. Keep the worker
-                        // action as the Broadcast receiver, but do not recompute its Serial input.
-                        self.without_coordinator_source()?
-                    };
-                    fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
-                }
-            }
-            (_, FragmentType::Root) => {
+        match &self.fragment_type {
+            FragmentType::Root => {
                 let action = QueryFragmentAction::create(
                     Fragmenter::get_local_executor(ctx),
                     self.plan.clone(),
                 );
                 fragment_actions.add_action(action);
             }
-            (_, FragmentType::Intermediate) => {
+            FragmentType::Intermediate => {
                 if self.has_merge_input {
                     // Only the coordinator can consume the merge input. Other shuffle
                     // destinations still need this fragment to receive remote data.
@@ -183,21 +147,21 @@ impl PlanFragment {
                     }
                 }
             }
-            (_, FragmentType::Source) => {
+            FragmentType::Source => {
                 // Redistribute partitions
                 self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
             }
-            (_, FragmentType::MutationSource) => {
+            FragmentType::MutationSource => {
                 self.redistribute_mutation_source(ctx, &mut fragment_actions)?;
             }
-            (_, FragmentType::ReplaceInto) => {
+            FragmentType::ReplaceInto => {
                 // Redistribute partitions
                 self.redistribute_replace_into(ctx, &mut fragment_actions)?;
             }
-            (_, FragmentType::Compact) => {
+            FragmentType::Compact => {
                 self.redistribute_compact(ctx, &mut fragment_actions)?;
             }
-            (_, FragmentType::Recluster) => {
+            FragmentType::Recluster => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
         }

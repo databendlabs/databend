@@ -275,7 +275,6 @@ impl PhysicalPlanBuilder {
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-                source_on_coordinator: false,
                 meta: PhysicalPlanMeta::new("ConstantTableScan"),
             });
         }

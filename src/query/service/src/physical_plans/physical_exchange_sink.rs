@@ -43,9 +43,6 @@ pub struct ExchangeSink {
     pub query_id: String,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
-    // Preserve the coordinator-only input requirement after fragmenting the Exchange.
-    #[serde(default)]
-    pub source_on_coordinator: bool,
 }
 
 #[typetag::serde]
@@ -104,7 +101,6 @@ impl IPhysicalPlan for ExchangeSink {
             query_id: self.query_id.clone(),
             ignore_exchange: self.ignore_exchange,
             allow_adjust_parallelism: self.allow_adjust_parallelism,
-            source_on_coordinator: self.source_on_coordinator,
         })
     }
 

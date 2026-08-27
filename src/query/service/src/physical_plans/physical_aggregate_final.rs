@@ -358,7 +358,6 @@ impl PhysicalPlanBuilder {
                         kind,
                         ignore_exchange: false,
                         allow_adjust_parallelism: true,
-                        source_on_coordinator: false,
                         meta: PhysicalPlanMeta::new("Exchange"),
                         input: PhysicalPlan::new(aggregate_partial),
                     })

@@ -97,6 +97,18 @@ CROSS JOIN (SELECT max(k) AS max_k FROM small_table) AS s",
         ),
         (
             SqlTestCase {
+                name: "constant_serial_build_is_broadcast",
+                description: "A constant Serial source should be broadcast while source partitioning keeps it single-produced.",
+                setup_sqls: &[],
+                sql: "SELECT b.k, c.x
+FROM big_table AS b
+CROSS JOIN (SELECT 1 AS x) AS c",
+            },
+            227_000_000,
+            24,
+        ),
+        (
+            SqlTestCase {
                 name: "large_serial_build_remains_serial",
                 description: "A Serial build that is not smaller than the probe should not be broadcast unconditionally.",
                 setup_sqls: &[],

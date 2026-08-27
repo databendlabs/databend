@@ -294,7 +294,6 @@ impl ReplaceInterpreter {
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-                source_on_coordinator: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
         } else if is_exchange && !is_stage_source {
@@ -304,7 +303,6 @@ impl ReplaceInterpreter {
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-                source_on_coordinator: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
         }
@@ -364,7 +362,6 @@ impl ReplaceInterpreter {
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-                source_on_coordinator: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
         }
