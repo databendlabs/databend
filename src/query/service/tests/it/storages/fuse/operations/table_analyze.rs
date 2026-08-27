@@ -221,7 +221,7 @@ async fn test_table_analyze_count_min_sketch_preserves_hll_statistics() -> anyho
         .execute_command(&format!("analyze table default.{table_name}"))
         .await?;
 
-    ctx.evict_table_from_cache("default", "default", table_name)?;
+    ctx.evict_table_from_cache("default", "default", table_name, None)?;
     let table = catalog
         .get_table(&ctx.get_tenant(), "default", table_name)
         .await?;
@@ -243,7 +243,7 @@ async fn test_table_analyze_count_min_sketch_preserves_hll_statistics() -> anyho
         .execute_command(&format!("analyze table default.{table_name}"))
         .await?;
 
-    ctx.evict_table_from_cache("default", "default", table_name)?;
+    ctx.evict_table_from_cache("default", "default", table_name, None)?;
     let table = catalog
         .get_table(&ctx.get_tenant(), "default", table_name)
         .await?;

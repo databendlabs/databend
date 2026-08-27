@@ -15,7 +15,7 @@
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_drop
 >>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a drop branch b_drop
 before vacuum drop table
-5
+present
 >>>> set enable_experimental_table_ref=1; select c from test_vacuum_drop_table_with_branches.a/b_live order by c
 1
 2
@@ -28,6 +28,6 @@ before vacuum drop table
 <<<< expected failure happened
 >>>> drop table test_vacuum_drop_table_with_branches.a
 after vacuum drop table
-1
+missing
 >>>> undrop table test_vacuum_drop_table_with_branches.a
 <<<< expected failure happened

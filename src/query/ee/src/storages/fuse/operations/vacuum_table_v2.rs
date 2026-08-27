@@ -128,6 +128,9 @@ pub async fn do_vacuum2(
     let now = Utc::now();
     let retention_time =
         now - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+    // Final branch GC removes an entire storage prefix. Wait for both the configured retention
+    // and the assumed maximum writer lifetime before considering a branch safe to remove.
+    let branch_final_gc_boundary = std::cmp::min(retention_time, now - ASSUMPTION_MAX_TXN_DURATION);
 
     let fuse_table = FuseTable::try_from_table(table)?;
     let catalog = ctx
@@ -194,7 +197,7 @@ pub async fn do_vacuum2(
         // For expired branches, `expire_at` acts as the automatic delete effective time.
         let effective_drop_time =
             drop_on.or_else(|| expire_at.filter(|expire_at| *expire_at <= now));
-        if effective_drop_time.is_some_and(|drop_time| drop_time < retention_time) {
+        if effective_drop_time.is_some_and(|drop_time| drop_time < branch_final_gc_boundary) {
             beyond_retention_branches.push((branch_table, branch_name));
             continue;
         }

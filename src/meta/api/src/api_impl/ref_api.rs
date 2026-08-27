@@ -473,9 +473,14 @@ where
                 )));
             };
             let mut table_meta = seq_table_meta.data;
-            // Keep the branch table meta for history/vacuum flows, but mark it dropped once the
-            // visible branch name is removed.
-            let drop_on = Utc::now();
+            // Expiration is the branch's automatic deletion time. Dropping an already expired
+            // branch must not restart its retention window from now.
+            let now = Utc::now();
+            let drop_on = seq_branch
+                .data
+                .expire_at
+                .filter(|expire_at| *expire_at <= now)
+                .unwrap_or(now);
             table_meta.drop_on = Some(drop_on);
 
             // Write dropped-branch entry so vacuum/undrop can discover this branch.
