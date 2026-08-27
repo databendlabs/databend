@@ -78,7 +78,6 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use crate::physical_plans::AddStreamColumn;
-use crate::physical_plans::FuseBlockRead;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
@@ -568,26 +567,18 @@ impl PhysicalPlanBuilder {
             FuseTable::try_from_table(table.as_ref()).is_ok(),
         );
 
-        let mut plan = if use_distributed_block_meta_shuffle {
-            FuseBlockRead::create(TableScan {
-                meta: PhysicalPlanMeta::new("TableScan"),
-                scan_id: scan.scan_id,
-                name_mapping,
-                source: Box::new(source),
-                internal_column,
-                table_index: Some(scan.table_index),
-                stat_info: Some(stat_info.clone()),
-            })
-        } else {
-            TableScan::create(
-                scan.scan_id,
-                name_mapping,
-                Box::new(source),
-                Some(scan.table_index),
-                Some(stat_info.clone()),
-                internal_column,
-            )
-        };
+        if use_distributed_block_meta_shuffle {
+            self.distributed_fuse_pruning_scans.insert(scan.scan_id);
+        }
+
+        let mut plan = TableScan::create(
+            scan.scan_id,
+            name_mapping,
+            Box::new(source),
+            Some(scan.table_index),
+            Some(stat_info.clone()),
+            internal_column,
+        );
 
         // Update stream columns if needed.
         if scan.update_stream_columns {

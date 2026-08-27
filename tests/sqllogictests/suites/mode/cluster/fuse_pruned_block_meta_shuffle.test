@@ -116,8 +116,8 @@ select count(*) from merge_target;
 ----
 1041
 
-query II rowsort
-select id, value from merge_target where id in (0, 499, 500, 5000, 10000);
+query II
+select id, value from merge_target where id in (0, 499, 500, 5000, 10000) order by id;
 ----
 0 20000
 499 20499

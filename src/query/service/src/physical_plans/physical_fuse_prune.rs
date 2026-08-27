@@ -22,6 +22,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_storages_fuse::FuseTable;
 
+use super::format::FusePruneFormatter;
+use super::format::PhysicalFormat;
 use super::physical_plan::IPhysicalPlan;
 use super::physical_plan::PhysicalPlan;
 use super::physical_plan::PhysicalPlanMeta;
@@ -56,6 +58,10 @@ impl IPhysicalPlan for FusePrune {
 
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
+    }
+
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(FusePruneFormatter::create(self))
     }
 
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {

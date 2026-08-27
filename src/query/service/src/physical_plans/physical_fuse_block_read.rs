@@ -81,10 +81,6 @@ impl IPhysicalPlan for FuseBlockRead {
         Some(&self.source)
     }
 
-    fn is_distributed_plan(&self) -> bool {
-        true
-    }
-
     fn get_desc(&self) -> Result<String> {
         Ok(format!(
             "{}.{}",
