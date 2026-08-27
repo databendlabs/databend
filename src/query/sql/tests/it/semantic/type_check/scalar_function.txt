@@ -11,3 +11,10 @@ sql: to_decimal(number, number)
 status: error
 code: 1065
 message: Invalid arguments for `to_decimal`, precision is only allowed to be a constant
+
+=== identity_cast_preserves_complete_argument ===
+description: An eliminated identity cast must not remap an inner function argument onto the original call.
+sql: to_int64(100000000 + ((854435761::UInt64 * number + 123456789) % 900000000))
+status: ok
+scalar: to_int64(plus(100000000, modulo(plus(multiply(854435761, number (#0)), 123456789), 900000000)))
+type: Int64 NULL

@@ -643,12 +643,27 @@ where A: TypeCheckAdapter
         // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
         // Note: check function may reorder the args
 
+        let checked_func_name = BUILTIN_FUNCTIONS
+            .aliases
+            .get(func_name)
+            .map_or(func_name, String::as_str);
+
+        // `check_function` may eliminate an identity conversion and return its argument.
+        // In that case, the checked root arguments no longer correspond to the original call.
+        let checked_root_matches = match &expr {
+            expr::Expr::FunctionCall(expr::FunctionCall {
+                function,
+                args: checked_args,
+                ..
+            }) => function.signature.name == checked_func_name && checked_args.len() == args.len(),
+            _ => false,
+        };
         let mut folded_args = match &expr {
             expr::Expr::FunctionCall(expr::FunctionCall {
                 function,
                 args: checked_args,
                 ..
-            }) => checked_args
+            }) if checked_root_matches => checked_args
                 .iter()
                 .zip(
                     function
