@@ -329,6 +329,7 @@ fn resolve_probe_column_ref(probe_key: &Expr<String>) -> &ColumnRef<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
     use std::collections::HashMap;
 
     use databend_common_expression::ColumnBuilder;
@@ -513,7 +514,7 @@ mod tests {
         input_domains.insert("column_a".to_string(), domain_value_2_10);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Borrowed(&filter_expr),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -532,14 +533,14 @@ mod tests {
         input_domains_false.insert("column_a".to_string(), domain_value_2_9);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Owned(filter_expr),
             &input_domains_false,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
         // Range [2,9] does not intersect with {1, 10}, so it should fold to constant false
-        match folded_expr_false {
+        match folded_expr_false.as_ref() {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -642,7 +643,7 @@ mod tests {
         input_domains.insert("column_b".to_string(), domain_value_500_600);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Borrowed(&filter_expr),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -665,7 +666,7 @@ mod tests {
         input_domains_no_intersect.insert("column_b".to_string(), domain_value_2000_3000);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Owned(filter_expr),
             &input_domains_no_intersect,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -673,7 +674,7 @@ mod tests {
 
         // Range [2000, 3000] does not intersect with {0, 1, 2, ..., 1023},
         // so it should fold to constant false
-        match folded_expr_false {
+        match folded_expr_false.as_ref() {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..

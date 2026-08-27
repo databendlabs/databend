@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -413,7 +414,7 @@ pub(crate) fn get_min_max_stats(
             .collect();
 
         let (_, domain_opt) = ConstantFolder::fold_with_domain(
-            &prepared_expr.expr,
+            Cow::Borrowed(&prepared_expr.expr),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,

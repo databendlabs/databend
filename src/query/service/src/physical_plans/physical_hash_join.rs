@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -935,14 +936,16 @@ impl PhysicalPlanBuilder {
 
             // Fold constants
             let (left_expr, _) =
-                ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(Cow::Owned(left_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let (right_expr, _) =
-                ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(Cow::Owned(right_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
 
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(
                 |(expr, scan_id, table_index, column_idx, is_null_equal)| {
                     (
-                        ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
+                        ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS)
+                            .0
+                            .into_owned(),
                         scan_id,
                         table_index,
                         column_idx,
@@ -1327,13 +1330,14 @@ impl PhysicalPlanBuilder {
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()))?;
             let (build_expr, _) =
-                ConstantFolder::fold(&build_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(Cow::Owned(build_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             spatial_right_join_conditions.push(build_expr.as_remote_expr());
 
             let probe_expr_for_runtime_filter = self.prepare_runtime_filter_expr(probe_arg)?;
             let probe_expr_for_runtime_filter =
                 probe_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (expr, _) =
+                        ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                     (
                         expr.as_remote_expr(),
                         scan_id,
@@ -1368,7 +1372,8 @@ impl PhysicalPlanBuilder {
                 let expr = scalar
                     .type_check(merged_schema.as_ref())?
                     .project_column_ref(|index| merged_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })
             .collect::<Result<_>>()?;

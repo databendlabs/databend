@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -403,10 +405,6 @@ where A: TypeCheckAdapter
         };
         let checked_expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
-        if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
-            return Ok(constant);
-        }
-
         // cast variant to other type should nest wrap nullable,
         // as we cast JSON null to SQL NULL.
         let target_type = if data_type.remove_nullable() == DataType::Variant {
@@ -518,7 +516,7 @@ where A: TypeCheckAdapter
                 let scale: i64 = check_number(
                     expr.span(),
                     &FunctionContext::default(),
-                    &expr,
+                    expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
                 scale.clamp(-76, 76)
@@ -549,7 +547,7 @@ where A: TypeCheckAdapter
                     let param: u8 = check_number(
                         expr.span(),
                         &FunctionContext::default(),
-                        &expr,
+                        expr,
                         &BUILTIN_FUNCTIONS,
                     )?;
                     params.push(Scalar::Number(NumberScalar::UInt8(param)));
@@ -603,7 +601,14 @@ where A: TypeCheckAdapter
                           default: i64|
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
-                    match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                    match ConstantFolder::fold(
+                        Cow::Owned(arg.as_expr()?),
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    )
+                    .0
+                    .into_owned()
+                    {
                         EExpr::Constant(Constant {
                             scalar,
                             ..
@@ -647,6 +652,7 @@ where A: TypeCheckAdapter
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         let expr = type_check::rewrite_function_to_cast(expr);
+        let is_top_level_cast = matches!(&expr, expr::Expr::Cast(_));
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
@@ -670,12 +676,12 @@ where A: TypeCheckAdapter
                 )
                 .zip(args)
                 .map(|((checked_arg, is_generic), arg)| {
-                    if !arg.evaluable() {
+                    if !arg.evaluable() || is_generic {
                         return arg;
                     }
-                    match self.try_fold_constant(checked_arg, !is_generic) {
-                        Some(box (constant, _)) => constant,
-                        _ => arg,
+                    match self.try_fold_constant(checked_arg.clone()) {
+                        Ok(box (constant, _)) => constant,
+                        Err(_) => arg,
                     }
                 })
                 .collect(),
@@ -686,17 +692,21 @@ where A: TypeCheckAdapter
             self.adapter.set_result_cache_uncacheable();
         }
 
-        if let Some(constant) = self.try_fold_constant(&expr, true) {
-            return Ok(constant);
-        }
+        let expr = match self.try_fold_constant(expr) {
+            Ok(constant) => return Ok(constant),
+            Err(expr) => expr,
+        };
 
-        if let expr::Expr::Cast(expr::Cast {
-            span,
-            is_try,
-            dest_type,
-            ..
-        }) = expr
-        {
+        if is_top_level_cast {
+            let expr::Expr::Cast(expr::Cast {
+                span,
+                is_try,
+                dest_type,
+                ..
+            }) = expr
+            else {
+                unreachable!("a partially folded top-level cast must remain a cast");
+            };
             assert_eq!(folded_args.len(), 1);
             return Ok(Box::new((
                 CastExpr {
@@ -719,6 +729,7 @@ where A: TypeCheckAdapter
             folded_args.swap(0, 1);
         }
 
+        let return_type = expr.data_type().clone();
         Ok(Box::new((
             FunctionCall {
                 span,
@@ -727,7 +738,7 @@ where A: TypeCheckAdapter
                 func_name: func_name.to_string(),
             }
             .into(),
-            expr.data_type().clone(),
+            return_type,
         )))
     }
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -156,8 +157,8 @@ impl DefaultExprBinder {
             (expr, false)
         } else if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             let (fold_to_constant, _) =
-                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            (fold_to_constant, true)
+                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+            (fold_to_constant.into_owned(), true)
         } else {
             (expr, false)
         };

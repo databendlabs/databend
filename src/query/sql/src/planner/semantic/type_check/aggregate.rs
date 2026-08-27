@@ -328,7 +328,7 @@ where A: TypeCheckAdapter
             let max_num_buckets: u64 = check_number(
                 None,
                 &FunctionContext::default(),
-                &arguments[1].as_expr()?,
+                arguments[1].as_expr()?,
                 &BUILTIN_FUNCTIONS,
             )?;
 

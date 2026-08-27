@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -138,7 +139,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let input_domains = ctx.input_domains();
 
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
-            &expr,
+            Cow::Borrowed(&expr),
             &input_domains,
             &ctx.func_ctx,
             &BUILTIN_FUNCTIONS,

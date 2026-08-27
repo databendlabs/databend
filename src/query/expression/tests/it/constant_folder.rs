@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -196,7 +197,9 @@ fn if_expr(args: Vec<Expr<usize>>) -> Expr<usize> {
 }
 
 fn fold_with_registry(expr: &Expr<usize>, registry: &FunctionRegistry) -> Expr<usize> {
-    ConstantFolder::fold(expr, &FunctionContext::default(), registry).0
+    ConstantFolder::fold(Cow::Borrowed(expr), &FunctionContext::default(), registry)
+        .0
+        .into_owned()
 }
 
 fn fold(expr: &Expr<usize>) -> Expr<usize> {
@@ -238,13 +241,13 @@ fn test_monotonic_nullable_domain_rejects_boundary_probe() {
     });
 
     let (folded, output_domain) = ConstantFolder::fold_with_domain(
-        &expr,
+        Cow::Borrowed(&expr),
         &HashMap::from([(0, input_domain)]),
         &FunctionContext::default(),
         &registry,
     );
 
-    assert_eq!(folded, expr);
+    assert_eq!(folded.as_ref(), &expr);
     assert_eq!(output_domain, None);
 }
 

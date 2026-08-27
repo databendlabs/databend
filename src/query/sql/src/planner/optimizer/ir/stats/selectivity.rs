@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
@@ -126,14 +127,18 @@ impl SelectivityEstimator {
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;
-        let (expr, output_domain) =
-            ConstantFolder::fold_with_domain(&expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, output_domain) = ConstantFolder::fold_with_domain(
+            Cow::Owned(expr),
+            &input_domains,
+            &func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
 
         // ConstantFolder owns expression/domain reasoning: boolean shortcuts and
         // contradictions visible from input column domains. It can still leave
         // SQL-truthy constants such as `WHERE 1`, so handle constant predicates
         // here before falling through to estimation rules.
-        if let Expr::Constant(constant) = &expr {
+        if let Expr::Constant(constant) = expr.as_ref() {
             return match constant_filter_truthiness(&constant.scalar) {
                 Some(true) => Ok(self.cardinality.value()),
                 Some(false) => {
