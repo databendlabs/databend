@@ -20,10 +20,10 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 
-use crate::servers::flight::FlightReceiver;
-use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::exchange::packet_receiver::PacketReceiver;
 use crate::servers::flight::v1::scatter::FlightScatter;
+use crate::servers::flight::v1::transport::OutboundStreamRef;
 
 #[derive(Clone)]
 pub struct ShuffleExchangeParams {
@@ -96,36 +96,36 @@ impl ExchangeParams {
         }
     }
 
-    pub fn take_flight_sender(
+    pub fn take_outbound_streams(
         &self,
-        senders: &mut HashMap<String, Vec<FlightSender>>,
-    ) -> Result<Vec<(String, FlightSender)>> {
+        senders: &mut HashMap<String, Vec<OutboundStreamRef>>,
+    ) -> Result<Vec<(String, Option<OutboundStreamRef>)>> {
         match self {
-            ExchangeParams::MergeExchange(params) => params.take_flight_sender(senders),
-            ExchangeParams::BroadcastExchange(params) => params.take_flight_sender(senders),
-            ExchangeParams::NodeShuffleExchange(params) => params.take_flight_sender(senders),
+            ExchangeParams::MergeExchange(params) => params.take_outbound_streams(senders),
+            ExchangeParams::BroadcastExchange(params) => params.take_outbound_streams(senders),
+            ExchangeParams::NodeShuffleExchange(params) => params.take_outbound_streams(senders),
             ExchangeParams::GlobalShuffleExchange(_params) => Ok(vec![]),
         }
     }
 
-    pub fn take_flight_receiver(
+    pub(super) fn take_packet_receivers(
         &self,
-        receivers: &mut HashMap<String, Vec<FlightReceiver>>,
-    ) -> Result<Vec<FlightReceiver>> {
+        receivers: &mut HashMap<String, Vec<PacketReceiver>>,
+    ) -> Result<Vec<PacketReceiver>> {
         match self {
-            ExchangeParams::MergeExchange(params) => params.take_flight_receiver(receivers),
-            ExchangeParams::BroadcastExchange(params) => params.take_flight_receiver(receivers),
-            ExchangeParams::NodeShuffleExchange(params) => params.take_flight_receiver(receivers),
+            ExchangeParams::MergeExchange(params) => params.take_packet_receivers(receivers),
+            ExchangeParams::BroadcastExchange(params) => params.take_packet_receivers(receivers),
+            ExchangeParams::NodeShuffleExchange(params) => params.take_packet_receivers(receivers),
             ExchangeParams::GlobalShuffleExchange(_params) => Ok(vec![]),
         }
     }
 }
 
 impl MergeExchangeParams {
-    fn take_flight_sender(
+    fn take_outbound_streams(
         &self,
-        senders: &mut HashMap<String, Vec<FlightSender>>,
-    ) -> Result<Vec<(String, FlightSender)>> {
+        senders: &mut HashMap<String, Vec<OutboundStreamRef>>,
+    ) -> Result<Vec<(String, Option<OutboundStreamRef>)>> {
         let Some(sender) = senders.remove(&self.channel_id) else {
             return Err(ErrorCode::UnknownFragmentExchange(format!(
                 "Unknown fragment exchange channel, {}, {}",
@@ -135,14 +135,14 @@ impl MergeExchangeParams {
 
         Ok(sender
             .into_iter()
-            .map(|x| (self.destination_id.clone(), x))
+            .map(|x| (self.destination_id.clone(), Some(x)))
             .collect())
     }
 
-    fn take_flight_receiver(
+    fn take_packet_receivers(
         &self,
-        receivers: &mut HashMap<String, Vec<FlightReceiver>>,
-    ) -> Result<Vec<FlightReceiver>> {
+        receivers: &mut HashMap<String, Vec<PacketReceiver>>,
+    ) -> Result<Vec<PacketReceiver>> {
         let Some(receivers) = receivers.remove(&self.channel_id) else {
             return Err(ErrorCode::UnknownFragmentExchange(format!(
                 "Unknown fragment flight receiver, {}, {}",
@@ -155,19 +155,16 @@ impl MergeExchangeParams {
 }
 
 impl BroadcastExchangeParams {
-    fn take_flight_sender(
+    fn take_outbound_streams(
         &self,
-        senders: &mut HashMap<String, Vec<FlightSender>>,
-    ) -> Result<Vec<(String, FlightSender)>> {
+        senders: &mut HashMap<String, Vec<OutboundStreamRef>>,
+    ) -> Result<Vec<(String, Option<OutboundStreamRef>)>> {
         let mut exchanges = Vec::with_capacity(self.destination_channels.len());
 
         for (destination, channels) in &self.destination_channels {
             for channel in channels {
                 if destination == &self.executor_id {
-                    exchanges.push((
-                        destination.clone(),
-                        FlightSender::create(async_channel::bounded(1).0),
-                    ));
+                    exchanges.push((destination.clone(), None));
 
                     continue;
                 }
@@ -179,17 +176,17 @@ impl BroadcastExchangeParams {
                     )));
                 };
 
-                exchanges.extend(senders.into_iter().map(|x| (destination.clone(), x)));
+                exchanges.extend(senders.into_iter().map(|x| (destination.clone(), Some(x))));
             }
         }
 
         Ok(exchanges)
     }
 
-    fn take_flight_receiver(
+    fn take_packet_receivers(
         &self,
-        receivers: &mut HashMap<String, Vec<FlightReceiver>>,
-    ) -> Result<Vec<FlightReceiver>> {
+        receivers: &mut HashMap<String, Vec<PacketReceiver>>,
+    ) -> Result<Vec<PacketReceiver>> {
         let mut exchanges = Vec::with_capacity(self.destination_channels.len());
 
         for (destination, channels) in &self.destination_channels {
@@ -211,19 +208,16 @@ impl BroadcastExchangeParams {
 }
 
 impl ShuffleExchangeParams {
-    fn take_flight_sender(
+    fn take_outbound_streams(
         &self,
-        senders: &mut HashMap<String, Vec<FlightSender>>,
-    ) -> Result<Vec<(String, FlightSender)>> {
+        senders: &mut HashMap<String, Vec<OutboundStreamRef>>,
+    ) -> Result<Vec<(String, Option<OutboundStreamRef>)>> {
         let mut exchanges = Vec::with_capacity(self.destination_ids.len());
 
         for (destination, channels) in &self.destination_channels {
             for channel in channels {
                 if destination == &self.executor_id {
-                    exchanges.push((
-                        destination.clone(),
-                        FlightSender::create(async_channel::bounded(1).0),
-                    ));
+                    exchanges.push((destination.clone(), None));
 
                     continue;
                 }
@@ -235,17 +229,17 @@ impl ShuffleExchangeParams {
                     )));
                 };
 
-                exchanges.extend(senders.into_iter().map(|x| (destination.clone(), x)));
+                exchanges.extend(senders.into_iter().map(|x| (destination.clone(), Some(x))));
             }
         }
 
         Ok(exchanges)
     }
 
-    fn take_flight_receiver(
+    fn take_packet_receivers(
         &self,
-        receivers: &mut HashMap<String, Vec<FlightReceiver>>,
-    ) -> Result<Vec<FlightReceiver>> {
+        receivers: &mut HashMap<String, Vec<PacketReceiver>>,
+    ) -> Result<Vec<PacketReceiver>> {
         let mut exchanges = Vec::with_capacity(self.destination_channels.len());
 
         for (destination, channels) in &self.destination_channels {

@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod actions;
-pub mod exchange;
-pub mod packets;
-pub mod scatter;
-pub mod transport;
+mod inbound;
+mod outbound;
+mod protocol;
+mod reconnect;
 
-mod flight_service;
-
-pub use flight_service::DatabendQueryFlightService;
+pub use inbound::ReliableInboundConnection;
+pub use inbound::ReliableInboundSource;
+pub use outbound::DoExchangeConnector;
+pub use outbound::DoExchangeTransport;
+pub use outbound::PendingReliableOutbound;
+pub use outbound::ReliableOutbound;
+pub(crate) use protocol::DoExchangeRequest;
+pub(crate) use protocol::DoExchangeResponse;
+pub(crate) use reconnect::FlightConnectionAttempts;
+pub use reconnect::FlightReconnectPolicy;

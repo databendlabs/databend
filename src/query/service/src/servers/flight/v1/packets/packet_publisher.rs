@@ -46,8 +46,10 @@ use crate::sessions::TableContextQueryIdentity;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
     Statistics,
-    /// do_get based channel (unidirectional: receiver pulls from sender)
+    /// A single-lane fragment channel. Legacy Flight receives it with do_get.
     Fragment(String),
+    /// Merge channel whose receiver must retain one ordered input per source node.
+    Merge(String),
     /// do_exchange based channel (bidirectional: sender pushes via ping-pong)
     /// One edge per node pair, identified by exchange_id, carrying all channel_ids.
     ExchangeFragment {
@@ -99,6 +101,10 @@ impl DataflowDiagramBuilder {
 
     pub fn add_data_edge(&mut self, source: &str, destination: &str, channel: &str) -> Result<()> {
         self.add_edge_inner(source, destination, Edge::Fragment(channel.to_string()))
+    }
+
+    pub fn add_merge_edge(&mut self, source: &str, destination: &str, channel: &str) -> Result<()> {
+        self.add_edge_inner(source, destination, Edge::Merge(channel.to_string()))
     }
 
     pub fn add_exchange_edge(

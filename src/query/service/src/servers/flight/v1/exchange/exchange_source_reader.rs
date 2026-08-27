@@ -27,7 +27,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use log::info;
 
-use crate::servers::flight::FlightReceiver;
+use super::packet_receiver::PacketReceiver;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
 
@@ -35,14 +35,14 @@ pub struct ExchangeSourceReader {
     finished: AtomicBool,
     output: Arc<OutputPort>,
     output_data: Vec<DataPacket>,
-    flight_receiver: FlightReceiver,
+    receiver: PacketReceiver,
 }
 
 impl ExchangeSourceReader {
-    pub fn create(output: Arc<OutputPort>, flight_receiver: FlightReceiver) -> ProcessorPtr {
+    pub fn create(output: Arc<OutputPort>, receiver: PacketReceiver) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
-            flight_receiver,
+            receiver,
             finished: AtomicBool::new(false),
             output_data: vec![],
         }))
@@ -67,7 +67,7 @@ impl Processor for ExchangeSourceReader {
 
         if self.output.is_finished() {
             if !self.finished.swap(true, Ordering::SeqCst) {
-                self.flight_receiver.close();
+                self.receiver.close();
             }
 
             return Ok(Event::Finished);
@@ -92,7 +92,7 @@ impl Processor for ExchangeSourceReader {
             if self.output.is_finished() {
                 info!("un_reacted output finished, id {}", id);
                 if !self.finished.swap(true, Ordering::SeqCst) {
-                    self.flight_receiver.close();
+                    self.receiver.close();
                 }
             }
         }
@@ -104,7 +104,7 @@ impl Processor for ExchangeSourceReader {
     async fn async_process(&mut self) -> Result<()> {
         if self.output_data.is_empty() {
             let mut dictionaries = Vec::new();
-            while let Some(output_data) = self.flight_receiver.recv().await? {
+            while let Some(output_data) = self.receiver.recv().await? {
                 if !matches!(&output_data, DataPacket::Dictionary(_)) {
                     dictionaries.push(output_data);
                     self.output_data = dictionaries;
@@ -118,17 +118,17 @@ impl Processor for ExchangeSourceReader {
         }
 
         if !self.finished.swap(true, Ordering::SeqCst) {
-            self.flight_receiver.close();
+            self.receiver.close();
         }
 
         Ok(())
     }
 }
 
-pub fn create_reader_item(flight_receiver: FlightReceiver) -> PipeItem {
+pub fn create_reader_item(receiver: PacketReceiver) -> PipeItem {
     let output = OutputPort::create();
     PipeItem::create(
-        ExchangeSourceReader::create(output.clone(), flight_receiver),
+        ExchangeSourceReader::create(output.clone(), receiver),
         vec![],
         vec![output],
     )

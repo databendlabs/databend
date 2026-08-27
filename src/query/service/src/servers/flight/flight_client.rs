@@ -20,8 +20,6 @@ use arrow_flight::FlightData;
 use arrow_flight::Ticket;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
-use async_channel::Sender;
-use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::Span;
@@ -33,7 +31,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::Duration;
 use tonic::Request;
-use tonic::Status;
 use tonic::Streaming;
 use tonic::metadata::AsciiMetadataKey;
 use tonic::metadata::AsciiMetadataValue;
@@ -41,14 +38,121 @@ use tonic::transport::channel::Channel;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;
-use crate::servers::flight::v1::packets::DataPacket;
+use crate::servers::flight::v1::transport::legacy::LegacyInbound;
 
 /// Parameters for a do_exchange RPC call, serialized as JSON in metadata.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DoExchangeParams {
     pub query_id: String,
     pub exchange_id: String,
     pub num_threads: usize,
+    /// Present only for New Flight streams. Absent keeps the existing Flight wire shape, so a
+    /// node running either transport can parse the other's requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_flight: Option<NewFlightAttachment>,
+}
+
+/// Identifies a New Flight logical stream and how long its receiver waits for a replacement
+/// connection. Keeping these together makes a partially specified attachment unrepresentable.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct NewFlightAttachment {
+    pub source_id: String,
+    pub receiver_lease_secs: u64,
+    pub stream: NewFlightStream,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NewFlightStream {
+    Fragment,
+    Exchange,
+    Merge,
+    Statistics,
+}
+
+impl DoExchangeParams {
+    pub fn create(query_id: String, exchange_id: String, num_threads: usize) -> Self {
+        Self {
+            query_id,
+            exchange_id,
+            num_threads,
+            new_flight: None,
+        }
+    }
+
+    pub fn new_flight_fragment(
+        query_id: String,
+        exchange_id: String,
+        source_id: String,
+        num_threads: usize,
+        receiver_lease_secs: u64,
+    ) -> Self {
+        Self {
+            query_id,
+            exchange_id,
+            num_threads,
+            new_flight: Some(NewFlightAttachment {
+                source_id,
+                receiver_lease_secs,
+                stream: NewFlightStream::Fragment,
+            }),
+        }
+    }
+
+    pub fn new_flight_merge(
+        query_id: String,
+        exchange_id: String,
+        source_id: String,
+        receiver_lease_secs: u64,
+    ) -> Self {
+        Self {
+            query_id,
+            exchange_id,
+            num_threads: 1,
+            new_flight: Some(NewFlightAttachment {
+                source_id,
+                receiver_lease_secs,
+                stream: NewFlightStream::Merge,
+            }),
+        }
+    }
+
+    pub fn new_flight_exchange(
+        query_id: String,
+        exchange_id: String,
+        source_id: String,
+        num_threads: usize,
+        receiver_lease_secs: u64,
+    ) -> Self {
+        Self {
+            query_id,
+            exchange_id,
+            num_threads,
+            new_flight: Some(NewFlightAttachment {
+                source_id,
+                receiver_lease_secs,
+                stream: NewFlightStream::Exchange,
+            }),
+        }
+    }
+
+    pub fn new_flight_statistics(
+        query_id: String,
+        source_id: String,
+        receiver_lease_secs: u64,
+    ) -> Self {
+        Self {
+            // Statistics is a single stream per source, so it needs no exchange id or thread fan-out.
+            query_id,
+            exchange_id: String::new(),
+            num_threads: 1,
+            new_flight: Some(NewFlightAttachment {
+                source_id,
+                receiver_lease_secs,
+                stream: NewFlightStream::Statistics,
+            }),
+        }
+    }
 }
 
 pub struct FlightClient {
@@ -196,7 +300,7 @@ impl FlightClient {
         &mut self,
         query_id: &str,
         target: &str,
-    ) -> Result<FlightExchange> {
+    ) -> Result<LegacyInbound> {
         let streaming = self
             .get_streaming(
                 RequestBuilder::create(Ticket::default())
@@ -212,12 +316,12 @@ impl FlightClient {
             self.local_node_id.clone(),
             self.remote_node_id.clone(),
         );
-        Ok(FlightExchange::create_receiver(notify, rx))
+        Ok(LegacyInbound::create(notify, rx))
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn do_get(&mut self, query_id: &str, channel_id: &str) -> Result<FlightExchange> {
+    pub async fn do_get(&mut self, query_id: &str, channel_id: &str) -> Result<LegacyInbound> {
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
             .with_metadata("x-query-id", query_id)?
@@ -232,7 +336,7 @@ impl FlightClient {
             self.local_node_id.clone(),
             self.remote_node_id.clone(),
         );
-        Ok(FlightExchange::create_receiver(notify, rx))
+        Ok(LegacyInbound::create(notify, rx))
     }
 
     fn streaming_receiver(
@@ -329,111 +433,5 @@ impl FlightClient {
                 )),
             }
         })
-    }
-}
-
-pub struct FlightReceiver {
-    notify: Arc<WatchNotify>,
-    rx: Receiver<Result<FlightData>>,
-}
-
-impl Drop for FlightReceiver {
-    fn drop(&mut self) {
-        drop_guard(move || {
-            self.close();
-        })
-    }
-}
-
-impl FlightReceiver {
-    pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver {
-            rx,
-            notify: Arc::new(WatchNotify::new()),
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        match self.rx.recv().await {
-            Err(_) => Ok(None),
-            Ok(Err(error)) => Err(error),
-            Ok(Ok(message)) => Ok(Some(DataPacket::try_from(message)?)),
-        }
-    }
-
-    pub fn close(&self) {
-        self.rx.close();
-        self.notify.notify_waiters();
-    }
-}
-
-pub struct FlightSender {
-    tx: Sender<std::result::Result<FlightData, Status>>,
-}
-
-impl FlightSender {
-    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
-        FlightSender { tx }
-    }
-
-    pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
-    }
-
-    #[async_backtrace::framed]
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the remote flight channel is closed.",
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub fn close(&self) {
-        self.tx.close();
-    }
-}
-
-pub enum FlightExchange {
-    Dummy,
-    Receiver {
-        notify: Arc<WatchNotify>,
-        receiver: Receiver<Result<FlightData>>,
-    },
-    Sender(Sender<std::result::Result<FlightData, Status>>),
-}
-
-impl FlightExchange {
-    pub fn create_sender(
-        sender: Sender<std::result::Result<FlightData, Status>>,
-    ) -> FlightExchange {
-        FlightExchange::Sender(sender)
-    }
-
-    pub fn create_receiver(
-        notify: Arc<WatchNotify>,
-        receiver: Receiver<Result<FlightData>>,
-    ) -> FlightExchange {
-        FlightExchange::Receiver { notify, receiver }
-    }
-
-    pub fn convert_to_sender(self) -> FlightSender {
-        match self {
-            FlightExchange::Sender(tx) => FlightSender { tx },
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn convert_to_receiver(self) -> FlightReceiver {
-        match self {
-            FlightExchange::Receiver { notify, receiver } => FlightReceiver {
-                notify,
-                rx: receiver,
-            },
-            _ => unreachable!(),
-        }
     }
 }

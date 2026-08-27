@@ -46,6 +46,7 @@ use crate::servers::flight::request_builder::RequestGetter;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::transport::batch;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -154,32 +155,52 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
-            &params.query_id,
-            &params.exchange_id,
-            params.num_threads,
-        )?;
-
-        let mut stream = req.into_inner();
+        let stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
-        GlobalIORuntime::instance().spawn(async move {
-            while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
-                };
-
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
-                }
-
-                // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
-                    break;
-                }
+        match params.new_flight {
+            Some(attachment) => {
+                let connection = DataExchangeManager::instance().handle_new_flight_do_exchange(
+                    &params.query_id,
+                    &params.exchange_id,
+                    &attachment.source_id,
+                    params.num_threads,
+                    attachment.stream,
+                    std::time::Duration::from_secs(attachment.receiver_lease_secs),
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    connection.serve(stream, tx).await;
+                });
             }
-            // sender is dropped here → closes sub-queues, notifies processors
-        });
+            None => {
+                let sender = DataExchangeManager::instance().handle_do_exchange(
+                    &params.query_id,
+                    &params.exchange_id,
+                    params.num_threads,
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    let mut stream = stream;
+                    while let Some(result) = stream.next().await {
+                        let Ok(flight_data) = result else {
+                            break;
+                        };
+                        let payloads = if batch::is_batch(&flight_data) {
+                            batch::split(flight_data)
+                        } else {
+                            vec![flight_data]
+                        };
+                        for payload in payloads {
+                            if sender.add_data(payload).await.is_err() {
+                                return;
+                            }
+                        }
+                        if tx.try_send(Ok(FlightData::default())).is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+        }
 
         Ok(RawResponse::new(Box::pin(rx)))
     }

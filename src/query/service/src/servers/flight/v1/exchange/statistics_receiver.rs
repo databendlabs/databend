@@ -18,13 +18,14 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures_util::future::Either;
 use futures_util::future::select;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::channel;
 
-use crate::servers::flight::FlightExchange;
+use super::packet_receiver::PacketReceiver;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::MemoryUpdater;
@@ -32,6 +33,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextTelemetry;
 
@@ -44,14 +46,13 @@ pub struct StatisticsReceiver {
 impl StatisticsReceiver {
     pub fn spawn_receiver(
         ctx: &Arc<QueryContext>,
-        statistics_exchanges: HashMap<String, FlightExchange>,
+        statistics_receivers: HashMap<String, PacketReceiver>,
     ) -> Result<StatisticsReceiver> {
         let (shutdown_tx, _shutdown_rx) = channel(2);
-        let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
+        let mut exchange_handler = Vec::with_capacity(statistics_receivers.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-        for (source_target, exchange) in statistics_exchanges.into_iter() {
-            let rx = exchange.convert_to_receiver();
+        for (source_target, rx) in statistics_receivers {
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
@@ -79,8 +80,7 @@ impl StatisticsReceiver {
                                         return Ok(());
                                     }
                                     Err(cause) => {
-                                        ctx.get_current_session().force_kill_query(cause.clone());
-                                        return Err(cause);
+                                        return Err(Self::fail_query(&ctx, cause));
                                     }
                                     _ => loop {
                                         match StatisticsReceiver::recv_data(
@@ -93,9 +93,7 @@ impl StatisticsReceiver {
                                                 return Ok(());
                                             }
                                             Err(cause) => {
-                                                ctx.get_current_session()
-                                                    .force_kill_query(cause.clone());
-                                                return Err(cause);
+                                                return Err(Self::fail_query(&ctx, cause));
                                             }
                                             _ => {}
                                         }
@@ -117,8 +115,7 @@ impl StatisticsReceiver {
                                         recv = Box::pin(rx.recv());
                                     }
                                     Err(cause) => {
-                                        ctx.get_current_session().force_kill_query(cause.clone());
-                                        return Err(cause);
+                                        return Err(Self::fail_query(&ctx, cause));
                                     }
                                 };
                             }
@@ -133,6 +130,16 @@ impl StatisticsReceiver {
             _runtime: runtime,
             shutdown_tx: Some(shutdown_tx),
         })
+    }
+
+    /// Tears down the query after a statistics stream fails, returning `cause` for the caller to
+    /// propagate. Shutting down the exchange first releases peers still waiting on this node.
+    fn fail_query(ctx: &Arc<QueryContext>, cause: ErrorCode) -> ErrorCode {
+        let query_id = ctx.get_id();
+        ctx.get_exchange_manager()
+            .shutdown_query(&query_id, Some(cause.clone()));
+        ctx.get_current_session().force_kill_query(cause.clone());
+        cause
     }
 
     fn recv_data(

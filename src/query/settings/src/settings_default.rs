@@ -1501,7 +1501,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("flight_connection_max_retry_times", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(3),
                     desc: "The maximum retry count for cluster flight. Disable if 0.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1513,6 +1513,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=10)),
+                }),
+                ("enable_experiment_new_flight", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable the experimental New Flight data path.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),

@@ -25,7 +25,6 @@ use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
-use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
@@ -36,7 +35,9 @@ use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_outbound_channels;
 use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_channels;
-use crate::servers::flight::v1::network::create_local_channels;
+use crate::servers::flight::v1::exchange::exchange_sink::build_legacy_packet_sinks;
+use crate::servers::flight::v1::exchange::exchange_sink::build_node_shuffle_packet_sinks;
+use crate::servers::flight::v1::exchange::local_channel::create_local_channels;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -85,29 +86,39 @@ impl ExchangeTransform {
         };
 
         let mut items = Vec::with_capacity(len);
-        let exchange_params = ExchangeParams::NodeShuffleExchange(params.clone());
         let exchange_manager = ctx.get_exchange_manager();
-        let flight_senders = exchange_manager.get_flight_sender(&exchange_params)?;
+        let new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
 
-        for (destination_id, sender) in flight_senders {
-            items.push(match destination_id == params.executor_id {
-                true => {
-                    if local_pipe == 1 {
-                        create_dummy_item()
-                    } else {
-                        create_resize_item(1, local_pipe)
-                    }
+        let nodes_source = if new_flight {
+            items.extend(build_node_shuffle_packet_sinks(
+                ctx, params, pipeline, local_pipe,
+            )?);
+
+            let exchange_params = ExchangeParams::NodeShuffleExchange(params.clone());
+            let receivers = exchange_manager.take_packet_receivers(&exchange_params)?;
+            let nodes_source = receivers.len();
+            items.extend(receivers.into_iter().map(create_reader_item));
+            nodes_source
+        } else {
+            let exchange_params = ExchangeParams::NodeShuffleExchange(params.clone());
+            let streams = exchange_manager
+                .take_fragment_outbound_streams(&exchange_params)?
+                .into_iter()
+                .map(|(_, stream)| stream)
+                .collect();
+            items.extend(build_legacy_packet_sinks(streams, false, || {
+                if local_pipe == 1 {
+                    create_dummy_item()
+                } else {
+                    create_resize_item(1, local_pipe)
                 }
-                false => create_writer_item(sender, false),
-            });
-        }
+            }));
 
-        let mut nodes_source = 0;
-        let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
-        for receiver in receivers {
-            nodes_source += 1;
-            items.push(create_reader_item(receiver));
-        }
+            let receivers = exchange_manager.take_packet_receivers(&exchange_params)?;
+            let nodes_source = receivers.len();
+            items.extend(receivers.into_iter().map(create_reader_item));
+            nodes_source
+        };
 
         let new_outputs = local_pipe + nodes_source;
         pipeline.add_pipe(Pipe::create(len, new_outputs, items));
@@ -136,6 +147,7 @@ impl ExchangeTransform {
         }
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
+        let new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
         let waker = pipeline.get_waker();
 
         pipeline.resize(local_threads, false)?;
@@ -150,10 +162,12 @@ impl ExchangeTransform {
             local_threads,
         )?;
 
-        assert_eq!(channel_set.channels.len(), local_threads);
+        assert_eq!(channel_set.receivers.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
-        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
+        let channels =
+            build_broadcast_outbound_channels(params, local_outbound, compression, new_flight)?;
+        channels.install_failure_handler(pipeline);
 
         let mut items = Vec::with_capacity(local_threads);
 
@@ -169,7 +183,7 @@ impl ExchangeTransform {
         pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
 
         let mut items = Vec::with_capacity(local_threads);
-        for idx in 0..channel_set.channels.len() {
+        for idx in 0..channel_set.receivers.len() {
             items.push(BroadcastRecvTransform::create_item(
                 idx,
                 channel_set.create_receiver(idx, &params.schema),
@@ -200,6 +214,7 @@ impl ExchangeTransform {
 
         let waker = pipeline.get_waker();
         let compression = ctx.get_settings().get_query_flight_compression()?;
+        let new_flight = ctx.get_settings().get_enable_experiment_new_flight()?;
         let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
         let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
 
@@ -214,10 +229,12 @@ impl ExchangeTransform {
             exchange_id,
             local_threads,
         )?;
-        assert_eq!(channel_set.channels.len(), local_threads);
+        assert_eq!(channel_set.receivers.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        let remote_outbound =
+            build_hash_outbound_channels(params, local_outbound, compression, new_flight)?;
+        remote_outbound.install_failure_handler(pipeline);
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
@@ -242,7 +259,7 @@ impl ExchangeTransform {
         pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
 
         let mut items = Vec::with_capacity(local_threads);
-        for idx in 0..channel_set.channels.len() {
+        for idx in 0..channel_set.receivers.len() {
             items.push(ExchangeRecvTransform::create_item(
                 idx,
                 channel_set.create_receiver(idx, &params.schema),
