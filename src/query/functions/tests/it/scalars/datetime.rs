@@ -638,6 +638,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
 fn test_to_number(file: &mut impl Write) {
     // date
     run_ast(file, "to_yyyymm(to_date(18875))", &[]);
+    run_ast(file, "to_yyyymm(to_date(2932896))", &[]);
     run_ast(file, "to_yyyymmdd(to_date(18875))", &[]);
     run_ast(file, "to_yyyymmddhhmmss(to_date(18875))", &[]);
     run_ast(file, "to_year(to_date(18875))", &[]);

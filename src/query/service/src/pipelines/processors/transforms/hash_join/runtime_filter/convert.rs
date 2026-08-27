@@ -24,19 +24,16 @@ use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnMinMax;
 use databend_common_expression::Constant;
-use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDomain;
-use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
-use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 
@@ -86,14 +83,12 @@ pub async fn build_runtime_filter_infos(
                 None
             };
 
-            let min_max = if let Some(ref min_max) = packet.min_max {
-                Some(build_min_max_filter(
-                    min_max.clone(),
-                    probe_key,
-                    &desc.build_key,
-                )?)
-            } else {
-                None
+            let min_max = match packet.min_max.as_ref() {
+                Some(ColumnMinMax::Values(min_max)) => {
+                    let (min, max) = min_max.scalars();
+                    Some(min_max_filter(min, max, probe_key)?)
+                }
+                _ => None,
             };
             let enabled = bloom.is_some() || inlist.is_some() || min_max.is_some();
 
@@ -156,89 +151,6 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr
     Ok((expr, inlist_value_count))
 }
 
-fn build_min_max_filter(
-    min_max: SerializableDomain,
-    probe_key: &Expr<String>,
-    build_key: &Expr,
-) -> Result<Expr<String>> {
-    let min_max = Domain::from_min_max(
-        min_max.min,
-        min_max.max,
-        &build_key.data_type().remove_nullable(),
-    );
-    let min_max_filter = match min_max {
-        Domain::Number(domain) => match domain {
-            NumberDomain::UInt8(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::UInt16(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::UInt32(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::UInt64(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::Int8(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::Int16(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::Int32(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::Int64(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::Float32(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-            NumberDomain::Float64(simple_domain) => {
-                let min = Scalar::Number(NumberScalar::from(simple_domain.min));
-                let max = Scalar::Number(NumberScalar::from(simple_domain.max));
-                min_max_filter(min, max, probe_key)?
-            }
-        },
-        Domain::String(domain) => {
-            let min = Scalar::String(domain.min);
-            let max = Scalar::String(domain.max.unwrap());
-            min_max_filter(min, max, probe_key)?
-        }
-        Domain::Date(date_domain) => {
-            let min = Scalar::Date(date_domain.min);
-            let max = Scalar::Date(date_domain.max);
-            min_max_filter(min, max, probe_key)?
-        }
-        _ => {
-            return Err(ErrorCode::UnsupportedDataType(format!(
-                "Unsupported domain {:?} for runtime filter",
-                min_max,
-            )));
-        }
-    };
-    Ok(min_max_filter)
-}
-
 async fn build_bloom_filter(
     bloom: Vec<u64>,
     max_threads: usize,
@@ -276,6 +188,7 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::ColumnMinMax;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
     use databend_common_expression::ConstantFolder;
@@ -285,6 +198,7 @@ mod tests {
     use databend_common_expression::Expr;
     use databend_common_expression::FromData;
     use databend_common_expression::FunctionContext;
+    use databend_common_expression::MinMax;
     use databend_common_expression::Scalar;
     use databend_common_expression::type_check::check_function;
     use databend_common_expression::types::AccessType;
@@ -292,16 +206,21 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberDomain;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::SimpleDomain;
     use databend_common_functions::BUILTIN_FUNCTIONS;
 
     use super::build_inlist_filter;
-    use super::build_min_max_filter;
     use super::build_runtime_filter_infos;
     use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
-    use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
+    use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
+
+    fn int32_domain(min: i32, max: i32) -> Domain {
+        Domain::Number(NumberDomain::Int32(SimpleDomain { min, max }))
+    }
 
     #[tokio::test(flavor = "current_thread")]
     async fn test_build_runtime_filter_infos_selectivity_threshold_only_disables_bloom() {
@@ -337,10 +256,10 @@ mod tests {
         packets.insert(0, RuntimeFilterPacket {
             id: 0,
             inlist: Some(inlist),
-            min_max: Some(SerializableDomain {
-                min: Scalar::Number(1i32.into()),
-                max: Scalar::Number(10i32.into()),
-            }),
+            min_max: Some(ColumnMinMax::Values(MinMax::Number(
+                NumberDomain::Int32(SimpleDomain { min: 1, max: 10 }),
+                false,
+            ))),
             bloom: Some(vec![11, 22]),
         });
 
@@ -386,11 +305,7 @@ mod tests {
 
         // Test with ConstantFolder - case where column_a in [2,10] (can be folded to constant)
         let mut input_domains = HashMap::new();
-        let domain_value_2_10 = Domain::from_min_max(
-            Scalar::Number(2i32.into()),
-            Scalar::Number(10i32.into()),
-            &data_type,
-        );
+        let domain_value_2_10 = int32_domain(2, 10);
         input_domains.insert("column_a".to_string(), domain_value_2_10);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
@@ -405,11 +320,7 @@ mod tests {
 
         // Test with ConstantFolder - case where column_a in [2,9] (should evaluate to false)
         let mut input_domains_false = HashMap::new();
-        let domain_value_2_9 = Domain::from_min_max(
-            Scalar::Number(2i32.into()),
-            Scalar::Number(9i32.into()),
-            &data_type,
-        );
+        let domain_value_2_9 = int32_domain(2, 9);
         input_domains_false.insert("column_a".to_string(), domain_value_2_9);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
@@ -454,19 +365,10 @@ mod tests {
         inlist_builder.push(Scalar::Number(11i64.into()).as_ref());
         let (inlist, _) = build_inlist_filter(inlist_builder.build(), &probe_expr).unwrap();
 
-        let build_key = Expr::ColumnRef(ColumnRef {
-            span: None,
-            id: 0,
-            data_type: probe_expr.data_type().clone(),
-            display_name: "build_key".to_string(),
-        });
-        let min_max = build_min_max_filter(
-            SerializableDomain {
-                min: Scalar::Number(11i64.into()),
-                max: Scalar::Number(11i64.into()),
-            },
+        let min_max = min_max_filter(
+            Scalar::Number(11i64.into()),
+            Scalar::Number(11i64.into()),
             &probe_expr,
-            &build_key,
         )
         .unwrap();
 
@@ -567,11 +469,7 @@ mod tests {
         // Test with ConstantFolder - case where column_b in [500, 600]
         // (should intersect with our range [0, 1023])
         let mut input_domains = HashMap::new();
-        let domain_value_500_600 = Domain::from_min_max(
-            Scalar::Number(500i32.into()),
-            Scalar::Number(600i32.into()),
-            &data_type,
-        );
+        let domain_value_500_600 = int32_domain(500, 600);
         input_domains.insert("column_b".to_string(), domain_value_500_600);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
@@ -590,11 +488,7 @@ mod tests {
         // Test with ConstantFolder - case where column_b in [2000, 3000]
         // (should NOT intersect with our range [0, 1023])
         let mut input_domains_no_intersect = HashMap::new();
-        let domain_value_2000_3000 = Domain::from_min_max(
-            Scalar::Number(2000i32.into()),
-            Scalar::Number(3000i32.into()),
-            &data_type,
-        );
+        let domain_value_2000_3000 = int32_domain(2000, 3000);
         input_domains_no_intersect.insert("column_b".to_string(), domain_value_2000_3000);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(

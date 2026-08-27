@@ -69,6 +69,8 @@ unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+databend-common-expression-test-support = { workspace = true }
+databend-common-functions = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }

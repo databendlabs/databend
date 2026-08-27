@@ -39,6 +39,7 @@ mod group_by;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
+mod min_max;
 
 mod schema;
 mod serde;

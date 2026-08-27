@@ -16,11 +16,12 @@ use std::io::Write;
 
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
-use databend_common_expression::Scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::SimpleDomain;
 use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::eliminate_cast;
@@ -38,14 +39,10 @@ fn test_eliminate_cast() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_eliminate_cast.txt").unwrap();
 
-    fn n(n: i32) -> Scalar {
-        Scalar::Number(n.into())
-    }
-
     run_text(file, "a::string = '2'", &[(
         "a",
         Int32Type::data_type(),
-        Domain::from_min_max(n(-2), n(3), &Int32Type::data_type()),
+        Domain::Number(NumberDomain::Int32(SimpleDomain { min: -2, max: 3 })),
     )]);
 }
 
