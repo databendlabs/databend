@@ -25,12 +25,12 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::SyncTaskSet;
 use petgraph::graph::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskSet;
+use super::outbound_send_channels::SharedOutboundChannels;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 pub struct HashSendSink {
@@ -47,7 +47,7 @@ impl HashSendSink {
     pub fn create_item(
         worker_id: usize,
         scatter: Arc<Box<dyn FlightScatter>>,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: SharedOutboundChannels,
         waker: Arc<ExecutorWaker>,
         rows_threshold: usize,
         bytes_threshold: usize,
@@ -71,6 +71,11 @@ impl HashSendSink {
 
         PipeItem::create(processor, vec![input], vec![])
     }
+
+    fn finish_processor(&mut self) -> Result<Event> {
+        self.input.finish();
+        self.channels.poll_complete_event(&self.tasks, self.id)
+    }
 }
 
 impl Processor for HashSendSink {
@@ -89,8 +94,7 @@ impl Processor for HashSendSink {
                 Poll::Ready(results) => {
                     self.channels.handle_send_results(results)?;
                     if self.channels.all_closed() {
-                        self.input.finish();
-                        return Ok(Event::Finished);
+                        return self.finish_processor();
                     }
                 }
                 Poll::Pending => {
@@ -130,8 +134,7 @@ impl Processor for HashSendSink {
                         Poll::Ready(results) => {
                             self.channels.handle_send_results(results)?;
                             if self.channels.all_closed() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
+                                return self.finish_processor();
                             }
                         }
                         Poll::Pending => {
@@ -164,8 +167,7 @@ impl Processor for HashSendSink {
             }
 
             if futures.is_empty() {
-                self.channels.close_all();
-                return Ok(Event::Finished);
+                return self.finish_processor();
             }
 
             let joined = Box::pin(futures::future::join_all(futures));
@@ -179,8 +181,7 @@ impl Processor for HashSendSink {
                 }
             }
 
-            self.channels.close_all();
-            return Ok(Event::Finished);
+            return self.finish_processor();
         }
 
         self.input.set_need_data();
@@ -189,11 +190,9 @@ impl Processor for HashSendSink {
 
     fn details_status(&self) -> Option<String> {
         Some(format!(
-            "handle_pending={}, closed_channels={}/{}, closed={:?}, buffered_partitions={:?}",
+            "handle_pending={}, closed_channels={}, buffered_partitions={:?}",
             self.handle.is_some(),
-            self.channels.closed_count(),
-            self.channels.len(),
-            self.channels.closed_status(),
+            self.channels.closed_summary(),
             self.partition_stream.partition_ids(),
         ))
     }

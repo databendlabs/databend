@@ -23,9 +23,10 @@ use databend_common_expression::DataBlock;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-use crate::servers::flight::v1::network::NetworkInboundChannelSet;
-use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::inbound_quota::QueueItem;
+use crate::servers::flight::v1::exchange::exchange_packet_receiver::ExchangePacketReceiverSet;
+use crate::servers::flight::v1::exchange::inbound_quota::QueueItem;
+use crate::servers::flight::v1::exchange::outbound_channel::OutboundChannel;
+use crate::servers::flight::v1::transport::StreamSendOutcome;
 
 pub struct LocalQueueItem {
     data: DataBlock,
@@ -61,38 +62,30 @@ impl OutboundChannel for LocalOutboundChannel {
         self.sender.is_closed()
     }
 
-    async fn add_block(&self, block: DataBlock) -> Result<()> {
+    async fn add_block(&self, block: DataBlock) -> Result<StreamSendOutcome> {
         let size = block.memory_size();
         let size = std::cmp::min(size, self.max_bytes_local_channel);
 
         let semaphore = self.semaphore.clone();
-        if let Ok(x) = semaphore.try_acquire_many_owned(size as u32) {
-            let item = LocalQueueItem::create(block, x);
-
-            if let Err(cause) = self.sender.try_send(item) {
-                if cause.is_full() {
-                    unreachable!("Logical error, local channel quota queue is full");
-                }
+        let permit = match semaphore.try_acquire_many_owned(size as u32) {
+            Ok(permit) => permit,
+            Err(_) => {
+                let semaphore = self.semaphore.clone();
+                let Ok(permit) = semaphore.acquire_many_owned(size as u32).await else {
+                    return Err(ErrorCode::Internal(
+                        "Logical error, inbound quota semaphore is closed.",
+                    ));
+                };
+                permit
             }
-
-            return Ok(());
-        }
-
-        let semaphore = self.semaphore.clone();
-        let Ok(x) = semaphore.acquire_many_owned(size as u32).await else {
-            return Err(ErrorCode::Internal(
-                "Logical error, inbound quota semaphore is closed.",
-            ));
         };
 
-        let item = LocalQueueItem::create(block, x);
-        if let Err(cause) = self.sender.try_send(item) {
-            if cause.is_full() {
-                unreachable!("Logical error, local channel quota queue is full");
-            }
+        let item = LocalQueueItem::create(block, permit);
+        match self.sender.try_send(item) {
+            Ok(()) => Ok(StreamSendOutcome::Accepted),
+            Err(cause) if cause.is_closed() => Ok(StreamSendOutcome::ConsumerClosed),
+            Err(_) => unreachable!("Logical error, local channel quota queue is full"),
         }
-
-        Ok(())
     }
 }
 
@@ -108,12 +101,12 @@ impl Drop for LocalOutboundChannel {
 pub const LOCAL_CHANNEL_MAX_BYTES: usize = 20 * 1024 * 1024;
 
 pub fn create_local_channels(
-    channel_set: &NetworkInboundChannelSet,
+    channel_set: &ExchangePacketReceiverSet,
 ) -> Vec<Arc<dyn OutboundChannel>> {
     let semaphore = Arc::new(Semaphore::new(LOCAL_CHANNEL_MAX_BYTES));
 
-    let mut outbound = Vec::<Arc<dyn OutboundChannel>>::with_capacity(channel_set.channels.len());
-    for channel in channel_set.channels.iter() {
+    let mut outbound = Vec::<Arc<dyn OutboundChannel>>::with_capacity(channel_set.receivers.len());
+    for channel in channel_set.receivers.iter() {
         channel.sender_count.fetch_add(1, Ordering::AcqRel);
 
         outbound.push(Arc::new(LocalOutboundChannel {

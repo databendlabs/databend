@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod actions;
-pub mod exchange;
-pub mod packets;
-pub mod scatter;
-pub mod transport;
+mod buffer;
+mod inbound;
+mod outbound;
+mod ping_pong;
 
-mod flight_service;
-
-pub use flight_service::DatabendQueryFlightService;
+pub use buffer::ExchangeBufferConfig;
+pub use buffer::ExchangeSinkBuffer;
+pub use inbound::LegacyInbound;
+pub use outbound::LegacyOutbound;
+pub use ping_pong::PingPongCallback;
+pub use ping_pong::PingPongExchange;
+pub use ping_pong::PingPongExchangeInner;
+pub use ping_pong::PingPongResponse;
