@@ -1410,8 +1410,8 @@ impl Optimizer for RuleEagerAggregation {
         "RuleEagerAggregationOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr, ErrorCode> {
-        self.optimize_sync(s_expr)
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr, ErrorCode> {
+        self.optimize_sync(&s_expr)
     }
 }
 

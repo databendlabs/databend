@@ -1,0 +1,23 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/20358
+
+statement ok
+DROP TABLE IF EXISTS issue_20358_patterns
+
+statement ok
+CREATE TABLE issue_20358_patterns(pattern VARCHAR)
+
+statement ok
+INSERT INTO issue_20358_patterns VALUES ('')
+
+query B
+SELECT 'x' LIKE pattern FROM issue_20358_patterns
+----
+0
+
+query B
+SELECT '' LIKE pattern FROM issue_20358_patterns
+----
+1
+
+statement ok
+DROP TABLE issue_20358_patterns

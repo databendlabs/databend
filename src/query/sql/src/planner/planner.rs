@@ -333,8 +333,8 @@ impl Planner {
                 RuleID::MergeFilter,
             ]);
             for indices in &mut agg_indices.values_mut() {
-                for (_, _, s_expr) in indices {
-                    *s_expr = optimizer.optimize_sync(s_expr)?;
+                for (id, sql, s_expr) in std::mem::take(indices) {
+                    indices.push((id, sql, optimizer.optimize_sync(s_expr)?));
                 }
             }
             metadata.write().replace_agg_indices(agg_indices);

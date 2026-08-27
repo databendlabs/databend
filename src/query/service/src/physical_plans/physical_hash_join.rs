@@ -809,8 +809,9 @@ impl PhysicalPlanBuilder {
 
         let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
-            let left_condition = &condition.left;
-            let right_condition = &condition.right;
+            let original_left_condition = &condition.left;
+            let original_right_condition = &condition.right;
+            let (left_condition, right_condition) = condition.canonical_keys();
 
             // Type check expressions
             let right_expr = right_condition
@@ -841,8 +842,8 @@ impl PhysicalPlanBuilder {
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
                 self.handle_inner_join_column_optimization(
-                    left_condition,
-                    right_condition,
+                    original_left_condition,
+                    original_right_condition,
                     probe_schema,
                     build_schema,
                     column_projections,
@@ -1404,10 +1405,12 @@ impl PhysicalPlanBuilder {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_sql::ColumnBindingBuilder;
     use databend_common_sql::Visibility;
     use databend_common_sql::plans::BoundColumnRef;
+    use databend_common_sql::plans::CastExpr;
     use databend_common_sql::plans::FunctionCall;
     use databend_common_sql::plans::JoinEquiCondition;
 
@@ -1417,16 +1420,33 @@ mod tests {
         DataType::Number(NumberDataType::Int64)
     }
 
-    fn column(index: usize) -> ScalarExpr {
+    fn typed_column(index: usize, data_type: DataType) -> ScalarExpr {
         let column = ColumnBindingBuilder::new(
             index.to_string(),
             Symbol::from_field_index(index),
-            Box::new(int64_type()),
+            Box::new(data_type),
             Visibility::Visible,
         )
         .build();
 
         ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+    }
+
+    fn column(index: usize) -> ScalarExpr {
+        typed_column(index, int64_type())
+    }
+
+    fn cast(expr: ScalarExpr, target_type: DataType, is_try: bool) -> ScalarExpr {
+        ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try,
+            argument: Box::new(expr),
+            target_type: Box::new(target_type),
+        })
+    }
+
+    fn cast_to_string(expr: ScalarExpr) -> ScalarExpr {
+        cast(expr, DataType::String, false)
     }
 
     fn schemas() -> (DataSchema, DataSchema, DataSchema) {
@@ -1473,6 +1493,102 @@ mod tests {
 
         assert!(info.is_some());
         assert_eq!(info.unwrap().projection, vec![0, 1]);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_safe_integer_string_round_trip_from_join_key() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let string_source = typed_column(1, DataType::Number(NumberDataType::Int32));
+        let string = cast_to_string(string_source.clone());
+
+        let condition = JoinEquiCondition::new(integer.clone(), string, false);
+        let (left, right) = condition.canonical_keys();
+
+        assert_eq!(left, &integer);
+        assert_eq!(right, &string_source);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_safe_round_trip_when_cast_is_on_left() -> Result<()> {
+        let string_source = typed_column(0, DataType::Number(NumberDataType::UInt32));
+        let string = cast_to_string(string_source.clone());
+        let integer = typed_column(1, DataType::Number(NumberDataType::Int64));
+
+        let condition = JoinEquiCondition::new(string, integer.clone(), false);
+        let (left, right) = condition.canonical_keys();
+
+        assert_eq!(left, &string_source);
+        assert_eq!(right, &integer);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_nullable_integer_string_round_trip() -> Result<()> {
+        let nullable_int64 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+        let nullable_int32 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32)));
+        let integer = typed_column(0, nullable_int64);
+        let string_source = typed_column(1, nullable_int32);
+        let string = cast(
+            string_source.clone(),
+            DataType::Nullable(Box::new(DataType::String)),
+            false,
+        );
+
+        let condition = JoinEquiCondition::new(integer.clone(), string, false);
+        let (left, right) = condition.canonical_keys();
+
+        assert_eq!(left, &integer);
+        assert_eq!(right, &string_source);
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_try_cast_and_arbitrary_string_join_keys() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let source = typed_column(1, DataType::Number(NumberDataType::Int32));
+        let try_cast = cast(source, DataType::String, true);
+
+        let condition = JoinEquiCondition::new(integer.clone(), try_cast.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &try_cast));
+
+        let string_column = typed_column(1, DataType::String);
+        let condition = JoinEquiCondition::new(integer.clone(), string_column.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &string_column));
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_non_integer_cast_sources_and_operands() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let source_types = [
+            DataType::Number(NumberDataType::Float64),
+            DataType::Decimal(DecimalSize::new(10, 2)?),
+            DataType::Boolean,
+            DataType::Date,
+        ];
+
+        for (index, source_type) in source_types.into_iter().enumerate() {
+            let string = cast_to_string(typed_column(index + 1, source_type));
+            let condition = JoinEquiCondition::new(integer.clone(), string.clone(), false);
+            assert_eq!(condition.canonical_keys(), (&integer, &string));
+        }
+
+        let float = typed_column(1, DataType::Number(NumberDataType::Float64));
+        let string = cast_to_string(typed_column(2, DataType::Number(NumberDataType::Int32)));
+        let condition = JoinEquiCondition::new(float.clone(), string.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&float, &string));
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_potentially_lossy_mixed_sign_string_join_key() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let string = cast_to_string(typed_column(1, DataType::Number(NumberDataType::UInt64)));
+
+        let condition = JoinEquiCondition::new(integer.clone(), string.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &string));
         Ok(())
     }
 }

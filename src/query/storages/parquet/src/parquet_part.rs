@@ -24,6 +24,7 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -276,7 +277,7 @@ pub(crate) fn collect_parts(
     num_columns_to_read: usize,
     total_columns_to_read: usize,
 ) -> Result<(PartStatistics, Partitions)> {
-    let mut partitions = Partitions::default();
+    let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
     let mut stats = PartStatistics::default();
 
     let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;

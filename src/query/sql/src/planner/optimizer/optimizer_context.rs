@@ -35,6 +35,7 @@ pub struct OptimizerContext {
 
     // Optimizer configurations
     enable_distributed_optimization: RwLock<bool>,
+    force_local_execution: RwLock<bool>,
     enable_join_reorder: RwLock<bool>,
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
@@ -77,6 +78,7 @@ impl OptimizerContext {
             metadata,
 
             enable_distributed_optimization: RwLock::new(false),
+            force_local_execution: RwLock::new(false),
             enable_join_reorder: RwLock::new(true),
             enable_dphyp: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
@@ -115,7 +117,17 @@ impl OptimizerContext {
     }
 
     pub fn get_enable_distributed_optimization(&self) -> bool {
-        *self.enable_distributed_optimization.read()
+        *self.enable_distributed_optimization.read() && !*self.force_local_execution.read()
+    }
+
+    /// Force the query to remain in one local execution graph.
+    ///
+    /// Unlike `Distribution::Serial`, this prevents distributed fragments from
+    /// being created below a serial operator. The decision is sticky for the
+    /// lifetime of this optimizer context.
+    pub fn set_force_local_execution(self: &Arc<Self>) -> &Arc<Self> {
+        *self.force_local_execution.write() = true;
+        self
     }
 
     fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> &Arc<Self> {

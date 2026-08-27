@@ -41,6 +41,27 @@ echo "create stage s4 FILE_FORMAT = (type = PARQUET);" | bendsql_connect_root
 echo "copy into @s4 from t2;" | bendsql_connect_root | cut -d$'\t' -f1,2
 echo "select * from @s4;" | bendsql_connect_root
 
+echo '--- small parquet file should stream multiple blocks'
+echo 'remove @s4;' | bendsql_connect_root
+echo "copy into @s4 from (select number a from numbers(131073)) file_format=(type=parquet) single=true;" | bendsql_connect_root | cut -d$'\t' -f1
+echo "select /*+ set_var(parquet_fast_read_bytes=1073741824) set_var(max_block_size=65536) */ count(), min(a), max(a), min(metadata\$file_row_number), max(metadata\$file_row_number), count(distinct metadata\$file_row_number) from @s4;" | bendsql_connect_root
+echo 'drop table if exists small_parquet_streaming;' | bendsql_connect_root
+echo 'create table small_parquet_streaming(a uint64, row_number uint64);' | bendsql_connect_root
+echo "copy /*+ set_var(parquet_fast_read_bytes=1073741824) set_var(max_block_size=65536) */ into small_parquet_streaming from (select a, metadata\$file_row_number from @s4) force=true;" | bendsql_connect_root | cut -d$'\t' -f2
+echo 'select count(), min(a), max(a), min(row_number), max(row_number), count(distinct row_number) from small_parquet_streaming;' | bendsql_connect_root
+echo 'truncate table small_parquet_streaming;' | bendsql_connect_root
+# A valid 332-byte Parquet file with one UInt64 column and zero rows.
+EMPTY_PARQUET_DIR="/tmp/databend_empty_parquet_$$"
+mkdir -p "$EMPTY_PARQUET_DIR"
+printf '%s' 'UEFSMRUEFQAVAkwVABUAEgAAABUEGSw1ABgGc2NoZW1hFQIAFQQlAhgBYSUcTKwTQBIAAAAWABkcGRwmABwVBBklAAYZGAFhFQIWABYcFh4mACYIKRwVBBUAFQIAAAAWHBYAJggWHgAZHBgMQVJST1c6c2NoZW1hGKABLy8vLy8zQUFBQUFRQUFBQUFBQUtBQXdBQmdBRkFBZ0FDZ0FBQUFBQkJBQU1BQUFBQ0FBSUFBQUFCQUFJQUFBQUJBQUFBQUVBQUFBVUFBQUFFQUFVQUFnQUJnQUhBQXdBQUFBUUFCQUFBQUFBQUFFQ0VBQUFBQmdBQUFBRUFBQUFBQUFBQUFFQUFBQmhBQVlBQ0FBRUFBWUFBQUJBQUFBQQAYIHBhcnF1ZXQtY3BwLWFycm93IHZlcnNpb24gMjEuMC4wGRwcAAAAMQEAAFBBUjE=' | base64 --decode > "$EMPTY_PARQUET_DIR/empty.parquet"
+echo 'drop stage if exists empty_parquet;' | bendsql_connect_root
+echo "create stage empty_parquet url = 'fs://$EMPTY_PARQUET_DIR/' file_format = (type = parquet);" | bendsql_connect_root
+echo "copy /*+ set_var(parquet_fast_read_bytes=1073741824) set_var(max_block_size=65536) */ into small_parquet_streaming from (select a, metadata\$file_row_number from @empty_parquet) force=true;" | bendsql_connect_root | cut -d$'\t' -f2
+echo 'select count() from small_parquet_streaming;' | bendsql_connect_root
+echo 'drop stage empty_parquet;' | bendsql_connect_root
+rm -rf "$EMPTY_PARQUET_DIR"
+echo 'drop table small_parquet_streaming;' | bendsql_connect_root
+
 ## generate large parquet files will cause timeout, we comment it now
 echo '--- large parquet file should be worked on parallel by rowgroups'
 echo 'remove @s4;' | bendsql_connect_root

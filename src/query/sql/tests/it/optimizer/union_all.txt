@@ -24,6 +24,30 @@ cardinality: 30.000
 precise_cardinality: Some(30)
 column_stat: k (#2) min=1, max=8, ndv=8.0, null_count=3, histogram=none
 
+=== all_null_branch ===
+description: An all-NULL branch contributes only its NULL count, preserving the other branch's value statistics.
+sql: SELECT k FROM l UNION ALL SELECT NULL
+path: []
+node:
+UnionAll
+├── output: [k (#2)]
+├── left: [l.k (#0)]
+├── right: [CAST(NULL (#1) AS Int64 NULL)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── Scan
+│   ├── table: default.l (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── EvalScalar
+    ├── scalars: [NULL AS (#1)]
+    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+cardinality: 11.000
+precise_cardinality: Some(11)
+column_stat: k (#2) min=1, max=3, ndv=3.0, null_count=2, histogram=some
+
 === finite_range_reduces_union_ndv_bound ===
 description: UnionAll reduces its conservative NDV upper bound to the merged finite range before an outer cast consumes the statistics.
 sql: SELECT CAST(k AS BIGINT) AS k FROM (SELECT k FROM l UNION ALL SELECT k FROM r) AS u
@@ -190,8 +214,8 @@ Join(Inner)
 
 cardinality: 300.000
 precise_cardinality: None
-column_stat: k (#2) min=1, max=8, ndv=8.0, null_count=0, histogram=none
-column_stat: j.k (#3) min=1, max=8, ndv=8.0, null_count=0, histogram=none
+column_stat: k (#2) min=1, max=8, ndv=8.0, null_count=~0.0, histogram=none
+column_stat: j.k (#3) min=1, max=8, ndv=8.0, null_count=~0.0, histogram=none
 path: [Left, Right]
 node:
 UnionAll
