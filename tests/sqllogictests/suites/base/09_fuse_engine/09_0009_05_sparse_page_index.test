@@ -365,5 +365,26 @@ UNSET max_block_size
 statement ok
 DROP TABLE spi_nocluster
 
+# Regression: SQL binding may retain a String literal for an equality against a nullable integer
+# cluster key. The sparse pruner must safely normalize the literal and still narrow granules.
+statement ok
+CREATE TABLE spi_implicit_string(key_id int null, payload string) CLUSTER BY (key_id) row_per_block = 10000 index_granularity = 100
+
+statement ok
+INSERT INTO spi_implicit_string SELECT number, concat('v', to_string(number)) FROM numbers(10000)
+
+query IT
+SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3167'
+----
+3167 v3167
+
+query T
+EXPLAIN SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3167'
+----
+<slt:ignore>granule pruning: 100 to 2<slt:ignore>
+
+statement ok
+DROP TABLE spi_implicit_string
+
 statement ok
 DROP DATABASE db_09_0009_05

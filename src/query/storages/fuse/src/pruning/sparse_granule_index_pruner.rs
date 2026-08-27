@@ -40,6 +40,7 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_cache::CacheLockStats;
+use databend_storages_common_index::eliminate_cast;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -276,6 +277,9 @@ impl GranulePredicateEvaluator {
             Some(filter) => filter,
             None => filter,
         };
+
+        let input_domains = ConstantFolder::full_input_domains(&filter);
+        let filter = eliminate_cast(&filter, input_domains).unwrap_or(filter);
 
         let (source_domains, source_predicate_impossible) = source_predicate_domains(&filter);
         let projected_key_domains = cluster_keys
@@ -853,7 +857,19 @@ fn constraints_to_domain(constraints: &[RangeConstraint<String>]) -> ConstraintD
     }
 
     let data_type = &first.data_type;
-    let (full_min, full_max) = Domain::full(&data_type.remove_nullable()).to_minmax();
+    // A constant whose scalar kind differs from the column type (e.g. a String
+    // literal surviving an implicit cast on an Int32 column) can neither be
+    // ordered against the column bounds nor form a `ColumnStatistics`
+    // interval. The former `Domain::from_datum` path returned `Err` for such
+    // constants; fail open the same way.
+    let value_type = data_type.remove_nullable();
+    if constraints
+        .iter()
+        .any(|constraint| constraint.constant.as_ref().infer_data_type() != value_type)
+    {
+        return ConstraintDomain::Unknown;
+    }
+    let (full_min, full_max) = Domain::full(&value_type).to_minmax();
     let mut lower = (!full_min.is_null()).then_some(full_min);
     let mut upper = (!full_max.is_null()).then_some(full_max);
     for constraint in constraints {
@@ -1271,6 +1287,81 @@ mod tests {
         assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![0..2]);
     }
 
+    #[test]
+    fn test_implicit_string_literal_prunes_integer_key() {
+        let key_id = column(
+            "key_id",
+            DataType::Number(NumberDataType::Int32).wrap_nullable(),
+        );
+        let literal = constant(Scalar::String("3167".to_string()), DataType::String);
+        let filters = [
+            call("is_true", vec![call("eq", vec![
+                key_id.clone(),
+                literal.clone(),
+            ])]),
+            call("is_true", vec![call("eq", vec![literal, key_id.clone()])]),
+        ];
+
+        for filter in filters {
+            let evaluator = GranulePredicateEvaluator::try_create(
+                FunctionContext::default(),
+                vec![key_id.clone()],
+                filter,
+            )
+            .unwrap();
+
+            // The implicit String literal inside `is_true` is normalized to the
+            // integer key type, so exact point pruning remains available.
+            let mut conjuncts = Vec::new();
+            collect_conjuncts(&evaluator.filter, &mut conjuncts);
+            let [Expr::FunctionCall(call)] = conjuncts.as_slice() else {
+                panic!(
+                    "expected one equality after cast elimination, got {:?}",
+                    evaluator.filter
+                );
+            };
+            let constraint = RangeConstraint::try_from_function_call(call).unwrap();
+            assert_eq!(constraint.constant, Scalar::Number(3167_i32.into()));
+
+            let mins = vec![
+                tuple(vec![Scalar::Number(1000_i32.into())]),
+                tuple(vec![Scalar::Number(3000_i32.into())]),
+                tuple(vec![Scalar::Number(4000_i32.into())]),
+            ];
+            let max = tuple(vec![Scalar::Number(5000_i32.into())]);
+            assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![1..2]);
+        }
+    }
+
+    #[test]
+    fn test_invalid_string_literal_fails_open_for_integer_key() {
+        let key_id = column(
+            "key_id",
+            DataType::Number(NumberDataType::Int32).wrap_nullable(),
+        );
+
+        for literal in ["not-an-int", "2147483648"] {
+            let filter = call("eq", vec![
+                key_id.clone(),
+                constant(Scalar::String(literal.to_string()), DataType::String),
+            ]);
+            let evaluator = GranulePredicateEvaluator::try_create(
+                FunctionContext::default(),
+                vec![key_id.clone()],
+                filter,
+            )
+            .unwrap();
+
+            let mins = vec![
+                tuple(vec![Scalar::Number(1000_i32.into())]),
+                tuple(vec![Scalar::Number(3000_i32.into())]),
+                tuple(vec![Scalar::Number(4000_i32.into())]),
+            ];
+            let max = tuple(vec![Scalar::Number(5000_i32.into())]);
+            assert_eq!(evaluator.apply(&mins, &max).unwrap(), vec![0..3]);
+        }
+    }
+
     fn int64_array(values: Vec<i64>) -> Expr<String> {
         constant(
             Scalar::Array(Int64Type::from_data(values)),
@@ -1458,6 +1549,53 @@ mod tests {
             &[],
             &Scalar::Number(100_i64.into()),
             &Scalar::Number(200_i64.into()),
+        ));
+    }
+
+    #[test]
+    fn test_heterogeneous_constraint_constant_fails_open() {
+        // Regression for the upstream-main merge: `Domain::from_datum` was
+        // replaced by `ColumnStatistics::new`, whose same-type assert panicked
+        // ("must have same type, min: '3167', max: 2147483647") when an
+        // implicit cast left a String literal against an Int32 column, e.g.
+        // `int_col = '3167'`. Such constraints must fail open like the old
+        // `from_datum` path did.
+        let heterogeneous = RangeConstraint {
+            column_id: "key_id".to_string(),
+            data_type: DataType::Number(NumberDataType::Int32).wrap_nullable(),
+            operator: "eq".to_string(),
+            constant: Scalar::String("3167".to_string()),
+            is_flipped: false,
+        };
+        assert!(matches!(
+            constraints_to_domain(std::slice::from_ref(&heterogeneous)),
+            ConstraintDomain::Unknown
+        ));
+
+        // Matching constants keep producing a pruning domain.
+        let homogeneous = RangeConstraint {
+            column_id: "key_id".to_string(),
+            data_type: DataType::Number(NumberDataType::Int32).wrap_nullable(),
+            operator: "eq".to_string(),
+            constant: Scalar::Number(3167_i32.into()),
+            is_flipped: false,
+        };
+        assert!(matches!(
+            constraints_to_domain(std::slice::from_ref(&homogeneous)),
+            ConstraintDomain::Domain(_)
+        ));
+
+        // So does the common `string_col = 'literal'` shape.
+        let string_eq = RangeConstraint {
+            column_id: "key_id".to_string(),
+            data_type: DataType::String,
+            operator: "eq".to_string(),
+            constant: Scalar::String("118".to_string()),
+            is_flipped: false,
+        };
+        assert!(matches!(
+            constraints_to_domain(std::slice::from_ref(&string_eq)),
+            ConstraintDomain::Domain(_)
         ));
     }
 
