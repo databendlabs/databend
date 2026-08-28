@@ -83,25 +83,6 @@ pub struct PlanFragment {
 }
 
 impl PlanFragment {
-    fn empty_exchange_plan(&self) -> Result<PhysicalPlan> {
-        let mut plan = self.plan.clone();
-        let exchange_sink = ExchangeSink::from_mut_physical_plan(&mut plan).ok_or_else(|| {
-            ErrorCode::Internal("Merge-input fragment exchange plan has no ExchangeSink")
-        })?;
-        exchange_sink.input = PhysicalPlan::new(ConstantTableScan {
-            meta: PhysicalPlanMeta::new("ConstantTableScan"),
-            values: exchange_sink
-                .schema
-                .fields()
-                .iter()
-                .map(|field| ColumnBuilder::with_capacity(field.data_type(), 0).build())
-                .collect(),
-            num_rows: 0,
-            output_schema: exchange_sink.schema.clone(),
-        });
-        Ok(plan)
-    }
-
     pub fn get_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -109,15 +90,39 @@ impl PlanFragment {
     ) -> Result<()> {
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
-        match &self.fragment_type {
-            FragmentType::Root => {
+        match (&self.fragment_type, self.has_merge_input) {
+            (FragmentType::Root, _) => {
                 let action = QueryFragmentAction::create(
                     Fragmenter::get_local_executor(ctx),
                     self.plan.clone(),
                 );
                 fragment_actions.add_action(action);
             }
-            _ if self.has_merge_input => {
+            (FragmentType::Intermediate, false) => {
+                // Otherwise distribute the fragment to all the executors.
+                for executor in Fragmenter::get_executors(ctx) {
+                    let action = QueryFragmentAction::create(executor, self.plan.clone());
+                    fragment_actions.add_action(action);
+                }
+            }
+            (FragmentType::Source, false) => {
+                // Redistribute partitions
+                self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
+            }
+            (FragmentType::MutationSource, false) => {
+                self.redistribute_mutation_source(ctx, &mut fragment_actions)?;
+            }
+            (FragmentType::ReplaceInto, false) => {
+                // Redistribute partitions
+                self.redistribute_replace_into(ctx, &mut fragment_actions)?;
+            }
+            (FragmentType::Compact, false) => {
+                self.redistribute_compact(ctx, &mut fragment_actions)?;
+            }
+            (FragmentType::Recluster, false) => {
+                self.redistribute_recluster(ctx, &mut fragment_actions)?;
+            }
+            (_, true) => {
                 // Only the coordinator can consume the merge input. Other exchange
                 // destinations still need this fragment to receive remote data.
                 let local_executor = Fragmenter::get_local_executor(ctx);
@@ -127,7 +132,25 @@ impl PlanFragment {
                 ));
 
                 if let Some(exchange) = &self.exchange {
-                    let empty_plan = self.empty_exchange_plan()?;
+                    let mut empty_plan = self.plan.clone();
+                    let Some(exchange_sink) = ExchangeSink::from_mut_physical_plan(&mut empty_plan)
+                    else {
+                        return Err(ErrorCode::Internal(
+                            "Merge-input fragment exchange plan has no ExchangeSink",
+                        ));
+                    };
+                    exchange_sink.input = PhysicalPlan::new(ConstantTableScan {
+                        meta: PhysicalPlanMeta::new("ConstantTableScan"),
+                        values: exchange_sink
+                            .schema
+                            .fields()
+                            .iter()
+                            .map(|field| ColumnBuilder::with_capacity(field.data_type(), 0).build())
+                            .collect(),
+                        num_rows: 0,
+                        output_schema: exchange_sink.schema.clone(),
+                    });
+
                     for executor in exchange.get_destinations() {
                         if executor != local_executor {
                             fragment_actions.add_action(QueryFragmentAction::create(
@@ -137,30 +160,6 @@ impl PlanFragment {
                         }
                     }
                 }
-            }
-            FragmentType::Intermediate => {
-                // Otherwise distribute the fragment to all the executors.
-                for executor in Fragmenter::get_executors(ctx) {
-                    let action = QueryFragmentAction::create(executor, self.plan.clone());
-                    fragment_actions.add_action(action);
-                }
-            }
-            FragmentType::Source => {
-                // Redistribute partitions
-                self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
-            }
-            FragmentType::MutationSource => {
-                self.redistribute_mutation_source(ctx, &mut fragment_actions)?;
-            }
-            FragmentType::ReplaceInto => {
-                // Redistribute partitions
-                self.redistribute_replace_into(ctx, &mut fragment_actions)?;
-            }
-            FragmentType::Compact => {
-                self.redistribute_compact(ctx, &mut fragment_actions)?;
-            }
-            FragmentType::Recluster => {
-                self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
         }
 
