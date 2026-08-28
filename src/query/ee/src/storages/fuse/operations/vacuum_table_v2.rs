@@ -615,9 +615,14 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeZone;
     use databend_common_meta_app::schema::TableIndexType;
+    use databend_query::test_kits::TestFixture;
+    use futures_util::StreamExt;
+    use opendal::services::Memory;
 
     use super::*;
+    use crate::test_kits::context::EESetup;
 
     #[test]
     fn test_collect_block_index_locations_keeps_per_block_order() {
@@ -653,5 +658,188 @@ mod tests {
             ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
+    }
+
+    mod memory {
+        use super::*;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn streaming_block_gc_keeps_protected_and_cutoff_blocks() -> anyhow::Result<()> {
+            const CANDIDATE_BLOCKS: usize = VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 2;
+            const BLOCK_PREFIX: &str = "1/2/_b/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+
+            let gc_root_timestamp = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+            let mut candidates = Vec::with_capacity(CANDIDATE_BLOCKS);
+            for i in 0..CANDIDATE_BLOCKS {
+                let timestamp = old_timestamp + chrono::Duration::milliseconds(i as i64);
+                let uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(timestamp);
+                let path = format!("{}h{}_v2.parquet", BLOCK_PREFIX, uuid.simple());
+                dal.write(&path, vec![i as u8]).await?;
+                candidates.push(path);
+            }
+
+            let protected_block = candidates[0].clone();
+            let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                gc_root_timestamp + chrono::Duration::seconds(1),
+            );
+            let after_cutoff_block =
+                format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
+            dal.write(&after_cutoff_block, vec![1]).await?;
+
+            let protected_blocks = HashSet::from([protected_block.clone()]);
+            let inverted_indexes = BTreeMap::new();
+            let block_gc = BlockGcContext {
+                dal: &dal,
+                ctx: &ctx,
+                table_desc: "streaming-gc-test",
+                block_location_prefix: BLOCK_PREFIX,
+                until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
+                gc_root_timestamp,
+                gc_root_meta_ts: gc_root_timestamp,
+                gc_root_blocks: &protected_blocks,
+                table_agg_index_ids: &[],
+                inverted_indexes: &inverted_indexes,
+                start: std::time::Instant::now(),
+            };
+            assert_ne!(dal.info().scheme(), Scheme::Fs);
+
+            let mut removed_files = Vec::new();
+            let stats = purge_blocks_before_gc_root(&block_gc, &mut removed_files).await?;
+
+            assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS);
+            assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
+            // Each removed block also contributes its derived bloom-index path.
+            assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 2);
+            assert!(dal.exists(&protected_block).await?);
+            assert!(dal.exists(&after_cutoff_block).await?);
+            for path in candidates.iter().skip(1) {
+                assert!(!dal.exists(path).await?, "garbage block survived: {path}");
+            }
+
+            Ok(())
+        }
+    }
+
+    mod real_s3 {
+        use opendal::services::S3;
+
+        use super::*;
+
+        /// Exercises the AWS S3 continuation-token boundary while vacuum deletes the page that
+        /// was just listed. CI supplies credentials through the runner's AWS credential chain.
+        #[tokio::test(flavor = "multi_thread")]
+        #[ignore = "requires an explicitly configured real AWS S3 bucket"]
+        async fn streaming_block_gc_across_list_pages() -> anyhow::Result<()> {
+            const CANDIDATE_BLOCKS: usize = VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 2;
+            const BLOCK_PREFIX: &str = "1/2/_b/";
+
+            let bucket = std::env::var("DATABEND_TEST_S3_BUCKET")?;
+            let region = std::env::var("DATABEND_TEST_S3_REGION")?;
+            let configured_root = std::env::var("DATABEND_TEST_S3_ROOT").unwrap_or_default();
+            let test_id =
+                databend_storages_common_table_meta::meta::uuid_from_date_time(Utc::now())
+                    .simple()
+                    .to_string();
+            let configured_root = configured_root.trim_matches('/');
+            let test_root = if configured_root.is_empty() {
+                format!("vacuum2/{test_id}/")
+            } else {
+                format!("{configured_root}/vacuum2/{test_id}/")
+            };
+
+            let builder = S3::default()
+                .bucket(&bucket)
+                .root(&test_root)
+                .region(&region);
+            let dal = Operator::new(builder)?.finish();
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+
+            let test_result: anyhow::Result<()> = async {
+                let gc_root_timestamp = Utc
+                    .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                    .single()
+                    .expect("valid gc-root timestamp");
+                let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+                let candidates = futures_util::stream::iter(0..CANDIDATE_BLOCKS)
+                    .map(|i| {
+                        let dal = dal.clone();
+                        async move {
+                            let timestamp =
+                                old_timestamp + chrono::Duration::milliseconds(i as i64);
+                            let uuid =
+                                databend_storages_common_table_meta::meta::uuid_from_date_time(
+                                    timestamp,
+                                );
+                            let path = format!("{}h{}_v2.parquet", BLOCK_PREFIX, uuid.simple());
+                            dal.write(&path, vec![i as u8]).await?;
+                            Ok::<_, opendal::Error>(path)
+                        }
+                    })
+                    .buffered(32)
+                    .try_collect::<Vec<_>>()
+                    .await?;
+
+                // AWS S3 returns at most 1000 keys per ListObjectsV2 page. Vacuum deletes those
+                // first 1000 keys before requesting the page containing this protected key.
+                let protected_block = candidates.last().unwrap().clone();
+                let after_cutoff_uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(
+                        gc_root_timestamp + chrono::Duration::seconds(1),
+                    );
+                let after_cutoff_block =
+                    format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
+                dal.write(&after_cutoff_block, vec![1]).await?;
+
+                let protected_blocks = HashSet::from([protected_block.clone()]);
+                let inverted_indexes = BTreeMap::new();
+                let block_gc = BlockGcContext {
+                    dal: &dal,
+                    ctx: &ctx,
+                    table_desc: "real-s3-streaming-gc-test",
+                    block_location_prefix: BLOCK_PREFIX,
+                    until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
+                    gc_root_timestamp,
+                    gc_root_meta_ts: gc_root_timestamp,
+                    gc_root_blocks: &protected_blocks,
+                    table_agg_index_ids: &[],
+                    inverted_indexes: &inverted_indexes,
+                    start: std::time::Instant::now(),
+                };
+                anyhow::ensure!(dal.info().scheme() == Scheme::S3, "expected an S3 operator");
+
+                let mut removed_files = Vec::new();
+                let stats = purge_blocks_before_gc_root(&block_gc, &mut removed_files).await?;
+
+                anyhow::ensure!(stats.scanned_blocks == CANDIDATE_BLOCKS);
+                anyhow::ensure!(stats.removed_blocks == CANDIDATE_BLOCKS - 1);
+                anyhow::ensure!(stats.removed_files == (CANDIDATE_BLOCKS - 1) * 2);
+                anyhow::ensure!(dal.exists(&protected_block).await?);
+                anyhow::ensure!(dal.exists(&after_cutoff_block).await?);
+                for path in candidates.iter().take(CANDIDATE_BLOCKS - 1) {
+                    anyhow::ensure!(!dal.exists(path).await?, "garbage block survived: {path}");
+                }
+
+                Ok(())
+            }
+            .await;
+
+            let cleanup_result = dal.remove_all("").await;
+            test_result?;
+            cleanup_result?;
+            Ok(())
+        }
     }
 }
