@@ -736,16 +736,8 @@ impl SubqueryDecorrelatorOptimizer {
                     )
                 };
 
-                let mut is_null_equal = Vec::new();
-                for (i, (l, r)) in left_conditions
-                    .iter()
-                    .zip(right_conditions.iter())
-                    .enumerate()
-                {
-                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
-                        is_null_equal.push(i);
-                    }
-                }
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;

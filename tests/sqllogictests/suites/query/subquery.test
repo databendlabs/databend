@@ -91,6 +91,62 @@ FROM nullable_fixed_probe_a AS a;
 NULL 0
 
 statement ok
+CREATE OR REPLACE TABLE nullable_scalar_outer (id INT, k DECIMAL(6, 0) NULL);
+
+statement ok
+INSERT INTO nullable_scalar_outer VALUES (1, NULL), (2, NULL), (3, 1);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_scalar_payload (v INT);
+
+statement ok
+INSERT INTO nullable_scalar_payload VALUES (7);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_scalar_two_keys (id INT, k1 INT NULL, k2 INT NULL);
+
+statement ok
+INSERT INTO nullable_scalar_two_keys VALUES
+    (1, NULL, 1),
+    (2, NULL, 1),
+    (3, NULL, 2),
+    (4, 1, 1);
+
+query IFI rowsort
+SELECT
+    id,
+    k,
+    (SELECT MAX(v) FROM nullable_scalar_payload WHERE outer_row.k IS NULL)
+FROM nullable_scalar_outer AS outer_row;
+----
+1 NULL 7
+2 NULL 7
+3 1 NULL
+
+query IFI rowsort
+SELECT
+    id,
+    k,
+    (SELECT COUNT(*) FROM nullable_scalar_payload WHERE outer_row.k IS NULL)
+FROM nullable_scalar_outer AS outer_row;
+----
+1 NULL 1
+2 NULL 1
+3 1 0
+
+query I rowsort
+SELECT id
+FROM nullable_scalar_two_keys AS outer_row
+WHERE (
+    SELECT COUNT(*)
+    FROM nullable_scalar_payload
+    WHERE outer_row.k1 IS NULL AND outer_row.k2 = 1
+) = 1;
+----
+1
+2
+
+statement ok
 SET enable_experimental_new_join = 0;
 
 query TBB rowsort
@@ -103,6 +159,40 @@ FROM nullable_fixed_probe_a AS a;
 0 1 1
 1 0 0
 NULL 0 0
+
+query IFI rowsort
+SELECT
+    id,
+    k,
+    (SELECT MAX(v) FROM nullable_scalar_payload WHERE outer_row.k IS NULL)
+FROM nullable_scalar_outer AS outer_row;
+----
+1 NULL 7
+2 NULL 7
+3 1 NULL
+
+query IFI rowsort
+SELECT
+    id,
+    k,
+    (SELECT COUNT(*) FROM nullable_scalar_payload WHERE outer_row.k IS NULL)
+FROM nullable_scalar_outer AS outer_row;
+----
+1 NULL 1
+2 NULL 1
+3 1 0
+
+query I rowsort
+SELECT id
+FROM nullable_scalar_two_keys AS outer_row
+WHERE (
+    SELECT COUNT(*)
+    FROM nullable_scalar_payload
+    WHERE outer_row.k1 IS NULL AND outer_row.k2 = 1
+) = 1;
+----
+1
+2
 
 statement ok
 SET enable_experimental_new_join = 1;

@@ -27,7 +27,6 @@ use super::algorithm::JoinEdgeRef;
 use super::algorithm::JoinNode;
 use super::algorithm::JoinOrderModel;
 use crate::IndexType;
-use crate::ScalarExpr;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::RelExpr;
@@ -59,7 +58,7 @@ pub struct DPhpyOptimizer {
 
 struct DPhypJoinOrderModel<'a> {
     join_relations: &'a [JoinRelation],
-    join_conditions: &'a [(ScalarExpr, ScalarExpr)],
+    join_conditions: &'a [JoinEquiCondition],
 }
 
 impl DPhypJoinOrderModel<'_> {
@@ -71,17 +70,14 @@ impl DPhypJoinOrderModel<'_> {
     ) -> SExpr {
         let left_expr = left.state().clone();
         let right_expr = right.state().clone();
-        let mut left_conditions = Vec::with_capacity(edge_refs.len());
-        let mut right_conditions = Vec::with_capacity(edge_refs.len());
+        let mut conditions = Vec::with_capacity(edge_refs.len());
 
         for edge_ref in edge_refs {
-            let (mut left_condition, mut right_condition) =
-                self.join_conditions[edge_ref.id].clone();
+            let mut condition = self.join_conditions[edge_ref.id].clone();
             if edge_ref.reversed {
-                std::mem::swap(&mut left_condition, &mut right_condition);
+                std::mem::swap(&mut condition.left, &mut condition.right);
             }
-            left_conditions.push(left_condition);
-            right_conditions.push(right_condition);
+            conditions.push(condition);
         }
 
         let join_type = if edge_refs.is_empty() {
@@ -90,11 +86,7 @@ impl DPhypJoinOrderModel<'_> {
             JoinType::Inner
         };
         let rel_op = RelOperator::Join(Join {
-            equi_conditions: JoinEquiCondition::new_conditions(
-                left_conditions,
-                right_conditions,
-                vec![],
-            ),
+            equi_conditions: conditions,
             non_equi_conditions: vec![],
             join_type,
             marker_index: None,
@@ -269,7 +261,7 @@ impl DPhpyOptimizer {
     async fn process_join_node(
         &mut self,
         s_expr: &SExpr,
-        join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
+        join_conditions: &mut Vec<JoinEquiCondition>,
     ) -> Result<(Arc<SExpr>, bool)> {
         let op = match s_expr.plan() {
             RelOperator::Join(op) => op,
@@ -304,7 +296,7 @@ impl DPhpyOptimizer {
                 break;
             }
 
-            join_conditions.push((condition.left.clone(), condition.right.clone()));
+            join_conditions.push(condition.clone());
         }
 
         // Add non-equi conditions to filters
@@ -571,7 +563,7 @@ impl DPhpyOptimizer {
     async fn process_unary_node(
         &mut self,
         s_expr: &SExpr,
-        join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
+        join_conditions: &mut Vec<JoinEquiCondition>,
         join_child: bool,
         join_relation: Option<&SExpr>,
     ) -> Result<(Arc<SExpr>, bool)> {
@@ -611,7 +603,7 @@ impl DPhpyOptimizer {
     async fn get_base_relations(
         &mut self,
         s_expr: &SExpr,
-        join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
+        join_conditions: &mut Vec<JoinEquiCondition>,
         join_child: bool,
         join_relation: Option<&SExpr>,
         is_subquery: bool,
@@ -673,7 +665,6 @@ impl DPhpyOptimizer {
         }
 
         // Firstly, we need to extract all join conditions and base tables
-        // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
         let (s_expr, optimized) = self
             .get_base_relations(s_expr, &mut join_conditions, false, None, false)
@@ -715,18 +706,18 @@ impl DPhpyOptimizer {
     fn build_join_order_edges(
         &self,
         hyper_dp: &mut HyperDp<'_, DPhypJoinOrderModel<'_>>,
-        join_conditions: &[(ScalarExpr, ScalarExpr)],
+        join_conditions: &[JoinEquiCondition],
     ) -> Result<bool> {
-        for (edge_id, (left_condition, right_condition)) in join_conditions.iter().enumerate() {
+        for (edge_id, condition) in join_conditions.iter().enumerate() {
             let mut left_relation_set = HashSet::new();
             let mut right_relation_set = HashSet::new();
 
-            let left_used_tables = left_condition.used_tables()?;
+            let left_used_tables = condition.left.used_tables()?;
             for table in left_used_tables.iter() {
                 left_relation_set.insert(self.table_index_map[table]);
             }
 
-            let right_used_tables = right_condition.used_tables()?;
+            let right_used_tables = condition.right.used_tables()?;
             for table in right_used_tables.iter() {
                 right_relation_set.insert(self.table_index_map[table]);
             }
@@ -904,7 +895,7 @@ mod tests {
     use crate::plans::MaterializedCTERef;
     use crate::plans::Sequence;
 
-    fn bool_constant(value: bool) -> ScalarExpr {
+    fn bool_constant(value: bool) -> crate::ScalarExpr {
         ConstantExpr {
             span: None,
             value: Scalar::Boolean(value),
