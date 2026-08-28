@@ -83,6 +83,25 @@ pub struct PlanFragment {
 }
 
 impl PlanFragment {
+    fn empty_exchange_plan(&self) -> Result<PhysicalPlan> {
+        let mut plan = self.plan.clone();
+        let exchange_sink = ExchangeSink::from_mut_physical_plan(&mut plan).ok_or_else(|| {
+            ErrorCode::Internal("Merge-input fragment exchange plan has no ExchangeSink")
+        })?;
+        exchange_sink.input = PhysicalPlan::new(ConstantTableScan {
+            meta: PhysicalPlanMeta::new("ConstantTableScan"),
+            values: exchange_sink
+                .schema
+                .fields()
+                .iter()
+                .map(|field| ColumnBuilder::with_capacity(field.data_type(), 0).build())
+                .collect(),
+            num_rows: 0,
+            output_schema: exchange_sink.schema.clone(),
+        });
+        Ok(plan)
+    }
+
     pub fn get_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -98,53 +117,32 @@ impl PlanFragment {
                 );
                 fragment_actions.add_action(action);
             }
-            FragmentType::Intermediate => {
-                if self.has_merge_input {
-                    // Only the coordinator can consume the merge input. Other shuffle
-                    // destinations still need this fragment to receive remote data.
-                    let local_executor = Fragmenter::get_local_executor(ctx);
-                    let action =
-                        QueryFragmentAction::create(local_executor.clone(), self.plan.clone());
-                    fragment_actions.add_action(action);
+            _ if self.has_merge_input => {
+                // Only the coordinator can consume the merge input. Other exchange
+                // destinations still need this fragment to receive remote data.
+                let local_executor = Fragmenter::get_local_executor(ctx);
+                fragment_actions.add_action(QueryFragmentAction::create(
+                    local_executor.clone(),
+                    self.plan.clone(),
+                ));
 
-                    if let Some(exchange) = &self.exchange {
-                        let mut empty_plan = self.plan.clone();
-                        let Some(exchange_sink) =
-                            ExchangeSink::from_mut_physical_plan(&mut empty_plan)
-                        else {
-                            return Err(ErrorCode::Internal(
-                                "Intermediate fragment exchange plan has no ExchangeSink",
+                if let Some(exchange) = &self.exchange {
+                    let empty_plan = self.empty_exchange_plan()?;
+                    for executor in exchange.get_destinations() {
+                        if executor != local_executor {
+                            fragment_actions.add_action(QueryFragmentAction::create(
+                                executor,
+                                empty_plan.clone(),
                             ));
-                        };
-                        exchange_sink.input = PhysicalPlan::new(ConstantTableScan {
-                            meta: PhysicalPlanMeta::new("ConstantTableScan"),
-                            values: exchange_sink
-                                .schema
-                                .fields()
-                                .iter()
-                                .map(|field| {
-                                    ColumnBuilder::with_capacity(field.data_type(), 0).build()
-                                })
-                                .collect(),
-                            num_rows: 0,
-                            output_schema: exchange_sink.schema.clone(),
-                        });
-
-                        for executor in exchange.get_destinations() {
-                            if executor != local_executor {
-                                fragment_actions.add_action(QueryFragmentAction::create(
-                                    executor,
-                                    empty_plan.clone(),
-                                ));
-                            }
                         }
                     }
-                } else {
-                    // Otherwise distribute the fragment to all the executors.
-                    for executor in Fragmenter::get_executors(ctx) {
-                        let action = QueryFragmentAction::create(executor, self.plan.clone());
-                        fragment_actions.add_action(action);
-                    }
+                }
+            }
+            FragmentType::Intermediate => {
+                // Otherwise distribute the fragment to all the executors.
+                for executor in Fragmenter::get_executors(ctx) {
+                    let action = QueryFragmentAction::create(executor, self.plan.clone());
+                    fragment_actions.add_action(action);
                 }
             }
             FragmentType::Source => {
