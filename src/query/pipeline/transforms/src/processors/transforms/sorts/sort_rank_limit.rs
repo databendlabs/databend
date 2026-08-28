@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataBlockVec;
@@ -23,21 +24,57 @@ use databend_common_expression::SortColumnDescription;
 use crate::processors::AccumulatingTransform;
 
 pub struct TransformRankLimitSort {
-    limit: LimitType,
+    limit: usize,
     batch_rows: usize,
     sort_desc: Arc<[SortColumnDescription]>,
     blocks: DataBlockVec,
     rows: usize,
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
 }
 
 impl TransformRankLimitSort {
-    pub fn new(limit: usize, sort_desc: Arc<[SortColumnDescription]>, batch_rows: usize) -> Self {
+    pub fn new(
+        limit: usize,
+        sort_desc: Arc<[SortColumnDescription]>,
+        batch_rows: usize,
+        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+    ) -> Self {
         Self {
-            limit: LimitType::LimitRank(limit),
+            limit,
             batch_rows,
             sort_desc,
             blocks: DataBlockVec::default(),
             rows: 0,
+            runtime_top_n_filter,
+        }
+    }
+
+    fn publish_runtime_top_n_boundary(&self, block: &DataBlock) {
+        let Some((source_offset, filter)) = &self.runtime_top_n_filter else {
+            return;
+        };
+        if self.limit == 0 {
+            return;
+        }
+
+        let column = block.get_by_offset(*source_offset);
+        let mut previous = None;
+        let mut rank = 0;
+        for row in 0..block.num_rows() {
+            let Some(value) = column.index(row) else {
+                continue;
+            };
+            let value = value.to_owned();
+            if previous.as_ref() == Some(&value) {
+                continue;
+            }
+
+            rank += 1;
+            if rank == self.limit {
+                filter.update(&value);
+                return;
+            }
+            previous = Some(value);
         }
     }
 
@@ -46,9 +83,12 @@ impl TransformRankLimitSort {
             return Ok(None);
         }
 
-        let sorted = self.blocks.sort_limit(self.sort_desc.clone(), self.limit)?;
+        let sorted = self
+            .blocks
+            .sort_limit(self.sort_desc.clone(), LimitType::LimitRank(self.limit))?;
         self.blocks.clear();
         self.rows = 0;
+        self.publish_runtime_top_n_boundary(&sorted);
 
         Ok(Some(sorted))
     }
