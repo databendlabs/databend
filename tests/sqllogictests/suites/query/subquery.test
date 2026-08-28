@@ -91,6 +91,37 @@ FROM nullable_fixed_probe_a AS a;
 NULL 0
 
 statement ok
+CREATE OR REPLACE TABLE nullable_cross_type_probe_a (integer_key BIGINT NULL);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_cross_type_probe_b (decimal_key DECIMAL(20, 0) NULL);
+
+statement ok
+INSERT INTO nullable_cross_type_probe_a VALUES
+    (NULL), (NULL), (NULL), (2097735747), (2109914711);
+
+statement ok
+INSERT INTO nullable_cross_type_probe_b VALUES (0);
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+0
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE NOT EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+5
+
+statement ok
 SET enable_experimental_new_join = 0;
 
 query TBB rowsort
@@ -103,6 +134,24 @@ FROM nullable_fixed_probe_a AS a;
 0 1 1
 1 0 0
 NULL 0 0
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+0
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE NOT EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+5
 
 statement ok
 SET enable_experimental_new_join = 1;
