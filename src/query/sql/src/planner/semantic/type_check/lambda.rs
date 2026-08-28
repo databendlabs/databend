@@ -340,10 +340,8 @@ where A: super::TypeCheckAdapter
             lambda_expr,
         )?;
 
-        let return_type = if func_name == "array_filter" || func_name == "map_filter" {
-            if lambda_type.remove_nullable() == DataType::Boolean {
-                arg_type.clone()
-            } else {
+        if func_name == "array_filter" || func_name == "map_filter" {
+            if lambda_type.remove_nullable() != DataType::Boolean {
                 return Err(ErrorCode::SemanticError(
                     format!("invalid lambda function for `{}`, the result data type of lambda function must be boolean", func_name)
                 )
@@ -370,36 +368,7 @@ where A: super::TypeCheckAdapter
                     target_type,
                 });
             }
-            max_ty.wrap_nullable()
-        } else if func_name == "map_transform_keys" {
-            if arg_type.is_nullable() {
-                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
-                    lambda_type.clone(),
-                    inner_tys[1].clone(),
-                ])))))
-            } else {
-                DataType::Map(Box::new(DataType::Tuple(vec![
-                    lambda_type.clone(),
-                    inner_tys[1].clone(),
-                ])))
-            }
-        } else if func_name == "map_transform_values" {
-            if arg_type.is_nullable() {
-                DataType::Nullable(Box::new(DataType::Map(Box::new(DataType::Tuple(vec![
-                    inner_tys[0].clone(),
-                    lambda_type.clone(),
-                ])))))
-            } else {
-                DataType::Map(Box::new(DataType::Tuple(vec![
-                    inner_tys[0].clone(),
-                    lambda_type.clone(),
-                ])))
-            }
-        } else if arg_type.is_nullable() {
-            DataType::Nullable(Box::new(DataType::Array(Box::new(lambda_type.clone()))))
-        } else {
-            DataType::Array(Box::new(lambda_type.clone()))
-        };
+        }
 
         let (lambda_func, data_type) = match arg_type.remove_nullable() {
             // Null and Empty array can convert to ConstantExpr
@@ -452,18 +421,17 @@ where A: super::TypeCheckAdapter
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
-                (
-                    LambdaFunc {
-                        span,
-                        func_name: func_name.to_string(),
-                        args: lambda_args,
-                        lambda_expr: Box::new(remote_lambda_expr),
-                        lambda_display,
-                        return_type: Box::new(return_type.clone()),
-                    }
-                    .into(),
-                    return_type,
-                )
+                let mut lambda_func = LambdaFunc {
+                    span,
+                    func_name: func_name.to_string(),
+                    args: lambda_args,
+                    lambda_expr: Box::new(remote_lambda_expr),
+                    lambda_display,
+                    return_type: Box::new(DataType::Null),
+                };
+                lambda_func.refresh_return_type()?;
+                let return_type = lambda_func.return_type.as_ref().clone();
+                (lambda_func.into(), return_type)
             }
         };
 
@@ -637,24 +605,18 @@ where A: super::TypeCheckAdapter
             )));
         }
 
-        let return_type = if json_type.is_nullable() || path_type.is_nullable() {
-            DataType::Nullable(Box::new(DataType::Variant))
-        } else {
-            DataType::Variant
+        let mut lambda_func = LambdaFunc {
+            span,
+            func_name: func_name.to_string(),
+            args: lambda_args,
+            lambda_expr: Box::new(remote_lambda_expr),
+            lambda_display,
+            return_type: Box::new(DataType::Null),
         };
+        lambda_func.refresh_return_type()?;
+        let return_type = lambda_func.return_type.as_ref().clone();
 
-        Ok(Box::new((
-            LambdaFunc {
-                span,
-                func_name: func_name.to_string(),
-                args: lambda_args,
-                lambda_expr: Box::new(remote_lambda_expr),
-                lambda_display,
-                return_type: Box::new(return_type.clone()),
-            }
-            .into(),
-            return_type,
-        )))
+        Ok(Box::new((lambda_func.into(), return_type)))
     }
 
     fn check_lambda_param_count(

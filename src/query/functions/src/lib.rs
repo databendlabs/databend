@@ -86,6 +86,8 @@ pub const GENERAL_WINDOW_FUNCTIONS: [Ascii<&str>; 13] = [
 pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
     ["first_value", "first", "last_value", "last", "nth_value"];
 
+// Keep this list in sync with LambdaFunc::infer_return_type in common-sql.
+// JSON collection aliases are normalized to their non-json names by the binder.
 pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 17] = [
     Ascii::new("array_transform"),
     Ascii::new("array_apply"),
