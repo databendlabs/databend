@@ -74,6 +74,15 @@ jobs:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
           parallel: ${{ matrix.tests.parallel }}
+      - name: Run native UDF sqllogic tests
+        if: matrix.tests.dirs == 'standalone' && matrix.handler == 'http'
+        shell: bash
+        run: |
+          target/${BUILD_PROFILE}/databend-sqllogictests \
+            --handlers http \
+            --run_dir udf_native \
+            --enable_sandbox \
+            --parallel 1
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure

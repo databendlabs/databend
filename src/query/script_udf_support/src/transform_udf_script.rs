@@ -595,10 +595,8 @@ impl TransformUdfScript {
     pub fn init_runtime(funcs: &[ScriptUdfFunctionDesc]) -> Result<RuntimeTimeRes> {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
-            let (code, code_str) = match &func.udf_type {
-                UDFType::Script(box script_code) => {
-                    (script_code, String::from_utf8(script_code.code.to_vec())?)
-                }
+            let code = match &func.udf_type {
+                UDFType::Script(box script_code) => script_code,
                 _ => continue,
             };
 
@@ -609,6 +607,7 @@ impl TransformUdfScript {
                     imports_stage_info,
                     ..
                 }) => {
+                    let code_str = String::from_utf8(code.code.to_vec())?;
                     let mut dependencies = Self::extract_deps(&code_str)?;
                     dependencies.extend_from_slice(packages.as_slice());
 
@@ -1186,6 +1185,51 @@ mod venv {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_init_wasm_runtime_with_non_utf8_binary() {
+        // A valid WASM module with a custom section whose payload length starts
+        // with 0xbf at byte 9. Custom section data is binary and need not be UTF-8.
+        let mut code = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+        code.extend_from_slice(&[0x00, 0xbf, 0x02, 0x00]);
+        code.extend_from_slice(&[0x00; 318]);
+
+        // Export an empty function as the Arrow UDF ABI version marker.
+        code.extend_from_slice(&[
+            0x01, 0x04, 0x01, 0x60, 0x00, 0x00, // type section
+            0x03, 0x02, 0x01, 0x00, // function section
+            0x07, 0x18, 0x01, 0x14, b'A', b'R', b'R', b'O', b'W', b'U', b'D', b'F', b'_', b'V',
+            b'E', b'R', b'S', b'I', b'O', b'N', b'_', b'3', b'_', b'0', 0x00, 0x00, // export section
+            0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b, // code section
+        ]);
+
+        let utf8_err = std::str::from_utf8(&code).expect_err("WASM fixture must not be UTF-8");
+        assert_eq!(utf8_err.valid_up_to(), 9);
+
+        let func = ScriptUdfFunctionDesc {
+            name: "non_utf8_wasm".to_string(),
+            func_name: "unused".to_string(),
+            output_column: databend_common_sql::Symbol::new(0),
+            arg_indices: vec![],
+            arg_exprs: vec![],
+            data_type: Box::new(DataType::Number(
+                databend_common_expression::types::NumberDataType::Int32,
+            )),
+            headers: BTreeMap::new(),
+            udf_type: UDFType::Script(Box::new(UDFScriptCode {
+                language: UDFLanguage::WebAssembly,
+                runtime_version: String::new(),
+                imports_stage_info: vec![],
+                imports: vec![],
+                packages: vec![],
+                code: Arc::new(code.into_boxed_slice()),
+            })),
+        };
+
+        let runtimes = TransformUdfScript::init_runtime(&[func])
+            .expect("binary WASM code should not be parsed as UTF-8");
+        assert!(runtimes.contains_key("non_utf8_wasm"));
+    }
 
     #[test]
     fn test_extract_deps_returns_error_for_malformed_toml() {
