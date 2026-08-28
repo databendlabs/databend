@@ -26,6 +26,87 @@ FROM t1;
 2 1 0
 NULL 0 1
 
+statement ok
+CREATE OR REPLACE TABLE nullable_fixed_probe_a (
+    decimal_key DECIMAL(6, 0) NULL,
+    boolean_key BOOLEAN NULL,
+    timestamp_key TIMESTAMP NULL
+);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_fixed_probe_b (
+    decimal_key DECIMAL(6, 0) NULL,
+    boolean_key BOOLEAN NULL,
+    timestamp_key TIMESTAMP NULL
+);
+
+statement ok
+INSERT INTO nullable_fixed_probe_a VALUES
+    (NULL, NULL, NULL),
+    (0, false, TIMESTAMP '1970-01-01 00:00:00'),
+    (1, true, TIMESTAMP '1970-01-01 00:00:01');
+
+statement ok
+INSERT INTO nullable_fixed_probe_b VALUES
+    (0, false, TIMESTAMP '1970-01-01 00:00:00');
+
+query T rowsort
+SELECT to_string(decimal_key)
+FROM nullable_fixed_probe_a AS a
+WHERE EXISTS (
+    SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.decimal_key = a.decimal_key
+);
+----
+0
+
+query T rowsort
+SELECT to_string(decimal_key)
+FROM nullable_fixed_probe_a AS a
+WHERE NOT EXISTS (
+    SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.decimal_key = a.decimal_key
+);
+----
+1
+NULL
+
+query TBB rowsort
+SELECT
+    to_string(decimal_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.boolean_key = a.boolean_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.timestamp_key = a.timestamp_key)
+FROM nullable_fixed_probe_a AS a;
+----
+0 1 1
+1 0 0
+NULL 0 0
+
+query TI rowsort
+SELECT
+    to_string(decimal_key),
+    (SELECT COUNT(*) FROM nullable_fixed_probe_b AS b WHERE b.decimal_key = a.decimal_key)
+FROM nullable_fixed_probe_a AS a;
+----
+0 1
+1 0
+NULL 0
+
+statement ok
+SET enable_experimental_new_join = 0;
+
+query TBB rowsort
+SELECT
+    to_string(decimal_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.boolean_key = a.boolean_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.timestamp_key = a.timestamp_key)
+FROM nullable_fixed_probe_a AS a;
+----
+0 1 1
+1 0 0
+NULL 0 0
+
+statement ok
+SET enable_experimental_new_join = 1;
+
 query IBB rowsort
 SELECT
       t1.a,
