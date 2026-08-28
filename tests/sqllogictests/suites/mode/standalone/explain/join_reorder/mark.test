@@ -101,7 +101,7 @@ EvalScalar
     ├── join type: LEFT SINGLE
     ├── build keys: [c (#8)]
     ├── probe keys: [c (#0)]
-    ├── keys is null equal: [false]
+    ├── keys is null equal: [true]
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)

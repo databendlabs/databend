@@ -930,13 +930,13 @@ explain select * from a where a.id = (select id from b where a.id = b.id);
 HashJoin
 ├── output columns: [a.id (#0), a.c1 (#1)]
 ├── join type: INNER
-├── build keys: [scalar_subquery_2 (#2), id (#2)]
-├── probe keys: [a.id (#0), a.id (#0)]
-├── keys is null equal: [false, false]
+├── build keys: [id (#2), scalar_subquery_2 (#2)]
+├── probe keys: [id (#0), a.id (#0)]
+├── keys is null equal: [true, false]
 ├── filters: []
 ├── build join filters:
-│   ├── filter id:0, build key:scalar_subquery_2 (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
-│   └── filter id:1, build key:id (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
+│   ├── filter id:0, build key:id (#2), probe targets:[id (#0)@scan0], filter type:
+│   └── filter id:1, build key:scalar_subquery_2 (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.40
 ├── TableScan(Build)
 │   ├── table: default.default.b
@@ -1327,10 +1327,10 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [a (#0)]
 ├── probe keys: [a (#3)]
-├── keys is null equal: [false]
+├── keys is null equal: [true]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── build join filters:
-│   └── filter id:0, build key:a (#0), probe targets:[a (#3)@scan1], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:a (#0), probe targets:[a (#3)@scan1], filter type:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -1375,10 +1375,10 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [a (#0)]
 ├── probe keys: [a (#3)]
-├── keys is null equal: [false]
+├── keys is null equal: [true]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── build join filters:
-│   └── filter id:0, build key:a (#0), probe targets:[a (#3)@scan1], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:a (#0), probe targets:[a (#3)@scan1], filter type:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
