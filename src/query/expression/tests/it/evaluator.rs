@@ -19,6 +19,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -76,4 +77,71 @@ fn test_run_lambda_ignores_physical_nullable_wrapper_for_non_nullable_array() {
         unsafe { column.index_unchecked(0) },
         ScalarRef::Array(_)
     ));
+}
+
+#[test]
+fn test_run_lambda_preserves_degenerate_collection() {
+    let block = DataBlock::empty();
+    let func_ctx = FunctionContext::default();
+    let fn_registry = FunctionRegistry::empty();
+    let evaluator = Evaluator::new(&block, &func_ctx, &fn_registry);
+    let lambda_expr = RemoteExpr::ColumnRef {
+        span: None,
+        id: 0,
+        data_type: DataType::Null,
+        display_name: "unused".to_string(),
+    };
+
+    for (func_name, data_type, return_type, scalar) in [
+        (
+            "array_transform",
+            DataType::Null,
+            DataType::Null,
+            Scalar::Null,
+        ),
+        (
+            "array_reduce",
+            DataType::EmptyArray,
+            DataType::Null,
+            Scalar::Null,
+        ),
+        (
+            "map_filter",
+            DataType::EmptyMap,
+            DataType::EmptyMap,
+            Scalar::EmptyMap,
+        ),
+    ] {
+        let scalar_result = evaluator
+            .run_lambda(
+                func_name,
+                vec![Value::Scalar(scalar.clone())],
+                vec![data_type.clone()],
+                &lambda_expr,
+                &return_type,
+                None,
+            )
+            .unwrap();
+        assert_eq!(scalar_result.into_scalar().unwrap(), scalar);
+
+        // A captured column determines the row count even when the rewritten
+        // collection argument itself is a scalar constant.
+        let column_result = evaluator
+            .run_lambda(
+                func_name,
+                vec![
+                    Value::Column(Int64Type::from_data(vec![1_i64, 2, 3])),
+                    Value::Scalar(scalar.clone()),
+                ],
+                vec![DataType::Number(NumberDataType::Int64), data_type.clone()],
+                &lambda_expr,
+                &return_type,
+                None,
+            )
+            .unwrap();
+        let column = column_result.into_column().unwrap();
+        assert_eq!(column.len(), 3);
+        assert_eq!(column.data_type(), return_type);
+        assert!((0..3).all(|index| unsafe { column.index_unchecked(index) } == scalar.as_ref()));
+    }
 }

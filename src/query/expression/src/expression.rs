@@ -1103,6 +1103,17 @@ impl<Index: ColumnIndex> Expr<Index> {
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
+    pub fn data_type(&self) -> &DataType {
+        match self {
+            RemoteExpr::Constant { data_type, .. } | RemoteExpr::ColumnRef { data_type, .. } => {
+                data_type
+            }
+            RemoteExpr::Cast { dest_type, .. } => dest_type,
+            RemoteExpr::FunctionCall { return_type, .. }
+            | RemoteExpr::LambdaFunctionCall { return_type, .. } => return_type,
+        }
+    }
+
     pub fn column_refs(&self) -> HashMap<Index, DataType> {
         #[recursive::recursive]
         fn walk<Index: ColumnIndex>(expr: &RemoteExpr<Index>, refs: &mut HashMap<Index, DataType>) {
