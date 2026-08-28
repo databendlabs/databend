@@ -46,6 +46,21 @@ async fn test_optimizer_rewrites_keep_function_return_types_consistent() -> Resu
         .await?;
     }
 
+    let grouping_array_lambda = SqlTestCase {
+        name: "grouping_sets_refresh_lambda_return_type",
+        description: "",
+        setup_sqls: &["CREATE TABLE grouping_array_t(a Array(Int64) NOT NULL)"],
+        sql: "SELECT grouping(a) FROM grouping_array_t GROUP BY CUBE(a) \
+              HAVING array_length(array_filter(a, x -> x <> -42)) >= 0",
+    };
+    for grouping_sets_to_union in ["0", "1"] {
+        optimize(&grouping_array_lambda, &[(
+            "grouping_sets_to_union",
+            grouping_sets_to_union,
+        )])
+        .await?;
+    }
+
     let cases = [
         SqlTestCase {
             name: "filter_join_rewrite_refreshes_function_return_types",
@@ -77,6 +92,21 @@ async fn test_optimizer_rewrites_keep_function_return_types_consistent() -> Resu
             description: "",
             setup_sqls: &["CREATE TABLE tuple_variant_t(a Nullable(Tuple(x Int64, y String)))"],
             sql: "SELECT CAST(a AS VARIANT) FROM tuple_variant_t",
+        },
+        SqlTestCase {
+            name: "equivalent_constant_rewrite_refreshes_lambda_return_type",
+            description: "",
+            setup_sqls: &["CREATE TABLE equivalent_lambda_t(a Nullable(Array(Int64)))"],
+            sql: "SELECT * FROM equivalent_lambda_t \
+                  WHERE a = CAST([1] AS ARRAY(INT64)) \
+                  AND array_length(array_filter(a, x -> x > 0)) > 0",
+        },
+        SqlTestCase {
+            name: "equivalent_empty_array_rewrite_keeps_lambda_type_valid",
+            description: "",
+            setup_sqls: &["CREATE TABLE equivalent_reduce_t(a Nullable(Array(Int64)))"],
+            sql: "SELECT * FROM equivalent_reduce_t \
+                  WHERE a = [] AND array_reduce(a, (x, y) -> x + y) > 0",
         },
     ];
     for case in &cases {

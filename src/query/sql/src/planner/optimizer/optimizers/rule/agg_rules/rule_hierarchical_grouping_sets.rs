@@ -44,6 +44,7 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
@@ -1030,5 +1031,12 @@ impl VisitorMut<'_> for GroupingSetsNullVisitor {
             self.visit(argument)?;
         }
         function.refresh_return_type()
+    }
+
+    fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+        for argument in &mut lambda.args {
+            self.visit(argument)?;
+        }
+        lambda.refresh_return_type()
     }
 }

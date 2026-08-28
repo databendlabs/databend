@@ -267,6 +267,21 @@ impl QueryInfo {
                 return Err(ErrorCode::Internal("Can't found column from index"));
             }
             ScalarExpr::ConstantExpr(_) => scalar.clone(),
+            ScalarExpr::LambdaFunction(lambda) => {
+                let mut new_args = Vec::with_capacity(lambda.args.len());
+                for arg in &lambda.args {
+                    let Some(new_arg) =
+                        self.check_output_cols(arg, index_output_cols, new_selection_set)?
+                    else {
+                        return Ok(None);
+                    };
+                    new_args.push(new_arg);
+                }
+                let mut new_lambda = lambda.clone();
+                new_lambda.args = new_args;
+                new_lambda.refresh_return_type()?;
+                ScalarExpr::LambdaFunction(new_lambda)
+            }
             ScalarExpr::FunctionCall(func) => {
                 let mut valid = true;
                 let mut new_args = Vec::with_capacity(func.arguments.len());

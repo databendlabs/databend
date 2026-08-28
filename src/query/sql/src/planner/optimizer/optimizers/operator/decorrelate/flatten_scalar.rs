@@ -108,14 +108,16 @@ impl SubqueryDecorrelatorOptimizer {
                     .iter()
                     .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                let mut lambda = LambdaFunc {
                     span: lambda.span,
                     func_name: lambda.func_name.clone(),
                     args,
                     lambda_expr: lambda.lambda_expr.clone(),
                     lambda_display: lambda.lambda_display.clone(),
                     return_type: lambda.return_type.clone(),
-                }))
+                };
+                lambda.refresh_return_type()?;
+                Ok(ScalarExpr::LambdaFunction(lambda))
             }
             ScalarExpr::CastExpr(cast_expr) => {
                 let scalar =
