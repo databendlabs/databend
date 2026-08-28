@@ -326,14 +326,16 @@ impl Binder {
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                let mut lambda_func = LambdaFunc {
                     span: lambda_func.span,
                     func_name: lambda_func.func_name.clone(),
                     args,
                     lambda_expr: lambda_func.lambda_expr.clone(),
                     lambda_display: lambda_func.lambda_display.clone(),
                     return_type: lambda_func.return_type.clone(),
-                }))
+                };
+                lambda_func.refresh_return_type()?;
+                Ok(ScalarExpr::LambdaFunction(lambda_func))
             }
             window @ ScalarExpr::WindowFunction(_) => {
                 if !rewrite_flags.needs_window_rewrite {

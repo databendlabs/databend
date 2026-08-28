@@ -46,6 +46,21 @@ async fn test_optimizer_rewrites_keep_function_return_types_consistent() -> Resu
         .await?;
     }
 
+    let grouping_array_lambda = SqlTestCase {
+        name: "grouping_sets_refresh_lambda_return_type",
+        description: "",
+        setup_sqls: &["CREATE TABLE grouping_array_t(a Array(Int64) NOT NULL)"],
+        sql: "SELECT grouping(a) FROM grouping_array_t GROUP BY CUBE(a) \
+              HAVING array_length(array_filter(a, x -> x <> -42)) >= 0",
+    };
+    for grouping_sets_to_union in ["0", "1"] {
+        optimize(&grouping_array_lambda, &[(
+            "grouping_sets_to_union",
+            grouping_sets_to_union,
+        )])
+        .await?;
+    }
+
     let cases = [
         SqlTestCase {
             name: "filter_join_rewrite_refreshes_function_return_types",

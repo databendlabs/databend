@@ -1172,6 +1172,92 @@ pub struct LambdaFunc {
     pub return_type: Box<DataType>,
 }
 
+impl LambdaFunc {
+    pub fn infer_return_type(&self) -> Result<DataType> {
+        if self.func_name == "json_path_transform" {
+            let [json, path, ..] = self.args.as_slice() else {
+                return Err(ErrorCode::Internal(
+                    "json_path_transform requires json and path arguments",
+                ));
+            };
+            let return_type = DataType::Variant;
+            return Ok(
+                if json.data_type().is_nullable_or_null() || path.data_type().is_nullable_or_null()
+                {
+                    return_type.wrap_nullable()
+                } else {
+                    return_type
+                },
+            );
+        }
+
+        // Captured columns precede the collection argument.
+        let collection_type = self
+            .args
+            .last()
+            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
+            .data_type();
+        let is_nullable = collection_type.is_nullable_or_null();
+        let collection_type = collection_type.remove_nullable();
+        let lambda_type = || {
+            self.lambda_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .data_type()
+                .clone()
+        };
+
+        let return_type = match self.func_name.as_str() {
+            "array_filter" | "map_filter" => collection_type,
+            "array_reduce" => match collection_type {
+                DataType::Array(inner_type) => inner_type.wrap_nullable(),
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "array_reduce requires an array argument",
+                    ));
+                }
+            },
+            "array_transform" | "array_apply" | "array_map" => {
+                DataType::Array(Box::new(lambda_type()))
+            }
+            "map_transform_keys" | "map_transform_values" => {
+                let DataType::Map(box DataType::Tuple(fields)) = collection_type else {
+                    return Err(ErrorCode::Internal(
+                        "map lambda function requires a map argument",
+                    ));
+                };
+                if fields.len() != 2 {
+                    return Err(ErrorCode::Internal(
+                        "map lambda function requires key and value fields",
+                    ));
+                }
+                let fields = if self.func_name == "map_transform_keys" {
+                    vec![lambda_type(), fields[1].clone()]
+                } else {
+                    vec![fields[0].clone(), lambda_type()]
+                };
+                DataType::Map(Box::new(DataType::Tuple(fields)))
+            }
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "unsupported lambda function {}",
+                    self.func_name
+                )));
+            }
+        };
+
+        Ok(if is_nullable {
+            return_type.wrap_nullable()
+        } else {
+            return_type
+        })
+    }
+
+    pub fn refresh_return_type(&mut self) -> Result<()> {
+        self.return_type = Box::new(self.infer_return_type()?);
+        Ok(())
+    }
+}
+
 #[derive(Clone, Educe)]
 #[educe(Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
