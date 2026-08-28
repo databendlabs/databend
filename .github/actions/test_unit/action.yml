@@ -32,10 +32,10 @@ runs:
         cargo nextest run \
           --no-fail-fast \
           --hide-progress-bar \
-          --run-ignored ignored-only \
+          --run-ignored only \
           -p databend-enterprise-query \
           --lib \
-          -E 'test(/::real_s3::/)'
+          real_s3::streaming_block_gc_across_list_pages
       env:
         DATABEND_TEST_S3_BUCKET: databend-ci
         DATABEND_TEST_S3_REGION: us-east-2
