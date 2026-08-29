@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
-use std::collections::HashSet;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::mem;
 
 use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
@@ -30,17 +27,18 @@ use crate::filters::FilterBuilder;
 type UnderType = u64;
 
 pub struct BloomBuilder {
-    bloom_size: u64,
-    seed: u64,
-    inner: HashSet<u64>,
+    false_positive_rate: f64,
+    filter: BloomFilter,
 }
 
 impl BloomBuilder {
-    pub fn create(bloom_size: u64, seed: u64) -> Self {
+    pub fn create(max_bloom_size: u64, false_positive_rate: f64, seed: u64) -> Self {
+        // Folding requires the final bitmap size to divide the initial size. Rounding the cap down
+        // to a power of two makes every smaller power-of-two candidate foldable.
+        let bloom_size = BloomFilter::foldable_size(max_bloom_size);
         Self {
-            bloom_size,
-            seed,
-            inner: Default::default(),
+            false_positive_rate,
+            filter: BloomFilter::with_false_positive_rate(bloom_size, false_positive_rate, seed),
         }
     }
 }
@@ -63,9 +61,9 @@ impl FilterBuilder for BloomBuilder {
     type Error = BloomBuildingError;
 
     fn add_key<K: Hash>(&mut self, key: &K) {
-        let mut hasher64 = CityHasher64::with_seed(self.seed);
+        let mut hasher64 = CityHasher64::with_seed(self.filter.seed);
         key.hash(&mut hasher64);
-        self.inner.insert(hasher64.finish());
+        self.filter.add(hasher64.finish());
     }
 
     fn add_keys<K: Hash>(&mut self, keys: &[K]) {
@@ -74,18 +72,13 @@ impl FilterBuilder for BloomBuilder {
         }
     }
 
-    fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
-        self.inner.extend(digests);
+    fn add_digest(&mut self, digest: u64) {
+        self.filter.add(digest);
     }
 
-    fn build(&mut self) -> Result<Self::Filter, Self::Error> {
-        let item_count = self.inner.len();
-
-        let mut filter = BloomFilter::with_item_count(self.bloom_size, item_count, self.seed);
-        for hash in mem::take(&mut self.inner) {
-            filter.add(hash);
-        }
-        Ok(filter)
+    fn build(mut self) -> Result<Self::Filter, Self::Error> {
+        self.filter.fold(self.false_positive_rate);
+        Ok(self.filter)
     }
 }
 
@@ -177,20 +170,87 @@ impl Filter for BloomFilter {
 }
 
 impl BloomFilter {
-    pub fn with_item_count(filter_size: u64, mut item_count: usize, seed: u64) -> Self {
-        assert!(filter_size > 0, "filter_size must be > 0");
-        item_count = max(item_count, 1);
+    fn foldable_size(max_filter_size: u64) -> u64 {
+        assert!(max_filter_size >= std::mem::size_of::<UnderType>() as u64);
+        // A power-of-two size lets every smaller candidate divide the original bit count, which
+        // is required to preserve membership when corresponding bitmap positions are folded.
+        1 << max_filter_size.ilog2()
+    }
 
-        let k = Self::optimal_k(filter_size, item_count);
-
-        Self::with_params(filter_size, k, seed)
+    pub fn with_false_positive_rate(filter_size: u64, false_positive_rate: f64, seed: u64) -> Self {
+        assert!(
+            false_positive_rate.is_finite()
+                && false_positive_rate > 0.0
+                && false_positive_rate < 1.0,
+            "false_positive_rate must be finite and between 0 and 1"
+        );
+        let hashes = Self::hashes_for_false_positive_rate(false_positive_rate);
+        Self::with_params(filter_size, hashes, seed)
     }
 
     #[inline]
-    fn optimal_k(filter_size: u64, item_count: usize) -> u64 {
-        let ln2 = std::f64::consts::LN_2;
-        let k = ((filter_size as f64 / item_count as f64) * ln2).ceil() as u64;
-        k.max(1)
+    fn hashes_for_false_positive_rate(false_positive_rate: f64) -> u64 {
+        (-false_positive_rate.ln() / std::f64::consts::LN_2)
+            .ceil()
+            .max(1.0) as u64
+    }
+
+    fn estimated_item_count(&self) -> f64 {
+        let bit_count = 8 * self.size;
+        let set_bits = self
+            .filter
+            .iter()
+            .map(|word| word.count_ones() as u64)
+            .sum::<u64>();
+        if set_bits == 0 {
+            return 0.0;
+        }
+        if set_bits == bit_count {
+            return f64::INFINITY;
+        }
+
+        let set_ratio = set_bits as f64 / bit_count as f64;
+        // Invert E[set_bits] = m * (1 - exp(-k * n / m)), where m is the number
+        // of bits, k is the number of probes, and n is the number of distinct digests.
+        -(bit_count as f64 / self.hashes as f64) * (-set_ratio).ln_1p()
+    }
+
+    fn target_size(&self, false_positive_rate: f64) -> u64 {
+        let item_count = self.estimated_item_count();
+        if !item_count.is_finite() {
+            return self.size;
+        }
+
+        // Solve p = (1 - exp(-k * n / m))^k for m. This uses the filter's actual
+        // integer probe count instead of assuming the theoretical optimal k.
+        let hashes = self.hashes as f64;
+        let occupied_probability = false_positive_rate.powf(1.0 / hashes);
+        let required_bits = -(hashes * item_count) / (-occupied_probability).ln_1p();
+        let required_bytes = (required_bits / 8.0).ceil() as u64;
+        if required_bytes >= self.size {
+            self.size
+        } else {
+            required_bytes
+                .max(std::mem::size_of::<UnderType>() as u64)
+                .next_power_of_two()
+        }
+    }
+
+    fn fold(&mut self, false_positive_rate: f64) {
+        let target_size = self.target_size(false_positive_rate);
+        while self.size > target_size {
+            let target_words = self.filter.len() / 2;
+            // For a power-of-two bitmap, (position % old_bits) % new_bits equals
+            // position % new_bits. OR-ing corresponding halves therefore preserves every bit
+            // that add() would have set had the filter originally used the smaller size.
+            for i in 0..target_words {
+                self.filter[i] |= self.filter[i + target_words];
+            }
+            self.filter.truncate(target_words);
+            self.size /= 2;
+            self.words = target_words as u64;
+        }
+        self.filter.shrink_to_fit();
     }
 
     pub fn with_params(size: u64, hashes: u64, seed: u64) -> Self {
@@ -206,15 +266,23 @@ impl BloomFilter {
         }
     }
 
-    pub fn resize(&mut self, size: u64) {
-        self.size = size;
-        self.words = size.div_ceil(std::mem::size_of::<UnderType>() as u64);
-        self.filter.resize(self.words as usize, 0);
+    #[inline]
+    fn probe_position(hash: u64, probe: u64, bit_count: u64) -> u64 {
+        let position = hash
+            .wrapping_add(probe)
+            .wrapping_add(probe.wrapping_mul(probe));
+        if bit_count.is_power_of_two() {
+            position & (bit_count - 1)
+        } else {
+            // Filters written before adaptive folding may have a non-power-of-two size.
+            position % bit_count
+        }
     }
 
     pub fn find(&self, hash: u64) -> bool {
+        let bit_count = 8 * self.size;
         for i in 0..self.hashes {
-            let pos = hash.wrapping_add(i).wrapping_add(i * i) % (8 * self.size);
+            let pos = Self::probe_position(hash, i, bit_count);
             let bit_pos = pos as usize % (8 * std::mem::size_of::<UnderType>());
             let word_index = pos as usize / (8 * std::mem::size_of::<UnderType>());
             if self.filter[word_index] & (1 << bit_pos) == 0 {
@@ -225,8 +293,9 @@ impl BloomFilter {
     }
 
     pub fn add(&mut self, hash: u64) {
+        let bit_count = 8 * self.size;
         for i in 0..self.hashes {
-            let pos = hash.wrapping_add(i).wrapping_add(i * i) % (8 * self.size);
+            let pos = Self::probe_position(hash, i, bit_count);
             let bit_pos = pos as usize % (8 * std::mem::size_of::<UnderType>());
             let word_index = pos as usize / (8 * std::mem::size_of::<UnderType>());
             self.filter[word_index] |= 1 << bit_pos;
@@ -280,9 +349,9 @@ mod tests {
     }
 
     #[test]
-    fn test_sbbf_insert_and_check() {
+    fn test_false_positive_rate_insert_and_check() {
         let item_count = 1_000_000;
-        let mut filter = BloomFilter::with_item_count(10 * 1024, item_count, 0);
+        let mut filter = BloomFilter::with_false_positive_rate(10 * 1024, 0.01, 0);
         for i in 0..item_count as u64 {
             filter.add(i);
             assert!(filter.find(i));
@@ -313,15 +382,78 @@ mod tests {
     }
 
     #[test]
-    fn test_optimal_k() {
-        assert_eq!(BloomFilter::optimal_k(1000, 100), 7); // (1000/100)*ln(2) ≈ 6.93 → ceil → 7
-        assert_eq!(BloomFilter::optimal_k(1024, 128), 6); // (1024/128)*ln(2) ≈ 5.545 → ceil → 6
-        assert_eq!(BloomFilter::optimal_k(100, 1000), 1); // (100/1000)*ln(2) ≈ 0.069 → ceil → 1
-        assert_eq!(BloomFilter::optimal_k(100, 100), 1); // (100/100)*ln(2) ≈ 0.693 → ceil → 1
-        assert_eq!(BloomFilter::optimal_k(1, 1), 1); // (1/1)*ln(2) ≈ 0.693 → ceil → 1
-        assert_eq!(BloomFilter::optimal_k(1, 1000), 1); // (1/1000)*ln(2) ≈ 0.0007 → ceil → 1
-        assert_eq!(BloomFilter::optimal_k(100, 50), 2); // (100/50)*ln(2) ≈ 1.386 → ceil → 2
-        assert_eq!(BloomFilter::optimal_k(101, 50), 2); // (101/50)*ln(2) ≈ 1.400 → ceil → 2
-        assert_eq!(BloomFilter::optimal_k(1_000_000, 10_000), 70); // (1e6/1e4)*ln(2) ≈ 69.31 → ceil → 70
+    fn test_hashes_for_false_positive_rate() {
+        assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.5), 1);
+        assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.1), 4);
+        assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.01), 7);
+        assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.001), 10);
+    }
+
+    #[test]
+    fn test_probe_position_uses_mask_with_legacy_fallback() {
+        let hash = 12_345_u64;
+        let probe = 7_u64;
+        let position = hash
+            .wrapping_add(probe)
+            .wrapping_add(probe.wrapping_mul(probe));
+
+        assert_eq!(
+            BloomFilter::probe_position(hash, probe, 8192),
+            position & 8191
+        );
+        assert_eq!(
+            BloomFilter::probe_position(hash, probe, 8000),
+            position % 8000
+        );
+    }
+
+    #[test]
+    fn test_bloom_builder_writes_filter_directly() {
+        let mut builder = BloomBuilder::create(1024, 0.01, 7);
+        builder.add_digest(11);
+        builder.add_digest(13);
+        builder.add_digests([17, 19].iter());
+
+        let filter = builder.build().unwrap();
+        assert_eq!(filter.hashes, 7);
+        assert_eq!(filter.size, 8);
+        assert!(filter.find(11));
+        assert!(filter.find(13));
+        assert!(filter.find(17));
+        assert!(filter.find(19));
+    }
+
+    #[test]
+    fn test_bloom_builder_folds_without_false_negatives() {
+        let digests = (0_u64..100)
+            .map(|value| {
+                let mut hasher = CityHasher64::with_seed(7);
+                value.hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        let mut builder = BloomBuilder::create(1024, 0.01, 7);
+        builder.add_digests(digests.iter());
+
+        let filter = builder.build().unwrap();
+        assert!(filter.size <= 256);
+        assert!(digests.iter().all(|digest| filter.find(*digest)));
+    }
+
+    #[test]
+    fn test_bloom_builder_keeps_max_size_when_full() {
+        let mut builder = BloomBuilder::create(1024, 0.01, 7);
+        for digest in 0..10_000 {
+            builder.add_digest(digest);
+        }
+
+        let filter = builder.build().unwrap();
+        assert_eq!(filter.size, 1024);
+    }
+
+    #[test]
+    fn test_foldable_size_does_not_exceed_limit() {
+        assert_eq!(BloomFilter::foldable_size(1024), 1024);
+        assert_eq!(BloomFilter::foldable_size(1000), 512);
     }
 }
