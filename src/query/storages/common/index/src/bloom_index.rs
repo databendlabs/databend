@@ -212,8 +212,9 @@ pub struct BloomIndex {
 
 /// Lazily maps all ngrams from the non-null strings in a value.
 ///
-/// ASCII rows use a byte-based fast path. Lowercase mappings for other rows are applied to each
-/// Unicode scalar independently. Both paths keep only one sliding ngram window.
+/// ASCII rows without uppercase bytes are read directly from the source string. Other ASCII rows
+/// use a reusable lowercase buffer. Unicode lowercase mappings are streamed through one sliding
+/// ngram window.
 pub struct NgramIterator<F> {
     arg: Value<AnyType>,
     map_ngram: F,
@@ -224,32 +225,28 @@ pub struct NgramIterator<F> {
 #[derive(Clone, Copy)]
 enum RowMode {
     Uninitialized,
-    Ascii,
+    AsciiBorrowed,
+    AsciiLowercased,
     Unicode,
 }
 
 struct RowNgrams {
+    gram_size: usize,
     mode: RowMode,
     byte_index: usize,
+    lowercase_ascii: Vec<u8>,
     lowercase_chars: Option<std::char::ToLowercase>,
-    window: SlidingNgramWindow,
+    unicode_window: UnicodeNgramWindow,
 }
 
-trait NgramWindow<Input> {
-    fn push(&mut self, input: Input) -> Option<&str>;
-}
-
-struct SlidingNgramWindow {
-    gram_size: usize,
+struct UnicodeNgramWindow {
     char_widths: VecDeque<usize>,
     bytes: VecDeque<u8>,
 }
 
-impl SlidingNgramWindow {
-    fn new(gram_size: usize) -> Self {
-        debug_assert!(gram_size > 0);
+impl UnicodeNgramWindow {
+    fn new() -> Self {
         Self {
-            gram_size,
             char_widths: VecDeque::new(),
             bytes: VecDeque::new(),
         }
@@ -260,8 +257,8 @@ impl SlidingNgramWindow {
         self.bytes.clear();
     }
 
-    fn current_ngram(&mut self, char_count: usize) -> Option<&str> {
-        if char_count < self.gram_size {
+    fn current_ngram(&mut self, gram_size: usize) -> Option<&str> {
+        if self.char_widths.len() < gram_size {
             return None;
         }
 
@@ -269,25 +266,8 @@ impl SlidingNgramWindow {
         // The window contains only ASCII or complete UTF-8 encodings.
         Some(unsafe { std::str::from_utf8_unchecked(bytes) })
     }
-}
-
-impl NgramWindow<u8> for SlidingNgramWindow {
-    fn push(&mut self, byte: u8) -> Option<&str> {
-        debug_assert!(byte.is_ascii());
-        debug_assert!(self.char_widths.is_empty());
-        if self.bytes.len() == self.gram_size {
-            self.bytes.pop_front().unwrap();
-        }
-
-        self.bytes.push_back(byte.to_ascii_lowercase());
-        let char_count = self.bytes.len();
-        self.current_ngram(char_count)
-    }
-}
-
-impl NgramWindow<char> for SlidingNgramWindow {
-    fn push(&mut self, c: char) -> Option<&str> {
-        if self.char_widths.len() == self.gram_size {
+    fn push(&mut self, c: char, gram_size: usize) -> Option<&str> {
+        if self.char_widths.len() == gram_size {
             let width = self.char_widths.pop_front().unwrap();
             self.bytes.drain(..width);
         }
@@ -297,18 +277,20 @@ impl NgramWindow<char> for SlidingNgramWindow {
         self.char_widths.push_back(encoded.len());
         self.bytes.extend(encoded);
 
-        let char_count = self.char_widths.len();
-        self.current_ngram(char_count)
+        self.current_ngram(gram_size)
     }
 }
 
 impl RowNgrams {
     fn new(gram_size: usize) -> Self {
+        debug_assert!(gram_size > 0);
         Self {
+            gram_size,
             mode: RowMode::Uninitialized,
             byte_index: 0,
+            lowercase_ascii: Vec::new(),
             lowercase_chars: None,
-            window: SlidingNgramWindow::new(gram_size),
+            unicode_window: UnicodeNgramWindow::new(),
         }
     }
 
@@ -337,14 +319,17 @@ impl RowNgrams {
 
     fn next_ascii<F, T>(&mut self, text: &str, map_ngram: &F) -> Option<T>
     where F: Fn(&str) -> T {
-        while self.byte_index < text.len() {
-            let byte = text.as_bytes()[self.byte_index];
-            self.byte_index += 1;
-            if let Some(ngram) = self.window.push(byte) {
-                return Some(map_ngram(ngram));
-            }
-        }
-        None
+        let bytes = match self.mode {
+            RowMode::AsciiBorrowed => text.as_bytes(),
+            RowMode::AsciiLowercased => self.lowercase_ascii.as_slice(),
+            _ => unreachable!(),
+        };
+        let end = self.byte_index.checked_add(self.gram_size)?;
+        let ngram = bytes.get(self.byte_index..end)?;
+        self.byte_index += 1;
+
+        // Both sources contain only ASCII bytes.
+        Some(map_ngram(unsafe { std::str::from_utf8_unchecked(ngram) }))
     }
 
     fn next_unicode<F, T>(&mut self, text: &str, map_ngram: &F) -> Option<T>
@@ -353,7 +338,7 @@ impl RowNgrams {
             let next_char =
                 Self::next_lowercase_char(text, &mut self.byte_index, &mut self.lowercase_chars);
             let c = next_char?;
-            if let Some(ngram) = self.window.push(c) {
+            if let Some(ngram) = self.unicode_window.push(c, self.gram_size) {
                 return Some(map_ngram(ngram));
             }
         }
@@ -365,12 +350,21 @@ impl RowNgrams {
             match self.mode {
                 RowMode::Uninitialized => {
                     self.mode = if text.is_ascii() {
-                        RowMode::Ascii
+                        if text.as_bytes().iter().any(u8::is_ascii_uppercase) {
+                            self.lowercase_ascii.clear();
+                            self.lowercase_ascii
+                                .extend(text.bytes().map(|byte| byte.to_ascii_lowercase()));
+                            RowMode::AsciiLowercased
+                        } else {
+                            RowMode::AsciiBorrowed
+                        }
                     } else {
                         RowMode::Unicode
                     };
                 }
-                RowMode::Ascii => return self.next_ascii(text, map_ngram),
+                RowMode::AsciiBorrowed | RowMode::AsciiLowercased => {
+                    return self.next_ascii(text, map_ngram);
+                }
                 RowMode::Unicode => return self.next_unicode(text, map_ngram),
             }
         }
@@ -379,8 +373,9 @@ impl RowNgrams {
     fn reset(&mut self) {
         self.mode = RowMode::Uninitialized;
         self.byte_index = 0;
+        self.lowercase_ascii.clear();
         self.lowercase_chars = None;
-        self.window.clear();
+        self.unicode_window.clear();
     }
 }
 
@@ -1715,7 +1710,9 @@ mod tests {
 
     #[test]
     fn test_calculate_ngram_nullable_column_streams_lowercase_chars() {
+        assert_eq!(calculate_ngrams("abc", 2), ["ab", "bc"]);
         assert_eq!(calculate_ngrams("AbC", 2), ["ab", "bc"]);
+        assert_eq!(calculate_ngrams("a-1", 2), ["a-", "-1"]);
         assert_eq!(calculate_ngrams("AbCdEfGh", 3), [
             "abc", "bcd", "cde", "def", "efg", "fgh"
         ]);
@@ -1739,7 +1736,7 @@ mod tests {
 
     #[test]
     fn test_calculate_ngram_nullable_column_switches_row_modes() {
-        let column = StringType::from_data(vec!["AbC", "AİB", "XyZ"]);
+        let column = StringType::from_data(vec!["abc", "AbC", "AİB", "xyz", "XyZ"]);
         let ngrams =
             BloomIndex::calculate_ngram_nullable_column(Value::Column(column), 2, |ngram| {
                 ngram.to_owned()
@@ -1747,7 +1744,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(ngrams, [
-            "ab", "bc", "ai", "i\u{307}", "\u{307}b", "xy", "yz"
+            "ab", "bc", "ab", "bc", "ai", "i\u{307}", "\u{307}b", "xy", "yz", "xy", "yz"
         ]);
     }
 
