@@ -148,6 +148,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             update_stream_meta: vec![],
             deduplicated_label: None,
             recluster_info: None,
+            acquire_commit_lock: false,
             meta: PhysicalPlanMeta::new("CommitSink"),
         });
 

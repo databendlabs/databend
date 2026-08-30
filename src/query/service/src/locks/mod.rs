@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod coordination_manager;
 mod lock_holder;
-mod lock_manager;
+mod segment_rewrite_claim;
 mod table_lock;
 
-pub use lock_manager::LockManager;
+pub use coordination_manager::CoordinationManager;

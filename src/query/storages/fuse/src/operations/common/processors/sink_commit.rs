@@ -24,6 +24,7 @@ use std::time::Instant;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -134,6 +135,9 @@ pub struct CommitSink<F: SnapshotGenerator> {
     // We still need to read the previous snapshot before deciding to skip the commit,
     // because new tables must record their first snapshot even for empty writes.
     pending_noop_commit: bool,
+    // Recluster may rewrite disjoint segment sets concurrently. Serialize only the final
+    // refresh, sequence validation, and metadata CAS.
+    acquire_commit_lock: bool,
 }
 
 #[derive(Debug)]
@@ -157,6 +161,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
+        acquire_commit_lock: bool,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
@@ -198,6 +203,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             table_meta_timestamps,
             vacuum_handler,
             pending_noop_commit: false,
+            acquire_commit_lock,
         })))
     }
 
@@ -675,22 +681,77 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 }
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
-                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                match fuse_table
-                    .update_table_meta(
-                        self.ctx.as_ref(),
-                        catalog.clone(),
-                        &table_info,
-                        &self.location_gen,
-                        snapshot,
-                        location,
-                        &self.copied_files,
-                        &self.update_stream_meta,
-                        &self.dal,
-                        self.deduplicated_label.clone(),
-                    )
+                let gate_wait_start = Instant::now();
+                let commit_guard = if self.acquire_commit_lock {
+                    self.ctx
+                        .clone()
+                        .acquire_table_lock(
+                            table_info.catalog(),
+                            table_info.database_name()?,
+                            &table_info.name,
+                            &LockTableOption::LockWithRetry,
+                        )
+                        .await?
+                } else {
+                    None
+                };
+                if self.acquire_commit_lock {
+                    metrics_observe_maintenance_commit_gate_wait_milliseconds(
+                        gate_wait_start.elapsed().as_millis() as u64,
+                    );
+                }
+
+                let commit_result = if self.acquire_commit_lock {
+                    async {
+                        self.table = self.table.refresh(self.ctx.as_ref()).await?;
+                        let latest_ident = self.table.get_table_info().ident;
+                        if latest_ident.table_id != table_info.ident.table_id
+                            || latest_ident.seq != table_info.ident.seq
+                        {
+                            return Err(ErrorCode::TableVersionMismatched(format!(
+                                "table changed before maintenance commit: expected {}, actual {}",
+                                table_info.ident, latest_ident
+                            )));
+                        }
+
+                        let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
+                        fuse_table
+                            .update_table_meta(
+                                self.ctx.as_ref(),
+                                catalog.clone(),
+                                &table_info,
+                                &self.location_gen,
+                                snapshot,
+                                location,
+                                &self.copied_files,
+                                &self.update_stream_meta,
+                                &self.dal,
+                                self.deduplicated_label.clone(),
+                            )
+                            .await
+                    }
                     .await
-                {
+                } else {
+                    let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
+                    fuse_table
+                        .update_table_meta(
+                            self.ctx.as_ref(),
+                            catalog.clone(),
+                            &table_info,
+                            &self.location_gen,
+                            snapshot,
+                            location,
+                            &self.copied_files,
+                            &self.update_stream_meta,
+                            &self.dal,
+                            self.deduplicated_label.clone(),
+                        )
+                        .await
+                };
+                // Do not hold the commit gate during vacuum, retry backoff, or snapshot rebase.
+                drop(commit_guard);
+
+                match commit_result {
                     Ok(_) => {
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
@@ -768,6 +829,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         self.state = State::Finish;
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
+                        if self.acquire_commit_lock {
+                            metrics_inc_maintenance_occ_retries();
+                        }
                         let table_info = self.table.get_table_info();
                         match self.backoff.next_backoff() {
                             Some(d) => {

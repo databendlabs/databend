@@ -378,6 +378,7 @@ impl ReplaceInterpreter {
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             table_meta_timestamps,
             recluster_info: None,
+            acquire_commit_lock: false,
             meta: PhysicalPlanMeta::new("CommitSink"),
         });
 

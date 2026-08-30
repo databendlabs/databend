@@ -637,15 +637,10 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    assert_eq!(
-        fuse_table
-            .read_table_snapshot()
-            .await?
-            .unwrap()
-            .segments
-            .len(),
-        36
-    );
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.segments.len(), 36);
+    let claimed_location = snapshot.segments[32].clone();
+    let claimed_segments = HashSet::from([claimed_location.clone()]);
 
     let push_downs = PushDownInfo {
         filters: Some(parse_to_filters(ctx.clone(), table.clone(), "id > 90")?),
@@ -659,6 +654,7 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
             Some(2),
             ReclusterMode::Conservative,
             &mut carry,
+            &claimed_segments,
         )
         .await?
         .expect("recluster should read the later matching scan range");
@@ -670,6 +666,12 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
             .removed_segment_indexes
             .iter()
             .all(|segment_idx| *segment_idx >= 32)
+    );
+    assert!(
+        !parts
+            .removed_segment_indexes
+            .iter()
+            .any(|segment_idx| snapshot.segments[*segment_idx] == claimed_location)
     );
 
     Ok(())

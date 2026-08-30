@@ -331,6 +331,7 @@ impl PhysicalPlanBuilder {
                 update_stream_meta: vec![],
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 recluster_info: None,
+                acquire_commit_lock: false,
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             });
@@ -425,6 +426,7 @@ impl PhysicalPlanBuilder {
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
+                acquire_commit_lock: false,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             });
 
@@ -665,6 +667,7 @@ impl PhysicalPlanBuilder {
             update_stream_meta: mutation_build_info.update_stream_meta,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             recluster_info: None,
+            acquire_commit_lock: false,
             meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
         });

@@ -26,7 +26,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_materialized_view::MaterializedViewHandler;
 use databend_enterprise_materialized_view::MaterializedViewHandlerWrapper;
 use databend_meta_client::types::SeqV;
-use databend_query::locks::LockManager;
+use databend_query::locks::CoordinationManager;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 
@@ -89,7 +89,7 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
         // Refresh consumes one source checkpoint range. Keep the same mandatory non-waiting lock
         // across the complete lifecycle so concurrent refreshes cannot consume the same changes.
         let locked_table_id = table.get_id();
-        let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
+        let table_lock = CoordinationManager::create_table_lock(table.get_table_info().clone())?;
         let _lock_guard = table_lock.try_lock(query_ctx.clone(), false).await?;
 
         // Reload after acquiring the lock: the table may have been replaced while lock acquisition

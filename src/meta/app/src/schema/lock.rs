@@ -25,6 +25,51 @@ use crate::schema::TableLockIdent;
 use crate::schema::TableLockIdentV2;
 use crate::tenant::Tenant;
 
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd,
+)]
+pub struct SegmentRewriteTarget {
+    pub location: String,
+    pub format_version: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListSegmentRewriteClaimsReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateSegmentRewriteClaimReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+    pub ttl: Duration,
+    pub user: String,
+    pub node: String,
+    pub query_id: String,
+    pub segments: Vec<SegmentRewriteTarget>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateSegmentRewriteClaimReply {
+    pub revision: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExtendSegmentRewriteClaimReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+    pub revision: u64,
+    pub ttl: Duration,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeleteSegmentRewriteClaimReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+    pub revision: u64,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
     pub user: String,
