@@ -268,19 +268,22 @@ impl BlockPruner {
 
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
-            // check limit speculatively
-            if limit_pruner.exceeded() {
-                return None;
-            }
-
             type BlockPruningFutureReturn =
                 Pin<Box<dyn Future<Output = Result<BlockPruneResult>> + Send>>;
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
-            let pruning_stats = pruning_stats.clone();
-            let runtime_stats_pruner = runtime_stats_pruner.clone();
-            block_meta_indexes.next().map(|(block_idx, block_meta)| {
+            // Range pruning runs inline and only blocks that survive it yield
+            // a task: pruned blocks contribute nothing downstream, so spawning
+            // tasks for them would only pay permit/spawn/join overhead.
+            loop {
+                // check limit speculatively
+                if limit_pruner.exceeded() {
+                    return None;
+                }
+
+                let (block_idx, block_meta) = block_meta_indexes.next()?;
+
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_before(1);
@@ -300,60 +303,51 @@ impl BlockPruner {
                 });
                 block_range_ns
                     .fetch_add(range_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
-                if prune_result.keep {
-                    // Perf.
-                    {
-                        metrics_inc_blocks_range_pruning_after(1);
-                        metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
-
-                        pruning_stats.set_blocks_range_pruning_after(1);
-                    }
-                    blocks_after_range_count.fetch_add(1, Ordering::Relaxed);
-
-                    if let Some(pruner) = runtime_stats_pruner.as_ref() {
-                        let runtime_start = Instant::now();
-                        if pruner.should_prune(Some(&block_meta.col_stats), row_count as usize) {
-                            prune_result.keep = false;
-                        }
-                        runtime_stats_ns.fetch_add(
-                            runtime_start.elapsed().as_nanos() as u64,
-                            Ordering::Relaxed,
-                        );
-                    }
-                    if prune_result.keep {
-                        blocks_after_runtime_count.fetch_add(1, Ordering::Relaxed);
-                    }
+                if !prune_result.keep {
+                    continue;
                 }
 
-                if prune_result.keep {
-                    // not pruned by block zone map index,
-                    let pruning_ctx = pruning_ctx.clone();
-                    let lock_stats = cache_lock_stats.clone();
-                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
-                        Box::pin(async move {
-                            let _permit = permit;
-                            Self::prune_after_range(
-                                pruning_ctx,
-                                prune_result,
-                                block_meta,
-                                row_count,
-                                false,
-                                Some(lock_stats),
-                            )
-                            .await
-                        })
-                    });
-                    v
-                } else {
-                    let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
-                        Box::pin(async move {
-                            let _permit = permit;
-                            Ok(prune_result)
-                        })
-                    });
-                    v
+                // Perf.
+                {
+                    metrics_inc_blocks_range_pruning_after(1);
+                    metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
+
+                    pruning_stats.set_blocks_range_pruning_after(1);
                 }
-            })
+                blocks_after_range_count.fetch_add(1, Ordering::Relaxed);
+
+                if let Some(pruner) = runtime_stats_pruner.as_ref() {
+                    let runtime_start = Instant::now();
+                    if pruner.should_prune(Some(&block_meta.col_stats), row_count as usize) {
+                        prune_result.keep = false;
+                    }
+                    runtime_stats_ns
+                        .fetch_add(runtime_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                    if !prune_result.keep {
+                        continue;
+                    }
+                }
+                blocks_after_runtime_count.fetch_add(1, Ordering::Relaxed);
+
+                // not pruned by block zone map index,
+                let pruning_ctx = pruning_ctx.clone();
+                let lock_stats = cache_lock_stats.clone();
+                let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
+                    Box::pin(async move {
+                        let _permit = permit;
+                        Self::prune_after_range(
+                            pruning_ctx,
+                            prune_result,
+                            block_meta,
+                            row_count,
+                            false,
+                            Some(lock_stats),
+                        )
+                        .await
+                    })
+                });
+                return Some(v);
+            }
         });
 
         let start = Instant::now();

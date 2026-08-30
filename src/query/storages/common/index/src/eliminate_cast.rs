@@ -133,7 +133,7 @@ impl RewriteVisitor<'_> {
         column: &ColumnRef<String>,
         expr: &Expr<String>,
     ) -> RewriteResult {
-        let Some(constant) = self.constant_from_expr(expr) else {
+        let Some(constant) = constant_from_expr(self.func_ctx, expr) else {
             return Ok(None);
         };
         let Some(scalar) = cast_integer_string_constant(
@@ -170,24 +170,6 @@ impl RewriteVisitor<'_> {
             .0
             .into_owned(),
         ))
-    }
-
-    fn constant_from_expr(&self, expr: &Expr<String>) -> Option<Constant> {
-        match expr {
-            Expr::Constant(constant) => Some(constant.clone()),
-            Expr::Cast(cast) if !cast.is_try => {
-                let Expr::Constant(constant) = cast.expr.as_ref() else {
-                    return None;
-                };
-                let scalar = cast_const(self.func_ctx, cast.dest_type.clone(), constant.clone())?;
-                Some(Constant {
-                    span: None,
-                    scalar,
-                    data_type: cast.dest_type.clone(),
-                })
-            }
-            _ => None,
-        }
     }
 
     fn check_no_throw(&self, cast: &Cast<String>) -> bool {
@@ -229,6 +211,81 @@ pub(super) fn cast_const(
     };
 
     domain.as_singleton()
+}
+
+fn constant_from_expr(func_ctx: &FunctionContext, expr: &Expr<String>) -> Option<Constant> {
+    match expr {
+        Expr::Constant(constant) => Some(constant.clone()),
+        Expr::Cast(cast) if !cast.is_try => {
+            let Expr::Constant(constant) = cast.expr.as_ref() else {
+                return None;
+            };
+            let scalar = cast_const(func_ctx, cast.dest_type.clone(), constant.clone())?;
+            Some(Constant {
+                span: None,
+                scalar,
+                data_type: cast.dest_type.clone(),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Statically detect whether `expr` contains any pattern that
+/// [`RewriteVisitor`] could rewrite, so that per-block pruning can skip the
+/// rewrite pass when there is provably nothing to rewrite.
+///
+/// This mirrors the domain-independent prefix of the rewrite rules:
+/// - `eq(cast(..), constant)` (either order) with a non-try cast counts as a
+///   candidate; the remaining conditions (`check_no_throw`) depend on
+///   per-block domains, so any such pair is conservatively kept.
+/// - `eq(integer_column, string_constant)` (either order) is a candidate only
+///   when the constant parses as the column's integer type; those conditions
+///   are all domain-independent and are replayed here exactly.
+///
+/// `true` means "the visitor must run per block". False positives merely lose
+/// the optimization, while a false negative would change pruning results, so
+/// every domain-dependent condition is treated as potentially satisfied.
+pub(super) fn has_rewrite_candidates(func_ctx: &FunctionContext, expr: &Expr<String>) -> bool {
+    let mut stack = vec![expr];
+    while let Some(expr) = stack.pop() {
+        match expr {
+            Expr::FunctionCall(call) => {
+                if call.id.name() == "eq" && is_rewrite_candidate_eq(func_ctx, call) {
+                    return true;
+                }
+                stack.extend(call.args.iter());
+            }
+            Expr::Cast(cast) => stack.push(&cast.expr),
+            // The rewrite visitor only walks lambda arguments, not the lambda body.
+            Expr::LambdaFunctionCall(lambda) => stack.extend(lambda.args.iter()),
+            Expr::Constant(_) | Expr::ColumnRef(_) => {}
+        }
+    }
+    false
+}
+
+fn is_rewrite_candidate_eq(func_ctx: &FunctionContext, call: &FunctionCall<String>) -> bool {
+    match call.args.as_slice() {
+        [Expr::Cast(cast), Expr::Constant(_)] | [Expr::Constant(_), Expr::Cast(cast)] => {
+            // Both `check_no_throw` and `try_rewrite` bail out on try-casts
+            // before consulting domains.
+            !cast.is_try
+        }
+        [Expr::ColumnRef(column), expr] | [expr, Expr::ColumnRef(column)] => {
+            match constant_from_expr(func_ctx, expr) {
+                Some(constant) => cast_integer_string_constant(
+                    func_ctx,
+                    &column.data_type,
+                    &constant.data_type,
+                    &constant.scalar,
+                )
+                .is_some(),
+                None => false,
+            }
+        }
+        _ => false,
+    }
 }
 
 fn cast_integer_string_constant(

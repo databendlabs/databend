@@ -70,6 +70,25 @@ pub struct RangeIndex {
     // Default stats for each column if no stats are available (e.g. for new-add columns)
     default_stats: StatisticsOfColumns,
     predicates: Vec<SpatialPredicate>,
+
+    /// Per-column domain sources resolved once from the immutable expression
+    /// and schema, so that each `apply` call avoids re-walking the expression
+    /// tree and re-scanning the schema for every block.
+    column_slots: Vec<ColumnDomainSlot>,
+    /// Whether the expression contains any pattern that the cast-elimination
+    /// rewrite could apply to. When false, `apply` skips the rewrite pass.
+    has_rewrite_candidates: bool,
+}
+
+/// The precomputed domain source for one column referenced by the pruning
+/// expression.
+#[derive(Clone)]
+struct ColumnDomainSlot {
+    name: String,
+    data_type: DataType,
+    /// Leaf column ids resolved from the table schema. `None` when the domain
+    /// is always full: internal/stream columns and virtual columns.
+    leaf_column_ids: Option<Vec<ColumnId>>,
 }
 
 impl RangeIndex {
@@ -83,13 +102,52 @@ impl RangeIndex {
             Some(result) => (result.expr, result.predicates),
             None => (expr.clone(), Vec::new()),
         };
-        Ok(Self {
+        Ok(Self::create_from_parts(
             expr,
             func_ctx,
             schema,
             default_stats,
             predicates,
-        })
+        ))
+    }
+
+    fn create_from_parts(
+        expr: Expr<String>,
+        func_ctx: FunctionContext,
+        schema: TableSchemaRef,
+        default_stats: StatisticsOfColumns,
+        predicates: Vec<SpatialPredicate>,
+    ) -> Self {
+        let column_slots = expr
+            .column_refs()
+            .into_iter()
+            .map(|(name, data_type)| {
+                // internal column and stream column are not actual stored columns
+                let leaf_column_ids = if is_internal_column(&name) || is_stream_column(&name) {
+                    None
+                } else {
+                    let column_ids = schema.leaf_columns_of(&name);
+                    // virtual columns are not included in leaf columns
+                    // TODO: add range filter for virtual columns
+                    (!column_ids.is_empty()).then_some(column_ids)
+                };
+                ColumnDomainSlot {
+                    name,
+                    data_type,
+                    leaf_column_ids,
+                }
+            })
+            .collect();
+        let has_rewrite_candidates = has_rewrite_candidates(&func_ctx, &expr);
+        Self {
+            expr,
+            func_ctx,
+            schema,
+            default_stats,
+            predicates,
+            column_slots,
+            has_rewrite_candidates,
+        }
     }
 
     pub fn try_apply_const(&self) -> Result<bool> {
@@ -112,62 +170,56 @@ impl RangeIndex {
     where
         F: Fn(&ColumnId) -> bool,
     {
-        let mut input_domains: HashMap<String, Domain> = self
-            .expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                // internal column and stream column are not actual stored columns
-                if is_internal_column(&name) || is_stream_column(&name) {
-                    return Ok((name, Domain::full(&ty)));
-                }
-
-                let column_ids = self.schema.leaf_columns_of(&name);
-                // virtual columns are not included in leaf columns
-                // TODO: add range filter for virtual columns
-                if column_ids.is_empty() {
-                    return Ok((name, Domain::full(&ty)));
-                }
-
-                let stats = column_ids
-                    .iter()
-                    .filter_map(|column_id| match stats.get(column_id) {
-                        None => {
-                            if column_is_default(column_id)
-                                && self.default_stats.contains_key(column_id)
-                            {
-                                Some(&self.default_stats[column_id])
-                            } else {
-                                None
+        let mut input_domains: HashMap<String, Domain> =
+            HashMap::with_capacity(self.column_slots.len());
+        for slot in &self.column_slots {
+            let domain = match &slot.leaf_column_ids {
+                None => Domain::full(&slot.data_type),
+                Some(column_ids) => {
+                    let stats = column_ids
+                        .iter()
+                        .filter_map(|column_id| match stats.get(column_id) {
+                            None => {
+                                if column_is_default(column_id)
+                                    && self.default_stats.contains_key(column_id)
+                                {
+                                    Some(&self.default_stats[column_id])
+                                } else {
+                                    None
+                                }
                             }
-                        }
-                        other => other,
-                    })
-                    .collect();
-
-                let domain = statistics_to_domain(stats, &ty);
-                Ok((name, domain))
-            })
-            .collect::<Result<_>>()?;
+                            other => other,
+                        })
+                        .collect();
+                    statistics_to_domain(stats, &slot.data_type)
+                }
+            };
+            input_domains.insert(slot.name.clone(), domain);
+        }
 
         for (name, domain) in self.spatial_predicate_domains(spatial_stats) {
             input_domains.insert(name, domain);
         }
 
-        let mut visitor = RewriteVisitor {
-            input_domains,
-            func_ctx: &self.func_ctx,
-            fn_registry: &BUILTIN_FUNCTIONS,
-        };
+        let (expr, input_domains) = if self.has_rewrite_candidates {
+            let mut visitor = RewriteVisitor {
+                input_domains,
+                func_ctx: &self.func_ctx,
+                fn_registry: &BUILTIN_FUNCTIONS,
+            };
 
-        let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
-            Some(expr) => Cow::Owned(expr),
-            None => Cow::Borrowed(&self.expr),
+            let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
+                Some(expr) => Cow::Owned(expr),
+                None => Cow::Borrowed(&self.expr),
+            };
+            (expr, visitor.input_domains)
+        } else {
+            (Cow::Borrowed(&self.expr), input_domains)
         };
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             expr,
-            &visitor.input_domains,
+            &input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
@@ -189,13 +241,13 @@ impl RangeIndex {
         partition_columns: &HashMap<String, Scalar>,
     ) -> Result<bool> {
         let expr = self.expr.fill_const_column(partition_columns);
-        RangeIndex {
+        Self::create_from_parts(
             expr,
-            func_ctx: self.func_ctx.clone(),
-            schema: self.schema.clone(),
-            default_stats: self.default_stats.clone(),
-            predicates: self.predicates.clone(),
-        }
+            self.func_ctx.clone(),
+            self.schema.clone(),
+            self.default_stats.clone(),
+            self.predicates.clone(),
+        )
         .apply(stats, None, |_| false)
     }
 

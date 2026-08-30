@@ -417,7 +417,7 @@ impl FusePruner {
         };
 
         info!(
-            "Pruning max concurrency configured to {} threads",
+            "Pruning max concurrency configured to {} permits",
             max_concurrency
         );
 
