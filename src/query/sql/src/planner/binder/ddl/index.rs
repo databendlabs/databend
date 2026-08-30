@@ -83,6 +83,7 @@ static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|
     let mut r = HashSet::new();
     r.insert("english");
     r.insert("chinese");
+    r.insert("japanese");
     r
 });
 
@@ -92,6 +93,8 @@ static INDEX_FILTER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     r.insert("english_stop");
     r.insert("english_stemmer");
     r.insert("chinese_stop");
+    r.insert("japanese_stop");
+    r.insert("japanese_stemmer");
     r
 });
 

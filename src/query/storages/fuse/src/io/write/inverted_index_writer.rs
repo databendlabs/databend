@@ -41,6 +41,13 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
+use lindera::dictionary::load_dictionary;
+use lindera::mode::Mode;
+use lindera::segmenter::Segmenter;
+use lindera_analysis::token_filter::BoxTokenFilter;
+use lindera_analysis::token_filter::japanese_base_form::JapaneseBaseFormTokenFilter;
+use lindera_analysis::token_filter::japanese_stop_tags::JapaneseStopTagsTokenFilter;
+use lindera_tantivy::tokenizer::LinderaTokenizer;
 use log::debug;
 use log::info;
 use opendal::Buffer;
@@ -343,114 +350,132 @@ impl InvertedIndexWriter {
     }
 }
 
-// Create tokenizer can handle both Chinese and English
+// Create tokenizers for English, Chinese, and Japanese.
 pub(crate) fn create_tokenizer_manager(
     index_options: &BTreeMap<String, String>,
 ) -> TokenizerManager {
     let tokenizer_manager = TokenizerManager::new();
+    let filters = index_options
+        .get("filters")
+        .map(|filters| filters.split(',').collect::<HashSet<_>>())
+        .unwrap_or_default();
 
-    let filters: HashSet<String> = match index_options.get("filters") {
-        Some(filters_str) => filters_str.split(',').map(|v| v.to_string()).collect(),
-        None => HashSet::new(),
-    };
+    let tokenizer = index_options
+        .get("tokenizer")
+        .map(String::as_str)
+        .unwrap_or("english");
+    match tokenizer {
+        "english" => tokenizer_manager.register("english", create_english_analyzer(&filters)),
+        "chinese" => tokenizer_manager.register("chinese", create_chinese_analyzer(&filters)),
+        "japanese" => tokenizer_manager.register("japanese", create_japanese_analyzer(&filters)),
+        _ => unreachable!("Invalid tokenizer {}", tokenizer),
+    }
 
-    // add lower case filter by default, so that the search can match
-    // all the rows regardless of whether it is uppercase or lowercase
-    let (english_analyzer, chinese_analyzer) = if filters.is_empty() {
-        let english_analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
-            .filter(LowerCaser)
-            .build();
-        let chinese_analyzer = TextAnalyzer::builder(JiebaTokenizer::new())
-            .filter(LowerCaser)
-            .build();
-
-        (english_analyzer, chinese_analyzer)
-    } else {
-        let mut english_analyzer =
-            TextAnalyzer::builder(SimpleTokenizer::default()).filter_dynamic(LowerCaser);
-        let mut chinese_analyzer =
-            TextAnalyzer::builder(JiebaTokenizer::new()).filter_dynamic(LowerCaser);
-
-        // add optional filters
-        // remove English stop words, like "a", "an", "and", etc.
-        if filters.contains("english_stop") {
-            english_analyzer =
-                english_analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
-            chinese_analyzer =
-                chinese_analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
-        }
-        // English stemmer maps different forms of the same word to a common word.
-        // for example, "walking" and "walked" will be mapped to "walk".
-        if filters.contains("english_stemmer") {
-            english_analyzer = english_analyzer.filter_dynamic(Stemmer::new(Language::English));
-            chinese_analyzer = chinese_analyzer.filter_dynamic(Stemmer::new(Language::English));
-        }
-        // remove Chinese stop words, which currently only supports Chinese punctuation is supported.
-        if filters.contains("chinese_stop") {
-            // Punctuation tokens to remove copied from lucene
-            // https://github.com/apache/lucene/blob/main/lucene/analysis/smartcn/src/resources/org/apache/lucene/analysis/cn/smart/stopwords.txt
-            chinese_analyzer = chinese_analyzer.filter_dynamic(StopWordFilter::remove(vec![
-                ",".to_string(),
-                ".".to_string(),
-                "`".to_string(),
-                "-".to_string(),
-                "_".to_string(),
-                "=".to_string(),
-                "?".to_string(),
-                "'".to_string(),
-                "|".to_string(),
-                "\"".to_string(),
-                "(".to_string(),
-                ")".to_string(),
-                "{".to_string(),
-                "}".to_string(),
-                "[".to_string(),
-                "]".to_string(),
-                "<".to_string(),
-                ">".to_string(),
-                "*".to_string(),
-                "#".to_string(),
-                "&".to_string(),
-                "^".to_string(),
-                "$".to_string(),
-                "@".to_string(),
-                "!".to_string(),
-                "~".to_string(),
-                ":".to_string(),
-                ";".to_string(),
-                "+".to_string(),
-                "/".to_string(),
-                "\\".to_string(),
-                "《".to_string(),
-                "》".to_string(),
-                "—".to_string(),
-                "－".to_string(),
-                "，".to_string(),
-                "。".to_string(),
-                "、".to_string(),
-                "：".to_string(),
-                "；".to_string(),
-                "！".to_string(),
-                "·".to_string(),
-                "？".to_string(),
-                "“".to_string(),
-                "”".to_string(),
-                "）".to_string(),
-                "（".to_string(),
-                "【".to_string(),
-                "】".to_string(),
-                "［".to_string(),
-                "］".to_string(),
-                "●".to_string(),
-                "　".to_string(),
-            ]));
-        }
-        (english_analyzer.build(), chinese_analyzer.build())
-    };
-
-    tokenizer_manager.register("english", english_analyzer);
-    tokenizer_manager.register("chinese", chinese_analyzer);
     tokenizer_manager
+}
+
+fn create_english_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
+    let mut analyzer = TextAnalyzer::builder(SimpleTokenizer::default()).filter_dynamic(LowerCaser);
+
+    if filters.contains("english_stop") {
+        analyzer = analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
+    }
+    if filters.contains("english_stemmer") {
+        analyzer = analyzer.filter_dynamic(Stemmer::new(Language::English));
+    }
+
+    analyzer.build()
+}
+
+fn create_chinese_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
+    let mut analyzer = TextAnalyzer::builder(JiebaTokenizer::new()).filter_dynamic(LowerCaser);
+
+    if filters.contains("english_stop") {
+        analyzer = analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
+    }
+    if filters.contains("english_stemmer") {
+        analyzer = analyzer.filter_dynamic(Stemmer::new(Language::English));
+    }
+    if filters.contains("chinese_stop") {
+        // Punctuation tokens copied from Lucene's Smart Chinese Analyzer.
+        // https://github.com/apache/lucene/blob/main/lucene/analysis/smartcn/src/resources/org/apache/lucene/analysis/cn/smart/stopwords.txt
+        analyzer = analyzer.filter_dynamic(StopWordFilter::remove(chinese_stop_words()));
+    }
+
+    analyzer.build()
+}
+
+fn create_japanese_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
+    let dictionary = load_dictionary("embedded://ipadic")
+        .expect("the embedded IPADIC dictionary must be available");
+    let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
+    let mut tokenizer = LinderaTokenizer::from_segmenter(segmenter);
+
+    // Lindera filters must run before conversion to Tantivy tokens because
+    // part-of-speech and base-form details are not retained by Tantivy.
+    if filters.contains("japanese_stemmer") {
+        tokenizer.append_token_filter(BoxTokenFilter::from(JapaneseBaseFormTokenFilter::new()));
+    }
+    if filters.contains("japanese_stop") {
+        tokenizer.append_token_filter(BoxTokenFilter::from(JapaneseStopTagsTokenFilter::new(
+            japanese_stop_tags(),
+        )));
+    }
+
+    let mut analyzer = TextAnalyzer::builder(tokenizer).filter_dynamic(LowerCaser);
+    if filters.contains("english_stop") {
+        analyzer = analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
+    }
+    if filters.contains("english_stemmer") {
+        analyzer = analyzer.filter_dynamic(Stemmer::new(Language::English));
+    }
+
+    analyzer.build()
+}
+
+fn chinese_stop_words() -> Vec<String> {
+    [
+        ",", ".", "`", "-", "_", "=", "?", "'", "|", "\"", "(", ")", "{", "}", "[", "]", "<", ">",
+        "*", "#", "&", "^", "$", "@", "!", "~", ":", ";", "+", "/", "\\", "《", "》", "—", "－",
+        "，", "。", "、", "：", "；", "！", "·", "？", "“", "”", "）", "（", "【", "】", "［",
+        "］", "●", "　",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
+}
+
+fn japanese_stop_tags() -> HashSet<String> {
+    [
+        "接続詞",
+        "助詞",
+        "助詞,格助詞",
+        "助詞,格助詞,一般",
+        "助詞,格助詞,引用",
+        "助詞,格助詞,連語",
+        "助詞,係助詞",
+        "助詞,副助詞",
+        "助詞,間投助詞",
+        "助詞,並立助詞",
+        "助詞,終助詞",
+        "助詞,副助詞／並立助詞／終助詞",
+        "助詞,連体化",
+        "助詞,副詞化",
+        "助詞,特殊",
+        "助動詞",
+        "記号",
+        "記号,一般",
+        "記号,読点",
+        "記号,句点",
+        "記号,空白",
+        "記号,括弧閉",
+        "その他,間投",
+        "フィラー",
+        "非言語音",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
 }
 
 pub(crate) fn create_index_schema(
@@ -481,7 +506,7 @@ pub(crate) fn create_index_schema(
     let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
     let json_options = JsonObjectOptions::default()
         .set_indexing_options(text_field_indexing)
-        .set_fast(None);
+        .set_fast("raw");
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());
