@@ -327,10 +327,11 @@ fn string_scalar_parses_as_integer_type(scalar: &Scalar, num_ty: &NumberDataType
 pub fn eliminate_cast(
     expr: &Expr<String>,
     input_domains: HashMap<String, Domain>,
+    func_ctx: &FunctionContext,
 ) -> Option<Expr<String>> {
     let mut visitor = RewriteVisitor {
         input_domains,
-        func_ctx: &FunctionContext::default(),
+        func_ctx,
         fn_registry: &BUILTIN_FUNCTIONS,
     };
 

@@ -118,6 +118,30 @@ impl RangeIndex {
         default_stats: StatisticsOfColumns,
         predicates: Vec<SpatialPredicate>,
     ) -> Self {
+        // Hoist domain-independent rewrites (e.g. `int_col = '123'` =>
+        // `int_col = 123`) out of the per-block path by running the rewrite
+        // pass once with full input domains. A rewrite accepted under full
+        // domains is valid for every block; rewrites that full domains cannot
+        // prove safe (overflow-checked cast elimination) keep their candidate
+        // pattern in the expression and are retried per block through
+        // `has_rewrite_candidates` below, so pruning results are unchanged.
+        let expr = if has_rewrite_candidates(&func_ctx, &expr) {
+            let full_domains = expr
+                .column_refs()
+                .into_iter()
+                .map(|(name, ty)| {
+                    let domain = Domain::full(&ty);
+                    (name, domain)
+                })
+                .collect();
+            match eliminate_cast(&expr, full_domains, &func_ctx) {
+                Some(rewritten) => rewritten,
+                None => expr,
+            }
+        } else {
+            expr
+        };
+
         let column_slots = expr
             .column_refs()
             .into_iter()

@@ -182,7 +182,7 @@ fn test_range_index_keeps_nullable_boolean_cast_under_is_true() {
         .into_iter()
         .collect();
 
-    let rewritten_expr = eliminate_cast(&expr, input_domains).unwrap();
+    let rewritten_expr = eliminate_cast(&expr, input_domains, &FunctionContext::default()).unwrap();
     assert_eq!(rewritten_expr.data_type(), &DataType::Boolean);
     let index = RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
         .unwrap();
@@ -317,6 +317,96 @@ fn test_range_index_rewrites_candidates_nested_under_and() {
             "{text} should prune the block"
         );
     }
+}
+
+#[test]
+fn test_range_index_int_column_string_literal_with_contains() {
+    // Production shape: Int32 `site_code` compared against a String literal
+    // (a cast-elimination rewrite candidate, hoisted at creation) combined
+    // with `contains` over an in-list.
+    fn n(n: i32) -> Scalar {
+        Scalar::Number(n.into())
+    }
+
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("site_code", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("account", TableDataType::Number(NumberDataType::Int64)),
+    ]));
+
+    let site_code = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "site_code".to_string(),
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "site_code".to_string(),
+    });
+    let account = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "account".to_string(),
+        data_type: DataType::Number(NumberDataType::Int64),
+        display_name: "account".to_string(),
+    });
+    let target = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::String("2815".to_string()),
+        data_type: DataType::String,
+    });
+    let in_list = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Array(Int64Type::from_data(vec![1i64, 5, 9])),
+        data_type: DataType::Array(Box::new(DataType::Number(NumberDataType::Int64))),
+    });
+    let eq = check_function(None, "eq", &[], &[site_code, target], &BUILTIN_FUNCTIONS).unwrap();
+    let contains = check_function(
+        None,
+        "contains",
+        &[],
+        &[in_list, account],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+    let expr = check_function(
+        None,
+        "and_filters",
+        &[],
+        &[eq, contains],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    let index =
+        RangeIndex::try_create(func_ctx, &expr, schema.clone(), Default::default()).unwrap();
+
+    let site_code_id = schema.leaf_columns_of(&"site_code".to_string())[0];
+    let account_id = schema.leaf_columns_of(&"account".to_string())[0];
+    let make_stats = |site_min: i32, site_max: i32, account_min: i64, account_max: i64| {
+        let mut stats = StatisticsOfColumns::default();
+        stats.insert(
+            site_code_id,
+            ColumnStatistics::new(n(site_min), n(site_max), 0, 0, None),
+        );
+        stats.insert(
+            account_id,
+            ColumnStatistics::new(
+                Scalar::Number(account_min.into()),
+                Scalar::Number(account_max.into()),
+                0,
+                0,
+                None,
+            ),
+        );
+        stats
+    };
+
+    // Pruned by the first conjunct: 2815 is outside [3000, 3100].
+    let stats = make_stats(3000, 3100, 0, 100);
+    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    // Kept: both conjuncts overlap the block ranges.
+    let stats = make_stats(2800, 2900, 0, 100);
+    assert!(index.apply(&stats, None, |_| false).unwrap());
+    // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
+    let stats = make_stats(2800, 2900, 1000, 2000);
+    assert!(!index.apply(&stats, None, |_| false).unwrap());
 }
 
 #[test]
