@@ -202,7 +202,7 @@ impl ReliableInboundSource {
 
     /// Terminates the logical source because its local consumers can no longer accept data.
     /// This releases its destinations and wakes active connections with a `FAIL` response.
-    pub(crate) fn fail(&self, cause: ErrorCode) {
+    pub fn fail(&self, cause: ErrorCode) {
         self.terminate(InboundTerminal::ReceiverFailed(cause));
     }
 
@@ -343,7 +343,7 @@ impl ReliableInboundConnection {
             .response()
     }
 
-    pub(crate) async fn serve(
+    pub async fn serve(
         self,
         mut stream: Streaming<FlightData>,
         tx: async_channel::Sender<std::result::Result<FlightData, Status>>,
