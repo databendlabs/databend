@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Exact two-dimensional clustering diagnostics.
-//!
-//! The pipeline encodes and ranks both endpoint dimensions, chooses an outer sweep axis, then
-//! optionally partitions that axis for parallel execution. Each partition recompresses its inner
-//! coordinates, while rectangles crossing boundaries are initialized as active in later
-//! partitions. Pair ownership follows the later rectangle start, preventing duplicate counts.
-
 use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
@@ -36,7 +29,6 @@ const MIN_RECTS_PER_SWEEP_PARTITION: usize = 4096;
 // 10% extra copies so parallelism cannot cause disproportionate CPU and memory amplification.
 const MAX_EXTRA_SWEEP_REPLICAS_PERCENT: usize = 10;
 
-/// A closed 2D range. Production sweeps use dense endpoint ranks rather than original values.
 #[derive(Clone, Copy)]
 struct Rect<T> {
     x_min: T,
@@ -45,9 +37,6 @@ struct Rect<T> {
     y_max: T,
 }
 
-/// One dimension after coordinate compression.
-/// `ranks[block]` stores `[min, max]`. `starts` and `ends` contain block IDs ordered by their
-/// corresponding endpoint and let the sweep consume events without sorting them again.
 struct RankedDimension {
     count: usize,
     ranks: Vec<[u32; 2]>,
@@ -62,8 +51,6 @@ fn rank_dimension(keys: &BinaryColumn, order: Vec<u32>) -> RankedDimension {
     let mut ranks = vec![[0u32; 2]; keys.len() / 2];
     let mut starts = Vec::with_capacity(ranks.len());
     let mut ends = Vec::with_capacity(ranks.len());
-    // Endpoint-count validation guarantees at most u32::MAX rows, so the largest zero-based dense
-    // rank also fits in u32.
     let mut rank = 0u32;
     let mut previous = None;
 
@@ -95,9 +82,6 @@ fn rank_dimension(keys: &BinaryColumn, order: Vec<u32>) -> RankedDimension {
     }
 }
 
-/// Lazy segment tree over compressed inner-axis coordinates.
-/// Range additions activate or deactivate a rectangle interval; the root always stores the
-/// maximum number of simultaneously active rectangles.
 struct RangeAddMaxTree {
     max: Vec<i32>,
     lazy: Vec<i32>,
@@ -145,8 +129,7 @@ impl RangeAddMaxTree {
     }
 }
 
-/// Active inner-axis intervals used to count rectangle intersections during the outer-axis sweep.
-/// Each Fenwick node stores counts for interval minima and maxima in one allocation.
+// Each Fenwick node stores counts for interval minima and maxima in one allocation.
 struct ActiveIntervals {
     endpoints: Vec<[u32; 2]>,
 }
@@ -189,7 +172,6 @@ impl ActiveIntervals {
     }
 }
 
-/// A sweep event at one outer-axis coordinate, carrying its closed inner-axis interval.
 #[derive(Clone, Copy)]
 struct SweepEvent {
     outer: u32,
@@ -197,14 +179,11 @@ struct SweepEvent {
     inner_max: u32,
 }
 
-/// Ordered event access shared by global and partition-local sweeps.
-/// The generic interface is monomorphized, so the hot sweep loop does not pay dynamic dispatch.
 trait SweepEvents {
     fn start(&self, position: usize) -> Option<SweepEvent>;
     fn end(&self, position: usize) -> Option<SweepEvent>;
 }
 
-/// Zero-copy event view used when the planner keeps a single global partition.
 struct RankedEvents<'a> {
     boxes: &'a [Rect<u32>],
     starts: &'a [u32],
@@ -235,9 +214,6 @@ impl SweepEvents for RankedEvents<'_> {
     }
 }
 
-/// Owned events whose inner coordinates were recompressed for one partition.
-/// Unlike `RankedEvents`, these events cannot borrow global coordinates because every partition has
-/// its own dense inner-rank domain.
 struct LocalEvents {
     starts: Vec<SweepEvent>,
     ends: Vec<SweepEvent>,
@@ -276,7 +252,6 @@ fn next_event_outer(start: Option<SweepEvent>, end: Option<SweepEvent>) -> Optio
     }
 }
 
-/// Return the maximum stabbing depth in one partition using range-add/range-max updates.
 fn sweep_max_depth<E: SweepEvents>(partition: &SweepPartition<E>) -> usize {
     let mut tree = RangeAddMaxTree::new(partition.inner_count);
     for interval in &partition.initial_active {
@@ -317,7 +292,6 @@ fn sweep_max_depth<E: SweepEvents>(partition: &SweepPartition<E>) -> usize {
     max_depth
 }
 
-/// Count intersecting rectangle pairs whose later start belongs to this partition.
 fn sweep_overlap_pairs<E: SweepEvents>(partition: &SweepPartition<E>) -> u64 {
     let mut active = ActiveIntervals::new(partition.inner_count);
     for interval in &partition.initial_active {
@@ -363,9 +337,6 @@ fn sweep_overlap_pairs<E: SweepEvents>(partition: &SweepPartition<E>) -> u64 {
     overlap_pairs
 }
 
-/// Globally ranked rectangles after choosing which dimension is the outer sweep axis.
-/// `starts` and `ends` are ordered block IDs for that axis. `inner_count` sizes the global trees
-/// used by the single-partition fallback.
 struct RankedSweep {
     boxes: Vec<Rect<u32>>,
     starts: Vec<u32>,
@@ -374,7 +345,6 @@ struct RankedSweep {
     inner_count: usize,
 }
 
-/// Reject caller-assigned ranges whose maximum sorts before their minimum on one axis.
 fn validate_ranked_ranges(dimension: &RankedDimension, axis: char) -> Result<()> {
     for (block, [min, max]) in dimension.ranks.iter().copied().enumerate() {
         if min > max {
@@ -386,7 +356,6 @@ fn validate_ranked_ranges(dimension: &RankedDimension, axis: char) -> Result<()>
     Ok(())
 }
 
-/// Choose the cheaper sweep orientation and normalize it to outer/inner coordinates.
 fn arrange_sweep(x: RankedDimension, y: RankedDimension) -> RankedSweep {
     let blocks = x.ranks.len() as u128;
     let x_cost = x.count as u128 + blocks * (y.count.max(1).ilog2() as u128 + 1);
@@ -413,8 +382,6 @@ fn arrange_sweep(x: RankedDimension, y: RankedDimension) -> RankedSweep {
             inner_count: y.count,
         }
     } else {
-        // Swapping physical dimensions changes only their generic outer/inner roles; rectangle
-        // identity and closed-range semantics remain unchanged.
         let boxes = x
             .ranks
             .into_iter()
@@ -452,7 +419,6 @@ fn partition_boundaries(
     for partition in 1..requested_partitions {
         let position = starts.len() * partition / requested_partitions;
         let boundary = boxes[starts[position] as usize].x_min;
-        // The smallest start was inserted before this loop, so the boundary list is non-empty.
         if boundary > *boundaries.last().expect("first boundary exists")
             && boundary < outer_count as u32
         {
@@ -473,7 +439,6 @@ fn partition_index(boundaries: &[u32], coordinate: u32) -> usize {
     boundaries[1..].partition_point(|boundary| *boundary <= coordinate)
 }
 
-/// A feasible partition layout plus exact capacities for each partition's member list.
 struct SweepPlan {
     boundaries: Vec<u32>,
     relevant_counts: Vec<usize>,
@@ -525,10 +490,6 @@ fn build_sweep_plan(
     })
 }
 
-/// Select the widest useful plan allowed by thread count, input size, and replica budget.
-/// `boxes` and its start-order permutation must be non-empty. The result is always executable: if
-/// no multi-partition candidate is affordable, the function returns a single partition containing
-/// every rectangle.
 fn choose_sweep_plan(
     boxes: &[Rect<u32>],
     starts: &[u32],
@@ -538,8 +499,6 @@ fn choose_sweep_plan(
     let max_partitions = max_threads
         .clamp(1, MAX_SWEEP_PARTITIONS)
         .min((boxes.len() / MIN_RECTS_PER_SWEEP_PARTITION).max(1));
-    // A single partition is always valid and provides the fallback for small or highly overlapping
-    // inputs. Wider candidates replace it only when their actual deduplicated boundary count grows.
     let mut best = SweepPlan {
         boundaries: partition_boundaries(boxes, starts, outer_count, 1),
         relevant_counts: vec![boxes.len()],
@@ -557,7 +516,6 @@ fn choose_sweep_plan(
             partition_boundaries(boxes, starts, outer_count, requested),
             extra_replica_limit,
         ) else {
-            // Each wider candidate only adds boundaries, so replication is monotone.
             break;
         };
         if candidate.boundaries.len() > best.boundaries.len() {
@@ -567,17 +525,12 @@ fn choose_sweep_plan(
     best
 }
 
-/// Translate a known coordinate into its dense partition-local rank.
 fn local_rank(coordinates: &[u32], coordinate: u32) -> u32 {
-    // Partition construction inserted every member endpoint before sorting and deduplication, so
-    // this lower-bound lookup must find an exact match. Local distinct-coordinate count cannot
-    // exceed the validated global endpoint count, making the u32 conversion lossless.
     let rank = coordinates.partition_point(|value| *value < coordinate);
     debug_assert_eq!(coordinates.get(rank), Some(&coordinate));
     rank as u32
 }
 
-/// Build one partition and recompress its inner coordinates to minimize tree memory and depth.
 fn build_sweep_partition(
     boxes: &[Rect<u32>],
     members: Vec<u32>,
@@ -646,9 +599,6 @@ fn build_sweep_partition(
 /// additive because each pair belongs to the partition containing its later outer-axis start.
 fn execute_partitioned_sweep(ranked: &RankedSweep, plan: SweepPlan) -> Result<(usize, u64)> {
     if plan.boundaries.len() == 2 {
-        // Avoid member replication, event materialization, and local coordinate compression when
-        // partitioning is not profitable. Both diagnostics still run concurrently on ranked data.
-        // Endpoint-count validation bounds block count below 2^31, so n * (n - 1) / 2 fits u64.
         let max_pairs = ranked.boxes.len() as u64 * ranked.boxes.len().saturating_sub(1) as u64 / 2;
         let partition = SweepPartition {
             initial_active: Vec::new(),
@@ -702,10 +652,7 @@ fn execute_partitioned_sweep(ranked: &RankedSweep, plan: SweepPlan) -> Result<(u
             })
             .collect::<Vec<_>>();
 
-        // Sweeps borrow immutable partition state, so depth and overlap diagnostics can traverse the
-        // same partitions concurrently. Internal boundary points are evaluated by the right-hand
-        // partition via its initial active set; global depth is therefore the maximum of disjoint
-        // half-open partition results, while pair ownership remains disjoint and additive.
+        // The right-hand partition evaluates boundary points through its initial active set.
         rayon::join(
             || {
                 partitions
@@ -718,8 +665,6 @@ fn execute_partitioned_sweep(ranked: &RankedSweep, plan: SweepPlan) -> Result<(u
                 partitions
                     .par_iter()
                     .map(sweep_overlap_pairs)
-                    // Saturate consistently with each local sweep rather than wrapping the public
-                    // aggregate if a future wider input domain exceeds u64 pair counts.
                     .reduce(|| 0, u64::saturating_add)
             },
         )
@@ -727,11 +672,7 @@ fn execute_partitioned_sweep(ranked: &RankedSweep, plan: SweepPlan) -> Result<(u
     Ok(result)
 }
 
-/// Exact partitioned diagnostics for two alternating min/max endpoint columns.
-/// `builders[0]` and `builders[1]` are the two MBR dimensions. Each must contain rows in
-/// `[block_0_min, block_0_max, block_1_min, block_1_max, ...]` order, with the corresponding type
-/// at the same dimension index. Wrong dimension/type counts, unequal row counts, odd cardinality,
-/// or a maximum sorting before its assigned minimum return `ErrorCode::Internal`.
+// Each dimension stores alternating `[block_0_min, block_0_max, ...]` endpoints.
 pub(crate) fn hilbert_diagnostics(
     builders: Vec<ColumnBuilder>,
     key_types: &[DataType],

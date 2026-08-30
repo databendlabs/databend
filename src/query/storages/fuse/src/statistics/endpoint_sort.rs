@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Shared endpoint encoding and sorting for clustering diagnostics.
-//!
-//! Typed endpoint columns are converted to SQL-compatible mem-comparable rows, then their row IDs
-//! are sorted with an MSD radix sort in a bounded request-local Rayon pool. Sorting preserves the
-//! original row IDs, allowing Linear and Hilbert diagnostics to interpret the caller-supplied
-//! alternating min/max layout.
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
@@ -33,16 +26,11 @@ use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::VariableRowConverter;
 use rayon::prelude::*;
 
-// One sentinel bucket for end-of-row plus one bucket for each possible byte value.
 const RADIX_BUCKETS: usize = 257;
 const RADIX_COMPARISON_SORT_THRESHOLD: usize = 4096;
 const MAX_RADIX_RECURSION_LEVELS: usize = 8;
 const MAX_DIAGNOSTICS_THREADS: usize = 8;
 
-/// Run one clustering-information calculation in a bounded request-local Rayon pool.
-/// The pool and its worker threads are dropped when `operation` returns. Nested Rayon calls inherit
-/// this pool, so endpoint sorting, ranking, and partition sweeps share the same thread limit without
-/// retaining workers across independent table-function requests.
 pub(crate) fn with_request_pool<R: Send>(
     max_threads: usize,
     operation: impl FnOnce(usize) -> Result<R> + Send,
@@ -60,21 +48,11 @@ pub(crate) fn with_request_pool<R: Send>(
     pool.install(|| operation(threads))
 }
 
-/// Encoded endpoints and their block-independent ascending row order.
-/// Sorting is intentionally unstable because consumers group equal keys by value. Under the
-/// caller-supplied alternating layout, each original row ID retains its assigned block and min/max
-/// role regardless of tie order.
 pub(crate) struct SortedEndpoints {
     pub(crate) keys: BinaryColumn,
     pub(crate) order: Vec<u32>,
 }
 
-/// Encode typed endpoint columns and sort their row IDs in the caller's Rayon execution context.
-/// The returned keys retain input row order; only `order` is sorted. Given the caller-supplied
-/// alternating layout, consumers use endpoint-ID parity to interpret each row's block and min/max
-/// role. Malformed column/type shapes, odd endpoint counts, and inputs too large for u32 row IDs
-/// return an internal error without producing a partial order. Empty typed columns are valid and
-/// produce empty encoded keys and an empty order.
 pub(crate) fn sort_endpoints(
     builders: Vec<ColumnBuilder>,
     key_types: &[DataType],
@@ -95,13 +73,11 @@ pub(crate) fn sort_endpoints(
             "clustering information endpoint columns have different lengths".to_string(),
         ));
     }
-    // Sorted orders and block IDs use u32 to halve index memory at multi-million-block scale.
     if endpoint_count > u32::MAX as usize {
         return Err(ErrorCode::Internal(format!(
             "clustering information has too many endpoints for exact diagnostics: {endpoint_count}"
         )));
     }
-    // Diagnostics index adjacent rows as endpoint pairs, so their cardinality must be even.
     if !endpoint_count.is_multiple_of(2) {
         return Err(ErrorCode::Internal(format!(
             "clustering information requires an even endpoint count for min/max pairs, got {endpoint_count}"

@@ -15,7 +15,6 @@
 pub mod accumulator;
 mod cluster_statistics;
 mod column_statistic;
-// Shared comparable-row endpoint sorting used by Linear and Hilbert diagnostics.
 mod endpoint_sort;
 mod hilbert;
 pub mod reducers;

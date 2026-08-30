@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of the `CLUSTERING_INFORMATION` table function.
-//!
-//! Block min/max metadata is collected into alternating endpoint rows, encoded with the same
-//! comparable-row semantics used by query sorting, and then dispatched to either a lexicographic
-//! Linear sweep or a two-dimensional Hilbert rectangle sweep. Both paths compute exact integer
-//! overlap/depth aggregates without materializing individual pairs; serialized averages are rounded
-//! to four decimal places.
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -72,9 +64,6 @@ use crate::table_functions::SimpleArgFuncTemplate;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
 
-/// Parsed positional arguments for `CLUSTERING_INFORMATION`.
-/// The optional cluster key requests an alternative Linear analysis. When omitted, diagnostics use
-/// the table's configured key and preserve its Linear or Hilbert layout.
 pub struct ClusteringInformationArgs {
     database_name: String,
     table_name: String,
@@ -110,13 +99,10 @@ impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
     }
 }
 
-/// Registered simple-argument table-function wrapper.
 pub type ClusteringInformationFunc = SimpleArgFuncTemplate<ClusteringInformation>;
 
-/// Marker implementing the `CLUSTERING_INFORMATION` table-function contract.
 pub struct ClusteringInformation;
 
-/// Internal and serialized result of one clustering-information request.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusteringInformationResponse {
     pub cluster_key: String,
@@ -126,10 +112,6 @@ pub struct ClusteringInformationResponse {
     pub info: serde_json::Value,
 }
 
-/// Compute clustering diagnostics for a Fuse table using its configured or requested custom key.
-/// This response-level entry point is shared by the SQL table-function adapter and the admin API.
-/// It derives metrics from exact integer aggregates for the current snapshot, rounds reported
-/// averages to four decimal places, and neither mutates table metadata nor encodes a `DataBlock`.
 #[async_backtrace::framed]
 pub async fn get_clustering_information(
     ctx: Arc<dyn TableContext>,
@@ -192,10 +174,6 @@ impl SimpleArgFunc for ClusteringInformation {
     }
 }
 
-/// Cluster-key information normalized for statistics collection.
-/// `stats_exprs` excludes vector-only expressions because they have no scalar min/max bounds.
-/// `default_key_id` allows persisted cluster statistics to be reused when analyzing the table's
-/// configured key; custom keys fall back to column statistics.
 struct ResolvedClusterKey {
     display: String,
     stats_exprs: Vec<Expr<usize>>,
@@ -214,10 +192,6 @@ impl ResolvedClusterKey {
     }
 }
 
-/// Block ranges collected before diagnostics.
-/// Each builder represents one scalar key dimension and stores alternating
-/// `[block_0_min, block_0_max, block_1_min, block_1_max, ...]` rows. Hilbert uses exactly two
-/// builders; linear clustering may use any number. Vector-only keys have no scalar builders.
 struct CollectedMetadata {
     key_types: Vec<DataType>,
     endpoint_builders: Option<Vec<ColumnBuilder>>,
@@ -225,9 +199,6 @@ struct CollectedMetadata {
     constant_block_count: u64,
 }
 
-/// Executes clustering-information collection for one Fuse table.
-/// Segment I/O and endpoint collection happen first; CPU-heavy encoding, sorting, and sweeps run
-/// only after all metadata is available, using one bounded request-local diagnostics pool.
 struct ClusteringInformationImpl<'a> {
     ctx: Arc<dyn TableContext>,
     table: &'a FuseTable,
@@ -244,8 +215,6 @@ impl ClusteringInformationImpl<'_> {
                     return self.resolve_default_cluster_key(table, normalized_key);
                 }
 
-                // A custom key is an alternative linear analysis, not a replacement Hilbert
-                // layout. Vector expressions have no scalar min/max range and are omitted.
                 let stats_exprs = custom_exprs
                     .into_iter()
                     .map(|expr| expr.project_column_ref(|index| Ok(index.as_usize())))
@@ -325,8 +294,6 @@ impl ClusteringInformationImpl<'_> {
         );
         let mut constant_block_count = 0u64;
         let mut block_count = 0usize;
-        // Read a few segments per worker to expose I/O concurrency without loading the entire
-        // snapshot's segment metadata at once.
         let chunk_size = self.ctx.get_settings().get_max_threads()?.max(1) as usize * 4;
 
         for chunk in snapshot.segments.chunks(chunk_size) {
@@ -338,8 +305,6 @@ impl ClusteringInformationImpl<'_> {
                 for block in segment.blocks {
                     block_count += 1;
                     if let Some(cluster_key_id) = hilbert_key_id {
-                        // Hilbert diagnostics operate on the two spatial MBR dimensions. Persist
-                        // them directly into the same alternating endpoint layout used by Linear.
                         let bounds = hilbert_bounds_for_diagnostics(
                             &prepared_exprs,
                             &block.col_stats,
@@ -402,8 +367,7 @@ impl ClusteringInformationImpl<'_> {
         let info = HilbertClusterStatistics {
             total_block_count,
             constant_block_count: metadata.constant_block_count,
-            // Each unordered pair contributes one overlapping neighbor to both rectangles. Validated
-            // block counts fit the result in u64; saturation is a defensive reuse guard.
+            // Each unordered pair contributes one overlapping neighbor to both rectangles.
             average_overlaps: rounded_average(
                 overlap_pairs.saturating_mul(2),
                 metadata.block_count,
@@ -453,8 +417,6 @@ impl ClusteringInformationImpl<'_> {
                     sweep_exact_statistics(&sorted.keys, &sorted.order)
                 })?
             }
-            // Vector-only keys have no scalar interval ordering. Preserve one zero-depth result per
-            // block so response counts remain aligned with the table snapshot.
             None => LinearClusteringStatistics {
                 block_count,
                 depth_counts: if block_count == 0 {
@@ -467,8 +429,6 @@ impl ClusteringInformationImpl<'_> {
         };
 
         let info = if aggregate.block_count == 0 {
-            // Preserve snapshot-level block reporting while leaving diagnostics at their serialized
-            // defaults when no scalar endpoint observations were produced.
             LinearClusterStatistics {
                 total_block_count,
                 ..Default::default()
@@ -540,8 +500,6 @@ impl ClusteringInformationImpl<'_> {
                 info,
             });
         };
-        // Old snapshots may not carry a timestamp; use request time only as that compatibility
-        // fallback, while preserving the actual snapshot timestamp whenever available.
         let timestamp = snapshot.timestamp.unwrap_or(now).timestamp_micros();
         info!(
             "clustering_information: started table={} cluster_type={} segments={} blocks={}",
@@ -553,11 +511,7 @@ impl ClusteringInformationImpl<'_> {
 
         let total_block_count = snapshot.summary.block_count;
         let metadata_start = Instant::now();
-        // Keep asynchronous segment I/O separate from the CPU-bound diagnostics phase. This also
-        // gives both Linear and Hilbert the same immutable endpoint snapshot.
         let metadata = self.collect_metadata(&snapshot, &key).await?;
-        // Keep this log aligned with the public snapshot-summary count. The response builders use
-        // `metadata.block_count` internally when normalizing metrics over traversed block records.
         info!(
             "clustering_information: metadata collected table={} segments={} blocks={} elapsed={:?}",
             self.table.table_info.desc,
@@ -573,7 +527,6 @@ impl ClusteringInformationImpl<'_> {
     }
 }
 
-/// Append one composite endpoint row across all key-dimension builders.
 fn push_endpoint(builders: &mut [ColumnBuilder], endpoint: &[Scalar]) {
     debug_assert_eq!(builders.len(), endpoint.len());
     for (builder, value) in builders.iter_mut().zip(endpoint) {
@@ -581,9 +534,7 @@ fn push_endpoint(builders: &mut [ColumnBuilder], endpoint: &[Scalar]) {
     }
 }
 
-/// Exact aggregates produced by the linear closed-interval sweep.
-/// `sum_overlap` counts both directions for each overlapping block pair, while `sum_depth` and
-/// `depth_counts` retain per-block maximum depth only in aggregate form.
+// `sum_overlap` counts both directions for each overlapping block pair.
 #[derive(Debug, Default)]
 struct LinearClusteringStatistics {
     pub block_count: usize,
@@ -592,8 +543,7 @@ struct LinearClusteringStatistics {
     pub depth_counts: BTreeMap<usize, u64>,
 }
 
-/// Find the representative of a monotone-stack position and compress the traversed parent path.
-/// Representatives point to the next position with an equal-or-greater stabbing depth.
+// Parents point to the next position with an equal-or-greater stabbing depth.
 fn find_root(parent: &mut [u32], mut node: usize) -> usize {
     let mut root = node;
     while parent[root] as usize != root {
@@ -622,7 +572,6 @@ fn sweep_exact_statistics(
     let mut monotone_stack = Vec::<u32>::with_capacity(keys.len());
     let mut depth_counts = Vec::<u64>::new();
     let mut active = 0usize;
-    // Unordered interval pairs counted once at the later opening coordinate.
     let mut overlap_pairs = 0u64;
     let mut sum_depth = 0u64;
     let mut point_position = 0usize;
@@ -715,9 +664,6 @@ fn sweep_exact_statistics(
     })
 }
 
-/// User-facing metrics for a lexicographically ordered (Linear) cluster key.
-/// Overlap and average depth are derived from exact integer aggregates and rounded to four decimals.
-/// Per-block depth is each block's maximum stabbing depth over its closed endpoint range.
 #[derive(Serialize, Default)]
 struct LinearClusterStatistics {
     total_block_count: u64,
@@ -729,12 +675,9 @@ struct LinearClusterStatistics {
     block_depth_histogram: BTreeMap<String, u64>,
 }
 
-/// User-facing 2D diagnostics for Hilbert minimum-bounding rectangles (MBRs).
-/// `average_overlaps` is derived from the exact pair count and rounded to four decimals;
-/// `max_depth` is the global maximum number of MBRs covering one point. Per-block depth and its
-/// histogram are intentionally omitted: computing each MBR's maximum internal stabbing depth
-/// requires an output-sensitive overlap structure and can degrade to quadratic work for dense
-/// layouts.
+/// Exact scalable 2D diagnostics. Per-block average depth and its histogram are intentionally
+/// omitted: computing each MBR's maximum internal stabbing depth requires an output-sensitive
+/// overlap structure and can degrade to quadratic work for dense layouts.
 #[derive(Serialize, Default)]
 struct HilbertClusterStatistics {
     total_block_count: u64,
@@ -743,9 +686,6 @@ struct HilbertClusterStatistics {
     max_depth: usize,
 }
 
-/// Divide and round a reported average to four decimal places; empty inputs produce zero.
-/// Rounding is applied only at the serialized metric boundary; all sweep aggregation remains
-/// integer-exact until this conversion.
 fn rounded_average(sum: u64, count: usize) -> f64 {
     if count == 0 {
         return 0.0;
@@ -753,8 +693,6 @@ fn rounded_average(sum: u64, count: usize) -> f64 {
     (10000.0 * sum as f64 / count as f64).round() / 10000.0
 }
 
-/// Return the nearest-rank percentile from an exact depth-frequency map.
-/// Callers pass percentiles in 1..=100 and a frequency map whose counts sum to `total_count`.
 fn percentile_depth(
     depth_counts: &BTreeMap<usize, u64>,
     total_count: usize,
