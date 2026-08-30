@@ -33,8 +33,7 @@ runs:
           --no-fail-fast \
           --hide-progress-bar \
           --run-ignored only \
-          -p databend-enterprise-query \
-          --lib \
+          --workspace \
           real_s3::streaming_block_gc_across_list_pages
       env:
         DATABEND_TEST_S3_BUCKET: databend-ci
