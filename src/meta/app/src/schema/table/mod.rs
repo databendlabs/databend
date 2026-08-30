@@ -43,6 +43,7 @@ use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::materialized_view::CreateMaterializedViewMeta;
+use crate::schema::materialized_view::MATERIALIZED_VIEW_ENGINE;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -102,7 +103,7 @@ pub struct TableInfo {
 
 impl TableInfo {
     pub fn database_name(&self) -> Result<&str> {
-        if self.engine() != "FUSE" {
+        if self.engine() != "FUSE" && self.engine() != MATERIALIZED_VIEW_ENGINE {
             return Err(ErrorCode::Internal(format!(
                 "Invalid engine: {}",
                 self.engine()
@@ -1273,9 +1274,28 @@ mod tests {
     use databend_meta_client::kvapi::StructKey;
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
+    use crate::schema::MATERIALIZED_VIEW_ENGINE;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableIdToName;
+    use crate::schema::TableInfo;
     use crate::schema::TableMeta;
+
+    #[test]
+    fn test_table_info_database_name() {
+        for engine in ["FUSE", MATERIALIZED_VIEW_ENGINE] {
+            let table_info = TableInfo::new("db", "table", Default::default(), TableMeta {
+                engine: engine.to_string(),
+                ..Default::default()
+            });
+            assert_eq!(table_info.database_name().unwrap(), "db");
+        }
+
+        let table_info = TableInfo::new("db", "table", Default::default(), TableMeta {
+            engine: "MEMORY".to_string(),
+            ..Default::default()
+        });
+        assert!(table_info.database_name().is_err());
+    }
 
     #[test]
     fn test_table_id_to_name_key_format() {
