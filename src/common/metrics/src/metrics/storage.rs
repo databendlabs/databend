@@ -244,8 +244,8 @@ static RECLUSTER_WRITE_BLOCK_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_recluster_write_block_nums"));
 static MAINTENANCE_ACTIVE_TASKS: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("fuse_maintenance_active_tasks"));
-static SEGMENT_REWRITE_CLAIM_CONFLICTS: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_segment_rewrite_claim_conflicts"));
+static SEGMENT_CLAIM_CONFLICTS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_segment_claim_conflicts"));
 static MAINTENANCE_COMMIT_GATE_WAIT_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_maintenance_commit_gate_wait_milliseconds")
 });
@@ -999,8 +999,8 @@ pub fn metrics_dec_maintenance_active_tasks() {
     MAINTENANCE_ACTIVE_TASKS.dec();
 }
 
-pub fn metrics_inc_segment_rewrite_claim_conflicts() {
-    SEGMENT_REWRITE_CLAIM_CONFLICTS.inc();
+pub fn metrics_inc_segment_claim_conflicts() {
+    SEGMENT_CLAIM_CONFLICTS.inc();
 }
 
 pub fn metrics_observe_maintenance_commit_gate_wait_milliseconds(c: u64) {

@@ -28,7 +28,6 @@ use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseco
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
 use log::info;
@@ -56,7 +55,7 @@ impl FuseTable {
         limit: Option<usize>,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
-        claimed_segments: &HashSet<Location>,
+        claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
 
@@ -128,7 +127,8 @@ impl FuseTable {
                 .into_iter()
                 .filter(|window| {
                     let valid = window.segments.iter().all(|(location, _)| {
-                        live_segments.contains_key(location) && !claimed_segments.contains(location)
+                        live_segments.contains_key(location)
+                            && !claimed_segments.contains(location.0.as_str())
                     });
                     if !valid {
                         debug!(
@@ -180,7 +180,7 @@ impl FuseTable {
                 });
                 let mut scan_locations = Vec::with_capacity(scan_range.len());
                 for (offset, location) in scan_range.iter().enumerate() {
-                    if claimed_segments.contains(location)
+                    if claimed_segments.contains(location.0.as_str())
                         || carry_locations
                             .as_ref()
                             .is_some_and(|locations| locations.contains(location))

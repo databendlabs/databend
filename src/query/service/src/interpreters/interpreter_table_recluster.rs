@@ -29,9 +29,8 @@ use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::SegmentRewriteTarget;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_metrics::storage::metrics_inc_segment_rewrite_claim_conflicts;
+use databend_common_metrics::storage::metrics_inc_segment_claim_conflicts;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::NameResolutionContext;
@@ -307,9 +306,6 @@ impl ReclusterTableInterpreter {
                 claim_manager
                     .claimed_segments(self.ctx.as_ref(), tbl.get_id())
                     .await?
-                    .into_iter()
-                    .map(|segment| (segment.location, segment.format_version))
-                    .collect()
             } else {
                 HashSet::new()
             };
@@ -333,13 +329,13 @@ impl ReclusterTableInterpreter {
             let claim = claim_manager
                 .as_ref()
                 .expect("parallel recluster must have a claim manager")
-                .try_segment_rewrite_claim(self.ctx.clone(), tbl.get_id(), segments)
+                .try_segment_claim(self.ctx.clone(), tbl.get_id(), segments)
                 .await?;
             if claim.is_some() {
                 break (physical_plan, claim);
             }
 
-            metrics_inc_segment_rewrite_claim_conflicts();
+            metrics_inc_segment_claim_conflicts();
             // Another maintenance task claimed this candidate set after planning.
             // Refresh the table as well as the exclusion set: the winner may already
             // have committed and released its claim before this task replans.
@@ -425,9 +421,9 @@ impl ReclusterTableInterpreter {
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
         linear_final_carry: &mut ReclusterFinalCarry,
-        claimed_segments: &HashSet<(String, u64)>,
+        claimed_segments: &HashSet<String>,
         acquire_commit_lock: bool,
-    ) -> Result<Option<(PhysicalPlan, Vec<SegmentRewriteTarget>)>> {
+    ) -> Result<Option<(PhysicalPlan, Vec<String>)>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
         // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
         // those tables on the conservative strategy until CREATE/ALTER CLUSTER BY
@@ -470,16 +466,15 @@ impl ReclusterTableInterpreter {
         let claimed_sources = removed_segment_indexes
             .iter()
             .map(|index| {
-                let (location, format_version) =
-                    snapshot.segments.get(*index).ok_or_else(|| {
+                snapshot
+                    .segments
+                    .get(*index)
+                    .map(|(location, _)| location.clone())
+                    .ok_or_else(|| {
                         ErrorCode::Internal(format!(
                             "recluster source segment index {index} is outside snapshot"
                         ))
-                    })?;
-                Ok(SegmentRewriteTarget {
-                    location: location.clone(),
-                    format_version: *format_version,
-                })
+                    })
             })
             .collect::<Result<Vec<_>>>()?;
         let root = PhysicalPlan::new(Recluster {

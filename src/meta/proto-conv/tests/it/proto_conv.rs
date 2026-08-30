@@ -246,6 +246,16 @@ pub(crate) fn new_lock_meta() -> mt::LockMeta {
     }
 }
 
+fn new_segment_claim_meta() -> mt::SegmentClaimMeta {
+    mt::SegmentClaimMeta {
+        user: "root".to_string(),
+        node: "node".to_string(),
+        query_id: "query".to_string(),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+        segment_locations: vec!["segment-1".to_string(), "segment-2".to_string()],
+    }
+}
+
 fn new_data_mask_meta() -> databend_common_meta_app::data_mask::DatamaskMeta {
     databend_common_meta_app::data_mask::DatamaskMeta {
         args: vec![("a".to_string(), "String".to_string())],
@@ -378,6 +388,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let p = lvt.to_pb();
     let got = mt::LeastVisibleTime::from_pb(p)?;
     assert_eq!(lvt, got);
+
+    let segment_claim = new_segment_claim_meta();
+    let p = segment_claim.to_pb();
+    let got = mt::SegmentClaimMeta::from_pb(p)?;
+    assert_eq!(segment_claim, got);
 
     Ok(())
 }

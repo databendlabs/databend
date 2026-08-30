@@ -12,9 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod coordination_manager;
-mod lock_holder;
-mod segment_claim;
-mod table_lock;
+syntax = "proto3";
 
-pub use coordination_manager::CoordinationManager;
+package databend_proto;
+
+message SegmentClaimMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string user = 1;
+  string node = 2;
+  string query_id = 3;
+  string created_on = 4;
+  repeated string segment_locations = 5;
+}

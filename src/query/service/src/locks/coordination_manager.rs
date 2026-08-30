@@ -32,7 +32,7 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc;
 
 use crate::locks::lock_holder::LockHolder;
-use crate::locks::segment_rewrite_claim::SegmentRewriteClaimHolder;
+use crate::locks::segment_claim::SegmentClaimHolder;
 use crate::locks::table_lock::TableLock;
 use crate::sessions::TableContext;
 
@@ -46,26 +46,25 @@ impl UnlockApi for TableLockUnlocker {
     }
 }
 
-struct SegmentRewriteClaimUnlocker {
+struct SegmentClaimUnlocker {
     tx: mpsc::UnboundedSender<u64>,
 }
 
-impl UnlockApi for SegmentRewriteClaimUnlocker {
-    fn unlock(&self, revision: u64) {
-        let _ = self.tx.send(revision);
+impl UnlockApi for SegmentClaimUnlocker {
+    fn unlock(&self, claim_id: u64) {
+        let _ = self.tx.send(claim_id);
     }
 }
 
 /// Owns the query node's active coordination holders.
 ///
-/// Table locks and segment rewrite claims intentionally retain separate Meta
-/// protocols, revision namespaces, holder implementations, and release paths.
+/// Table locks and segment claims intentionally retain separate Meta protocols,
+/// identifier namespaces, holder implementations, and release paths.
 pub struct CoordinationManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
-    pub(super) active_segment_rewrite_claims:
-        Arc<RwLock<HashMap<u64, Arc<SegmentRewriteClaimHolder>>>>,
+    pub(super) active_segment_claims: Arc<RwLock<HashMap<u64, Arc<SegmentClaimHolder>>>>,
     table_lock_unlocker: Arc<dyn UnlockApi>,
-    pub(super) segment_rewrite_claim_unlocker: Arc<dyn UnlockApi>,
+    pub(super) segment_claim_unlocker: Arc<dyn UnlockApi>,
 }
 
 impl CoordinationManager {
@@ -73,13 +72,13 @@ impl CoordinationManager {
         let (table_lock_tx, mut table_lock_rx) = mpsc::unbounded_channel();
         let (claim_tx, mut claim_rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
-        let active_segment_rewrite_claims = Arc::new(RwLock::new(HashMap::new()));
+        let active_segment_claims = Arc::new(RwLock::new(HashMap::new()));
 
         let manager = Arc::new(Self {
             active_locks: active_locks.clone(),
-            active_segment_rewrite_claims: active_segment_rewrite_claims.clone(),
+            active_segment_claims: active_segment_claims.clone(),
             table_lock_unlocker: Arc::new(TableLockUnlocker { tx: table_lock_tx }),
-            segment_rewrite_claim_unlocker: Arc::new(SegmentRewriteClaimUnlocker { tx: claim_tx }),
+            segment_claim_unlocker: Arc::new(SegmentClaimUnlocker { tx: claim_tx }),
         });
 
         GlobalIORuntime::instance().spawn(async move {
@@ -91,8 +90,8 @@ impl CoordinationManager {
             }
         });
         GlobalIORuntime::instance().spawn(async move {
-            while let Some(revision) = claim_rx.recv().await {
-                if let Some(holder) = active_segment_rewrite_claims.write().remove(&revision) {
+            while let Some(claim_id) = claim_rx.recv().await {
+                if let Some(holder) = active_segment_claims.write().remove(&claim_id) {
                     metrics_inc_shutdown_lock_holder_nums();
                     metrics_dec_maintenance_active_tasks();
                     holder.shutdown();
@@ -166,17 +165,16 @@ mod tests {
     use databend_common_pipeline::core::UnlockApi;
     use tokio::sync::mpsc;
 
-    use super::SegmentRewriteClaimUnlocker;
+    use super::SegmentClaimUnlocker;
     use super::TableLockUnlocker;
 
     #[test]
-    fn test_same_revision_routes_to_separate_release_channels() {
+    fn test_same_id_routes_to_separate_release_channels() {
         let (table_lock_tx, mut table_lock_rx) = mpsc::unbounded_channel();
         let (claim_tx, mut claim_rx) = mpsc::unbounded_channel();
         let table_lock_unlocker: Arc<dyn UnlockApi> =
             Arc::new(TableLockUnlocker { tx: table_lock_tx });
-        let claim_unlocker: Arc<dyn UnlockApi> =
-            Arc::new(SegmentRewriteClaimUnlocker { tx: claim_tx });
+        let claim_unlocker: Arc<dyn UnlockApi> = Arc::new(SegmentClaimUnlocker { tx: claim_tx });
 
         table_lock_unlocker.unlock(42);
         claim_unlocker.unlock(42);

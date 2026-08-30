@@ -16,28 +16,27 @@ use std::num::ParseIntError;
 
 use databend_meta_client::kvapi;
 
-use crate::schema::table_lock_ident_v2::format_table_lock_revision_v2;
 use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, kvapi::KeyCodec)]
-pub struct SegmentRewriteClaimName {
+pub struct SegmentClaimName {
     table_id: u64,
-    revision: String,
+    claim_id: String,
 }
 
-/// Identifies one segment rewrite claim.
-pub type SegmentRewriteClaimIdent = TIdent<Resource, SegmentRewriteClaimName>;
+/// Identifies one segment claim.
+pub type SegmentClaimIdent = TIdent<Resource, SegmentClaimName>;
 
 pub use kvapi_impl::Resource;
 
-pub const SEGMENT_REWRITE_CLAIM_SEQ_KEY: &str = "__fd_segment_rewrite_claim_seq";
+pub const SEGMENT_CLAIM_SEQ_KEY: &str = "__fd_segment_claim_seq";
 
-impl SegmentRewriteClaimIdent {
-    pub fn new(tenant: impl ToTenant, table_id: u64, revision: u64) -> Self {
-        Self::new_generic(tenant, SegmentRewriteClaimName {
+impl SegmentClaimIdent {
+    pub fn new(tenant: impl ToTenant, table_id: u64, claim_id: u64) -> Self {
+        Self::new_generic(tenant, SegmentClaimName {
             table_id,
-            revision: format_table_lock_revision_v2(revision),
+            claim_id: format_claim_id(claim_id),
         })
     }
 
@@ -45,22 +44,35 @@ impl SegmentRewriteClaimIdent {
         self.name().table_id
     }
 
-    pub fn try_revision(&self) -> Result<u64, ParseIntError> {
-        self.name().revision.replace('_', "").parse()
+    pub fn try_claim_id(&self) -> Result<u64, ParseIntError> {
+        self.name().claim_id.replace('_', "").parse()
     }
 }
 
+fn format_claim_id(claim_id: u64) -> String {
+    format!("{:021}", claim_id).chars().enumerate().fold(
+        String::new(),
+        |mut output, (index, character)| {
+            if index > 0 && index % 3 == 0 {
+                output.push('_');
+            }
+            output.push(character);
+            output
+        },
+    )
+}
+
 mod kvapi_impl {
-    use crate::schema::LockMeta;
+    use crate::schema::SegmentClaimMeta;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
 
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_segment_rewrite_claim";
-        const TYPE: &'static str = "SegmentRewriteClaimIdent";
+        const PREFIX: &'static str = "__fd_segment_claim";
+        const TYPE: &'static str = "SegmentClaimIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = LockMeta;
+        type ValueType = SegmentClaimMeta;
     }
 }
 
@@ -68,15 +80,15 @@ mod kvapi_impl {
 mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
-    use super::SegmentRewriteClaimIdent;
+    use super::SegmentClaimIdent;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_segment_rewrite_claim_ident() {
-        let ident = SegmentRewriteClaimIdent::new(Tenant::new_literal("test"), 5, 6);
+    fn test_segment_claim_ident() {
+        let ident = SegmentClaimIdent::new(Tenant::new_literal("test"), 5, 6);
         assert_round_trip(
             ident,
-            "__fd_segment_rewrite_claim/test/5/000_000_000_000_000_000_006",
+            "__fd_segment_claim/test/5/000_000_000_000_000_000_006",
         );
     }
 }

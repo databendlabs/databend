@@ -640,7 +640,7 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
     let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.segments.len(), 36);
     let claimed_location = snapshot.segments[32].clone();
-    let claimed_segments = HashSet::from([claimed_location.clone()]);
+    let claimed_segments = HashSet::from([claimed_location.0.clone()]);
 
     let push_downs = PushDownInfo {
         filters: Some(parse_to_filters(ctx.clone(), table.clone(), "id > 90")?),

@@ -35,6 +35,7 @@ mod role;
 mod row_access_policy;
 mod row_access_policy_table_id;
 mod schema;
+mod segment_claim;
 mod sequence;
 mod stage;
 mod table;
