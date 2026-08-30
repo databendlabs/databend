@@ -5094,6 +5094,7 @@ dependencies = [
  "parquet 58.1.0",
  "paste",
  "rand 0.8.5",
+ "rayon",
  "roaring 0.10.12",
  "serde",
  "serde_json",
