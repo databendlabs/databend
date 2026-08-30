@@ -1140,16 +1140,25 @@ impl DataExchangeManager {
                 let statistics_receiver: Mutex<StatisticsReceiver> =
                     Mutex::new(statistics_receiver);
 
-                // Interrupting the execution of finished callback if network error
+                // Keep the query coordinator, including reliable inbound sources, alive until all
+                // statistics streams have reached a terminal state. A statistics sender may still
+                // be reconnecting after its pipeline finishes; removing the coordinator first
+                // would admit the replay as a new logical source with sequence zero.
                 build_res.main_pipeline.set_on_finished(basic_callback(
                     move |info: &ExecutionInfo| {
                         let query_id = ctx.get_id();
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
+                        let result = statistics_receiver.wait_shutdown();
+                        let cause = info
+                            .res
+                            .clone()
+                            .err()
+                            .or_else(|| result.as_ref().err().cloned());
                         ctx.get_exchange_manager()
-                            .on_finished_query(&query_id, info.res.clone().err());
-                        statistics_receiver.wait_shutdown()
+                            .on_finished_query(&query_id, cause);
+                        result
                     },
                 ));
 
