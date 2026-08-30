@@ -1,5 +1,5 @@
 name: "Test Query Flight Reconnect with TPC-H"
-description: "Verify New Flight reconnects after a random live link reset"
+description: "Verify New Flight reconnects after a random temporary network partition"
 runs:
   using: "composite"
   steps:
