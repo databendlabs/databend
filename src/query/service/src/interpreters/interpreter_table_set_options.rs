@@ -73,6 +73,7 @@ use crate::interpreters::common::table_option_validation::is_valid_analyze_histo
 use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
+use crate::interpreters::common::table_option_validation::is_valid_block_thresholds;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
@@ -81,9 +82,10 @@ use crate::interpreters::common::table_option_validation::is_valid_data_page_row
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
+use crate::interpreters::common::table_option_validation::is_valid_index_granularity;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_block_reduction;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
-use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -119,9 +121,9 @@ impl Interpreter for SetOptionsInterpreter {
         let mut options_map = HashMap::new();
         // check block_per_segment
         is_valid_block_per_segment(&self.plan.set_options)?;
-        // check row_per_block
-        is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_block_thresholds(&self.plan.set_options)?;
         is_valid_recluster_depth(&self.plan.set_options)?;
+        is_valid_recluster_block_reduction(&self.plan.set_options)?;
         // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
         // check enable_parquet_encoding
@@ -199,6 +201,9 @@ impl Interpreter for SetOptionsInterpreter {
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
         check_maintenance_target(table.as_ref(), &self.plan.target)?;
+        let mut effective_options = table.get_table_info().meta.options.clone();
+        effective_options.extend(self.plan.set_options.clone());
+        is_valid_index_granularity(&effective_options)?;
 
         if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
             let mode = mode.parse::<WriteDistributionMode>()?;

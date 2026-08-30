@@ -16,16 +16,21 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::block_format::FuseParquetBlockFormat;
+use super::granule_group::build_granule_groups;
 use super::parquet_data_source::ParquetDataSource;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
 use crate::io::BlockReadContext;
+use crate::io::GranuleDataReader;
+use crate::io::OffsetsIndex;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
@@ -37,6 +42,7 @@ pub struct ReadBlockContext {
     block_format: FuseParquetBlockFormat,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    max_block_size: usize,
 }
 
 impl ReadBlockContext {
@@ -55,6 +61,7 @@ impl ReadBlockContext {
             block_format,
             index_reader,
             virtual_reader,
+            max_block_size: ctx.get_settings().get_max_block_size()? as usize,
         }))
     }
 
@@ -64,7 +71,7 @@ impl ReadBlockContext {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
+    pub(crate) async fn read_full_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
         if let Some(data_source) = self.read_agg_index_data(fuse_part).await? {
@@ -87,7 +94,92 @@ impl ReadBlockContext {
             )
             .await?;
 
-        Ok(ParquetDataSource::Normal((data, virtual_source)))
+        Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
+    }
+
+    pub(crate) fn granule_groups_if_subset(
+        &self,
+        part: &PartInfoPtr,
+    ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let Some(ranges) = fuse_part
+            .block_meta_index()
+            .and_then(|index| index.granule_ranges.as_deref())
+        else {
+            return Ok(None);
+        };
+        let Some(groups) = self.granule_groups(part, Some(ranges))? else {
+            return Ok(None);
+        };
+        let granule_rows = fuse_part
+            .granule_index
+            .as_ref()
+            .expect("granule_groups checked metadata")
+            .granule_rows as usize;
+        let num_granules = crate::io::num_granules_of(fuse_part.nums_rows, granule_rows);
+        let selected = ranges.iter().try_fold(0usize, |selected, range| {
+            selected
+                .checked_add(range.end - range.start)
+                .ok_or_else(|| ErrorCode::Internal("selected granule count overflows"))
+        })?;
+        Ok((selected < num_granules).then_some(groups))
+    }
+
+    pub(crate) fn granule_groups(
+        &self,
+        part: &PartInfoPtr,
+        ranges: Option<&[std::ops::Range<usize>]>,
+    ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
+        if self.index_reader.is_some() || self.virtual_reader.is_some() {
+            return Ok(None);
+        }
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let Some(granule_index) = fuse_part.granule_index.as_ref() else {
+            return Ok(None);
+        };
+        if fuse_part.nums_rows == 0 {
+            return Ok(None);
+        }
+        Ok(Some(build_granule_groups(
+            ranges,
+            granule_index.granule_rows as usize,
+            fuse_part.nums_rows,
+            self.max_block_size,
+        )?))
+    }
+
+    pub(crate) fn create_granule_data_reader(
+        &self,
+        part: &PartInfoPtr,
+        groups: &[Vec<std::ops::Range<usize>>],
+        lock_stats: Arc<CacheLockStats>,
+    ) -> Result<GranuleDataReader> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let granule_index = fuse_part
+            .granule_index
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("granule index metadata is missing"))?;
+        let offsets = OffsetsIndex::load_with_stats(
+            self.block_read_ctx.operator(),
+            &self.read_settings,
+            &granule_index.offsets,
+            granule_index.granule_rows as usize,
+            fuse_part.nums_rows,
+            &fuse_part.columns_meta,
+            self.block_read_ctx
+                .project_indices()
+                .values()
+                .map(|(column_id, ..)| *column_id),
+            Some(lock_stats.clone()),
+        )?;
+        GranuleDataReader::create(
+            &self.block_read_ctx,
+            &self.read_settings,
+            fuse_part,
+            groups,
+            &offsets,
+            Some(lock_stats),
+        )
     }
 
     async fn read_agg_index_data(
@@ -134,6 +226,7 @@ impl ReadBlockContext {
             location,
             None,
             0,
+            None,
             block_meta.num_rows,
             block_meta.columns_meta,
             None,

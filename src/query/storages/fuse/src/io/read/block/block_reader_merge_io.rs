@@ -30,6 +30,7 @@ type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 #[derive(EnumAsInner, Clone)]
 pub enum DataItem<'a> {
     RawData(Buffer),
+    GranuleData(Buffer, std::ops::Range<u64>),
     ColumnArray(&'a Arc<SizedColumnArray>),
 }
 
@@ -37,6 +38,8 @@ pub struct BlockReadResult {
     merge_io_result: MergeIOReadResult,
     pub(crate) cached_column_data: CachedColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
+    row_range: Option<std::ops::Range<usize>>,
+    column_data_ranges: HashMap<ColumnId, std::ops::Range<u64>>,
 }
 
 impl BlockReadResult {
@@ -49,7 +52,28 @@ impl BlockReadResult {
             merge_io_result,
             cached_column_data,
             cached_column_array,
+            row_range: None,
+            column_data_ranges: HashMap::new(),
         }
+    }
+
+    pub fn create_with_row_range(
+        merge_io_result: MergeIOReadResult,
+        cached_column_array: CachedColumnArray,
+        column_data_ranges: HashMap<ColumnId, std::ops::Range<u64>>,
+        row_range: std::ops::Range<usize>,
+    ) -> BlockReadResult {
+        BlockReadResult {
+            merge_io_result,
+            cached_column_data: vec![],
+            cached_column_array,
+            row_range: Some(row_range),
+            column_data_ranges,
+        }
+    }
+
+    pub fn row_range(&self) -> Option<&std::ops::Range<usize>> {
+        self.row_range.as_ref()
     }
 
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {
@@ -61,7 +85,15 @@ impl BlockReadResult {
                 .merge_io_result
                 .owner_memory
                 .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
-            res.insert(*column_id, DataItem::RawData(chunk.slice(range.clone())));
+            let data = chunk.slice(range.clone());
+            match self.column_data_ranges.get(column_id) {
+                Some(data_range) => {
+                    res.insert(*column_id, DataItem::GranuleData(data, data_range.clone()));
+                }
+                None => {
+                    res.insert(*column_id, DataItem::RawData(data));
+                }
+            }
         }
 
         // merge column data from cache
@@ -95,5 +127,34 @@ impl BlockReadResult {
         }
 
         Ok(res)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_storages_common_io::OwnerMemory;
+
+    use super::*;
+
+    #[test]
+    fn test_granule_data_keeps_file_range() {
+        let merge = MergeIOReadResult::create(
+            OwnerMemory::create(vec![(0, Buffer::from(vec![1, 2, 3]))]),
+            HashMap::from([(7, (0, 0..3))]),
+            "block".to_string(),
+        );
+        let result = BlockReadResult::create_with_row_range(
+            merge,
+            vec![],
+            HashMap::from([(7, 100..103)]),
+            0..3,
+        );
+
+        let chunks = result.columns_chunks().unwrap();
+        assert!(matches!(
+            chunks.get(&7),
+            Some(DataItem::GranuleData(data, range))
+                if data.to_bytes().as_ref() == [1, 2, 3] && *range == (100..103)
+        ));
     }
 }

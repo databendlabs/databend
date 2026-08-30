@@ -40,6 +40,7 @@ use crate::caches::ColumnArrayCache;
 use crate::caches::ColumnDataCache;
 use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
+use crate::caches::GranuleIndexFileCache;
 use crate::caches::IcebergTableCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
@@ -118,6 +119,7 @@ pub struct CacheManager {
     virtual_column_meta_cache: CacheSlot<VirtualColumnMetaCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
+    granule_index_file_cache: Option<GranuleIndexFileCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
     segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
@@ -242,6 +244,7 @@ impl CacheManager {
                 virtual_column_meta_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
+                granule_index_file_cache: None,
                 table_statistic_cache: CacheSlot::new(None),
                 segment_statistics_cache: CacheSlot::new(None),
                 in_memory_table_data_cache,
@@ -466,6 +469,9 @@ impl CacheManager {
                 MEMORY_CACHE_PARQUET_META_DATA,
                 DEFAULT_PARQUET_META_DATA_CACHE_ITEMS,
             );
+            let granule_index_file_cache = (config.granule_index_file_bytes > 0).then(|| {
+                GranuleIndexFileCache::new(config.granule_index_file_bytes as usize)
+            });
 
             let segment_block_metas_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_SEGMENT_BLOCK_METAS,
@@ -501,6 +507,7 @@ impl CacheManager {
                 in_memory_table_data_cache,
                 segment_block_metas_cache,
                 parquet_meta_data_cache,
+                granule_index_file_cache,
                 block_meta_cache,
                 iceberg_table_meta_cache,
                 allows_on_disk_cache,
@@ -536,6 +543,9 @@ impl CacheManager {
             // Only the in-memory part of column_data_cache will be cleared
             CacheManager::clear_cache(&me.column_data_cache);
             CacheManager::clear_cache(&me.block_meta_cache);
+            if let Some(cache) = &me.granule_index_file_cache {
+                cache.clear();
+            }
         }
 
         fn clear_extra_caches(me: &CacheManager) {
@@ -565,6 +575,11 @@ impl CacheManager {
             MEMORY_CACHE_PARQUET_META_DATA => {
                 let cache = &self.parquet_meta_data_cache;
                 Self::set_items_capacity(cache, new_capacity, name)
+            }
+            MEMORY_CACHE_GRANULE_INDEX_FILE => {
+                if let Some(cache) = &self.granule_index_file_cache {
+                    cache.set_bytes_capacity(new_capacity as usize);
+                }
             }
             MEMORY_CACHE_PRUNE_PARTITIONS => {
                 let cache = &self.prune_partitions_cache;
@@ -831,6 +846,10 @@ impl CacheManager {
         self.parquet_meta_data_cache.get()
     }
 
+    pub fn get_granule_index_file_cache(&self) -> Option<GranuleIndexFileCache> {
+        self.granule_index_file_cache.clone()
+    }
+
     pub fn get_column_data_cache(&self) -> Option<ColumnDataCache> {
         self.get_hybrid_cache(self.column_data_cache.get())
     }
@@ -962,6 +981,7 @@ impl CacheManager {
 
 const MEMORY_CACHE_TABLE_DATA: &str = "memory_cache_table_data";
 const MEMORY_CACHE_PARQUET_META_DATA: &str = "memory_cache_parquet_meta_data";
+const MEMORY_CACHE_GRANULE_INDEX_FILE: &str = "memory_cache_granule_index_file";
 const MEMORY_CACHE_PRUNE_PARTITIONS: &str = "memory_cache_prune_partitions";
 const HYBRID_CACHE_INVERTED_INDEX_FILE: &str = "cache_inverted_index_file";
 const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_FILE: &str = "memory_cache_inverted_index_file";
@@ -1309,6 +1329,7 @@ mod tests {
             spatial_index_location: None,
             spatial_index_size: None,
             spatial_stats: None,
+            granule_index: None,
             vector_stats: None,
             virtual_block_meta: None,
             compression: Compression::Lz4,
@@ -1417,6 +1438,47 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_manager_granule_index_file_config() -> Result<()> {
+        let max_server_memory_usage = 1024 * 1024;
+
+        let enabled = CacheManager::try_new(
+            &CacheConfig {
+                granule_index_file_bytes: 1024,
+                ..Default::default()
+            },
+            &max_server_memory_usage,
+            "test_tenant_id",
+            false,
+        )?;
+        assert!(enabled.get_granule_index_file_cache().is_some());
+
+        let zero_capacity = CacheManager::try_new(
+            &CacheConfig {
+                granule_index_file_bytes: 0,
+                ..Default::default()
+            },
+            &max_server_memory_usage,
+            "test_tenant_id",
+            false,
+        )?;
+        assert!(zero_capacity.get_granule_index_file_cache().is_none());
+
+        let table_meta_disabled = CacheManager::try_new(
+            &CacheConfig {
+                enable_table_meta_cache: false,
+                granule_index_file_bytes: 1024,
+                ..Default::default()
+            },
+            &max_server_memory_usage,
+            "test_tenant_id",
+            false,
+        )?;
+        assert!(table_meta_disabled.get_granule_index_file_cache().is_none());
 
         Ok(())
     }

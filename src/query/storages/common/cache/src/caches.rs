@@ -14,10 +14,17 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 use std::time::Instant;
 
 use arrow::array::ArrayRef;
+use bytes::Bytes;
+use databend_common_cache::Cache;
+use databend_common_cache::LruCache;
 use databend_common_cache::MemSized;
+use parking_lot::RwLock;
 
 use crate::CacheAccessor;
 use crate::InMemoryLruCache;
@@ -64,6 +71,140 @@ pub type VirtualColumnMetaCache = HybridCache<VirtualColumnFileMeta>;
 
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
+
+/// Temporary per-query diagnostics for cache lock contention. Remove this
+/// together with the `[FUSE-PRUNER-DIAG]` logs after the investigation.
+#[derive(Debug, Default)]
+pub struct CacheLockStats {
+    memory_wait_ns: AtomicU64,
+    memory_hold_ns: AtomicU64,
+    memory_acquires: AtomicU64,
+    disk_wait_ns: AtomicU64,
+    disk_hold_ns: AtomicU64,
+    disk_acquires: AtomicU64,
+}
+
+impl CacheLockStats {
+    pub fn record_memory(&self, wait: Duration, hold: Duration) {
+        self.memory_wait_ns
+            .fetch_add(duration_ns(wait), Ordering::Relaxed);
+        self.memory_hold_ns
+            .fetch_add(duration_ns(hold), Ordering::Relaxed);
+        self.memory_acquires.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_disk(&self, wait: Duration, hold: Duration) {
+        self.disk_wait_ns
+            .fetch_add(duration_ns(wait), Ordering::Relaxed);
+        self.disk_hold_ns
+            .fetch_add(duration_ns(hold), Ordering::Relaxed);
+        self.disk_acquires.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn snapshot(&self) -> CacheLockStatsSnapshot {
+        CacheLockStatsSnapshot {
+            memory_wait_ns: self.memory_wait_ns.load(Ordering::Relaxed),
+            memory_hold_ns: self.memory_hold_ns.load(Ordering::Relaxed),
+            memory_acquires: self.memory_acquires.load(Ordering::Relaxed),
+            disk_wait_ns: self.disk_wait_ns.load(Ordering::Relaxed),
+            disk_hold_ns: self.disk_hold_ns.load(Ordering::Relaxed),
+            disk_acquires: self.disk_acquires.load(Ordering::Relaxed),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CacheLockStatsSnapshot {
+    pub memory_wait_ns: u64,
+    pub memory_hold_ns: u64,
+    pub memory_acquires: u64,
+    pub disk_wait_ns: u64,
+    pub disk_hold_ns: u64,
+    pub disk_acquires: u64,
+}
+
+fn duration_ns(duration: Duration) -> u64 {
+    duration.as_nanos().min(u64::MAX as u128) as u64
+}
+
+/// Raw bytes of one immutable granule-index file.
+#[derive(Clone)]
+pub struct GranuleIndexFile(Bytes);
+
+impl GranuleIndexFile {
+    pub fn new(data: Bytes) -> Self {
+        Self(data)
+    }
+
+    pub fn data(&self) -> Bytes {
+        self.0.clone()
+    }
+}
+
+impl MemSized for GranuleIndexFile {
+    fn mem_bytes(&self) -> usize {
+        self.0.len()
+    }
+}
+
+/// A direct byte-sized LRU for granule-index files. This intentionally does
+/// not implement `CacheAccessor`: granule-index files are immutable and callers
+/// use the underlying LRU semantics directly.
+#[derive(Clone)]
+pub struct GranuleIndexFileCache {
+    inner: Arc<RwLock<LruCache<String, GranuleIndexFile>>>,
+}
+
+impl GranuleIndexFileCache {
+    pub fn new(bytes_capacity: usize) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(LruCache::with_bytes_capacity(bytes_capacity))),
+        }
+    }
+
+    pub fn get(&self, key: &str) -> Option<Bytes> {
+        self.get_with_stats(key, None)
+    }
+
+    pub fn get_with_stats(&self, key: &str, stats: Option<&CacheLockStats>) -> Option<Bytes> {
+        let wait_start = Instant::now();
+        let mut cache = self.inner.write();
+        let wait = wait_start.elapsed();
+        let hold_start = Instant::now();
+        let result = cache.get(key).map(GranuleIndexFile::data);
+        let hold = hold_start.elapsed();
+        drop(cache);
+        if let Some(stats) = stats {
+            stats.record_memory(wait, hold);
+        }
+        result
+    }
+
+    pub fn insert(&self, key: String, data: Bytes) {
+        self.insert_with_stats(key, data, None)
+    }
+
+    pub fn insert_with_stats(&self, key: String, data: Bytes, stats: Option<&CacheLockStats>) {
+        let wait_start = Instant::now();
+        let mut cache = self.inner.write();
+        let wait = wait_start.elapsed();
+        let hold_start = Instant::now();
+        cache.insert(key, GranuleIndexFile::new(data));
+        let hold = hold_start.elapsed();
+        drop(cache);
+        if let Some(stats) = stats {
+            stats.record_memory(wait, hold);
+        }
+    }
+
+    pub fn clear(&self) {
+        self.inner.write().clear();
+    }
+
+    pub fn set_bytes_capacity(&self, capacity: usize) {
+        self.inner.write().set_bytes_capacity(capacity);
+    }
+}
 
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
@@ -418,5 +559,35 @@ impl From<FileSize> for CacheValue<FileSize> {
 impl<T> MemSized for CacheValue<T> {
     fn mem_bytes(&self) -> usize {
         self.mem_bytes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+
+    use super::CacheLockStats;
+    use super::GranuleIndexFileCache;
+
+    #[test]
+    fn test_granule_index_file_cache_evicts_by_bytes() {
+        let cache = GranuleIndexFileCache::new(5);
+        cache.insert("a".to_string(), Bytes::from_static(b"123"));
+        cache.insert("b".to_string(), Bytes::from_static(b"456"));
+
+        assert!(cache.get("a").is_none());
+        assert_eq!(cache.get("b").as_deref(), Some(b"456".as_slice()));
+
+        let stats = CacheLockStats::default();
+        cache.insert_with_stats("c".to_string(), Bytes::from_static(b"xy"), Some(&stats));
+        assert_eq!(
+            cache.get_with_stats("c", Some(&stats)).as_deref(),
+            Some(b"xy".as_slice())
+        );
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.memory_acquires, 2);
+
+        cache.set_bytes_capacity(2);
+        assert!(cache.get("b").is_none());
     }
 }

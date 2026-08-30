@@ -172,6 +172,32 @@ impl ClusterStatsGenerator {
         }
     }
 
+    pub fn scalar_cluster_key_offsets(&self) -> Vec<usize> {
+        match &self.layout {
+            // `stats_keys` holds only scalar key offsets; the vector cluster-id
+            // offset lives in the operator and is intentionally excluded.
+            ClusterStatsLayout::Linear | ClusterStatsLayout::Vector(_) => {
+                self.stats_keys.iter().map(|key| key.offset).collect()
+            }
+            // Hilbert dimensions are not linear scalar keys; the granule index
+            // does not apply to them.
+            ClusterStatsLayout::Hilbert => vec![],
+        }
+    }
+
+    pub fn granule_cluster_key_offsets(&self) -> Option<Vec<usize>> {
+        let keys = self.scalar_cluster_key_offsets();
+        (!keys.is_empty()).then_some(keys)
+    }
+
+    pub fn block_thresholds(&self) -> BlockThresholds {
+        self.block_thresholds
+    }
+
+    pub fn cluster_key_id(&self) -> u32 {
+        self.cluster_key_id
+    }
+
     pub fn sort_descs(&self) -> Vec<SortColumnDescription> {
         let capacity = self.stats_keys.len() + usize::from(self.vector_operator().is_some());
         let mut descs = Vec::with_capacity(capacity);

@@ -100,6 +100,7 @@ use crate::filters::Xor8Filter;
 use crate::statistics_to_domain;
 
 const NGRAM_HASH_SEED: u64 = 1575457558;
+const LARGE_STRING_BYTES_THRESHOLD: usize = 256;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BloomIndexType {
@@ -178,14 +179,14 @@ impl TryFrom<ParquetMetaData> for BloomIndexMeta {
 /// That is to say, it is legal to have a BlockFilter with zero columns.
 ///
 /// For example, for the source data block as follows:
-/// ```
+/// ```text
 ///         +---name--+--age--+
 ///         | "Alice" |  20   |
 ///         | "Bob"   |  30   |
 ///         +---------+-------+
 /// ```
 /// We will create table of filters as follows:
-/// ```
+/// ```text
 ///         +---Bloom(name)--+--Bloom(age)--+
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
@@ -644,12 +645,44 @@ pub struct BloomIndexBuilder {
     ngram_columns: Vec<ColumnFilterBuilder>,
 }
 
+struct BytesThreshold {
+    threshold: usize,
+    total_bytes: usize,
+    values: usize,
+}
+
+impl BytesThreshold {
+    fn new(threshold: usize) -> Self {
+        Self {
+            threshold,
+            total_bytes: 0,
+            values: 0,
+        }
+    }
+
+    fn update(&mut self, column: &Column) {
+        let (column, values) = match column {
+            Column::Nullable(inner) => (&inner.column, inner.validity.true_count()),
+            column => (column, column.len()),
+        };
+        if let Column::String(column) = column {
+            self.total_bytes += column.total_bytes_len();
+            self.values += values;
+        }
+    }
+
+    fn exceeded(&self) -> bool {
+        self.total_bytes / self.values.max(1) > self.threshold
+    }
+}
+
 struct ColumnFilterBuilder {
     index: FieldIndex,
     field: TableField,
     gram_size: usize,
     bloom_size: u64,
     builder: FilterImplBuilder,
+    threshold: BytesThreshold,
 }
 
 #[derive(Clone, Debug)]
@@ -708,6 +741,7 @@ impl BloomIndexBuilder {
                         FilterImplBuilder::BinaryFuse32(BinaryFuse32Builder::create())
                     }
                 },
+                threshold: BytesThreshold::new(LARGE_STRING_BYTES_THRESHOLD),
             });
         }
         for arg in ngram_args.iter() {
@@ -720,6 +754,7 @@ impl BloomIndexBuilder {
                     arg.bloom_size,
                     NGRAM_HASH_SEED,
                 )),
+                threshold: BytesThreshold::new(LARGE_STRING_BYTES_THRESHOLD),
             });
         }
 
@@ -841,11 +876,91 @@ impl BloomIndexBuilder {
         Ok(())
     }
 
+    /// Add one fragment for an explicitly selected top-level physical-schema column.
+    pub fn add_column(&mut self, field_index: FieldIndex, column: Column) -> Result<()> {
+        let field_type = column.data_type();
+        let mut bloom_keys_to_remove = Vec::new();
+        for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
+            if index_column.index != field_index {
+                continue;
+            }
+            if !BloomIndex::supported_type(index_column.field.data_type()) {
+                bloom_keys_to_remove.push(index);
+                continue;
+            }
+
+            let (column, data_type) = match field_type.remove_nullable() {
+                DataType::Map(box inner_ty) => {
+                    let input = column.clone();
+                    let map_column = if field_type.is_nullable() {
+                        NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(&input)
+                            .unwrap()
+                            .column
+                    } else {
+                        MapType::<AnyType, AnyType>::try_downcast_column(&input).unwrap()
+                    };
+                    let column = map_column.underlying_column().values;
+                    let DataType::Tuple(kv_tys) = inner_ty else {
+                        unreachable!();
+                    };
+                    let val_type = kv_tys[1].clone();
+                    if val_type.remove_nullable() == DataType::Variant {
+                        let mut builder = ColumnBuilder::with_capacity(
+                            &DataType::Nullable(Box::new(DataType::String)),
+                            column.len(),
+                        );
+                        for val in column.iter() {
+                            if let ScalarRef::Variant(v) = val {
+                                let raw_jsonb = RawJsonb::new(v);
+                                if let Ok(Some(str_val)) = raw_jsonb.as_str() {
+                                    builder.push(ScalarRef::String(&str_val));
+                                    continue;
+                                }
+                            }
+                            builder.push_default();
+                        }
+                        let column = builder.build();
+                        (column, DataType::Nullable(Box::new(DataType::String)))
+                    } else {
+                        (column, val_type)
+                    }
+                }
+                _ => (column.clone(), field_type.clone()),
+            };
+            index_column.threshold.update(&column);
+            let digests = BloomIndex::calculate_digest_by_type(&data_type, &column)?;
+            index_column.builder.add_digests(digests.deref());
+        }
+        bloom_keys_to_remove.sort_unstable_by(|a, b| b.cmp(a));
+        for index in bloom_keys_to_remove {
+            self.bloom_columns.remove(index);
+        }
+
+        for index_column in self.ngram_columns.iter_mut() {
+            if index_column.index != field_index {
+                continue;
+            }
+            for digests in BloomIndex::calculate_ngram_nullable_column(
+                Value::Column(column.clone()),
+                index_column.gram_size,
+                BloomIndex::ngram_hash,
+            ) {
+                if !digests.is_empty() {
+                    index_column.builder.add_digests(digests.iter());
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn finalize(&mut self) -> Result<Option<BloomIndex>> {
         let mut column_distinct_count = HashMap::with_capacity(self.columns_len());
         let mut filters = Vec::with_capacity(self.columns_len());
         let mut filter_fields = Vec::with_capacity(self.columns_len());
         for bloom_column in self.bloom_columns.iter_mut() {
+            if bloom_column.threshold.exceeded() {
+                continue;
+            }
             let filter = bloom_column.builder.build()?;
             if let Some(len) = filter.len() {
                 if !matches!(
@@ -1491,5 +1606,52 @@ impl EqVisitor for ShortListVisitor {
         }
 
         Ok(ControlFlow::Break(None))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::StringType;
+
+    use super::*;
+
+    fn string_builder() -> Result<BloomIndexBuilder> {
+        let mut columns = BTreeMap::new();
+        columns.insert(0, TableField::new("s", TableDataType::String));
+        BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::Xor8,
+            columns,
+            &[],
+        )
+    }
+
+    #[test]
+    fn test_large_string_decision_is_fragment_independent() -> Result<()> {
+        let long = "x".repeat(300);
+        let column = StringType::from_data(vec![long, String::new()]);
+
+        let mut whole = string_builder()?;
+        whole.add_column(0, column.clone())?;
+        let whole = whole.finalize()?.unwrap();
+
+        let mut fragmented = string_builder()?;
+        fragmented.add_column(0, column.slice(0..1))?;
+        fragmented.add_column(0, column.slice(1..2))?;
+        let fragmented = fragmented.finalize()?.unwrap();
+
+        assert_eq!(whole.filter_schema, fragmented.filter_schema);
+        assert_eq!(
+            whole.column_distinct_count,
+            fragmented.column_distinct_count
+        );
+        assert_eq!(whole.filters.len(), 1);
+        assert_eq!(fragmented.filters.len(), 1);
+        Ok(())
     }
 }

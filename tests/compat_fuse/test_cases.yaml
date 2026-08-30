@@ -1,3 +1,5 @@
+# yamllint disable rule:indentation
+# yamllint disable rule:line-length
 # Fuse table compatibility test matrix.
 #
 # Each object tests write-then-read across query versions:
@@ -10,6 +12,22 @@
 #
 # To add a new test case, append an entry to the appropriate section below.
 # To bump a version, edit the version string in place.
+
+# --- Granule-index rolling upgrade (run first) ---
+# Old creates the clustered table, current enables granules and disables the
+# table's automatic compaction/recluster hook, then old verifies current-written
+# block pruning and appends plain blocks before current completes replacement.
+# Both old versions execute the same SQL against independent data lifecycles.
+- [
+    { writer: "1.2.833", reader: current, meta: [current], suite: granule_index_rollout/01_old_bootstrap_current_option },
+    { writer: "1.2.833", reader: current, meta: [current], suite: granule_index_rollout/02_old_live_current_recluster },
+    { writer: current, reader: current, meta: [current], suite: granule_index_rollout/03_current_replaced },
+  ]
+- [
+    { writer: "1.2.929", reader: current, meta: [current], suite: granule_index_rollout/01_old_bootstrap_current_option },
+    { writer: "1.2.929", reader: current, meta: [current], suite: granule_index_rollout/02_old_live_current_recluster },
+    { writer: current, reader: current, meta: [current], suite: granule_index_rollout/03_current_replaced },
+  ]
 
 # --- Backward compat: old writer -> current reader ---
 # NOTE: current query requires min-compatible-metasrv-version >= 1.2.770,
@@ -24,8 +42,54 @@
 # Requires writer >= 1.2.832 (procedure enabled by default since this version).
 - { writer: "1.2.833", reader: current, meta: [1.2.833], suite: rbac_current }
 
+# --- Cluster-key page-pruning backward compat: an old writer writes a `row_per_page` clustered
+# table (inline ClusterStatistics.pages, no marks file); the current reader removed the legacy
+# page_pruner and must still read it correctly via whole-block reads.
+- { writer: "1.2.46", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: page_index_backward }
+
 # --- Forward compat: current writer -> old reader ---
 - { writer: current, reader: "1.2.311", meta: [1.2.770], suite: rbac_v1_2_311 }
 - { writer: current, reader: "1.2.318", meta: [1.2.770], suite: rbac_v1_2_311 }
 - { writer: current, reader: "1.2.680", meta: [1.2.770], suite: udf }
 - { writer: current, reader: "1.2.833", meta: [1.2.833], suite: rbac_current }
+
+# --- Sparse page index forward compat: current writer emits the page-index marks file + new
+# BlockMeta fields; an old reader must ignore them and fall back to whole-block reads.
+# index_granularity is a current-only feature, so the writer must always be current.
+- { writer: current, reader: "1.2.833", meta: [1.2.833], suite: page_index }
+
+# --- Current-version horizontal/vertical compatibility ---
+# Run identical INSERT, UPDATE, MERGE, stream, and recluster workloads through
+# both methods, then restart query and verify/consume the results.
+- { writer: current, reader: current, meta: [current], suite: recluster_current }
+
+# --- Mixed query-version rolling compatibility ---
+# Each object is a complete old-writer -> meta-chain -> current-reader case.
+# The enclosing array preserves Meta/Fuse data between objects, allowing the
+# versions to alternate deterministically without running at the same time.
+- [
+    { writer: "1.2.833", reader: current, meta: [1.2.833], suite: recluster_mixed/01_old_current },
+    { writer: "1.2.833", reader: current, meta: [1.2.833], suite: recluster_mixed/02_old_current },
+    { writer: "1.2.833", reader: current, meta: [1.2.833], suite: recluster_mixed/03_old_current },
+  ]
+
+# --- Granule index, boundary, and vertical SortBlocks/MergeBlocks compatibility ---
+# Run the exact same four-round snapshot history against both 1.2.833 and
+# 1.2.929. Each group uses an independent data directory lifecycle and current
+# Meta, which understands the Bloom index enum. Current emits sparse and Bloom
+# granule metadata; before old starts, the logical Bloom definition is removed
+# while its immutable block metadata remains. Old readers ignore it and append
+# plain blocks. A dedicated table verifies SortBlocks physical order before
+# MergeBlocks consumes it.
+- [
+    { writer: current, reader: "1.2.833", meta: [current], suite: granule_index_mixed/01_current_old_sort },
+    { writer: "1.2.833", reader: current, meta: [current], suite: granule_index_mixed/02_old_current_merge },
+    { writer: current, reader: "1.2.833", meta: [current], suite: granule_index_mixed/03_current_old_boundaries },
+    { writer: "1.2.833", reader: current, meta: [current], suite: granule_index_mixed/04_old_current_final },
+  ]
+- [
+    { writer: current, reader: "1.2.929", meta: [current], suite: granule_index_mixed/01_current_old_sort },
+    { writer: "1.2.929", reader: current, meta: [current], suite: granule_index_mixed/02_old_current_merge },
+    { writer: current, reader: "1.2.929", meta: [current], suite: granule_index_mixed/03_current_old_boundaries },
+    { writer: "1.2.929", reader: current, meta: [current], suite: granule_index_mixed/04_old_current_final },
+  ]

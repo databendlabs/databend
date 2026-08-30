@@ -1,0 +1,250 @@
+statement ok
+create or replace database db_vertical_recluster
+
+statement ok
+use db_vertical_recluster
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+set max_threads = 2
+
+statement ok
+create table t_vertical(k int, payload string, nested tuple(x int, y string)) cluster by(k) row_per_block=6 block_per_segment=2
+
+statement ok
+insert into t_vertical values (6, 'f', (60, 'ff')), (1, 'a', (10, 'aa')), (5, 'e', (50, 'ee'))
+
+statement ok
+insert into t_vertical values (3, 'c', (30, 'cc')), (2, 'b', (20, 'bb')), (4, 'd', (40, 'dd'))
+
+statement ok
+alter table t_vertical add column evolved int not null default 42
+
+statement ok
+alter table t_vertical recluster final
+
+query ITTI rowsort
+select k, payload, nested:y, evolved from t_vertical
+----
+1 a aa 42
+2 b bb 42
+3 c cc 42
+4 d dd 42
+5 e ee 42
+6 f ff 42
+
+query T
+select info:average_depth from clustering_information('db_vertical_recluster', 't_vertical')
+----
+1.0
+
+statement ok
+alter table t_vertical set options(change_tracking = true)
+
+statement ok
+insert into t_vertical(k, payload, nested) values (9, 'i', (90, 'ii')), (7, 'g', (70, 'gg')), (8, 'h', (80, 'hh'))
+
+statement ok
+alter table t_vertical recluster final
+
+query I
+select count() from t_vertical
+----
+9
+
+query IBBI rowsort
+select k, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t_vertical
+----
+1 0 0 0
+2 0 0 1
+3 0 0 2
+4 0 0 3
+5 0 0 4
+6 0 0 5
+7 0 0 0
+8 0 0 1
+9 0 0 2
+
+statement ok
+create table t_vertical_sort(k int, payload string, nested tuple(x int, y string)) row_per_block=6 block_per_segment=2
+
+statement ok
+insert into t_vertical_sort values (6, 'f', (60, 'ff')), (1, 'a', (10, 'aa')), (5, 'e', (50, 'ee')), (3, 'c', (30, 'cc')), (2, 'b', (20, 'bb')), (4, 'd', (40, 'dd'))
+
+statement ok
+alter table t_vertical_sort add column evolved int not null default 42
+
+statement ok
+alter table t_vertical_sort cluster by(k)
+
+statement ok
+alter table t_vertical_sort recluster final
+
+query ITTI rowsort
+select k, payload, nested:y, evolved from t_vertical_sort
+----
+1 a aa 42
+2 b bb 42
+3 c cc 42
+4 d dd 42
+5 e ee 42
+6 f ff 42
+
+query T
+select info:average_depth from clustering_information('db_vertical_recluster', 't_vertical_sort')
+----
+1.0
+
+statement ok
+set recluster_method = 'horizontal'
+
+statement ok
+insert into t_vertical(k, payload, nested) values (12, 'l', (120, 'll')), (10, 'j', (100, 'jj')), (11, 'k', (110, 'kk'))
+
+statement ok
+alter table t_vertical recluster final
+
+query II
+select min(k), max(k) from t_vertical
+----
+1 12
+
+# Cross-method compatibility in the other direction: vertical MergeBlocks must
+# consume blocks previously produced by the horizontal recluster path.
+statement ok
+create table t_cross_method(k int, tie string, payload string) cluster by(k, tie) row_per_block=8 block_per_segment=2
+
+statement ok
+insert into t_cross_method values (4, 'd', 'horizontal-d'), (1, 'a', 'horizontal-a'), (3, 'c', 'horizontal-c'), (2, 'b', 'horizontal-b')
+
+statement ok
+alter table t_cross_method recluster final
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+insert into t_cross_method values (4, 'e', 'vertical-e'), (1, 'z', 'vertical-z'), (3, 'x', 'vertical-x'), (2, 'y', 'vertical-y')
+
+statement ok
+alter table t_cross_method recluster final
+
+query ITT rowsort
+select k, tie, payload from t_cross_method
+----
+1 a horizontal-a
+1 z vertical-z
+2 b horizontal-b
+2 y vertical-y
+3 c horizontal-c
+3 x vertical-x
+4 d horizontal-d
+4 e vertical-e
+
+query T
+select info:average_depth from clustering_information('db_vertical_recluster', 't_cross_method')
+----
+1.0
+
+# FINAL candidate selection is independent of the execution method. Both methods
+# must merge the same level-1 plus level-0 layout into one block.
+statement ok
+create table t_horizontal_final(k int, payload string) row_per_block=16 block_per_segment=2
+
+statement ok
+create table t_vertical_final(k int, payload string) row_per_block=16 block_per_segment=2
+
+statement ok
+insert into t_horizontal_final values (8,'a8'),(1,'a1'),(7,'a7'),(2,'a2'),(6,'a6'),(3,'a3'),(5,'a5'),(4,'a4')
+
+statement ok
+insert into t_vertical_final values (8,'a8'),(1,'a1'),(7,'a7'),(2,'a2'),(6,'a6'),(3,'a3'),(5,'a5'),(4,'a4')
+
+statement ok
+alter table t_horizontal_final cluster by(k)
+
+statement ok
+alter table t_vertical_final cluster by(k)
+
+statement ok
+set recluster_method = 'horizontal'
+
+statement ok
+alter table t_horizontal_final recluster final
+
+statement ok
+alter table t_vertical_final recluster final
+
+statement ok
+insert into t_horizontal_final values (0,'b0'),(2,'b2'),(3,'b3'),(5,'b5'),(6,'b6'),(7,'b7'),(8,'b8'),(9,'b9')
+
+statement ok
+insert into t_vertical_final values (0,'b0'),(2,'b2'),(3,'b3'),(5,'b5'),(6,'b6'),(7,'b7'),(8,'b8'),(9,'b9')
+
+query II
+select count(), count(distinct _block_name) from t_horizontal_final
+----
+16 2
+
+query II
+select count(), count(distinct _block_name) from t_vertical_final
+----
+16 2
+
+statement ok
+alter table t_horizontal_final recluster final
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+alter table t_vertical_final recluster final
+
+query II
+select count(), count(distinct _block_name) from t_horizontal_final
+----
+16 1
+
+query II
+select count(), count(distinct _block_name) from t_vertical_final
+----
+16 1
+
+query I
+select count() from ((select * from t_horizontal_final except select * from t_vertical_final) union all (select * from t_vertical_final except select * from t_horizontal_final))
+----
+0
+
+statement ok
+create table t_vertical_memory(k int, payload string) cluster by(k) row_per_block=6 block_per_segment=2
+
+statement ok
+insert into t_vertical_memory values (1, 'a1'), (2, 'b1'), (3, 'c1')
+
+statement ok
+insert into t_vertical_memory values (1, 'a2'), (2, 'b2'), (3, 'c2')
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+set recluster_block_size = 1
+
+statement ok
+alter table t_vertical_memory recluster
+
+query I
+select count(distinct _block_name) from t_vertical_memory
+----
+2
+
+statement ok
+unset recluster_block_size
+
+statement ok
+set recluster_method = 'auto'
+
+statement ok
+drop database db_vertical_recluster

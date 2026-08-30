@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
@@ -49,7 +50,7 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
 use databend_common_hashtable::StackHashMap;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnIdMap;
@@ -77,6 +78,7 @@ use parquet::file::metadata::ParquetMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use super::parquet_block_writer::ParquetBlockWriter;
 use crate::index::VIRTUAL_COLUMN_NODES_KEY;
 use crate::index::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
 use crate::index::encode_compact_virtual_column_nodes;
@@ -110,7 +112,9 @@ pub struct VirtualColumnBuilder {
     virtual_paths: Vec<HashMap<OwnedKeyPaths, usize>>,
     // Store virtual values across multiple blocks
     virtual_values: Vec<Vec<JsonbScalarValue>>,
-    // Total number of rows processed
+    // Total number of rows processed for each Variant source in column-oriented writes.
+    variant_rows: Vec<usize>,
+    // Total logical rows processed across all source columns.
     total_rows: usize,
 }
 
@@ -133,14 +137,71 @@ impl VirtualColumnBuilder {
         for _ in 0..variant_fields.len() {
             virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
         }
+        let variant_count = variant_fields.len();
         let virtual_values = Vec::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER);
         Ok(VirtualColumnBuilder {
             variant_offsets,
             variant_fields,
             virtual_paths,
             virtual_values,
+            variant_rows: vec![0; variant_count],
             total_rows: 0,
         })
+    }
+
+    pub fn add_column(&mut self, field_index: usize, column: &Column) -> Result<()> {
+        let Some(variant_index) = self
+            .variant_offsets
+            .iter()
+            .position(|offset| *offset == field_index)
+        else {
+            return Ok(());
+        };
+        let mut hash_to_index: StackHashMap<u128, usize, 16> =
+            StackHashMap::with_capacity(self.virtual_paths[variant_index].len());
+        for (virtual_path, index) in &self.virtual_paths[variant_index] {
+            let mut hasher = SipHasher24::new();
+            virtual_path.to_borrowed_key_paths().hash(&mut hasher);
+            let hash_value = hasher.finish128().into();
+            unsafe {
+                match hash_to_index.insert_and_entry(hash_value) {
+                    Ok(entry) | Err(entry) => *entry.get_mut() = *index,
+                }
+            }
+        }
+
+        let base_row = self.variant_rows[variant_index];
+        for row in 0..column.len() {
+            let ScalarRef::Variant(jsonb_bytes) = (unsafe { column.index_unchecked(row) }) else {
+                continue;
+            };
+            let raw_jsonb = RawJsonb::new(jsonb_bytes);
+            for (key_paths, jsonb_value) in raw_jsonb.extract_scalar_key_values(true).unwrap() {
+                let scalar_value = JsonbScalarValue {
+                    row: base_row + row,
+                    scalar: Self::jsonb_value_to_scalar(jsonb_value),
+                };
+                let mut hasher = SipHasher24::new();
+                key_paths.hash(&mut hasher);
+                let hash_value = hasher.finish128().into();
+                if let Some(index) = hash_to_index.get(&hash_value) {
+                    self.virtual_values[*index].push(scalar_value);
+                } else {
+                    let index = self.virtual_values.len();
+                    let owned_key_paths = OwnedKeyPaths::from_borrowed_key_paths(&key_paths);
+                    unsafe {
+                        match hash_to_index.insert_and_entry(hash_value) {
+                            Ok(entry) | Err(entry) => *entry.get_mut() = index,
+                        }
+                    }
+                    self.virtual_paths[variant_index].insert(owned_key_paths, index);
+                    self.virtual_values.push(vec![scalar_value]);
+                }
+            }
+        }
+        self.variant_rows[variant_index] += column.len();
+        self.total_rows = self.total_rows.max(self.variant_rows[variant_index]);
+        Ok(())
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -178,6 +239,9 @@ impl VirtualColumnBuilder {
         self.extract_virtual_values(block, 0, num_rows, &mut hash_to_index);
 
         self.total_rows += num_rows;
+        for rows in &mut self.variant_rows {
+            *rows += num_rows;
+        }
 
         Ok(())
     }
@@ -681,6 +745,7 @@ impl VirtualColumnBuilder {
 
         let total_rows = self.total_rows;
         self.total_rows = 0;
+        self.variant_rows.fill(0);
         let extracted_path_count = virtual_paths.iter().map(HashMap::len).sum::<usize>();
         let extracted_value_count = virtual_values.iter().map(Vec::len).sum::<usize>();
 
@@ -943,19 +1008,25 @@ impl VirtualColumnBuilder {
             HashMap::new(),
         )?;
 
+        // Plain write (`granule_rows = None`); virtual columns derive their metas from the raw
+        // parquet footer, so use `finish_plain` to get the full `SerializedParquet` back.
+        let props = Arc::new(build_parquet_writer_properties(
+            write_settings.table_compression,
+            write_settings.enable_parquet_dictionary,
+            Some(&columns_statistics),
+            metadata,
+            virtual_block.num_rows(),
+            virtual_block_schema.as_ref(),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
+        ));
+        let mut writer = ParquetBlockWriter::new(props, virtual_block_schema.clone(), None);
+        writer.write(virtual_block)?;
         let SerializedParquet {
             payload,
             metadata: file_meta,
-        } = blocks_to_parquet_with_stats(
-            virtual_block_schema.as_ref(),
-            vec![virtual_block],
-            write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
-            metadata,
-            Some(&columns_statistics),
-            write_settings.data_page_rows,
-            write_settings.data_page_bytes,
-        )?;
+            ..
+        } = writer.finish_plain()?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
             file_meta,
@@ -1161,4 +1232,51 @@ enum PathClass {
     Typed(VariantDataType),
     Dynamic,
     Shared,
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::VariantType;
+
+    use super::*;
+
+    fn variant_column(values: &[&str]) -> Column {
+        VariantType::from_data(
+            values
+                .iter()
+                .map(|value| jsonb::parse_value(value.as_bytes()).unwrap().to_vec())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
+    fn test_add_column_tracks_rows_per_variant_source() {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("left", TableDataType::Variant),
+            TableField::new("right", TableDataType::Variant),
+        ]));
+        let mut builder = VirtualColumnBuilder::try_create(schema).unwrap();
+        let left = variant_column(&[r#"{"a":1}"#, r#"{"a":2}"#, r#"{"a":3}"#]);
+        let right = variant_column(&[r#"{"b":4}"#, r#"{"b":5}"#, r#"{"b":6}"#]);
+
+        builder.add_column(0, &left.slice(0..1)).unwrap();
+        builder.add_column(0, &left.slice(1..3)).unwrap();
+        builder.add_column(1, &right.slice(0..2)).unwrap();
+        builder.add_column(1, &right.slice(2..3)).unwrap();
+
+        assert_eq!(builder.variant_rows, vec![3, 3]);
+        assert_eq!(builder.total_rows, 3);
+        for paths in &builder.virtual_paths {
+            assert_eq!(paths.len(), 1);
+            let value_index = *paths.values().next().unwrap();
+            let rows = builder.virtual_values[value_index]
+                .iter()
+                .map(|value| value.row)
+                .collect::<Vec<_>>();
+            assert_eq!(rows, vec![0, 1, 2]);
+        }
+    }
 }

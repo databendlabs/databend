@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod async_block_index_prune_transform;
 mod async_block_prune_transform;
 mod block_metas_meta;
 mod block_prune_result_meta;
 mod column_oriented_block_prune;
 mod extract_segment_transform;
+mod granule_prune_result_meta;
 mod lazy_segment_meta;
 mod lazy_segment_receiver_source;
 mod pruned_segment_meta;
+mod range_and_granule_prune_transform;
 mod runtime_filter_prune_context;
 mod runtime_top_n_segment_reorder;
 mod sample_block_metas_transform;
@@ -29,6 +32,7 @@ mod sync_block_prune_transform;
 mod topn_prune_transform;
 mod vector_index_prune_transform;
 
+pub use async_block_index_prune_transform::AsyncBlockIndexPruneTransform;
 pub use async_block_prune_transform::AsyncBlockPruneTransform;
 pub use column_oriented_block_prune::ColumnOrientedBlockPruneSink;
 pub use extract_segment_transform::ExtractSegmentTransform;
@@ -37,6 +41,7 @@ pub use lazy_segment_receiver_source::LazySegmentReceiverSource;
 pub use pruned_segment_meta::PrunedColumnOrientedSegmentMeta;
 pub use pruned_segment_meta::PrunedCompactSegmentMeta;
 pub use pruned_segment_meta::PrunedSegmentMeta;
+pub use range_and_granule_prune_transform::RangeAndGranulePruneTransform;
 pub use runtime_filter_prune_context::RuntimeFilterPruneContext;
 pub use runtime_top_n_segment_reorder::RuntimeTopNSegmentReorder;
 pub use sample_block_metas_transform::SampleBlockMetasTransform;

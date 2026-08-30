@@ -1,0 +1,206 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::ops::Range;
+use std::sync::Arc;
+
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::Constant;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Domain;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::expr::*;
+use databend_common_expression::types::DataType;
+use databend_common_expression::visit_expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+use super::eliminate_cast::*;
+use crate::range_index::statistics_to_domain;
+
+#[derive(Clone)]
+pub struct GranuleIndex {
+    expr: Expr<String>,
+    column_refs: HashMap<String, DataType>,
+    func_ctx: FunctionContext,
+
+    // index of the cluster key inside the schema
+    cluster_key_fields: Vec<DataField>,
+}
+
+impl GranuleIndex {
+    pub fn try_create(
+        func_ctx: FunctionContext,
+        cluster_keys: Vec<String>,
+        expr: &Expr<String>,
+        schema: TableSchemaRef,
+    ) -> Result<Self> {
+        let data_schema: DataSchemaRef = Arc::new((&schema).into());
+        let cluster_key_fields = cluster_keys
+            .iter()
+            .map(|name| data_schema.field_with_name(name.as_str()).unwrap().clone())
+            .collect::<Vec<_>>();
+
+        Ok(Self {
+            column_refs: expr.column_refs(),
+            expr: expr.clone(),
+            cluster_key_fields,
+            func_ctx,
+        })
+    }
+
+    pub fn try_apply_const(&self) -> Result<bool> {
+        // if the exprs did not contains the first cluster key, we should return true
+        if self.cluster_key_fields.is_empty()
+            || !self
+                .column_refs
+                .iter()
+                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c.0))
+        {
+            return Ok(true);
+        }
+
+        // Only return false, which means to skip this block, when the expression is folded to a constant false.
+        Ok(!matches!(
+            self.expr,
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
+    }
+
+    /// Returns `true` when the filter expression references at least one cluster-key column.
+    pub fn touches_cluster_key(&self) -> bool {
+        !self.cluster_key_fields.is_empty()
+            && self
+                .column_refs
+                .keys()
+                .any(|c| self.cluster_key_fields.iter().any(|f| f.name() == c))
+    }
+
+    /// Apply the granule index with explicitly provided granule mins and block max.
+    /// Used by the sparse granule index pruner which loads mins from a marks file.
+    pub fn apply(&self, min_values: &[Scalar], max_value: &Scalar) -> Result<Vec<Range<usize>>> {
+        let pages = min_values.len();
+        if pages == 0 {
+            return Ok(vec![]);
+        }
+        let mut start = 0;
+        let mut end = pages - 1;
+
+        while start <= end {
+            let min_value = &min_values[start];
+            let upper = if start + 1 < pages {
+                &min_values[start + 1]
+            } else {
+                max_value
+            };
+
+            if self.eval_single_page(min_value, upper)? {
+                break;
+            }
+            start += 1;
+        }
+
+        while end >= start {
+            let min_value = &min_values[end];
+            let upper = if end + 1 < pages {
+                &min_values[end + 1]
+            } else {
+                max_value
+            };
+
+            if self.eval_single_page(min_value, upper)? {
+                break;
+            }
+            end -= 1;
+        }
+
+        #[allow(clippy::single_range_in_vec_init)]
+        match start > end {
+            true => Ok(vec![]),
+            false => Ok(vec![start..end + 1]),
+        }
+    }
+
+    fn eval_single_page(&self, min_value: &Scalar, max_value: &Scalar) -> Result<bool> {
+        let min_value = min_value
+            .as_tuple()
+            .ok_or_else(|| ErrorCode::StorageOther("cluster stats must be tuple scalar"))?;
+        let max_value = max_value
+            .as_tuple()
+            .ok_or_else(|| ErrorCode::StorageOther("cluster stats must be tuple scalar"))?;
+
+        let mut input_domains = HashMap::with_capacity(self.cluster_key_fields.len());
+        for (idx, (min, max)) in min_value.iter().zip(max_value.iter()).enumerate() {
+            let f = &self.cluster_key_fields[idx];
+            if self.column_refs.contains_key(f.name()) {
+                let stat = ColumnStatistics::new(min.clone(), max.clone(), 0, 0, None);
+                let domain = statistics_to_domain(vec![&stat], f.data_type());
+                input_domains.insert(f.name().clone(), domain);
+            }
+
+            // For Tuple scalars, if the first element is not equal, then the monotonically increasing property is broken.
+            if min != max {
+                break;
+            }
+        }
+
+        if input_domains.is_empty() {
+            return Ok(true);
+        }
+
+        // Fill missing stats to be full domain
+        for (name, ty) in self.column_refs.iter() {
+            if !input_domains.contains_key(name.as_str()) {
+                input_domains.insert(name.clone(), Domain::full(ty));
+            }
+        }
+
+        let mut visitor = RewriteVisitor {
+            input_domains,
+            func_ctx: &self.func_ctx,
+            fn_registry: &BUILTIN_FUNCTIONS,
+        };
+
+        let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
+            Some(expr) => Cow::Owned(expr),
+            None => Cow::Borrowed(&self.expr),
+        };
+
+        let (new_expr, _) = ConstantFolder::fold_with_domain(
+            expr,
+            &visitor.input_domains,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
+
+        // Only return false, which means to skip this block, when the expression is folded to a constant false.
+        Ok(!matches!(
+            new_expr.as_ref(),
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            })
+        ))
+    }
+}

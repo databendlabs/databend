@@ -20,7 +20,9 @@ use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
@@ -31,6 +33,7 @@ use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
@@ -41,6 +44,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
+use databend_common_storages_fuse::operations::VerticalReclusterSource;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -135,6 +139,35 @@ impl IPhysicalPlan for Recluster {
                     }
                 }
                 let recluster_block_nums = task.parts.len();
+                if let Some(kind) = task.vertical_kind {
+                    let expected = match kind {
+                        VerticalReclusterKind::SortBlocks => "SortBlocks",
+                        VerticalReclusterKind::MergeBlocks => "MergeBlocks",
+                    };
+                    log::info!(
+                        "recluster: scheduled vertical kind={} block_count={} rows={} budget={}",
+                        expected,
+                        recluster_block_nums,
+                        task.total_rows,
+                        task.memory_budget,
+                    );
+                    return builder.main_pipeline.add_source(
+                        |output| {
+                            SyncSourcer::create(
+                                builder.ctx.get_scan_progress(),
+                                output,
+                                VerticalReclusterSource::create(
+                                    builder.ctx.clone(),
+                                    table.clone(),
+                                    task.clone(),
+                                    self.table_meta_timestamps,
+                                ),
+                            )
+                        },
+                        1,
+                    );
+                }
+
                 let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
                 let schema = table.schema_with_stream();
@@ -252,7 +285,7 @@ impl IPhysicalPlan for Recluster {
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
-                .with_block_size_hit(rows_per_block);
+                .with_block_size(rows_per_block);
                 if !skip_partial_sort {
                     let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
                     builder.main_pipeline.add_transformer(move || {
