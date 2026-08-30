@@ -279,7 +279,7 @@ impl GranulePredicateEvaluator {
         };
 
         let input_domains = ConstantFolder::full_input_domains(&filter);
-        let filter = eliminate_cast(&filter, input_domains).unwrap_or(filter);
+        let filter = eliminate_cast(&filter, input_domains, &func_ctx).unwrap_or(filter);
 
         let (source_domains, source_predicate_impossible) = source_predicate_domains(&filter);
         let projected_key_domains = cluster_keys
