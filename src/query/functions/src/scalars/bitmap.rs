@@ -36,6 +36,7 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_io::FastTreemap;
 use databend_common_io::HybridBitmap;
 use databend_common_io::bitmap::bitmap_contains;
 use databend_common_io::bitmap::bitmap_has_all;
@@ -43,6 +44,7 @@ use databend_common_io::bitmap::bitmap_has_any;
 use databend_common_io::bitmap::bitmap_len;
 use databend_common_io::bitmap::bitmap_max;
 use databend_common_io::bitmap::bitmap_min;
+use databend_common_io::bitmap::is_hybrid_large;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use itertools::join;
@@ -539,6 +541,44 @@ fn bitmap_logic_operate(
         builder.commit_row();
         return;
     }
+
+    if is_hybrid_large(arg1) && is_hybrid_large(arg2) {
+        // Choose which side to materialize based on the operation and the size.
+        // And: materialize the smaller side, the larger side avoid deserialize.
+        // Not: sides cannot swap.
+        // Or/Xor: both sides are fully parsed either way, keep the natural order.
+        let (materialized, serialized) = match &op {
+            LogicOp::And if arg1.len() > arg2.len() => (arg2, arg1),
+            _ => (arg1, arg2),
+        };
+
+        let Some(mut rb) = FastTreemap::deserialize(materialized)
+            .map_err(|e| {
+                ctx.set_error(builder.len(), e.to_string());
+                builder.commit_row();
+            })
+            .ok()
+        else {
+            return;
+        };
+
+        let result = match op {
+            LogicOp::Or => rb.bitor_assign_serialized(serialized),
+            LogicOp::And => rb.bitand_assign_serialized(serialized),
+            LogicOp::Xor => rb.bitxor_assign_serialized(serialized),
+            LogicOp::Not => rb.sub_assign_serialized(serialized),
+        };
+        if let Err(e) = result {
+            ctx.set_error(builder.len(), e.to_string());
+            builder.commit_row();
+            return;
+        }
+
+        rb.serialize_into(&mut builder.data).unwrap();
+        builder.commit_row();
+        return;
+    }
+
     let Some(rb1) = deserialize_bitmap(arg1)
         .map_err(|e| {
             ctx.set_error(builder.len(), e.to_string());
