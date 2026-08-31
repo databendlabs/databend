@@ -23,6 +23,7 @@ mod hook;
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 pub use hook::HookOperator;
 use log::info;
@@ -32,6 +33,16 @@ pub use table_hook_scheduler::TableHookScheduler;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
+
+/// Synchronous hooks run before the parent operation releases its lock. Reuse
+/// that exclusion instead of trying to acquire the same table lock recursively.
+pub(crate) fn hook_lock_option(parent_lock_held: bool) -> LockTableOption {
+    if parent_lock_held {
+        LockTableOption::NoLock
+    } else {
+        LockTableOption::LockNoRetry
+    }
+}
 
 pub(crate) fn table_id_matches_target(
     hook_name: &str,
@@ -178,5 +189,18 @@ async fn table_id_exists_in_database(
     {
         Ok(table) => Ok(table.get_id() == expected_table_id),
         Err(_) => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::lock::LockTableOption;
+
+    use super::hook_lock_option;
+
+    #[test]
+    fn test_hook_lock_option() {
+        assert_eq!(hook_lock_option(true), LockTableOption::NoLock);
+        assert_eq!(hook_lock_option(false), LockTableOption::LockNoRetry);
     }
 }

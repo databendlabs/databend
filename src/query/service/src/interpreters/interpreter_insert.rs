@@ -16,7 +16,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::Duration;
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContextCluster;
@@ -68,6 +67,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
+use crate::interpreters::hook::hook_lock_option;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::EvalScalar;
@@ -509,7 +509,7 @@ impl Interpreter for InsertInterpreter {
                             self.plan.database.clone(),
                             self.plan.table.clone(),
                             MutationKind::Insert,
-                            LockTableOption::LockNoRetry,
+                            hook_lock_option(self.materialized_view_refresh_target.is_some()),
                         );
                         hook_operator.execute(&mut build_res.main_pipeline).await;
                     }
@@ -643,7 +643,7 @@ impl Interpreter for InsertInterpreter {
                         self.plan.database.clone(),
                         self.plan.table.clone(),
                         MutationKind::Insert,
-                        LockTableOption::LockNoRetry,
+                        hook_lock_option(self.materialized_view_refresh_target.is_some()),
                     );
                     hook_operator.execute(&mut build_res.main_pipeline).await;
                 }
@@ -713,7 +713,7 @@ impl Interpreter for InsertInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Insert,
-                LockTableOption::LockNoRetry,
+                hook_lock_option(self.materialized_view_refresh_target.is_some()),
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
@@ -44,6 +43,7 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
+use crate::interpreters::hook::hook_lock_option;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -163,11 +163,9 @@ impl MutationInterpreter {
         mutation: &databend_common_sql::plans::Mutation,
         build_res: &mut PipelineBuildResult,
     ) {
-        let hook_lock_opt = if mutation.lock_guard.is_some() {
-            LockTableOption::NoLock
-        } else {
-            LockTableOption::LockNoRetry
-        };
+        let hook_lock_opt = hook_lock_option(
+            mutation.lock_guard.is_some() || self.materialized_view_refresh_target.is_some(),
+        );
 
         let mutation_kind = match mutation.mutation_type {
             MutationType::Update => MutationKind::Update,
