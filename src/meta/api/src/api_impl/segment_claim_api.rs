@@ -15,6 +15,8 @@
 use std::collections::BTreeSet;
 
 use chrono::Utc;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::schema::CreateSegmentClaimReply;
 use databend_common_meta_app::schema::CreateSegmentClaimReq;
 use databend_common_meta_app::schema::DeleteSegmentClaimReq;
@@ -130,7 +132,12 @@ where
         self.crud_update_existing(
             &key,
             |meta| Some((meta, Some(req.ttl))),
-            || Err(invalid_reply("segment claim expired while being acquired")),
+            || {
+                Err(AppError::TableLockExpired(TableLockExpired::new(
+                    req.table_id,
+                    "acquire segment claim",
+                )))
+            },
         )
         .await??;
 
@@ -144,7 +151,12 @@ where
         self.crud_update_existing(
             &key,
             |meta| Some((meta, Some(req.ttl))),
-            || Err(invalid_reply("segment claim expired while being renewed")),
+            || {
+                Err(AppError::TableLockExpired(TableLockExpired::new(
+                    req.table_id,
+                    "renew segment claim",
+                )))
+            },
         )
         .await??;
         Ok(())
@@ -169,11 +181,14 @@ where
 mod tests {
     use std::time::Duration;
 
+    use databend_common_meta_app::app_error::AppError;
     use databend_common_meta_app::schema::CreateSegmentClaimReq;
     use databend_common_meta_app::schema::DeleteSegmentClaimReq;
+    use databend_common_meta_app::schema::ExtendSegmentClaimReq;
     use databend_common_meta_app::schema::ListSegmentClaimsReq;
 
     use super::SegmentClaimApi;
+    use crate::kv_app_error::KVAppError;
     use crate::testing;
 
     const TABLE_ID: u64 = 7;
@@ -256,6 +271,38 @@ mod tests {
                 claim_id: second,
             })
             .await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_renew_expired_claim_returns_terminal_error() -> anyhow::Result<()> {
+        let store = testing::new_local_meta_store().await;
+        let claim_id = store
+            .create_segment_claim(create_req("q1", vec!["s1"]))
+            .await?
+            .claim_id
+            .expect("claim should succeed");
+        store
+            .delete_segment_claim(DeleteSegmentClaimReq {
+                tenant: testing::tenant("tenant1"),
+                table_id: TABLE_ID,
+                claim_id,
+            })
+            .await?;
+
+        let error = store
+            .extend_segment_claim(ExtendSegmentClaimReq {
+                tenant: testing::tenant("tenant1"),
+                table_id: TABLE_ID,
+                claim_id,
+                ttl: Duration::from_secs(30),
+            })
+            .await
+            .expect_err("expired claim renewal must fail");
+        assert!(matches!(
+            error,
+            KVAppError::AppError(AppError::TableLockExpired(_))
+        ));
         Ok(())
     }
 }
