@@ -56,7 +56,7 @@ use crate::catalogs::PaimonCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
 use crate::interpreters::TableHookScheduler;
-use crate::locks::LockManager;
+use crate::locks::CoordinationManager;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::ClientSessionManager;
@@ -146,7 +146,7 @@ impl GlobalServices {
         ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
-        LockManager::init()?;
+        CoordinationManager::init()?;
         TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
         AuthMgr::init(config, version)?;
 

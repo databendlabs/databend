@@ -21,16 +21,16 @@ use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::LockGuard;
 
-use crate::locks::LockManager;
+use crate::locks::CoordinationManager;
 use crate::sessions::TableContext;
 
 pub struct TableLock {
-    lock_mgr: Arc<LockManager>,
+    lock_mgr: Arc<CoordinationManager>,
     table_info: TableInfo,
 }
 
 impl TableLock {
-    pub fn create(lock_mgr: Arc<LockManager>, table_info: TableInfo) -> Arc<dyn Lock> {
+    pub fn create(lock_mgr: Arc<CoordinationManager>, table_info: TableInfo) -> Arc<dyn Lock> {
         Arc::new(TableLock {
             lock_mgr,
             table_info,

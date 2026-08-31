@@ -153,7 +153,7 @@ impl TableContextTableAccess for QueryContext {
             return Ok(None);
         }
 
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        let table_lock = CoordinationManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = match lock_opt {
             LockTableOption::LockNoRetry => table_lock.try_lock(self.clone(), false).await?,
             LockTableOption::LockWithRetry => table_lock.try_lock(self.clone(), true).await?,

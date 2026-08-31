@@ -285,6 +285,7 @@ pub async fn do_refresh_table_index(
             Some(prev_snapshot_id),
             None,
             table_meta_timestamps,
+            false,
         )
     })?;
 

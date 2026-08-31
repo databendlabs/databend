@@ -117,7 +117,9 @@ impl HookOperator {
                 table_id: Some(table_id),
             },
             hook_settings: TableHookTaskSettings::create(&self.ctx),
-            lock_opt: self.lock_opt.clone(),
+            // The parent DML pipeline has finished before an async hook starts, so its
+            // `NoLock` cannot be reused. The maintenance job must own its commit gate.
+            lock_opt: LockTableOption::LockWithRetry,
             operation_name: self.mutation_kind.to_string(),
             main_operation_start: Instant::now(),
         };

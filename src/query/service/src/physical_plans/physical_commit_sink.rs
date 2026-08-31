@@ -57,6 +57,10 @@ pub struct CommitSink {
 
     // Used for recluster.
     pub recluster_info: Option<ReclusterInfoSideCar>,
+
+    /// Acquire the table lock only around refresh, sequence validation, and CAS publish.
+    #[serde(default)]
+    pub acquire_commit_lock: bool,
 }
 
 #[typetag::serde]
@@ -98,6 +102,7 @@ impl IPhysicalPlan for CommitSink {
             deduplicated_label: self.deduplicated_label.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
             recluster_info: self.recluster_info.clone(),
+            acquire_commit_lock: self.acquire_commit_lock,
         })
     }
 
@@ -145,6 +150,7 @@ impl IPhysicalPlan for CommitSink {
                         prev_snapshot_id,
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
+                        false,
                     )
                 })
             }
@@ -211,6 +217,7 @@ impl IPhysicalPlan for CommitSink {
                         None,
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
+                        self.acquire_commit_lock,
                     )
                 })
             }
