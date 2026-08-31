@@ -554,25 +554,19 @@ impl Binder {
             },
         )?;
 
-        let parameters = res
+        let args_map: HashMap<&str, &Expr> = res
             .args
             .iter()
-            .map(|arg| arg.0.to_string())
-            .collect::<Vec<_>>();
-        let mut args_map = HashMap::with_capacity(parameters.len());
-
-        arguments.iter().enumerate().for_each(|(idx, argument)| {
-            if let Some(parameter) = parameters.get(idx) {
-                args_map.insert(parameter.as_str(), (*argument).clone());
-            }
-        });
+            .map(|arg| arg.0.as_str())
+            .zip(arguments.iter())
+            .collect();
 
         let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match
                 if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
-                    return Ok(Some(arg.clone()));
+                    return Ok(Some((**arg).clone()));
                 }
             }
             Ok(None)

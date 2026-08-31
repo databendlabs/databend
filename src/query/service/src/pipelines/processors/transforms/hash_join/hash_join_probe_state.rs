@@ -230,10 +230,7 @@ impl HashJoinProbeState {
         }
 
         let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
-        let valids = if !Self::check_for_eliminate_valids(
-            self.hash_join_state.hash_join_desc.from_correlated_subquery,
-            &self.hash_join_state.hash_join_desc.join_type,
-        ) && probe_keys.iter().any(|expr| {
+        let valids = if probe_keys.iter().any(|expr| {
             let ty = expr.data_type();
             ty.is_nullable() || ty.is_null()
         }) {
@@ -383,29 +380,6 @@ impl HashJoinProbeState {
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })
-    }
-
-    /// Checks if a join type can eliminate valids.
-    pub fn check_for_eliminate_valids(
-        from_correlated_subquery: bool,
-        join_type: &JoinType,
-    ) -> bool {
-        if !from_correlated_subquery {
-            return false;
-        }
-        matches!(
-            join_type,
-            JoinType::Inner
-                | JoinType::InnerAny
-                | JoinType::Full
-                | JoinType::Left
-                | JoinType::LeftAny
-                | JoinType::LeftSingle
-                | JoinType::LeftAnti
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-                | JoinType::RightMark
-        )
     }
 
     /// Checks if the join type need to use unmatched selection.
