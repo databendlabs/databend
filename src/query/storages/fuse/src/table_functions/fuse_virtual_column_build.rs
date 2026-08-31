@@ -220,6 +220,8 @@ async fn build_segment_virtual_columns(
     }
     let mut direct_paths = Vec::new();
     let max_direct_columns = policy.max_direct_columns;
+    let mut path_counts = path_counts.into_iter().collect::<Vec<_>>();
+    path_counts.sort_unstable_by_key(|(source_column_id, _)| *source_column_id);
     for (source_column_id, counts) in path_counts {
         let mut counts = counts.into_iter().collect::<Vec<_>>();
         counts.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
