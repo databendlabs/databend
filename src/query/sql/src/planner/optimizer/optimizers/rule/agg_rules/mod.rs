@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod agg_index;
+mod grouping_sets_common;
 mod materialized_view;
 mod rule_eager_aggregation;
 mod rule_fold_count_aggregate;

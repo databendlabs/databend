@@ -24,8 +24,11 @@ use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
+use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
+use crate::plans::UDFLambdaCall;
 
 impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
@@ -55,7 +58,7 @@ impl SubqueryDecorrelatorOptimizer {
                 }
                 Ok(scalar.clone())
             }
-            ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
+            ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => Ok(scalar.clone()),
             ScalarExpr::AggregateFunction(agg) => {
                 let mut args = Vec::with_capacity(agg.args.len());
                 for arg in &agg.args {
@@ -99,6 +102,21 @@ impl SubqueryDecorrelatorOptimizer {
                     return_type: func.return_type.clone(),
                 }))
             }
+            ScalarExpr::LambdaFunction(lambda) => {
+                let args = lambda
+                    .args
+                    .iter()
+                    .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                    span: lambda.span,
+                    func_name: lambda.func_name.clone(),
+                    args,
+                    lambda_expr: lambda.lambda_expr.clone(),
+                    lambda_display: lambda.lambda_display.clone(),
+                    return_type: lambda.return_type.clone(),
+                }))
+            }
             ScalarExpr::CastExpr(cast_expr) => {
                 let scalar =
                     self.flatten_scalar(&cast_expr.argument, correlated_columns, derived_columns)?;
@@ -127,8 +145,40 @@ impl SubqueryDecorrelatorOptimizer {
                     arguments,
                 }))
             }
-            _ => Err(ErrorCode::Internal(
-                "Invalid scalar for flattening subquery",
+            ScalarExpr::UDAFCall(udaf) => {
+                let arguments = udaf
+                    .arguments
+                    .iter()
+                    .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ScalarExpr::UDAFCall(UDAFCall {
+                    span: udaf.span,
+                    name: udaf.name.clone(),
+                    display_name: udaf.display_name.clone(),
+                    arg_types: udaf.arg_types.clone(),
+                    state_fields: udaf.state_fields.clone(),
+                    return_type: udaf.return_type.clone(),
+                    arguments,
+                    udf_type: udaf.udf_type.clone(),
+                }))
+            }
+            ScalarExpr::UDFLambdaCall(udf) => {
+                let scalar =
+                    self.flatten_scalar(&udf.scalar, correlated_columns, derived_columns)?;
+                Ok(ScalarExpr::UDFLambdaCall(UDFLambdaCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    scalar: Box::new(scalar),
+                }))
+            }
+            ScalarExpr::WindowFunction(_) => Err(ErrorCode::SemanticError(
+                "Window functions are not supported while flattening correlated subqueries",
+            )),
+            ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Internal(
+                "Nested subqueries must be decorrelated before flattening correlated subqueries",
+            )),
+            ScalarExpr::AsyncFunctionCall(_) => Err(ErrorCode::SemanticError(
+                "Async functions are not supported while flattening correlated subqueries",
             )),
         }
     }

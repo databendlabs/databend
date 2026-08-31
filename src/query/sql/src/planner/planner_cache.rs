@@ -231,7 +231,11 @@ struct TableSnapshot {
 
 impl TableSnapshot {
     fn from_resolved_table(table: &dyn Table) -> Option<Self> {
-        if table.is_temp() || table.is_stage_table() || table.is_stream() {
+        if !table.plan_can_be_cached()
+            || table.is_temp()
+            || table.is_stage_table()
+            || table.is_stream()
+        {
             return None;
         }
 

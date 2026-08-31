@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
@@ -186,9 +188,12 @@ fn transform_expr(
                 .map(|param| {
                     let raw_expr = transform_expr(param, &[], builtin_functions);
                     let expr = type_check::check(&raw_expr, builtin_functions).unwrap();
-                    let (expr, _) =
-                        ConstantFolder::fold(&expr, &FunctionContext::default(), builtin_functions);
-                    expr.into_constant().unwrap().scalar
+                    let (expr, _) = ConstantFolder::fold(
+                        Cow::Owned(expr),
+                        &FunctionContext::default(),
+                        builtin_functions,
+                    );
+                    expr.into_owned().into_constant().unwrap().scalar
                 })
                 .collect(),
         },

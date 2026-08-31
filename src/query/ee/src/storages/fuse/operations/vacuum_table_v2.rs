@@ -37,6 +37,7 @@ use databend_storages_common_table_meta::meta::Location;
 use log::info;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
+const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
 
 /// GC root context derived from the owner table before ref-aware cleanup starts.
 ///
@@ -128,14 +129,41 @@ pub async fn do_vacuum2(
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
 
-    // Collect blocks from main gc_root
+    // Collect blocks from main gc_root. Read protected segments in chunks to avoid
+    // retaining all CompactSegmentInfo objects in memory at once.
     let protected_segments = protected_segments.into_iter().collect::<Vec<_>>();
-    let segments = segments_io
-        .read_segments::<Arc<CompactSegmentInfo>>(&protected_segments, false)
-        .await?;
+    let total_chunks = protected_segments
+        .len()
+        .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
     let mut gc_root_blocks = HashSet::new();
-    for segment in segments {
-        gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+    for (chunk_idx, segment_chunk) in protected_segments
+        .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
+        .enumerate()
+    {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while reading protected segment chunk {}/{} for table {}",
+                chunk_idx + 1,
+                total_chunks,
+                table_info.desc
+            )));
+        }
+
+        let segments = segments_io
+            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
+            .await?;
+        for segment in segments {
+            gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+        }
+        ctx.set_status_info(&format!(
+            "Read protected segment chunk for table {}, elapsed: {:?}, segment chunk: {}/{}, segments in chunk: {}, total protected blocks: {}",
+            table_info.desc,
+            start.elapsed(),
+            chunk_idx + 1,
+            total_chunks,
+            segment_chunk.len(),
+            gc_root_blocks.len()
+        ));
     }
     ctx.set_status_info(&format!(
         "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",

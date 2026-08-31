@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -33,7 +32,6 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
-use crate::optimizer::ir::finite_range_ndv_upper;
 use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -131,48 +129,21 @@ impl UnionAll {
                         "exactly empty UNION ALL right input must not carry column statistics"
                     );
 
-                    match (
-                        left_stat_info.statistics.precise_cardinality,
-                        right_stat_info.statistics.precise_cardinality,
-                    ) {
-                        (Some(0), Some(0)) => return Ok(None),
-                        (_, Some(0)) => return Ok(left.map(|stat| (output, stat))),
-                        (Some(0), _) => return Ok(right.map(|stat| (output, stat))),
-                        _ => {}
-                    }
-
-                    let (Some(left), Some(right)) = (left, right) else {
-                        // TODO: Distinguish all-NULL column statistics from unknown statistics so
-                        // a non-empty all-NULL branch can contribute its NULL count without
-                        // discarding the other branch's value statistics.
-                        return Ok(None);
+                    let stat = match (left, right) {
+                        (Some(left), Some(right)) => Self::merge_column_stats(left, right)?,
+                        (Some(left), None)
+                            if right_stat_info.statistics.precise_cardinality == Some(0) =>
+                        {
+                            left
+                        }
+                        (None, Some(right))
+                            if left_stat_info.statistics.precise_cardinality == Some(0) =>
+                        {
+                            right
+                        }
+                        _ => return Ok(None),
                     };
-                    let mut ndv = Self::merge_ndv(&left, &right)?;
-                    let min = if left.min.compare(&right.min)? == Ordering::Less {
-                        left.min
-                    } else {
-                        right.min
-                    };
-                    let max = if left.max.compare(&right.max)? == Ordering::Greater {
-                        left.max
-                    } else {
-                        right.max
-                    };
-
-                    if let Some(upper) = finite_range_ndv_upper(&min, &max) {
-                        ndv = ndv.reduce(upper);
-                    }
-                    let null_count = StatCount::sum(left.null_count, right.null_count);
-                    Ok(Some((output, ColumnStat {
-                        min,
-                        max,
-                        ndv,
-                        null_count,
-                        // Combining histograms requires aligning bucket boundaries and
-                        // accounting for overlapping values. Dropping it is safer than
-                        // exposing either child's distribution as the union distribution.
-                        histogram: None,
-                    })))
+                    Ok(Some((output, stat)))
                 },
             )
             .filter_map(Result::transpose)
@@ -189,37 +160,81 @@ impl UnionAll {
         }))
     }
 
-    fn merge_ndv(left: &ColumnStat, right: &ColumnStat) -> Result<NdvEstimate> {
-        let ndv_upper = left.ndv.upper + right.ndv.upper;
-        let ranges_disjoint = left.max.compare(&right.min)? == Ordering::Less
-            || right.max.compare(&left.min)? == Ordering::Less;
-        if ranges_disjoint
-            && let (Some(left), Some(right)) = (left.ndv.expected, right.ndv.expected)
-        {
-            return Ok(NdvEstimate::new(left + right, ndv_upper));
-        }
+    fn merge_column_stats(left: ColumnStat, right: ColumnStat) -> Result<ColumnStat> {
+        let (left, right) = match (left, right) {
+            (
+                ColumnStat::AllNull {
+                    null_count: left_null_count,
+                },
+                ColumnStat::AllNull {
+                    null_count: right_null_count,
+                },
+            ) => {
+                return Ok(ColumnStat::AllNull {
+                    null_count: StatCount::sum(left_null_count, right_null_count),
+                });
+            }
+            (ColumnStat::AllNull { null_count }, mut values)
+            | (mut values, ColumnStat::AllNull { null_count }) => {
+                values.set_null_count(StatCount::sum(values.null_count(), null_count));
+                return Ok(values);
+            }
+            pair => pair,
+        };
 
-        if left.min.is_numeric()
-            && let (Some(left), Some(left_ndv)) = (&left.histogram, left.ndv.expected)
-            && let (Some(right), Some(right_ndv)) = (&right.histogram, right.ndv.expected)
-            && let Some(intersection) = left.estimate_join_numeric_compatible(right)?
+        let left_histogram = left.histogram();
+        let right_histogram = right.histogram();
+
+        let (Some(left_bounds), Some(right_bounds)) = (left.bounds(), right.bounds()) else {
+            return Err(databend_common_exception::ErrorCode::Internal(
+                "UNION ALL value-statistics merge received all-NULL statistics",
+            ));
+        };
+        let left_ndv = left.ndv();
+        let right_ndv = right.ndv();
+        let left_null_count = left.null_count();
+        let right_null_count = right.null_count();
+
+        let ndv_upper = left_ndv.upper + right_ndv.upper;
+        let ranges_disjoint = left_bounds.is_disjoint(&right_bounds)?;
+        let ndv = if ranges_disjoint
+            && let (Some(left), Some(right)) = (left_ndv.expected, right_ndv.expected)
+        {
+            NdvEstimate::new(left + right, ndv_upper)
+        } else if left_bounds.is_numeric()
+            && let (Some(left_histogram), Some(left_expected_ndv)) =
+                (left_histogram, left_ndv.expected)
+            && let (Some(right_histogram), Some(right_expected_ndv)) =
+                (right_histogram, right_ndv.expected)
+            && let Some(intersection) =
+                left_histogram.estimate_join_numeric_compatible(right_histogram)?
             && let Some(intersection_ndv) = intersection.ndv.expected
         {
-            let lower = left_ndv.max(right_ndv);
-            let expected = (left_ndv + right_ndv - intersection_ndv).clamp(lower, ndv_upper);
-            return Ok(NdvEstimate::new(expected, ndv_upper));
-        }
-
-        Ok(match (left.ndv.expected, right.ndv.expected) {
-            // Match join estimation's NDV fallback: use the larger expected
-            // NDV when both sides have one, preserve the known side when only
-            // one does, and become upper-only only when neither side has one.
-            (Some(left), Some(right)) => NdvEstimate::new(left.max(right), ndv_upper),
-            (Some(expected), None) | (None, Some(expected)) => {
-                NdvEstimate::new(expected, ndv_upper)
+            let lower = left_expected_ndv.max(right_expected_ndv);
+            let expected =
+                (left_expected_ndv + right_expected_ndv - intersection_ndv).clamp(lower, ndv_upper);
+            NdvEstimate::new(expected, ndv_upper)
+        } else {
+            match (left_ndv.expected, right_ndv.expected) {
+                (Some(left), Some(right)) => NdvEstimate::new(left.max(right), ndv_upper),
+                (Some(expected), None) | (None, Some(expected)) => {
+                    NdvEstimate::new(expected, ndv_upper)
+                }
+                (None, None) => NdvEstimate::upper_bound(ndv_upper),
             }
-            (None, None) => NdvEstimate::upper_bound(ndv_upper),
-        })
+        };
+
+        let bounds = left_bounds.union(right_bounds)?;
+        ColumnStat::new(
+            bounds,
+            ndv,
+            StatCount::sum(left_null_count, right_null_count),
+            // Combining histograms requires aligning bucket boundaries and
+            // accounting for overlapping values. Dropping it is safer than
+            // exposing either child's distribution as the union distribution.
+            None,
+        )
+        .map_err(databend_common_exception::ErrorCode::Internal)
     }
 }
 

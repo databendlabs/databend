@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
@@ -510,7 +511,8 @@ fn run_text_spatial(
 
     let columns = [("g", DataType::Geometry)];
     let expr = parse_expr(text, &columns);
-    let (folded_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+    let (folded_expr, _) =
+        ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS);
     let index = RangeIndex::try_create(func_ctx, &folded_expr, schema, Default::default()).unwrap();
 
     writeln!(file, "text      : {text}").unwrap();

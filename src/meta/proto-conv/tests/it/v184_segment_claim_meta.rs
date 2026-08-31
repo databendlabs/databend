@@ -28,15 +28,15 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// Encoded data of version 183 of SegmentClaimMeta.
+// Encoded data of version 184 of SegmentClaimMeta.
 // It is generated with common::test_pb_from_to().
 #[test]
-fn test_decode_v183_segment_claim_meta() -> anyhow::Result<()> {
-    let segment_claim_meta_v183 = vec![
+fn test_decode_v184_segment_claim_meta() -> anyhow::Result<()> {
+    let segment_claim_meta_v184 = vec![
         10, 4, 114, 111, 111, 116, 18, 4, 110, 111, 100, 101, 26, 5, 113, 117, 101, 114, 121, 34,
         23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84,
         67, 42, 9, 115, 101, 103, 109, 101, 110, 116, 45, 49, 42, 9, 115, 101, 103, 109, 101, 110,
-        116, 45, 50, 160, 6, 183, 1, 168, 6, 24,
+        116, 45, 50, 160, 6, 184, 1, 168, 6, 24,
     ];
 
     let want = || SegmentClaimMeta {
@@ -50,8 +50,8 @@ fn test_decode_v183_segment_claim_meta() -> anyhow::Result<()> {
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(
         func_name!(),
-        segment_claim_meta_v183.as_slice(),
-        183,
+        segment_claim_meta_v184.as_slice(),
+        184,
         want(),
     )?;
 

@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::StatEvaluator;
+use databend_common_expression::function_stat::DomainStatBounds;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::ReturnStat;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -115,31 +115,29 @@ impl EvalScalar {
         else {
             return Ok(None);
         };
-        Ok(Self::column_stat_from_return_stat(stat.into_owned()))
+        Self::column_stat_from_return_stat(stat.into_owned())
     }
 
-    fn column_stat_from_return_stat(stat: ReturnStat) -> Option<ColumnStat> {
-        // `ColumnStat` has no representation for an all-NULL column because its
-        // min/max fields are non-optional. Do not retain the shadowed input stat
-        // in that case; unknown is safer than a stale non-NULL distribution.
-        let value_domain = match &stat.domain {
-            Domain::Nullable(domain) => domain.value.as_deref()?,
-            domain => domain,
+    fn column_stat_from_return_stat(stat: ReturnStat) -> Result<Option<ColumnStat>> {
+        let bounds = match stat.domain.stat_bounds() {
+            DomainStatBounds::Bounds(bounds) => bounds,
+            DomainStatBounds::AllNull => {
+                return Ok(Some(ColumnStat::AllNull {
+                    null_count: stat.null_count,
+                }));
+            }
+            DomainStatBounds::Unsupported => return Ok(None),
         };
-        let (min, max) = value_domain.to_minmax();
-        let min = min.to_datum()?;
-        let max = max.to_datum()?;
         let histogram = match stat.distribution {
             OwnedDistribution::Histogram(histogram) => Some(histogram),
             OwnedDistribution::Unknown | OwnedDistribution::Boolean(_) => None,
         };
-        Some(ColumnStat {
-            min,
-            max,
-            ndv: stat.ndv,
-            null_count: stat.null_count,
+        Ok(Some(ColumnStat::new(
+            bounds,
+            stat.ndv,
+            stat.null_count,
             histogram,
-        })
+        )?))
     }
 }
 
@@ -221,7 +219,7 @@ impl Operator for EvalScalar {
             count_min_sketch,
             ..
         } = &input.statistics;
-        let item_column_stats = self
+        let derived_items = self
             .items
             .iter()
             .map(|item| {
@@ -233,7 +231,7 @@ impl Operator for EvalScalar {
                 Ok(stat.map(|stat| (item.index, stat)))
             })
             .collect::<Result<Vec<_>>>()?;
-        let column_stats = item_column_stats
+        let column_stats = derived_items
             .into_iter()
             .flatten()
             .chain(column_stats.iter().filter_map(|(index, stat)| {
@@ -305,7 +303,7 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_common_statistics::Datum;
+    use databend_common_statistics::StatBounds;
 
     use super::*;
     use crate::Visibility;
@@ -360,9 +358,9 @@ mod tests {
     }
 
     fn column_stat_with_nulls(min: i64, max: i64, ndv: f64, null_count: u64) -> ColumnStat {
-        ColumnStat {
-            min: Datum::Int(min),
-            max: Datum::Int(max),
+        ColumnStat::Int {
+            min,
+            max,
             ndv: NdvEstimate::exact(ndv),
             null_count: StatCount::exact(null_count),
             histogram: None,
@@ -444,18 +442,12 @@ mod tests {
         assert_eq!(stats.cardinality, 10.0);
         assert_eq!(stats.statistics.precise_cardinality, Some(10));
         let alias = &stats.statistics.column_stats[&Symbol::new(1)];
-        assert_eq!(
-            (alias.min.clone(), alias.max.clone()),
-            (Datum::Int(1), Datum::Int(3))
-        );
-        assert_eq!(alias.ndv, NdvEstimate::exact(3.0));
+        assert_eq!(alias.bounds(), Some(StatBounds::Int { min: 1, max: 3 }));
+        assert_eq!(alias.ndv(), NdvEstimate::exact(3.0));
         let constant = &stats.statistics.column_stats[&Symbol::new(2)];
-        assert_eq!(
-            (constant.min.clone(), constant.max.clone()),
-            (Datum::Int(7), Datum::Int(7))
-        );
-        assert_eq!(constant.ndv, NdvEstimate::exact(1.0));
-        assert_eq!(constant.null_count, StatCount::exact(0));
+        assert_eq!(constant.bounds(), Some(StatBounds::Int { min: 7, max: 7 }));
+        assert_eq!(constant.ndv(), NdvEstimate::exact(1.0));
+        assert_eq!(constant.null_count(), StatCount::exact(0));
     }
 
     #[test]
@@ -482,12 +474,9 @@ mod tests {
         );
 
         let derived = &stats.statistics.column_stats[&Symbol::new(1)];
-        assert_eq!(
-            (derived.min.clone(), derived.max.clone()),
-            (Datum::Int(11), Datum::Int(13))
-        );
-        assert_eq!(derived.ndv, NdvEstimate::exact(3.0));
-        assert_eq!(derived.null_count, StatCount::exact(2));
+        assert_eq!(derived.bounds(), Some(StatBounds::Int { min: 11, max: 13 }));
+        assert_eq!(derived.ndv(), NdvEstimate::exact(3.0));
+        assert_eq!(derived.null_count(), StatCount::exact(2));
     }
 
     #[test]
@@ -521,7 +510,10 @@ mod tests {
             ]),
         );
 
-        assert!(!stats.statistics.column_stats.contains_key(&Symbol::new(1)));
+        assert!(matches!(
+            stats.statistics.column_stats.get(&Symbol::new(1)),
+            Some(ColumnStat::AllNull { null_count }) if *null_count == StatCount::exact(10)
+        ));
         assert!(!stats.statistics.column_stats.contains_key(&Symbol::new(2)));
         assert!(stats.statistics.column_stats.contains_key(&Symbol::new(0)));
     }
