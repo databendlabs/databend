@@ -392,7 +392,7 @@ impl TableRefVisitor {
                         for mv in materialized_views {
                             let mv_options = &mv.table_meta.data.options;
                             fingerprint.push_str(&format!(
-                                ":mv:{}:definition:{}:table:{}:{}:snapshot:{:?}:checkpoint:{}:{:?}",
+                                ":mv:{}:definition:{}:table_seq:{}:snapshot:{:?}:checkpoint_seq:{:?}:checkpoint_snapshot:{:?}",
                                 mv.mv_id,
                                 mv.definition.seq,
                                 mv.table_meta.seq,
