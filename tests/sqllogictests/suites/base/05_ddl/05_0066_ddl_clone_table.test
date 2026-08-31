@@ -1,0 +1,236 @@
+statement ok
+DROP DATABASE IF EXISTS db_05_clone
+
+statement ok
+DROP DATABASE IF EXISTS db_05_clone_target
+
+statement ok
+CREATE DATABASE db_05_clone
+
+statement ok
+CREATE DATABASE db_05_clone_target
+
+statement ok
+USE db_05_clone
+
+# Empty clones preserve the schema and evolve independently.
+statement ok
+CREATE TABLE empty_source(id INT, payload INT)
+
+statement ok
+CREATE TABLE empty_clone CLONE empty_source
+
+query III
+SELECT count(*), count_if(name = 'id'), count_if(name = 'payload')
+FROM system.columns
+WHERE database = 'db_05_clone' AND "table" = 'empty_clone'
+----
+2 1 1
+
+statement ok
+INSERT INTO empty_clone VALUES (1, 10)
+
+query II
+SELECT (SELECT count(*) FROM empty_source), (SELECT count(*) FROM empty_clone)
+----
+0 1
+
+# Cross-database clones are independent tables.
+statement ok
+CREATE TABLE cross_source(id INT)
+
+statement ok
+INSERT INTO cross_source VALUES (1)
+
+statement ok
+CREATE TABLE db_05_clone_target.cross_clone CLONE db_05_clone.cross_source
+
+statement ok
+INSERT INTO db_05_clone_target.cross_clone VALUES (2)
+
+query I
+SELECT id FROM db_05_clone.cross_source ORDER BY id
+----
+1
+
+query I
+SELECT id FROM db_05_clone_target.cross_clone ORDER BY id
+----
+1
+2
+
+# TRANSIENT is an inheritable table behavior, not source identity.
+statement ok
+CREATE TRANSIENT TABLE transient_source(id INT)
+
+statement ok
+CREATE TABLE transient_clone CLONE transient_source
+
+query I
+SELECT count(*)
+FROM system.tables
+WHERE database = 'db_05_clone' AND name = 'transient_clone'
+  AND table_option LIKE '%TRANSIENT%'
+----
+1
+
+# Auto-increment state is copied at clone time and advances independently.
+statement ok
+CREATE TABLE auto_source(id INT AUTOINCREMENT (5, 1) ORDER, payload INT)
+
+statement ok
+INSERT INTO auto_source(payload) VALUES (10), (20)
+
+statement ok
+CREATE TABLE auto_clone CLONE auto_source
+
+statement ok
+INSERT INTO auto_source(payload) VALUES (30)
+
+statement ok
+INSERT INTO auto_clone(payload) VALUES (40), (50)
+
+statement ok
+CREATE TABLE auto_chain CLONE auto_clone
+
+statement ok
+INSERT INTO auto_chain(payload) VALUES (60)
+
+query I
+SELECT id FROM auto_source ORDER BY id
+----
+5
+6
+7
+
+query I
+SELECT id FROM auto_clone ORDER BY id
+----
+5
+6
+7
+8
+
+query I
+SELECT id FROM auto_chain ORDER BY id
+----
+5
+6
+7
+8
+9
+
+# IF NOT EXISTS, replacement, chained clones, and self-replacement.
+statement ok
+CREATE TABLE source(id INT)
+
+statement ok
+INSERT INTO source VALUES (1), (2)
+
+statement ok
+CREATE TABLE head CLONE source
+
+statement ok
+CREATE TABLE chain CLONE head
+
+statement ok
+INSERT INTO chain VALUES (5)
+
+statement ok
+INSERT INTO source VALUES (3)
+
+statement ok
+CREATE TABLE IF NOT EXISTS head CLONE source
+
+query I
+SELECT id FROM head ORDER BY id
+----
+1
+2
+
+statement ok
+CREATE OR REPLACE TABLE head CLONE source
+
+query I
+SELECT id FROM head ORDER BY id
+----
+1
+2
+3
+
+query I
+SELECT id FROM chain ORDER BY id
+----
+1
+2
+5
+
+statement ok
+CREATE OR REPLACE TABLE source CLONE source
+
+statement ok
+INSERT INTO source VALUES (6)
+
+query I
+SELECT id FROM source ORDER BY id
+----
+1
+2
+3
+6
+
+query I
+SELECT id FROM head ORDER BY id
+----
+1
+2
+3
+
+query I
+SELECT id FROM chain ORDER BY id
+----
+1
+2
+5
+
+# Dropping the source does not invalidate existing clones.
+statement ok
+DROP TABLE source
+
+statement ok
+INSERT INTO head VALUES (7)
+
+statement ok
+INSERT INTO chain VALUES (8)
+
+query I
+SELECT id FROM head ORDER BY id
+----
+1
+2
+3
+7
+
+query I
+SELECT id FROM chain ORDER BY id
+----
+1
+2
+5
+8
+
+# CLONE owns its schema and engine and supports only snapshot-ID navigation.
+statement error
+CREATE TABLE clone_with_schema(id INT) CLONE head
+
+statement error
+CREATE TABLE clone_with_engine CLONE head ENGINE = FUSE
+
+statement error
+CREATE TABLE clone_at_timestamp CLONE head AT (TIMESTAMP => now())
+
+statement ok
+DROP DATABASE db_05_clone_target
+
+statement ok
+DROP DATABASE db_05_clone

@@ -374,7 +374,7 @@ pub async fn do_vacuum(
     let table_lvt = catalog
         .get_table_lvt(&LeastVisibleTimeIdent::new(
             ctx.get_tenant(),
-            fuse_table.get_table_info().ident.table_id,
+            fuse_table.get_id(),
         ))
         .await?;
     let table = fuse_table.refresh(ctx.as_ref()).await?;

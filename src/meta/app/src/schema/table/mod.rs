@@ -514,6 +514,14 @@ impl Display for TableIdList {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableCloneMeta {
+    pub source_table_id: u64,
+    pub source_table_seq: MatchSeq,
+    pub clone_group_id: u64,
+    pub snapshot_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub catalog_name: Option<String>,
@@ -544,6 +552,9 @@ pub struct CreateTableReq {
     /// validates that the definition is still bound to the source metadata
     /// recorded in the CREATE plan. It is `None` for non-MV tables.
     pub materialized_view: Option<CreateMaterializedViewMeta>,
+
+    /// Source validation and lineage for a zero-copy table clone.
+    pub clone: Option<CreateTableCloneMeta>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,

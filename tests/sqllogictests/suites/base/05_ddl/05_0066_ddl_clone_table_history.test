@@ -1,0 +1,192 @@
+statement ok
+DROP DATABASE IF EXISTS db_05_clone_history
+
+statement ok
+CREATE DATABASE db_05_clone_history
+
+statement ok
+USE db_05_clone_history
+
+statement ok
+CREATE TABLE source(id INT, payload STRING)
+
+statement ok
+INSERT INTO source VALUES (1, 'old')
+
+statement ok
+SET VARIABLE first_snap = (
+    SELECT snapshot_id
+    FROM fuse_snapshot('db_05_clone_history', 'source')
+    ORDER BY timestamp
+    LIMIT 1
+)
+
+statement ok
+ALTER TABLE source ADD COLUMN evolved STRING
+
+statement ok
+ALTER TABLE source CLUSTER BY (id)
+
+statement ok
+INSERT INTO source VALUES (2, 'new', 'current')
+
+# Constraints are not versioned by snapshots. A current constraint that is valid for the selected
+# historical structure is inherited by the clone.
+statement ok
+ALTER TABLE source ADD CONSTRAINT id_positive CHECK (id > 0)
+
+statement ok
+CREATE TABLE head CLONE source
+
+statement ok
+CREATE TABLE historical CLONE source AT (SNAPSHOT => $first_snap)
+
+statement ok
+CREATE TABLE chained CLONE head
+
+query I
+SELECT id FROM head ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM historical ORDER BY id
+----
+1
+
+query I
+SELECT id FROM chained ORDER BY id
+----
+1
+2
+
+# Current clones inherit current schema; historical clones restore selected-snapshot schema.
+query I
+SELECT count(*)
+FROM system.columns
+WHERE database = 'db_05_clone_history' AND "table" = 'head' AND name = 'evolved'
+----
+1
+
+query I
+SELECT count(*)
+FROM system.columns
+WHERE database = 'db_05_clone_history' AND "table" = 'chained' AND name = 'evolved'
+----
+1
+
+query I
+SELECT count(*)
+FROM system.columns
+WHERE database = 'db_05_clone_history' AND "table" = 'historical' AND name = 'evolved'
+----
+0
+
+# Historical structure, clustering, and data come from the selected snapshot. Constraints and
+# other non-versioned semantic metadata are inherited from the current source and validated.
+query I
+SELECT count(*)
+FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'head' AND cluster_by != ''
+----
+1
+
+query I
+SELECT count(*)
+FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'historical' AND cluster_by = ''
+----
+1
+
+query I
+SELECT count(*)
+FROM system.constraints
+WHERE database = 'db_05_clone_history' AND "table" = 'historical' AND name = 'id_positive'
+----
+1
+
+# Current semantic metadata is never silently removed. If it cannot bind to the historical
+# structure, the clone fails before publishing a target table.
+statement ok
+ALTER TABLE source ADD CONSTRAINT evolved_current CHECK (evolved IS NULL OR length(evolved) > 0)
+
+statement error Constraint 'evolved_current' is incompatible with the target schema
+CREATE TABLE invalid_constraint CLONE source AT (SNAPSHOT => $first_snap)
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'invalid_constraint'
+----
+0
+
+statement ok
+ALTER TABLE source DROP CONSTRAINT evolved_current
+
+# change_tracking is inherited, but its internal begin_version belongs to the source identity.
+# A clone must discard that source boundary and initialize its own after target allocation.
+statement ok
+ALTER TABLE source SET OPTIONS (change_tracking = true)
+
+statement ok
+CREATE TABLE tracked CLONE source AT (SNAPSHOT => $first_snap)
+
+query I
+SELECT count(*)
+FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'tracked'
+  AND table_option LIKE '%CHANGE_TRACKING=''true''%'
+----
+1
+
+statement ok
+ALTER TABLE source SET OPTIONS (bloom_index_columns = 'evolved')
+
+statement error
+CREATE TABLE invalid_option CLONE source AT (SNAPSHOT => $first_snap)
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'invalid_option'
+----
+0
+
+# Persisted table indexes require more than ColumnId existence: their column types and options
+# must remain valid for the historical structure.
+statement ok
+CREATE TABLE index_source(id INT, indexed INT)
+
+statement ok
+INSERT INTO index_source VALUES (1, 10)
+
+statement ok
+SET VARIABLE index_snap = (
+    SELECT snapshot_id
+    FROM fuse_snapshot('db_05_clone_history', 'index_source')
+    ORDER BY timestamp
+    LIMIT 1
+)
+
+statement ok
+ALTER TABLE index_source MODIFY COLUMN indexed STRING
+
+statement ok
+CREATE NGRAM INDEX indexed_ngram ON index_source(indexed) gram_size = 5 bloom_size = 1048576
+
+statement error
+CREATE TABLE invalid_index CLONE index_source AT (SNAPSHOT => $index_snap)
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'invalid_index'
+----
+0
+
+statement ok
+UNSET VARIABLE index_snap
+
+statement ok
+UNSET VARIABLE first_snap
+
+statement ok
+DROP DATABASE db_05_clone_history

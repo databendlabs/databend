@@ -28,7 +28,6 @@ use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableIndex;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
@@ -58,6 +57,12 @@ use crate::io::read::ColumnOrientedSegmentReader;
 use crate::io::read::RowOrientedSegmentReader;
 
 impl FuseTable {
+    fn owns_storage_location(&self, location: &str) -> bool {
+        location
+            .strip_prefix(self.get_storage_prefix())
+            .is_some_and(|suffix| suffix.starts_with('/'))
+    }
+
     pub async fn do_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -104,28 +109,41 @@ impl FuseTable {
         };
 
         let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
-        if !dry_run {
-            // Persist the current snapshot timestamp as LVT so that concurrent
-            // writers/committers will only reference data newer than the gc root.
-            catalog
-                .set_table_lvt(
-                    &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                    &LeastVisibleTime::new(root_snapshot.timestamp.unwrap()),
-                )
-                .await?;
-        }
-
         let mut snapshot_files = snapshot_files;
-        // protected segments.
+        // Protected segments include this table's GC root and every other live/recoverable
+        // member in the zero-copy clone group.
         let mut segments = HashSet::from_iter(root_snapshot.segments.iter().cloned());
+        let (observed_descendants, mut table_lvts) = self
+            .extend_clone_descendant_referenced_segments(ctx.clone(), &mut segments, |_| {})
+            .await?;
+        if !dry_run {
+            table_lvts.insert(
+                self.get_id(),
+                LeastVisibleTime::new(root_snapshot.timestamp.unwrap()),
+            );
+            // Publish LVTs only; see has_new_clone_descendants for the known FLASHBACK window.
+            catalog
+                .set_table_lvts(&ctx.get_tenant(), &table_lvts)
+                .await?;
+            if self
+                .has_new_clone_descendants(ctx, &observed_descendants)
+                .await?
+            {
+                info!(
+                    "stop purge after a new clone descendant appeared for table {}",
+                    self.get_id()
+                );
+                return Ok(None);
+            }
+        }
+        self.extend_clone_descendant_tag_segments(
+            ctx.clone(),
+            &observed_descendants,
+            &mut segments,
+        )
+        .await?;
         let protected_table_stats_locs = self
-            .process_tags_for_purge(
-                &catalog,
-                &root_snapshot_location,
-                &mut snapshot_files,
-                &mut segments,
-                dry_run,
-            )
+            .process_tags_for_purge(&catalog, &mut snapshot_files, &mut segments, dry_run)
             .await?;
         let segment_refs = segments.iter().collect::<Vec<_>>();
         let referenced_locations = self
@@ -201,6 +219,12 @@ impl FuseTable {
 
                 let diff: HashSet<_> = s.segments.difference(&base_segments).cloned().collect();
                 segments_to_be_purged.extend(diff);
+                segments_to_be_purged.retain(|location| {
+                    location
+                        .0
+                        .starts_with(location_gen.segment_location_prefix())
+                        && !root_snapshot_lite.segments.contains(location)
+                });
 
                 if s.table_statistics_location.is_some()
                     && s.table_statistics_location != base_ts_location_opt
@@ -275,6 +299,12 @@ impl FuseTable {
                 }
 
                 segments_to_be_purged.extend(s.segments);
+                segments_to_be_purged.retain(|location| {
+                    location
+                        .0
+                        .starts_with(location_gen.segment_location_prefix())
+                        && !root_snapshot_lite.segments.contains(location)
+                });
 
                 if s.table_statistics_location.is_some() {
                     ts_to_be_purged.insert(s.table_statistics_location.unwrap());
@@ -332,23 +362,42 @@ impl FuseTable {
                 .await?;
 
             for loc in &locations.block_location {
-                if locations_referenced_by_root.block_location.contains(loc) {
+                if locations_referenced_by_root.block_location.contains(loc)
+                    || !self.owns_storage_location(loc)
+                {
                     continue;
                 }
                 purge_files.push(loc.to_string());
             }
 
             for loc in &locations.bloom_location {
-                if locations_referenced_by_root.bloom_location.contains(loc) {
+                if locations_referenced_by_root.bloom_location.contains(loc)
+                    || !self.owns_storage_location(loc)
+                {
                     continue;
                 }
                 purge_files.push(loc.to_string())
             }
 
-            purge_files.extend(chunk.iter().map(|loc| loc.0.clone()));
+            purge_files.extend(
+                chunk
+                    .iter()
+                    .map(|loc| loc.0.clone())
+                    .filter(|loc| self.owns_storage_location(loc)),
+            );
         }
-        purge_files.extend(ts_to_be_purged.iter().map(|loc| loc.to_string()));
-        purge_files.extend(snapshots_to_be_purged.iter().map(|loc| loc.to_string()));
+        purge_files.extend(
+            ts_to_be_purged
+                .iter()
+                .filter(|loc| self.owns_storage_location(loc))
+                .cloned(),
+        );
+        purge_files.extend(
+            snapshots_to_be_purged
+                .iter()
+                .filter(|loc| self.owns_storage_location(loc))
+                .cloned(),
+        );
 
         Ok(())
     }
@@ -378,7 +427,9 @@ impl FuseTable {
             let mut blocks_to_be_purged = HashSet::new();
             let mut inverted_indexes_to_be_purged = HashSet::new();
             for loc in &locations.block_location {
-                if locations_referenced_by_root.block_location.contains(loc) {
+                if locations_referenced_by_root.block_location.contains(loc)
+                    || !self.owns_storage_location(loc)
+                {
                     continue;
                 }
                 blocks_to_be_purged.insert(loc.to_string());
@@ -396,7 +447,9 @@ impl FuseTable {
 
             let mut blooms_to_be_purged = HashSet::new();
             for loc in &locations.bloom_location {
-                if locations_referenced_by_root.bloom_location.contains(loc) {
+                if locations_referenced_by_root.bloom_location.contains(loc)
+                    || !self.owns_storage_location(loc)
+                {
                     continue;
                 }
                 blooms_to_be_purged.insert(loc.to_string());
@@ -404,7 +457,9 @@ impl FuseTable {
 
             let mut stats_to_be_purged = HashSet::new();
             for loc in &locations.hll_location {
-                if locations_referenced_by_root.hll_location.contains(loc) {
+                if locations_referenced_by_root.hll_location.contains(loc)
+                    || !self.owns_storage_location(loc)
+                {
                     continue;
                 }
                 stats_to_be_purged.insert(loc.to_string());
@@ -414,7 +469,7 @@ impl FuseTable {
                 chunk
                     .iter()
                     .map(|loc| loc.0.clone())
-                    .collect::<Vec<String>>(),
+                    .filter(|loc| self.owns_storage_location(loc)),
             );
 
             // Refresh status.
@@ -524,6 +579,15 @@ impl FuseTable {
         ts_to_be_purged: HashSet<String>,
         snapshots_to_be_purged: HashSet<String>,
     ) -> Result<()> {
+        let ts_to_be_purged = ts_to_be_purged
+            .into_iter()
+            .filter(|location| self.owns_storage_location(location))
+            .collect::<HashSet<_>>();
+        let snapshots_to_be_purged = snapshots_to_be_purged
+            .into_iter()
+            .filter(|location| self.owns_storage_location(location))
+            .collect::<HashSet<_>>();
+
         // 3. Purge table statistic files
         let ts_count = ts_to_be_purged.len();
         if ts_count > 0 {
@@ -597,7 +661,6 @@ impl FuseTable {
     pub async fn process_tags_for_purge(
         &self,
         catalog: &Arc<dyn Catalog>,
-        root_snapshot_location: &String,
         snapshot_files_to_gc: &mut Vec<String>,
         protected_segments: &mut HashSet<Location>,
         dry_run: bool,
@@ -637,18 +700,18 @@ impl FuseTable {
             }
 
             let tag_snapshot_loc = seq_tag.data.snapshot_loc;
-            if &tag_snapshot_loc < root_snapshot_location {
-                if let Some(snapshot) =
-                    SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &tag_snapshot_loc)
-                        .await?
-                {
-                    protected_segments.extend(snapshot.segments.iter().cloned());
-                    if let Some(stats_loc) = &snapshot.table_statistics_location {
-                        protected_table_stats_locs.insert(stats_loc.clone());
-                    }
+            // As in protect_table_tags, listing tags and reading their objects is not atomic.
+            // Tolerate a missing snapshot without revalidating the tag; other errors propagate.
+            if let Some(snapshot) =
+                SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &tag_snapshot_loc)
+                    .await?
+            {
+                protected_segments.extend(snapshot.segments.iter().cloned());
+                if let Some(stats_loc) = &snapshot.table_statistics_location {
+                    protected_table_stats_locs.insert(stats_loc.clone());
                 }
-                protected_snapshot_locs.insert(tag_snapshot_loc);
             }
+            protected_snapshot_locs.insert(tag_snapshot_loc);
         }
 
         snapshot_files_to_gc.retain(|path| !protected_snapshot_locs.contains(path));

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -283,8 +284,10 @@ where
         f(&mut new_snapshot, &mut new_table_meta);
 
         let mut new_snapshot_location = None;
+        let mut gc_safe_time = None;
         if let Some(new_snapshot) = new_snapshot {
-            // Persist the snapshot
+            // Persist the snapshot.
+            gc_safe_time = new_snapshot.timestamp;
             let new_snapshot_loc = fuse_tbl
                 .meta_location_generator()
                 .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -301,7 +304,14 @@ where
             new_snapshot_location = Some(new_snapshot_loc);
         }
         new_table_meta.updated_on = Utc::now();
-        update_table_meta(fuse_tbl, &new_table_meta, catalog, ctx.get_tenant()).await?;
+        update_table_meta(
+            fuse_tbl,
+            &new_table_meta,
+            catalog,
+            ctx.get_tenant(),
+            gc_safe_time,
+        )
+        .await?;
 
         if let Some(new_snapshot_location) = new_snapshot_location {
             FuseTable::write_last_snapshot_hint(
@@ -322,16 +332,22 @@ pub(crate) async fn update_table_meta(
     new_table_meta: &TableMeta,
     catalog: Arc<dyn Catalog>,
     tenant: Tenant,
+    gc_safe_time: Option<DateTime<Utc>>,
 ) -> Result<()> {
     let table_info = fuse_tbl.get_table_info().clone();
     let table_id = table_info.ident.table_id;
     let table_version = table_info.ident.seq;
+    let lvt_check = if gc_safe_time.is_some() {
+        FuseTable::build_table_lvt_check(&table_info, &tenant, gc_safe_time)?
+    } else {
+        None
+    };
     let req = UpdateTableMetaReq {
         table_id,
         seq: MatchSeq::Exact(table_version),
         new_table_meta: new_table_meta.clone(),
         base_snapshot_location: fuse_tbl.snapshot_loc(),
-        lvt_check: None,
+        lvt_check,
     };
     catalog
         .update_single_table_meta(&tenant, req, &table_info)

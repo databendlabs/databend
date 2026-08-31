@@ -44,6 +44,12 @@ use crate::plans::Plan;
 pub type TableOptions = BTreeMap<String, String>;
 
 #[derive(Clone, Debug)]
+pub struct CloneTablePlan {
+    pub source: databend_common_meta_app::schema::TableInfo,
+    pub navigation: Option<NavigationPoint>,
+}
+
+#[derive(Clone, Debug)]
 pub struct CreateTablePlan {
     pub create_option: CreateOption,
     pub tenant: Tenant,
@@ -65,6 +71,7 @@ pub struct CreateTablePlan {
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
+    pub clone: Option<CloneTablePlan>,
     pub attached_columns: Option<Vec<Identifier>>,
 }
 

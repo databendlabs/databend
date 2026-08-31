@@ -301,6 +301,21 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        self.mutable_catalog
+            .mget_table_metas_by_ids(table_ids)
+            .await
+    }
+
+    async fn list_clone_group_bindings(&self, clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        self.mutable_catalog
+            .list_clone_group_bindings(clone_group_id)
+            .await
+    }
+
     async fn get_mv_definition(
         &self,
         tenant: &Tenant,
@@ -980,6 +995,16 @@ impl Catalog for DatabaseCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.mutable_catalog.list_dictionaries(req).await
+    }
+
+    async fn set_table_lvts(
+        &self,
+        tenant: &Tenant,
+        table_lvts: &std::collections::HashMap<u64, LeastVisibleTime>,
+    ) -> Result<()> {
+        self.mutable_catalog
+            .set_table_lvts(tenant, table_lvts)
+            .await
     }
 
     async fn set_table_lvt(

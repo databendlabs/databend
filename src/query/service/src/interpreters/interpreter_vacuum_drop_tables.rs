@@ -32,6 +32,7 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -183,14 +184,63 @@ impl Interpreter for VacuumDropTablesInterpreter {
         };
 
         let tenant = self.ctx.get_tenant();
-        let (tables, drop_ids) = catalog
+        let (mut tables, mut drop_ids) = catalog
             .get_drop_table_infos(ListDroppedTableReq::new4(
                 &tenant,
-                database_name,
+                database_name.clone(),
                 Some(retention_time),
                 self.plan.option.limit,
             ))
             .await?;
+
+        // LIMIT must not permanently starve a clone group by selecting only the same first member
+        // on every run. If the limited batch touches a group, expand only that group from the full
+        // eligible scope. Unrelated tables remain capped by LIMIT.
+        if self.plan.option.limit.is_some() {
+            let selected_clone_groups = tables
+                .iter()
+                .filter_map(|table| {
+                    table
+                        .get_table_info()
+                        .meta
+                        .options
+                        .get(OPT_KEY_CLONE_GROUP_ID)
+                        .and_then(|value| value.parse::<u64>().ok())
+                })
+                .collect::<HashSet<_>>();
+            if !selected_clone_groups.is_empty() {
+                let (eligible_tables, eligible_drop_ids) = catalog
+                    .get_drop_table_infos(ListDroppedTableReq::new4(
+                        &tenant,
+                        database_name,
+                        Some(retention_time),
+                        None,
+                    ))
+                    .await?;
+                let mut selected_table_ids = tables
+                    .iter()
+                    .map(|table| table.get_id())
+                    .collect::<HashSet<_>>();
+                let mut added_table_ids = HashSet::new();
+                for table in eligible_tables {
+                    let group_id = table
+                        .get_table_info()
+                        .meta
+                        .options
+                        .get(OPT_KEY_CLONE_GROUP_ID)
+                        .and_then(|value| value.parse::<u64>().ok());
+                    if group_id.is_some_and(|id| selected_clone_groups.contains(&id))
+                        && selected_table_ids.insert(table.get_id())
+                    {
+                        added_table_ids.insert(table.get_id());
+                        tables.push(table);
+                    }
+                }
+                drop_ids.extend(eligible_drop_ids.into_iter().filter(|drop_id| {
+                    matches!(drop_id, DroppedId::Table { id, .. } if added_table_ids.contains(&id.table_id))
+                }));
+            }
+        }
 
         // map: table id to its belonging db id
         let mut containing_db = BTreeMap::new();
@@ -246,6 +296,38 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let tables_count = tables.len();
 
+        // A clone member's snapshots may reference files in any ancestor directory. Only current
+        // leaves are safe to physically remove: if another existing member names a table as its
+        // direct source, that child (or one of its descendants) can still reference the directory.
+        let candidate_table_ids = tables
+            .iter()
+            .map(|table| table.get_id())
+            .collect::<HashSet<_>>();
+        let candidate_clone_groups = tables
+            .iter()
+            .filter_map(|table| {
+                table
+                    .get_table_info()
+                    .meta
+                    .options
+                    .get(OPT_KEY_CLONE_GROUP_ID)
+                    .and_then(|value| value.parse::<u64>().ok())
+            })
+            .collect::<HashSet<_>>();
+        let mut safe_clone_table_ids = HashSet::new();
+        for group_id in candidate_clone_groups {
+            let bindings = catalog.list_clone_group_bindings(group_id).await?;
+            let mut members = HashSet::from([group_id]);
+            members.extend(bindings.iter().map(|(table_id, _)| *table_id));
+            let direct_sources = bindings
+                .into_iter()
+                .map(|(_, source_id)| source_id)
+                .collect::<HashSet<_>>();
+            safe_clone_table_ids.extend(candidate_table_ids.iter().copied().filter(|table_id| {
+                members.contains(table_id) && !direct_sources.contains(table_id)
+            }));
+        }
+
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
         let (files_opt, failed_tables) = handler
@@ -257,6 +339,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 } else {
                     None
                 },
+                safe_clone_table_ids,
             )
             .await?;
 

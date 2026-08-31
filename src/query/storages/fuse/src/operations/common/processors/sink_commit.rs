@@ -35,6 +35,7 @@ use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -93,6 +94,7 @@ enum State {
         snapshot: TableSnapshot,
         table_info: TableInfo,
         table_statistics: Option<TableSnapshotStatistics>,
+        lvt_check: Option<TableLvtCheck>,
     },
     Abort(ErrorCode),
     Finish,
@@ -269,9 +271,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
     }
 
     fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
-        // currently, the only error that we know,  which indicates there are no side effects
-        // is TABLE_VERSION_MISMATCHED
-        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
+        matches!(
+            e.code(),
+            ErrorCode::TABLE_VERSION_MISMATCHED | ErrorCode::TABLE_SNAPSHOT_EXPIRED
+        )
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -534,6 +537,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
+                        let lvt_check = FuseTable::build_table_lvt_check(
+                            &table_info,
+                            &self.ctx.get_tenant(),
+                            snapshot.timestamp,
+                        )?;
                         stamp_table_statistics_with_snapshot_predecessor(
                             &mut table_statistics,
                             &snapshot,
@@ -543,6 +551,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             snapshot,
                             table_info,
                             table_statistics,
+                            lvt_check,
                         };
                     }
                     Err(e) => {
@@ -651,6 +660,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 snapshot,
                 table_info,
                 table_statistics,
+                lvt_check,
             } => {
                 snapshot.ensure_segments_unique()?;
                 let location = self
@@ -731,6 +741,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             &self.copied_files,
                             &self.update_stream_meta,
                             &self.dal,
+                            lvt_check,
                             self.deduplicated_label.clone(),
                         )
                         .await
@@ -856,9 +867,16 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         }
                     }
                     Err(e) => {
-                        // we are not sure about if the table state has been modified or not, just propagate the error
-                        // and return, without aborting anything.
-                        return Err(e);
+                        if Self::no_side_effects_in_meta_store(&e) {
+                            // Meta rejected the transaction before applying any writes. Enter the
+                            // normal abort state for consistent accounting, but do not retry: the
+                            // already-written objects retain their timestamps.
+                            self.state = State::Abort(e);
+                        } else {
+                            // The metastore outcome may be ambiguous; propagate without treating
+                            // the operation as a confirmed abort.
+                            return Err(e);
+                        }
                     }
                 };
             }
@@ -912,5 +930,29 @@ pub fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Resu
     {
         Some(value) => Ok(value.parse::<u32>()? != 0),
         None => ctx.get_settings().get_enable_auto_vacuum(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_meta_rejection_side_effect_classification() {
+        assert!(
+            CommitSink::<AppendGenerator>::no_side_effects_in_meta_store(
+                &ErrorCode::TableVersionMismatched("version conflict".to_string())
+            )
+        );
+        assert!(
+            CommitSink::<AppendGenerator>::no_side_effects_in_meta_store(
+                &ErrorCode::TableSnapshotExpired("snapshot expired".to_string())
+            )
+        );
+        assert!(
+            !CommitSink::<AppendGenerator>::no_side_effects_in_meta_store(&ErrorCode::Internal(
+                "ambiguous failure".to_string()
+            ))
+        );
     }
 }

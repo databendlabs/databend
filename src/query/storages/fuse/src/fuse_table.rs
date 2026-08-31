@@ -69,6 +69,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -579,6 +580,25 @@ impl FuseTable {
 
     pub fn is_transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
+    }
+
+    /// Stable identity shared by a base table and all of its zero-copy clones.
+    pub fn clone_group_id(&self) -> Result<u64> {
+        self.table_info
+            .meta
+            .options
+            .get(OPT_KEY_CLONE_GROUP_ID)
+            .map(|value| {
+                value.parse::<u64>().map_err(|err| {
+                    ErrorCode::Internal(format!(
+                        "invalid clone group on table {}: {}",
+                        self.get_id(),
+                        err
+                    ))
+                })
+            })
+            .transpose()
+            .map(|group_id| group_id.unwrap_or_else(|| self.get_id()))
     }
 
     pub fn cluster_key_str(&self) -> Option<&str> {

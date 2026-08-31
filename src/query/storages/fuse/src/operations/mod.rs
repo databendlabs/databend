@@ -15,6 +15,7 @@
 mod analyze;
 mod append;
 mod changes;
+mod clone;
 mod commit;
 mod common;
 mod compact;

@@ -45,8 +45,18 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
+use databend_common_meta_app::data_mask::DataMaskId;
+use databend_common_meta_app::data_mask::DataMaskIdIdent;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::AutoIncrementKey;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -74,12 +84,15 @@ use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MVSourceBinding;
 use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableCloneBinding;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -201,6 +214,30 @@ fn validate_index_columns(meta: &TableMeta) -> Result<(), KVAppError> {
     Ok(())
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum LvtGuardFailure {
+    Unchanged,
+    Retryable,
+    Expired(LeastVisibleTime),
+}
+
+fn classify_lvt_guard_failure(
+    observed_seq: u64,
+    current_seq: u64,
+    current_lvt: Option<LeastVisibleTime>,
+    check_time: DateTime<Utc>,
+) -> LvtGuardFailure {
+    if current_seq == observed_seq {
+        return LvtGuardFailure::Unchanged;
+    }
+    if let Some(current_lvt) = current_lvt
+        && current_lvt.time > check_time
+    {
+        return LvtGuardFailure::Expired(current_lvt);
+    }
+    LvtGuardFailure::Retryable
+}
+
 fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError> {
     let name = &req.name_ident.table_name;
     if !req.as_dropped && req.table_meta.drop_on.is_some() {
@@ -214,6 +251,13 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
         ));
     }
     let is_mv = is_materialized_view_engine(&req.table_meta.engine);
+    if req.clone.is_some()
+        && (!req.table_meta.engine.eq_ignore_ascii_case("FUSE") || !req.as_dropped)
+    {
+        return Err(KVAppError::AppError(
+            InvalidMaterializedView::new("table clone must create a staged FUSE table").into(),
+        ));
+    }
     if is_mv != req.materialized_view.is_some() || (is_mv && req.as_dropped) {
         return Err(KVAppError::AppError(
             InvalidMaterializedView::new("invalid materialized view create request").into(),
@@ -524,6 +568,183 @@ where
                         .push(txn_put_pb(&source_id, &updated_source_meta));
                 }
 
+                if let Some(clone) = &req.clone {
+                    let source_id = TableId::new(clone.source_table_id);
+                    let source_meta = self.get_pb(&source_id).await?.ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            clone.source_table_id,
+                            "create table clone source",
+                        )))
+                    })?;
+                    if clone.source_table_seq.match_seq(&source_meta).is_err() {
+                        return Err(KVAppError::AppError(AppError::from(
+                            TableVersionMismatched::new(
+                                clone.source_table_id,
+                                clone.source_table_seq,
+                                source_meta.seq,
+                                "create table clone source",
+                            ),
+                        )));
+                    }
+                    if source_meta.drop_on.is_some() {
+                        return Err(KVAppError::AppError(AppError::UnknownTableId(
+                            UnknownTableId::new(
+                                clone.source_table_id,
+                                "create table clone source is dropped",
+                            ),
+                        )));
+                    }
+
+                    let source_group_id = source_meta
+                        .options
+                        .get(OPT_KEY_CLONE_GROUP_ID)
+                        .map(|value| value.parse::<u64>())
+                        .transpose()
+                        .map_err(|err| {
+                            KVAppError::AppError(
+                                InvalidMaterializedView::new(format!(
+                                    "invalid clone_group_id on source table {}: {}",
+                                    clone.source_table_id, err
+                                ))
+                                .into(),
+                            )
+                        })?
+                        .unwrap_or(clone.source_table_id);
+                    if source_group_id != clone.clone_group_id
+                        || req.table_meta.options.get(OPT_KEY_CLONE_GROUP_ID)
+                            != Some(&clone.clone_group_id.to_string())
+                    {
+                        return Err(KVAppError::AppError(
+                            InvalidMaterializedView::new("inconsistent table clone group").into(),
+                        ));
+                    }
+
+                    txn.condition
+                        .push(txn_cond_seq(&source_id, Eq, source_meta.seq));
+                    if !source_meta.options.contains_key(OPT_KEY_CLONE_GROUP_ID) {
+                        let mut updated_source_meta = source_meta.data.clone();
+                        updated_source_meta.options.insert(
+                            OPT_KEY_CLONE_GROUP_ID.to_string(),
+                            clone.clone_group_id.to_string(),
+                        );
+                        txn.if_then
+                            .push(txn_put_pb(&source_id, &updated_source_meta));
+                    } else if clone.source_table_id != clone.clone_group_id {
+                        let source_binding_ident = TableCloneByGroupIdent::new(
+                            clone.clone_group_id,
+                            clone.source_table_id,
+                        );
+                        let source_binding = self.get_pb(&source_binding_ident).await?;
+                        let Some(source_binding) = source_binding else {
+                            return Err(KVAppError::AppError(
+                                InvalidMaterializedView::new(
+                                    "clone source binding disappeared during create",
+                                )
+                                .into(),
+                            ));
+                        };
+                        txn.condition.push(txn_cond_seq(
+                            &source_binding_ident,
+                            Eq,
+                            source_binding.seq,
+                        ));
+                    }
+
+                    let lvt_ident = LeastVisibleTimeIdent::new(req.tenant(), clone.source_table_id);
+                    let (lvt_seq, lvt) = self.get_pb_seq_and_value(&lvt_ident).await?;
+                    if let (Some(lvt), Some(snapshot_timestamp)) =
+                        (lvt.as_ref(), clone.snapshot_timestamp)
+                        && lvt.time > snapshot_timestamp
+                    {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                clone.source_table_id,
+                                format!(
+                                    "clone snapshot timestamp {:?} is older than least visible time {:?}",
+                                    snapshot_timestamp, lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                    txn.condition.push(txn_cond_seq(&lvt_ident, Eq, lvt_seq));
+                    if let Some(lvt) = lvt {
+                        let clone_lvt_ident = LeastVisibleTimeIdent::new(req.tenant(), table_id);
+                        txn.condition.push(txn_cond_seq(&clone_lvt_ident, Eq, 0));
+                        txn.if_then.push(txn_put_pb(&clone_lvt_ident, &lvt));
+                    }
+                    txn.if_then.push(txn_put_pb(
+                        &TableCloneByGroupIdent::new(clone.clone_group_id, table_id),
+                        &TableCloneBinding {
+                            source_table_id: clone.source_table_id,
+                        },
+                    ));
+
+                    // Security policies are embedded in TableMeta, but their reverse references
+                    // are keyed by table ID. Recreate those references for the clone atomically,
+                    // and CAS each policy record so a concurrent policy drop cannot leave the new
+                    // table with a dangling policy ID.
+                    let mask_policy_ids = req
+                        .table_meta
+                        .column_mask_policy_columns_ids
+                        .values()
+                        .map(|policy| policy.policy_id)
+                        .collect::<HashSet<_>>();
+                    for policy_id in mask_policy_ids {
+                        let policy_ident =
+                            DataMaskIdIdent::new_generic(req.tenant(), DataMaskId::new(policy_id));
+                        let policy = self.get_pb(&policy_ident).await?.ok_or_else(|| {
+                            KVAppError::AppError(
+                                InvalidMaterializedView::new(format!(
+                                    "masking policy {} referenced by clone no longer exists",
+                                    policy_id
+                                ))
+                                .into(),
+                            )
+                        })?;
+                        txn.condition
+                            .push(txn_cond_seq(&policy_ident, Eq, policy.seq));
+                        txn.if_then.push(txn_put_pb(
+                            &MaskPolicyTableIdIdent::new_generic(
+                                req.tenant(),
+                                MaskPolicyIdTableId {
+                                    policy_id,
+                                    table_id,
+                                },
+                            ),
+                            &MaskPolicyTableId,
+                        ));
+                    }
+
+                    if let Some(policy) = &req.table_meta.row_access_policy_columns_ids {
+                        let policy_id = policy.policy_id;
+                        let policy_ident = RowAccessPolicyIdIdent::new_generic(
+                            req.tenant(),
+                            RowAccessPolicyId::new(policy_id),
+                        );
+                        let policy = self.get_pb(&policy_ident).await?.ok_or_else(|| {
+                            KVAppError::AppError(
+                                InvalidMaterializedView::new(format!(
+                                    "row access policy {} referenced by clone no longer exists",
+                                    policy_id
+                                ))
+                                .into(),
+                            )
+                        })?;
+                        txn.condition
+                            .push(txn_cond_seq(&policy_ident, Eq, policy.seq));
+                        txn.if_then.push(txn_put_pb(
+                            &RowAccessPolicyTableIdIdent::new_generic(
+                                req.tenant(),
+                                RowAccessPolicyIdTableId {
+                                    policy_id,
+                                    table_id,
+                                },
+                            ),
+                            &RowAccessPolicyTableId,
+                        ));
+                    }
+                }
+
                 if let Some(ref mv) = req.materialized_view {
                     let def_ident = MVDefinitionIdent::new(req.tenant(), table_id);
                     txn.if_then.push(txn_put_pb(&def_ident, &mv.definition));
@@ -589,6 +810,42 @@ where
                     ));
                 }
 
+                for table_field in req.table_meta.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
+                    };
+
+                    let storage_value = if let Some(clone) = &req.clone {
+                        let source_key =
+                            AutoIncrementKey::new(clone.source_table_id, table_field.column_id());
+                        let source_ident =
+                            AutoIncrementStorageIdent::new_generic(req.tenant(), source_key);
+                        let source_value = self.get_pb(&source_ident).await?;
+                        let (source_seq, source_value) = match source_value {
+                            Some(value) => (value.seq, value.data),
+                            None => (
+                                0,
+                                ValueId::<AutoIncrementStorageValue>::new(
+                                    auto_increment_expr.start,
+                                ),
+                            ),
+                        };
+                        // Auto-increment counters are table-ID-scoped and advance independently of
+                        // TableMeta. CAS the source counter so the clone captures one coherent
+                        // counter value, then install an independent target counter below.
+                        txn.condition
+                            .push(txn_cond_seq(&source_ident, Eq, source_seq));
+                        source_value
+                    } else {
+                        ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start)
+                    };
+
+                    let target_key = AutoIncrementKey::new(table_id, table_field.column_id());
+                    let target_ident =
+                        AutoIncrementStorageIdent::new_generic(req.tenant(), target_key);
+                    txn.if_then.push(txn_put_pb(&target_ident, &storage_value));
+                }
+
                 if req.as_dropped {
                     // To create the table in a "dropped" state,
                     // - we intentionally omit the tuple (key_dbid_name, table_id).
@@ -602,21 +859,6 @@ where
                     // (tenant, db_id, tb_name) -> tb_id
                     txn.if_then
                         .push(txn_put_pb(&key_dbid_tbname, &TableId::new(table_id)))
-                }
-
-                for table_field in req.table_meta.schema.fields() {
-                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
-                        continue;
-                    };
-
-                    let auto_increment_key =
-                        AutoIncrementKey::new(table_id, table_field.column_id());
-                    let storage_ident =
-                        AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
-                    let storage_value =
-                        ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start);
-                    txn.if_then
-                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;
@@ -1262,9 +1504,25 @@ where
                     )
                     .map_err(|e| KVAppError::AppError(e.into()))?;
 
-                    txn_req
-                        .condition
-                        .push(txn_cond_seq(&visible_table_id, Eq, previous.seq));
+                    // Atomically retire the previous visible table while publishing the staged
+                    // replacement. Keep the name binding in place here; this transaction switches
+                    // it to the staged table below. Reusing the normal DROP builder also cleans
+                    // policy, MV, ownership and tag references consistently.
+                    construct_drop_table_txn_operations(
+                        self,
+                        req.name_ident.table_name.clone(),
+                        &req.name_ident.tenant,
+                        Some("default".to_string()),
+                        VersionedTable {
+                            id: visible_table_id,
+                            meta: previous,
+                        },
+                        db_id,
+                        false,
+                        false,
+                        &mut txn_req,
+                    )
+                    .await?;
                 }
 
                 // undrop a table with no drop_on time
@@ -1386,6 +1644,10 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
+        // Capture every LVT condition so the transaction's else branch can return the exact LVT
+        // value that caused a CAS failure. This avoids a second-read race while diagnosing whether
+        // the base snapshot expired during metadata publication.
+        let mut lvt_guards = Vec::new();
         // If a request repeats a table ID, use the final update to decide whether its MV bindings
         // are invalidated, matching the transaction's final put for that table.
         let mut invalidates_mv_source_bindings_by_table_id = HashMap::new();
@@ -1410,7 +1672,7 @@ where
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
 
-            // Add LVT check if provided
+            // Add a per-table LVT check if provided.
             if let Some(check) = req.lvt_check.as_ref() {
                 let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
                 let res = self.get_pb(&lvt_ident).await?;
@@ -1431,8 +1693,11 @@ where
                         )));
                     }
                 }
-                // no other one has updated LVT since we read it
+                // No other operation may advance this table's LVT before the metadata update
+                // commits. Record the observed value so the transaction failure branch can
+                // distinguish an LVT race from unrelated failed conditions.
                 txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
+                lvt_guards.push((req.table_id, lvt_ident, seq, check.time));
             }
 
             txn.if_then.push(txn_put_pb(&tbid, &new_table_meta));
@@ -1569,6 +1834,14 @@ where
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
 
+        // Keep these after the table metadata gets: failure parsing relies on the first N
+        // responses matching `update_table_metas`, followed by one response per LVT guard.
+        for (_, lvt_ident, _, _) in &lvt_guards {
+            txn.else_then.push(TxnOp {
+                request: Some(Request::Get(TxnGetRequest::new(lvt_ident.to_string_key()))),
+            });
+        }
+
         let txn_response = txn_sender.send_txn(self, txn).await?;
 
         let else_branch_op_responses = match txn_response {
@@ -1585,9 +1858,12 @@ where
             IdempotentKVTxnResponse::Failed(op_responses) => op_responses,
         };
 
+        let table_response_count = update_table_metas.len();
         let mut mismatched_tbs = vec![];
+        let mut current_table_metas = HashMap::new();
         for (resp, req) in else_branch_op_responses
             .iter()
+            .take(table_response_count)
             .zip(update_table_metas.iter())
         {
             let Some(Response::Get(get_resp)) = &resp.response else {
@@ -1596,7 +1872,7 @@ where
                     resp.response
                 )
             };
-            // deserialize table version info
+            // Deserialize the table state returned atomically by the failed transaction.
             let (tb_meta_seq, table_meta): (_, TableMeta) = if let Some(seq_v) = &get_resp.value {
                 (seq_v.seq, deserialize_struct(&seq_v.data)?)
             } else {
@@ -1605,30 +1881,84 @@ where
                 )));
             };
 
-            // check table version
+            current_table_metas.insert(req.0.table_id, (tb_meta_seq, table_meta.clone()));
             if req.0.seq.match_seq(&tb_meta_seq).is_err() {
                 mismatched_tbs.push((req.0.table_id, tb_meta_seq, table_meta));
             }
         }
 
+        // A table-version conflict already forces the caller to rebuild its snapshot. Only
+        // diagnose LVT conditions when table versions are stable, so a concurrent safe commit is
+        // not incorrectly reported as an expired snapshot.
         if mismatched_tbs.is_empty() {
-            if !insert_if_not_exists_table_ids.is_empty() {
-                // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files
-                Err(KVAppError::AppError(AppError::from(
-                    DuplicatedUpsertFiles::new(
-                        insert_if_not_exists_table_ids,
-                        "update_multi_table_meta",
-                    ),
-                )))
-            } else {
-                // if all table version does match, but tx failed, we don't know why, just return error
-                Err(KVAppError::AppError(AppError::from(
-                    MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
-                )))
+            for (resp, (table_id, _, observed_seq, check_time)) in else_branch_op_responses
+                .iter()
+                .skip(table_response_count)
+                .zip(lvt_guards.iter())
+            {
+                let Some(Response::Get(get_resp)) = &resp.response else {
+                    unreachable!(
+                        "internal error: expect LVT TxnGetResponseGet, but got {:?}",
+                        resp.response
+                    )
+                };
+                let (current_seq, current_lvt) = if let Some(seq_v) = &get_resp.value {
+                    (
+                        seq_v.seq,
+                        Some(deserialize_struct::<LeastVisibleTime>(&seq_v.data)?),
+                    )
+                } else {
+                    (0, None)
+                };
+                match classify_lvt_guard_failure(
+                    *observed_seq,
+                    current_seq,
+                    current_lvt,
+                    *check_time,
+                ) {
+                    LvtGuardFailure::Unchanged => continue,
+                    LvtGuardFailure::Expired(current_lvt) => {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                *table_id,
+                                format!(
+                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                    check_time, current_lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                    LvtGuardFailure::Retryable => {}
+                }
+
+                let (table_seq, table_meta) =
+                    current_table_metas.get(table_id).ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            *table_id,
+                            "update_multi_table_meta LVT retry",
+                        )))
+                    })?;
+                mismatched_tbs.push((*table_id, *table_seq, table_meta.clone()));
             }
+        }
+
+        if !mismatched_tbs.is_empty() {
+            // The upper layer rebuilds snapshots against the returned current table state.
+            return Ok(Err(mismatched_tbs));
+        }
+        if !insert_if_not_exists_table_ids.is_empty() {
+            // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files.
+            Err(KVAppError::AppError(AppError::from(
+                DuplicatedUpsertFiles::new(
+                    insert_if_not_exists_table_ids,
+                    "update_multi_table_meta",
+                ),
+            )))
         } else {
-            // up layer will retry
-            Ok(Err(mismatched_tbs))
+            // All known table and LVT conditions still match; another transaction condition failed.
+            Err(KVAppError::AppError(AppError::from(
+                MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+            )))
         }
     }
 
@@ -2172,6 +2502,64 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>, KVAppError> {
+        Ok(self
+            .get_pb_vec(table_ids.iter().copied().map(TableId::new))
+            .await?
+            .into_iter()
+            .map(|(ident, meta)| (ident.table_id, meta))
+            .collect())
+    }
+
+    /// Atomically and monotonically advance LVTs, retrying LVT conflicts only.
+    /// This does not validate TableMeta or GC mark sets; callers own mark-to-sweep coordination.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn set_table_lvts(
+        &self,
+        tenant: &Tenant,
+        table_lvts: &HashMap<u64, LeastVisibleTime>,
+    ) -> Result<(), KVAppError> {
+        debug!(req :? =(&tenant, table_lvts); "TableApi: {}", func_name!());
+        if table_lvts.is_empty() {
+            return Ok(());
+        }
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+            let current_lvts = self
+                .get_pb_vec(
+                    table_lvts
+                        .keys()
+                        .map(|table_id| LeastVisibleTimeIdent::new(tenant, *table_id)),
+                )
+                .await?;
+
+            let mut txn = TxnRequest::default();
+            for (ident, current) in current_lvts {
+                let lvt = &table_lvts[&ident.table_id()];
+                let (seq, current_time) = current
+                    .map(|v| (v.seq, Some(v.data.time)))
+                    .unwrap_or((0, None));
+                txn.condition.push(txn_cond_seq(&ident, Eq, seq));
+                if current_time.is_none_or(|time| time < lvt.time) {
+                    txn.if_then.push(txn_put_pb(&ident, lvt));
+                }
+            }
+
+            let (success, _) = send_txn(self, txn).await?;
+            if success {
+                return Ok(());
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
     async fn set_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
@@ -2211,4 +2599,33 @@ where
     KV: Send + Sync,
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
 {
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::DateTime;
+
+    use super::LeastVisibleTime;
+    use super::LvtGuardFailure;
+    use super::classify_lvt_guard_failure;
+
+    #[test]
+    fn test_classify_lvt_guard_failure() {
+        let check_time = DateTime::from_timestamp(1_000, 0).unwrap();
+        let older_lvt = LeastVisibleTime::new(DateTime::from_timestamp(900, 0).unwrap());
+        let newer_lvt = LeastVisibleTime::new(DateTime::from_timestamp(1_100, 0).unwrap());
+
+        assert_eq!(
+            classify_lvt_guard_failure(7, 7, Some(newer_lvt.clone()), check_time),
+            LvtGuardFailure::Unchanged
+        );
+        assert_eq!(
+            classify_lvt_guard_failure(7, 8, Some(older_lvt), check_time),
+            LvtGuardFailure::Retryable
+        );
+        assert_eq!(
+            classify_lvt_guard_failure(7, 8, Some(newer_lvt.clone()), check_time),
+            LvtGuardFailure::Expired(newer_lvt)
+        );
+    }
 }

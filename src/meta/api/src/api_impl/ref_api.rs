@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdTagName;
 use databend_common_meta_app::schema::TableLvtCheck;
@@ -145,7 +146,7 @@ where
                 txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
                 // Tag must not already exist.
                 txn_cond_seq(&key_tag, Eq, 0),
-                // Check table lvt.
+                // Check this table's LVT.
                 build_lvt_condition(self, table_id, &req.lvt_check).await?,
             ];
 
@@ -155,6 +156,21 @@ where
                 return Ok(());
             }
         }
+    }
+
+    /// List lightweight direct-source bindings in a zero-copy clone group.
+    #[fastrace::trace]
+    async fn list_clone_group_bindings(
+        &self,
+        clone_group_id: u64,
+    ) -> Result<Vec<(u64, u64)>, KVAppError> {
+        let prefix = DirName::new(TableCloneByGroupIdent::new(clone_group_id, 0));
+        Ok(self
+            .list_pb_vec(ListOptions::unlimited(&prefix))
+            .await?
+            .into_iter()
+            .map(|(ident, binding)| (ident.clone_table_id, binding.data.source_table_id))
+            .collect())
     }
 
     /// Drop a table tag.

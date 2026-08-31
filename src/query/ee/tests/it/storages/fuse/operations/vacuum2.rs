@@ -22,13 +22,19 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::CreateTableTagReq;
+use databend_common_meta_app::schema::DropTableTagReq;
+use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_meta_client::types::MatchSeq;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
+use databend_query::test_kits::query_count;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use futures::TryStreamExt;
@@ -126,6 +132,197 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
     check_files_left(&ctx, storage_root, "db1", "t1").await?;
     check_files_left(&ctx, storage_root, "default", "t1").await?;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_preserves_clone_only_data() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let database = fixture.default_db_name();
+    let source_name = fixture.default_table_name();
+    let clone_name = format!("{}_vacuum_clone", source_name);
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!("CREATE TABLE {database}.{source_name} (c INT)"))
+        .await?;
+    fixture
+        .execute_command(&format!("INSERT INTO {database}.{source_name} VALUES (1)"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {database}.{clone_name} CLONE {database}.{source_name}"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let clone = catalog.get_table(&tenant, &database, &clone_name).await?;
+    let clone_id = clone.get_id();
+    let clone_snapshot = FuseTable::try_from_table(clone.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .expect("clone must have an anchor snapshot");
+    let clone_timestamp = clone_snapshot.timestamp.unwrap();
+    let clone_segments = clone_snapshot.segments.clone();
+    assert!(!clone_segments.is_empty());
+
+    // Make the source head disjoint from the cloned snapshot. The old source data is now
+    // reachable only through clone metadata.
+    fixture
+        .execute_command(&format!("TRUNCATE TABLE {database}.{source_name}"))
+        .await?;
+    fixture
+        .execute_command(&format!("INSERT INTO {database}.{source_name} VALUES (2)"))
+        .await?;
+    let source = catalog.get_table(&tenant, &database, &source_name).await?;
+    let source_segments = FuseTable::try_from_table(source.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .expect("source must have a post-truncate snapshot")
+        .segments
+        .clone();
+    assert!(
+        source_segments
+            .iter()
+            .all(|segment| !clone_segments.contains(segment)),
+        "source head must not retain clone-only segments"
+    );
+
+    fixture
+        .execute_command(&format!("VACUUM TABLE {database}.{source_name}"))
+        .await?;
+
+    let source_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, source.get_id()))
+        .await?
+        .expect("source LVT must be published");
+    let clone_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, clone_id))
+        .await?
+        .expect("clone LVT must be published");
+    assert!(source_lvt.time > clone_lvt.time);
+    assert_eq!(clone_lvt.time, clone_timestamp);
+
+    // Reading the clone exercises both its protected segment and block files.
+    assert_eq!(
+        query_count(
+            fixture
+                .execute_query(&format!(
+                    "SELECT count() FROM {database}.{clone_name} WHERE c = 1"
+                ))
+                .await?
+        )
+        .await?,
+        1
+    );
+
+    fixture
+        .execute_command(&format!("INSERT INTO {database}.{clone_name} VALUES (3)"))
+        .await?;
+    fixture
+        .execute_command(&format!("INSERT INTO {database}.{source_name} VALUES (4)"))
+        .await?;
+    fixture
+        .execute_command(&format!("VACUUM TABLE {database}.{source_name}"))
+        .await?;
+    let advanced_clone_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, clone_id))
+        .await?
+        .expect("clone LVT must remain published");
+    assert!(advanced_clone_lvt.time > clone_lvt.time);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_tag_scan_after_lvt_publication() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let database = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {database}.tag_source(c INT)"),
+        format!("INSERT INTO {database}.tag_source VALUES (1)"),
+        format!("CREATE TABLE {database}.tag_clone CLONE {database}.tag_source"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let cloned = catalog.get_table(&tenant, &database, "tag_clone").await?;
+    let cloned = FuseTable::try_from_table(cloned.as_ref())?;
+    let tag_location = cloned.snapshot_loc().unwrap();
+    let tag_snapshot = cloned.read_table_snapshot().await?.unwrap();
+    fixture
+        .execute_command(&format!("TRUNCATE TABLE {database}.tag_clone"))
+        .await?;
+
+    let source = catalog.get_table(&tenant, &database, "tag_source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let mut segments = HashSet::new();
+    let (descendants, lvts) = source
+        .extend_clone_descendant_referenced_segments(ctx.clone(), &mut segments, |_| {})
+        .await?;
+    assert!(
+        segments.is_empty(),
+        "the descendant head no longer references the data"
+    );
+
+    // Deterministically publish a historical tag between root mark and LVT publication.
+    let cloned = catalog.get_table(&tenant, &database, "tag_clone").await?;
+    catalog
+        .create_table_tag(CreateTableTagReq {
+            table_id: cloned.get_id(),
+            seq: MatchSeq::Exact(cloned.get_table_info().ident.seq),
+            tag_name: "late_tag".to_string(),
+            snapshot_loc: tag_location,
+            expire_at: None,
+            lvt_check: TableLvtCheck {
+                tenant: tenant.clone(),
+                time: tag_snapshot.timestamp.unwrap(),
+            },
+        })
+        .await?;
+    catalog.set_table_lvts(&tenant, &lvts).await?;
+    assert!(lvts[&cloned.get_id()].time > tag_snapshot.timestamp.unwrap());
+    source
+        .extend_clone_descendant_tag_segments(ctx.clone(), &descendants, &mut segments)
+        .await?;
+    assert_eq!(
+        segments,
+        tag_snapshot
+            .segments
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>()
+    );
+
+    // A removed tag need not keep its old objects protected for another GC round.
+    catalog
+        .drop_table_tag(DropTableTagReq {
+            table_id: cloned.get_id(),
+            tag_name: "late_tag".to_string(),
+            seq: None,
+        })
+        .await?;
+    segments.clear();
+    source
+        .extend_clone_descendant_tag_segments(ctx.clone(), &descendants, &mut segments)
+        .await?;
+    assert!(
+        segments.is_empty(),
+        "a dropped tag no longer contributes protection"
+    );
     Ok(())
 }
 

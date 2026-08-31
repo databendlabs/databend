@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use itertools::Itertools;
 
@@ -145,26 +146,25 @@ impl Binder {
         let (column_ids, index_options, meta_index_type) = match index_type {
             AstTableIndexType::Inverted => {
                 let column_ids =
-                    self.validate_inverted_index_columns(table_schema.clone(), columns)?;
-                let index_options = self.validate_inverted_index_options(index_options)?;
+                    Self::validate_inverted_index_columns(table_schema.clone(), columns)?;
+                let index_options = Self::validate_inverted_index_options(index_options)?;
                 (column_ids, index_options, TableIndexType::Inverted)
             }
             AstTableIndexType::Ngram => {
-                let column_ids =
-                    self.validate_ngram_index_columns(table_schema.clone(), columns)?;
-                let index_options = self.validate_ngram_index_options(index_options)?;
+                let column_ids = Self::validate_ngram_index_columns(table_schema.clone(), columns)?;
+                let index_options = Self::validate_ngram_index_options(index_options)?;
                 (column_ids, index_options, TableIndexType::Ngram)
             }
             AstTableIndexType::Vector => {
                 let column_ids =
-                    self.validate_vector_index_columns(table_schema.clone(), columns)?;
-                let index_options = self.validate_vector_index_options(index_options)?;
+                    Self::validate_vector_index_columns(table_schema.clone(), columns)?;
+                let index_options = Self::validate_vector_index_options(index_options)?;
                 (column_ids, index_options, TableIndexType::Vector)
             }
             AstTableIndexType::Spatial => {
                 let column_ids =
-                    self.validate_spatial_index_columns(table_schema.clone(), columns)?;
-                let index_options = self.validate_spatial_index_options(index_options)?;
+                    Self::validate_spatial_index_columns(table_schema.clone(), columns)?;
+                let index_options = Self::validate_spatial_index_options(index_options)?;
                 (column_ids, index_options, TableIndexType::Spatial)
             }
         };
@@ -225,7 +225,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_ngram_index_columns(
-        &self,
         table_schema: TableSchemaRef,
         columns: &[Identifier],
     ) -> Result<Vec<ColumnId>> {
@@ -259,7 +258,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_ngram_index_options(
-        &self,
         index_options: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>> {
         let mut options = BTreeMap::new();
@@ -346,7 +344,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_inverted_index_columns(
-        &self,
         table_schema: TableSchemaRef,
         columns: &[Identifier],
     ) -> Result<Vec<ColumnId>> {
@@ -382,7 +379,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_inverted_index_options(
-        &self,
         index_options: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>> {
         let mut options = BTreeMap::new();
@@ -413,13 +409,18 @@ impl Binder {
                     options.insert("filters".to_string(), filters.join(",").to_string());
                 }
                 "index_record" => {
-                    if !is_valid_index_record_values(&value) {
+                    // Persisted index metadata stores this option as a JSON string. Accept both
+                    // the CREATE INDEX input and that normalized representation so validation is
+                    // idempotent when metadata is projected onto another schema.
+                    let index_record =
+                        serde_json::from_str::<String>(&value).unwrap_or_else(|_| value.clone());
+                    if !is_valid_index_record_values(&index_record) {
                         return Err(ErrorCode::IndexOptionInvalid(format!(
                             "value `{value}` is invalid index record option",
                         )));
                     }
-                    // convert to a JSON string, for `IndexRecordOption` deserialize
-                    let index_record_val = format!("\"{}\"", value);
+                    // Convert to a JSON string for `IndexRecordOption` deserialization.
+                    let index_record_val = serde_json::to_string(&index_record)?;
                     options.insert("index_record".to_string(), index_record_val);
                 }
                 _ => {
@@ -433,7 +434,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_vector_index_columns(
-        &self,
         table_schema: TableSchemaRef,
         columns: &[Identifier],
     ) -> Result<Vec<ColumnId>> {
@@ -467,7 +467,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_vector_index_options(
-        &self,
         index_options: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>> {
         let mut options = BTreeMap::new();
@@ -541,7 +540,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_spatial_index_columns(
-        &self,
         table_schema: TableSchemaRef,
         columns: &[Identifier],
     ) -> Result<Vec<ColumnId>> {
@@ -575,7 +573,6 @@ impl Binder {
     }
 
     pub(in crate::planner::binder) fn validate_spatial_index_options(
-        &self,
         _index_options: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>> {
         let options = BTreeMap::new();
@@ -652,4 +649,57 @@ impl Binder {
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
+}
+
+/// Validate persisted table-index definitions against a projected schema using the same rules as
+/// CREATE INDEX. This checks column existence, column types, duplicate columns, and index options.
+pub fn validate_table_indexes_by_schema(
+    indexes: &BTreeMap<String, TableIndex>,
+    schema: TableSchemaRef,
+) -> Result<()> {
+    for index in indexes.values() {
+        let columns = index
+            .column_ids
+            .iter()
+            .map(|column_id| {
+                schema
+                    .field_of_column_id(*column_id)
+                    .map(|field| Identifier::from_name(None, field.name()))
+                    .map_err(|_| {
+                        ErrorCode::UnsupportedIndex(format!(
+                            "Index '{}' references column ID {} that does not exist in the target schema",
+                            index.name, column_id
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let result = match index.index_type {
+            TableIndexType::Inverted => {
+                Binder::validate_inverted_index_columns(schema.clone(), &columns)?;
+                Binder::validate_inverted_index_options(&index.options).map(|_| ())
+            }
+            TableIndexType::Ngram => {
+                Binder::validate_ngram_index_columns(schema.clone(), &columns)?;
+                Binder::validate_ngram_index_options(&index.options).map(|_| ())
+            }
+            TableIndexType::Vector => {
+                Binder::validate_vector_index_columns(schema.clone(), &columns)?;
+                Binder::validate_vector_index_options(&index.options).map(|_| ())
+            }
+            TableIndexType::Spatial => {
+                Binder::validate_spatial_index_columns(schema.clone(), &columns)?;
+                Binder::validate_spatial_index_options(&index.options).map(|_| ())
+            }
+        };
+
+        result.map_err(|err| {
+            ErrorCode::UnsupportedIndex(format!(
+                "Index '{}' is incompatible with the target schema: {}",
+                index.name,
+                err.message()
+            ))
+        })?;
+    }
+    Ok(())
 }

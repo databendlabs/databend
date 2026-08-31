@@ -161,6 +161,7 @@ impl StreamHandler for RealStreamHandler {
             },
             source_table_option,
             as_dropped: false,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,

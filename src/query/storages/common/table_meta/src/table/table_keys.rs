@@ -21,6 +21,7 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 
 use crate::meta::ColumnCountMinSketch;
@@ -127,6 +128,7 @@ pub fn is_fuse_backed_engine(engine: &str) -> bool {
 pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
@@ -141,6 +143,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
 /// Table option keys that Should not be shown in `show create table` statement
 pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
+    r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_ENGINE_META);
@@ -242,10 +245,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_cluster_type_is_reserved_and_internal() {
+    fn test_reserved_and_internal_option_keys() {
         assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key("CLUSTER_TYPE"));
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+        assert!(is_reserved_opt_key(OPT_KEY_CLONE_GROUP_ID));
+        assert!(is_internal_opt_key(OPT_KEY_CLONE_GROUP_ID));
     }
 
     #[test]

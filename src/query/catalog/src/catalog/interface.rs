@@ -210,6 +210,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
+    /// Batch get table metadata by table IDs. Missing tables remain `None` in the result.
+    async fn mget_table_metas_by_ids(
+        &self,
+        _table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        Err(ErrorCode::Unimplemented(
+            "'mget_table_metas_by_ids' not implemented",
+        ))
+    }
+
+    /// List lightweight direct-source bindings in a zero-copy clone group.
+    async fn list_clone_group_bindings(&self, _clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        Err(ErrorCode::Unimplemented(
+            "'list_clone_group_bindings' not implemented",
+        ))
+    }
+
     /// Get a materialized-view definition by its table ID.
     async fn get_mv_definition(
         &self,
@@ -708,6 +725,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>>;
+
+    async fn set_table_lvts(
+        &self,
+        _tenant: &Tenant,
+        _table_lvts: &std::collections::HashMap<u64, LeastVisibleTime>,
+    ) -> Result<()> {
+        unimplemented!()
+    }
 
     async fn set_table_lvt(
         &self,

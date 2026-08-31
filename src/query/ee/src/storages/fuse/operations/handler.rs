@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -27,7 +28,7 @@ use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use crate::storages::fuse::do_vacuum;
 use crate::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use crate::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
-use crate::storages::fuse::vacuum_drop_tables;
+use crate::storages::fuse::vacuum_drop_tables_with_safe_clone_tables;
 pub struct RealVacuumHandler {}
 
 #[async_trait::async_trait]
@@ -55,8 +56,15 @@ impl VacuumHandler for RealVacuumHandler {
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
+        safe_clone_table_ids: HashSet<u64>,
     ) -> VacuumDropTablesResult {
-        vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
+        vacuum_drop_tables_with_safe_clone_tables(
+            threads_nums,
+            tables,
+            dry_run_limit,
+            safe_clone_table_ids,
+        )
+        .await
     }
 
     async fn do_vacuum_temporary_files(

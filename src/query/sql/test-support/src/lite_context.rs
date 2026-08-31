@@ -1385,6 +1385,11 @@ impl LiteTableContext {
                             "lite sql harness DDL registration from CREATE TABLE LIKE",
                         );
                     }
+                    Some(CreateTableSource::Clone { .. }) => {
+                        return unsupported(
+                            "lite sql harness DDL registration from CREATE TABLE CLONE",
+                        );
+                    }
                     None => {
                         let lowered = sql.to_ascii_lowercase();
                         if lowered.contains(" from numbers(") {
