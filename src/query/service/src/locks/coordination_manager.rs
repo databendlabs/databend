@@ -50,23 +50,13 @@ use crate::locks::table_lock::TableLock;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-struct TableLockUnlocker {
+struct ChannelUnlocker {
     tx: mpsc::UnboundedSender<u64>,
 }
 
-impl UnlockApi for TableLockUnlocker {
-    fn unlock(&self, revision: u64) {
-        let _ = self.tx.send(revision);
-    }
-}
-
-struct SegmentClaimUnlocker {
-    tx: mpsc::UnboundedSender<u64>,
-}
-
-impl UnlockApi for SegmentClaimUnlocker {
-    fn unlock(&self, claim_id: u64) {
-        let _ = self.tx.send(claim_id);
+impl UnlockApi for ChannelUnlocker {
+    fn unlock(&self, id: u64) {
+        let _ = self.tx.send(id);
     }
 }
 
@@ -91,8 +81,8 @@ impl CoordinationManager {
         let manager = Arc::new(Self {
             active_locks: active_locks.clone(),
             active_segment_claims: active_segment_claims.clone(),
-            table_lock_unlocker: Arc::new(TableLockUnlocker { tx: table_lock_tx }),
-            segment_claim_unlocker: Arc::new(SegmentClaimUnlocker { tx: claim_tx }),
+            table_lock_unlocker: Arc::new(ChannelUnlocker { tx: table_lock_tx }),
+            segment_claim_unlocker: Arc::new(ChannelUnlocker { tx: claim_tx }),
         });
 
         GlobalIORuntime::instance().spawn(async move {
@@ -144,13 +134,12 @@ impl CoordinationManager {
     }
 
     pub async fn try_segment_claim(
-        self: &Arc<Self>,
+        &self,
         ctx: Arc<QueryContext>,
         table_id: u64,
         segment_locations: Vec<String>,
     ) -> Result<Option<Arc<LockGuard>>> {
         let tenant = ctx.get_tenant();
-        let query_id = ctx.get_id();
         // A zero TTL cannot be renewed safely and would make the random renewal range empty.
         let ttl = Duration::from_secs(ctx.get_settings().get_table_lock_expire_secs()?.max(3));
         let reply = UserApiProvider::instance()
@@ -161,7 +150,7 @@ impl CoordinationManager {
                 ttl,
                 user: ctx.get_current_user()?.name,
                 node: ctx.get_cluster().local_id.clone(),
-                query_id: query_id.clone(),
+                query_id: ctx.get_id(),
                 segment_locations,
             })
             .await?;
@@ -239,33 +228,5 @@ impl CoordinationManager {
                 Err(error)
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use databend_common_pipeline::core::UnlockApi;
-    use tokio::sync::mpsc;
-
-    use super::SegmentClaimUnlocker;
-    use super::TableLockUnlocker;
-
-    #[test]
-    fn test_same_id_routes_to_separate_release_channels() {
-        let (table_lock_tx, mut table_lock_rx) = mpsc::unbounded_channel();
-        let (claim_tx, mut claim_rx) = mpsc::unbounded_channel();
-        let table_lock_unlocker: Arc<dyn UnlockApi> =
-            Arc::new(TableLockUnlocker { tx: table_lock_tx });
-        let claim_unlocker: Arc<dyn UnlockApi> = Arc::new(SegmentClaimUnlocker { tx: claim_tx });
-
-        table_lock_unlocker.unlock(42);
-        claim_unlocker.unlock(42);
-
-        assert_eq!(table_lock_rx.try_recv(), Ok(42));
-        assert_eq!(claim_rx.try_recv(), Ok(42));
-        assert!(table_lock_rx.try_recv().is_err());
-        assert!(claim_rx.try_recv().is_err());
     }
 }

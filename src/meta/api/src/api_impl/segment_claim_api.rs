@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TableLockExpired;
@@ -32,7 +30,6 @@ use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
-use futures::TryStreamExt;
 
 use crate::error_util::invalid_reply;
 use crate::kv_app_error::KVAppError;
@@ -52,17 +49,16 @@ where
         req: ListSegmentClaimsReq,
     ) -> Result<Vec<(u64, SegmentClaimMeta)>, KVAppError> {
         let dir = DirName::new(SegmentClaimIdent::new(req.tenant, req.table_id, 0));
-        let mut stream = self.list_pb(ListOptions::unlimited(&dir)).await?;
-        let mut claims = Vec::new();
-
-        while let Some(item) = stream.try_next().await? {
-            claims.push((
-                item.key
-                    .try_claim_id()
-                    .map_err(|error| invalid_reply(format!("invalid segment claim ID: {error}")))?,
-                item.seqv.data,
-            ));
-        }
+        let mut claims = self
+            .list_pb_vec(ListOptions::unlimited(&dir))
+            .await?
+            .into_iter()
+            .map(|(key, seqv)| {
+                key.try_claim_id()
+                    .map(|claim_id| (claim_id, seqv.data))
+                    .map_err(|error| invalid_reply(format!("invalid segment claim ID: {error}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         claims.sort_unstable_by_key(|(claim_id, _)| *claim_id);
         Ok(claims)
     }
@@ -108,14 +104,16 @@ where
                 table_id: req.table_id,
             })
             .await?;
-        let requested = meta.segment_locations.iter().collect::<BTreeSet<_>>();
-        let conflicts = claims.iter().any(|(other_claim_id, other)| {
-            *other_claim_id < claim_id
-                && other
+        let requested = &meta.segment_locations;
+        let conflicts = claims
+            .iter()
+            .take_while(|(other_claim_id, _)| *other_claim_id < claim_id)
+            .any(|(_, other)| {
+                other
                     .segment_locations
                     .iter()
-                    .any(|location| requested.contains(location))
-        });
+                    .any(|location| requested.binary_search(location).is_ok())
+            });
         if conflicts {
             self.delete_segment_claim(DeleteSegmentClaimReq {
                 tenant: req.tenant,
@@ -238,7 +236,7 @@ mod tests {
             .await?
             .claim_id
             .expect("first disjoint claim should succeed");
-        let second = store
+        store
             .create_segment_claim(create_req("q2", vec!["s2"]))
             .await?
             .claim_id
@@ -263,14 +261,6 @@ mod tests {
             .create_segment_claim(create_req("q3", vec!["s1"]))
             .await?;
         assert!(replacement.claim_id.is_some());
-
-        store
-            .delete_segment_claim(DeleteSegmentClaimReq {
-                tenant: testing::tenant("tenant1"),
-                table_id: TABLE_ID,
-                claim_id: second,
-            })
-            .await?;
         Ok(())
     }
 

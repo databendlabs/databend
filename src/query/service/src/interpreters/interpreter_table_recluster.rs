@@ -29,7 +29,6 @@ use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_segment_claim_conflicts;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
@@ -47,8 +46,6 @@ use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use log::debug;
 use log::error;
@@ -84,18 +81,6 @@ pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterPlan,
     lock_opt: LockTableOption,
-}
-
-fn recluster_coordination(
-    enable_table_lock: bool,
-    lock_opt: &LockTableOption,
-    target: &MaintenanceTarget,
-) -> (bool, bool) {
-    let use_segment_claims = enable_table_lock && *lock_opt != LockTableOption::NoLock;
-    // MV refresh owns a dedicated lifecycle lock, while MV maintenance intentionally stays
-    // outside the generic table-lock protocol. Segment claims still prevent overlapping rewrites.
-    let acquire_commit_lock = use_segment_claims && matches!(target, MaintenanceTarget::Table);
-    (use_segment_claims, acquire_commit_lock)
 }
 
 impl ReclusterTableInterpreter {
@@ -280,11 +265,12 @@ impl ReclusterTableInterpreter {
             limit,
             ..
         } = &self.plan;
-        let (use_segment_claims, acquire_commit_lock) = recluster_coordination(
-            settings.get_enable_table_lock()?,
-            &self.lock_opt,
-            &self.plan.target,
-        );
+        let use_segment_claims =
+            settings.get_enable_table_lock()? && self.lock_opt != LockTableOption::NoLock;
+        // MV refresh owns a dedicated lifecycle lock, while MV maintenance intentionally stays
+        // outside the generic table-lock protocol. Segment claims still prevent overlapping rewrites.
+        let acquire_commit_lock =
+            use_segment_claims && matches!(self.plan.target, MaintenanceTarget::Table);
         let outer_lock_guard = if use_segment_claims {
             None
         } else {
@@ -300,24 +286,23 @@ impl ReclusterTableInterpreter {
             self.ctx.evict_table_from_cache(catalog, database, table)?;
         }
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
-        check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
-        if tbl.cluster_key_meta().is_none() {
-            return Err(ErrorCode::UnclusteredTable(format!(
-                "Unclustered table '{}.{}'",
-                database, table,
-            )));
-        }
-
-        if FuseTable::try_from_table(tbl.as_ref())?.cluster_type() == Some(ClusterType::Hilbert) {
-            return Err(ErrorCode::Unimplemented(
-                "Hilbert reclustering is not supported yet",
-            ));
-        }
-
-        self.build_push_downs(push_downs, &tbl)?;
-
         let claim_manager = use_segment_claims.then(CoordinationManager::instance);
         let (mut physical_plan, claim_guard) = loop {
+            check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
+            if tbl.cluster_key_meta().is_none() {
+                return Err(ErrorCode::UnclusteredTable(format!(
+                    "Unclustered table '{}.{}'",
+                    database, table,
+                )));
+            }
+            if FuseTable::try_from_table(tbl.as_ref())?.cluster_type() == Some(ClusterType::Hilbert)
+            {
+                return Err(ErrorCode::Unimplemented(
+                    "Hilbert reclustering is not supported yet",
+                ));
+            }
+            self.build_push_downs(push_downs, &tbl)?;
+
             let claimed_segments = if let Some(claim_manager) = &claim_manager {
                 claim_manager
                     .claimed_segments(self.ctx.as_ref(), tbl.get_id())
@@ -338,13 +323,11 @@ impl ReclusterTableInterpreter {
             let Some((physical_plan, segments)) = plan else {
                 return Ok(true);
             };
-            if !use_segment_claims {
+            let Some(claim_manager) = &claim_manager else {
                 break (physical_plan, None);
-            }
+            };
 
             let claim = claim_manager
-                .as_ref()
-                .expect("concurrent recluster must have a claim manager")
                 .try_segment_claim(self.ctx.clone(), tbl.get_id(), segments)
                 .await?;
             if claim.is_some() {
@@ -358,19 +341,6 @@ impl ReclusterTableInterpreter {
             *linear_final_carry = ReclusterFinalCarry::default();
             self.ctx.evict_table_from_cache(catalog, database, table)?;
             tbl = self.ctx.get_table(catalog, database, table).await?;
-            check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
-            if tbl.cluster_key_meta().is_none() {
-                return Err(ErrorCode::UnclusteredTable(format!(
-                    "Unclustered table '{}.{}'",
-                    database, table,
-                )));
-            }
-            if FuseTable::try_from_table(tbl.as_ref())?.cluster_type() == Some(ClusterType::Hilbert)
-            {
-                return Err(ErrorCode::Unimplemented(
-                    "Hilbert reclustering is not supported yet",
-                ));
-            }
         };
         physical_plan.adjust_plan_id(&mut 0);
         let mut build_res =
@@ -472,13 +442,13 @@ impl ReclusterTableInterpreter {
             .get_table_meta_timestamps(tbl, Some(snapshot.clone()))?;
 
         let table_info = tbl.get_table_info().clone();
-        let is_distributed = parts.is_distributed(self.ctx.clone());
         let ReclusterParts {
             tasks,
             remained_blocks,
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
+        let is_distributed = tasks.len() > 1;
         let claimed_sources = removed_segment_indexes
             .iter()
             .map(|index| {
@@ -493,28 +463,42 @@ impl ReclusterTableInterpreter {
                     })
             })
             .collect::<Result<Vec<_>>>()?;
-        let root = PhysicalPlan::new(Recluster {
+        let mut input = PhysicalPlan::new(Recluster {
             tasks,
             table_meta_timestamps,
-
             table_info: table_info.clone(),
             meta: PhysicalPlanMeta::new("Recluster"),
         });
+        if is_distributed {
+            input = PhysicalPlan::new(Exchange {
+                input,
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
+        }
 
-        let plan = Self::add_commit_sink(
-            root,
-            is_distributed,
+        let plan = PhysicalPlan::new(CommitSink {
+            input,
             table_info,
-            snapshot,
-            false,
-            Some(ReclusterInfoSideCar {
+            snapshot: Some(snapshot),
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Recluster,
+                merge_meta: false,
+            },
+            update_stream_meta: vec![],
+            deduplicated_label: None,
+            table_meta_timestamps,
+            recluster_info: Some(ReclusterInfoSideCar {
                 merged_blocks: remained_blocks,
                 removed_segment_indexes,
                 removed_statistics: removed_segment_summary,
             }),
-            table_meta_timestamps,
             acquire_commit_lock,
-        );
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        });
         Ok(Some((plan, claimed_sources)))
     }
 
@@ -556,86 +540,5 @@ impl ReclusterTableInterpreter {
             }
         }
         Ok(())
-    }
-
-    fn add_commit_sink(
-        mut input: PhysicalPlan,
-        is_distributed: bool,
-        table_info: TableInfo,
-        snapshot: Arc<TableSnapshot>,
-        merge_meta: bool,
-        recluster_info: Option<ReclusterInfoSideCar>,
-        table_meta_timestamps: TableMetaTimestamps,
-        acquire_commit_lock: bool,
-    ) -> PhysicalPlan {
-        if is_distributed {
-            input = PhysicalPlan::new(Exchange {
-                input,
-                kind: FragmentKind::Merge,
-                keys: vec![],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-                meta: PhysicalPlanMeta::new("Exchange"),
-            });
-        }
-
-        let mut kind = MutationKind::Compact;
-
-        if recluster_info.is_some() {
-            kind = MutationKind::Recluster
-        }
-
-        PhysicalPlan::new(CommitSink {
-            input,
-            table_info,
-            snapshot: Some(snapshot),
-            commit_type: CommitType::Mutation { kind, merge_meta },
-            update_stream_meta: vec![],
-            deduplicated_label: None,
-            table_meta_timestamps,
-            recluster_info,
-            acquire_commit_lock,
-            meta: PhysicalPlanMeta::new("CommitSink"),
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_catalog::lock::LockTableOption;
-    use databend_common_sql::plans::MaintenanceTarget;
-
-    use super::recluster_coordination;
-
-    #[test]
-    fn test_recluster_coordination() {
-        assert_eq!(
-            recluster_coordination(
-                true,
-                &LockTableOption::LockWithRetry,
-                &MaintenanceTarget::Table,
-            ),
-            (true, true)
-        );
-        assert_eq!(
-            recluster_coordination(
-                true,
-                &LockTableOption::LockWithRetry,
-                &MaintenanceTarget::MaterializedView { table_id: 1 },
-            ),
-            (true, false)
-        );
-        assert_eq!(
-            recluster_coordination(
-                false,
-                &LockTableOption::LockWithRetry,
-                &MaintenanceTarget::Table,
-            ),
-            (false, false)
-        );
-        assert_eq!(
-            recluster_coordination(true, &LockTableOption::NoLock, &MaintenanceTarget::Table,),
-            (false, false)
-        );
     }
 }

@@ -180,6 +180,10 @@ impl FuseTable {
                 });
                 let mut scan_locations = Vec::with_capacity(scan_range.len());
                 for (offset, location) in scan_range.iter().enumerate() {
+                    // Intentional FINAL semantics: claimed segments are treated as work delegated
+                    // to concurrent recluster tasks. This statement does not wait for claim owners;
+                    // if every remaining candidate is claimed, it may return success even if an
+                    // owner later fails. A subsequent RECLUSTER statement can pick that work up.
                     if claimed_segments.contains(location.0.as_str())
                         || carry_locations
                             .as_ref()

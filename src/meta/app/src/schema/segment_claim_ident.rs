@@ -34,32 +34,22 @@ pub const SEGMENT_CLAIM_SEQ_KEY: &str = "__fd_segment_claim_seq";
 
 impl SegmentClaimIdent {
     pub fn new(tenant: impl ToTenant, table_id: u64, claim_id: u64) -> Self {
-        Self::new_generic(tenant, SegmentClaimName {
-            table_id,
-            claim_id: format_claim_id(claim_id),
-        })
-    }
-
-    pub fn table_id(&self) -> u64 {
-        self.name().table_id
+        let claim_id = format!("{:021}", claim_id).chars().enumerate().fold(
+            String::new(),
+            |mut output, (index, character)| {
+                if index > 0 && index % 3 == 0 {
+                    output.push('_');
+                }
+                output.push(character);
+                output
+            },
+        );
+        Self::new_generic(tenant, SegmentClaimName { table_id, claim_id })
     }
 
     pub fn try_claim_id(&self) -> Result<u64, ParseIntError> {
         self.name().claim_id.replace('_', "").parse()
     }
-}
-
-fn format_claim_id(claim_id: u64) -> String {
-    format!("{:021}", claim_id).chars().enumerate().fold(
-        String::new(),
-        |mut output, (index, character)| {
-            if index > 0 && index % 3 == 0 {
-                output.push('_');
-            }
-            output.push(character);
-            output
-        },
-    )
 }
 
 mod kvapi_impl {

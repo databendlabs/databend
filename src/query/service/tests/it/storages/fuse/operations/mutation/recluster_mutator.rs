@@ -659,7 +659,6 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
         .await?
         .expect("recluster should read the later matching scan range");
 
-    assert!(!parts.is_empty());
     assert!(!parts.tasks.is_empty());
     assert!(
         parts

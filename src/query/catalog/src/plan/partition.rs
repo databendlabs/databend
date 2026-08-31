@@ -457,10 +457,6 @@ impl ReclusterParts {
     pub fn is_empty(&self) -> bool {
         self.tasks.is_empty() && self.remained_blocks.is_empty()
     }
-
-    pub fn is_distributed(&self, _ctx: Arc<dyn TableContext>) -> bool {
-        self.tasks.len() > 1
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]

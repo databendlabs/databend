@@ -681,59 +681,46 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 }
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
-                let gate_wait_start = Instant::now();
                 let commit_guard = if self.acquire_commit_lock {
-                    self.ctx
+                    let wait_start = Instant::now();
+                    let guard = self
+                        .ctx
                         .clone()
-                        .acquire_table_lock(
+                        .acquire_table_lock_by_id(
                             table_info.catalog(),
-                            table_info.database_name()?,
-                            &table_info.name,
+                            table_info.ident.table_id,
                             &LockTableOption::LockWithRetry,
                         )
-                        .await?
+                        .await?;
+                    metrics_observe_maintenance_commit_gate_wait_milliseconds(
+                        wait_start.elapsed().as_millis() as u64,
+                    );
+                    guard
                 } else {
                     None
                 };
-                if self.acquire_commit_lock {
-                    metrics_observe_maintenance_commit_gate_wait_milliseconds(
-                        gate_wait_start.elapsed().as_millis() as u64,
-                    );
-                }
 
-                let commit_result = if self.acquire_commit_lock {
-                    async {
+                let commit_result = async {
+                    if self.acquire_commit_lock {
                         self.table = self.table.refresh(self.ctx.as_ref()).await?;
-                        let latest_ident = self.table.get_table_info().ident;
-                        if latest_ident.table_id != table_info.ident.table_id
-                            || latest_ident.seq != table_info.ident.seq
+                        let latest_info = self.table.get_table_info();
+                        if latest_info.meta.drop_on.is_some() {
+                            return Err(ErrorCode::InvalidOperation(format!(
+                                "table {} was dropped before maintenance commit",
+                                latest_info.ident.table_id
+                            )));
+                        }
+                        if latest_info.ident.table_id != table_info.ident.table_id
+                            || latest_info.ident.seq != table_info.ident.seq
                         {
                             return Err(ErrorCode::TableVersionMismatched(format!(
                                 "table changed before maintenance commit: expected {}, actual {}",
-                                table_info.ident, latest_ident
+                                table_info.ident, latest_info.ident
                             )));
                         }
-
-                        let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                        fuse_table
-                            .update_table_meta(
-                                self.ctx.as_ref(),
-                                catalog.clone(),
-                                &table_info,
-                                &self.location_gen,
-                                snapshot,
-                                location,
-                                &self.copied_files,
-                                &self.update_stream_meta,
-                                &self.dal,
-                                self.deduplicated_label.clone(),
-                            )
-                            .await
                     }
-                    .await
-                } else {
-                    let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                    fuse_table
+
+                    FuseTable::try_from_table(self.table.as_ref())?
                         .update_table_meta(
                             self.ctx.as_ref(),
                             catalog.clone(),
@@ -747,7 +734,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             self.deduplicated_label.clone(),
                         )
                         .await
-                };
+                }
+                .await;
                 // Do not hold the commit gate during vacuum, retry backoff, or snapshot rebase.
                 drop(commit_guard);
 
