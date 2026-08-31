@@ -130,6 +130,7 @@ impl AutoIncrementApiTestSuite {
                 table_meta: drop_table_meta(created_on),
                 source_table_option: None,
                 as_dropped: true,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,

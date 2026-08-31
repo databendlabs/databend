@@ -1,0 +1,157 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS db_03_vacuum_clone
+
+statement ok
+CREATE DATABASE db_03_vacuum_clone
+
+statement ok
+USE db_03_vacuum_clone
+
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+CREATE TABLE source(id INT)
+
+statement ok
+INSERT INTO source VALUES (1)
+
+statement ok
+CREATE TABLE clone CLONE source
+
+statement ok
+CREATE TABLE chained CLONE clone
+
+# The source head no longer references the cloned data.
+statement ok
+TRUNCATE TABLE source
+
+statement ok
+INSERT INTO source VALUES (2)
+
+statement ok
+VACUUM TABLE source
+
+query I
+SELECT id FROM clone ORDER BY id
+----
+1
+
+query I
+SELECT id FROM chained ORDER BY id
+----
+1
+
+# Vacuuming a newer group member must not expire an older live member's current head.
+statement ok
+CREATE TABLE post_vacuum_child CLONE clone
+
+query I
+SELECT id FROM post_vacuum_child ORDER BY id
+----
+1
+
+# Vacuuming a middle clone must preserve data retained only by its child.
+statement ok
+TRUNCATE TABLE clone
+
+statement ok
+INSERT INTO clone VALUES (3)
+
+statement ok
+VACUUM TABLE clone
+
+query I
+SELECT id FROM clone ORDER BY id
+----
+3
+
+query I
+SELECT id FROM chained ORDER BY id
+----
+1
+
+# OPTIMIZE ... PURGE must preserve source-owned data referenced by sibling clones.
+statement ok
+SET data_retention_num_snapshots_to_keep = 1
+
+statement ok
+CREATE TABLE purge_source(id INT)
+
+statement ok
+INSERT INTO purge_source VALUES (1)
+
+statement ok
+CREATE TABLE left_clone CLONE purge_source
+
+statement ok
+CREATE TABLE right_clone CLONE purge_source
+
+statement ok
+CREATE TABLE left_child CLONE left_clone
+
+statement ok
+TRUNCATE TABLE purge_source
+
+statement ok
+INSERT INTO purge_source VALUES (4)
+
+statement ok
+OPTIMIZE TABLE purge_source PURGE
+
+query I
+SELECT id FROM left_clone ORDER BY id
+----
+1
+
+query I
+SELECT id FROM right_clone ORDER BY id
+----
+1
+
+# Purging a middle clone must preserve data retained only by its child.
+statement ok
+TRUNCATE TABLE left_clone
+
+statement ok
+INSERT INTO left_clone VALUES (5)
+
+statement ok
+OPTIMIZE TABLE left_clone PURGE
+
+query I
+SELECT id FROM left_child ORDER BY id
+----
+1
+
+query I
+SELECT id FROM left_clone ORDER BY id
+----
+5
+
+query I
+SELECT id FROM right_clone ORDER BY id
+----
+1
+
+query I
+SELECT id FROM purge_source ORDER BY id
+----
+4
+
+statement ok
+DROP DATABASE db_03_vacuum_clone

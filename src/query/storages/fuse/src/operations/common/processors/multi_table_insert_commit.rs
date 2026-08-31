@@ -27,11 +27,13 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_session::TxnManagerRef;
@@ -128,6 +130,7 @@ impl AsyncSink for CommitMultiTableInsert {
             } else {
                 let (req, imperfect_count) = build_update_table_meta_req(
                     table.as_ref(),
+                    &tenant,
                     &snapshot_generator,
                     self.ctx.txn_mgr(),
                     *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
@@ -164,8 +167,7 @@ impl AsyncSink for CommitMultiTableInsert {
                 {
                     Ok(ret) => ret,
                     Err(e) => {
-                        // other errors may occur, especially the version mismatch of streams,
-                        // let's log it here for the convenience of diagnostics
+                        // Other errors may occur, especially stream version mismatches.
                         error!(
                             "Non-recoverable fault occurred during updating tables. {}",
                             e
@@ -253,6 +255,7 @@ impl AsyncSink for CommitMultiTableInsert {
                             if req.table_id == tid {
                                 let (new_req, imperfect_count) = build_update_table_meta_req(
                                     table.as_ref(),
+                                    &tenant,
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
                                     *self.table_meta_timestampss.get(&tid).unwrap(),
@@ -355,8 +358,9 @@ async fn build_update_temp_table_req(
     insert_top_n: &BlockTopN,
 ) -> Result<(UpdateTempTableReq, u64)> {
     let table_info = table.get_table_info();
-    let (new_table_meta, imperfect_count) = write_new_snapshot_and_build_table_meta(
+    let (new_table_meta, imperfect_count, _) = write_new_snapshot_and_build_table_meta(
         table,
+        None,
         snapshot_generator,
         txn_mgr,
         table_meta_timestamps,
@@ -379,6 +383,7 @@ async fn build_update_temp_table_req(
 
 async fn build_update_table_meta_req(
     table: &dyn Table,
+    tenant: &Tenant,
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
     table_meta_timestamps: TableMetaTimestamps,
@@ -387,8 +392,9 @@ async fn build_update_table_meta_req(
     insert_top_n: &BlockTopN,
 ) -> Result<(UpdateTableMetaReq, u64)> {
     let fuse_table = FuseTable::try_from_table(table)?;
-    let (new_table_meta, imperfect_count) = write_new_snapshot_and_build_table_meta(
+    let (new_table_meta, imperfect_count, lvt_check) = write_new_snapshot_and_build_table_meta(
         table,
+        Some(tenant),
         snapshot_generator,
         txn_mgr,
         table_meta_timestamps,
@@ -405,20 +411,21 @@ async fn build_update_table_meta_req(
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
         base_snapshot_location: fuse_table.snapshot_loc(),
-        lvt_check: None,
+        lvt_check,
     };
     Ok((req, imperfect_count))
 }
 
 async fn write_new_snapshot_and_build_table_meta(
     table: &dyn Table,
+    tenant: Option<&Tenant>,
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
     table_meta_timestamps: TableMetaTimestamps,
     insert_hll: &BlockHLL,
     insert_rows: u64,
     insert_top_n: &BlockTopN,
-) -> Result<(TableMeta, u64)> {
+) -> Result<(TableMeta, u64, Option<TableLvtCheck>)> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     // Match single-table commits: transaction commits may collapse intermediate snapshot
@@ -443,6 +450,10 @@ async fn write_new_snapshot_and_build_table_meta(
         table_meta_timestamps,
         table_stats_gen,
     )?;
+    let lvt_check = tenant
+        .map(|tenant| FuseTable::build_table_lvt_check(table_info, tenant, snapshot.timestamp))
+        .transpose()?
+        .flatten();
     stamp_table_statistics_with_snapshot_predecessor(&mut table_statistics, &snapshot);
     snapshot.ensure_segments_unique()?;
     let imperfect_count = snapshot.summary.block_count - snapshot.summary.perfect_block_count;
@@ -463,6 +474,7 @@ async fn write_new_snapshot_and_build_table_meta(
     Ok((
         FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot),
         imperfect_count,
+        lvt_check,
     ))
 }
 

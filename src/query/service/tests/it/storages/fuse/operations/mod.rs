@@ -15,6 +15,7 @@
 #![allow(clippy::too_many_arguments)]
 mod alter_table;
 mod analyze;
+mod clone;
 mod clustering;
 mod commit;
 

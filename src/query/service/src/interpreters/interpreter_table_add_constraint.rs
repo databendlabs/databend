@@ -78,7 +78,14 @@ impl Interpreter for AddTableConstraintInterpreter {
             self.plan.constraint.clone(),
         )?;
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
+        update_table_meta(
+            fuse_table,
+            &new_table_meta,
+            catalog,
+            self.ctx.get_tenant(),
+            None,
+        )
+        .await?;
         Ok(PipelineBuildResult::create())
     }
 }

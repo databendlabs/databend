@@ -133,6 +133,28 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> anyhow::Resu
         let db_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
         let v = meta.get_pb(&db_ownership_key).await?;
         assert!(v.is_some());
+
+        // Staged CREATE OR REPLACE ... AS SELECT must transfer ownership when it publishes the
+        // CTAS result. Replacement-history retirement is covered by the Schema API suite.
+        let ctas_old_id = second_create_id;
+        let ctas_old_ownership = db_ownership_key;
+        fixture
+            .execute_command(&format!(
+                "create or replace table {}.{}.{} as select 7 as id",
+                catalog_name, db_name, tbl_name
+            ))
+            .await?;
+        let ctas_table = db.get_table(tbl_name).await?;
+        let ctas_table_id = ctas_table.get_table_info().ident.table_id;
+        assert_ne!(ctas_table_id, ctas_old_id);
+        assert!(meta.get_pb(&ctas_old_ownership).await?.is_none());
+        let ctas_ownership =
+            TenantOwnershipObjectIdent::new(tenant.clone(), OwnershipObject::Table {
+                catalog_name: catalog_name.clone(),
+                db_id: db.get_db_info().database_id.db_id,
+                table_id: ctas_table_id,
+            });
+        assert!(meta.get_pb(&ctas_ownership).await?.is_some());
     }
 
     // test create or replace database

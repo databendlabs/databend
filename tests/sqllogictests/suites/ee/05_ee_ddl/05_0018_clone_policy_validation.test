@@ -1,0 +1,64 @@
+# Historical CLONE must validate current policy definitions against the selected schema.
+statement ok
+CREATE DATABASE db_clone_policy_validation
+
+statement ok
+USE db_clone_policy_validation
+
+statement ok
+CREATE TABLE source(id INT, secured INT)
+
+statement ok
+INSERT INTO source VALUES (1, 10)
+
+statement ok
+SET VARIABLE int_snapshot = (
+    SELECT snapshot_id FROM fuse_snapshot('db_clone_policy_validation', 'source')
+    ORDER BY timestamp LIMIT 1
+)
+
+statement ok
+ALTER TABLE source MODIFY COLUMN secured STRING
+
+statement ok
+CREATE MASKING POLICY clone_string_mask AS (val STRING) RETURNS STRING -> val
+
+statement ok
+ALTER TABLE source MODIFY COLUMN secured SET MASKING POLICY clone_string_mask
+
+statement error masking policy
+CREATE TABLE invalid_mask CLONE source AT (SNAPSHOT => $int_snapshot)
+
+statement ok
+ALTER TABLE source MODIFY COLUMN secured UNSET MASKING POLICY
+
+statement ok
+DROP MASKING POLICY clone_string_mask
+
+statement ok
+CREATE ROW ACCESS POLICY clone_string_row AS (val STRING) RETURNS BOOLEAN -> true
+
+statement ok
+ALTER TABLE source ADD ROW ACCESS POLICY clone_string_row ON (secured)
+
+statement error row access policy
+CREATE TABLE invalid_row CLONE source AT (SNAPSHOT => $int_snapshot)
+
+# Neither failure may publish a target table.
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_clone_policy_validation' AND name IN ('invalid_mask', 'invalid_row')
+----
+0
+
+statement ok
+ALTER TABLE source DROP ROW ACCESS POLICY clone_string_row
+
+statement ok
+DROP ROW ACCESS POLICY clone_string_row
+
+statement ok
+UNSET VARIABLE int_snapshot
+
+statement ok
+DROP DATABASE db_clone_policy_validation

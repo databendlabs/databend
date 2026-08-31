@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -36,6 +37,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
 use opendal::Operator;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
@@ -77,8 +79,8 @@ struct BlockGcContext<'a> {
     /// GC-root object metadata timestamp used by the common vacuum safety helper
     /// for legacy object-key handling.
     gc_root_meta_ts: DateTime<Utc>,
-    /// Protected data block paths that are still referenced by the gc root or refs.
-    gc_root_blocks: &'a HashSet<String>,
+    /// Protected data block IDs that are still referenced by protection roots.
+    protected_block_ids: &'a HashSet<i128>,
     /// Inverted index metadata used to derive index object paths from data blocks.
     inverted_indexes: &'a BTreeMap<String, TableIndex>,
     /// Start time of the block GC phase, used only for status reporting.
@@ -151,9 +153,13 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
+    let target_segment_prefix = fuse_table
+        .meta_location_generator()
+        .segment_location_prefix();
     let protected_seg_paths = protected_segments
         .iter()
-        .map(|(p, _)| p)
+        .map(|(path, _)| path)
+        .filter(|path| path.starts_with(target_segment_prefix))
         .collect::<HashSet<_>>();
     let segments_to_gc: Vec<String> = segments_before_gc_root
         .into_iter()
@@ -175,13 +181,13 @@ pub async fn do_vacuum2(
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
 
-    // Collect blocks from main gc_root. Read protected segments in chunks to avoid
-    // retaining all CompactSegmentInfo objects in memory at once.
+    // Read all protection roots in chunks, but retain only block IDs owned by the target table.
     let protected_segments = protected_segments.into_iter().collect::<Vec<_>>();
     let total_chunks = protected_segments
         .len()
         .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
-    let mut gc_root_blocks = HashSet::new();
+    let target_block_prefix = fuse_table.meta_location_generator().block_location_prefix();
+    let mut protected_block_ids = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
         .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
         .enumerate()
@@ -199,7 +205,11 @@ pub async fn do_vacuum2(
             .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
             .await?;
         for segment in segments {
-            gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+            for block in segment?.block_metas()? {
+                if block.location.0.starts_with(target_block_prefix) {
+                    protected_block_ids.insert(block_id_from_location(&block.location.0)?);
+                }
+            }
         }
         ctx.set_status_info(&format!(
             "Read protected segment chunk for table {}, elapsed: {:?}, segment chunk: {}/{}, segments in chunk: {}, total protected blocks: {}",
@@ -208,14 +218,14 @@ pub async fn do_vacuum2(
             chunk_idx + 1,
             total_chunks,
             segment_chunk.len(),
-            gc_root_blocks.len()
+            protected_block_ids.len()
         ));
     }
     ctx.set_status_info(&format!(
         "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
         table_info.desc,
         start.elapsed(),
-        gc_root_blocks.len()
+        protected_block_ids.len()
     ));
 
     let start = std::time::Instant::now();
@@ -232,7 +242,7 @@ pub async fn do_vacuum2(
         until: FuseTable::vacuum2_until_prefix(block_location_prefix, gc_root_timestamp),
         gc_root_timestamp,
         gc_root_meta_ts,
-        gc_root_blocks: &gc_root_blocks,
+        protected_block_ids: &protected_block_ids,
         inverted_indexes,
         start,
     };
@@ -306,6 +316,23 @@ async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<Bl
     }
 }
 
+/// Return true when a candidate must be kept.
+///
+/// Unparsable paths are kept conservatively. Vacuum must not delete an object when it cannot
+/// prove that the object ID is absent from the protected set.
+fn is_protected_block(block_gc: &BlockGcContext<'_>, path: &str) -> bool {
+    match block_id_from_location(path) {
+        Ok(block_id) => block_gc.protected_block_ids.contains(&block_id),
+        Err(err) => {
+            warn!(
+                "skip block with unparsable ID during vacuum, table: {}, path: {}, err: {}",
+                block_gc.table_desc, path, err
+            );
+            true
+        }
+    }
+}
+
 async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
     let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
@@ -332,7 +359,7 @@ async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result
     };
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     for block_path in blocks_before_gc_root {
-        if !block_gc.gc_root_blocks.contains(&block_path) {
+        if !is_protected_block(block_gc, &block_path) {
             block_chunk.push(block_path);
             if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
                 purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
@@ -380,7 +407,7 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
         }
 
         stats.scanned_blocks += 1;
-        if block_gc.gc_root_blocks.contains(path) {
+        if is_protected_block(block_gc, path) {
             continue;
         }
 
@@ -517,6 +544,35 @@ async fn vacuum_base_snapshot_phase(
         .iter()
         .cloned()
         .collect::<HashSet<_>>();
+    let (observed_descendants, mut table_lvts) = fuse_table
+        .extend_clone_descendant_referenced_segments(
+            ctx.clone(),
+            &mut protected_segments,
+            |status| ctx.set_status_info(&status),
+        )
+        .await?;
+    table_lvts.insert(fuse_table.get_id(), selection.lvt.clone());
+    // Publish LVTs only; see has_new_clone_descendants for the known FLASHBACK window.
+    catalog
+        .set_table_lvts(&ctx.get_tenant(), &table_lvts)
+        .await?;
+    if fuse_table
+        .has_new_clone_descendants(ctx, &observed_descendants)
+        .await?
+    {
+        info!(
+            "stop vacuum after a new clone descendant appeared for table {}",
+            fuse_table.get_id()
+        );
+        return Ok(None);
+    }
+    fuse_table
+        .extend_clone_descendant_tag_segments(
+            ctx.clone(),
+            &observed_descendants,
+            &mut protected_segments,
+        )
+        .await?;
     fuse_table
         .protect_table_tag_references(
             &catalog,
@@ -632,7 +688,7 @@ mod tests {
                 format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
             dal.write(&after_cutoff_block, vec![1]).await?;
 
-            let protected_blocks = HashSet::from([protected_block.clone()]);
+            let protected_block_ids = HashSet::from([block_id_from_location(&protected_block)?]);
             let inverted_indexes = BTreeMap::new();
             let block_gc = BlockGcContext {
                 dal: &dal,
@@ -642,7 +698,7 @@ mod tests {
                 until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
                 gc_root_timestamp,
                 gc_root_meta_ts: gc_root_timestamp,
-                gc_root_blocks: &protected_blocks,
+                protected_block_ids: &protected_block_ids,
                 inverted_indexes: &inverted_indexes,
                 start: std::time::Instant::now(),
             };
@@ -738,7 +794,8 @@ mod tests {
                     format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
                 dal.write(&after_cutoff_block, vec![1]).await?;
 
-                let protected_blocks = HashSet::from([protected_block.clone()]);
+                let protected_block_ids =
+                    HashSet::from([block_id_from_location(&protected_block)?]);
                 let inverted_indexes = BTreeMap::new();
                 let block_gc = BlockGcContext {
                     dal: &dal,
@@ -748,7 +805,7 @@ mod tests {
                     until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
                     gc_root_timestamp,
                     gc_root_meta_ts: gc_root_timestamp,
-                    gc_root_blocks: &protected_blocks,
+                    protected_block_ids: &protected_block_ids,
                     inverted_indexes: &inverted_indexes,
                     start: std::time::Instant::now(),
                 };

@@ -151,6 +151,8 @@ fn test_statement() {
         r#"create table if not exists a.b (a string, b string, ngram index idx1 (a,b) gram_size=5);"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
+        r#"create table a.b_clone clone c.d;"#,
+        r#"create table a.b_clone clone c.d at (snapshot => '0123456789abcdef');"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE WORKER read_env"#,
         r#"CREATE WORKER IF NOT EXISTS read_env"#,
