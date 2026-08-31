@@ -100,59 +100,34 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-patterns = {
-    "cache_disabled": re.compile(
-        r"Logical plan construction completed.*?cache_context_us=(\d+).*?bind_us=(\d+).*?optimize_us=(\d+).*?total_us=(\d+)"
-    ),
-    "cache_miss": re.compile(
-        r"Logical plan construction completed.*?cache_context_us=(\d+).*?bind_us=(\d+).*?optimize_us=(\d+).*?total_us=(\d+)"
-    ),
-    "cache_hit": re.compile(
-        r"Logical plan retrieved from cache.*?cache_context_us=(\d+).*?cache_lookup_us=(\d+).*?total_us=(\d+)"
-    ),
-}
+elapsed_pattern = re.compile(
+    r"Logical plan (?:construction completed|retrieved from cache), elapsed: "
+    r"([0-9]+(?:\.[0-9]+)?)(ns|µs|ms|s)"
+)
+unit_to_us = {"ns": 0.001, "µs": 1, "ms": 1000, "s": 1_000_000}
 
-for phase, pattern in patterns.items():
+for phase in ("cache_disabled", "cache_miss", "cache_hit"):
     rows = []
     log_file = root / (phase + ".logs")
     for line in log_file.read_text(errors="replace").splitlines():
-        match = pattern.search(line)
+        match = elapsed_pattern.search(line)
         if match:
-            rows.append(tuple(map(int, match.groups())))
+            rows.append(float(match.group(1)) * unit_to_us[match.group(2)])
 
     if not rows:
         print(phase + ": no planner timing records found")
         continue
 
-    totals = [row[-1] for row in rows]
-    p95_index = max(0, min(len(totals) - 1, int(len(totals) * 0.95) - 1))
+    p95_index = max(0, min(len(rows) - 1, int(len(rows) * 0.95) - 1))
     print(
         phase
         + ": count="
         + str(len(rows))
         + " avg_us="
-        + format(statistics.mean(totals), ".1f")
+        + format(statistics.mean(rows), ".1f")
         + " p50_us="
-        + format(statistics.median(totals), ".1f")
+        + format(statistics.median(rows), ".1f")
         + " p95_us="
-        + str(sorted(totals)[p95_index])
+        + format(sorted(rows)[p95_index], ".1f")
     )
-    if phase == "cache_hit":
-        print(
-            phase
-            + ": avg_cache_context_us="
-            + format(statistics.mean(row[0] for row in rows), ".1f")
-            + " avg_cache_lookup_us="
-            + format(statistics.mean(row[1] for row in rows), ".1f")
-        )
-    else:
-        print(
-            phase
-            + ": avg_cache_context_us="
-            + format(statistics.mean(row[0] for row in rows), ".1f")
-            + " avg_bind_us="
-            + format(statistics.mean(row[1] for row in rows), ".1f")
-            + " avg_optimize_us="
-            + format(statistics.mean(row[2] for row in rows), ".1f")
-        )
 PY
