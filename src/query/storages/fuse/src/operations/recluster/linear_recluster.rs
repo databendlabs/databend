@@ -211,7 +211,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 average_depth,
                 estimated_depth_gain: 0,
             };
-            candidates.push(task_candidate(group, score, &task_indices, blocks, true));
+            candidates.push(task_candidate(group, score, &task_indices, blocks));
         };
 
         let push_plan = |plans: &mut Vec<CandidatePlan>,
@@ -397,13 +397,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                     .iter()
                     .map(|local_idx| indices[*local_idx])
                     .collect::<Vec<_>>();
-                candidates.push(task_candidate(
-                    group,
-                    plan.score,
-                    &task_indices,
-                    blocks,
-                    true,
-                ));
+                candidates.push(task_candidate(group, plan.score, &task_indices, blocks));
             }
         }
 

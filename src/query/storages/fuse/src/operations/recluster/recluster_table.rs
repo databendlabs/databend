@@ -378,16 +378,6 @@ impl FuseTable {
                         break;
                     }
                     let task = &pending_windows[window_idx].tasks[task_idx];
-                    if enable_task_selection_v2
-                        && mode == ReclusterMode::Aggressive
-                        && !task.passes_aggressive_tail_filter()
-                    {
-                        debug!(
-                            "recluster: skip inefficient task candidate window_idx={} task_idx={} {}",
-                            window_idx, task_idx, task,
-                        );
-                        continue;
-                    }
                     // Repack-only candidates rewrite no blocks, but each one
                     // consumes a whole window. Keep one per round so max_tasks
                     // does not repack multiple disjoint windows at once.

@@ -364,7 +364,6 @@ impl ReclusterMutator {
                     selected_blocks: Vec::new(),
                     output_level: 0,
                     all_ordered: false,
-                    tail_filterable: false,
                 });
             } else {
                 return Ok(candidate_window);
@@ -496,9 +495,6 @@ impl ReclusterMutator {
                 .cmp_desc_v2(&left.score)
                 .then_with(|| left.output_level.cmp(&right.output_level))
         });
-        if self.properties.mode == ReclusterMode::Aggressive {
-            candidates.retain(|candidate| candidate.passes_aggressive_tail_filter());
-        }
         candidates.truncate(task_budget);
 
         Ok(candidates)
@@ -695,7 +691,7 @@ impl ReclusterMutator {
                 average_depth: block_count as f64,
                 estimated_depth_gain: block_count.saturating_sub(1) as u64,
             };
-            return Ok(vec![task_candidate(group, score, &indices, blocks, false)]);
+            return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }
 
         let candidates = self.strategy.fetch_task_candidates(

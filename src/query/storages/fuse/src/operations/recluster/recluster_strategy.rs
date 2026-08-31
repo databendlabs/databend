@@ -303,7 +303,6 @@ pub struct CandidateScore {
 
 impl CandidateScore {
     const TASK_SLOT_COST_BYTES: usize = 8 * 1024 * 1024;
-    const MAX_TASK_COST_ADJUSTED_BYTES_PER_DEPTH_GAIN: f64 = 32.0 * 1024.0;
 
     pub fn bytes_per_depth_gain(&self) -> f64 {
         if self.estimated_depth_gain == 0 {
@@ -324,19 +323,6 @@ impl CandidateScore {
             .selected_total_bytes
             .saturating_add(Self::TASK_SLOT_COST_BYTES);
         task_cost as f64 / self.estimated_depth_gain as f64 * fragmentation_ratio.sqrt()
-    }
-
-    pub fn passes_tail_efficiency_threshold(&self) -> bool {
-        // The tail threshold is meant to stop large-table FINAL recluster from
-        // spending distributed task slots on low-gain cleanup. Do not apply it
-        // to tiny candidates: for small tables the fixed slot cost dominates
-        // the score and would make FINAL skip the only valid rewrite.
-        if self.selected_total_bytes < Self::TASK_SLOT_COST_BYTES {
-            return true;
-        }
-
-        self.task_cost_adjusted_bytes_per_depth_gain()
-            <= Self::MAX_TASK_COST_ADJUSTED_BYTES_PER_DEPTH_GAIN
     }
 
     /// Compare scores in descending priority order.
@@ -376,7 +362,6 @@ pub(crate) struct ReclusterTaskCandidate {
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
     pub(crate) output_level: i32,
     pub(crate) all_ordered: bool,
-    pub(crate) tail_filterable: bool,
 }
 
 impl ReclusterTaskCandidate {
@@ -390,10 +375,6 @@ impl ReclusterTaskCandidate {
     /// Whether this candidate only repacks unchanged blocks into fewer segments.
     pub(crate) fn is_repack_only(&self) -> bool {
         self.selected_blocks.is_empty()
-    }
-
-    pub(crate) fn passes_aggressive_tail_filter(&self) -> bool {
-        !self.tail_filterable || self.score.passes_tail_efficiency_threshold()
     }
 }
 
@@ -452,7 +433,6 @@ pub(crate) fn task_candidate(
     score: CandidateScore,
     task_indices: &[usize],
     blocks: &[&ReclusterBlock],
-    tail_filterable: bool,
 ) -> ReclusterTaskCandidate {
     use std::collections::HashMap;
 
@@ -478,7 +458,6 @@ pub(crate) fn task_candidate(
         selected_blocks,
         output_level,
         all_ordered,
-        tail_filterable,
     }
 }
 
@@ -497,9 +476,7 @@ pub(crate) fn passes_depth_gate(
 
 #[cfg(test)]
 mod tests {
-    use super::CandidateScore;
     use super::ReclusterMode;
-    use super::ReclusterTaskCandidate;
     use super::enable_task_selection_v2_for_mode;
 
     #[test]
@@ -520,53 +497,5 @@ mod tests {
             ReclusterMode::Conservative,
             false
         ));
-    }
-
-    #[test]
-    fn test_tail_threshold_allows_tiny_candidates() {
-        let tiny_candidate = CandidateScore {
-            selected_total_bytes: 16,
-            selected_block_count: 2,
-            max_depth: 2,
-            average_depth: 2.0,
-            estimated_depth_gain: 1,
-        };
-        assert!(tiny_candidate.passes_tail_efficiency_threshold());
-
-        let inefficient_large_candidate = CandidateScore {
-            selected_total_bytes: CandidateScore::TASK_SLOT_COST_BYTES,
-            selected_block_count: 2,
-            max_depth: 2,
-            average_depth: 2.0,
-            estimated_depth_gain: 1,
-        };
-        assert!(!inefficient_large_candidate.passes_tail_efficiency_threshold());
-    }
-
-    #[test]
-    fn test_aggressive_tail_filter_only_applies_to_filterable_candidates() {
-        let score = CandidateScore {
-            selected_total_bytes: CandidateScore::TASK_SLOT_COST_BYTES,
-            selected_block_count: 2,
-            max_depth: 2,
-            average_depth: 2.0,
-            estimated_depth_gain: 1,
-        };
-        assert!(!score.passes_tail_efficiency_threshold());
-
-        let filterable = ReclusterTaskCandidate {
-            score,
-            selected_blocks: vec![(0, vec![0, 1])],
-            output_level: 0,
-            all_ordered: true,
-            tail_filterable: true,
-        };
-        assert!(!filterable.passes_aggressive_tail_filter());
-
-        let exempt = ReclusterTaskCandidate {
-            tail_filterable: false,
-            ..filterable
-        };
-        assert!(exempt.passes_aggressive_tail_filter());
     }
 }

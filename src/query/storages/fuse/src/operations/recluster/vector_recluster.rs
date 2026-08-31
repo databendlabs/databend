@@ -376,7 +376,6 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 },
                 &task_indices,
                 blocks,
-                false,
             ));
         }
 
