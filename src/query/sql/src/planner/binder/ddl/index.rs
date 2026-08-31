@@ -645,6 +645,22 @@ impl Binder {
                     }
                     options.insert("bloom_size".to_string(), value);
                 }
+                "false_positive_rate" => {
+                    match value.parse::<f64>() {
+                        Ok(num) if num.is_finite() && num > 0.0 && num < 1.0 => {}
+                        Ok(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(
+                                "`false_positive_rate` must be finite and between 0 and 1",
+                            ));
+                        }
+                        Err(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{value}` is not a legal number",
+                            )));
+                        }
+                    }
+                    options.insert("false_positive_rate".to_string(), value);
+                }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
                         "index option `{key}` is invalid key for create ngram index statement",

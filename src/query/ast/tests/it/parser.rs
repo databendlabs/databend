@@ -1420,6 +1420,24 @@ fn test_create_table_options_before_partition_by() {
 }
 
 #[test]
+fn test_ngram_index_accepts_float_options() {
+    let cases = [
+        "CREATE NGRAM INDEX idx ON t(a) false_positive_rate=0.02",
+        "CREATE TABLE t(a STRING, NGRAM INDEX idx(a) false_positive_rate=0.02)",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let displayed = stmt.to_string();
+        assert!(displayed.contains("false_positive_rate = '0.02'"));
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
 fn test_stage_local_filesystem_uri_errors() {
     let cases = [
         (
