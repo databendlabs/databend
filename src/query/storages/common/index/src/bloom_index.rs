@@ -1751,7 +1751,7 @@ mod tests {
     #[test]
     fn test_ngram_filter_folds_across_blocks() {
         let field = TableField::new("content", TableDataType::String);
-        let args = [NgramArgs::new(0, field, 3, 1024, 0.01)];
+        let args = [NgramArgs::new(0, field, 3, 1024 * 1024, 0.01)];
         let mut builder = BloomIndexBuilder::create(
             FunctionContext::default(),
             BloomIndexType::default(),
@@ -1774,7 +1774,7 @@ mod tests {
         let FilterImpl::Ngram(filter) = index.filters[0].as_ref() else {
             panic!("expected ngram filter");
         };
-        assert!(filter.memory_usage_bytes() < 1024);
+        assert!(filter.memory_usage_bytes() < 1024 * 1024);
         for ngram in ["abc", "bca", "cab", "bcd", "cde"] {
             assert!(filter.contains_digest(BloomIndex::ngram_hash(ngram)));
         }

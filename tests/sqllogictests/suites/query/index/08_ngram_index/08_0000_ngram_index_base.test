@@ -20,22 +20,22 @@ INSERT INTO t1 VALUES
 query TIII
 select name, index_size, bloom_index_size, ngram_index_size from system.tables where name='t1' and database='test_gram_index';
 ----
-t1 1103 1103 297
+t1 33621 33621 32809
 
 query III
 select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1')
 ----
-4 1103 297
+4 33621 32809
 
 query IIIII
 select block_count, row_count, index_size, bloom_index_size, ngram_index_size from fuse_segment('test_gram_index', 't1');
 ----
-1 4 1103 1103 297
+1 4 33621 33621 32809
 
 query IIIII
 select block_count, row_count, index_size, bloom_index_size, ngram_index_size from fuse_snapshot('test_gram_index', 't1');
 ----
-1 4 1103 1103 297
+1 4 33621 33621 32809
 
 statement ok
 CREATE TABLE t2 (id int, content string, name string)

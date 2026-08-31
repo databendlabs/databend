@@ -26,6 +26,10 @@ use crate::filters::FilterBuilder;
 
 type UnderType = u64;
 
+// Bound adaptive folding to preserve pruning quality for low-cardinality blocks while still
+// allowing the default 1 MiB bitmap to shrink by up to 32x.
+const MIN_FOLDED_BLOOM_SIZE: u64 = 32 * 1024;
+
 pub struct BloomBuilder {
     false_positive_rate: f64,
     filter: BloomFilter,
@@ -77,7 +81,8 @@ impl FilterBuilder for BloomBuilder {
     }
 
     fn build(mut self) -> Result<Self::Filter, Self::Error> {
-        self.filter.fold(self.false_positive_rate);
+        self.filter
+            .fold(self.false_positive_rate, MIN_FOLDED_BLOOM_SIZE);
         Ok(self.filter)
     }
 }
@@ -195,50 +200,27 @@ impl BloomFilter {
             .max(1.0) as u64
     }
 
-    fn estimated_item_count(&self) -> f64 {
-        let bit_count = 8 * self.size;
-        let set_bits = self
-            .filter
-            .iter()
-            .map(|word| word.count_ones() as u64)
+    fn estimated_false_positive_rate(set_bits: u64, bit_count: u64, hashes: u64) -> f64 {
+        let occupancy = set_bits as f64 / bit_count as f64;
+        occupancy.powf(hashes as f64)
+    }
+
+    fn estimated_false_positive_rate_after_fold(&self) -> f64 {
+        let target_words = self.filter.len() / 2;
+        let set_bits = (0..target_words)
+            .map(|i| (self.filter[i] | self.filter[i + target_words]).count_ones() as u64)
             .sum::<u64>();
-        if set_bits == 0 {
-            return 0.0;
-        }
-        if set_bits == bit_count {
-            return f64::INFINITY;
-        }
-
-        let set_ratio = set_bits as f64 / bit_count as f64;
-        // Invert E[set_bits] = m * (1 - exp(-k * n / m)), where m is the number
-        // of bits, k is the number of probes, and n is the number of distinct digests.
-        -(bit_count as f64 / self.hashes as f64) * (-set_ratio).ln_1p()
+        let bit_count = (target_words * UnderType::BITS as usize) as u64;
+        Self::estimated_false_positive_rate(set_bits, bit_count, self.hashes)
     }
 
-    fn target_size(&self, false_positive_rate: f64) -> u64 {
-        let item_count = self.estimated_item_count();
-        if !item_count.is_finite() {
-            return self.size;
-        }
-
-        // Solve p = (1 - exp(-k * n / m))^k for m. This uses the filter's actual
-        // integer probe count instead of assuming the theoretical optimal k.
-        let hashes = self.hashes as f64;
-        let occupied_probability = false_positive_rate.powf(1.0 / hashes);
-        let required_bits = -(hashes * item_count) / (-occupied_probability).ln_1p();
-        let required_bytes = (required_bits / 8.0).ceil() as u64;
-        if required_bytes >= self.size {
-            self.size
-        } else {
-            required_bytes
-                .max(std::mem::size_of::<UnderType>() as u64)
-                .next_power_of_two()
-        }
-    }
-
-    fn fold(&mut self, false_positive_rate: f64) {
-        let target_size = self.target_size(false_positive_rate);
-        while self.size > target_size {
+    fn fold(&mut self, target_false_positive_rate: f64, min_filter_size: u64) {
+        // Evaluate the bitmap produced by each candidate fold directly. The lengths form a
+        // geometric sequence, so all candidate scans together are linear in the original bitmap
+        // size and require no additional bitmap allocation.
+        while self.size / 2 >= min_filter_size
+            && self.estimated_false_positive_rate_after_fold() <= target_false_positive_rate
+        {
             let target_words = self.filter.len() / 2;
             // For a power-of-two bitmap, (position % old_bits) % new_bits equals
             // position % new_bits. OR-ing corresponding halves therefore preserves every bit
@@ -382,6 +364,28 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_legacy_non_power_of_two_filter() {
+        let digests = (0_u64..100)
+            .map(|value| {
+                let mut hasher = CityHasher64::with_seed(7);
+                value.hash(&mut hasher);
+                hasher.finish()
+            })
+            .collect::<Vec<_>>();
+        let mut legacy_filter = BloomFilter::with_params(1000, 7, 7);
+        for digest in &digests {
+            legacy_filter.add(*digest);
+        }
+
+        let bytes = legacy_filter.to_bytes().unwrap();
+        let (decoded, consumed) = BloomFilter::from_bytes(&bytes).unwrap();
+
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(decoded.size, 1000);
+        assert!(digests.iter().all(|digest| decoded.find(*digest)));
+    }
+
+    #[test]
     fn test_hashes_for_false_positive_rate() {
         assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.5), 1);
         assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.1), 4);
@@ -408,6 +412,21 @@ mod tests {
     }
 
     #[test]
+    fn test_fold_uses_candidate_bitmap_occupancy() {
+        let mut above_target = BloomFilter::with_false_positive_rate(16, 0.01, 7);
+        above_target.filter[0] = (1_u64 << 34) - 1;
+        assert!(above_target.estimated_false_positive_rate_after_fold() > 0.01);
+        above_target.fold(0.01, 8);
+        assert_eq!(above_target.size, 16);
+
+        let mut below_target = BloomFilter::with_false_positive_rate(16, 0.01, 7);
+        below_target.filter[0] = (1_u64 << 33) - 1;
+        assert!(below_target.estimated_false_positive_rate_after_fold() <= 0.01);
+        below_target.fold(0.01, 8);
+        assert_eq!(below_target.size, 8);
+    }
+
+    #[test]
     fn test_bloom_builder_writes_filter_directly() {
         let mut builder = BloomBuilder::create(1024, 0.01, 7);
         builder.add_digest(11);
@@ -416,11 +435,21 @@ mod tests {
 
         let filter = builder.build().unwrap();
         assert_eq!(filter.hashes, 7);
-        assert_eq!(filter.size, 8);
+        assert_eq!(filter.size, 1024);
         assert!(filter.find(11));
         assert!(filter.find(13));
         assert!(filter.find(17));
         assert!(filter.find(19));
+    }
+
+    #[test]
+    fn test_bloom_builder_respects_small_non_power_of_two_limit() {
+        let mut builder = BloomBuilder::create(1000, 0.01, 7);
+        builder.add_digest(11);
+
+        let filter = builder.build().unwrap();
+        assert_eq!(filter.size, 512);
+        assert!(filter.find(11));
     }
 
     #[test]
@@ -432,23 +461,33 @@ mod tests {
                 hasher.finish()
             })
             .collect::<Vec<_>>();
-        let mut builder = BloomBuilder::create(1024, 0.01, 7);
+        let mut builder = BloomBuilder::create(1024 * 1024, 0.01, 7);
         builder.add_digests(digests.iter());
 
         let filter = builder.build().unwrap();
-        assert!(filter.size <= 256);
+        let set_bits = filter
+            .filter
+            .iter()
+            .map(|word| word.count_ones() as u64)
+            .sum::<u64>();
+        let estimated_false_positive_rate =
+            BloomFilter::estimated_false_positive_rate(set_bits, 8 * filter.size, filter.hashes);
+        assert_eq!(filter.size, MIN_FOLDED_BLOOM_SIZE);
+        assert!(estimated_false_positive_rate <= 0.01);
         assert!(digests.iter().all(|digest| filter.find(*digest)));
     }
 
     #[test]
-    fn test_bloom_builder_keeps_max_size_when_full() {
-        let mut builder = BloomBuilder::create(1024, 0.01, 7);
-        for digest in 0..10_000 {
-            builder.add_digest(digest);
+    fn test_bloom_builder_keeps_max_size_when_occupancy_is_high() {
+        let mut builder = BloomBuilder::create(1024 * 1024, 0.01, 7);
+        for value in 0..1_000_000_u64 {
+            let mut hasher = CityHasher64::with_seed(7);
+            value.hash(&mut hasher);
+            builder.add_digest(hasher.finish());
         }
 
         let filter = builder.build().unwrap();
-        assert_eq!(filter.size, 1024);
+        assert_eq!(filter.size, 1024 * 1024);
     }
 
     #[test]
