@@ -984,52 +984,6 @@ pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io
     Ok(())
 }
 
-// Mirrors the generators from RoaringFormatSpec/testdata and testdata64. We deliberately
-// serialize with the local `roaring` crate: BitmapReader supports the no-run portable subset
-// emitted by that implementation, rather than every representation accepted by the format.
-#[cfg(test)]
-pub(crate) fn create_format_spec_32_bitmap() -> RoaringTreemap {
-    let mut bitmap = RoaringTreemap::new();
-    for value in (0..100_000u64).step_by(1_000) {
-        bitmap.insert(value);
-    }
-    for value in 100_000..200_000u64 {
-        bitmap.insert(3 * value);
-    }
-    for value in 700_000..800_000u64 {
-        bitmap.insert(value);
-    }
-    bitmap
-}
-
-#[cfg(test)]
-pub(crate) fn create_format_spec_64_bitmap() -> RoaringTreemap {
-    let mut bitmap = RoaringTreemap::new();
-    for value in (0..65_536u64).step_by(2) {
-        bitmap.insert(value);
-    }
-    let start = 1u64 << 32;
-    bitmap.insert_range(start..start + 1_000_000);
-    bitmap.insert(1u64 << 48);
-    bitmap
-}
-
-#[cfg(test)]
-pub(crate) fn create_format_spec_portable_64_bitmap() -> RoaringTreemap {
-    let mut bitmap = RoaringTreemap::new();
-    for prefix in 0..2u64 {
-        let base = prefix << 32;
-        bitmap.insert_range((base)..=(base | 0x09000));
-        bitmap.insert_range((base | 0x0A000)..=(base | 0x10000));
-        bitmap.insert(base | 0x20000);
-        bitmap.insert(base | 0x20005);
-        for value in (0..0x10000u64).step_by(2) {
-            bitmap.insert(base | 0x80000 | value);
-        }
-    }
-    bitmap
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -1040,6 +994,9 @@ mod tests {
     use roaring::RoaringTreemap;
 
     use super::*;
+    use crate::bitmap::test_support::create_format_spec_32_bitmap;
+    use crate::bitmap::test_support::create_format_spec_64_bitmap;
+    use crate::bitmap::test_support::create_format_spec_portable_64_bitmap;
 
     fn create_bitmap(seed: u64) -> RoaringTreemap {
         let mut rng = SmallRng::seed_from_u64(seed);
