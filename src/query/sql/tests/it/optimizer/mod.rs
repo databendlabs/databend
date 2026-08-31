@@ -29,6 +29,7 @@ mod materialized_cte_distribution;
 mod normalize_scalar;
 mod outer_join_to_anti;
 mod push_down_filter_project_set;
+mod push_down_rank_limit_aggregate;
 mod selectivity;
 mod selectivity_smoke;
 mod stat_derivation;
