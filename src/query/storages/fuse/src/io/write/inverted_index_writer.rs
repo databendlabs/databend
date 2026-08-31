@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
@@ -41,6 +42,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
+use lindera::dictionary::Dictionary;
 use lindera::dictionary::load_dictionary;
 use lindera::mode::Mode;
 use lindera::segmenter::Segmenter;
@@ -76,6 +78,10 @@ use tantivy_jieba::JiebaTokenizer;
 
 use crate::index::build_tantivy_footer;
 use crate::io::TableMetaLocationGenerator;
+
+static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
+    load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
+});
 
 #[derive(Clone)]
 pub struct InvertedIndexBuilder {
@@ -406,9 +412,7 @@ fn create_chinese_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
 }
 
 fn create_japanese_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
-    let dictionary = load_dictionary("embedded://ipadic")
-        .expect("the embedded IPADIC dictionary must be available");
-    let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
+    let segmenter = Segmenter::new(Mode::Normal, JAPANESE_DICTIONARY.clone(), None);
     let mut tokenizer = LinderaTokenizer::from_segmenter(segmenter);
 
     // Lindera filters must run before conversion to Tantivy tokens because
