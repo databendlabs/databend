@@ -1678,7 +1678,7 @@ mod tests {
     use super::is_system_history_table;
 
     fn table_info_with_db(db_name: &str) -> TableInfo {
-        // database_name() requires a Fuse-backed engine.
+        // database_name() requires a FUSE engine.
         let mut meta = TableMeta {
             storage_params: Some(StorageParams::Memory),
             ..Default::default()

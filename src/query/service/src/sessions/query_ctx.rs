@@ -117,7 +117,6 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;

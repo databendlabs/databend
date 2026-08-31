@@ -39,6 +39,7 @@ use databend_common_sql::bind_table;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
@@ -83,6 +84,18 @@ pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterPlan,
     lock_opt: LockTableOption,
+}
+
+fn recluster_coordination(
+    enable_table_lock: bool,
+    lock_opt: &LockTableOption,
+    target: &MaintenanceTarget,
+) -> (bool, bool) {
+    let use_segment_claims = enable_table_lock && *lock_opt != LockTableOption::NoLock;
+    // MV refresh owns a dedicated lifecycle lock, while MV maintenance intentionally stays
+    // outside the generic table-lock protocol. Segment claims still prevent overlapping rewrites.
+    let acquire_commit_lock = use_segment_claims && matches!(target, MaintenanceTarget::Table);
+    (use_segment_claims, acquire_commit_lock)
 }
 
 impl ReclusterTableInterpreter {
@@ -267,9 +280,12 @@ impl ReclusterTableInterpreter {
             limit,
             ..
         } = &self.plan;
-        let parallel =
-            settings.get_enable_table_lock()? && self.lock_opt != LockTableOption::NoLock;
-        let outer_lock_guard = if parallel {
+        let (use_segment_claims, acquire_commit_lock) = recluster_coordination(
+            settings.get_enable_table_lock()?,
+            &self.lock_opt,
+            &self.plan.target,
+        );
+        let outer_lock_guard = if use_segment_claims {
             None
         } else {
             self.ctx
@@ -278,9 +294,9 @@ impl ReclusterTableInterpreter {
                 .await?
         };
 
-        // The former outer table lock evicted this cache. Parallel planning must do
+        // The former outer table lock evicted this cache. Concurrent planning must do
         // that explicitly so the claim set is matched against the latest snapshot.
-        if parallel {
+        if use_segment_claims {
             self.ctx.evict_table_from_cache(catalog, database, table)?;
         }
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
@@ -300,7 +316,7 @@ impl ReclusterTableInterpreter {
 
         self.build_push_downs(push_downs, &tbl)?;
 
-        let claim_manager = parallel.then(CoordinationManager::instance);
+        let claim_manager = use_segment_claims.then(CoordinationManager::instance);
         let (mut physical_plan, claim_guard) = loop {
             let claimed_segments = if let Some(claim_manager) = &claim_manager {
                 claim_manager
@@ -316,19 +332,19 @@ impl ReclusterTableInterpreter {
                     *limit,
                     linear_final_carry,
                     &claimed_segments,
-                    parallel,
+                    acquire_commit_lock,
                 )
                 .await?;
             let Some((physical_plan, segments)) = plan else {
                 return Ok(true);
             };
-            if !parallel {
+            if !use_segment_claims {
                 break (physical_plan, None);
             }
 
             let claim = claim_manager
                 .as_ref()
-                .expect("parallel recluster must have a claim manager")
+                .expect("concurrent recluster must have a claim manager")
                 .try_segment_claim(self.ctx.clone(), tbl.get_id(), segments)
                 .await?;
             if claim.is_some() {
@@ -581,5 +597,45 @@ impl ReclusterTableInterpreter {
             acquire_commit_lock,
             meta: PhysicalPlanMeta::new("CommitSink"),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::lock::LockTableOption;
+    use databend_common_sql::plans::MaintenanceTarget;
+
+    use super::recluster_coordination;
+
+    #[test]
+    fn test_recluster_coordination() {
+        assert_eq!(
+            recluster_coordination(
+                true,
+                &LockTableOption::LockWithRetry,
+                &MaintenanceTarget::Table,
+            ),
+            (true, true)
+        );
+        assert_eq!(
+            recluster_coordination(
+                true,
+                &LockTableOption::LockWithRetry,
+                &MaintenanceTarget::MaterializedView { table_id: 1 },
+            ),
+            (true, false)
+        );
+        assert_eq!(
+            recluster_coordination(
+                false,
+                &LockTableOption::LockWithRetry,
+                &MaintenanceTarget::Table,
+            ),
+            (false, false)
+        );
+        assert_eq!(
+            recluster_coordination(true, &LockTableOption::NoLock, &MaintenanceTarget::Table,),
+            (false, false)
+        );
     }
 }

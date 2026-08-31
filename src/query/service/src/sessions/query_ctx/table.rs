@@ -14,11 +14,6 @@
 
 use super::*;
 
-fn supports_table_lock(engine: &str, is_read_only: bool, is_temp: bool) -> bool {
-    let is_materialized_view = is_materialized_view_engine(engine);
-    (is_materialized_view || engine == "FUSE" && !is_read_only) && !is_temp
-}
-
 impl TableContextTableFactory for QueryContext {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
@@ -154,7 +149,7 @@ impl TableContextTableAccess for QueryContext {
         let tbl = catalog
             .get_table(&self.get_tenant(), db_name, tbl_name)
             .await?;
-        if !supports_table_lock(tbl.engine(), tbl.is_read_only(), tbl.is_temp()) {
+        if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
         }
 
@@ -683,25 +678,5 @@ impl TableContextTableManagement for QueryContext {
         Err(ErrorCode::Unimplemented(
             "Stage table support is disabled, rebuild with cargo feature 'storage-stage'",
         ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
-
-    use super::supports_table_lock;
-
-    #[test]
-    fn test_supports_table_lock() {
-        assert!(supports_table_lock("FUSE", false, false));
-        assert!(!supports_table_lock("FUSE", true, false));
-        assert!(!supports_table_lock("FUSE", false, true));
-
-        // Materialized views expose a read-only table facade, but refresh and
-        // maintenance commits still coordinate through the table lock.
-        assert!(supports_table_lock(MATERIALIZED_VIEW_ENGINE, true, false));
-        assert!(!supports_table_lock(MATERIALIZED_VIEW_ENGINE, true, true));
-        assert!(!supports_table_lock("MEMORY", false, false));
     }
 }
