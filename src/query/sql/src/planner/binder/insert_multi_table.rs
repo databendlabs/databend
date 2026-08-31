@@ -238,23 +238,14 @@ impl Binder {
                 self.schema_project(&target_schema, target_columns.as_ref(), &dest_entity_name)?
             };
 
-            let default_indices = source_columns
+            if source_columns
                 .iter()
-                .enumerate()
-                .filter_map(|(i, col)| {
-                    if matches!(col, SourceExpr::Default) {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            if !default_indices.is_empty() {
+                .any(|column| matches!(column, SourceExpr::Default))
+            {
                 let mut casted_schema_fields = vec![];
                 let mut kept_target_column_ids = vec![];
                 for (i, field) in casted_schema.fields().iter().enumerate() {
-                    if default_indices.contains(&i) {
+                    if matches!(source_columns[i], SourceExpr::Default) {
                         continue;
                     }
                     casted_schema_fields.push(field.clone());
