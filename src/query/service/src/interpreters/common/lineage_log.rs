@@ -331,7 +331,6 @@ fn catalog_type_name(catalog_type: Option<CatalogType>) -> Option<&'static str> 
         CatalogType::Default => "DEFAULT",
         CatalogType::Hive => "HIVE",
         CatalogType::Iceberg => "ICEBERG",
-        CatalogType::Paimon => "PAIMON",
     })
 }
 

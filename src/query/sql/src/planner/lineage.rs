@@ -1074,7 +1074,7 @@ fn relation_info_from_table_index(
         CatalogType::Default => {
             (table_info.ident.table_id != 0).then_some(table_info.ident.table_id)
         }
-        CatalogType::Hive | CatalogType::Iceberg | CatalogType::Paimon => None,
+        CatalogType::Hive | CatalogType::Iceberg => None,
     };
     Ok(Some(QueryLineageRelation {
         catalog: table.catalog().to_string(),
@@ -1168,10 +1168,11 @@ fn target_column_from_schema_field(
 ) -> QueryLineageColumn {
     metadata
         .columns_by_table_index(table_index)
+        .into_iter()
         .find(|column| column.name() == field_name)
         .map(|column| QueryLineageColumn {
             name: column.name(),
-            id: column_id(column),
+            id: column_id(&column),
         })
         .unwrap_or_else(|| QueryLineageColumn {
             name: field_name.to_string(),
@@ -1194,20 +1195,22 @@ fn target_column_from_field_index(
     if let Some(column_index) = mutation.field_index_map.get(&field_index)
         && let Some(column_entry) = metadata
             .columns_by_table_index(mutation.target_table_index)
+            .into_iter()
             .find(|entry| entry.index().to_string() == *column_index)
     {
         return Some(QueryLineageColumn {
             name: column_entry.name(),
-            id: column_id(column_entry),
+            id: column_id(&column_entry),
         });
     }
 
     metadata
         .columns_by_table_index(mutation.target_table_index)
+        .into_iter()
         .nth(field_index)
         .map(|entry| QueryLineageColumn {
             name: entry.name(),
-            id: column_id(entry),
+            id: column_id(&entry),
         })
 }
 
@@ -1235,7 +1238,6 @@ mod tests {
     use databend_common_meta_app::schema::HiveCatalogOption;
     use databend_common_meta_app::schema::IcebergCatalogOption;
     use databend_common_meta_app::schema::IcebergRestCatalogOption;
-    use databend_common_meta_app::schema::PaimonCatalogOption;
     use databend_common_meta_app::schema::TableIdent;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
@@ -1463,7 +1465,6 @@ mod tests {
             (CatalogType::Default, "FUSE", Some(10)),
             (CatalogType::Hive, "HIVE", None),
             (CatalogType::Iceberg, "ICEBERG", None),
-            (CatalogType::Paimon, "PAIMON", None),
         ] {
             let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
             let table_index = add_fake_table_with_catalog_type(
@@ -2019,7 +2020,6 @@ mod tests {
             CatalogType::Default => "default",
             CatalogType::Hive => "hive",
             CatalogType::Iceberg => "iceberg",
-            CatalogType::Paimon => "paimon",
         }
         .to_string()
     }
@@ -2040,9 +2040,6 @@ mod tests {
                     props: HashMap::new(),
                 }))
             }
-            CatalogType::Paimon => CatalogOption::Paimon(PaimonCatalogOption {
-                options: HashMap::new(),
-            }),
         };
         Arc::new(info)
     }
@@ -2051,6 +2048,7 @@ mod tests {
         let columns = metadata
             .read()
             .columns_by_table_index(table_index)
+            .into_iter()
             .map(|column| column.index())
             .collect();
         SExpr::create_leaf(Arc::new(RelOperator::Scan(Scan {
@@ -2083,6 +2081,7 @@ mod tests {
         metadata
             .read()
             .columns_by_table_index(table_index)
+            .into_iter()
             .find(|column| column.name() == name)
             .unwrap_or_else(|| panic!("missing column {name}"))
             .index()

@@ -483,6 +483,7 @@ fn materialized_cte_producer_column(
 
     metadata
         .columns_by_table_index(producer.table_index)
+        .into_iter()
         .find_map(|column| match column {
             ColumnEntry::BaseTableColumn(column)
                 if column.path_indices.as_deref() == Some(producer_path.as_slice()) =>
@@ -507,6 +508,7 @@ fn materialized_cte_output_position(metadata: &Metadata, column_index: Symbol) -
 
     metadata
         .columns_by_table_index(column.table_index)
+        .into_iter()
         .filter(|column| {
             matches!(
                 column,
