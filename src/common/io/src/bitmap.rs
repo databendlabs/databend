@@ -28,6 +28,7 @@ use roaring::RoaringTreemap;
 use roaring::treemap::Iter;
 use smallvec::SmallVec;
 
+pub(crate) mod fast;
 mod reader;
 
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914
