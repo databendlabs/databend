@@ -69,9 +69,9 @@ create table t2 (a int null, v json null) storage_format = 'parquet' enable_virt
 statement ok
 insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10},"d":20}'))
 
-# Virtual sidecars are materialized by rewrite operations.
+# Virtual sidecars are materialized by refresh operations.
 statement ok
-optimize table t2 compact
+refresh virtual column on t2
 
 query T
 explain select a, v from t2 where v['b']['c'] = 10 order by a limit 1
@@ -144,6 +144,28 @@ Filter
     ├── push downs: [filters: [is_true(TRY_CAST(t2.v.b.c (#3) AS UInt8 NULL) = 10)], limit: NONE]
     ├── virtual columns: [v.a[0], v.b.c]
     └── estimated rows: 1.00
+
+# virtual column range pruner
+query T
+explain select a, get_by_keypath(v, '{"a",0}') from t2 where v['b']['c'] = 99
+----
+Filter
+├── output columns: [t2.a (#0), t2.v.a[0] (#2)]
+├── filters: [is_true(TRY_CAST(t2.v.b.c (#3) AS UInt8 NULL) = 99)]
+├── estimated rows: 0.20
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
+    ├── output columns: [a (#0), v.a[0] (#2), v.b.c (#3)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(TRY_CAST(t2.v.b.c (#3) AS UInt8 NULL) = 99)], limit: NONE]
+    ├── virtual columns: [v.a[0], v.b.c]
+    └── estimated rows: 1.00
+
 
 query T
 explain select a, get_by_keypath_string(v, '{"a",0}') from t2 where get_by_keypath_string(v, '{"b","c"}') like '%10%'
@@ -347,11 +369,11 @@ HashJoin
 │       ├── table: default.test_virtual_db.t2
 │       ├── scan id: 1
 │       ├── output columns: [a (#2), v (#3), v.b.c (#4)]
-│       ├── read rows: 1
-│       ├── read size: < 1 KiB
+│       ├── read rows: 0
+│       ├── read size: 0
 │       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── partitions scanned: 0
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 0 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [is_true(TRY_CAST(t2.v.b.c (#4) AS Int32 NULL) = t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v.b.c]
 │       └── estimated rows: 1.00

@@ -187,7 +187,9 @@ fn build_virtual_column_metas(
     let mut in_memory_sizes = Vec::with_capacity(virtual_column_metas.len());
     let mut column_stat_bitmap = MutableBitmap::with_capacity(virtual_column_metas.len());
 
-    for (column_id, virtual_column_meta) in virtual_column_metas {
+    let mut sorted_metas = virtual_column_metas.iter().collect::<Vec<_>>();
+    sorted_metas.sort_unstable_by_key(|(column_id, _)| **column_id);
+    for (column_id, virtual_column_meta) in sorted_metas {
         let path_name = path_map
             .get(column_id)
             .map(|(source_column_id, path)| {
@@ -296,12 +298,16 @@ fn build_virtual_path_statistic(
     let mut path_names = Vec::new();
     let mut path_counts = Vec::new();
 
-    for (source_column_id, path_stats) in virtual_path_statistics {
+    let mut sorted_statistics = virtual_path_statistics.iter().collect::<Vec<_>>();
+    sorted_statistics.sort_unstable_by_key(|(source_column_id, _)| **source_column_id);
+    for (source_column_id, path_stats) in sorted_statistics {
+        let mut sorted_path_counts = path_stats.path_counts.iter().collect::<Vec<_>>();
+        sorted_path_counts.sort_unstable_by_key(|(column_id, _)| *column_id);
         let source_name = source_column_names
             .get(source_column_id)
             .cloned()
             .unwrap_or_else(|| source_column_id.to_string());
-        for (column_id, path_count) in &path_stats.path_counts {
+        for (column_id, path_count) in sorted_path_counts {
             let path_name = path_map
                 .get(column_id)
                 .map(|(_, path)| format!("{}.{}", &source_name, &path))
