@@ -505,14 +505,16 @@ fn parse_serialized_treemap(buf: &[u8]) -> Result<SerializedTreemap<'_>> {
 mod tests {
     use std::ops::RangeInclusive;
 
+    use proptest::prelude::*;
     use roaring::RoaringTreemap;
 
     use super::FastTreemap;
     use super::FastTreemapOp;
     use crate::bitmap::HybridBitmap;
-    use crate::bitmap::reader::create_format_spec_32_bitmap;
-    use crate::bitmap::reader::create_format_spec_64_bitmap;
-    use crate::bitmap::reader::create_format_spec_portable_64_bitmap;
+    use crate::bitmap::test_support::create_format_spec_32_bitmap;
+    use crate::bitmap::test_support::create_format_spec_64_bitmap;
+    use crate::bitmap::test_support::create_format_spec_portable_64_bitmap;
+    use crate::bitmap::test_support::serialization_strategy;
 
     fn roaring_treemap(values: impl IntoIterator<Item = u64>) -> RoaringTreemap {
         values.into_iter().collect()
@@ -839,6 +841,39 @@ mod tests {
                     FastTreemapOp::Xor => bitmap.bitxor_assign_serialized(rhs),
                 };
                 assert!(result.is_err(), "{op:?} rejects {name}");
+            }
+        }
+    }
+
+    #[cfg_attr(miri, ignore)]
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(32))]
+
+        #[test]
+        fn prop_fast_treemap_assign_serialized_ops(
+            ((lhs_buf, lhs_tree), (rhs_buf, rhs_tree)) in
+                (serialization_strategy(), serialization_strategy())
+        ) {
+            for op in [
+                FastTreemapOp::And,
+                FastTreemapOp::Or,
+                FastTreemapOp::Sub,
+                FastTreemapOp::Xor,
+            ] {
+                let expected = match op {
+                    FastTreemapOp::And => (&lhs_tree & &rhs_tree).iter().collect::<Vec<_>>(),
+                    FastTreemapOp::Or => (&lhs_tree | &rhs_tree).iter().collect::<Vec<_>>(),
+                    FastTreemapOp::Sub => (&lhs_tree - &rhs_tree).iter().collect::<Vec<_>>(),
+                    FastTreemapOp::Xor => (&lhs_tree ^ &rhs_tree).iter().collect::<Vec<_>>(),
+                };
+                let mut fast = FastTreemap::deserialize(&lhs_buf).unwrap();
+                match op {
+                    FastTreemapOp::And => fast.bitand_assign_serialized(&rhs_buf).unwrap(),
+                    FastTreemapOp::Or => fast.bitor_assign_serialized(&rhs_buf).unwrap(),
+                    FastTreemapOp::Sub => fast.sub_assign_serialized(&rhs_buf).unwrap(),
+                    FastTreemapOp::Xor => fast.bitxor_assign_serialized(&rhs_buf).unwrap(),
+                }
+                prop_assert_eq!(treemap_values(&fast), expected, "{:?}", op);
             }
         }
     }
