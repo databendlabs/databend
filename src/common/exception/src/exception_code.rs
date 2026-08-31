@@ -483,8 +483,8 @@ build_exceptions! {
     DuplicatedUpsertFiles(2014),
     /// Table already locked
     TableAlreadyLocked(2015),
-    /// Table lock expired
-    TableLockExpired(2016),
+    /// Lease expired
+    LeaseExpired(2016),
 }
 
 // User and Role Management Errors [2201-2218]

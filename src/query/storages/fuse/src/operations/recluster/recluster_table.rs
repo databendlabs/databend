@@ -55,6 +55,7 @@ impl FuseTable {
         limit: Option<usize>,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
+        claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
 
@@ -125,10 +126,10 @@ impl FuseTable {
             let valid_carry = std::mem::take(&mut carry.pending)
                 .into_iter()
                 .filter(|window| {
-                    let valid = window
-                        .segments
-                        .iter()
-                        .all(|(location, _)| live_segments.contains_key(location));
+                    let valid = window.segments.iter().all(|(location, _)| {
+                        live_segments.contains_key(location)
+                            && !claimed_segments.contains(location.0.as_str())
+                    });
                     if !valid {
                         debug!(
                             "recluster: carried window invalidated locations={} skip_reason=carried_location_missing",
@@ -179,9 +180,14 @@ impl FuseTable {
                 });
                 let mut scan_locations = Vec::with_capacity(scan_range.len());
                 for (offset, location) in scan_range.iter().enumerate() {
-                    if carry_locations
-                        .as_ref()
-                        .is_some_and(|locations| locations.contains(location))
+                    // Intentional FINAL semantics: claimed segments are treated as work delegated
+                    // to concurrent recluster tasks. This statement does not wait for claim owners;
+                    // if every remaining candidate is claimed, it may return success even if an
+                    // owner later fails. A subsequent RECLUSTER statement can pick that work up.
+                    if claimed_segments.contains(location.0.as_str())
+                        || carry_locations
+                            .as_ref()
+                            .is_some_and(|locations| locations.contains(location))
                     {
                         continue;
                     }

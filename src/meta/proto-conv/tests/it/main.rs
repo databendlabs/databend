@@ -175,3 +175,4 @@ mod v180_paimon_catalog_option;
 mod v181_materialized_view_meta;
 mod v182_aggregate_state_data_type;
 mod v183_data_share;
+mod v184_segment_claim_meta;

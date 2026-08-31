@@ -44,7 +44,7 @@
 use chrono::Utc;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::TableLockExpired;
+use databend_common_meta_app::app_error::LeaseExpired;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
@@ -168,8 +168,10 @@ where
                 Some((lock_meta, Some(req.ttl)))
             },
             || {
-                Err(AppError::TableLockExpired(TableLockExpired::new(
-                    table_id, ctx,
+                Err(AppError::LeaseExpired(LeaseExpired::new(
+                    table_id,
+                    req.revision,
+                    ctx,
                 )))
             },
         )
