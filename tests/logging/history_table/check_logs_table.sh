@@ -2,9 +2,6 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lineage_sqllogic.sh"
-
 # Source query IDs from setup script
 if [ -z "$QUERY_ID" ]; then
     echo "Error: Query IDs not set. Run setup_test_data.sh first."
