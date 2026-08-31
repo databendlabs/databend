@@ -1,0 +1,166 @@
+statement ok
+CREATE OR REPLACE TABLE decimal_same_width(
+    d64 DECIMAL(10, 2),
+    d128 DECIMAL(20, 0),
+    d256 DECIMAL(40, 5)
+)
+
+statement ok
+INSERT INTO decimal_same_width VALUES (12345678.90, 12345678901234567890, 12345678901234567890123456789012345.67890)
+
+statement ok
+CREATE OR REPLACE TABLE decimal_cross_64_128(v DECIMAL(18, 0))
+
+statement ok
+INSERT INTO decimal_cross_64_128 VALUES (123456789012345678)
+
+statement ok
+CREATE OR REPLACE TABLE decimal_cross_128_256(v DECIMAL(38, 0))
+
+statement ok
+INSERT INTO decimal_cross_128_256 VALUES (12345678901234567890123456789012345678)
+
+statement ok
+CREATE OR REPLACE TABLE decimal_scale_change(v DECIMAL(20, 0))
+
+statement ok
+INSERT INTO decimal_scale_change VALUES (123)
+
+statement ok
+CREATE OR REPLACE TABLE decimal_precision_narrow(v DECIMAL(30, 0))
+
+statement ok
+INSERT INTO decimal_precision_narrow VALUES (12345678901234567890)
+
+statement ok
+CREATE OR REPLACE TABLE decimal_original_blocks(table_name STRING, block_location STRING)
+
+statement ok
+INSERT INTO decimal_original_blocks
+SELECT 'same_width', block_location FROM fuse_block('default', 'decimal_same_width')
+
+statement ok
+INSERT INTO decimal_original_blocks
+SELECT 'cross_64_128', block_location FROM fuse_block('default', 'decimal_cross_64_128')
+
+statement ok
+INSERT INTO decimal_original_blocks
+SELECT 'cross_128_256', block_location FROM fuse_block('default', 'decimal_cross_128_256')
+
+statement ok
+INSERT INTO decimal_original_blocks
+SELECT 'scale_change', block_location FROM fuse_block('default', 'decimal_scale_change')
+
+statement ok
+INSERT INTO decimal_original_blocks
+SELECT 'precision_narrow', block_location FROM fuse_block('default', 'decimal_precision_narrow')
+
+# Widening precision within the same Decimal64/128/256 storage width is metadata-only.
+statement ok
+ALTER TABLE decimal_same_width MODIFY COLUMN d64 DECIMAL(15, 2)
+
+statement ok
+ALTER TABLE decimal_same_width MODIFY COLUMN d128 DECIMAL(30, 0)
+
+statement ok
+ALTER TABLE decimal_same_width MODIFY COLUMN d256 DECIMAL(50, 5)
+
+query TTT
+SELECT typeof(d64), typeof(d128), typeof(d256) FROM decimal_same_width
+----
+DECIMAL(15, 2) NULL DECIMAL(30, 0) NULL DECIMAL(50, 5) NULL
+
+query RRR
+SELECT d64, d128, d256 FROM decimal_same_width
+----
+12345678.90 12345678901234567890 12345678901234567890123456789012345.67890
+
+query B
+SELECT count(*) = count_if(new_blocks.block_location IS NOT NULL)
+FROM decimal_original_blocks AS old_blocks
+LEFT JOIN fuse_block('default', 'decimal_same_width') AS new_blocks
+    ON old_blocks.block_location = new_blocks.block_location
+WHERE old_blocks.table_name = 'same_width'
+----
+1
+
+# Crossing a storage-width boundary, changing scale, or narrowing precision must rewrite data.
+statement ok
+ALTER TABLE decimal_cross_64_128 MODIFY COLUMN v DECIMAL(19, 0)
+
+statement ok
+ALTER TABLE decimal_cross_128_256 MODIFY COLUMN v DECIMAL(39, 0)
+
+statement ok
+ALTER TABLE decimal_scale_change MODIFY COLUMN v DECIMAL(30, 2)
+
+statement ok
+ALTER TABLE decimal_precision_narrow MODIFY COLUMN v DECIMAL(20, 0)
+
+query TR
+SELECT typeof(v), v FROM decimal_cross_64_128
+----
+DECIMAL(19, 0) NULL 123456789012345678
+
+query TR
+SELECT typeof(v), v FROM decimal_cross_128_256
+----
+DECIMAL(39, 0) NULL 12345678901234567890123456789012345678
+
+query TR
+SELECT typeof(v), v FROM decimal_scale_change
+----
+DECIMAL(30, 2) NULL 123.00
+
+query TR
+SELECT typeof(v), v FROM decimal_precision_narrow
+----
+DECIMAL(20, 0) NULL 12345678901234567890
+
+query TB rowsort
+SELECT 'cross_64_128', count_if(new_blocks.block_location IS NULL) = count(*)
+FROM decimal_original_blocks AS old_blocks
+LEFT JOIN fuse_block('default', 'decimal_cross_64_128') AS new_blocks
+    ON old_blocks.block_location = new_blocks.block_location
+WHERE old_blocks.table_name = 'cross_64_128'
+UNION ALL
+SELECT 'cross_128_256', count_if(new_blocks.block_location IS NULL) = count(*)
+FROM decimal_original_blocks AS old_blocks
+LEFT JOIN fuse_block('default', 'decimal_cross_128_256') AS new_blocks
+    ON old_blocks.block_location = new_blocks.block_location
+WHERE old_blocks.table_name = 'cross_128_256'
+UNION ALL
+SELECT 'scale_change', count_if(new_blocks.block_location IS NULL) = count(*)
+FROM decimal_original_blocks AS old_blocks
+LEFT JOIN fuse_block('default', 'decimal_scale_change') AS new_blocks
+    ON old_blocks.block_location = new_blocks.block_location
+WHERE old_blocks.table_name = 'scale_change'
+UNION ALL
+SELECT 'precision_narrow', count_if(new_blocks.block_location IS NULL) = count(*)
+FROM decimal_original_blocks AS old_blocks
+LEFT JOIN fuse_block('default', 'decimal_precision_narrow') AS new_blocks
+    ON old_blocks.block_location = new_blocks.block_location
+WHERE old_blocks.table_name = 'precision_narrow'
+----
+cross_128_256 1
+cross_64_128 1
+precision_narrow 1
+scale_change 1
+
+statement ok
+DROP TABLE decimal_original_blocks
+
+statement ok
+DROP TABLE decimal_same_width
+
+statement ok
+DROP TABLE decimal_cross_64_128
+
+statement ok
+DROP TABLE decimal_cross_128_256
+
+statement ok
+DROP TABLE decimal_scale_change
+
+statement ok
+DROP TABLE decimal_precision_narrow

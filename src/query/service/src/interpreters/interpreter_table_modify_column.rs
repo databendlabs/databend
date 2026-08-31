@@ -436,12 +436,17 @@ impl ModifyTableColumnInterpreter {
                 let old_field = schema.field_with_name(&field.name)?;
                 let is_alter_column_string_to_binary =
                     is_string_to_binary(&old_field.data_type, &field.data_type);
+                let is_decimal_precision_widening =
+                    is_decimal_precision_widening(&old_field.data_type, &field.data_type);
                 // If two conditions are met, we don't need rebuild the table,
-                // as rebuild table can be a time-consuming job.
-                // 1. alter column from string to binary in parquet or data type not changed.
+                // as rebuilding a table can be a time-consuming job.
+                // 1. The physical representation is unchanged: alter column from string to
+                //    binary in parquet, widen a decimal within the same storage width without
+                //    changing its scale, or leave the data type unchanged.
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
                 if ((format_as_parquet && is_alter_column_string_to_binary)
+                    || is_decimal_precision_widening
                     || old_field.data_type == field.data_type)
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
@@ -886,6 +891,77 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
                     .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
         }
         _ => false,
+    }
+}
+
+fn is_decimal_precision_widening(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    match (old_ty, new_ty) {
+        (TableDataType::Decimal(old), TableDataType::Decimal(new)) => {
+            old.data_kind() == new.data_kind()
+                && old.scale() == new.scale()
+                && old.precision() < new.precision()
+        }
+        (TableDataType::Nullable(old), TableDataType::Nullable(new)) => {
+            is_decimal_precision_widening(old, new)
+        }
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    fn decimal(precision: u8, scale: u8) -> TableDataType {
+        TableDataType::Decimal(DecimalDataType::from(
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    #[test]
+    fn test_is_decimal_precision_widening() {
+        assert!(is_decimal_precision_widening(
+            &decimal(20, 0),
+            &decimal(30, 0)
+        ));
+        assert!(is_decimal_precision_widening(
+            &decimal(10, 2).wrap_nullable(),
+            &decimal(15, 2).wrap_nullable()
+        ));
+        assert!(is_decimal_precision_widening(
+            &decimal(40, 5),
+            &decimal(50, 5)
+        ));
+
+        // Crossing a storage-width boundary changes the physical representation.
+        assert!(!is_decimal_precision_widening(
+            &decimal(18, 0),
+            &decimal(19, 0)
+        ));
+        assert!(!is_decimal_precision_widening(
+            &decimal(38, 0),
+            &decimal(39, 0)
+        ));
+        assert!(!is_decimal_precision_widening(
+            &decimal(30, 0),
+            &decimal(40, 0)
+        ));
+
+        assert!(!is_decimal_precision_widening(
+            &decimal(30, 0),
+            &decimal(20, 0)
+        ));
+        assert!(!is_decimal_precision_widening(
+            &decimal(20, 0),
+            &decimal(30, 2)
+        ));
+        assert!(!is_decimal_precision_widening(
+            &decimal(20, 0),
+            &decimal(20, 0)
+        ));
     }
 }
 
