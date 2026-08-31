@@ -12008,7 +12008,7 @@ dependencies = [
 [[package]]
 name = "lindera-tantivy"
 version = "5.0.1"
-source = "git+https://github.com/b41sh/lindera-tantivy?rev=0f522e51c8d7517e9560f17740c588011b1b9467#0f522e51c8d7517e9560f17740c588011b1b9467"
+source = "git+https://github.com/datafuse-extras/lindera-tantivy?rev=a40ccd7#a40ccd7a87791de6a851224333303d3afb9f96bd"
 dependencies = [
  "lindera",
  "lindera-analysis",
@@ -13685,7 +13685,7 @@ checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 [[package]]
 name = "ownedbytes"
 version = "0.9.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -17903,7 +17903,7 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 [[package]]
 name = "tantivy"
 version = "0.27.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -17956,7 +17956,7 @@ dependencies = [
 [[package]]
 name = "tantivy-bitpacker"
 version = "0.10.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "bitpacking",
 ]
@@ -17964,7 +17964,7 @@ dependencies = [
 [[package]]
 name = "tantivy-columnar"
 version = "0.7.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -17979,7 +17979,7 @@ dependencies = [
 [[package]]
 name = "tantivy-common"
 version = "0.11.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -18002,7 +18002,7 @@ dependencies = [
 [[package]]
 name = "tantivy-jieba"
 version = "0.20.0"
-source = "git+https://github.com/b41sh/tantivy-jieba?rev=22c3f82888b304cc97441843da9b4e71cd4d204e#22c3f82888b304cc97441843da9b4e71cd4d204e"
+source = "git+https://github.com/datafuse-extras/tantivy-jieba?rev=3cda3c6#3cda3c626ad6e673c088ef8355d1a5f2bf4a06b5"
 dependencies = [
  "jieba-rs",
  "lazy_static",
@@ -18012,7 +18012,7 @@ dependencies = [
 [[package]]
 name = "tantivy-query-grammar"
 version = "0.26.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "fnv",
  "nom 7.1.3",
@@ -18024,7 +18024,7 @@ dependencies = [
 [[package]]
 name = "tantivy-sstable"
 version = "0.7.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "futures-util",
  "itertools 0.14.0",
@@ -18037,7 +18037,7 @@ dependencies = [
 [[package]]
 name = "tantivy-stacker"
 version = "0.7.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "murmurhash32",
  "tantivy-common",
@@ -18046,7 +18046,7 @@ dependencies = [
 [[package]]
 name = "tantivy-tokenizer-api"
 version = "0.7.0"
-source = "git+https://github.com/b41sh/tantivy?rev=3eb4dd325d6188bd87ee6b25823b286d5bb310a1#3eb4dd325d6188bd87ee6b25823b286d5bb310a1"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=760ddb7#760ddb7ad6c9e5ff4fbfdbebbd7c6cdc2eab3ca8"
 dependencies = [
  "serde",
 ]
