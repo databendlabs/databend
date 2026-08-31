@@ -648,11 +648,24 @@ mod bitmap_scalar {
             }
         }
 
+        fn fill_shared(
+            lhs: &mut HybridBitmap,
+            rhs: &mut HybridBitmap,
+            prefix: u32,
+            rng: &mut SmallRng,
+        ) {
+            let card = rng.gen_range(100..=10000);
+            for _ in 0..card {
+                let value = (prefix as u64) << 32 | rng.r#gen::<u32>() as u64;
+                lhs.insert(value);
+                rhs.insert(value);
+            }
+        }
+
         let mut lhs = HybridBitmap::new();
         let mut rhs = HybridBitmap::new();
         for p in 0..shared {
-            fill(&mut lhs, p, &mut rng);
-            fill(&mut rhs, p, &mut rng);
+            fill_shared(&mut lhs, &mut rhs, p, &mut rng);
         }
         for i in 0..lhs_only {
             fill(&mut lhs, shared + i, &mut rng);

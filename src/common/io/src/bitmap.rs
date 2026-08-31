@@ -736,11 +736,13 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
     }
 }
 
+#[inline]
 fn is_hybrid(buf: &[u8]) -> bool {
     buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION
 }
 
-fn is_hybrid_large(buf: &[u8]) -> bool {
+#[inline]
+pub fn is_hybrid_large(buf: &[u8]) -> bool {
     is_hybrid(buf) && buf[3] == HYBRID_KIND_LARGE
 }
 
