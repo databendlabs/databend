@@ -176,7 +176,9 @@ impl Aggregate {
             let cardinality = (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0);
             return Ok(Arc::new(StatInfo {
                 cardinality,
-                max_cardinality: cardinality,
+                // A grouped aggregate emits at most one row per input row.
+                // NDV is still the costing estimate, not a proof-grade cap.
+                max_cardinality: stat_info.max_cardinality.max(cardinality),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
@@ -227,7 +229,9 @@ impl Aggregate {
 
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality: cardinality,
+            // Correlated NDV estimates can understate the number of groups;
+            // retain the input risk separately from the costing cardinality.
+            max_cardinality: stat_info.max_cardinality.max(cardinality),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -427,5 +431,62 @@ impl Operator for Aggregate {
         }
 
         Ok(children_required)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::stat_distribution::NdvEstimate;
+    use databend_common_expression::stat_distribution::StatCount;
+    use databend_common_statistics::StatBounds;
+
+    use super::*;
+
+    #[test]
+    fn grouped_aggregate_retains_input_risk_bound() -> Result<()> {
+        let group = Symbol::new(0);
+        let aggregate = Aggregate {
+            mode: AggregateMode::Initial,
+            group_items: vec![ScalarItem {
+                scalar: ScalarExpr::BoundColumnRef(crate::plans::BoundColumnRef {
+                    span: None,
+                    column: crate::ColumnBindingBuilder::new(
+                        "g".to_string(),
+                        group,
+                        Box::new(DataType::Number(
+                            databend_common_expression::types::NumberDataType::Int64,
+                        )),
+                        crate::Visibility::Visible,
+                    )
+                    .build(),
+                }),
+                index: group,
+            }],
+            ..Default::default()
+        };
+        let input = Arc::new(StatInfo {
+            cardinality: 200_000_000.0,
+            max_cardinality: 200_000_000.0,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: HashMap::from([(
+                    group,
+                    ColumnStat::new(
+                        StatBounds::Int { min: 1, max: 1 },
+                        NdvEstimate::exact(1.0),
+                        StatCount::exact(0),
+                        None,
+                    )?,
+                )]),
+                ..Default::default()
+            },
+        });
+
+        let output = aggregate.derive_agg_stats(input)?;
+        assert_eq!(output.cardinality, 1.0);
+        assert_eq!(output.max_cardinality, 200_000_000.0);
+        Ok(())
     }
 }
