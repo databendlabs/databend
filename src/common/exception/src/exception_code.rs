@@ -411,7 +411,7 @@ build_exceptions! {
     IllegalCloudControlMessageFormat(1703),
 }
 
-// UDF and Extension Errors [1810, 2601-2607]
+// UDF and Extension Errors [1810, 2601-2608]
 build_exceptions! {
     /// UDF runtime error
     UDFRuntimeError(1810),
@@ -429,6 +429,8 @@ build_exceptions! {
     UnsupportedDataType(2606),
     /// UDF data error
     UDFDataError(2607),
+    /// UDF endpoint response error
+    UDFEndpointResponseError(2608),
 }
 
 // Task Errors [2611-2614]
