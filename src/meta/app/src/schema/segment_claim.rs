@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
 
 use crate::tenant::Tenant;
+
+/// Maximum number of unique segment locations protected by one maintenance claim.
+pub const MAX_SEGMENT_LOCATIONS_PER_CLAIM: usize = 128;
 
 /// A short-lived maintenance claim over immutable segment objects.
 ///
@@ -29,7 +33,7 @@ pub struct SegmentClaimMeta {
     pub node: String,
     pub query_id: String,
     pub created_on: DateTime<Utc>,
-    pub segment_locations: Vec<String>,
+    pub segment_locations: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,7 +50,7 @@ pub struct CreateSegmentClaimReq {
     pub user: String,
     pub node: String,
     pub query_id: String,
-    pub segment_locations: Vec<String>,
+    pub segment_locations: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

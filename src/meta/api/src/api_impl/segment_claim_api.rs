@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::CreateSegmentClaimReq;
 use databend_common_meta_app::schema::DeleteSegmentClaimReq;
 use databend_common_meta_app::schema::ExtendSegmentClaimReq;
 use databend_common_meta_app::schema::ListSegmentClaimsReq;
+use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_meta_app::schema::SegmentClaimIdent;
 use databend_common_meta_app::schema::SegmentClaimMeta;
 use databend_common_meta_app::schema::segment_claim_ident::SEGMENT_CLAIM_SEQ_KEY;
@@ -65,12 +66,18 @@ where
 
     async fn create_segment_claim(
         &self,
-        mut req: CreateSegmentClaimReq,
+        req: CreateSegmentClaimReq,
     ) -> Result<CreateSegmentClaimReply, KVAppError> {
-        req.segment_locations.sort_unstable();
-        req.segment_locations.dedup();
         if req.segment_locations.is_empty() {
             return Err(invalid_reply("segment claim must contain locations").into());
+        }
+        if req.segment_locations.len() > MAX_SEGMENT_LOCATIONS_PER_CLAIM {
+            return Err(invalid_reply(format!(
+                "segment claim contains {} locations, exceeding the maximum of {}",
+                req.segment_locations.len(),
+                MAX_SEGMENT_LOCATIONS_PER_CLAIM,
+            ))
+            .into());
         }
 
         let meta = SegmentClaimMeta {
@@ -108,12 +115,7 @@ where
         let conflicts = claims
             .iter()
             .take_while(|(other_claim_id, _)| *other_claim_id < claim_id)
-            .any(|(_, other)| {
-                other
-                    .segment_locations
-                    .iter()
-                    .any(|location| requested.binary_search(location).is_ok())
-            });
+            .any(|(_, other)| !requested.is_disjoint(&other.segment_locations));
         if conflicts {
             self.delete_segment_claim(DeleteSegmentClaimReq {
                 tenant: req.tenant,
@@ -186,6 +188,7 @@ mod tests {
     use databend_common_meta_app::schema::DeleteSegmentClaimReq;
     use databend_common_meta_app::schema::ExtendSegmentClaimReq;
     use databend_common_meta_app::schema::ListSegmentClaimsReq;
+    use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 
     use super::SegmentClaimApi;
     use crate::kv_app_error::KVAppError;
@@ -209,11 +212,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_segment_claim_location_limit() -> anyhow::Result<()> {
+        let store = testing::new_local_meta_store().await;
+        let mut at_limit = create_req("at-limit", vec!["placeholder"]);
+        at_limit.segment_locations = (0..MAX_SEGMENT_LOCATIONS_PER_CLAIM)
+            .map(|index| format!("segment-{index}"))
+            .collect();
+        assert!(
+            store
+                .create_segment_claim(at_limit)
+                .await?
+                .claim_id
+                .is_some()
+        );
+
+        let mut over_limit = create_req("over-limit", vec!["placeholder"]);
+        over_limit.segment_locations = (0..=MAX_SEGMENT_LOCATIONS_PER_CLAIM)
+            .map(|index| format!("other-segment-{index}"))
+            .collect();
+        let error = store
+            .create_segment_claim(over_limit)
+            .await
+            .expect_err("claim above the location limit must be rejected");
+        assert!(error.to_string().contains("exceeding the maximum of 128"));
+
+        let claims = store
+            .list_segment_claims(ListSegmentClaimsReq {
+                tenant: testing::tenant("tenant1"),
+                table_id: TABLE_ID,
+            })
+            .await?;
+        assert_eq!(claims.len(), 1);
+        assert_eq!(
+            claims[0].1.segment_locations.len(),
+            MAX_SEGMENT_LOCATIONS_PER_CLAIM
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_intersecting_claims_have_one_winner() -> anyhow::Result<()> {
         let store = testing::new_local_meta_store().await;
         let (left, right) = tokio::join!(
-            store.create_segment_claim(create_req("q1", vec!["s1"])),
-            store.create_segment_claim(create_req("q2", vec!["s1"]))
+            store.create_segment_claim(create_req("q1", vec!["s1", "shared"])),
+            store.create_segment_claim(create_req("q2", vec!["shared", "s2"]))
         );
         let left = left?;
         let right = right?;
@@ -226,7 +268,8 @@ mod tests {
             })
             .await?;
         assert_eq!(claims.len(), 1);
-        assert_eq!(claims[0].1.segment_locations, vec!["s1"]);
+        assert_eq!(claims[0].1.segment_locations.len(), 2);
+        assert!(claims[0].1.segment_locations.contains("shared"));
         Ok(())
     }
 

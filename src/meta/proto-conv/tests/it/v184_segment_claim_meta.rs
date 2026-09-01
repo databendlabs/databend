@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema::SegmentClaimMeta;
@@ -44,7 +46,7 @@ fn test_decode_v184_segment_claim_meta() -> anyhow::Result<()> {
         node: "node".to_string(),
         query_id: "query".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
-        segment_locations: vec!["segment-1".to_string(), "segment-2".to_string()],
+        segment_locations: BTreeSet::from(["segment-1".to_string(), "segment-2".to_string()]),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

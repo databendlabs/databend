@@ -127,6 +127,7 @@ pub use segment_claim::CreateSegmentClaimReq;
 pub use segment_claim::DeleteSegmentClaimReq;
 pub use segment_claim::ExtendSegmentClaimReq;
 pub use segment_claim::ListSegmentClaimsReq;
+pub use segment_claim::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 pub use segment_claim::SegmentClaimMeta;
 pub use segment_claim_ident::SegmentClaimIdent;
 pub use sequence::*;

@@ -150,7 +150,7 @@ impl CoordinationManager {
                 user: ctx.get_current_user()?.name,
                 node: ctx.get_cluster().local_id.clone(),
                 query_id: ctx.get_id(),
-                segment_locations,
+                segment_locations: segment_locations.into_iter().collect(),
             })
             .await?;
         let Some(claim_id) = reply.claim_id else {
