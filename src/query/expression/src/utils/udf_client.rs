@@ -43,10 +43,14 @@ use databend_common_metrics::external_server::record_running_requests_external_s
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
+use http::Response as HttpResponse;
+use http::StatusCode;
 use hyper_util::client::legacy::connect::HttpConnector;
 use itertools::Itertools;
 use tonic::Request;
+use tonic::Response as TonicResponse;
 use tonic::Status;
+use tonic::body::Body;
 use tonic::metadata::KeyAndValueRef;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
@@ -54,6 +58,7 @@ use tonic::metadata::MetadataValue;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
 use tonic::transport::channel::Channel;
+use tower::util::MapResponse;
 
 use crate::BlockEntry;
 use crate::DataBlock;
@@ -81,6 +86,19 @@ const TRANSPORT_ERROR_SNIPPETS: &[&str] = &[
     "no route to host",
 ];
 
+#[derive(Clone, Copy, Debug)]
+struct HttpResponseStatus(StatusCode);
+
+type CaptureHttpStatus = fn(HttpResponse<Body>) -> HttpResponse<Body>;
+type UdfChannel = MapResponse<Channel, CaptureHttpStatus>;
+
+/// Preserves the HTTP status before tonic converts the response to gRPC types.
+fn capture_http_status(mut response: HttpResponse<Body>) -> HttpResponse<Body> {
+    let status = HttpResponseStatus(response.status());
+    response.extensions_mut().insert(status);
+    response
+}
+
 #[derive(Debug)]
 enum FlightDecodeIssue {
     TransportInterrupted,
@@ -92,7 +110,7 @@ enum FlightDecodeIssue {
 
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
-    inner: FlightServiceClient<Channel>,
+    inner: FlightServiceClient<UdfChannel>,
     batch_rows: usize,
     headers: MetadataMap,
 }
@@ -154,6 +172,7 @@ impl UDFFlightClient {
                     err
                 ))
             })?;
+        let channel = MapResponse::new(channel, capture_http_status as CaptureHttpStatus);
         let inner =
             FlightServiceClient::new(channel).max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
@@ -426,7 +445,9 @@ impl UDFFlightClient {
             .build(stream::iter(batches))
             .map(|data| data.unwrap());
         let request = self.make_request(flight_data_stream);
-        let flight_data_stream = self.inner.do_exchange(request).await?.into_inner();
+        let response = self.inner.do_exchange(request).await?;
+        ensure_no_http_bad_gateway(func_name, &response)?;
+        let flight_data_stream = response.into_inner();
         let record_batch_stream = FlightRecordBatchStream::new_from_flight_data(
             flight_data_stream.map_err(|err| err.into()),
         )
@@ -443,6 +464,19 @@ impl UDFFlightClient {
         concat_batches(&schema, batches.iter())
             .map_err(|err| ErrorCode::UDFDataError(err.to_string()))
     }
+}
+
+fn ensure_no_http_bad_gateway<T>(func_name: &str, response: &TonicResponse<T>) -> Result<()> {
+    if response
+        .extensions()
+        .get::<HttpResponseStatus>()
+        .is_some_and(|status| status.0 == StatusCode::BAD_GATEWAY)
+    {
+        return Err(ErrorCode::UDFDataError(format!(
+            "The endpoint for the user-defined function \"{func_name}\" returned HTTP 502 (Bad Gateway) instead of a gRPC response. Check the proxy or gateway configuration and the UDF server's health and logs."
+        )));
+    }
+    Ok(())
 }
 
 fn handle_flight_decode_error(func_name: &str, err: FlightError) -> ErrorCode {
@@ -549,7 +583,12 @@ pub fn error_kind(message: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
+    use arrow_flight::FlightData;
+    use futures::executor::block_on;
     use tonic::Code;
+    use tower::service_fn;
 
     use super::*;
 
@@ -611,5 +650,40 @@ mod tests {
             message.contains("could not parse"),
             "malformed data hint missing: {message}"
         );
+    }
+
+    /// Verifies that the captured status survives tonic's response conversion
+    /// and is available before the streaming body is decoded.
+    #[test]
+    fn http_bad_gateway_is_detected_before_body_decode() {
+        block_on(async {
+            let service = service_fn(|_request: http::Request<Body>| async {
+                Ok::<_, Infallible>(
+                    HttpResponse::builder()
+                        .status(StatusCode::BAD_GATEWAY)
+                        .body(Body::empty())
+                        .expect("build HTTP response"),
+                )
+            });
+            let service = MapResponse::new(service, capture_http_status as CaptureHttpStatus);
+            let mut client = FlightServiceClient::new(service);
+            let response = client
+                .do_exchange(stream::empty::<FlightData>())
+                .await
+                .expect("receive streaming response");
+
+            let err = ensure_no_http_bad_gateway("test_udf", &response)
+                .expect_err("HTTP 502 should be rejected");
+            let message = err.message();
+            assert!(
+                message.contains("returned HTTP 502 (Bad Gateway) instead of a gRPC response"),
+                "HTTP 502 hint missing: {message}"
+            );
+            assert!(
+                !message.contains("could not be reached")
+                    && !message.contains("reported by the proxy or gateway"),
+                "HTTP 502 response was attributed to a specific component: {message}"
+            );
+        });
     }
 }
