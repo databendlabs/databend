@@ -345,6 +345,9 @@ lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
 limits-rs = "0.2.0"
+lindera = { version = "5.0.1", features = ["embed-ipadic"] }
+lindera-analysis = "5.0.1"
+lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
 logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main", features = [
     'json',
     'rolling-file',
@@ -475,11 +478,11 @@ sub-cache = "0.2.1"
 syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = "0.26.0"
-tantivy-common = "0.10.0"
+tantivy = "0.27.0"
+tantivy-common = "0.11.0"
 tantivy-fst = "0.5"
-tantivy-jieba = "0.17.0"
-tantivy-query-grammar = "0.25.0"
+tantivy-jieba = "0.20.0"
+tantivy-query-grammar = "0.26.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 terminal_size = "0.4.2"
@@ -652,6 +655,7 @@ lance-encoding = { git = "https://github.com/datafuse-extras/lance", rev = "85f9
 lance-file = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lance-io = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lindera-tantivy = { git = "https://github.com/datafuse-extras/lindera-tantivy", rev = "a40ccd7" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
@@ -660,9 +664,9 @@ recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "1
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "68ab55c" }
-tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-query-grammar" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "3cda3c6" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

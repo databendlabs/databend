@@ -143,8 +143,8 @@ REFRESH NGRAM INDEX idx1 ON t3
 query III
 select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_ngram_index_db', 't3');
 ----
-209 2098447 2097234
-240 2098447 2097234
+209 66820 65618
+240 66820 65618
 
 query ITT
 SELECT * FROM t3 WHERE content1 like '%speak%'
