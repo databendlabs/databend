@@ -512,6 +512,59 @@ statement ok
 set enforce_shuffle_join = 1
 
 statement ok
+set hash_join_shuffle_mode = 'node'
+
+statement ok
+set disable_join_reorder = 1
+
+query T
+explain select * from numbers(10) as t1 join numbers(20) as t2 on t1.number = t2.number
+----
+Exchange
+├── output columns: [t1.number (#0), t2.number (#1)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [t1.number (#0), t2.number (#1)]
+    ├── join type: INNER
+    ├── build keys: [t2.number (#1)]
+    ├── probe keys: [t1.number (#0)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters(distributed):
+    │   └── filter id:0, build key:t2.number (#1), probe targets:[t1.number (#0)@scan0], filter type:bloom,inlist,min_max
+    ├── estimated rows: 200.00
+    ├── Exchange(Build)
+    │   ├── output columns: [t2.number (#1)]
+    │   ├── exchange type: NodeToNodeHash(t2.number (#1))
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── scan id: 1
+    │       ├── output columns: [number (#1)]
+    │       ├── read rows: 20
+    │       ├── read size: < 1 KiB
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 20.00
+    └── Exchange(Probe)
+        ├── output columns: [t1.number (#0)]
+        ├── exchange type: NodeToNodeHash(t1.number (#0))
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── scan id: 0
+            ├── output columns: [number (#0)]
+            ├── read rows: 10
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 10.00
+
+statement ok
+set disable_join_reorder = 0
+
+statement ok
 create or replace table multi_key_scatter_probe(
     text_key string not null,
     key_num_1 uint64 not null,
@@ -674,3 +727,6 @@ drop table node_shuffle_r
 
 statement ok
 unset enforce_shuffle_join
+
+statement ok
+unset hash_join_shuffle_mode

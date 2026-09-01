@@ -34,6 +34,34 @@ use crate::SettingScope;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HashJoinShuffleMode {
+    Global,
+    Node,
+}
+
+impl HashJoinShuffleMode {
+    pub(crate) fn values() -> Vec<String> {
+        ["global", "node"].map(String::from).to_vec()
+    }
+}
+
+impl FromStr for HashJoinShuffleMode {
+    type Err = ErrorCode;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        if value.eq_ignore_ascii_case("global") {
+            Ok(Self::Global)
+        } else if value.eq_ignore_ascii_case("node") {
+            Ok(Self::Node)
+        } else {
+            Err(ErrorCode::InvalidConfig(format!(
+                "invalid hash_join_shuffle_mode: {value:?}"
+            )))
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum FlightCompression {
     Lz4,
@@ -484,6 +512,10 @@ impl Settings {
 
     pub fn get_enforce_shuffle_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_shuffle_join")? != 0)
+    }
+
+    pub fn get_hash_join_shuffle_mode(&self) -> Result<HashJoinShuffleMode> {
+        self.try_get_string("hash_join_shuffle_mode")?.parse()
     }
 
     pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {

@@ -107,13 +107,30 @@ async fn test_hash_join_child_distributions() -> Result<()> {
 
     ctx.get_settings()
         .set_setting("enforce_shuffle_join".to_string(), "1".to_string())?;
-    let shuffle_plan = optimized_join(&ctx).await?;
-    let mut shuffle_exchanges = Exchanges::default();
-    collect_exchanges(&shuffle_plan, &mut shuffle_exchanges);
-    shuffle_exchanges.node_to_node_key_counts.sort_unstable();
-    assert_eq!(shuffle_exchanges.node_to_node_key_counts, vec![2, 2]);
-    assert_eq!(shuffle_exchanges.global_hash, 0);
-    assert_eq!(shuffle_exchanges.broadcast, 0);
+
+    let global_plan = optimized_join(&ctx).await?;
+    let mut global_exchanges = Exchanges::default();
+    collect_exchanges(&global_plan, &mut global_exchanges);
+    assert!(global_exchanges.node_to_node_key_counts.is_empty());
+    assert_eq!(global_exchanges.global_hash, 2);
+    assert_eq!(global_exchanges.broadcast, 0);
+
+    let global_mark_plan = optimized_nullable_mark_join(&ctx).await?;
+    let mut global_mark_exchanges = Exchanges::default();
+    collect_exchanges(&global_mark_plan, &mut global_mark_exchanges);
+    assert!(global_mark_exchanges.node_to_node_key_counts.is_empty());
+    assert_eq!(global_mark_exchanges.global_hash, 1);
+    assert_eq!(global_mark_exchanges.broadcast, 1);
+
+    ctx.get_settings()
+        .set_setting("hash_join_shuffle_mode".to_string(), "node".to_string())?;
+    let node_plan = optimized_join(&ctx).await?;
+    let mut node_exchanges = Exchanges::default();
+    collect_exchanges(&node_plan, &mut node_exchanges);
+    node_exchanges.node_to_node_key_counts.sort_unstable();
+    assert_eq!(node_exchanges.node_to_node_key_counts, vec![2, 2]);
+    assert_eq!(node_exchanges.global_hash, 0);
+    assert_eq!(node_exchanges.broadcast, 0);
 
     let mark_plan = optimized_nullable_mark_join(&ctx).await?;
     let mut mark_exchanges = Exchanges::default();

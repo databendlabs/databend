@@ -140,7 +140,7 @@ impl Display for Distribution {
             Distribution::Broadcast => write!(f, "Broadcast"),
             Distribution::NodeToNodeHash(keys) => write!(
                 f,
-                "Hash({})",
+                "NodeToNodeHash({})",
                 keys.iter()
                     .map(|s| s.as_raw_expr().to_string())
                     .collect::<Vec<_>>()
@@ -155,5 +155,19 @@ impl Display for Distribution {
                     .join(", ")
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_distribution_display() {
+        assert_eq!(
+            Distribution::NodeToNodeHash(vec![]).to_string(),
+            "NodeToNodeHash()"
+        );
+        assert_eq!(Distribution::GlobalHash(vec![]).to_string(), "Hash()");
     }
 }

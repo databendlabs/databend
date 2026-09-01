@@ -57,7 +57,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Exchange(op) => {
             format!("Exchange: ({})", match op {
                 Exchange::NodeToNodeHash(scalars) => format!(
-                    "Hash({})",
+                    "NodeToNodeHash({})",
                     scalars
                         .iter()
                         .map(|s| s.as_raw_expr().to_string())
