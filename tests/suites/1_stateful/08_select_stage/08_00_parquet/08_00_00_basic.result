@@ -22,6 +22,8 @@
 131073	0	131072	0	131072	131073
 0
 0
+--- legacy Decimal schema annotation should survive plan serialization
+123
 --- large parquet file should be worked on parallel by rowgroups
 5000000
 parallel scan partitions: true

@@ -30,6 +30,7 @@ use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
+use parquet::schema::types::Type as ParquetType;
 
 use crate::statistics::collect_row_group_stats;
 
@@ -113,16 +114,152 @@ pub(crate) fn check_parquet_schema(
     path: &str,
     schema_from: &str,
 ) -> Result<()> {
-    if expect.root_schema() != actual.root_schema() {
-        // TODO:
-        // 1. better print the differs for large schema
-        // 2. don't check column id, table name, just check column name and types
+    if let Some(difference) =
+        first_schema_difference(expect.root_schema(), actual.root_schema(), "")
+    {
         return Err(ErrorCode::TableSchemaMismatch(format!(
-            "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
-            schema_from, path, expect, actual
+            "Parquet schema mismatch in file '{}'. Schema inferred from '{}'. First difference at '{}': {} differs (inferred: {}, file: {})",
+            path,
+            schema_from,
+            difference.path,
+            difference.property,
+            difference.expected,
+            difference.actual,
         )));
     }
     Ok(())
+}
+
+struct SchemaDifference {
+    path: String,
+    property: &'static str,
+    expected: String,
+    actual: String,
+}
+
+fn first_schema_difference(
+    expected: &ParquetType,
+    actual: &ParquetType,
+    path: &str,
+) -> Option<SchemaDifference> {
+    let expected_info = expected.get_basic_info();
+    let actual_info = actual.get_basic_info();
+    let current_path = if path.is_empty() { "<root>" } else { path };
+
+    macro_rules! difference {
+        ($property:expr, $expected:expr, $actual:expr) => {
+            return Some(SchemaDifference {
+                path: current_path.to_string(),
+                property: $property,
+                expected: format!("{:?}", $expected),
+                actual: format!("{:?}", $actual),
+            })
+        };
+    }
+
+    // The root message name is producer-specific metadata (for example,
+    // "schema" in Arrow and "spark_schema" in Spark), not a column name.
+    if !path.is_empty() && expected_info.name() != actual_info.name() {
+        difference!("field name", expected_info.name(), actual_info.name());
+    }
+
+    let expected_repetition = expected_info
+        .has_repetition()
+        .then(|| expected_info.repetition());
+    let actual_repetition = actual_info
+        .has_repetition()
+        .then(|| actual_info.repetition());
+    if expected_repetition != actual_repetition {
+        difference!("repetition", expected_repetition, actual_repetition);
+    }
+
+    match (expected, actual) {
+        (
+            ParquetType::PrimitiveType {
+                physical_type: expected_physical,
+                type_length: expected_length,
+                scale: expected_scale,
+                precision: expected_precision,
+                ..
+            },
+            ParquetType::PrimitiveType {
+                physical_type: actual_physical,
+                type_length: actual_length,
+                scale: actual_scale,
+                precision: actual_precision,
+                ..
+            },
+        ) => {
+            if expected_physical != actual_physical {
+                difference!("physical type", expected_physical, actual_physical);
+            }
+            if expected_length != actual_length {
+                difference!("type length", expected_length, actual_length);
+            }
+            if expected_precision != actual_precision {
+                difference!("precision", expected_precision, actual_precision);
+            }
+            if expected_scale != actual_scale {
+                difference!("scale", expected_scale, actual_scale);
+            }
+        }
+        (ParquetType::GroupType { .. }, ParquetType::GroupType { .. }) => {}
+        _ => difference!("node type", node_kind(expected), node_kind(actual)),
+    }
+
+    if expected_info.converted_type() != actual_info.converted_type() {
+        difference!(
+            "converted type",
+            expected_info.converted_type(),
+            actual_info.converted_type()
+        );
+    }
+    if expected_info.logical_type_ref() != actual_info.logical_type_ref() {
+        difference!(
+            "logical type",
+            expected_info.logical_type_ref(),
+            actual_info.logical_type_ref()
+        );
+    }
+
+    // Field IDs are metadata and are not used to map columns in stage Parquet reads.
+
+    if let (
+        ParquetType::GroupType {
+            fields: expected_fields,
+            ..
+        },
+        ParquetType::GroupType {
+            fields: actual_fields,
+            ..
+        },
+    ) = (expected, actual)
+    {
+        if expected_fields.len() != actual_fields.len() {
+            difference!("field count", expected_fields.len(), actual_fields.len());
+        }
+        for (expected_field, actual_field) in expected_fields.iter().zip(actual_fields) {
+            let field_path = if path.is_empty() {
+                expected_field.name().to_string()
+            } else {
+                format!("{path}.{}", expected_field.name())
+            };
+            if let Some(difference) =
+                first_schema_difference(expected_field, actual_field, &field_path)
+            {
+                return Some(difference);
+            }
+        }
+    }
+
+    None
+}
+
+fn node_kind(schema: &ParquetType) -> &'static str {
+    match schema {
+        ParquetType::PrimitiveType { .. } => "primitive",
+        ParquetType::GroupType { .. } => "group",
+    }
 }
 
 #[async_backtrace::framed]
@@ -293,5 +430,170 @@ impl Loader<ParquetMetaData> for LoaderWrapper<Operator> {
             None => self.0.stat(location).await?.content_length(),
         };
         read_metadata_async(location, &self.0, Some(size)).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use parquet::basic::ConvertedType;
+    use parquet::basic::LogicalType;
+    use parquet::basic::Repetition;
+    use parquet::basic::Type as PhysicalType;
+    use parquet::schema::types::SchemaDescriptor;
+    use parquet::schema::types::Type;
+
+    use super::check_parquet_schema;
+
+    fn decimal_schema(logical_type: Option<LogicalType>) -> SchemaDescriptor {
+        let deal = Type::primitive_type_builder("deal", PhysicalType::FIXED_LEN_BYTE_ARRAY)
+            .with_repetition(Repetition::OPTIONAL)
+            .with_converted_type(ConvertedType::DECIMAL)
+            .with_logical_type(logical_type)
+            .with_length(9)
+            .with_precision(20)
+            .with_scale(0)
+            .build()
+            .unwrap();
+        let root = Type::group_type_builder("spark_schema")
+            .with_fields(vec![Arc::new(deal)])
+            .build()
+            .unwrap();
+        SchemaDescriptor::new(Arc::new(root))
+    }
+
+    fn primitive_schema(
+        root_name: &str,
+        field_name: &str,
+        physical_type: PhysicalType,
+        field_id: Option<i32>,
+    ) -> SchemaDescriptor {
+        let field = Type::primitive_type_builder(field_name, physical_type)
+            .with_repetition(Repetition::REQUIRED)
+            .with_id(field_id)
+            .build()
+            .unwrap();
+        let root = Type::group_type_builder(root_name)
+            .with_fields(vec![Arc::new(field)])
+            .build()
+            .unwrap();
+        SchemaDescriptor::new(Arc::new(root))
+    }
+
+    #[test]
+    fn test_check_parquet_schema_reports_first_difference() {
+        let inferred = decimal_schema(Some(LogicalType::Decimal {
+            scale: 0,
+            precision: 20,
+        }));
+        let file = decimal_schema(None);
+
+        let error = check_parquet_schema(&inferred, &file, "actual.parquet", "inferred.parquet")
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("Parquet schema mismatch in file 'actual.parquet'"));
+        assert!(error.contains("Schema inferred from 'inferred.parquet'"));
+        assert!(error.contains("First difference at 'deal': logical type differs"));
+        assert!(error.contains("file: None"));
+    }
+
+    #[test]
+    fn test_check_parquet_schema_ignores_root_name_in_diagnostics() {
+        let inferred = primitive_schema("schema", "id", PhysicalType::INT32, None);
+        let file = primitive_schema(
+            "spark_schema",
+            "resourceType",
+            PhysicalType::BYTE_ARRAY,
+            None,
+        );
+
+        let error = check_parquet_schema(&inferred, &file, "actual.parquet", "inferred.parquet")
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains(
+            "First difference at 'id': field name differs (inferred: \"id\", file: \"resourceType\")"
+        ));
+    }
+
+    #[test]
+    fn test_check_parquet_schema_accepts_different_root_names() {
+        let inferred = primitive_schema("schema", "id", PhysicalType::INT32, None);
+        let file = primitive_schema("spark_schema", "id", PhysicalType::INT32, None);
+
+        check_parquet_schema(&inferred, &file, "actual.parquet", "inferred.parquet").unwrap();
+    }
+
+    #[test]
+    fn test_check_parquet_schema_accepts_different_field_ids() {
+        let inferred = primitive_schema("schema", "id", PhysicalType::INT32, Some(1));
+        let file = primitive_schema("schema", "id", PhysicalType::INT32, Some(2));
+
+        check_parquet_schema(&inferred, &file, "actual.parquet", "inferred.parquet").unwrap();
+    }
+
+    #[test]
+    fn test_check_parquet_schema_reports_node_kind() {
+        let nested = Type::group_type_builder("value")
+            .with_repetition(Repetition::REQUIRED)
+            .with_fields(vec![Arc::new(
+                Type::primitive_type_builder("id", PhysicalType::INT32)
+                    .with_repetition(Repetition::REQUIRED)
+                    .build()
+                    .unwrap(),
+            )])
+            .build()
+            .unwrap();
+        let inferred = SchemaDescriptor::new(Arc::new(
+            Type::group_type_builder("schema")
+                .with_fields(vec![Arc::new(nested)])
+                .build()
+                .unwrap(),
+        ));
+        let file = primitive_schema("schema", "value", PhysicalType::INT32, None);
+
+        let error = check_parquet_schema(&inferred, &file, "actual.parquet", "inferred.parquet")
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains(
+            "First difference at 'value': node type differs (inferred: \"group\", file: \"primitive\")"
+        ));
+    }
+
+    #[test]
+    fn test_check_parquet_schema_reports_field_count_before_field_name() {
+        let inferred = SchemaDescriptor::new(Arc::new(
+            Type::group_type_builder("schema")
+                .with_fields(vec![
+                    Arc::new(
+                        Type::primitive_type_builder("a", PhysicalType::INT32)
+                            .with_repetition(Repetition::REQUIRED)
+                            .build()
+                            .unwrap(),
+                    ),
+                    Arc::new(
+                        Type::primitive_type_builder("b", PhysicalType::INT32)
+                            .with_repetition(Repetition::REQUIRED)
+                            .build()
+                            .unwrap(),
+                    ),
+                ])
+                .build()
+                .unwrap(),
+        ));
+        let file = primitive_schema("schema", "b", PhysicalType::INT32, None);
+
+        let error = check_parquet_schema(&inferred, &file, "actual.parquet", "inferred.parquet")
+            .unwrap_err()
+            .to_string();
+
+        assert!(
+            error.contains(
+                "First difference at '<root>': field count differs (inferred: 2, file: 1)"
+            )
+        );
     }
 }
