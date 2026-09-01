@@ -16806,12 +16806,12 @@ OptimizeTable(
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+OPTIMIZE TABLE t PURGE;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10
+VACUUM TABLE t
 ---------- AST ------------
-OptimizeTable(
-    OptimizeTableStmt {
+VacuumTable(
+    VacuumTableStmt {
         catalog: None,
         database: None,
         table: Identifier {
@@ -16822,68 +16822,42 @@ OptimizeTable(
             quote: None,
             ident_type: None,
         },
-        action: Purge {
-            before: Some(
-                Snapshot(
-                    Literal {
-                        span: Some(
-                            43..77,
-                        ),
-                        value: String(
-                            "9828b23f74664ff3806f44bbc1925ea5",
-                        ),
-                    },
-                ),
-            ),
+        option: VacuumTableOption {
+            dry_run: None,
         },
-        limit: Some(
-            10,
-        ),
     },
 )
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+OPTIMIZE TABLE db.t PURGE;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+VACUUM TABLE db.t
 ---------- AST ------------
-OptimizeTable(
-    OptimizeTableStmt {
+VacuumTable(
+    VacuumTableStmt {
         catalog: None,
-        database: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    15..17,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                15..16,
+                18..19,
             ),
             name: "t",
             quote: None,
             ident_type: None,
         },
-        action: Purge {
-            before: Some(
-                Timestamp(
-                    Cast {
-                        span: Some(
-                            72..83,
-                        ),
-                        expr: Literal {
-                            span: Some(
-                                44..72,
-                            ),
-                            value: String(
-                                "2023-06-26 09:49:02.038483",
-                            ),
-                        },
-                        target_type: Timestamp,
-                        pg_style: true,
-                    },
-                ),
-            ),
+        option: VacuumTableOption {
+            dry_run: None,
         },
-        limit: Some(
-            10,
-        ),
     },
 )
 
@@ -19882,7 +19856,7 @@ AlterDatabase(
 ---------- Input ----------
 VACUUM TABLE t;
 ---------- Output ---------
-VACUUM TABLE t 
+VACUUM TABLE t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -19904,52 +19878,33 @@ VacuumTable(
 
 
 ---------- Input ----------
-VACUUM TABLE t DRY RUN;
+VACUUM TABLE db.t;
 ---------- Output ---------
-VACUUM TABLE t DRY RUN
+VACUUM TABLE db.t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
         catalog: None,
-        database: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..15,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                13..14,
+                16..17,
             ),
             name: "t",
             quote: None,
             ident_type: None,
         },
         option: VacuumTableOption {
-            dry_run: Some(
-                false,
-            ),
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM TABLE t DRY RUN SUMMARY;
----------- Output ---------
-VACUUM TABLE t DRY RUN SUMMARY
----------- AST ------------
-VacuumTable(
-    VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: Some(
-                true,
-            ),
+            dry_run: None,
         },
     },
 )
@@ -19958,7 +19913,7 @@ VacuumTable(
 ---------- Input ----------
 VACUUM DROP TABLE;
 ---------- Output ---------
-VACUUM DROP TABLE 
+VACUUM DROP TABLE
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -19966,44 +19921,6 @@ VacuumDropTable(
         database: None,
         option: VacuumDropTableOption {
             dry_run: None,
-            limit: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE DRY RUN;
----------- Output ---------
-VACUUM DROP TABLE DRY RUN
----------- AST ------------
-VacuumDropTable(
-    VacuumDropTableStmt {
-        catalog: None,
-        database: None,
-        option: VacuumDropTableOption {
-            dry_run: Some(
-                false,
-            ),
-            limit: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE DRY RUN SUMMARY;
----------- Output ---------
-VACUUM DROP TABLE DRY RUN SUMMARY
----------- AST ------------
-VacuumDropTable(
-    VacuumDropTableStmt {
-        catalog: None,
-        database: None,
-        option: VacuumDropTableOption {
-            dry_run: Some(
-                true,
-            ),
             limit: None,
         },
     },
@@ -20013,7 +19930,7 @@ VacuumDropTable(
 ---------- Input ----------
 VACUUM DROP TABLE FROM db;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db 
+VACUUM DROP TABLE FROM db
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -20037,9 +19954,26 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db LIMIT 10;
+VACUUM DROPPED OBJECTS;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db  LIMIT 10
+VACUUM DROP TABLE
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
+        catalog: None,
+        database: None,
+        option: VacuumDropTableOption {
+            dry_run: None,
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROPPED OBJECTS FROM db;
+---------- Output ---------
+VACUUM DROP TABLE FROM db
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -20047,7 +19981,7 @@ VacuumDropTable(
         database: Some(
             Identifier {
                 span: Some(
-                    23..25,
+                    28..30,
                 ),
                 name: "db",
                 quote: None,
@@ -20056,9 +19990,7 @@ VacuumDropTable(
         ),
         option: VacuumDropTableOption {
             dry_run: None,
-            limit: Some(
-                10,
-            ),
+            limit: None,
         },
     },
 )
@@ -30019,7 +29951,7 @@ CopyIntoLocation(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -30083,7 +30015,7 @@ CreateTask(
             },
         ),
         sql: SingleStatement(
-            "VACUUM TABLE t ",
+            "VACUUM TABLE t",
         ),
     },
 )
@@ -30092,7 +30024,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -30110,7 +30042,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "VACUUM TABLE t ",
+            "VACUUM TABLE t",
         ),
     },
 )
@@ -30131,7 +30063,7 @@ CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los A
 BEGIN;
 INSERT INTO t VALUES ('a;');
 DELETE FROM t WHERE c = ';';
-VACUUM TABLE t ;
+VACUUM TABLE t;
 MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
@@ -30156,7 +30088,7 @@ CreateTask(
                 "BEGIN",
                 "INSERT INTO t VALUES ('a;')",
                 "DELETE FROM t WHERE c = ';'",
-                "VACUUM TABLE t ",
+                "VACUUM TABLE t",
                 "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                 "COMMIT",
             ],
@@ -30909,7 +30841,7 @@ ALTER TASK MyTask2 MODIFY AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
 DELETE FROM t WHERE c = ';';
-VACUUM TABLE t ;
+VACUUM TABLE t;
 MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
@@ -30924,7 +30856,7 @@ AlterTask(
                     "BEGIN",
                     "INSERT INTO t VALUES ('a;')",
                     "DELETE FROM t WHERE c = ';'",
-                    "VACUUM TABLE t ",
+                    "VACUUM TABLE t",
                     "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                     "COMMIT",
                 ],

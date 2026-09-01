@@ -1413,20 +1413,35 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let optimize_table = map(
-        rule! {
-            OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, (catalog, database, table), action, opt_limit)| {
-            Statement::OptimizeTable(OptimizeTableStmt {
-                catalog,
-                database,
-                table,
-                action,
-                limit: opt_limit.map(|(_, limit)| limit),
-            })
-        },
-    );
+    let optimize_table = alt((
+        map(
+            rule! {
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ PURGE
+            },
+            |(_, _, (database, table), _)| {
+                Statement::VacuumTable(VacuumTableStmt {
+                    catalog: None,
+                    database,
+                    table,
+                    option: VacuumTableOption { dry_run: None },
+                })
+            },
+        ),
+        map(
+            rule! {
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+            },
+            |(_, _, (database, table), action, opt_limit)| {
+                Statement::OptimizeTable(OptimizeTableStmt {
+                    catalog: None,
+                    database,
+                    table,
+                    action,
+                    limit: opt_limit.map(|(_, limit)| limit),
+                })
+            },
+        ),
+    ));
     let vacuum_temp_files = map(
         rule! {
             VACUUM ~ TEMPORARY ~ FILES ~ (RETAIN ~ #literal_duration)? ~ (LIMIT ~ #literal_u64)?
@@ -1440,30 +1455,46 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let vacuum_table = map(
         rule! {
-            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #vacuum_table_option
+            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_2
         },
-        |(_, _, (catalog, database, table), option)| {
+        |(_, _, (database, table))| {
             Statement::VacuumTable(VacuumTableStmt {
-                catalog,
+                catalog: None,
                 database,
                 table,
-                option,
+                option: VacuumTableOption { dry_run: None },
             })
         },
     );
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
         },
-        |(_, _, _, database_option, option)| {
-            let (catalog, database) = database_option.map_or_else(
-                || (None, None),
-                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
-            );
+        |(_, _, _, database_option)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
-                catalog,
-                database,
-                option,
+                catalog: None,
+                database: database_option.map(|(_, database)| database),
+                option: VacuumDropTableOption {
+                    dry_run: None,
+                    limit: None,
+                },
+            })
+        },
+    );
+    let dropped_keyword = match_ident_text("DROPPED");
+    let objects_keyword = match_ident_text("OBJECTS");
+    let vacuum_dropped_objects = map(
+        rule! {
+            VACUUM ~ #dropped_keyword ~ #objects_keyword ~ (FROM ~ ^#ident)?
+        },
+        |(_, _, _, database_option)| {
+            Statement::VacuumDropTable(VacuumDropTableStmt {
+                catalog: None,
+                database: database_option.map(|(_, database)| database),
+                option: VacuumDropTableOption {
+                    dry_run: None,
+                    limit: None,
+                },
             })
         },
     );
@@ -2547,18 +2578,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, name, _, args, _)| Statement::Call(CallStmt { name, args }),
     );
 
-    let vacuum_temporary_tables = map(
-        rule! {
-            VACUUM ~ TEMPORARY ~ TABLES ~ ( LIMIT ~ ^#literal_u64 )?
-        },
-        |(_, _, _, opt_limit)| {
-            Statement::Call(CallStmt {
-                name: Identifier::from_name(None, "fuse_vacuum_temporary_table"),
-                args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
-            })
-        },
-    );
-
     let presign = map(
         rule! {
             PRESIGN ~ ( #presign_action )?
@@ -3234,14 +3253,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (PURGE | COMPACT [SEGMENT])`"
             ).parse(i),
         VACUUM => rule!(
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table>`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM <database>]`"
+            | #vacuum_dropped_objects : "`VACUUM DROPPED OBJECTS [FROM <database>]`"
             | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
-            | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             ).parse(i),
@@ -5517,20 +5536,11 @@ pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
-    alt((
-        value(OptimizeTableAction::All, rule! { ALL }),
-        map(
-            rule! { PURGE ~ (BEFORE ~ ^#travel_point)? },
-            |(_, opt_travel_point)| OptimizeTableAction::Purge {
-                before: opt_travel_point.map(|(_, p)| p),
-            },
-        ),
-        map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
-            OptimizeTableAction::Compact {
-                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-            }
-        }),
-    ))
+    map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
+        OptimizeTableAction::Compact {
+            target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+        }
+    })
     .parse(i)
 }
 

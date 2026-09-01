@@ -752,7 +752,9 @@ impl Display for VacuumTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        write!(f, " {}", &self.option)?;
+        if self.option.dry_run.is_some() {
+            write!(f, " {}", &self.option)?;
+        }
 
         Ok(())
     }
@@ -767,13 +769,14 @@ pub struct VacuumDropTableStmt {
 
 impl Display for VacuumDropTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "VACUUM DROP TABLE ")?;
+        write!(f, "VACUUM DROP TABLE")?;
         if self.catalog.is_some() || self.database.is_some() {
-            write!(f, "FROM ")?;
+            write!(f, " FROM ")?;
             write_dot_separated_list(f, self.catalog.iter().chain(&self.database))?;
-            write!(f, " ")?;
         }
-        write!(f, "{}", &self.option)?;
+        if self.option.dry_run.is_some() || self.option.limit.is_some() {
+            write!(f, " {}", &self.option)?;
+        }
 
         Ok(())
     }
