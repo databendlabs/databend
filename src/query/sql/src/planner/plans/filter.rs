@@ -101,10 +101,9 @@ impl Operator for Filter {
         };
         Ok(Arc::new(StatInfo {
             cardinality,
-            // Filters are treated as a risk reset in this scoped guard. This
-            // preserves existing selective-build choices; Join/Union are the
-            // operators that retain source risk for the target regression.
-            max_cardinality: cardinality,
+            // Predicate selectivity is an expected value, not a proof-grade
+            // output cap. Keep the child risk for broadcast decisions.
+            max_cardinality: filter_max_cardinality(stat_info.max_cardinality, cardinality),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -112,5 +111,24 @@ impl Operator for Filter {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+fn filter_max_cardinality(input_max_cardinality: f64, cardinality: f64) -> f64 {
+    input_max_cardinality.max(cardinality)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::filter_max_cardinality;
+
+    #[test]
+    fn filter_retains_input_risk_bound() {
+        assert_eq!(
+            filter_max_cardinality(200_000_000.0, 100_000.0),
+            200_000_000.0
+        );
+        assert_eq!(filter_max_cardinality(10.0, 20.0), 20.0);
+        assert!(filter_max_cardinality(f64::INFINITY, 1.0).is_infinite());
     }
 }

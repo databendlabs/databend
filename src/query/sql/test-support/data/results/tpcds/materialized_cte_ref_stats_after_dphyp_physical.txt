@@ -368,12 +368,12 @@ Exchange
     │                                               │       ├── probe keys: [store_returns.sr_item_sk (#25)]
     │                                               │       ├── keys is null equal: [false]
     │                                               │       ├── filters: []
-    │                                               │       ├── build join filters:
+    │                                               │       ├── build join filters(distributed):
     │                                               │       │   └── filter id:3, build key:item.i_item_sk (#317), probe targets:[store_returns.sr_item_sk (#25)@scan1], filter type:bloom,inlist,min_max
     │                                               │       ├── estimated rows: 2737509.14
     │                                               │       ├── Exchange(Build)
     │                                               │       │   ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317)]
-    │                                               │       │   ├── exchange type: Broadcast
+    │                                               │       │   ├── exchange type: Hash(item.i_item_sk (#317))
     │                                               │       │   └── HashJoin
     │                                               │       │       ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317)]
     │                                               │       │       ├── join type: INNER
@@ -456,17 +456,20 @@ Exchange
     │                                               │       │                                       ├── push downs: [filters: [], limit: NONE]
     │                                               │       │                                       ├── apply join filters: [#2, #0, #1]
     │                                               │       │                                       └── estimated rows: 143997065.00
-    │                                               │       └── TableScan(Probe)
-    │                                               │           ├── table: default.default.store_returns
-    │                                               │           ├── scan id: 1
-    │                                               │           ├── output columns: [sr_item_sk (#25), sr_ticket_number (#32)]
-    │                                               │           ├── read rows: 0
-    │                                               │           ├── read size: 0
-    │                                               │           ├── partitions total: 0
-    │                                               │           ├── partitions scanned: 0
-    │                                               │           ├── push downs: [filters: [], limit: NONE]
-    │                                               │           ├── apply join filters: [#3]
-    │                                               │           └── estimated rows: 28795080.00
+    │                                               │       └── Exchange(Probe)
+    │                                               │           ├── output columns: [store_returns.sr_item_sk (#25), store_returns.sr_ticket_number (#32)]
+    │                                               │           ├── exchange type: Hash(store_returns.sr_item_sk (#25))
+    │                                               │           └── TableScan
+    │                                               │               ├── table: default.default.store_returns
+    │                                               │               ├── scan id: 1
+    │                                               │               ├── output columns: [sr_item_sk (#25), sr_ticket_number (#32)]
+    │                                               │               ├── read rows: 0
+    │                                               │               ├── read size: 0
+    │                                               │               ├── partitions total: 0
+    │                                               │               ├── partitions scanned: 0
+    │                                               │               ├── push downs: [filters: [], limit: NONE]
+    │                                               │               ├── apply join filters: [#3]
+    │                                               │               └── estimated rows: 28795080.00
     │                                               └── TableScan(Probe)
     │                                                   ├── table: default.default.store_sales
     │                                                   ├── scan id: 0
