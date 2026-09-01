@@ -4,6 +4,7 @@
 >>>> select count(*) from fuse_snapshot('default','test_vacuum2_respect_time_travel')
 4
 <<<<
+>>>> set data_retention_time_in_days = 0;call system$fuse_vacuum2('default','test_vacuum2_respect_time_travel',true);
 >>>> select count(*) from fuse_snapshot('default','test_vacuum2_respect_time_travel')
 1
 <<<<
