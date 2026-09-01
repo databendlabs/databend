@@ -269,9 +269,9 @@ impl ReclusterTableInterpreter {
             ..
         } = &self.plan;
         // `NoLock` means the caller already owns the lifecycle lock (for example, MV refresh).
-        // Otherwise both table and materialized-view reclustering use segment claims while
+        // Otherwise table and materialized-view reclustering initially use segment claims while
         // planning and the shared table lock as a short commit gate.
-        let use_segment_claims =
+        let mut use_segment_claims =
             settings.get_enable_table_lock()? && self.lock_opt != LockTableOption::NoLock;
         let outer_lock_guard = if use_segment_claims {
             None
@@ -288,6 +288,11 @@ impl ReclusterTableInterpreter {
             self.ctx.evict_table_from_cache(catalog, database, table)?;
         }
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
+        // Temporary tables are session-local, and their IDs are intentionally unsupported by
+        // the segment-claim and lock catalog APIs.
+        if tbl.is_temp() {
+            use_segment_claims = false;
+        }
         let claim_manager = use_segment_claims.then(CoordinationManager::instance);
         let mut claim_retries = 0;
         let (parts, snapshot, claim_guard) = loop {
