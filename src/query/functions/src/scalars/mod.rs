@@ -55,7 +55,7 @@ pub use string::ALL_STRING_FUNC_NAMES;
 pub use string::PURE_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    variant::register(registry);
+    registry.register_context_dependent(variant::register);
     databend_functions_scalar_decimal::register_decimal_minus(registry);
     arithmetic::register(registry);
     // register basic arithmetic operation (+ - * / %)
@@ -79,12 +79,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_func::geo_h3::register(registry);
     hash::register(registry);
     other::register(registry);
-    databend_functions_scalar_decimal::register_to_decimal(registry);
+    registry.register_context_dependent(databend_functions_scalar_decimal::register_to_decimal);
     vector::register(registry);
     bitmap::register(registry);
     geo_func::geometry::register(registry);
     geo_func::geography::register(registry);
     hilbert::register(registry);
-    dt_func::interval::register(registry);
+    registry.register_context_dependent(dt_func::interval::register);
     obfuscator::register(registry);
 }
