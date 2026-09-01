@@ -204,6 +204,7 @@ use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
+use crate::plans::VacuumAllPlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
@@ -334,6 +335,7 @@ pub enum Plan {
     TruncateTable(Box<TruncateTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
     VacuumTables(Box<VacuumTablesPlan>),
+    VacuumAll(Box<VacuumAllPlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
     VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
@@ -618,6 +620,7 @@ impl Plan {
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
             Plan::VacuumTables(plan) => plan.schema(),
+            Plan::VacuumAll(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
@@ -766,6 +769,9 @@ mod tests {
             Plan::VacuumTables(Box::new(VacuumTablesPlan {
                 catalog: "default".to_string(),
                 database: None,
+            })),
+            Plan::VacuumAll(Box::new(VacuumAllPlan {
+                catalog: "default".to_string(),
             })),
             Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
                 catalog: "default".to_string(),

@@ -2163,6 +2163,9 @@ impl AccessChecker for PrivilegeAccess {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
                 }
             }
+            Plan::VacuumAll(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+            }
             Plan::VacuumDropTable(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
             }

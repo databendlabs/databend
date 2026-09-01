@@ -775,6 +775,15 @@ impl Display for VacuumTablesStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct VacuumAllStmt;
+
+impl Display for VacuumAllStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM ALL")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,

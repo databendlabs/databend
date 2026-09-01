@@ -1476,6 +1476,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
             VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
@@ -3266,7 +3267,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (PURGE | COMPACT [SEGMENT])`"
             ).parse(i),
         VACUUM => rule!(
-            #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            #vacuum_all : "`VACUUM ALL`"
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_tables : "`VACUUM TABLES [FROM <database>]`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table>`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM <database>]`"

@@ -59,6 +59,7 @@ use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::VacuumAllStmt;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTablesStmt;
@@ -183,6 +184,7 @@ use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
+use crate::plans::VacuumAllPlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
@@ -1921,6 +1923,17 @@ impl Binder {
         Ok(Plan::VacuumTables(Box::new(VacuumTablesPlan {
             catalog: self.ctx.get_current_catalog(),
             database,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_all(
+        &mut self,
+        _bind_context: &mut BindContext,
+        _stmt: &VacuumAllStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::VacuumAll(Box::new(VacuumAllPlan {
+            catalog: self.ctx.get_current_catalog(),
         })))
     }
 

@@ -671,6 +671,7 @@ impl QueryEntry {
             | Plan::OptimizeCompactBlock { .. }
             | Plan::VacuumTable(_)
             | Plan::VacuumTables(_)
+            | Plan::VacuumAll(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)

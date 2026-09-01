@@ -19944,6 +19944,16 @@ VacuumTables(
 
 
 ---------- Input ----------
+VACUUM ALL;
+---------- Output ---------
+VACUUM ALL
+---------- AST ------------
+VacuumAll(
+    VacuumAllStmt,
+)
+
+
+---------- Input ----------
 VACUUM DROP TABLE;
 ---------- Output ---------
 VACUUM DROP TABLE

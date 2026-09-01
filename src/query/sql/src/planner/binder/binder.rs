@@ -355,6 +355,7 @@ impl Binder {
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
             Statement::VacuumTables(stmt) => self.bind_vacuum_tables(bind_context, stmt).await?,
+            Statement::VacuumAll(stmt) => self.bind_vacuum_all(bind_context, stmt).await?,
             Statement::VacuumDropTable(stmt) => {
                 self.bind_vacuum_drop_table(bind_context, stmt).await?
             }

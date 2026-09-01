@@ -36,6 +36,7 @@ const PATTERNS: &[&str] = &[
     "SHOW ONLINE NODES",
     "VACUUM TABLE",
     "VACUUM TABLES",
+    "VACUUM ALL",
     "VACUUM DROP TABLE",
     "VACUUM DROPPED OBJECTS",
     "VACUUM TEMPORARY FILES",
@@ -277,7 +278,7 @@ mod tests {
         // Single word prefixes should get context help
         assert_eq!(
             suggest_correction("vacuum"),
-            Some("Try: `VACUUM TABLE`, `VACUUM TABLES`, or `VACUUM DROP TABLE`".to_string())
+            Some("Try: `VACUUM TABLE`, `VACUUM TABLES`, or `VACUUM ALL`".to_string())
         );
 
         let result = suggest_correction("show").unwrap();
