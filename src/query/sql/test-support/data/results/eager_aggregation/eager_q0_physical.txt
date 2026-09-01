@@ -16,7 +16,7 @@ Sort(Final)
             ├── estimated rows: 1.00
             └── Exchange
                 ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#34), lineitem.l_orderkey (#17), orders.o_orderdate (#4), orders.o_shippriority (#7)]
-                ├── exchange type: Hash(0, 1, 2)
+                ├── exchange type: NodeToNodeHash(0, 1, 2)
                 └── AggregatePartial
                     ├── group by: [l_orderkey, o_orderdate, o_shippriority]
                     ├── aggregate functions: [sum(sum_arg_0)]

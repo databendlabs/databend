@@ -10,7 +10,7 @@ Exchange
     │       ├── estimated rows: 40561773.90
     │       └── Exchange
     │           ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307), d1.d_year (#113), d2.d_year (#141), d3.d_year (#169)]
-    │           ├── exchange type: Hash(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+    │           ├── exchange type: NodeToNodeHash(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
     │           └── AggregatePartial
     │               ├── group by: [i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number, ca_street_name, ca_city, ca_zip, d_year, d_year, d_year]
     │               ├── aggregate functions: []
@@ -411,7 +411,7 @@ Exchange
     │                                               │       │                   ├── estimated rows: 190915.00
     │                                               │       │                   └── Exchange
     │                                               │       │                       ├── output columns: [sum(cs_ext_list_price) (#104), sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit) (#106), catalog_sales.cs_item_sk (#58)]
-    │                                               │       │                       ├── exchange type: Hash(0)
+    │                                               │       │                       ├── exchange type: NodeToNodeHash(0)
     │                                               │       │                       └── AggregatePartial
     │                                               │       │                           ├── group by: [cs_item_sk]
     │                                               │       │                           ├── aggregate functions: [sum(cs_ext_list_price), sum(sum_arg_0)]

@@ -16,7 +16,7 @@ Exchange
             ├── estimated rows: 58807078.72
             └── Exchange
                 ├── output columns: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167), count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168), a.a0d (#0), a.a0k (#7), a.a0m (#9), c.a5m (#144)]
-                ├── exchange type: Hash(0, 1, 2, 3)
+                ├── exchange type: NodeToNodeHash(0, 1, 2, 3)
                 └── AggregatePartial
                     ├── group by: [a0d, a0k, a0m, a5m]
                     ├── aggregate functions: [sum(sum_arg_0), count()]
