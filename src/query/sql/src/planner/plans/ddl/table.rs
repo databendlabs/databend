@@ -123,6 +123,19 @@ impl VacuumTablePlan {
     }
 }
 
+/// Vacuum tables
+#[derive(Clone, Debug)]
+pub struct VacuumTablesPlan {
+    pub catalog: String,
+    pub database: Option<String>,
+}
+
+impl VacuumTablesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// Vacuum drop table
 #[derive(Clone, Debug)]
 pub struct VacuumDropTablePlan {

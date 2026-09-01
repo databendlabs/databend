@@ -1466,6 +1466,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let vacuum_tables = map(
+        rule! {
+            VACUUM ~ TABLES ~ (FROM ~ ^#ident)?
+        },
+        |(_, _, database)| {
+            Statement::VacuumTables(VacuumTablesStmt {
+                database: database.map(|(_, database)| database),
+            })
+        },
+    );
     let vacuum_drop_table = map(
         rule! {
             VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
@@ -3257,6 +3267,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ).parse(i),
         VACUUM => rule!(
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #vacuum_tables : "`VACUUM TABLES [FROM <database>]`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table>`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM <database>]`"
             | #vacuum_dropped_objects : "`VACUUM DROPPED OBJECTS [FROM <database>]`"

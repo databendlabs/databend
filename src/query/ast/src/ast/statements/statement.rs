@@ -204,6 +204,7 @@ pub enum Statement {
     TruncateTable(TruncateTableStmt),
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
+    VacuumTables(VacuumTablesStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
     VacuumVirtualColumn(VacuumVirtualColumnStmt),
@@ -565,6 +566,7 @@ impl Statement {
             | Statement::ShowDropTables(..)
             | Statement::OptimizeTable(..)
             | Statement::VacuumTable(..)
+            | Statement::VacuumTables(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
             | Statement::VacuumVirtualColumn(..)
@@ -956,6 +958,7 @@ impl Display for Statement {
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTables(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,

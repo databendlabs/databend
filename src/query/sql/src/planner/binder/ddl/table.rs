@@ -61,6 +61,7 @@ use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
+use databend_common_ast::ast::VacuumTablesStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
@@ -184,6 +185,7 @@ use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
 #[derive(Visitor)]
@@ -1902,6 +1904,23 @@ impl Binder {
             catalog,
             database,
             table,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_tables(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTablesStmt,
+    ) -> Result<Plan> {
+        let database = stmt
+            .database
+            .as_ref()
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name);
+
+        Ok(Plan::VacuumTables(Box::new(VacuumTablesPlan {
+            catalog: self.ctx.get_current_catalog(),
+            database,
         })))
     }
 

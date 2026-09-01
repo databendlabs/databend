@@ -110,6 +110,7 @@ impl Plan {
             Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
             Plan::OptimizeCompactBlock { .. } => Ok("OptimizeCompactBlock".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
+            Plan::VacuumTables(_) => Ok("VacuumTables".to_string()),
             Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
             Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),

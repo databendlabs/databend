@@ -761,6 +761,21 @@ impl Display for VacuumTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct VacuumTablesStmt {
+    pub database: Option<Identifier>,
+}
+
+impl Display for VacuumTablesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TABLES")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

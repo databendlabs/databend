@@ -19911,6 +19911,39 @@ VacuumTable(
 
 
 ---------- Input ----------
+VACUUM TABLES;
+---------- Output ---------
+VACUUM TABLES
+---------- AST ------------
+VacuumTables(
+    VacuumTablesStmt {
+        database: None,
+    },
+)
+
+
+---------- Input ----------
+VACUUM TABLES FROM db;
+---------- Output ---------
+VACUUM TABLES FROM db
+---------- AST ------------
+VacuumTables(
+    VacuumTablesStmt {
+        database: Some(
+            Identifier {
+                span: Some(
+                    19..21,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 VACUUM DROP TABLE;
 ---------- Output ---------
 VACUUM DROP TABLE

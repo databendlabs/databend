@@ -2156,6 +2156,13 @@ impl AccessChecker for PrivilegeAccess {
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            Plan::VacuumTables(plan) => {
+                if let Some(database) = &plan.database {
+                    self.validate_db_access(&plan.catalog, database, UserPrivilegeType::Super, false).await?
+                } else {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+                }
+            }
             Plan::VacuumDropTable(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
             }

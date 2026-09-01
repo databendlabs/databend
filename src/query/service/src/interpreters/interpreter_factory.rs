@@ -510,6 +510,10 @@ impl InterpreterFactory {
                 ctx,
                 *vacuum_table.clone(),
             )?)),
+            Plan::VacuumTables(vacuum_tables) => Ok(Arc::new(VacuumTablesInterpreter::try_create(
+                ctx,
+                *vacuum_tables.clone(),
+            )?)),
             Plan::VacuumDropTable(vacuum_drop_table) => Ok(Arc::new(
                 VacuumDropTablesInterpreter::try_create(ctx, *vacuum_drop_table.clone())?,
             )),

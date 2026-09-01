@@ -206,6 +206,7 @@ use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::plans::VacuumVirtualColumnPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -332,6 +333,7 @@ pub enum Plan {
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
+    VacuumTables(Box<VacuumTablesPlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
     VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
@@ -615,6 +617,7 @@ impl Plan {
             Plan::ShowCreateMaterializedView(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
+            Plan::VacuumTables(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
@@ -759,6 +762,10 @@ mod tests {
                 catalog: "default".to_string(),
                 database: "default".to_string(),
                 table: "t".to_string(),
+            })),
+            Plan::VacuumTables(Box::new(VacuumTablesPlan {
+                catalog: "default".to_string(),
+                database: None,
             })),
             Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
                 catalog: "default".to_string(),
