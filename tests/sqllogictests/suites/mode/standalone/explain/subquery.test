@@ -821,7 +821,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL))]
-├── estimated rows: 1.50
+├── estimated rows: 3.00
 ├── ConstantTableScan(Build)
 │   ├── output columns: [c1 (#1)]
 │   └── column 0: ['data%']
@@ -872,7 +872,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL), '$')]
-├── estimated rows: 1.50
+├── estimated rows: 0.38
 ├── ConstantTableScan(Build)
 │   ├── output columns: [c1 (#1)]
 │   └── column 0: ['data$%%']
