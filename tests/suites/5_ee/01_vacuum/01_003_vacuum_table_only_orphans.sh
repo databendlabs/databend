@@ -17,7 +17,7 @@ stmt "insert into test_vacuum_table_only_orphans.a values (3),(4)"
 SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_table_only_orphans','a') limit 1" | bendsql_connect_root)
 PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
 
-echo "before purge"
+echo "before vacuum"
 
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_b/ | wc -l
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_sg/ | wc -l
@@ -26,9 +26,9 @@ ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_i_b_v2/ | wc -l
 
 stmt "truncate table test_vacuum_table_only_orphans.a"
 
-stmt "set data_retention_time_in_days=0; optimize table test_vacuum_table_only_orphans.a purge"
+stmt "set data_retention_time_in_days=0; vacuum table test_vacuum_table_only_orphans.a"
 
-echo "after purge"
+echo "after vacuum"
 
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_b/ | wc -l
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_sg/ | wc -l
