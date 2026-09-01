@@ -77,7 +77,42 @@ async fn assert_only_current_snapshot_files(
     Ok(())
 }
 
-// TODO investigate this
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_table_command() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let database = "vacuum_table_db";
+    let table = "t";
+    for statement in [
+        format!("create database {database}"),
+        format!("create table {database}.{table} (c int) as select 1"),
+        format!("insert into {database}.{table} values (2)"),
+        format!("truncate table {database}.{table}"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let storage_root = fixture.storage_root();
+    assert!(
+        table_storage_files(&ctx, storage_root, database, table)
+            .await?
+            .len()
+            > 2
+    );
+
+    fixture
+        .execute_command(&format!("vacuum table {database}.{table}"))
+        .await?;
+    assert_only_current_snapshot_files(&ctx, storage_root, database, table).await?;
+
+    Ok(())
+}
+
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_tables_commands() -> anyhow::Result<()> {
