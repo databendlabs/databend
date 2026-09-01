@@ -86,27 +86,27 @@ const MONTHS_PER_YEAR: i64 = 12;
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS timestamp)
     // to_timestamp(xx)
-    register_string_to_timestamp(registry);
-    register_date_to_timestamp(registry);
-    register_date_to_timestamp_tz(registry);
+    registry.register_context_dependent(register_string_to_timestamp);
+    registry.register_context_dependent(register_date_to_timestamp);
+    registry.register_context_dependent(register_date_to_timestamp_tz);
     register_number_to_timestamp(registry);
-    register_timestamp_to_timestamp_tz(registry);
-    register_timestamp_tz_to_timestamp(registry);
+    registry.register_context_dependent(register_timestamp_to_timestamp_tz);
+    registry.register_context_dependent(register_timestamp_tz_to_timestamp);
 
     // cast(xx AS date)
     // to_date(xx)
-    register_string_to_date(registry);
-    register_timestamp_to_date(registry);
-    register_timestamp_tz_to_date(registry);
+    registry.register_context_dependent(register_string_to_date);
+    registry.register_context_dependent(register_timestamp_to_date);
+    registry.register_context_dependent(register_timestamp_tz_to_date);
     register_number_to_date(registry);
 
     // cast([date | timestamp] AS string)
     // to_string([date | timestamp])
-    crate::date_format::register(registry);
+    registry.register_context_dependent(crate::date_format::register);
 
     // cast([date | timestamp] AS [uint8 | int8 | ...])
     // to_[uint8 | int8 | ...]([date | timestamp])
-    crate::date_extract::register_cast(registry);
+    registry.register_context_dependent(crate::date_extract::register_cast);
 
     // [add | subtract]_[years | months | days | hours | minutes | seconds]([date | timestamp], number)
     // date_[add | sub]([year | quarter | month | week | day | hour | minute | second], [date | timestamp], number)
@@ -115,29 +115,29 @@ pub fn register(registry: &mut FunctionRegistry) {
     // [date | timestamp] +/- [date | timestamp]
     // datesub([year | quarter | month | week | day | hour | minute | second], [date | timestamp], [date | timestamp])
     // The number of complete partitions between the dates.
-    crate::date_arithmetic::register(registry);
+    registry.register_context_dependent(crate::date_arithmetic::register);
 
     // now, today, yesterday, tomorrow
     crate::date_conversion::register_real_time_functions(registry);
 
     // to_*([date | timestamp]) -> number
-    crate::date_extract::register(registry);
+    registry.register_context_dependent(crate::date_extract::register);
 
     // to_*([date | timestamp]) -> [date | timestamp]
-    crate::date_round::register(registry);
+    registry.register_context_dependent(crate::date_round::register);
 
     // [date | timestamp] +/- number
-    crate::date_arithmetic::register_timestamp_add_sub(registry);
+    registry.register_context_dependent(crate::date_arithmetic::register_timestamp_add_sub);
 
     // convert_timezone( target_timezone, 'timestamp')
-    register_convert_timezone(registry);
+    registry.register_context_dependent(register_convert_timezone);
 
     // date_from_parts(year, month, day)
     // timestamp_from_parts(year, month, day, hour, minute, second [, nanosecond])
     // timestamp_tz_from_parts(year, month, day, hour, minute, second [, nanosecond] [, time_zone])
     register_date_from_parts(registry);
-    register_timestamp_from_parts(registry);
-    register_timestamp_tz_from_parts(registry);
+    registry.register_context_dependent(register_timestamp_from_parts);
+    registry.register_context_dependent(register_timestamp_tz_from_parts);
 }
 
 /// calc int32 domain to timestamp domain

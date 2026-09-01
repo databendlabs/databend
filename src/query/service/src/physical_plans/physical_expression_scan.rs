@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -131,8 +132,11 @@ impl PhysicalPlanBuilder {
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string())
                             })?;
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let (expr, _) = ConstantFolder::fold(
+                            Cow::Owned(expr),
+                            &self.func_ctx,
+                            &BUILTIN_FUNCTIONS,
+                        );
                         Ok(expr.as_remote_expr())
                     })
                     .collect::<Result<Vec<_>>>()

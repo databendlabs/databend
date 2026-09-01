@@ -8,8 +8,8 @@ right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : cross_join
 sql           : SELECT * FROM l CROSS JOIN r
 join          : CROSS cardinality=234.000
-stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
-stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[1..1:5.000/1.000, 2..2:7.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
 
 case          : inner_join_overlap
 description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
@@ -67,7 +67,7 @@ left stats    : rows=1000000, min=0, max=9999, ndv=10000, histogram_input=missin
 right stats   : rows=1000000, min=5000, max=14999, ndv=10000, histogram_input=missing
 query         : inner_join_with_both_derived_keys
 sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k + 0
-join          : INNER cardinality=1000000000000.000
+join          : INNER cardinality=100000000.000
 stat          : l.k (#0) min=0, max=9999, ndv=10000.000, null=0.000, histogram=none
 stat          : r.k (#2) min=5000, max=14999, ndv=10000.000, null=0.000, histogram=none
 
@@ -77,9 +77,9 @@ left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
 right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : inner_join_with_derived_left_key
 sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k
-join          : INNER cardinality=234.000
+join          : INNER cardinality=58.500
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000 (upper=4.000), null=0.000, histogram=none
 
 case          : inner_join_derived_right_key_without_histogram
 description   : A derived right join key keeps bounds and NDV but has no typed histogram, so join estimation naturally falls back to NDV.
@@ -87,9 +87,9 @@ left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
 right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : inner_join_with_derived_right_key
 sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k + 0
-join          : INNER cardinality=234.000
+join          : INNER cardinality=58.500
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000 (upper=4.000), null=0.000, histogram=none
 
 case          : inner_join_both_derived_keys_without_histograms
 description   : Both derived join keys keep bounds and NDV but lose typed histograms, exercising the two-sided NDV fallback through SQL.
@@ -97,9 +97,9 @@ left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
 right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : inner_join_with_both_derived_keys
 sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k + 0
-join          : INNER cardinality=234.000
+join          : INNER cardinality=58.500
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
-stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000 (upper=4.000), null=0.000, histogram=none
 
 case          : inner_join_no_overlap
 description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
@@ -115,7 +115,7 @@ left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
 right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
 query         : inner_any_join
 sql           : SELECT * FROM l INNER ANY JOIN r ON l.k = r.k
-join          : INNER ANY cardinality=58.000
+join          : INNER ANY cardinality=3.000
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 

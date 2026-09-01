@@ -15,6 +15,7 @@
 #![allow(clippy::cloned_ref_to_slice_refs)]
 #![allow(clippy::useless_vec)]
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use databend_common_expression::ColumnId;
@@ -28,6 +29,12 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_aggregate_state_table_physical_type() {
+    let ordinary_tuple = TableDataType::Tuple {
+        fields_name: vec!["1".to_string(), "2".to_string()],
+        fields_type: vec![TableDataType::String, TableDataType::Boolean],
+    };
+    assert!(matches!(ordinary_tuple.physical_type(), Cow::Borrowed(_)));
+
     let state_type = TableDataType::Tuple {
         fields_name: vec!["1".to_string(), "2".to_string()],
         fields_type: vec![
@@ -44,6 +51,26 @@ fn test_aggregate_state_table_physical_type() {
 
     assert_eq!(aggregate_state.physical_type().as_ref(), &state_type);
     assert_eq!(aggregate_state.sql_name(), "AGGREGATESTATE(SUM, UINT64)");
+    assert_eq!(
+        TableDataType::Tuple {
+            fields_name: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            fields_type: vec![
+                TableDataType::String,
+                aggregate_state.clone(),
+                TableDataType::Boolean,
+            ],
+        }
+        .physical_type()
+        .into_owned(),
+        TableDataType::Tuple {
+            fields_name: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            fields_type: vec![
+                TableDataType::String,
+                state_type.clone(),
+                TableDataType::Boolean,
+            ],
+        }
+    );
     assert_eq!(
         TableDataType::Nullable(Box::new(aggregate_state))
             .physical_type()

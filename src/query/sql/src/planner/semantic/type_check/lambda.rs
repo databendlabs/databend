@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use databend_common_ast::Span;
@@ -446,7 +447,8 @@ where A: super::TypeCheckAdapter
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
@@ -618,7 +620,7 @@ where A: super::TypeCheckAdapter
         let expr = lambda_scalar
             .type_check(&lambda_schema)?
             .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
         let remote_lambda_expr = expr.as_remote_expr();
         let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 

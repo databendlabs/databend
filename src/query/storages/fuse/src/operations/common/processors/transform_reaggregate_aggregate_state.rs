@@ -41,6 +41,17 @@ use databend_common_pipeline_transforms::processors::Transform;
 /// gathers neighboring rows into the same block. Re-aggregating that block
 /// collapses duplicate groups without rewriting the whole materialized view.
 /// Non-aggregate MVs keep `_mv_source_row_id` and skip this transform.
+///
+/// The output preserves the input column layout: the materialized view
+/// physical schema always stores aggregate state columns before group
+/// columns, matching the `[states..., groups...]` layout produced by
+/// `Payload::aggregate_flush`, and evaluated cluster key columns stay
+/// appended after the table columns as trailing group keys.
+///
+/// The output row order is unspecified: rows are flushed in hash-table
+/// order. Write paths serializing clustered data must sort each block
+/// afterwards, as compact does inside `cluster_gen_for_append` and recluster
+/// does with an explicit partial sort before `TransformSerializeBlock`.
 #[derive(Clone)]
 pub struct TransformReaggregateAggregateStateBlock {
     table_column_count: usize,
@@ -163,19 +174,25 @@ impl Transform for TransformReaggregateAggregateStateBlock {
 /// Re-aggregate that block so equal group keys collapse before serialization.
 ///
 /// Non-aggregate materialized views keep `_mv_source_row_id` and are left unchanged.
+///
+/// Returns whether the transform was added. Re-aggregation flushes rows in
+/// hash-table order, so write paths that do not already sort each block
+/// before serialization (recluster: serialize-time cluster statistics read
+/// the first and last rows of a sorted block) must re-establish the
+/// cluster-key order afterwards.
 pub fn add_aggregate_state_reaggregate_transform(
     pipeline: &mut Pipeline,
     engine: &str,
     table_schema: &TableSchema,
-) -> Result<()> {
+) -> Result<bool> {
     if !is_materialized_view_engine(engine) {
-        return Ok(());
+        return Ok(false);
     }
     let Some(transform) = TransformReaggregateAggregateStateBlock::try_create(table_schema)? else {
-        return Ok(());
+        return Ok(false);
     };
     pipeline.add_transformer(move || transform.clone());
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -247,6 +264,53 @@ mod tests {
         let output = transform.transform(input)?;
         assert_eq!(output.num_rows(), 1);
         assert_eq!(output.num_columns(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn reaggregate_preserves_column_layout() -> Result<()> {
+        // Materialized view physical schemas store aggregate state columns
+        // before group columns; the transform output must keep that layout.
+        let function = AggregateFunctionFactory::instance().get(
+            "sum_state",
+            vec![],
+            vec![DataType::Number(NumberDataType::Int32)],
+            vec![],
+        )?;
+        let schema = TableSchema::new(vec![
+            TableField::new("total", infer_schema_type(&function.return_type()?)?),
+            TableField::new("category", TableDataType::String),
+        ]);
+        let mut transform = TransformReaggregateAggregateStateBlock::try_create(&schema)?
+            .expect("aggregate state schema should build a reaggregate transform");
+
+        // Two runs of the same group keys, concatenated the way a
+        // recluster-merged block interleaves rows from different source blocks.
+        let groups: Vec<String> = (0..64).map(|i| format!("key_{i:03}")).collect();
+        let group_refs: Vec<&str> = groups.iter().map(|group| group.as_str()).collect();
+        let values_a: Vec<i32> = (0..64).collect();
+        let values_b: Vec<i32> = (0..64).map(|i| i * 10).collect();
+        let first = sum_state_block(&group_refs, &values_a)?;
+        let second = sum_state_block(&group_refs, &values_b)?;
+        let input = DataBlock::concat(&[first, second])?;
+        assert_eq!(input.num_rows(), 128);
+        // Flushed state columns use the state's physical serialization type.
+        let state_type = input.get_by_offset(0).data_type();
+
+        let output = transform.transform(input)?;
+        assert_eq!(output.num_rows(), 64);
+        assert_eq!(output.num_columns(), 2);
+        // Column layout preserved: state column first, group column second.
+        assert_eq!(output.get_by_offset(0).data_type(), state_type);
+        assert_eq!(output.get_by_offset(1).data_type(), DataType::String);
+        // The flushed row order is unspecified; compare the group key set.
+        let group_column = output.get_by_offset(1).clone().into_column().unwrap();
+        let mut flushed: Vec<String> = (0..output.num_rows())
+            .map(|row| group_column.index(row).unwrap().to_string())
+            .collect();
+        flushed.sort();
+        let expected: Vec<String> = groups.iter().map(|group| format!("'{group}'")).collect();
+        assert_eq!(flushed, expected);
         Ok(())
     }
 

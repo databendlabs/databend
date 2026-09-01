@@ -1,0 +1,120 @@
+# When several materialized views can answer the same query, rewrite must pick
+# the cheaper plan rather than the first matching candidate.
+
+statement ok
+drop database if exists test_materialized_view_cost
+
+statement ok
+create database test_materialized_view_cost
+
+statement ok
+use test_materialized_view_cost
+
+statement ok
+create table source (
+    a int,
+    b int,
+    t int
+)
+
+statement ok
+insert into source values
+    (1, 10, 5),
+    (1, 20, 9),
+    (1, 30, 100),
+    (2, 10, 7),
+    (2, 20, 70),
+    (2, 30, 3),
+    (3, 10, 8),
+    (3, 20, 4)
+
+# Create the more expensive fine-grained MV first so first-match would pick it.
+statement ok
+create materialized view mv_by_ab (
+    a,
+    b,
+    sum_t
+) as
+select a, b, sum(t)
+from source
+group by a, b
+
+statement ok
+refresh materialized view mv_by_ab
+
+statement ok
+create materialized view mv_by_a (
+    a,
+    sum_t
+) as
+select a, sum(t)
+from source
+group by a
+
+statement ok
+refresh materialized view mv_by_a
+
+# GROUP BY a can use either MV. The exact-granularity MV has fewer stored rows
+# and needs no extra rollup, so it must win on cost.
+query T
+explain select a, sum(t)
+from source
+group by a
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_by_a<slt:ignore>
+
+query II rowsort
+select a, sum(t)
+from source
+group by a
+----
+1 114
+2 80
+3 12
+
+statement ok
+create table detail_source (
+    id int,
+    amount int
+)
+
+statement ok
+insert into detail_source values
+    (1, 10),
+    (2, 15),
+    (3, 20),
+    (4, 25),
+    (5, 30),
+    (6, 35)
+
+# Create the wider predicate first so first-match would pick the larger scan.
+statement ok
+create materialized view mv_amount_gt_10 (id, amount) as
+select id, amount from detail_source where amount > 10
+
+statement ok
+refresh materialized view mv_amount_gt_10
+
+statement ok
+create materialized view mv_amount_gt_20 (id, amount) as
+select id, amount from detail_source where amount > 20
+
+statement ok
+refresh materialized view mv_amount_gt_20
+
+# amount > 20 can use either MV. The tighter MV stores fewer rows and needs no
+# compensating filter, so it must win on cost.
+query T
+explain select id, amount from detail_source where amount > 20
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_amount_gt_20<slt:ignore>
+
+query II rowsort
+select id, amount from detail_source where amount > 20
+----
+4 25
+5 30
+6 35
+
+statement ok
+drop database test_materialized_view_cost
