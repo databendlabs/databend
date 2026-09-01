@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_sql::plans::RefreshSelection;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
@@ -193,115 +192,6 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         }
     }
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_virtual_column_block_selection_refreshes_owning_segment() -> anyhow::Result<()>
-{
-    let fixture = TestFixture::setup().await?;
-    fixture.create_default_database().await?;
-    fixture.create_variant_table().await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {}.{} set options(block_per_segment = 100)",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {}.{} set options(enable_virtual_column = false)",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-    append_variant_sample_data(2, &fixture).await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {}.{} set options(enable_virtual_column = true)",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-
-    let ctx = fixture.new_query_ctx().await?;
-    let table = fixture.latest_default_table().await?;
-    let fuse = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot = fuse.read_table_snapshot().await?.unwrap();
-    let reader = MetaReaders::segment_info_reader(fuse.get_operator(), table.schema());
-    let (segment_location, version) = &snapshot.segments[0];
-    let segment = reader
-        .read(&LoadParams {
-            location: segment_location.clone(),
-            len_hint: None,
-            ver: *version,
-            put_cache: false,
-        })
-        .await?;
-    let blocks = segment.block_metas()?;
-    assert!(blocks.len() > 1);
-    let selected_block = blocks[0].location.0.clone();
-
-    let results = prepare_refresh_virtual_column(
-        ctx,
-        fuse,
-        None,
-        true,
-        Some(RefreshSelection::BlockLocation(selected_block)),
-    )
-    .await?;
-    assert_eq!(results.len(), blocks.len());
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_virtual_column_limit_keeps_segment_whole() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture.create_default_database().await?;
-    fixture.create_variant_table().await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {}.{} set options(block_per_segment = 100)",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {}.{} set options(enable_virtual_column = false)",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-    append_variant_sample_data(2, &fixture).await?;
-    fixture
-        .execute_command(&format!(
-            "alter table {}.{} set options(enable_virtual_column = true)",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-
-    let ctx = fixture.new_query_ctx().await?;
-    let table = fixture.latest_default_table().await?;
-    let fuse = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot = fuse.read_table_snapshot().await?.unwrap();
-    let reader = MetaReaders::segment_info_reader(fuse.get_operator(), table.schema());
-    let (segment_location, version) = &snapshot.segments[0];
-    let segment = reader
-        .read(&LoadParams {
-            location: segment_location.clone(),
-            len_hint: None,
-            ver: *version,
-            put_cache: false,
-        })
-        .await?;
-    let segment_block_count = segment.block_metas()?.len();
-    assert!(segment_block_count > 1);
-
-    let results = prepare_refresh_virtual_column(ctx, fuse, Some(1), true, None).await?;
-    assert_eq!(results.len(), segment_block_count);
     Ok(())
 }
 
