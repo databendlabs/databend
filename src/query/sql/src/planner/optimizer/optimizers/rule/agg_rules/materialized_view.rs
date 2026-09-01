@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast;
+use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use log::info;
 
@@ -51,6 +53,18 @@ const UNKNOWN_CARDINALITY_COST: f64 = 1e12;
 const COMPUTE_PER_ROW: f64 = 1.0;
 const AGGREGATE_PER_ROW: f64 = 5.0;
 
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+struct PrefixRouteScore {
+    matched_prefix: usize,
+    equality_prefix: usize,
+}
+
+#[derive(Default)]
+struct PredicateColumns {
+    equality: HashSet<String>,
+    range: HashSet<String>,
+}
+
 struct RewriteCandidate {
     replacement: SExpr,
     mv_table_id: u64,
@@ -78,6 +92,20 @@ impl RewriteCandidate {
             },
         }
     }
+}
+
+/// Cluster-key pruning is part of scan cost, not an independent candidate
+/// ordering rule. The factor is deliberately conservative because optimizer
+/// statistics do not contain per-block pruning results.
+const CLUSTER_PREFIX_PRUNING_FACTOR: f64 = 0.5;
+
+fn cluster_pruning_factor(score: PrefixRouteScore) -> f64 {
+    let equality_factor = CLUSTER_PREFIX_PRUNING_FACTOR.powi(score.equality_prefix as i32);
+    let range_prefix = score.matched_prefix.saturating_sub(score.equality_prefix);
+    let range_factor = CLUSTER_PREFIX_PRUNING_FACTOR
+        .powi(range_prefix as i32)
+        .sqrt();
+    (equality_factor * range_factor).max(0.01)
 }
 
 /// Choose the cheapest semantically valid materialized-view rewrite.
@@ -117,7 +145,8 @@ pub(crate) fn try_rewrite(
         else {
             continue;
         };
-        let cost = estimate_rewrite_cost(&replacement);
+        let scan_pruning_factor = scan_pruning_factor_for_plan(metadata, &replacement);
+        let cost = estimate_rewrite_cost(&replacement, scan_pruning_factor);
         let current = RewriteCandidate {
             replacement,
             mv_table_id: candidate.mv_table_id,
@@ -260,10 +289,14 @@ fn try_build_replacement(
     Ok(Some((replacement, requires_aggregate_rollup)))
 }
 
-fn estimate_rewrite_cost(s_expr: &SExpr) -> f64 {
-    let children_cost: f64 = s_expr.children().map(estimate_rewrite_cost).sum();
+fn estimate_rewrite_cost(s_expr: &SExpr, scan_pruning_factor: f64) -> f64 {
+    estimate_compute_cost(s_expr) + estimate_scan_cost(s_expr, scan_pruning_factor)
+}
+
+fn estimate_compute_cost(s_expr: &SExpr) -> f64 {
+    let children_cost: f64 = s_expr.children().map(estimate_compute_cost).sum();
     let node_cost = match s_expr.plan() {
-        RelOperator::Scan(scan) => scan_cost(scan),
+        RelOperator::Scan(_) => 0.0,
         RelOperator::Aggregate(_) => {
             input_cardinality(s_expr).unwrap_or(UNKNOWN_CARDINALITY_COST) * AGGREGATE_PER_ROW
         }
@@ -282,13 +315,185 @@ fn estimate_rewrite_cost(s_expr: &SExpr) -> f64 {
     children_cost + node_cost
 }
 
-fn scan_cost(scan: &Scan) -> f64 {
+/// Estimate the read cost of a rewritten plan. Cluster-key pruning is applied
+/// at the scan itself; relational operators only adjust the amount of data
+/// flowing through their child scans.
+fn estimate_scan_cost(s_expr: &SExpr, scan_pruning_factor: f64) -> f64 {
+    match s_expr.plan() {
+        RelOperator::Scan(scan) => scan_cost(scan, scan_pruning_factor),
+        RelOperator::Filter(_) => {
+            let Some(child) = s_expr.child(0).ok() else {
+                return UNKNOWN_CARDINALITY_COST;
+            };
+            let child_cost = estimate_scan_cost(child, scan_pruning_factor);
+            let Some(child_rows) = output_cardinality(child) else {
+                return child_cost;
+            };
+            let Some(output_rows) = output_cardinality(s_expr) else {
+                return child_cost;
+            };
+            if child_rows > 0.0 && output_rows.is_finite() {
+                child_cost * (output_rows / child_rows).clamp(0.0, 1.0)
+            } else {
+                child_cost
+            }
+        }
+        RelOperator::UnionAll(_) => s_expr
+            .children()
+            .map(|child| estimate_scan_cost(child, scan_pruning_factor))
+            .sum(),
+        _ => s_expr
+            .children()
+            .map(|child| estimate_scan_cost(child, scan_pruning_factor))
+            .sum(),
+    }
+}
+
+fn scan_cost(scan: &Scan, scan_pruning_factor: f64) -> f64 {
     scan.statistics
         .table_stats
         .as_ref()
         .and_then(|stats| stats.num_rows)
-        .map(|rows| rows as f64 * COMPUTE_PER_ROW)
+        .map(|rows| rows as f64 * COMPUTE_PER_ROW * scan_pruning_factor)
         .unwrap_or(UNKNOWN_CARDINALITY_COST)
+}
+
+fn scan_pruning_factor_for_plan(metadata: &Metadata, plan: &SExpr) -> f64 {
+    let predicate_columns = predicate_columns_from_plan(plan);
+    let Some(scan) = find_scan(plan) else {
+        return 1.0;
+    };
+    let table = metadata.table(scan.table_index).table();
+    let score = cluster_prefix_score(&cluster_key_columns(table.as_ref()), &predicate_columns);
+    cluster_pruning_factor(score)
+}
+
+fn find_scan(s_expr: &SExpr) -> Option<&Scan> {
+    if let RelOperator::Scan(scan) = s_expr.plan() {
+        return Some(scan);
+    }
+    s_expr.children().find_map(find_scan)
+}
+
+fn predicate_columns_from_plan(s_expr: &SExpr) -> PredicateColumns {
+    let mut columns = PredicateColumns::default();
+    collect_predicate_columns_for_scan(s_expr, &mut columns);
+    columns
+}
+
+fn collect_predicate_columns_for_scan(s_expr: &SExpr, columns: &mut PredicateColumns) {
+    match s_expr.plan() {
+        RelOperator::Scan(scan) => {
+            if let Some(predicates) = &scan.push_down_predicates {
+                for predicate in predicates {
+                    collect_predicate_columns_from_scalar(predicate, columns);
+                }
+            }
+        }
+        RelOperator::Filter(filter) => {
+            // A filter above an aggregate cannot prune the aggregate's input
+            // scan. Filters below the aggregate, or directly above the scan,
+            // can still contribute to storage pruning.
+            if s_expr
+                .child(0)
+                .is_ok_and(|child| !contains_aggregate(child))
+            {
+                for predicate in &filter.predicates {
+                    collect_predicate_columns_from_scalar(predicate, columns);
+                }
+            }
+            if let Ok(child) = s_expr.child(0) {
+                collect_predicate_columns_for_scan(child, columns);
+            }
+        }
+        _ => {
+            for child in s_expr.children() {
+                collect_predicate_columns_for_scan(child, columns);
+            }
+        }
+    }
+}
+
+fn contains_aggregate(s_expr: &SExpr) -> bool {
+    matches!(s_expr.plan(), RelOperator::Aggregate(_)) || s_expr.children().any(contains_aggregate)
+}
+
+fn collect_predicate_columns_from_scalar(expr: &ScalarExpr, columns: &mut PredicateColumns) {
+    let ScalarExpr::FunctionCall(function) = expr else {
+        return;
+    };
+
+    if matches!(function.func_name.as_str(), "or" | "or_filters") {
+        return;
+    }
+    if function.arguments.len() == 2
+        && matches!(
+            function.func_name.as_str(),
+            "eq" | "gt" | "gte" | "lt" | "lte"
+        )
+    {
+        let column = match (&function.arguments[0], &function.arguments[1]) {
+            (ScalarExpr::BoundColumnRef(column), ScalarExpr::ConstantExpr(_))
+            | (ScalarExpr::BoundColumnRef(column), ScalarExpr::TypedConstantExpr(_, _)) => {
+                Some(column.column.column_name.clone())
+            }
+            (ScalarExpr::ConstantExpr(_), ScalarExpr::BoundColumnRef(column))
+            | (ScalarExpr::TypedConstantExpr(_, _), ScalarExpr::BoundColumnRef(column)) => {
+                Some(column.column.column_name.clone())
+            }
+            _ => None,
+        };
+        if let Some(column) = column {
+            match function.func_name.as_str() {
+                "eq" => {
+                    columns.equality.insert(column);
+                }
+                "gt" | "gte" | "lt" | "lte" => {
+                    columns.range.insert(column);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    for argument in &function.arguments {
+        collect_predicate_columns_from_scalar(argument, columns);
+    }
+}
+
+fn cluster_prefix_score<S: AsRef<str>>(
+    cluster_key_columns: &[S],
+    predicate_columns: &PredicateColumns,
+) -> PrefixRouteScore {
+    let mut score = PrefixRouteScore::default();
+    for column in cluster_key_columns {
+        let column = column.as_ref();
+        if predicate_columns.equality.contains(column) {
+            score.matched_prefix += 1;
+            score.equality_prefix += 1;
+        } else if predicate_columns.range.contains(column) {
+            score.matched_prefix += 1;
+            break;
+        } else {
+            break;
+        }
+    }
+    score
+}
+
+fn cluster_key_columns(table: &dyn Table) -> Vec<String> {
+    table
+        .resolve_cluster_keys()
+        .unwrap_or_default()
+        .iter()
+        .map(|expr| match expr {
+            ast::Expr::ColumnRef { column, .. } if column.table.is_none() => {
+                Some(column.column.name().to_string())
+            }
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()
+        .unwrap_or_default()
 }
 
 fn input_cardinality(s_expr: &SExpr) -> Option<f64> {
@@ -545,6 +750,29 @@ mod tests {
     }
 
     #[test]
+    fn cluster_prefix_is_part_of_scan_cost() {
+        let scan = scan_with_rows(Some(100));
+        let unpruned = estimate_rewrite_cost(&scan, 1.0);
+        let equality_pruned = estimate_rewrite_cost(
+            &scan,
+            cluster_pruning_factor(PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 1,
+            }),
+        );
+        let range_pruned = estimate_rewrite_cost(
+            &scan,
+            cluster_pruning_factor(PrefixRouteScore {
+                matched_prefix: 1,
+                equality_prefix: 0,
+            }),
+        );
+
+        assert!(equality_pruned < range_pruned);
+        assert!(range_pruned < unpruned);
+    }
+
+    #[test]
     fn cheaper_rewrite_wins() {
         let cheaper = rewrite_candidate(10.0, MaterializedViewCandidateReadMode::Hybrid, 2);
         let expensive = rewrite_candidate(20.0, MaterializedViewCandidateReadMode::Fresh, 1);
@@ -570,8 +798,8 @@ mod tests {
 
     #[test]
     fn smaller_scan_is_cheaper_than_larger_scan() {
-        let small = estimate_rewrite_cost(&scan_with_rows(Some(10)));
-        let large = estimate_rewrite_cost(&scan_with_rows(Some(100)));
+        let small = estimate_rewrite_cost(&scan_with_rows(Some(10)), 1.0);
+        let large = estimate_rewrite_cost(&scan_with_rows(Some(100)), 1.0);
         assert!(small < large);
     }
 
@@ -588,13 +816,13 @@ mod tests {
             ),
             Arc::new(scan.clone()),
         );
-        assert!(estimate_rewrite_cost(&scan) < estimate_rewrite_cost(&with_aggregate));
+        assert!(estimate_rewrite_cost(&scan, 1.0) < estimate_rewrite_cost(&with_aggregate, 1.0));
     }
 
     #[test]
     fn unknown_scan_stats_are_more_expensive_than_known_small_scan() {
-        let unknown = estimate_rewrite_cost(&scan_with_rows(None));
-        let known = estimate_rewrite_cost(&scan_with_rows(Some(1)));
+        let unknown = estimate_rewrite_cost(&scan_with_rows(None), 1.0);
+        let known = estimate_rewrite_cost(&scan_with_rows(Some(1)), 1.0);
         assert!(known < unknown);
     }
 }

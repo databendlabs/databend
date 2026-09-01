@@ -487,10 +487,7 @@ impl Binder {
         let checker = MaterializedViewChecker::check_query(query);
         if !checker.is_supported() {
             return Err(ErrorCode::SemanticError(format!(
-                "Materialized View only support simple query, like: \
-                    `SELECT ... FROM ... WHERE ... GROUP BY ...`, \
-                     and these aggregate funcs: {}, \
-                     non-deterministic functions are not support like: NOW()",
+                "Materialized View only supports simple SELECT queries over one table, with optional WHERE/GROUP BY clauses, and these aggregate funcs: {}, non-deterministic functions are not supported like: NOW()",
                 SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
             )));
         }
