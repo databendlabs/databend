@@ -107,6 +107,11 @@ select * from t20_0012 order by c;
 echo "select 'test -- optimize table'" | $TEST_USER_CONNECT
 echo "optimize table t20_0012 compact" | $TEST_USER_CONNECT
 
+## global vacuum drop table - test permission denied
+## This must require global SUPER instead of trying to resolve an empty database name.
+echo "select 'test -- vacuum drop table'" | $TEST_USER_CONNECT
+echo "vacuum drop table" | $TEST_USER_CONNECT
+
 ## grant user privilege and test optimize
 run_root_sql "GRANT Super ON *.* TO 'test-user';"
 run_test_user "
