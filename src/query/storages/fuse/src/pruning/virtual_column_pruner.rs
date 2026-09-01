@@ -296,6 +296,16 @@ impl VirtualColumnPruner {
             let Some(path) =
                 schema.find_path_ref(field.source_column_id, &virtual_column_field.encoded_path)
             else {
+                // The parent itself may have no leaf while descendant paths are
+                // materialized (for example only `geo.lat` exists in this block).
+                // BlockMeta cannot reconstruct that object, so inspect the
+                // sidecar trie instead of incorrectly declaring the parent missing.
+                if schema.has_descendant_paths(
+                    field.source_column_id,
+                    &virtual_column_field.encoded_path,
+                ) {
+                    return None;
+                }
                 if virtual_block_meta.virtual_columns_complete {
                     virtual_column_read_plan
                         .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
