@@ -25,11 +25,12 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use parquet::arrow::ArrowSchemaConverter;
+use parquet::file::FOOTER_SIZE;
+use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
-use parquet::schema::parser::parse_message_type;
-use parquet::schema::printer::print_schema;
+use parquet::file::metadata::ParquetMetaDataReader;
+use parquet::file::metadata::ParquetMetaDataWriter;
 use parquet::schema::types::SchemaDescPtr;
-use parquet::schema::types::SchemaDescriptor;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -59,6 +60,9 @@ pub struct ParquetTableInfo {
     pub table_info: TableInfo,
     pub arrow_schema: ArrowSchema,
     pub schema_descr: SchemaDescPtr,
+    /// Whether `schema_descr` was rebuilt from `arrow_schema` because its serialized form
+    /// could not be decoded. This is runtime diagnostic state and is not serialized.
+    pub schema_descr_from_arrow_fallback: bool,
     pub files_to_read: Option<Vec<StageFileInfo>>,
     pub schema_from: String,
     pub compression_ratio: f64,
@@ -97,13 +101,15 @@ struct ParquetTableInfoSerde {
 impl Serialize for ParquetTableInfo {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: serde::Serializer {
+        let schema_descr_bytes =
+            schema_to_bytes(&self.schema_descr).map_err(serde::ser::Error::custom)?;
         ParquetTableInfoSerde {
             read_options: self.read_options,
             stage_info: self.stage_info.clone(),
             files_info: self.files_info.clone(),
             table_info: self.table_info.clone(),
             arrow_schema: self.arrow_schema.clone(),
-            schema_descr_bytes: schema_to_bytes(&self.schema_descr),
+            schema_descr_bytes,
             schema_descr_root: self.schema_descr.root_schema().name().to_string(),
             files_to_read: self.files_to_read.clone(),
             schema_from: self.schema_from.clone(),
@@ -118,12 +124,25 @@ impl<'de> Deserialize<'de> for ParquetTableInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         let helper = ParquetTableInfoSerde::deserialize(deserializer)?;
-        let schema_descr = schema_from_bytes(&helper.schema_descr_bytes).or_else(|_| {
-            ArrowSchemaConverter::new()
-                .schema_root(&helper.schema_descr_root)
-                .convert(&helper.arrow_schema)
-                .map(Arc::new)
-        });
+        let (schema_descr, schema_descr_from_arrow_fallback) = match schema_from_bytes(
+            &helper.schema_descr_bytes,
+        ) {
+            Ok(schema_descr) => (Ok(schema_descr), false),
+            Err(error) => {
+                // Distributed query plans are expected to be exchanged by query nodes running
+                // the same version. This fallback is best effort and may normalize annotations.
+                log::warn!(
+                    "Failed to decode serialized Parquet schema metadata, falling back to the Arrow schema: {error}"
+                );
+                (
+                    ArrowSchemaConverter::new()
+                        .schema_root(&helper.schema_descr_root)
+                        .convert(&helper.arrow_schema)
+                        .map(Arc::new),
+                    true,
+                )
+            }
+        };
         let schema_descr = schema_descr.map_err(|e| serde::de::Error::custom(e.to_string()))?;
 
         Ok(Self {
@@ -133,6 +152,7 @@ impl<'de> Deserialize<'de> for ParquetTableInfo {
             table_info: helper.table_info,
             arrow_schema: helper.arrow_schema,
             schema_descr,
+            schema_descr_from_arrow_fallback,
             files_to_read: helper.files_to_read,
             schema_from: helper.schema_from,
             compression_ratio: helper.compression_ratio,
@@ -145,16 +165,18 @@ impl<'de> Deserialize<'de> for ParquetTableInfo {
 }
 
 fn schema_from_bytes(bytes: &[u8]) -> parquet::errors::Result<SchemaDescPtr> {
-    let schema_string = String::from_utf8(bytes.to_vec())
-        .map_err(|e| parquet::errors::ParquetError::General(e.to_string()))?;
-    let schema = parse_message_type(&schema_string)?;
-    Ok(Arc::new(SchemaDescriptor::new(Arc::new(schema))))
+    ParquetMetaDataReader::decode_schema(bytes)
 }
 
-fn schema_to_bytes(schema: &SchemaDescPtr) -> Vec<u8> {
+fn schema_to_bytes(schema: &SchemaDescPtr) -> parquet::errors::Result<Vec<u8>> {
+    let file_metadata = FileMetaData::new(1, 0, None, None, schema.clone(), None);
+    let metadata = ParquetMetaData::new(file_metadata, vec![]);
     let mut out = Vec::new();
-    print_schema(&mut out, schema.root_schema());
-    out
+    ParquetMetaDataWriter::new(&mut out, &metadata).finish()?;
+    // finish() appends the metadata length and PAR1 magic, while decode_schema()
+    // expects only the Thrift FileMetaData payload.
+    out.truncate(out.len() - FOOTER_SIZE);
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -169,12 +191,13 @@ mod tests {
     use parquet::basic::Type as PhysicalType;
     use parquet::errors::ParquetError;
     use parquet::schema::parser::parse_message_type;
-    use parquet::schema::printer::print_schema;
     use parquet::schema::types::SchemaDescPtr;
     use parquet::schema::types::SchemaDescriptor;
     use parquet::schema::types::Type;
 
     use super::ParquetTableInfo;
+    use super::schema_from_bytes;
+    use super::schema_to_bytes;
 
     fn make_desc() -> Result<SchemaDescPtr, ParquetError> {
         let mut fields = vec![];
@@ -232,52 +255,10 @@ mod tests {
         Ok(Arc::new(SchemaDescriptor::new(Arc::new(schema))))
     }
 
-    #[test]
-    fn test_serde() {
-        let schema_descr = make_desc().unwrap();
-        let info = ParquetTableInfo {
-            schema_descr: schema_descr.clone(),
-            read_options: Default::default(),
-            stage_info: Default::default(),
-            files_info: StageFilesInfo {
-                path: "".to_string(),
-                files: None,
-                pattern: None,
-            },
-            table_info: Default::default(),
-            leaf_fields: Arc::new(vec![]),
-            arrow_schema: ArrowSchema {
-                fields: Default::default(),
-                metadata: Default::default(),
-            },
-            files_to_read: None,
-            schema_from: "".to_string(),
-            compression_ratio: 0.0,
-            need_stats_provider: false,
-            max_threads: 1,
-            max_memory_usage: 10000,
-        };
-        let s = serde_json::to_string(&info).unwrap();
-        let info = serde_json::from_str::<ParquetTableInfo>(&s).unwrap();
-
-        let mut original = Vec::new();
-        print_schema(&mut original, schema_descr.root_schema());
-        let mut roundtrip = Vec::new();
-        print_schema(&mut roundtrip, info.schema_descr.root_schema());
-
-        assert_eq!(
-            schema_descr.root_schema().name(),
-            info.schema_descr.root_schema().name()
-        );
-        assert_eq!(original, roundtrip)
-    }
-
-    #[test]
-    fn test_serde_falls_back_to_arrow_schema() {
-        let schema_descr = make_arrow_compatible_desc().unwrap();
-        let arrow_schema = parquet_to_arrow_schema(&schema_descr, None).unwrap();
-        let info = ParquetTableInfo {
-            schema_descr: schema_descr.clone(),
+    fn info_with(schema_descr: SchemaDescPtr, arrow_schema: ArrowSchema) -> ParquetTableInfo {
+        ParquetTableInfo {
+            schema_descr,
+            schema_descr_from_arrow_fallback: false,
             read_options: Default::default(),
             stage_info: Default::default(),
             files_info: StageFilesInfo {
@@ -294,12 +275,91 @@ mod tests {
             need_stats_provider: false,
             max_threads: 1,
             max_memory_usage: 10000,
-        };
+        }
+    }
+
+    #[test]
+    fn test_serde() {
+        let schema_descr = make_desc().unwrap();
+        let info = info_with(schema_descr.clone(), ArrowSchema::empty());
+        let s = serde_json::to_string(&info).unwrap();
+        let info = serde_json::from_str::<ParquetTableInfo>(&s).unwrap();
+
+        assert_eq!(schema_descr.root_schema(), info.schema_descr.root_schema());
+    }
+
+    #[test]
+    fn test_schema_bytes_roundtrip() {
+        let schema_descr = make_desc().unwrap();
+        let schema_bytes = schema_to_bytes(&schema_descr).unwrap();
+
+        assert!(!schema_bytes.ends_with(b"PAR1"));
+        let decoded_schema = schema_from_bytes(&schema_bytes).unwrap();
+        assert_eq!(schema_descr.root_schema(), decoded_schema.root_schema());
+    }
+
+    #[test]
+    fn test_serde_preserves_legacy_decimal_annotation() {
+        let deal = Type::primitive_type_builder("deal", PhysicalType::FIXED_LEN_BYTE_ARRAY)
+            .with_repetition(Repetition::OPTIONAL)
+            .with_converted_type(ConvertedType::DECIMAL)
+            .with_length(9)
+            .with_precision(20)
+            .with_scale(0)
+            .build()
+            .unwrap();
+        let nested = Type::group_type_builder("nested")
+            .with_repetition(Repetition::OPTIONAL)
+            .with_fields(vec![Arc::new(deal)])
+            .build()
+            .unwrap();
+        let schema = Type::group_type_builder("spark_schema")
+            .with_fields(vec![Arc::new(nested)])
+            .build()
+            .unwrap();
+        let schema_descr = Arc::new(SchemaDescriptor::new(Arc::new(schema)));
+        assert!(!schema_to_bytes(&schema_descr).unwrap().ends_with(b"PAR1"));
+        assert!(
+            schema_descr
+                .column(0)
+                .self_type()
+                .get_basic_info()
+                .logical_type_ref()
+                .is_none()
+        );
+
+        let arrow_schema = parquet_to_arrow_schema(&schema_descr, None).unwrap();
+        let info = info_with(schema_descr.clone(), arrow_schema);
+
+        let serialized = serde_json::to_string(&info).unwrap();
+        let deserialized = serde_json::from_str::<ParquetTableInfo>(&serialized).unwrap();
+
+        assert_eq!(
+            schema_descr.root_schema(),
+            deserialized.schema_descr.root_schema()
+        );
+        assert!(
+            deserialized
+                .schema_descr
+                .column(0)
+                .self_type()
+                .get_basic_info()
+                .logical_type_ref()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_serde_falls_back_to_arrow_schema() {
+        let schema_descr = make_arrow_compatible_desc().unwrap();
+        let arrow_schema = parquet_to_arrow_schema(&schema_descr, None).unwrap();
+        let info = info_with(schema_descr.clone(), arrow_schema);
 
         let mut json = serde_json::to_value(&info).unwrap();
         json["schema_descr_bytes"] = serde_json::json!(Vec::<u8>::from("invalid schema"));
 
         let info = serde_json::from_value::<ParquetTableInfo>(json).unwrap();
+        assert!(info.schema_descr_from_arrow_fallback);
 
         assert_eq!(
             schema_descr.root_schema().name(),
