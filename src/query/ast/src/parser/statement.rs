@@ -1419,12 +1419,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ PURGE
             },
             |(_, _, (database, table), _)| {
-                Statement::VacuumTable(VacuumTableStmt {
-                    catalog: None,
-                    database,
-                    table,
-                    option: VacuumTableOption { dry_run: None },
-                })
+                Statement::VacuumTable(VacuumTableStmt { database, table })
             },
         ),
         map(
@@ -1457,14 +1452,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             VACUUM ~ TABLE ~ #dot_separated_idents_1_to_2
         },
-        |(_, _, (database, table))| {
-            Statement::VacuumTable(VacuumTableStmt {
-                catalog: None,
-                database,
-                table,
-                option: VacuumTableOption { dry_run: None },
-            })
-        },
+        |(_, _, (database, table))| Statement::VacuumTable(VacuumTableStmt { database, table }),
     );
     let vacuum_tables = map(
         rule! {
@@ -1483,12 +1471,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, _, database_option)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
-                catalog: None,
                 database: database_option.map(|(_, database)| database),
-                option: VacuumDropTableOption {
-                    dry_run: None,
-                    limit: None,
-                },
             })
         },
     );
@@ -1500,12 +1483,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, _, database_option)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
-                catalog: None,
                 database: database_option.map(|(_, database)| database),
-                option: VacuumDropTableOption {
-                    dry_run: None,
-                    limit: None,
-                },
             })
         },
     );
@@ -5576,31 +5554,6 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
         #days
         | #seconds
     )
-    .parse(i)
-}
-
-pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
-    alt((map(
-        rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
-        },
-        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
-            limit: opt_limit.map(|(_, limit)| limit as usize),
-        },
-    ),))
-    .parse(i)
-}
-
-pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
-    alt((map(
-        rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)?
-        },
-        |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
-        },
-    ),))
     .parse(i)
 }
 

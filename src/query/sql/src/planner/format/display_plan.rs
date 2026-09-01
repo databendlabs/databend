@@ -106,7 +106,6 @@ impl Plan {
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),
             Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
-            Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
             Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
             Plan::OptimizeCompactBlock { .. } => Ok("OptimizeCompactBlock".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),

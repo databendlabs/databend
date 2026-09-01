@@ -736,27 +736,14 @@ impl Display for TruncateTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumTableStmt {
-    pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub option: VacuumTableOption,
 }
 
 impl Display for VacuumTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM TABLE ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
-        if self.option.dry_run.is_some() {
-            write!(f, " {}", &self.option)?;
-        }
-
-        Ok(())
+        write_dot_separated_list(f, self.database.iter().chain(Some(&self.table)))
     }
 }
 
@@ -786,22 +773,15 @@ impl Display for VacuumAllStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumDropTableStmt {
-    pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    pub option: VacuumDropTableOption,
 }
 
 impl Display for VacuumDropTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM DROP TABLE")?;
-        if self.catalog.is_some() || self.database.is_some() {
-            write!(f, " FROM ")?;
-            write_dot_separated_list(f, self.catalog.iter().chain(&self.database))?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
         }
-        if self.option.dry_run.is_some() || self.option.limit.is_some() {
-            write!(f, " {}", &self.option)?;
-        }
-
         Ok(())
     }
 }
@@ -989,75 +969,18 @@ pub enum CompactTarget {
     Segment,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct VacuumTableOption {
-    // Some(true) means dry run with summary option
-    pub dry_run: Option<bool>,
-}
-
-impl Display for VacuumTableOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(summary) = self.dry_run {
-            write!(f, "DRY RUN")?;
-            if summary {
-                write!(f, " SUMMARY")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct VacuumDropTableOption {
-    // Some(true) means dry run with summary option
-    pub dry_run: Option<bool>,
-    pub limit: Option<usize>,
-}
-
-impl Display for VacuumDropTableOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(summary) = self.dry_run {
-            write!(f, "DRY RUN")?;
-            if summary {
-                write!(f, " SUMMARY")?;
-            }
-        }
-        if let Some(limit) = self.limit {
-            write!(f, " LIMIT {}", limit)?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
-    All,
-    Purge { before: Option<TimeTravelPoint> },
     Compact { target: CompactTarget },
 }
 
 impl Display for OptimizeTableAction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            OptimizeTableAction::All => write!(f, "ALL"),
-            OptimizeTableAction::Purge { before } => {
-                write!(f, "PURGE")?;
-                if let Some(point) = before {
-                    write!(f, " BEFORE {}", point)?;
-                }
-                Ok(())
-            }
-            OptimizeTableAction::Compact { target } => {
-                match target {
-                    CompactTarget::Block => {
-                        write!(f, "COMPACT")?;
-                    }
-                    CompactTarget::Segment => {
-                        write!(f, "COMPACT SEGMENT")?;
-                    }
-                }
-                Ok(())
-            }
+            OptimizeTableAction::Compact { target } => match target {
+                CompactTarget::Block => write!(f, "COMPACT"),
+                CompactTarget::Segment => write!(f, "COMPACT SEGMENT"),
+            },
         }
     }
 }

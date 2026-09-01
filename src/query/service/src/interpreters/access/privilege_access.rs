@@ -2143,9 +2143,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::TruncateTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false, false).await?
             }
-            Plan::OptimizePurge(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
-            }
             Plan::OptimizeCompactSegment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }

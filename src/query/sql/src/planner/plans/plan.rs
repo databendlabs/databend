@@ -149,7 +149,6 @@ use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeCompactSegmentPlan;
-use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
@@ -353,11 +352,9 @@ pub enum Plan {
     DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
-    OptimizePurge(Box<OptimizePurgePlan>),
     OptimizeCompactSegment(Box<OptimizeCompactSegmentPlan>),
     OptimizeCompactBlock {
         s_expr: Box<SExpr>,
-        need_purge: bool,
     },
 
     // Insert
@@ -579,7 +576,6 @@ impl Plan {
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
             | Plan::DataMutation { .. }
-            | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
             _ => QueryKind::Other,

@@ -13,19 +13,9 @@
 // limitations under the License.
 
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_catalog::table::NavigationPoint;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
-
-#[derive(Clone, Debug)]
-pub struct OptimizePurgePlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub instant: Option<NavigationPoint>,
-    pub num_snapshot_limit: Option<usize>,
-}
 
 #[derive(Clone, Debug)]
 pub struct OptimizeCompactSegmentPlan {

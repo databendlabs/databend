@@ -666,8 +666,7 @@ impl QueryEntry {
             }
 
             // DDL: Heavy actions.
-            Plan::OptimizePurge(_)
-            | Plan::OptimizeCompactSegment(_)
+            Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. }
             | Plan::VacuumTable(_)
             | Plan::VacuumTables(_)

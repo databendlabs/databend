@@ -7,5 +7,3 @@ Error: APIError: QueryFailed: [2733]Change tracking has been missing for the tim
 Error: APIError: QueryFailed: [2733]Change tracking has been missing for the time range requested on table 'db_stream'.'base'
 Error: APIError: QueryFailed: [2733]Change tracking has been missing for the time range requested on table 'db_stream'.'base'
 Error: APIError: QueryFailed: [2733]Change tracking has been missing for the time range requested on table 'db_stream'.'base'
-3
-2

@@ -491,19 +491,14 @@ impl InterpreterFactory {
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
-                ctx,
-                *purge.clone(),
-            )?)),
             Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
                 OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
-            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+            Plan::OptimizeCompactBlock { s_expr } => {
                 Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
                     ctx,
                     *s_expr.clone(),
                     LockTableOption::LockWithRetry,
-                    *need_purge,
                 )?))
             }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(

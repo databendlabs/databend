@@ -16812,7 +16812,6 @@ VACUUM TABLE t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
         database: None,
         table: Identifier {
             span: Some(
@@ -16821,9 +16820,6 @@ VacuumTable(
             name: "t",
             quote: None,
             ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: None,
         },
     },
 )
@@ -16836,7 +16832,6 @@ VACUUM TABLE db.t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
         database: Some(
             Identifier {
                 span: Some(
@@ -16854,9 +16849,6 @@ VacuumTable(
             name: "t",
             quote: None,
             ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: None,
         },
     },
 )
@@ -19860,7 +19852,6 @@ VACUUM TABLE t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
         database: None,
         table: Identifier {
             span: Some(
@@ -19869,9 +19860,6 @@ VacuumTable(
             name: "t",
             quote: None,
             ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: None,
         },
     },
 )
@@ -19884,7 +19872,6 @@ VACUUM TABLE db.t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
         database: Some(
             Identifier {
                 span: Some(
@@ -19902,9 +19889,6 @@ VacuumTable(
             name: "t",
             quote: None,
             ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: None,
         },
     },
 )
@@ -19960,12 +19944,7 @@ VACUUM DROP TABLE
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
         database: None,
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: None,
-        },
     },
 )
 
@@ -19977,7 +19956,6 @@ VACUUM DROP TABLE FROM db
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
         database: Some(
             Identifier {
                 span: Some(
@@ -19988,10 +19966,6 @@ VacuumDropTable(
                 ident_type: None,
             },
         ),
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: None,
-        },
     },
 )
 
@@ -20003,12 +19977,7 @@ VACUUM DROP TABLE
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
         database: None,
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: None,
-        },
     },
 )
 
@@ -20020,7 +19989,6 @@ VACUUM DROP TABLE FROM db
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
         database: Some(
             Identifier {
                 span: Some(
@@ -20031,10 +19999,6 @@ VacuumDropTable(
                 ident_type: None,
             },
         ),
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: None,
-        },
     },
 )
 
