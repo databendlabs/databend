@@ -44,6 +44,7 @@ tokio = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+reqwest = { workspace = true, features = ["gzip"] }
 
 [lints]
 workspace = true

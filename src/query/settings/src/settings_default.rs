@@ -659,6 +659,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_cascading_grouping_sets", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Builds hierarchical grouping sets from the closest available parent grouping.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
@@ -675,7 +682,7 @@ impl DefaultSettings {
                 }),
                 ("hide_options_in_show_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of the result of SHOW TABLE CREATE.",
+                    desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of SHOW CREATE TABLE and SHOW CREATE MATERIALIZED VIEW.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -953,6 +960,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_materialized_view_rewrite", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables rewriting queries to scan matching materialized views.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
@@ -1146,6 +1160,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_table_schema_refresh", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh table schemas from storage when listing system.tables, system.columns, or system.statistics, and refresh system.tables statistics. This reflects changes invisible to the meta server (currently only read-only ATTACH tables). Disabled by default; refreshing an ATTACH table may require multiple storage requests.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_experimental_row_access_policy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable row access policy(disable by default).",
@@ -1203,8 +1224,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh aggregating index after new data written",
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Deprecated: aggregating index refresh is disabled",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

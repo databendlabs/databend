@@ -1,0 +1,439 @@
+=== inner_nullable_equality ===
+description: Regular equality rejects NULL join keys and exposes the final cardinality and both output column statistics.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=2.000
+stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
+
+=== correlated_exists_projection_nullable_key ===
+description: A nullable correlated EXISTS projection is decorrelated into RIGHT MARK with a null-safe correlation equality key.
+sql           : SELECT EXISTS (SELECT 1 FROM r WHERE r.k = l.k) FROM l
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : RIGHT MARK cardinality=4.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=0.400, null=0.200, histogram=none
+stat          : 1 (#2) min=1, max=1, ndv=1.000, null=0.000, histogram=none
+
+=== inner_derived_boolean_equality ===
+description: Boolean join-key statistics are derived by EvalScalar from numeric input statistics rather than injected at the scan boundary.
+sql           : SELECT * FROM (SELECT k > 1 AS b FROM l) dl INNER JOIN (SELECT k > 1 AS b FROM r) dr ON dl.b = dr.b
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=3.000
+stat          : l.k (#0) min=1, max=3, ndv=2.250, null=0.750, histogram=none
+stat          : b (#1) min=false, max=true, ndv=2.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=2, ndv=1.333, null=1.000, histogram=none
+stat          : b (#3) min=false, max=true, ndv=2.000, null=0.000, histogram=none
+
+=== inner_derived_boolean_lossless_cast ===
+description: A lossless Boolean-to-UInt8 join cast consumes Boolean statistics derived upstream instead of relying on serialized Boolean column statistics.
+sql           : SELECT * FROM (SELECT k > 1 AS b FROM l) dl INNER JOIN (SELECT k > 1 AS b FROM r) dr ON CAST(dl.b AS UInt8) = CAST(dr.b AS UInt8)
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=3.000
+stat          : l.k (#0) min=1, max=3, ndv=2.250, null=0.750, histogram=none
+stat          : b (#1) min=false, max=true, ndv=1.875 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=2, ndv=1.333, null=1.000, histogram=none
+stat          : b (#3) min=false, max=true, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+
+=== inner_disjoint_bounds ===
+description: Disjoint value bounds drive regular equality to zero matches without a histogram.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 5
+input stat    : right.k min=10, max=14, ndv=Some(5), null=0
+join          : INNER cardinality=0.000
+
+=== left_outer_disjoint_bounds ===
+description: A disjoint LEFT join preserves its outer input and NULL-extends every column on the nullable side, including non-key payloads.
+sql           : SELECT * FROM l LEFT JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL, payload INT NOT NULL)
+right rows     : 5
+input stat    : right.k min=10, max=14, ndv=Some(5), null=1
+input stat    : right.payload min=20, max=24, ndv=Some(5), null=0
+join          : RIGHT OUTER cardinality=4.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=rows=3.000, ndv=3.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000]
+stat          : r.k (#1) all_null=true, null=4.000, histogram=none
+stat          : r.payload (#2) all_null=true, null=4.000, histogram=none
+stat          : payload (#3) all_null=true, null=4.000, histogram=none
+
+=== left_outer_partial_overlap ===
+description: A partially matched LEFT join adds one unmatched outer row to the nullable-side join key's NULL count.
+sql           : SELECT * FROM l LEFT JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 2
+input stat    : left.k min=1, max=2, ndv=Some(2), null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 1
+input stat    : right.k min=1, max=1, ndv=Some(1), null=0
+join          : LEFT OUTER cardinality=2.000
+stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=1, ndv=1.000, null=1.000, histogram=none
+stat          : k (#2) min=1, max=1, ndv=1.000, null=1.000, histogram=none
+
+=== left_semi_non_key_histogram_finish ===
+description: A selective SEMI join keeps the preserved join-key histogram while dropping the now-inaccurate synthesized histogram on its payload column.
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL, payload INT NOT NULL)
+left rows     : 10
+input stat    : left.k min=1, max=10, ndv=Some(10), null=0
+input stat    : left.payload min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 5
+input stat    : right.k min=1, max=5, ndv=Some(5), null=0
+join          : LEFT SEMI cardinality=5.000
+stat          : l.k (#0) min=1, max=5, ndv=5.000, null=0.000, histogram=rows=5.000, ndv=5.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000]
+stat          : l.payload (#1) min=1, max=10, ndv=5.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=5.000, null=0.000, histogram=none
+
+=== inner_non_key_contraction ===
+description: A selective join reduces non-key NDV and NULL rows using matched input rows before join fanout, then drops the non-key histogram.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL, payload INT NULL)
+left rows     : 1000
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+input stat    : left.payload min=1, max=10, ndv=Some(10), null=200
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 10
+input stat    : right.k min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=100.000
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : l.payload (#1) min=1, max=10, ndv=9.998 (upper=10.000), null=20.000, histogram=none
+stat          : r.k (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+
+=== inner_non_key_expansion ===
+description: Join fanout expands non-key NULL row counts while keeping the surviving NDV capped by its input range.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL, payload INT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=10, ndv=Some(10), null=0
+input stat    : left.payload min=1, max=10, ndv=Some(10), null=20
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 100
+input stat    : right.k min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=1000.000
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=1000.000, ndv=10.000, buckets=[1..1:100.000/1.000, 2..2:100.000/1.000, 3..3:100.000/1.000, 4..4:100.000/1.000, 5..5:100.000/1.000, 6..6:100.000/1.000, 7..7:100.000/1.000, 8..8:100.000/1.000, 9..9:100.000/1.000, 10..10:100.000/1.000]
+stat          : l.payload (#1) min=1, max=10, ndv=10.000, null=200.000, histogram=none
+stat          : r.k (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=1000.000, ndv=10.000, buckets=[1..1:100.000/1.000, 2..2:100.000/1.000, 3..3:100.000/1.000, 4..4:100.000/1.000, 5..5:100.000/1.000, 6..6:100.000/1.000, 7..7:100.000/1.000, 8..8:100.000/1.000, 9..9:100.000/1.000, 10..10:100.000/1.000]
+
+=== inner_derived_boolean_non_key ===
+description: A Boolean non-key statistic derived upstream is contracted by the INNER join without injecting Boolean statistics at Scan.
+sql           : SELECT * FROM (SELECT k, k > 50 AS flag FROM l) dl INNER JOIN r ON dl.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 10
+input stat    : right.k min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=10.000
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : flag (#1) min=false, max=true, ndv=1.990 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+
+=== inner_derived_all_null_non_key ===
+description: An all-NULL non-key statistic derived upstream scales its NULL row count with the INNER join output.
+sql           : SELECT * FROM (SELECT k, NULL AS payload FROM l) dl INNER JOIN r ON dl.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 10
+input stat    : right.k min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=10.000
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : payload (#1) all_null=true, null=10.000, histogram=none
+stat          : r.k (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+
+=== inner_two_key_equality ===
+description: Multiple equality keys are applied cumulatively; a disjoint second key eliminates matches after the first key has narrowed statistics.
+sql           : SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : left.k2 min=1, max=2, ndv=Some(2), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=20, max=21, ndv=Some(2), null=0
+join          : INNER cardinality=0.000
+
+=== inner_three_key_strictest_nonzero ===
+description: Three non-zero equality estimates select the strictest key while a later looser key does not replace the winner histogram.
+sql           : SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2 AND l.k3 = r.k3
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL, k3 INT NOT NULL)
+left rows     : 10
+input stat    : left.k1 min=1, max=4, ndv=Some(4), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+input stat    : left.k3 min=1, max=2, ndv=Some(2), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL, k3 INT NOT NULL)
+right rows     : 10
+input stat    : right.k1 min=1, max=4, ndv=Some(4), null=0
+input stat    : right.k2 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k3 min=1, max=2, ndv=Some(2), null=0
+join          : INNER cardinality=10.000
+stat          : l.k1 (#0) min=1, max=4, ndv=4.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : l.k3 (#2) min=1, max=2, ndv=2.000, null=0.000, histogram=none
+stat          : r.k1 (#3) min=1, max=4, ndv=4.000, null=0.000, histogram=none
+stat          : r.k2 (#4) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : r.k3 (#5) min=1, max=2, ndv=2.000, null=0.000, histogram=none
+
+=== left_outer_nullable_key ===
+description: A left outer join excludes key NULLs from its inner estimate but preserves the outer-side NULL statistics.
+sql           : SELECT * FROM l LEFT JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=42, max=44, ndv=Some(2), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 4
+input stat    : right.k min=42, max=45, ndv=Some(3), null=1
+join          : LEFT OUTER cardinality=4.375
+stat          : l.k (#0) min=42, max=44, ndv=2.000, null=1.000, histogram=none
+stat          : r.k (#1) min=42, max=44, ndv=2.750 (upper=3.000), null=1.000, histogram=none
+
+=== inner_lossless_cast_key ===
+description: A lossless injective cast participates in join estimation and rejects NULLs from its source column.
+sql           : SELECT * FROM l INNER JOIN r ON CAST(l.k AS BIGINT) = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k BIGINT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=2.000
+stat          : l.k (#0) min=1, max=3, ndv=1.809 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+
+=== inner_mixed_numeric_equality ===
+description: Different integer SQL types reach the numeric comparison boundary through the normal binder and optimizer path.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=0
+right ddl      : CREATE TABLE r(k BIGINT NOT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=0
+join          : INNER cardinality=4.000
+stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+
+=== inner_mixed_integer_large_histogram_boundaries ===
+description: Mixed signed and unsigned integer histograms keep adjacent values above 2^53 distinct through SQL comparison typing.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k BIGINT NOT NULL)
+left rows     : 3
+input stat    : left.k min=9007199254740992, max=9007199254741002, ndv=Some(1), null=0
+input hist    : left.k present
+right ddl      : CREATE TABLE r(k UINT64 NOT NULL)
+right rows     : 2
+input stat    : right.k min=9007199254740992, max=9007199254741002, ndv=Some(1), null=0
+input hist    : right.k present
+join          : INNER cardinality=0.000
+
+=== inner_mixed_integer_upper_only_extremes ===
+description: Upper-only UInt64 and Int64 statistics at opposite numeric extremes produce no overlap without overflowing conversion.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k UINT64 NOT NULL)
+left rows     : 1
+input stat    : left.k min=18446744073709551615, max=18446744073709551615, ndv=None, null=0
+right ddl      : CREATE TABLE r(k BIGINT NOT NULL)
+right rows     : 1
+input stat    : right.k min=0, max=0, ndv=None, null=0
+join          : INNER cardinality=0.000
+
+=== inner_float_cast_adjacent_large_integers ===
+description: Explicit Float64 comparison casts make adjacent integers above 2^53 collide, and the SQL estimate reflects that comparison domain.
+sql           : SELECT * FROM l INNER JOIN r ON CAST(l.k AS DOUBLE) = CAST(r.k AS DOUBLE)
+left ddl      : CREATE TABLE l(k BIGINT NOT NULL)
+left rows     : 3
+input stat    : left.k min=9007199254740992, max=9007199254740992, ndv=Some(1), null=0
+input hist    : left.k present
+right ddl      : CREATE TABLE r(k BIGINT NOT NULL)
+right rows     : 2
+input stat    : right.k min=9007199254740993, max=9007199254740993, ndv=Some(1), null=0
+input hist    : right.k present
+join          : INNER cardinality=6.000
+stat          : l.k (#0) min=9007199254740992, max=9007199254740992, ndv=1.000, null=0.000, histogram=none
+stat          : r.k (#1) min=9007199254740993, max=9007199254740993, ndv=1.000, null=0.000, histogram=none
+
+=== inner_mixed_numeric_histogram_not_propagated ===
+description: Mixed signed and unsigned histograms contribute to cardinality, while incompatible typed histograms are not propagated to output columns.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 3
+input stat    : left.k min=-5, max=10, ndv=Some(1), null=0
+input hist    : left.k present
+right ddl      : CREATE TABLE r(k UINT8 NOT NULL)
+right rows     : 2
+input stat    : right.k min=0, max=15, ndv=Some(1), null=0
+input hist    : right.k present
+join          : INNER cardinality=6.000
+stat          : l.k (#0) min=0, max=10, ndv=1.000, null=0.000, histogram=none
+stat          : r.k (#1) min=0, max=10, ndv=1.000, null=0.000, histogram=none
+
+=== inner_try_cast_key ===
+description: TRY_CAST stays outside the NULL-rejection whitelist, so its source statistics are not rewritten.
+sql           : SELECT * FROM l INNER JOIN r ON TRY_CAST(l.k AS BIGINT) = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k BIGINT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+
+=== inner_lossy_cast_key ===
+description: A narrowing cast is outside the reverse-propagation whitelist, so the golden captures its fallback cardinality and per-side output statistics.
+sql           : SELECT * FROM l INNER JOIN r ON CAST(l.k AS TINYINT) = r.k
+left ddl      : CREATE TABLE l(k BIGINT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k TINYINT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+
+=== inner_function_join_key ===
+description: A function join key is not reverse-propagated to its source, while the complete plan still shows any statistics derivable for the expression.
+sql           : SELECT * FROM l INNER JOIN r ON COALESCE(l.k, 0) = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=1
+join          : INNER cardinality=8.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+
+=== inner_string_equality ===
+description: String bounds pass through the byte-statistics path and narrow both join keys to their shared range.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k VARCHAR NOT NULL)
+left rows     : 4
+input stat    : left.k min=a, max=d, ndv=Some(4), null=0
+right ddl      : CREATE TABLE r(k VARCHAR NOT NULL)
+right rows     : 3
+input stat    : right.k min=b, max=c, ndv=Some(2), null=0
+join          : INNER cardinality=3.000
+stat          : l.k (#0) min=b, max=c, ndv=2.000, null=0.000, histogram=none
+stat          : r.k (#1) min=b, max=c, ndv=2.000, null=0.000, histogram=none
+
+=== inner_inaccurate_bytes_histogram_fallback ===
+description: Inaccurate byte histograms are ignored for equality cardinality, so the complete SQL join falls back to NDV and propagates no histogram.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k VARCHAR NOT NULL)
+left rows     : 100
+input stat    : left.k min=a, max=z, ndv=Some(10), null=0
+input hist    : left.k present
+right ddl      : CREATE TABLE r(k VARCHAR NOT NULL)
+right rows     : 200
+input stat    : right.k min=a, max=z, ndv=Some(20), null=0
+input hist    : right.k present
+join          : INNER cardinality=1000.000
+stat          : l.k (#0) min=a, max=z, ndv=10.000, null=0.000, histogram=none
+stat          : r.k (#1) min=a, max=z, ndv=10.000, null=0.000, histogram=none
+
+=== inner_date_equality ===
+description: DATE statistics retain their semantic type while using integer-backed bounds and histograms end to end.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k DATE NOT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=0
+right ddl      : CREATE TABLE r(k DATE NOT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=0
+join          : INNER cardinality=4.000
+stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+
+=== inner_timestamp_equality ===
+description: TIMESTAMP statistics retain their semantic type while using integer-backed bounds and histograms end to end.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k TIMESTAMP NOT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=0
+right ddl      : CREATE TABLE r(k TIMESTAMP NOT NULL)
+right rows     : 3
+input stat    : right.k min=1, max=2, ndv=Some(2), null=0
+join          : INNER cardinality=4.000
+stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+
+=== inner_missing_right_column_statistics ===
+description: Missing statistics on one join input exercise the cardinality fallback without manufacturing bounds for that column.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 20
+join          : INNER cardinality=60.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=0.000, histogram=none
+
+=== inner_known_and_upper_only_ndv ===
+description: One missing NDV input yields an upper-only Scan estimate and the join fallback uses the other side's known NDV.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=1000, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 200
+input stat    : right.k min=1, max=1000, ndv=None, null=0
+join          : INNER cardinality=2000.000
+stat          : l.k (#0) min=1, max=1000, ndv=unknown (upper=10.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=1000, ndv=unknown (upper=10.000), null=0.000, histogram=none
+
+=== inner_both_upper_only_ndv ===
+description: Two missing NDV inputs reach the conservative upper-only join fallback without test-only optimizer intervention.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=1000, ndv=None, null=0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 200
+input stat    : right.k min=1, max=1000, ndv=None, null=0
+join          : INNER cardinality=1.000
+stat          : l.k (#0) min=1, max=1000, ndv=unknown (upper=1.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=1000, ndv=unknown (upper=1.000), null=0.000, histogram=none
+
+=== inner_all_null_equality ===
+description: Regular equality with an all-NULL key produces no matches through the scan-to-join statistics path.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k all_null=true, ndv=Some(0), null=4
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 10
+input stat    : right.k min=1, max=3, ndv=Some(3), null=2
+join          : INNER cardinality=0.000
+

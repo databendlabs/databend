@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ConstantFolder;
@@ -41,8 +43,11 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use log::warn;
 
+/// Vector cluster metadata resolved from a vector cluster key expression.
 #[derive(Clone, Debug)]
 pub struct VectorClusterInfo {
     pub key_index: usize,
@@ -52,6 +57,7 @@ pub struct VectorClusterInfo {
     pub distance_type: VectorDistanceType,
 }
 
+/// Runtime metadata for injecting vector cluster ids into the physical sort key.
 #[derive(Clone, Debug)]
 pub struct VectorClusterOperator {
     pub info: VectorClusterInfo,
@@ -59,6 +65,43 @@ pub struct VectorClusterOperator {
     pub vector_cluster_id_offset: usize,
 }
 
+/// One evaluated key persisted in `ClusterStatistics`.
+#[derive(Clone, Copy, Debug)]
+pub struct ClusterStatsKey {
+    pub offset: usize,
+    pub source_column_id: Option<ColumnId>,
+}
+
+/// Mutually exclusive runtime layout used to generate cluster statistics.
+#[derive(Clone, Debug, Default)]
+pub enum ClusterStatsLayout {
+    #[default]
+    Linear,
+    Vector(VectorClusterOperator),
+    Hilbert,
+}
+
+/// Cluster statistics and reusable state produced for block serialization.
+pub struct ClusterStatsState {
+    /// Persisted cluster ranges for the block, when clustering is active.
+    pub cluster_stats: Option<ClusterStatistics>,
+    /// Data block to serialize after temporary cluster-key columns are removed.
+    pub data_block: DataBlock,
+    /// Direct-column bounds reusable by the column-statistics pass.
+    pub column_min_max: HashMap<ColumnId, (Option<Scalar>, Option<Scalar>)>,
+}
+
+impl ClusterStatsState {
+    fn without_stats(data_block: DataBlock) -> Self {
+        Self {
+            cluster_stats: None,
+            data_block,
+            column_min_max: HashMap::new(),
+        }
+    }
+}
+
+/// Resolve vector cluster metadata from table indexes and the vector key column.
 pub fn vector_cluster_info_from_column(
     table_indexes: &BTreeMap<String, TableIndex>,
     key_index: usize,
@@ -83,18 +126,21 @@ pub fn vector_cluster_info_from_column(
     })
 }
 
+/// Generates cluster statistics and temporary sort-key columns for block writes.
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
 
     level: i32,
     block_thresholds: BlockThresholds,
+    /// Keys persisted into `ClusterStatistics`; direct columns carry reusable column IDs.
+    stats_keys: Vec<ClusterStatsKey>,
+    layout: ClusterStatsLayout,
 
     pub extra_key_num: usize,
+    /// Physical offsets of evaluated PARTITION BY expressions.
     pub partition_key_index: Vec<usize>,
-    pub cluster_key_index: Vec<usize>,
-    pub operators: Vec<BlockOperator>,
-    pub vector_operator: Option<VectorClusterOperator>,
+    pub eval_operators: Vec<BlockOperator>,
     pub out_fields: Vec<DataField>,
     pub func_ctx: FunctionContext,
 }
@@ -103,59 +149,103 @@ impl ClusterStatsGenerator {
     #![allow(clippy::too_many_arguments)]
     pub fn new(
         cluster_key_id: u32,
-        cluster_key_index: Vec<usize>,
+        stats_keys: Vec<ClusterStatsKey>,
         extra_key_num: usize,
         level: i32,
         block_thresholds: BlockThresholds,
-        operators: Vec<BlockOperator>,
-        vector_operator: Option<VectorClusterOperator>,
+        eval_operators: Vec<BlockOperator>,
+        layout: ClusterStatsLayout,
         out_fields: Vec<DataField>,
         func_ctx: FunctionContext,
     ) -> Self {
         Self {
             cluster_key_id,
-            cluster_key_index,
             partition_key_index: Vec::new(),
+            stats_keys,
             extra_key_num,
             level,
             block_thresholds,
-            operators,
-            vector_operator,
+            eval_operators,
+            layout,
             out_fields,
             func_ctx,
         }
     }
 
     pub fn sort_descs(&self) -> Vec<SortColumnDescription> {
-        self.cluster_key_index
-            .iter()
-            .map(|offset| SortColumnDescription {
-                offset: *offset,
+        let capacity = self.stats_keys.len() + usize::from(self.vector_operator().is_some());
+        let mut descs = Vec::with_capacity(capacity);
+        let mut push = |offset| {
+            descs.push(SortColumnDescription {
+                offset,
                 asc: true,
                 nulls_first: false,
-            })
-            .collect()
+            });
+        };
+        match &self.layout {
+            ClusterStatsLayout::Linear => {
+                self.stats_keys.iter().for_each(|key| push(key.offset));
+            }
+            ClusterStatsLayout::Vector(operator) => {
+                debug_assert!(operator.info.key_index <= self.stats_keys.len());
+                for (index, key) in self.stats_keys.iter().enumerate() {
+                    if index == operator.info.key_index {
+                        push(operator.vector_cluster_id_offset);
+                    }
+                    push(key.offset);
+                }
+                if operator.info.key_index == self.stats_keys.len() {
+                    push(operator.vector_cluster_id_offset);
+                }
+            }
+            ClusterStatsLayout::Hilbert => {}
+        }
+        descs
     }
 
-    pub fn operator_extra_key_num(&self) -> usize {
-        self.operators
+    /// Return the vector operator when vector clustering is active.
+    pub fn vector_operator(&self) -> Option<&VectorClusterOperator> {
+        match &self.layout {
+            ClusterStatsLayout::Vector(operator) => Some(operator),
+            ClusterStatsLayout::Linear | ClusterStatsLayout::Hilbert => None,
+        }
+    }
+
+    pub fn is_linear(&self) -> bool {
+        matches!(self.layout, ClusterStatsLayout::Linear)
+    }
+
+    pub fn is_hilbert(&self) -> bool {
+        matches!(self.layout, ClusterStatsLayout::Hilbert)
+    }
+
+    /// Physical offsets of the two evaluated Hilbert dimensions.
+    pub fn hilbert_dimension_offsets(&self) -> Result<[usize; HILBERT_CLUSTER_DIMENSIONS]> {
+        if !self.is_hilbert() {
+            return Err(ErrorCode::Internal(
+                "cluster stats generator is not configured for Hilbert clustering",
+            ));
+        }
+        self.stats_keys
             .iter()
-            .map(|op| match op {
-                BlockOperator::Map { exprs, .. } => exprs.len(),
-                BlockOperator::Project { .. } => 0,
+            .map(|key| key.offset)
+            .collect::<Vec<_>>()
+            .try_into()
+            .map_err(|_| {
+                ErrorCode::Internal(format!(
+                    "Hilbert clustering requires exactly {HILBERT_CLUSTER_DIMENSIONS} dimensions"
+                ))
             })
-            .sum()
     }
 
-    // This can be used in block append.
-    // The input block contains the cluster key block.
-    pub fn gen_stats_for_append(
-        &self,
-        mut data_block: DataBlock,
-    ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
-        let cluster_stats = self.clusters_statistics(&data_block, self.level)?;
-        data_block.pop_columns(self.extra_key_num);
-        Ok((cluster_stats, data_block))
+    /// Generate cluster statistics for append and remove temporary columns.
+    ///
+    /// The input block already contains evaluated cluster key columns.
+    /// Direct-column bounds are returned for the following column-statistics pass.
+    pub fn gen_stats_for_append(&self, data_block: DataBlock) -> Result<ClusterStatsState> {
+        let mut state = self.clusters_statistics(data_block, self.level)?;
+        state.data_block.pop_columns(self.extra_key_num);
+        Ok(state)
     }
 
     pub fn extract_partition_stats(
@@ -172,14 +262,14 @@ impl ClusterStatsGenerator {
         }
 
         // Append blocks already contain evaluated key expressions. Mutation paths may
-        // serialize source columns directly, so evaluate the key operators on demand.
+        // serialize source columns directly, so evaluate key expressions on demand.
         let evaluated_block = if self
             .partition_key_index
             .iter()
             .any(|index| *index >= data_block.num_columns())
         {
             Some(
-                self.operators
+                self.eval_operators
                     .iter()
                     .try_fold(data_block.clone(), |block, operator| {
                         operator.execute(&self.func_ctx, block)
@@ -215,81 +305,124 @@ impl ClusterStatsGenerator {
         Ok(Some(PartitionStatistics::new(values)))
     }
 
-    // This can be used in deletion, for an existing block.
+    /// Recompute cluster statistics and reusable direct-column bounds during mutation.
     pub fn gen_with_origin_stats(
         &self,
-        data_block: &DataBlock,
+        data_block: DataBlock,
         origin_stats: Option<ClusterStatistics>,
-    ) -> Result<Option<ClusterStatistics>> {
-        if origin_stats.is_none() {
-            return Ok(None);
+    ) -> Result<ClusterStatsState> {
+        let level = match origin_stats {
+            Some(origin_stats) if origin_stats.cluster_key_id == self.cluster_key_id => {
+                origin_stats.level
+            }
+            _ if self.is_hilbert() => 0,
+            _ => return Ok(ClusterStatsState::without_stats(data_block)),
+        };
+
+        let mut stats_block = data_block.clone();
+
+        if self.is_linear() && !self.stats_keys.is_empty() {
+            let indices = [0u32, stats_block.num_rows() as u32 - 1];
+            stats_block = stats_block.take(indices.as_slice())?;
         }
 
-        let origin_stats = origin_stats.unwrap();
-        if origin_stats.cluster_key_id != self.cluster_key_id {
-            return Ok(None);
-        }
-
-        let mut block = data_block.clone();
-
-        // For vector cluster keys, scalar keys after the vector key are aggregated from the
-        // full block because the block is sorted by the injected vector sort key, not by
-        // those scalar suffix keys.
-        if self.vector_operator.is_none() && !self.cluster_key_index.is_empty() {
-            let indices = vec![0u32, block.num_rows() as u32 - 1];
-            block = block.take(indices.as_slice())?;
-        }
-
-        block = self
-            .operators
+        stats_block = self
+            .eval_operators
             .iter()
-            .try_fold(block, |input, op| op.execute(&self.func_ctx, input))?;
+            .try_fold(stats_block, |input, op| op.execute(&self.func_ctx, input))?;
 
-        self.clusters_statistics(&block, origin_stats.level)
+        let mut state = self.clusters_statistics(stats_block, level)?;
+        state.data_block = data_block;
+        Ok(state)
     }
 
-    /// for string value, only use the first 8 bytes.
-    fn clusters_statistics(
-        &self,
-        data_block: &DataBlock,
-        level: i32,
-    ) -> Result<Option<ClusterStatistics>> {
-        if self.cluster_key_index.is_empty() {
-            return Ok(None);
+    /// Generate persisted cluster ranges from evaluated key columns.
+    fn clusters_statistics(&self, data_block: DataBlock, level: i32) -> Result<ClusterStatsState> {
+        // A vector-only cluster key has no persisted scalar bound, but clustering is still active
+        // and callers require `cluster_stats` to be present. Only skip stats when clustering is not
+        // configured at all.
+        let is_linear = self.is_linear();
+        let is_hilbert = self.is_hilbert();
+        if self.stats_keys.is_empty() && is_linear {
+            return Ok(ClusterStatsState::without_stats(data_block));
         }
-        let vector_cluster_id_offset = self.vector_cluster_id_offset();
-        let scalar_cluster_key_index = self.scalar_cluster_key_index(vector_cluster_id_offset);
-        let mut min = Vec::with_capacity(scalar_cluster_key_index.len());
-        let mut max = Vec::with_capacity(scalar_cluster_key_index.len());
+        let mut min = Vec::with_capacity(self.stats_keys.len());
+        let mut max = Vec::with_capacity(self.stats_keys.len());
+        let mut column_min_max = HashMap::with_capacity(self.stats_keys.len());
 
-        let vector_key_position = vector_cluster_id_offset
-            .and_then(|offset| self.cluster_key_index.iter().position(|key| *key == offset))
-            .unwrap_or(self.cluster_key_index.len());
-        for (key_index, key) in scalar_cluster_key_index.iter().copied() {
-            if key_index < vector_key_position {
-                let val = data_block.get_by_offset(key);
-                let left = unsafe { val.index_unchecked(0) }.to_owned();
+        if is_hilbert {
+            let dimension_offsets = self.hilbert_dimension_offsets()?;
+            for (key, offset) in self.stats_keys.iter().zip(dimension_offsets) {
+                debug_assert_eq!(key.offset, offset);
+                let (left, right, can_reuse_max) =
+                    aggregate_cluster_key_min_max(&data_block, offset)?;
+                if let Some(column_id) = key.source_column_id {
+                    cache_column_min_max(
+                        &mut column_min_max,
+                        column_id,
+                        &left,
+                        &right,
+                        can_reuse_max,
+                    );
+                }
                 min.push(left);
-
-                // The maximum in cluster statistics neednot larger than the non-trimmed one.
-                // So we use trim_min directly.
-                let right = unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
                 max.push(right);
-            } else {
-                let (left, right) = aggregate_cluster_key_min_max(data_block, key)?;
+            }
+        } else {
+            let proxy_sort_key_position = match &self.layout {
+                ClusterStatsLayout::Vector(operator) => operator.info.key_index,
+                ClusterStatsLayout::Linear => self.stats_keys.len(),
+                ClusterStatsLayout::Hilbert => unreachable!(),
+            };
+            let mut prefix_is_constant = true;
+            for (key_index, key) in self.stats_keys.iter().enumerate() {
+                let (left, right, can_reuse_max) = if key_index < proxy_sort_key_position {
+                    let val = data_block.get_by_offset(key.offset);
+                    let left = unsafe { val.index_unchecked(0) }.to_owned();
+                    // The stored max must not exceed the last value in the sorted block.
+                    let right = unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
+                    let null_count = block_entry_null_count(val);
+                    let can_reuse_max = null_count == 0 || null_count == data_block.num_rows();
+                    (left, right, can_reuse_max)
+                } else {
+                    aggregate_cluster_key_min_max(&data_block, key.offset)?
+                };
+
+                // Lexicographic endpoints are independent column bounds only while every
+                // preceding key is constant. Keys after a vector proxy key were aggregated.
+                if (key_index >= proxy_sort_key_position || prefix_is_constant)
+                    && let Some(column_id) = key.source_column_id
+                {
+                    cache_column_min_max(
+                        &mut column_min_max,
+                        column_id,
+                        &left,
+                        &right,
+                        can_reuse_max,
+                    );
+                }
+                if key_index < proxy_sort_key_position {
+                    prefix_is_constant &= left == right;
+                }
                 min.push(left);
                 max.push(right);
             }
         }
         debug_assert!(
-            min.iter()
-                .map(Scalar::as_ref)
-                .cmp(max.iter().map(Scalar::as_ref))
-                != Ordering::Greater,
-            "cluster statistics: min > max, data may not be sorted by cluster key"
+            if is_hilbert {
+                min.iter()
+                    .zip(&max)
+                    .all(|(min, max)| min.as_ref().cmp(&max.as_ref()) != Ordering::Greater)
+            } else {
+                min.iter()
+                    .map(Scalar::as_ref)
+                    .cmp(max.iter().map(Scalar::as_ref))
+                    != Ordering::Greater
+            },
+            "cluster statistics: min > max"
         );
 
-        let level = if self.vector_operator.is_none()
+        let level = if (is_linear || is_hilbert)
             && min == max
             && self.block_thresholds.check_large_enough(
                 data_block.num_rows(),
@@ -300,30 +433,36 @@ impl ClusterStatsGenerator {
             level
         };
 
-        Ok(Some(ClusterStatistics::new(
-            self.cluster_key_id,
-            min,
-            max,
-            level,
-        )))
+        let cluster_stats = ClusterStatistics::new(self.cluster_key_id, min, max, level);
+        Ok(ClusterStatsState {
+            cluster_stats: Some(cluster_stats),
+            data_block,
+            column_min_max,
+        })
     }
+}
 
-    fn vector_cluster_id_offset(&self) -> Option<usize> {
-        self.vector_operator
-            .as_ref()
-            .map(|vector_operator| vector_operator.vector_cluster_id_offset)
+fn block_entry_null_count(entry: &BlockEntry) -> usize {
+    match entry {
+        BlockEntry::Const(value, _, len) => usize::from(matches!(value, Scalar::Null)) * len,
+        BlockEntry::Column(column) => {
+            let (all_null, validity) = column.validity();
+            validity.map_or_else(|| usize::from(all_null) * column.len(), |v| v.null_count())
+        }
     }
+}
 
-    fn scalar_cluster_key_index(
-        &self,
-        vector_cluster_id_offset: Option<usize>,
-    ) -> Vec<(usize, usize)> {
-        self.cluster_key_index
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(|(_, key)| Some(*key) != vector_cluster_id_offset)
-            .collect()
+fn cache_column_min_max(
+    values: &mut HashMap<ColumnId, (Option<Scalar>, Option<Scalar>)>,
+    column_id: ColumnId,
+    min: &Scalar,
+    max: &Scalar,
+    can_reuse_max: bool,
+) {
+    let cached = values.entry(column_id).or_default();
+    cached.0.get_or_insert_with(|| min.clone());
+    if can_reuse_max {
+        cached.1.get_or_insert_with(|| max.clone());
     }
 }
 
@@ -381,24 +520,36 @@ pub(crate) fn same_partition(
     }
 }
 
-pub fn aggregate_cluster_key_min_max(
+/// Aggregate one cluster-key range, using NULL as the NULLS LAST upper bound when present.
+///
+/// The boolean indicates whether the returned max is also reusable as column statistics.
+/// A mixed-NULL cluster range ends at NULL, while column max must ignore those NULL values.
+pub(crate) fn aggregate_cluster_key_min_max(
     data_block: &DataBlock,
     key: usize,
-) -> Result<(Scalar, Scalar)> {
+) -> Result<(Scalar, Scalar, bool)> {
     let entry = data_block.get_by_offset(key).clone();
+    let row_count = data_block.num_rows();
+    let null_count = block_entry_null_count(&entry);
+    if null_count == row_count {
+        return Ok((Scalar::Null, Scalar::Null, true));
+    }
+
     let entries = [entry];
-    let (min, _) = eval_aggr("min", vec![], &entries, data_block.num_rows(), vec![])?;
-    let (max, _) = eval_aggr("max", vec![], &entries, data_block.num_rows(), vec![])?;
-    Ok((
-        min.index(0).unwrap().to_owned(),
-        max.index(0).unwrap().to_owned(),
-    ))
+    let (min, _) = eval_aggr("min", vec![], &entries, row_count, vec![])?;
+    let min = min.index(0).unwrap().to_owned();
+    if null_count > 0 {
+        return Ok((min, Scalar::Null, false));
+    }
+
+    let (max, _) = eval_aggr("max", vec![], &entries, row_count, vec![])?;
+    Ok((min, max.index(0).unwrap().to_owned(), true))
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct BlockOverlapDepth {
-    pub overlap: usize,
-    pub depth: usize,
+pub(crate) struct BlockOverlapDepth {
+    pub(crate) overlap: usize,
+    pub(crate) depth: usize,
 }
 
 /// Iterative segment tree answering range-max queries over a fixed sequence.
@@ -442,7 +593,8 @@ impl RangeMaxTree {
     }
 }
 
-pub fn calculate_block_overlap_depths(
+/// Calculate scalar cluster overlap scores from min/max ranges.
+pub(crate) fn calculate_block_overlap_depths(
     ranges: &[(Vec<Scalar>, Vec<Scalar>)],
     cluster_key_types: &[DataType],
 ) -> Result<Vec<BlockOverlapDepth>> {
@@ -551,19 +703,16 @@ pub(crate) fn prepare_cluster_key_exprs(
         .collect()
 }
 
+/// Reconstruct cluster min/max stats from column stats and prepared key domains.
 pub(crate) fn get_min_max_stats(
     prepared_exprs: &[PreparedClusterKeyExpr],
     col_stats: &StatisticsOfColumns,
     cluster_stats: Option<&ClusterStatistics>,
     default_key_id: Option<u32>,
 ) -> (Vec<Scalar>, Vec<Scalar>) {
-    if let Some(default_key_id) = default_key_id {
-        if let Some(v) = cluster_stats {
-            if v.cluster_key_id == default_key_id {
-                // Cluster stats min/max are guaranteed when generated; reuse them directly.
-                return (v.min().clone(), v.max().clone());
-            }
-        }
+    if let Some(v) = cluster_stats.filter(|stats| Some(stats.cluster_key_id) == default_key_id) {
+        // Cluster stats min/max are guaranteed when generated; reuse them directly.
+        return (v.min().clone(), v.max().clone());
     }
 
     let func_ctx = FunctionContext::default();
@@ -584,7 +733,7 @@ pub(crate) fn get_min_max_stats(
             .collect();
 
         let (_, domain_opt) = ConstantFolder::fold_with_domain(
-            &prepared_expr.expr,
+            Cow::Borrowed(&prepared_expr.expr),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -602,9 +751,71 @@ pub(crate) fn get_min_max_stats(
     (mins, maxs)
 }
 
+/// Rebuild ClusterStatistics from column stats.
+pub(crate) fn cluster_stats_from_col_stats(
+    prepared_exprs: &[PreparedClusterKeyExpr],
+    col_stats: &StatisticsOfColumns,
+    cluster_key_id: u32,
+    level: i32,
+) -> ClusterStatistics {
+    let (min, max) = get_min_max_stats(prepared_exprs, col_stats, None, None);
+    ClusterStatistics::new(cluster_key_id, min, max, level)
+}
+
+/// Reuse a valid persisted Hilbert MBR or rebuild diagnostics bounds from column stats.
+pub(crate) fn hilbert_bounds_for_diagnostics(
+    prepared_exprs: &[PreparedClusterKeyExpr],
+    col_stats: &StatisticsOfColumns,
+    cluster_stats: Option<&ClusterStatistics>,
+    cluster_key_id: u32,
+) -> [Scalar; HILBERT_CLUSTER_DIMENSIONS * 2] {
+    debug_assert_eq!(prepared_exprs.len(), HILBERT_CLUSTER_DIMENSIONS);
+    if let Some((min, max)) = cluster_stats
+        .filter(|stats| {
+            stats.cluster_key_id == cluster_key_id
+                && stats.min().len() == HILBERT_CLUSTER_DIMENSIONS
+                && stats.max().len() == HILBERT_CLUSTER_DIMENSIONS
+        })
+        .and_then(|stats| valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS))
+    {
+        return [
+            min[0].clone(),
+            max[0].clone(),
+            min[1].clone(),
+            max[1].clone(),
+        ];
+    }
+
+    let (min, max) = get_min_max_stats(prepared_exprs, col_stats, None, None);
+    debug_assert_eq!(min.len(), HILBERT_CLUSTER_DIMENSIONS);
+    debug_assert_eq!(max.len(), HILBERT_CLUSTER_DIMENSIONS);
+    [
+        min[0].clone(),
+        max[0].clone(),
+        min[1].clone(),
+        max[1].clone(),
+    ]
+}
+
+/// Types used by scalar overlap depth calculation.
+pub(crate) fn cluster_key_types_for_depth(exprs: &[Expr<usize>]) -> Vec<DataType> {
+    exprs
+        .iter()
+        .map(|expr| {
+            let data_type = expr.data_type();
+            if matches!(*data_type, DataType::String) {
+                data_type.wrap_nullable()
+            } else {
+                data_type.clone()
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::ColumnRef;
+    use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::RawExpr;
     use databend_common_expression::TableDataType;
@@ -648,6 +859,41 @@ mod tests {
             );
         }
         col_stats
+    }
+
+    fn stats_generator_with_thresholds(
+        stats_keys: Vec<ClusterStatsKey>,
+        extra_key_num: usize,
+        level: i32,
+        layout: ClusterStatsLayout,
+        block_thresholds: BlockThresholds,
+    ) -> ClusterStatsGenerator {
+        ClusterStatsGenerator::new(
+            7,
+            stats_keys,
+            extra_key_num,
+            level,
+            block_thresholds,
+            vec![],
+            layout,
+            vec![],
+            FunctionContext::default(),
+        )
+    }
+
+    fn stats_generator(
+        stats_keys: Vec<ClusterStatsKey>,
+        extra_key_num: usize,
+        level: i32,
+        layout: ClusterStatsLayout,
+    ) -> ClusterStatsGenerator {
+        stats_generator_with_thresholds(
+            stats_keys,
+            extra_key_num,
+            level,
+            layout,
+            BlockThresholds::new(1_000_000, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000),
+        )
     }
 
     #[test]
@@ -737,7 +983,10 @@ mod tests {
         )?;
         let mut generator = ClusterStatsGenerator::new(
             3,
-            vec![1],
+            vec![ClusterStatsKey {
+                offset: 1,
+                source_column_id: Some(1),
+            }],
             1,
             0,
             BlockThresholds::default(),
@@ -745,14 +994,17 @@ mod tests {
                 exprs: vec![partition_expr],
                 projections: None,
             }],
-            None,
+            ClusterStatsLayout::Linear,
             vec![],
             FunctionContext::default(),
         );
         generator.partition_key_index = vec![2];
 
         let partition_stats = generator.extract_partition_stats(&block)?.unwrap();
-        let cluster_stats = generator.clusters_statistics(&block, 0)?.unwrap();
+        let cluster_stats = generator
+            .clusters_statistics(block, 0)?
+            .cluster_stats
+            .unwrap();
 
         assert_eq!(partition_stats.values, vec![Scalar::Number(
             NumberScalar::Int64(7)
@@ -783,5 +1035,94 @@ mod tests {
         let right = PartitionStatistics::new(vec![int32_scalar(1)]);
         assert!(!same_partition(Some(&left), Some(&right), 1));
         assert!(same_partition(Some(&left), Some(&left), 1));
+    }
+
+    #[test]
+    fn test_hilbert_mutation_rebuilds_missing_stats_and_marks_constant_block() -> Result<()> {
+        let generator = stats_generator_with_thresholds(
+            vec![
+                ClusterStatsKey {
+                    offset: 0,
+                    source_column_id: Some(10),
+                },
+                ClusterStatsKey {
+                    offset: 1,
+                    source_column_id: Some(20),
+                },
+            ],
+            0,
+            4,
+            ClusterStatsLayout::Hilbert,
+            BlockThresholds::new(2, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000),
+        );
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![3, 3]),
+            Int32Type::from_data(vec![7, 7]),
+        ]);
+
+        let state = generator.gen_with_origin_stats(block, None)?;
+        let stats = state.cluster_stats.unwrap();
+        assert_eq!(stats.cluster_key_id, 7);
+        assert_eq!(stats.min(), &vec![int32_scalar(3), int32_scalar(7)]);
+        assert_eq!(stats.max(), &vec![int32_scalar(3), int32_scalar(7)]);
+        assert_eq!(stats.level, -1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_linear_min_max_cache_uses_source_ids_and_constant_prefix() -> Result<()> {
+        let stats_gen = stats_generator(
+            vec![
+                ClusterStatsKey {
+                    offset: 0,
+                    source_column_id: Some(10),
+                },
+                ClusterStatsKey {
+                    offset: 1,
+                    source_column_id: Some(20),
+                },
+            ],
+            0,
+            0,
+            ClusterStatsLayout::Linear,
+        );
+
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1, 1, 1]),
+            Int32Type::from_data(vec![2, 3, 4]),
+        ]);
+        let state = stats_gen.gen_stats_for_append(block)?;
+        assert_eq!(state.column_min_max.len(), 2);
+        assert_eq!(
+            state.column_min_max[&10],
+            (Some(int32_scalar(1)), Some(int32_scalar(1)))
+        );
+        assert_eq!(
+            state.column_min_max[&20],
+            (Some(int32_scalar(2)), Some(int32_scalar(4)))
+        );
+
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1, 2, 3]),
+            Int32Type::from_data(vec![10, 0, 5]),
+        ]);
+        let state = stats_gen.gen_stats_for_append(block)?;
+        assert!(state.column_min_max.contains_key(&10));
+        assert!(!state.column_min_max.contains_key(&20));
+
+        let block = DataBlock::new_from_columns(vec![
+            Int32Type::from_opt_data(vec![Some(1), Some(2), None]),
+            Int32Type::from_data(vec![0, 0, 0]),
+        ]);
+        let origin_stats = ClusterStatistics::new(
+            7,
+            vec![int32_scalar(1), int32_scalar(0)],
+            vec![Scalar::Null, int32_scalar(0)],
+            0,
+        );
+        let state = stats_gen.gen_with_origin_stats(block, Some(origin_stats))?;
+        assert_eq!(state.column_min_max[&10], (Some(int32_scalar(1)), None));
+        assert!(!state.column_min_max.contains_key(&20));
+        Ok(())
     }
 }

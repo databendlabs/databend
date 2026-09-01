@@ -2,7 +2,7 @@
 description: A single comparison should remain unchanged.
 operator: filter
 input: a = 5
-changed: true
+changed: false
 output[0]: eq<UInt64, UInt64>(a (#0), 5_u64)
 
 === filter_flattens_and_chain ===
@@ -91,7 +91,7 @@ output[0]: b (#1)
 description: Expressions outside the rule's target patterns should remain intact.
 operator: filter
 input: is_not_null(c < 3 and c < 4)
-changed: true
+changed: false
 output[0]: is_not_null<T0=Boolean><T0 NULL>(and<Boolean NULL, Boolean NULL>(lt<UInt64 NULL, UInt64 NULL>(c (#2), CAST<UInt8>(3_u8 AS UInt64 NULL)), lt<UInt64 NULL, UInt64 NULL>(c (#2), CAST<UInt8>(4_u8 AS UInt64 NULL))))
 
 === scan_normalizes_pushdown_and_chain ===
@@ -101,6 +101,13 @@ input: a != 3 and true and a != 5
 changed: true
 output[0]: noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(3_u8 AS UInt64))
 output[1]: noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(5_u8 AS UInt64))
+
+=== scan_keeps_simple_comparison ===
+description: A scan predicate outside the target patterns should remain unchanged.
+operator: scan
+input: a = 5
+changed: false
+output[0]: eq<UInt64, UInt64>(a (#0), 5_u64)
 
 === scan_short_circuits_pushdown_or_chain ===
 description: Scan pushdown predicates should also short-circuit truthy OR operands.

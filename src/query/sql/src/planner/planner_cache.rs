@@ -29,12 +29,15 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::is_cacheable_function;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_settings::ChangeValue;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -87,6 +90,7 @@ impl Planner {
             name_resolution_ctx,
             cache_miss: false,
             has_security_policy: false,
+            mv_fingerprints: vec![],
         };
         stmt.drive(&mut visitor);
 
@@ -94,7 +98,11 @@ impl Planner {
             return Ok(None);
         }
 
-        let cache_key = self.planner_cache_key_for_stmt(stmt, visitor.has_security_policy)?;
+        let cache_key = self.planner_cache_key_for_stmt(
+            stmt,
+            visitor.has_security_policy,
+            &visitor.mv_fingerprints,
+        )?;
         Ok(Some(PlanCacheContext {
             cache_key,
             table_snapshots: visitor.table_snapshots,
@@ -105,16 +113,22 @@ impl Planner {
         &self,
         stmt: &Statement,
         has_security_policy: bool,
+        mv_fingerprints: &[String],
     ) -> Result<String> {
+        let mv_fingerprint = mv_fingerprints.join("\0");
         if has_security_policy {
             return Ok(Self::planner_cache_key(&format!(
-                "{}\0{}",
+                "{}\0{}\0{}",
                 self.security_policy_cache_key_prefix()?,
+                mv_fingerprint,
                 stmt
             )));
         }
 
-        Ok(Self::planner_cache_key(&stmt.to_string()))
+        Ok(Self::planner_cache_key(&format!(
+            "{}\0{}",
+            mv_fingerprint, stmt
+        )))
     }
 
     fn security_policy_cache_key_prefix(&self) -> Result<String> {
@@ -201,6 +215,7 @@ impl Planner {
 struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
     table_snapshots: Vec<TableSnapshot>,
+    mv_fingerprints: Vec<String>,
     name_resolution_ctx: NameResolutionContext,
     cache_miss: bool,
     has_security_policy: bool,
@@ -224,19 +239,25 @@ impl PlanCacheContext {
 #[derive(Clone)]
 struct TableSnapshot {
     schema: TableSchemaRef,
+    table_seq: u64,
     snapshot_location: String,
     security_policy: SecurityPolicySnapshot,
 }
 
 impl TableSnapshot {
     fn from_resolved_table(table: &dyn Table) -> Option<Self> {
-        if table.is_temp() || table.is_stage_table() || table.is_stream() {
+        if !table.plan_can_be_cached()
+            || table.is_temp()
+            || table.is_stage_table()
+            || table.is_stream()
+        {
             return None;
         }
 
         let snapshot_location = table.options().get(OPT_KEY_SNAPSHOT_LOCATION)?.clone();
         Some(Self {
             schema: table.schema(),
+            table_seq: table.get_table_info().ident.seq,
             snapshot_location,
             security_policy: SecurityPolicySnapshot::from(&table.get_table_info().meta),
         })
@@ -256,7 +277,8 @@ impl TableSnapshot {
             return false;
         }
 
-        table.options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(&self.snapshot_location)
+        table.get_table_info().ident.seq == self.table_seq
+            && table.options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(&self.snapshot_location)
             && SecurityPolicySnapshot::from(&table.get_table_info().meta) == self.security_policy
     }
 }
@@ -311,7 +333,6 @@ impl TableRefVisitor {
                 self.cache_miss = true;
                 return;
             }
-
             let catalog = table.catalog.to_owned().unwrap_or(Identifier {
                 span: None,
                 name: self.ctx.get_current_catalog(),
@@ -345,6 +366,46 @@ impl TableRefVisitor {
                     )
                     .await
                 {
+                    if table.engine() == MATERIALIZED_VIEW_ENGINE {
+                        // A direct MV read may fall back to its live source endpoint, which is not
+                        // represented by the ordinary table snapshot.
+                        self.cache_miss = true;
+                        return;
+                    }
+                    if let Ok(catalog) = self.ctx.get_catalog(&catalog_name).await {
+                        let tenant = self.ctx.get_tenant();
+                        let source_table_id = table.get_id();
+                        let Ok(snapshot) = catalog
+                            .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                            .await
+                        else {
+                            self.cache_miss = true;
+                            return;
+                        };
+
+                        let mut materialized_views = snapshot.materialized_views;
+                        materialized_views.sort_by_key(|mv| mv.mv_id);
+                        let mut fingerprint = format!(
+                            "source:{}:binding_generation:{}",
+                            source_table_id, snapshot.generation
+                        );
+                        for mv in materialized_views {
+                            let mv_options = &mv.table_meta.data.options;
+                            fingerprint.push_str(&format!(
+                                ":mv:{}:definition:{}:table_seq:{}:snapshot:{:?}:checkpoint_seq:{:?}:checkpoint_snapshot:{:?}",
+                                mv.mv_id,
+                                mv.definition.seq,
+                                mv.table_meta.seq,
+                                mv.table_meta.data.options.get(OPT_KEY_SNAPSHOT_LOCATION),
+                                mv_options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ),
+                                mv_options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
+                            ));
+                        }
+                        self.mv_fingerprints.push(fingerprint);
+                    } else {
+                        self.cache_miss = true;
+                        return;
+                    }
                     if let Some(snapshot) = TableSnapshot::from_resolved_table(table.as_ref()) {
                         self.has_security_policy |= snapshot.has_security_policy();
                         self.table_snapshots.push(snapshot);

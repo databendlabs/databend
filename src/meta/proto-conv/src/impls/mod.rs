@@ -17,6 +17,7 @@ mod client_session;
 mod config;
 mod connection;
 mod data_mask;
+mod data_share;
 mod database;
 mod datetime;
 mod dictionary;

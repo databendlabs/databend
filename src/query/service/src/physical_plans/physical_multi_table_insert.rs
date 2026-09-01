@@ -708,8 +708,8 @@ impl IPhysicalPlan for ChunkAppendData {
                 block_thresholds,
                 schema,
             )?;
-            let operators = cluster_stats_gen.operators.clone();
-            if !operators.is_empty() {
+            if !cluster_stats_gen.eval_operators.is_empty() {
+                let eval_operators = cluster_stats_gen.eval_operators.clone();
                 let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
                 eval_cluster_key_builders.push(Box::new(move |input, output| {
@@ -718,23 +718,26 @@ impl IPhysicalPlan for ChunkAppendData {
                         output,
                         num_input_columns,
                         func_ctx2.clone(),
-                        operators.clone(),
+                        eval_operators.clone(),
                     )))
                 }));
                 eval_cluster_key_num += 1;
             } else {
                 eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()));
             }
-            if let Some(vector_operator) = cluster_stats_gen.vector_operator.clone() {
+            if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
                 let rows_per_block = block_thresholds.max_rows_per_block;
+                let vector_column_input_offset = vector_operator.vector_column_input_offset;
+                let dimension = vector_operator.info.dimension;
+                let distance_type = vector_operator.info.distance_type;
                 vector_cluster_builders.push(Box::new(move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                         input,
                         output,
                         TransformVectorCluster::new(
-                            vector_operator.vector_column_input_offset,
-                            vector_operator.info.dimension,
-                            vector_operator.info.distance_type,
+                            vector_column_input_offset,
+                            dimension,
+                            distance_type,
                             rows_per_block,
                         ),
                     )))

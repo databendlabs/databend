@@ -25,7 +25,6 @@ use crate::optimizer::OptimizerContext;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
@@ -35,10 +34,11 @@ use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::optimizers::cascades::tasks::Task;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
+use crate::optimizer::optimizers::distributed::MaterializedCTEDistribution;
+use crate::optimizer::optimizers::distributed::MaterializedCTEDistributionOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::rule::RuleSet;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::RelOperator;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
@@ -88,86 +88,63 @@ impl CascadesOptimizer {
     #[recursive::recursive]
     pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let opt_ctx = self.opt_ctx.clone();
+        let distributed = opt_ctx.get_enable_distributed_optimization();
 
-        // Try to optimize using the internal optimizer
-        let result = self.optimize_internal(s_expr.clone());
+        // Settle distribution properties first. Exchange-sensitive operators
+        // are lowered only after materialized CTE placement is known.
+        let optimized_expr = self.optimize_without_staging(&s_expr)?;
 
-        // Process different cases based on the result
-        let mut optimized_expr = match result {
-            Ok(expr) => {
-                // After successful optimization, apply sort and limit push down if distributed optimization is enabled
-                if opt_ctx.get_enable_distributed_optimization() {
-                    let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
-                    sort_and_limit_optimizer.optimize(&expr)?
-                } else {
-                    expr
+        if !distributed {
+            return Ok(optimized_expr);
+        }
+
+        let optimized_expr = if opt_ctx
+            .is_optimizer_disabled(MaterializedCTEDistributionOptimizer::NAME)
+        {
+            optimized_expr
+        } else {
+            let optimizer = MaterializedCTEDistributionOptimizer::create();
+            match optimizer.optimize(&optimized_expr)? {
+                MaterializedCTEDistribution::Distributed(expr) => expr,
+                MaterializedCTEDistribution::RequiresLocal => {
+                    info!(
+                        "Force local execution because a materialized CTE producer cannot participate in the distributed fragment graph"
+                    );
+                    opt_ctx.set_force_local_execution();
+
+                    // Re-plan from the pre-Cascades expression instead of
+                    // deleting Exchanges from a distributed physical choice.
+                    let mut local_optimizer = CascadesOptimizer::new(opt_ctx)?;
+                    let local_expr = local_optimizer.optimize_without_staging(&s_expr)?;
+                    self.memo = local_optimizer.memo;
+                    return Ok(local_expr);
                 }
             }
+        };
 
+        let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
+        let optimized_expr = sort_and_limit_optimizer.optimize(&optimized_expr)?;
+
+        Ok(optimized_expr)
+    }
+
+    fn optimize_without_staging(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        match self.optimize_internal(s_expr.clone()) {
+            Ok(expr) => Ok(expr),
             Err(e) => {
-                // Optimization failed, log the error and fall back to heuristic optimizer
                 info!(
                     "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
                     e
                 );
 
-                // If distributed optimization is enabled, use the distributed optimizer
-                if opt_ctx.get_enable_distributed_optimization() {
-                    let distributed_optimizer = DistributedOptimizer::new(opt_ctx);
-                    distributed_optimizer.optimize(&s_expr)?
+                if self.opt_ctx.get_enable_distributed_optimization() {
+                    let distributed_optimizer = DistributedOptimizer::new(self.opt_ctx.clone());
+                    distributed_optimizer.optimize(s_expr)
                 } else {
-                    // Otherwise return the original expression
-                    s_expr.clone()
+                    Ok(s_expr.clone())
                 }
             }
-        };
-
-        optimized_expr = Self::remove_exchanges_for_serial_sequence(optimized_expr)?;
-
-        Ok(optimized_expr)
-    }
-
-    fn remove_exchanges_for_serial_sequence(s_expr: SExpr) -> Result<SExpr> {
-        if Self::has_sequence_with_serial_left_child(&s_expr)? {
-            Self::remove_all_exchanges(s_expr)
-        } else {
-            Ok(s_expr)
         }
-    }
-
-    fn has_sequence_with_serial_left_child(s_expr: &SExpr) -> Result<bool> {
-        if let RelOperator::Sequence(_) = s_expr.plan.as_ref() {
-            let left_child = s_expr.left_child();
-            let rel_expr = RelExpr::with_s_expr(left_child);
-            let physical_prop = rel_expr.derive_physical_prop()?;
-
-            if physical_prop.distribution == Distribution::Serial {
-                return Ok(true);
-            }
-        }
-
-        for child in s_expr.children() {
-            if Self::has_sequence_with_serial_left_child(child)? {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
-    fn remove_all_exchanges(s_expr: SExpr) -> Result<SExpr> {
-        if let RelOperator::Exchange(_) = s_expr.plan.as_ref() {
-            return Self::remove_all_exchanges(s_expr.unary_child().clone());
-        }
-
-        let mut new_children = Vec::new();
-        for child in s_expr.children() {
-            let processed_child = Self::remove_all_exchanges(child.clone())?;
-            new_children.push(Arc::new(processed_child));
-        }
-
-        let result = s_expr.replace_children(new_children);
-        Ok(result)
     }
 
     fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {
@@ -297,8 +274,8 @@ impl Optimizer for CascadesOptimizer {
         "CascadesOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_sync(s_expr.clone())
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        self.optimize_sync(s_expr)
     }
 
     fn memo(&self) -> Option<&Memo> {

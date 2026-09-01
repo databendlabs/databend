@@ -204,7 +204,7 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
         let scalar = wrap_cast(&scalar, &DataType::String.wrap_nullable());
-        let nullable = scalar.data_type()?.is_nullable();
+        let nullable = scalar.data_type().is_nullable();
         let column_positions = partition_bind_context
             .columns
             .iter()

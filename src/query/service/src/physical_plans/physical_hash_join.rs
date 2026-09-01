@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -49,6 +50,9 @@ use tokio::sync::Barrier;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
+use super::runtime_filter::RuntimeFilterProbeKey;
+use super::runtime_filter::canonical_equivalence_connector;
+use super::runtime_filter::resolve_runtime_filter_probe_expr;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -77,7 +81,7 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
+    Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
     Vec<((usize, bool), usize)>,
     Vec<Option<IndexType>>,
 );
@@ -88,14 +92,7 @@ type ProjectionsResult = (
     Option<(usize, HashMap<Symbol, usize>)>,
 );
 
-/// Type alias for runtime filter expression result
-/// Contains: (Expr, scan_id, table_index, column_idx)
-type RuntimeFilterExpr = Option<(
-    databend_common_expression::Expr<String>,
-    usize,
-    usize,
-    Symbol,
-)>;
+type RuntimeFilterExpr = Option<RuntimeFilterProbeKey<databend_common_expression::Expr<String>>>;
 
 type MergedFieldsResult = (
     Vec<DataField>,
@@ -713,66 +710,24 @@ impl PhysicalPlanBuilder {
     /// * `left_condition` - The left side condition
     ///
     /// # Returns
-    /// * `Result<Option<(databend_common_expression::Expr<String>, usize, usize)>>` - Runtime filter expression, scan ID, and table index
+    /// The typed probe key and its scan/column metadata, if the expression
+    /// references exactly one physical base column.
     fn prepare_runtime_filter_expr(
         &self,
         left_condition: &ScalarExpr,
     ) -> Result<RuntimeFilterExpr> {
-        // Runtime filter only supports columns in base tables
-        if left_condition.used_columns().iter().all(|idx| {
-            matches!(
-                self.metadata.read().column(*idx),
-                ColumnEntry::BaseTableColumn(_)
-            )
-        }) {
-            if let Some(column_idx) = left_condition.used_columns().iter().next() {
-                // Safe to unwrap because we have checked the column is a base table column
-                let table_index = self
-                    .metadata
-                    .read()
-                    .column(*column_idx)
-                    .table_index()
-                    .unwrap();
-                let scan_id = self
-                    .metadata
-                    .read()
-                    .base_column_scan_id(*column_idx)
-                    .unwrap();
-
-                let metadata = self.metadata.read();
-                return Ok(Some((
-                    left_condition
-                        .as_raw_expr()
-                        .type_check(&*metadata)?
-                        .project_column_ref(|col| {
-                            // Use the physical column name from the table schema
-                            // (looked up by column_id) rather than the binding's
-                            // context name, which can be an alias that collides
-                            // with another column in the same table.
-                            let entry = metadata.column(col.index);
-                            if let ColumnEntry::BaseTableColumn(base_col) = entry {
-                                if base_col.path_indices.is_none() {
-                                    let table = metadata.table(base_col.table_index);
-                                    let schema = table.table().schema_with_stream();
-                                    if let Ok(field) = schema.field_of_column_id(base_col.column_id)
-                                    {
-                                        return Ok(field.name().clone());
-                                    }
-                                }
-                                // For nested/path columns, or when schema lookup
-                                // fails, use the stable metadata-level column name.
-                                return Ok(base_col.column_name.clone());
-                            }
-                            Ok(col.column_name.clone())
-                        })?,
-                    scan_id,
-                    table_index,
-                    *column_idx,
-                )));
-            }
-        }
-
-        Ok(None)
+        let Some(probe) = resolve_runtime_filter_probe_expr(&self.metadata, left_condition)? else {
+            return Ok(None);
+        };
+        let is_connector =
+            canonical_equivalence_connector(probe.probe_key.as_remote_expr()).is_ok();
+        Ok(Some(RuntimeFilterProbeKey {
+            probe_key: probe.probe_key,
+            scan_id: probe.scan_id,
+            column_idx: probe.column_idx,
+            is_connector,
+            is_null_equal: false,
+        }))
     }
 
     /// Handles inner join column optimization
@@ -855,8 +810,9 @@ impl PhysicalPlanBuilder {
 
         let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
-            let left_condition = &condition.left;
-            let right_condition = &condition.right;
+            let original_left_condition = &condition.left;
+            let original_right_condition = &condition.right;
+            let (left_condition, right_condition) = condition.canonical_keys();
 
             // Type check expressions
             let right_expr = right_condition
@@ -869,8 +825,9 @@ impl PhysicalPlanBuilder {
             // Prepare runtime filter expression
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
-            let build_table_index = if right_condition.used_columns().len() == 1 {
-                let column_idx = *right_condition.used_columns().iter().next().unwrap();
+            let right_used_columns = right_condition.used_columns();
+            let build_table_index = if right_used_columns.len() == 1 {
+                let column_idx = *right_used_columns.iter().next().unwrap();
                 if matches!(
                     self.metadata.read().column(column_idx),
                     ColumnEntry::BaseTableColumn(_)
@@ -886,8 +843,8 @@ impl PhysicalPlanBuilder {
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
                 self.handle_inner_join_column_optimization(
-                    left_condition,
-                    right_condition,
+                    original_left_condition,
+                    original_right_condition,
                     probe_schema,
                     build_schema,
                     column_projections,
@@ -925,54 +882,45 @@ impl PhysicalPlanBuilder {
 
             // Process runtime filter expressions
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
-                .map(|(expr, scan_id, table_index, column_idx)| {
-                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS).map(
-                        |casted_expr| {
-                            (
-                                casted_expr,
-                                scan_id,
-                                table_index,
-                                column_idx,
-                                condition.is_null_equal,
-                            )
-                        },
-                    )
+                .map(|probe| {
+                    probe.try_map_probe_key(|probe_key| {
+                        check_cast(
+                            probe_key.span(),
+                            false,
+                            probe_key,
+                            &common_ty,
+                            &BUILTIN_FUNCTIONS,
+                        )
+                    })
                 })
                 .transpose()?;
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|mut probe| {
+                probe.is_null_equal = condition.is_null_equal;
+                probe
+            });
 
             // Fold constants
             let (left_expr, _) =
-                ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(Cow::Owned(left_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let (right_expr, _) =
-                ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(Cow::Owned(right_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
-                    (
-                        ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
-                        scan_id,
-                        table_index,
-                        column_idx,
-                        is_null_equal,
-                    )
-                },
-            );
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|probe| {
+                probe.map_probe_key(|probe_key| {
+                    ConstantFolder::fold(Cow::Owned(probe_key), &self.func_ctx, &BUILTIN_FUNCTIONS)
+                        .0
+                        .into_owned()
+                })
+            });
 
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
-            left_join_conditions_rt.push(left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
-                    (
-                        expr.as_remote_expr(),
-                        scan_id,
-                        table_index,
-                        column_idx,
-                        is_null_equal,
-                    )
-                },
-            ));
+            left_join_conditions_rt.push(
+                left_expr_for_runtime_filter
+                    .map(|probe| probe.map_probe_key(|probe_key| probe_key.as_remote_expr())),
+            );
             build_table_indexes.push(build_table_index);
         }
 
@@ -1256,7 +1204,8 @@ impl PhysicalPlanBuilder {
                 let expr = scalar
                     .type_check(merged_schema.as_ref())?
                     .project_column_ref(|index| merged_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })
             .collect::<Result<_>>()?;
@@ -1460,10 +1409,12 @@ impl PhysicalPlanBuilder {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_sql::ColumnBindingBuilder;
     use databend_common_sql::Visibility;
     use databend_common_sql::plans::BoundColumnRef;
+    use databend_common_sql::plans::CastExpr;
     use databend_common_sql::plans::FunctionCall;
     use databend_common_sql::plans::JoinEquiCondition;
 
@@ -1473,16 +1424,33 @@ mod tests {
         DataType::Number(NumberDataType::Int64)
     }
 
-    fn column(index: usize) -> ScalarExpr {
+    fn typed_column(index: usize, data_type: DataType) -> ScalarExpr {
         let column = ColumnBindingBuilder::new(
             index.to_string(),
             Symbol::from_field_index(index),
-            Box::new(int64_type()),
+            Box::new(data_type),
             Visibility::Visible,
         )
         .build();
 
         ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+    }
+
+    fn column(index: usize) -> ScalarExpr {
+        typed_column(index, int64_type())
+    }
+
+    fn cast(expr: ScalarExpr, target_type: DataType, is_try: bool) -> ScalarExpr {
+        ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try,
+            argument: Box::new(expr),
+            target_type: Box::new(target_type),
+        })
+    }
+
+    fn cast_to_string(expr: ScalarExpr) -> ScalarExpr {
+        cast(expr, DataType::String, false)
     }
 
     fn schemas() -> (DataSchema, DataSchema, DataSchema) {
@@ -1519,6 +1487,7 @@ mod tests {
                 func_name: "gt".to_string(),
                 params: vec![],
                 arguments: vec![column(0), column(1)],
+                return_type: Box::new(DataType::Boolean),
             })],
             ..Default::default()
         };
@@ -1528,6 +1497,102 @@ mod tests {
 
         assert!(info.is_some());
         assert_eq!(info.unwrap().projection, vec![0, 1]);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_safe_integer_string_round_trip_from_join_key() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let string_source = typed_column(1, DataType::Number(NumberDataType::Int32));
+        let string = cast_to_string(string_source.clone());
+
+        let condition = JoinEquiCondition::new(integer.clone(), string, false);
+        let (left, right) = condition.canonical_keys();
+
+        assert_eq!(left, &integer);
+        assert_eq!(right, &string_source);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_safe_round_trip_when_cast_is_on_left() -> Result<()> {
+        let string_source = typed_column(0, DataType::Number(NumberDataType::UInt32));
+        let string = cast_to_string(string_source.clone());
+        let integer = typed_column(1, DataType::Number(NumberDataType::Int64));
+
+        let condition = JoinEquiCondition::new(string, integer.clone(), false);
+        let (left, right) = condition.canonical_keys();
+
+        assert_eq!(left, &string_source);
+        assert_eq!(right, &integer);
+        Ok(())
+    }
+
+    #[test]
+    fn removes_nullable_integer_string_round_trip() -> Result<()> {
+        let nullable_int64 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+        let nullable_int32 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32)));
+        let integer = typed_column(0, nullable_int64);
+        let string_source = typed_column(1, nullable_int32);
+        let string = cast(
+            string_source.clone(),
+            DataType::Nullable(Box::new(DataType::String)),
+            false,
+        );
+
+        let condition = JoinEquiCondition::new(integer.clone(), string, false);
+        let (left, right) = condition.canonical_keys();
+
+        assert_eq!(left, &integer);
+        assert_eq!(right, &string_source);
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_try_cast_and_arbitrary_string_join_keys() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let source = typed_column(1, DataType::Number(NumberDataType::Int32));
+        let try_cast = cast(source, DataType::String, true);
+
+        let condition = JoinEquiCondition::new(integer.clone(), try_cast.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &try_cast));
+
+        let string_column = typed_column(1, DataType::String);
+        let condition = JoinEquiCondition::new(integer.clone(), string_column.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &string_column));
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_non_integer_cast_sources_and_operands() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let source_types = [
+            DataType::Number(NumberDataType::Float64),
+            DataType::Decimal(DecimalSize::new(10, 2)?),
+            DataType::Boolean,
+            DataType::Date,
+        ];
+
+        for (index, source_type) in source_types.into_iter().enumerate() {
+            let string = cast_to_string(typed_column(index + 1, source_type));
+            let condition = JoinEquiCondition::new(integer.clone(), string.clone(), false);
+            assert_eq!(condition.canonical_keys(), (&integer, &string));
+        }
+
+        let float = typed_column(1, DataType::Number(NumberDataType::Float64));
+        let string = cast_to_string(typed_column(2, DataType::Number(NumberDataType::Int32)));
+        let condition = JoinEquiCondition::new(float.clone(), string.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&float, &string));
+        Ok(())
+    }
+
+    #[test]
+    fn keeps_potentially_lossy_mixed_sign_string_join_key() -> Result<()> {
+        let integer = typed_column(0, DataType::Number(NumberDataType::Int64));
+        let string = cast_to_string(typed_column(1, DataType::Number(NumberDataType::UInt64)));
+
+        let condition = JoinEquiCondition::new(integer.clone(), string.clone(), false);
+        assert_eq!(condition.canonical_keys(), (&integer, &string));
         Ok(())
     }
 }

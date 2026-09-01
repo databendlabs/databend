@@ -365,6 +365,9 @@ impl InterpreterFactory {
             Plan::CreateDatabase(create_database) => Ok(Arc::new(
                 CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())?,
             )),
+            Plan::CreateDatabaseFromShare(create_database) => Ok(Arc::new(
+                CreateDatabaseFromShareInterpreter::try_create(ctx, *create_database.clone())?,
+            )),
             Plan::DropDatabase(drop_database) => Ok(Arc::new(DropDatabaseInterpreter::try_create(
                 ctx,
                 *drop_database.clone(),
@@ -377,6 +380,34 @@ impl InterpreterFactory {
             Plan::RenameDatabase(rename_database) => Ok(Arc::new(
                 RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
             )),
+            Plan::CreateShare(plan) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DropShare(plan) => Ok(Arc::new(DropShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::AlterShare(plan) => Ok(Arc::new(AlterShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::GrantShare(plan) => Ok(Arc::new(GrantShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::RevokeShare(plan) => Ok(Arc::new(RevokeShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::ShowShares(plan) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DescShare(plan) => Ok(Arc::new(DescShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
 
             // Tables
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
@@ -536,6 +567,9 @@ impl InterpreterFactory {
                 ctx,
                 *describe_view.clone(),
             )?)),
+            Plan::RefreshLineage(refresh_lineage) => Ok(Arc::new(
+                RefreshLineageInterpreter::try_create(ctx, *refresh_lineage.clone())?,
+            )),
 
             // Materialized Views
             Plan::CreateMaterializedView(create_view) => Ok(Arc::new(
@@ -544,9 +578,11 @@ impl InterpreterFactory {
             Plan::DropMaterializedView(drop_view) => Ok(Arc::new(
                 DropMaterializedViewInterpreter::try_create(ctx, *drop_view.clone())?,
             )),
-            Plan::DescribeMaterializedView(_) => todo!(),
             Plan::RefreshMaterializedView(refresh_view) => Ok(Arc::new(
                 RefreshMaterializedViewInterpreter::try_create(ctx, *refresh_view.clone())?,
+            )),
+            Plan::ShowCreateMaterializedView(plan) => Ok(Arc::new(
+                ShowCreateMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
             )),
 
             // Streams
@@ -971,8 +1007,5 @@ impl InterpreterFactory {
 }
 
 fn lineage_enabled() -> bool {
-    GlobalConfig::instance()
-        .log
-        .history
-        .is_table_enabled("lineage_unresolved")
+    GlobalConfig::instance().lineage.enabled()
 }

@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateMaterializedViewMeta;
-use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
-use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::CreateMaterializedViewPlan;
 
+use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
 
 pub struct CreateMaterializedViewInterpreter {
     ctx: Arc<QueryContext>,
@@ -50,39 +50,23 @@ impl Interpreter for CreateMaterializedViewInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
+
+        let table_interpreter =
+            CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
 
         let materialized_view = CreateMaterializedViewMeta {
             definition: self.plan.mv_definition.clone(),
-            // TODO
-            expected_source_generation: 0,
+            expected_source_generation: self.plan.expected_source_generation,
         };
-
-        let plan = CreateTableReq {
-            create_option: self.plan.create_option,
-            catalog_name: if self.plan.create_option.is_overriding() {
-                Some(self.plan.catalog.to_string())
-            } else {
-                None
-            },
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name: self.plan.database.clone(),
-                table_name: self.plan.view_name.clone(),
-            },
-            table_meta: TableMeta {
-                schema: self.plan.schema.clone(),
-                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
-                options: self.plan.options.clone(),
-                ..Default::default()
-            },
-            source_table_option: self.plan.source_table_option.clone(),
-            as_dropped: false,
-            materialized_view: Some(materialized_view),
-            table_properties: None,
-            table_partition: None,
-        };
-        catalog.create_table(plan).await?;
+        let catalog = self.ctx.get_catalog(&self.plan.table_plan.catalog).await?;
+        let mut req = table_interpreter.build_request(None)?;
+        req.source_table_option = self.plan.source_table_option.clone();
+        req.materialized_view = Some(materialized_view);
+        // MV tables deliberately have no independent ownership. Reuse table
+        // validation/request construction, then publish directly through the catalog.
+        catalog.create_table(req).await?;
 
         Ok(PipelineBuildResult::create())
     }

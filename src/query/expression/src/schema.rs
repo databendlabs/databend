@@ -38,6 +38,7 @@ use crate::types::DataType;
 use crate::types::DecimalDataKind;
 use crate::types::NumberDataType;
 use crate::types::VectorDataType;
+use crate::types::collect_physical_types;
 use crate::types::decimal::DecimalDataType;
 
 // Column id of TableField
@@ -1466,24 +1467,13 @@ impl TableDataType {
             TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } => {
-                let physical_fields = fields_type
-                    .iter()
-                    .map(|field| field.physical_type())
-                    .collect::<Vec<_>>();
-                if physical_fields
-                    .iter()
-                    .zip(fields_type)
-                    .all(|(physical, logical)| physical.as_ref() == logical)
-                {
-                    Cow::Borrowed(self)
-                } else {
-                    Cow::Owned(TableDataType::Tuple {
-                        fields_name: fields_name.clone(),
-                        fields_type: physical_fields.into_iter().map(Cow::into_owned).collect(),
-                    })
-                }
-            }
+            } => match collect_physical_types(fields_type, Self::physical_type) {
+                Some(fields_type) => Cow::Owned(TableDataType::Tuple {
+                    fields_name: fields_name.clone(),
+                    fields_type,
+                }),
+                None => Cow::Borrowed(self),
+            },
             _ => Cow::Borrowed(self),
         }
     }

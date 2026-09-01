@@ -18,10 +18,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_statistics::TypedHistogram;
 
 use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
+use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -166,7 +168,7 @@ impl Aggregate {
             .group_items
             .iter()
             .any(|item| match column_stats.get(&item.index) {
-                Some(stat) => stat.ndv.is_upper_only(),
+                Some(stat) => stat.ndv().is_upper_only(),
                 None => true,
             })
         {
@@ -186,7 +188,7 @@ impl Aggregate {
             .iter()
             .map(|group| {
                 column_stats[&group.index]
-                    .ndv
+                    .ndv()
                     .expected
                     .expect("upper-only group NDV should have used aggregate fallback")
             })
@@ -209,20 +211,14 @@ impl Aggregate {
         for item in self.group_items.iter() {
             let item_stat = column_stats.get_mut(&item.index).unwrap();
             if self.group_items.len() == 1 {
-                item_stat.ndv = item_stat.ndv.reduce(cardinality);
+                item_stat.set_ndv(item_stat.ndv().reduce(cardinality));
             }
-
-            let Some(histogram) = &mut item_stat.histogram else {
-                continue;
-            };
-            // When there is a high probability that eager aggregation
-            // is better, we will update the histogram.
-            if histogram
-                .ndv()
-                .expected
-                .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
-            {
-                histogram.collapse_counts_to_distinct();
+            match item_stat {
+                ColumnStat::Int { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::UInt { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::Float { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::Bytes { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => {}
             }
         }
 
@@ -235,6 +231,21 @@ impl Aggregate {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+fn collapse_dense_histogram<T>(histogram: &mut Option<TypedHistogram<T>>) {
+    let Some(histogram) = histogram else {
+        return;
+    };
+    // When there is a high probability that eager aggregation is better, we
+    // will update the histogram.
+    if histogram
+        .ndv()
+        .expected
+        .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
+    {
+        histogram.collapse_counts_to_distinct();
     }
 }
 

@@ -108,10 +108,5 @@ pub use window::WindowOrderByInfo;
 pub use window::bind_window_function_info;
 
 pub(crate) fn lineage_enabled() -> bool {
-    let history = &GlobalConfig::instance().log.history;
-    history.on
-        && history
-            .tables
-            .iter()
-            .any(|table| table.table_name == "lineage_unresolved")
+    GlobalConfig::instance().lineage.enabled()
 }

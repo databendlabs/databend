@@ -190,7 +190,7 @@ impl PhysicalPlanBuilder {
         let mut used = vec![];
         for item in udf_plan.items.iter() {
             if required.contains(&item.index) {
-                required.extend(item.scalar.used_columns());
+                item.scalar.collect_used_columns(&mut required);
                 used.push(item.clone());
             }
         }

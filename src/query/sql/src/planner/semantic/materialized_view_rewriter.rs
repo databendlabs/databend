@@ -43,7 +43,7 @@ use databend_common_ast::visit::Walk;
 use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BASE_ROW_ID_COL_NAME;
+use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
@@ -212,7 +212,7 @@ impl MaterializedViewRewriter {
                 column: ColumnRef {
                     database: None,
                     table: None,
-                    column: ColumnID::Name(Identifier::from_name(None, BASE_ROW_ID_COL_NAME)),
+                    column: ColumnID::Name(Identifier::from_name(None, CHANGE_ROW_ID_COL_NAME)),
                 },
             }),
             alias: Some(Identifier::from_name(
@@ -482,7 +482,7 @@ impl VisitorMut for AggregateExprRewriter<'_> {
                 if !func.distinct
                     && func.filter.is_none()
                     && func.window.is_none()
-                    && func.lambda.is_none()
+                    && !func.has_explicit_lambda()
                     && func.order_by.is_empty()
                     && func.params.is_empty()
                     && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
@@ -794,7 +794,7 @@ mod tests {
         assert_eq!(rewriter.logical_define_exprs(), ["value", "category"]);
         assert_eq!(
             query.to_string(),
-            "SELECT amount AS value, category AS category, _base_row_id AS _mv_source_row_id FROM default.t WHERE amount > 0"
+            "SELECT amount AS value, category AS category, change$row_id AS _mv_source_row_id FROM default.t WHERE amount > 0"
         );
         Ok(())
     }

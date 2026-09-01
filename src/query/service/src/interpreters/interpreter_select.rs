@@ -156,6 +156,7 @@ impl SelectInterpreter {
         let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
+        let tenant = self.ctx.get_tenant();
         build_res
             .main_pipeline
             .set_on_finished(move |info: &ExecutionInfo| match &info.res {
@@ -167,7 +168,10 @@ impl SelectInterpreter {
                                 ..Default::default()
                             };
                             info!("Updating stream metadata to consume data");
-                            catalog.update_multi_table_meta(r).await.map(|_| ())
+                            catalog
+                                .update_multi_table_meta(&tenant, r)
+                                .await
+                                .map(|_| ())
                         }
                         None => Ok(()),
                     }

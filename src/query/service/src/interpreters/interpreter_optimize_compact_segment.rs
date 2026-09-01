@@ -66,8 +66,7 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
                 &self.plan.table,
             )
             .await?;
-        // check mutability
-        table.check_mutable()?;
+        table.check_mutable_or_materialized_view()?;
 
         let mut build_res = PipelineBuildResult::create();
         table

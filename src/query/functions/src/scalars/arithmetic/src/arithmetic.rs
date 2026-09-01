@@ -359,6 +359,24 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
     }
 }
 
+fn format_number<T>(value: T) -> String
+where
+    T: Number,
+    T::Native: From<T>,
+{
+    let options = T::lexical_options();
+    const FORMAT: u128 = lexical_core::format::STANDARD;
+    let mut buffer = vec![0; T::Native::FORMATTED_SIZE_DECIMAL];
+    let len = lexical_core::write_with_options::<_, FORMAT>(
+        T::Native::from(value),
+        &mut buffer,
+        &options,
+    )
+    .len();
+    buffer.truncate(len);
+    unsafe { String::from_utf8_unchecked(buffer) }
+}
+
 pub fn register_number_to_string(registry: &mut FunctionRegistry) {
     for src_type in ALL_NUMBER_CLASSES {
         with_number_mapped_type!(|NUM_TYPE| match src_type {
@@ -370,7 +388,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                     .passthrough_nullable()
                     .calc_domain(|_, _| FunctionDomain::Full)
                     .vectorized(|from, _| match from {
-                        Value::Scalar(s) => Value::Scalar(s.to_string()),
+                        Value::Scalar(s) => Value::Scalar(format_number(s)),
                         Value::Column(from) => {
                             let options = NUM_TYPE::lexical_options();
                             const FORMAT: u128 = lexical_core::format::STANDARD;
@@ -402,7 +420,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                     "try_to_string",
                     |_, _| FunctionDomain::Full,
                     |from, _| match from {
-                        Value::Scalar(s) => Value::Scalar(Some(s.to_string())),
+                        Value::Scalar(s) => Value::Scalar(Some(format_number(s))),
                         Value::Column(from) => {
                             let options = NUM_TYPE::lexical_options();
                             const FORMAT: u128 = lexical_core::format::STANDARD;

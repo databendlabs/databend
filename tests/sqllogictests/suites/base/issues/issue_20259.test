@@ -1,0 +1,48 @@
+statement ok
+DROP TABLE IF EXISTS issue_20259;
+
+statement ok
+DROP TABLE IF EXISTS issue_20259_source;
+
+statement ok
+CREATE TABLE issue_20259(a INT, b STRING);
+
+statement ok
+CREATE TABLE issue_20259_source(a INT);
+
+statement ok
+INSERT INTO issue_20259 VALUES (1, ''), (2, ''), (3, '');
+
+statement ok
+INSERT INTO issue_20259_source VALUES (20);
+
+# Internal columns in assignments force the scan-based path. The qualified uppercase reference
+# also verifies case-insensitive name normalization.
+statement ok
+UPDATE issue_20259 AS t SET b = to_string(t._ROW_ID) WHERE t.a = 1;
+
+# Internal columns in predicates also force the scan-based path.
+statement ok
+UPDATE issue_20259 SET a = 20 WHERE _block_name != '' AND a = 2;
+
+statement ok
+DELETE FROM issue_20259 WHERE _row_id > 0 AND a = 3;
+
+# Source-side internal columns used by UPDATE FROM must survive physical column pruning.
+statement ok
+UPDATE issue_20259 AS t
+SET b = s._block_name
+FROM issue_20259_source AS s
+WHERE t.a = s.a;
+
+query IB
+SELECT a, length(b) > 0 FROM issue_20259 ORDER BY a;
+----
+1 1
+20 1
+
+statement ok
+DROP TABLE issue_20259;
+
+statement ok
+DROP TABLE issue_20259_source;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -139,7 +140,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let input_domains = ctx.input_domains();
 
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
-            &expr,
+            Cow::Borrowed(&expr),
             &input_domains,
             &ctx.func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -369,7 +370,9 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
         let raw_expr = parser::parse_raw_expr(text, &[], &BUILTIN_FUNCTIONS);
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let expr = type_check::rewrite_function_to_cast(expr);
-        ConstantFolder::fold_context_independent(&expr, &BUILTIN_FUNCTIONS).0
+        ConstantFolder::fold_context_independent(Cow::Owned(expr), &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned()
     }
 
     assert!(fold("1 + 2").as_constant().is_some());

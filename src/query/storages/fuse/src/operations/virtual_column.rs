@@ -136,6 +136,11 @@ pub async fn prepare_refresh_virtual_column(
         ));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(source_schema)?;
+    info!(
+        "Preparing virtual column refresh for table_id={} with {} variant source fields",
+        fuse_table.get_id(),
+        field_indices.len()
+    );
 
     let projection = Projection::Columns(field_indices);
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
@@ -372,7 +377,7 @@ pub async fn commit_refresh_virtual_column(
             fuse_table,
             ctx.clone(),
             latest_snapshot.segments.clone(),
-            vec![],
+            Default::default(),
             vec![],
             Statistics::default(),
             MutationKind::Refresh,
@@ -387,7 +392,7 @@ pub async fn commit_refresh_virtual_column(
             fuse_table,
             ctx.clone(),
             None,
-            vec![],
+            Default::default(),
             snapshot_gen.clone(),
             input,
             None,
@@ -449,7 +454,7 @@ pub async fn do_vacuum_virtual_column(
                 fuse_table,
                 ctx.clone(),
                 latest_snapshot.segments.clone(),
-                vec![],
+                Default::default(),
                 vec![],
                 Statistics::default(),
                 MutationKind::Refresh,
@@ -464,7 +469,7 @@ pub async fn do_vacuum_virtual_column(
                 fuse_table,
                 ctx.clone(),
                 None,
-                vec![],
+                Default::default(),
                 snapshot_gen.clone(),
                 input,
                 None,
@@ -770,8 +775,9 @@ async fn build_virtual_columns(
                     );
                 } else {
                     info!(
-                        "No virtual column data produced for block {}",
-                        task.block_location
+                        "No virtual column data produced for block {} (rows={}); no sidecar file will be written",
+                        task.block_location,
+                        block.num_rows()
                     );
                 }
 

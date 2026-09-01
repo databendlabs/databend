@@ -76,6 +76,8 @@ pub struct Metadata {
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
     agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
+    /// Valid materialized-view rewrite candidates grouped by source table ID.
+    materialized_view_candidates: HashMap<u64, Vec<MaterializedViewCandidate>>,
     max_column_position: usize, // for CSV
     has_column_name_ref: bool,  // for schema inference from stage files
 
@@ -86,6 +88,10 @@ pub struct Metadata {
     /// View output symbols that should remain at the view boundary after the
     /// view query is expanded into the surrounding plan.
     view_lineage_source_columns: HashMap<Symbol, Vec<ViewLineageSourceColumn>>,
+    /// Explicit materialized CTEs are executed through temporary tables. Keep
+    /// one producer definition and its temporary-table output mappings so
+    /// lineage extraction can look through that execution detail.
+    materialized_cte_lineage_sources: HashMap<IndexType, MaterializedCteLineageSource>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
@@ -357,6 +363,51 @@ impl Metadata {
         !self.agg_indices.is_empty()
     }
 
+    pub fn add_materialized_view_candidates(
+        &mut self,
+        source_table_id: u64,
+        candidates: Vec<MaterializedViewCandidate>,
+    ) {
+        match self.materialized_view_candidates.entry(source_table_id) {
+            Entry::Occupied(occupied) => occupied.into_mut().extend(candidates),
+            Entry::Vacant(vacant) => {
+                vacant.insert(candidates);
+            }
+        }
+    }
+
+    pub fn materialized_view_candidates(&self) -> &HashMap<u64, Vec<MaterializedViewCandidate>> {
+        &self.materialized_view_candidates
+    }
+
+    pub fn get_materialized_view_candidates(
+        &self,
+        source_table_id: u64,
+    ) -> Option<&[MaterializedViewCandidate]> {
+        self.materialized_view_candidates
+            .get(&source_table_id)
+            .map(Vec::as_slice)
+    }
+
+    /// Replace candidate `read_plan`s after statistics have been collected.
+    /// `read_plans` must stay in the same order as the stored candidates.
+    pub fn replace_materialized_view_candidate_read_plans(
+        &mut self,
+        source_table_id: u64,
+        read_plans: Vec<SExpr>,
+    ) {
+        let Some(candidates) = self.materialized_view_candidates.get_mut(&source_table_id) else {
+            return;
+        };
+        for (candidate, read_plan) in candidates.iter_mut().zip(read_plans) {
+            candidate.read_plan = read_plan;
+        }
+    }
+
+    pub fn has_materialized_view_candidates(&self) -> bool {
+        !self.materialized_view_candidates.is_empty()
+    }
+
     fn remove_cte_suffix(mut table_name: String, cte_suffix_name: Option<String>) -> String {
         if let Some(suffix) = cte_suffix_name {
             if table_name.ends_with(&suffix) {
@@ -570,6 +621,31 @@ impl Metadata {
             })
     }
 
+    pub(crate) fn add_materialized_cte_lineage_source(
+        &mut self,
+        table_index: IndexType,
+        source: MaterializedCteLineageSource,
+    ) {
+        self.materialized_cte_lineage_sources
+            .insert(table_index, source);
+    }
+
+    pub(crate) fn materialized_cte_lineage_source(
+        &self,
+        table_index: IndexType,
+    ) -> Option<&MaterializedCteLineageSource> {
+        self.materialized_cte_lineage_sources.get(&table_index)
+    }
+
+    pub(crate) fn materialized_cte_lineage_output(&self, column_index: Symbol) -> Option<Symbol> {
+        let table_index = self.columns.get(column_index.as_usize())?.table_index()?;
+        self.materialized_cte_lineage_sources
+            .get(&table_index)?
+            .column_mapping
+            .get(&column_index)
+            .copied()
+    }
+
     pub(crate) fn set_stream_lineage_source(
         &mut self,
         table_index: IndexType,
@@ -583,6 +659,12 @@ impl Metadata {
             entry.table = table.clone();
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MaterializedCteLineageSource {
+    pub(crate) definition: SExpr,
+    pub(crate) column_mapping: HashMap<Symbol, Symbol>,
 }
 
 #[derive(Clone)]
@@ -731,6 +813,39 @@ pub struct TableInternalColumn {
     pub table_index: IndexType,
     pub column_index: Symbol,
     pub internal_column: InternalColumn,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaterializedViewCandidateReadMode {
+    Fresh,
+    Hybrid,
+}
+
+/// A materialized view that has passed source-binding validation and can be
+/// considered by optimizer rewrite rules.
+///
+/// Both plans use this query's [`MetadataRef`] symbol namespace. `definition`
+/// describes the source-based logical query used for semantic matching, while
+/// `read_plan` reads the materialized view using the endpoint captured here.
+#[derive(Clone, Debug)]
+pub struct MaterializedViewCandidate {
+    pub source_table_id: u64,
+    /// Exact source occurrence in the outer query. Candidate-internal source
+    /// scans must not recursively reuse this candidate.
+    pub source_table_index: IndexType,
+    pub mv_table_id: u64,
+    pub definition: SExpr,
+    pub read_plan: SExpr,
+    pub read_mode: MaterializedViewCandidateReadMode,
+    pub logical_sql: String,
+    pub mv_table_seq: u64,
+    pub mv_snapshot_location: Option<String>,
+    pub source_table_seq: u64,
+    pub source_snapshot_location: Option<String>,
+    /// Logical output columns produced by `definition`, in SELECT-list order.
+    pub definition_output_columns: Vec<Symbol>,
+    /// Logical output columns produced by `read_plan`, in MV definition order.
+    pub read_output_columns: Vec<Symbol>,
 }
 
 #[derive(Clone, Debug)]

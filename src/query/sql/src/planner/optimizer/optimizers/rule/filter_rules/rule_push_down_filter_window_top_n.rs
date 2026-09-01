@@ -270,7 +270,7 @@ fn extract_i32(expr: &ScalarExpr) -> Option<i32> {
     check_number(
         None,
         &FunctionContext::default(),
-        &expr.as_expr().ok()?,
+        expr.as_expr().ok()?,
         &BUILTIN_FUNCTIONS,
     )
     .ok()

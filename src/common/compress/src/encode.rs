@@ -147,7 +147,7 @@ impl CompressCodec {
     ) -> databend_common_exception::Result<Vec<u8>> {
         let mut compress_bufs = vec![];
         let mut input = PartialBuffer::new(to_compress);
-        let buf_size = to_compress.len().min(4096);
+        let buf_size = to_compress.len().clamp(1, 4096);
 
         loop {
             let mut output = PartialBuffer::new(vec![0u8; buf_size]);
@@ -244,6 +244,27 @@ mod tests {
                 compressed.len(),
                 decompressed.len()
             );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compress_empty_content() -> databend_common_exception::Result<()> {
+        for algo in [
+            CompressAlgorithm::Zlib,
+            CompressAlgorithm::Gzip,
+            CompressAlgorithm::Bz2,
+            CompressAlgorithm::Zstd,
+            CompressAlgorithm::Deflate,
+            CompressAlgorithm::Xz,
+            CompressAlgorithm::Lzma,
+        ] {
+            let mut encoder = CompressCodec::from(algo);
+            let compressed = encoder.compress_all(&[])?;
+            let mut decoder = DecompressDecoder::new(algo);
+            let decompressed = decoder.decompress_all(&compressed)?;
+            assert_eq!(decompressed, b"", "fail to compress empty {algo:?}");
         }
 
         Ok(())

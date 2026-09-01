@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::io::Error;
 use std::sync::Arc;
 use std::vec;
@@ -40,6 +42,7 @@ use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -70,10 +73,9 @@ pub async fn generate_snapshot_with_segments(
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
-    let current_cluster_key_meta = fuse_table.cluster_key_meta();
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
-        current_cluster_key_meta,
+        fuse_table.cluster_key_info(),
         Some(fuse_table.get_table_info().ident.seq),
         TestFixture::default_table_meta_timestamps(),
     )?;
@@ -215,7 +217,7 @@ async fn generate_blocks(
     let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
     for block in blocks {
         let stats =
-            gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
         let (block_meta, _index_meta, hll) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
             .await?;
@@ -298,7 +300,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     ];
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
-        snapshot_1.cluster_key_meta.clone(),
+        snapshot_1
+            .cluster_key_meta
+            .clone()
+            .zip(snapshot_1.cluster_type)
+            .map(|(key, cluster_type)| ClusterKeyInfo::new(key, cluster_type)),
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;

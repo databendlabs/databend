@@ -22,6 +22,7 @@ use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 
@@ -34,21 +35,21 @@ use crate::statistics::merge_statistics;
 
 pub struct TransformMergeCommitMeta {
     to_merged: Vec<CommitMeta>,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
 }
 
 impl TransformMergeCommitMeta {
-    pub fn create(default_cluster_key_id: Option<u32>) -> Self {
+    pub fn create(cluster_key_info: Option<ClusterKeyInfo>) -> Self {
         TransformMergeCommitMeta {
             to_merged: vec![],
-            default_cluster_key_id,
+            cluster_key_info,
         }
     }
 
     fn merge_conflict_resolve_context(
         l: ConflictResolveContext,
         r: ConflictResolveContext,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
     ) -> Result<ConflictResolveContext> {
         match (l, r) {
             (
@@ -67,7 +68,7 @@ impl TransformMergeCommitMeta {
                         removed_statistics: merge_statistics(
                             l.removed_statistics.clone(),
                             &r.removed_statistics,
-                            default_cluster_key_id,
+                            cluster_key_info,
                         ),
                         appended_segments: l
                             .appended_segments
@@ -82,7 +83,7 @@ impl TransformMergeCommitMeta {
                         merged_statistics: merge_statistics(
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
-                            default_cluster_key_id,
+                            cluster_key_info,
                         ),
                     },
                 ))
@@ -106,7 +107,7 @@ impl TransformMergeCommitMeta {
                         merged_statistics: merge_statistics(
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
-                            default_cluster_key_id,
+                            cluster_key_info,
                         ),
                     },
                     l_schema,
@@ -226,7 +227,7 @@ impl TransformMergeCommitMeta {
     pub fn merge_commit_meta(
         l: CommitMeta,
         r: CommitMeta,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
     ) -> Result<CommitMeta> {
         assert_eq!(l.table_id, r.table_id, "table id mismatch");
 
@@ -250,7 +251,7 @@ impl TransformMergeCommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
                 r.conflict_resolve_context,
-                default_cluster_key_id,
+                cluster_key_info,
             )?,
             new_segment_locs: l
                 .new_segment_locs
@@ -288,7 +289,7 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         let mut to_merged = to_merged.into_iter();
         let first = to_merged.next().unwrap();
         let merged = to_merged.try_fold(first, |acc, x| {
-            Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
+            Self::merge_commit_meta(acc, x, self.cluster_key_info.as_ref())
         })?;
         Ok(vec![merged.into()])
     }
@@ -446,6 +447,18 @@ mod tests {
                 .conflict_resolve_context
                 .logical_insert_rows(merged.logical_deleted_rows),
             5
+        );
+    }
+
+    #[test]
+    fn test_logical_insert_rows_saturates_for_physical_row_reduction() {
+        let compacted = commit_meta_with_rows(1, 5, 0);
+
+        assert_eq!(
+            compacted
+                .conflict_resolve_context
+                .logical_insert_rows(compacted.logical_deleted_rows),
+            0
         );
     }
 }

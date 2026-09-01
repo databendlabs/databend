@@ -227,9 +227,7 @@ impl FieldEncoderToString {
     #[inline]
     fn date_text(&self, value: i32) -> String {
         match self.settings.http_json_result_mode {
-            HttpHandlerDataFormat::Display => {
-                date_to_string(value as i64, &self.settings.jiff_timezone).to_string()
-            }
+            HttpHandlerDataFormat::Display => date_to_string(value as i64),
             HttpHandlerDataFormat::Driver => value.to_string(),
         }
     }

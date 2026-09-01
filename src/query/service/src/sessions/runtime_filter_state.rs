@@ -96,10 +96,13 @@ impl RuntimeFilterState {
             .unwrap_or_default()
     }
 
-    pub fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    pub fn get_bloom_runtime_filter_with_id(
+        &self,
+        id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         self.get_runtime_filters(id)
             .into_iter()
-            .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))
+            .filter_map(|entry| entry.bloom.map(|bloom| (entry.probe_expr, bloom.filter)))
             .collect()
     }
 

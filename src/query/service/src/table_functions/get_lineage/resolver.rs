@@ -59,10 +59,14 @@ pub(super) struct ResolvedObject {
 }
 
 impl ResolvedObject {
-    pub(super) fn qualified_name(&self) -> String {
+    pub(super) fn output_address(&self) -> (Option<String>, Option<String>, Option<String>) {
         match self.object_type {
-            LineageObjectType::Stage => self.name.clone(),
-            _ => format!("{}.{}.{}", self.catalog, self.database, self.name),
+            LineageObjectType::Stage => (None, None, Some(self.name.clone())),
+            _ => (
+                Some(self.catalog.clone()),
+                Some(self.database.clone()),
+                Some(self.name.clone()),
+            ),
         }
     }
 

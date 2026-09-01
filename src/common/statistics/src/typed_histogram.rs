@@ -27,15 +27,17 @@ use crate::estimate_distinct_count_after_row_scale;
 
 #[derive(Clone, PartialEq)]
 pub struct TypedHistogram<T> {
-    /// Whether bucket `num_distinct` values still come directly from ANALYZE
-    /// and may be used as exact NDV facts for the remaining bucket set.
+    /// Relative quality of this probabilistic histogram model. `true` means the
+    /// bucket statistics are expected to be more accurate because they still
+    /// come directly from ANALYZE; it does not provide strong consistency or
+    /// prove value existence, complete coverage, exact NDV, or confirmed
+    /// matches.
     ///
     /// Histograms synthesized from NDV/min-max bounds mark this flag `false`.
     /// Row scaling by an independent selectivity also marks it `false`: scaling
     /// is a row-mass alignment after a filter whose surviving values are
-    /// unknown, so bucket distinct counts can no longer be exact. Range clipping
-    /// and join overlap keep the input accuracy because they do not by
-    /// themselves perform that unknown-value alignment.
+    /// unknown, so bucket distinct counts are expected to be less accurate.
+    /// Range clipping and join overlap preserve this relative-quality flag.
     pub accuracy: bool,
     /// A histogram-level row multiplier used to align row mass with the current
     /// cardinality without rewriting bucket distinct estimates.
@@ -121,6 +123,126 @@ impl<T> TypedHistogram<T> {
     pub fn is_range_distorted(&self) -> bool {
         self.avg_spacing
             .is_some_and(|bucket_width| bucket_width > 1e12)
+    }
+}
+
+impl<T> TypedHistogram<T>
+where T: Copy + Ord + Into<i128>
+{
+    pub fn restrict_discrete_buckets(&self, min: T, max: T) -> Option<Self> {
+        let mut buckets = Vec::new();
+        for bucket in &self.buckets {
+            let bucket_min = *bucket.lower_bound();
+            let bucket_max = *bucket.upper_bound();
+            if bucket_min > max || bucket_max < min {
+                continue;
+            }
+            let new_min = bucket_min.max(min);
+            let new_max = bucket_max.min(max);
+            if new_min > new_max {
+                continue;
+            }
+            let (num_values, num_distinct) = discrete_overlap_counts(
+                bucket_min.into(),
+                bucket_max.into(),
+                new_min.into(),
+                new_max.into(),
+                bucket.num_values() * self.row_scale,
+                bucket.num_distinct(),
+            );
+            buckets.push(TypedHistogramBucket::new(
+                new_min,
+                new_max,
+                num_values,
+                num_distinct,
+            ));
+        }
+        (!buckets.is_empty()).then_some(Self {
+            accuracy: self.accuracy,
+            row_scale: 1.0,
+            buckets,
+            avg_spacing: self.avg_spacing,
+        })
+    }
+}
+
+impl TypedHistogram<OrderedFloat<f64>> {
+    pub fn restrict_float_buckets(
+        &self,
+        min: OrderedFloat<f64>,
+        max: OrderedFloat<f64>,
+    ) -> Option<Self> {
+        let mut buckets = Vec::new();
+        for bucket in &self.buckets {
+            let bucket_min = *bucket.lower_bound();
+            let bucket_max = *bucket.upper_bound();
+            if bucket_min > max || bucket_max < min {
+                continue;
+            }
+            let new_min = bucket_min.max(min);
+            let new_max = bucket_max.min(max);
+            if new_min > new_max {
+                continue;
+            }
+            let (num_values, num_distinct) = float_overlap_counts(
+                bucket_min,
+                bucket_max,
+                new_min,
+                new_max,
+                bucket.num_values() * self.row_scale,
+                bucket.num_distinct(),
+            );
+            buckets.push(TypedHistogramBucket::new(
+                new_min,
+                new_max,
+                num_values,
+                num_distinct,
+            ));
+        }
+        (!buckets.is_empty()).then_some(Self {
+            accuracy: self.accuracy,
+            row_scale: 1.0,
+            buckets,
+            avg_spacing: self.avg_spacing,
+        })
+    }
+}
+
+impl TypedHistogram<Vec<u8>> {
+    pub fn restrict_bytes_buckets(&self, min: &[u8], max: &[u8]) -> Option<Self> {
+        let mut buckets = Vec::new();
+        for bucket in &self.buckets {
+            let bucket_min = bucket.lower_bound();
+            let bucket_max = bucket.upper_bound();
+            if bucket_min.as_slice() > max || bucket_max.as_slice() < min {
+                continue;
+            }
+            let new_min = if bucket_min.as_slice() > min {
+                bucket_min.clone()
+            } else {
+                min.to_vec()
+            };
+            let new_max = if bucket_max.as_slice() < max {
+                bucket_max.clone()
+            } else {
+                max.to_vec()
+            };
+            if new_min > new_max {
+                continue;
+            }
+            buckets.push(TypedHistogramBucket::new(
+                new_min,
+                new_max,
+                bucket.num_values() * self.row_scale,
+                bucket.num_distinct(),
+            ));
+        }
+        (!buckets.is_empty()).then_some(Self {
+            accuracy: self.accuracy,
+            row_scale: 1.0,
+            buckets,
+            avg_spacing: self.avg_spacing,
+        })
     }
 }
 
@@ -215,6 +337,51 @@ impl<T: Value> TypedHistogramBucket<T> {
     }
 }
 
+fn float_overlap_counts(
+    bucket_min: OrderedFloat<f64>,
+    bucket_max: OrderedFloat<f64>,
+    new_min: OrderedFloat<f64>,
+    new_max: OrderedFloat<f64>,
+    num_values: f64,
+    num_distinct: f64,
+) -> (f64, f64) {
+    let bucket_width = bucket_max.into_inner() - bucket_min.into_inner();
+    if bucket_width <= 0.0 {
+        return (num_values, num_distinct);
+    }
+    let overlap_width = new_max.into_inner() - new_min.into_inner();
+    let selectivity = overlap_width / bucket_width;
+    debug_assert!(
+        (0.0..=1.0).contains(&selectivity),
+        "invalid float bucket overlap selectivity: {selectivity:?}"
+    );
+    (num_values * selectivity, num_distinct * selectivity)
+}
+
+fn discrete_overlap_counts(
+    bucket_min: i128,
+    bucket_max: i128,
+    new_min: i128,
+    new_max: i128,
+    num_values: f64,
+    num_distinct: f64,
+) -> (f64, f64) {
+    let bucket_count = bucket_max - bucket_min + 1;
+    if bucket_count <= 0 {
+        return (num_values, num_distinct);
+    }
+    let overlap_count = new_max - new_min + 1;
+    let bucket_count = bucket_count as f64;
+    let overlap_count = overlap_count as f64;
+    let selectivity = overlap_count / bucket_count;
+    debug_assert!(
+        (0.0..=1.0).contains(&selectivity),
+        "invalid discrete bucket overlap selectivity: {selectivity:?}"
+    );
+    let scale_count = |count| overlap_count * (count / bucket_count);
+    (scale_count(num_values), scale_count(num_distinct))
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedHistogramBounds<T> {
     lower_bound: T,
@@ -239,46 +406,39 @@ impl<T> TypedHistogramBounds<T> {
 }
 
 impl<T: Value> TypedHistogramBounds<T> {
-    pub fn has_intersection(&self, other: &Self) -> bool {
+    fn has_intersection(&self, other: &Self) -> bool {
         !matches!(
             (
-                T::compare(self.lower_bound(), other.upper_bound()),
-                T::compare(self.upper_bound(), other.lower_bound()),
+                T::compare(&self.lower_bound, &other.upper_bound),
+                T::compare(&self.upper_bound, &other.lower_bound),
             ),
             (Ordering::Greater, _) | (_, Ordering::Less)
         )
     }
 
-    pub fn intersection(&self, other: &Self) -> (Option<T>, Option<T>) {
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
         if !self.has_intersection(other) {
-            return (None, None);
+            return None;
         }
 
-        let lower_bound = if matches!(
-            T::compare(self.lower_bound(), other.lower_bound()),
-            Ordering::Less
-        ) {
-            other.lower_bound().clone()
-        } else {
-            self.lower_bound().clone()
-        };
-
-        let upper_bound = if matches!(
-            T::compare(self.upper_bound(), other.upper_bound()),
-            Ordering::Greater
-        ) {
-            other.upper_bound().clone()
-        } else {
-            self.upper_bound().clone()
-        };
-
-        (Some(lower_bound), Some(upper_bound))
+        Some(Self {
+            lower_bound: if T::compare(&self.lower_bound, &other.lower_bound) == Ordering::Less {
+                other.lower_bound.clone()
+            } else {
+                self.lower_bound.clone()
+            },
+            upper_bound: if T::compare(&self.upper_bound, &other.upper_bound) == Ordering::Greater {
+                other.upper_bound.clone()
+            } else {
+                self.upper_bound.clone()
+            },
+        })
     }
 
-    pub fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<T, String> {
+    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<T, String> {
         T::bucket_upper_bound(
-            self.lower_bound(),
-            self.upper_bound(),
+            &self.lower_bound,
+            &self.upper_bound,
             num_buckets,
             bucket_index,
         )
@@ -429,8 +589,12 @@ pub trait Value: Clone + PartialEq {
     where Self: Sized;
 }
 
-trait NumericValue: Value {
+pub(crate) trait NumericValue: Value {
     fn distance(start: &Self, end: &Self) -> Option<f64>;
+
+    fn as_wide_integer(&self) -> i128;
+
+    fn as_f64(&self) -> f64;
 
     fn estimate_numeric_overlap_coverages(
         left: &TypedHistogramBucket<Self>,
@@ -442,13 +606,9 @@ trait NumericValue: Value {
             Intersection::Range => {
                 let left_bounds = left.bounds();
                 let right_bounds = right.bounds();
-                let (Some(lower_bound), Some(upper_bound)) =
-                    left_bounds.intersection(&right_bounds)
-                else {
-                    return None;
-                };
+                let bounds = left_bounds.intersection(&right_bounds)?;
 
-                let overlap_width = Self::distance(&lower_bound, &upper_bound)?;
+                let overlap_width = Self::distance(bounds.lower_bound(), bounds.upper_bound())?;
                 let left_width = Self::distance(&left.lower_bound, left.upper_bound())?;
                 let right_width = Self::distance(&right.lower_bound, right.upper_bound())?;
                 if overlap_width <= 0.0 || left_width <= 0.0 || right_width <= 0.0 {
@@ -563,6 +723,14 @@ impl NumericValue for u64 {
     fn distance(start: &Self, end: &Self) -> Option<f64> {
         end.checked_sub(*start).map(|distance| distance as f64)
     }
+
+    fn as_wide_integer(&self) -> i128 {
+        *self as i128
+    }
+
+    fn as_f64(&self) -> f64 {
+        *self as f64
+    }
 }
 
 impl Value for i64 {
@@ -642,6 +810,14 @@ impl NumericValue for i64 {
     fn distance(start: &Self, end: &Self) -> Option<f64> {
         end.checked_sub(*start).map(|distance| distance as f64)
     }
+
+    fn as_wide_integer(&self) -> i128 {
+        *self as i128
+    }
+
+    fn as_f64(&self) -> f64 {
+        *self as f64
+    }
 }
 
 impl Value for OrderedFloat<f64> {
@@ -682,6 +858,48 @@ impl NumericValue for OrderedFloat<f64> {
     fn distance(start: &Self, end: &Self) -> Option<f64> {
         Some(end.into_inner() - start.into_inner())
     }
+
+    fn as_wide_integer(&self) -> i128 {
+        self.into_inner() as i128
+    }
+
+    fn as_f64(&self) -> f64 {
+        self.into_inner()
+    }
+}
+
+fn ordered_value_bucket_upper_bound<T: Clone + Ord>(
+    min: &T,
+    max: &T,
+    num_buckets: usize,
+    bucket_index: usize,
+) -> Result<T, String> {
+    if min == max || bucket_index == 0 {
+        return Ok(min.clone());
+    }
+    if bucket_index >= num_buckets {
+        return Ok(max.clone());
+    }
+
+    if bucket_index <= num_buckets / 2 {
+        Ok(min.clone())
+    } else {
+        Ok(max.clone())
+    }
+}
+
+fn estimate_ordered_value_overlap_coverages<T: Value>(
+    left: &TypedHistogramBucket<T>,
+    right: &TypedHistogramBucket<T>,
+) -> Option<OverlapCoverage> {
+    match left.intersection_kind(right) {
+        Intersection::None => None,
+        Intersection::Point => OverlapCoverage::point(left.num_distinct, right.num_distinct),
+        Intersection::Range => Some(OverlapCoverage {
+            left: 1.0,
+            right: 1.0,
+        }),
+    }
 }
 
 impl Value for String {
@@ -695,36 +913,14 @@ impl Value for String {
         num_buckets: usize,
         bucket_index: usize,
     ) -> Result<Self, String> {
-        if min == max {
-            return Ok(min.clone());
-        }
-
-        if bucket_index == 0 {
-            Ok(min.clone())
-        } else if bucket_index >= num_buckets {
-            Ok(max.clone())
-        } else {
-            let mid_bucket = num_buckets / 2;
-            if bucket_index <= mid_bucket {
-                Ok(min.clone())
-            } else {
-                Ok(max.clone())
-            }
-        }
+        ordered_value_bucket_upper_bound(min, max, num_buckets, bucket_index)
     }
 
     fn estimate_overlap_coverages(
         left: &TypedHistogramBucket<Self>,
         right: &TypedHistogramBucket<Self>,
     ) -> Option<OverlapCoverage> {
-        match left.intersection_kind(right) {
-            Intersection::None => None,
-            Intersection::Point => OverlapCoverage::point(left.num_distinct, right.num_distinct),
-            Intersection::Range => Some(OverlapCoverage {
-                left: 1.0,
-                right: 1.0,
-            }),
-        }
+        estimate_ordered_value_overlap_coverages(left, right)
     }
 
     fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
@@ -759,36 +955,14 @@ impl Value for Vec<u8> {
         num_buckets: usize,
         bucket_index: usize,
     ) -> Result<Self, String> {
-        if min == max {
-            return Ok(min.clone());
-        }
-
-        if bucket_index == 0 {
-            Ok(min.clone())
-        } else if bucket_index >= num_buckets {
-            Ok(max.clone())
-        } else {
-            let mid_bucket = num_buckets / 2;
-            if bucket_index <= mid_bucket {
-                Ok(min.clone())
-            } else {
-                Ok(max.clone())
-            }
-        }
+        ordered_value_bucket_upper_bound(min, max, num_buckets, bucket_index)
     }
 
     fn estimate_overlap_coverages(
         left: &TypedHistogramBucket<Self>,
         right: &TypedHistogramBucket<Self>,
     ) -> Option<OverlapCoverage> {
-        match left.intersection_kind(right) {
-            Intersection::None => None,
-            Intersection::Point => OverlapCoverage::point(left.num_distinct, right.num_distinct),
-            Intersection::Range => Some(OverlapCoverage {
-                left: 1.0,
-                right: 1.0,
-            }),
-        }
+        estimate_ordered_value_overlap_coverages(left, right)
     }
 
     fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
@@ -901,7 +1075,10 @@ mod tests {
         assert_eq!(histogram.ndv().expected, Some(8.0));
         assert_eq!(histogram.avg_spacing, Some(20.0));
         assert!(left.has_intersection(&right));
-        assert_eq!(left.intersection(&right), (Some(5_u64), Some(10_u64)));
+        assert_eq!(
+            left.intersection(&right),
+            Some(TypedHistogramBounds::new(5_u64, 10_u64))
+        );
     }
 
     #[test]
@@ -967,6 +1144,6 @@ mod tests {
         let right = TypedHistogramBounds::new(b"x".to_vec(), b"z".to_vec());
 
         assert!(!left.has_intersection(&right));
-        assert_eq!(left.intersection(&right), (None, None));
+        assert_eq!(left.intersection(&right), None);
     }
 }

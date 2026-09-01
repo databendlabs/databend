@@ -250,3 +250,60 @@ DROP TABLE departments;
 
 statement ok
 DROP TABLE sales;
+
+# Regression for #20370: a constant materialized CTE is local-only. The query
+# must be planned locally before the window sort is split into Final/Partial.
+statement ok
+set enable_auto_materialize_cte = 1;
+
+query TII
+WITH
+queries AS (
+    SELECT
+        CAST(to_timestamp('2026-01-01 00:00:01') AS TIMESTAMP NULL) AS start_time,
+        CAST(to_timestamp('2026-01-01 00:00:02') AS TIMESTAMP NULL) AS end_time
+),
+timeline AS (
+    SELECT start_time AS ts, 1 AS delta FROM queries
+    UNION ALL
+    SELECT end_time AS ts, -1 AS delta FROM queries
+)
+SELECT
+    ts,
+    delta,
+    sum(delta) OVER (ORDER BY ts) AS running
+FROM timeline;
+----
+2026-01-01 00:00:01.000000 1 1
+2026-01-01 00:00:02.000000 -1 0
+
+query IRI
+WITH
+queries AS (
+    SELECT
+        CAST(to_timestamp('2026-01-01 00:00:01') AS TIMESTAMP NULL) AS start_time,
+        CAST(to_timestamp('2026-01-01 00:00:02') AS TIMESTAMP NULL) AS end_time
+),
+timeline AS (
+    SELECT start_time AS ts, 1 AS delta FROM queries
+    UNION ALL
+    SELECT end_time AS ts, -1 AS delta FROM queries
+)
+SELECT
+    max(running) AS max_concurrency,
+    avg(running) AS avg_concurrency,
+    count(*) AS event_points
+FROM (
+    SELECT
+        sum(delta) OVER (ORDER BY ts) AS running
+    FROM (
+        SELECT ts, sum(delta) AS delta
+        FROM timeline
+        GROUP BY ts
+    )
+);
+----
+1 0.5 2
+
+statement ok
+unset enable_auto_materialize_cte;

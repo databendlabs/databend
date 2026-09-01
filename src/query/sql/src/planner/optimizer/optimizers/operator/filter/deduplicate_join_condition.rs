@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use crate::ScalarExpr;
 use crate::optimizer::Optimizer;
 use crate::optimizer::ir::SExpr;
-use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 
@@ -99,32 +98,34 @@ impl DeduplicateJoinConditionOptimizer {
         }
     }
 
-    pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.deduplicate(s_expr)
     }
 
     #[recursive::recursive]
-    pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        match s_expr.plan.as_ref() {
-            // Only optimize filtering joins that don't preserve nulls
-            RelOperator::Join(join) if join.join_type.is_filtering_join() => {
-                self.optimize_filtering_join(s_expr, join)
-            }
-            // Recursively process other nodes
-            _ => self.deduplicate_children(s_expr),
+    pub fn deduplicate(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        if let RelOperator::Join(join) = s_expr.plan.as_ref()
+            && join.join_type.is_filtering_join()
+        {
+            self.optimize_filtering_join(s_expr)
+        } else {
+            self.deduplicate_children(s_expr)
         }
     }
 
     /// Optimize filtering joins (inner/semi/anti) by removing redundant equi-conditions
-    fn optimize_filtering_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
-        debug_assert!(join.join_type.is_filtering_join());
-
+    fn optimize_filtering_join(&mut self, mut s_expr: SExpr) -> Result<SExpr> {
         // Recursively optimize left and right subtrees
-        let left = self.deduplicate(s_expr.child(0)?)?;
-        let right = self.deduplicate(s_expr.child(1)?)?;
+        assert_eq!(s_expr.children.len(), 2);
+        let right = self.deduplicate(Arc::unwrap_or_clone(s_expr.children.pop().unwrap()))?;
+        let left = self.deduplicate(Arc::unwrap_or_clone(s_expr.children.pop().unwrap()))?;
 
-        let mut join = join.clone();
-        let mut non_redundant_conditions = Vec::new();
+        let RelOperator::Join(join) = Arc::make_mut(&mut s_expr.plan) else {
+            unreachable!()
+        };
+        debug_assert!(join.join_type.is_filtering_join());
+        let condition_count = join.equi_conditions.len();
+        let mut non_redundant_conditions = Vec::with_capacity(condition_count);
         // Anti / Semi joins should not contribute new equivalence to ancestor nodes.
         let snapshot = if matches!(
             join.join_type,
@@ -136,7 +137,7 @@ impl DeduplicateJoinConditionOptimizer {
         };
 
         // Check each equi-join condition
-        for condition in &join.equi_conditions {
+        for condition in std::mem::take(&mut join.equi_conditions) {
             let left_idx = self.get_or_create_index(&condition.left);
             let right_idx = self.get_or_create_index(&condition.right);
 
@@ -148,15 +149,14 @@ impl DeduplicateJoinConditionOptimizer {
             if left_group != right_group {
                 // Merge the two groups
                 self.union(left_group, right_group);
-                non_redundant_conditions.push(condition.clone());
+                non_redundant_conditions.push(condition);
             }
             // If already in the same group, the condition is redundant and can be skipped
         }
 
         // Update join conditions if any were removed
-        if non_redundant_conditions.len() < join.equi_conditions.len() {
-            join.equi_conditions = non_redundant_conditions;
-        }
+        debug_assert!(non_redundant_conditions.len() <= condition_count);
+        join.equi_conditions = non_redundant_conditions;
 
         // Restore union-find state for anti joins to avoid leaking equivalence upward.
         if let Some(snapshot) = snapshot {
@@ -164,27 +164,15 @@ impl DeduplicateJoinConditionOptimizer {
         }
 
         // Create new expression
-        let new_plan = Arc::new(RelOperator::Join(join));
-        let new_children = vec![Arc::new(left), Arc::new(right)];
-
-        Ok(s_expr.replace_plan(new_plan).replace_children(new_children))
+        Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
     }
 
     /// Recursively process children nodes
-    fn deduplicate_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.arity());
-        let mut children_changed = false;
-
-        for child in s_expr.children() {
-            let optimized_child = self.deduplicate(child)?;
-            if !optimized_child.eq(child) {
-                children_changed = true;
-            }
+    fn deduplicate_children(&mut self, mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            let optimized_child = self.deduplicate(Arc::unwrap_or_clone(child))?;
             children.push(Arc::new(optimized_child));
-        }
-
-        if !children_changed {
-            return Ok(s_expr.clone());
         }
 
         Ok(s_expr.replace_children(children))
@@ -277,7 +265,7 @@ impl Optimizer for DeduplicateJoinConditionOptimizer {
         "DeduplicateJoinConditionOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 }

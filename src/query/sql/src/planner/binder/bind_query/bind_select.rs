@@ -20,7 +20,6 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Expr::Array;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
@@ -28,6 +27,7 @@ use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Join;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Pivot;
@@ -38,7 +38,6 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::UnpivotName;
 use databend_common_ast::visit::VisitControl;
 use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
@@ -47,9 +46,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use log::warn;
+use unicase::Ascii;
 
 use crate::AsyncFunctionRewriter;
+use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
@@ -155,7 +157,7 @@ impl Binder {
             return self.bind_dummy_table(bind_context, &stmt.select_list);
         }
 
-        let mut max_column_position = MaxColumnPosition::default();
+        let mut max_column_position = MaxColumnPosition::new(self.name_resolution_ctx.clone());
         stmt.walk(&mut max_column_position)?;
         self.metadata.write().set_stage_column_references(
             max_column_position.max_pos,
@@ -575,38 +577,6 @@ impl SelectRewriter {
             alias,
         }
     }
-
-    fn expr_literal_array_from_unpivot_names(names: &[UnpivotName]) -> Expr {
-        Array {
-            span: Span::default(),
-            exprs: names
-                .iter()
-                .map(|name| Expr::Literal {
-                    span: name.ident.span,
-                    value: Literal::String(
-                        name.alias.as_ref().unwrap_or(&name.ident.name).to_string(),
-                    ),
-                })
-                .collect(),
-        }
-    }
-
-    fn expr_column_ref_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
-        Array {
-            span: Span::default(),
-            exprs: exprs
-                .into_iter()
-                .map(|expr| Expr::ColumnRef {
-                    span: None,
-                    column: ColumnRef {
-                        database: None,
-                        table: None,
-                        column: ColumnID::Name(expr),
-                    },
-                })
-                .collect(),
-        }
-    }
 }
 
 impl SelectRewriter {
@@ -638,7 +608,6 @@ impl SelectRewriter {
 
     fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
         self.rewrite_pivot(stmt)?;
-        self.rewrite_unpivot(stmt)?;
         Ok(self.new_stmt.take())
     }
 
@@ -970,52 +939,23 @@ impl SelectRewriter {
 
         Ok(source_query)
     }
-
-    fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {
-        if stmt.from.len() != 1 {
-            return Ok(());
-        }
-        let Some(unpivot) = stmt.from[0].unpivot() else {
-            return Ok(());
-        };
-        let mut new_select_list = stmt.select_list.clone();
-        let columns = unpivot
-            .column_names
-            .iter()
-            .map(|name| name.ident.to_owned())
-            .collect::<Vec<_>>();
-        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(columns.clone());
-        };
-        new_select_list.push(Self::target_func_from_name_args(
-            Identifier::from_name(stmt.span, "unnest"),
-            vec![Self::expr_literal_array_from_unpivot_names(
-                &unpivot.column_names,
-            )],
-            Some(unpivot.unpivot_column.clone()),
-        ));
-        new_select_list.push(Self::target_func_from_name_args(
-            Identifier::from_name(stmt.span, "unnest"),
-            vec![Self::expr_column_ref_array_from_vec_ident(columns)],
-            Some(unpivot.value_column.clone()),
-        ));
-
-        if let Some(ref mut new_stmt) = self.new_stmt {
-            new_stmt.select_list = new_select_list;
-        } else {
-            self.new_stmt = Some(SelectStmt {
-                select_list: new_select_list,
-                ..stmt.clone()
-            });
-        };
-        Ok(())
-    }
 }
 
 #[derive(Default)]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
     pub has_name_ref: bool,
+    name_resolution_ctx: NameResolutionContext,
+    lambda_params: Vec<HashSet<String>>,
+}
+
+impl MaxColumnPosition {
+    pub fn new(name_resolution_ctx: NameResolutionContext) -> Self {
+        Self {
+            name_resolution_ctx,
+            ..Default::default()
+        }
+    }
 }
 
 impl Visitor for MaxColumnPosition {
@@ -1025,6 +965,17 @@ impl Visitor for MaxColumnPosition {
                 ColumnID::Position(pos) if pos.pos > self.max_pos => {
                     self.max_pos = pos.pos;
                 }
+                ColumnID::Name(name)
+                    if column.database.is_none()
+                        && column.table.is_none()
+                        && self.lambda_params.iter().rev().any(|params| {
+                            params
+                                .contains(&self.name_resolution_ctx.normalize_identifier(name).name)
+                        }) =>
+                {
+                    // Lambda parameters are resolved locally and do not refer
+                    // to columns in the stage schema.
+                }
                 ColumnID::Name(_) => {
                     self.has_name_ref = true;
                 }
@@ -1032,5 +983,77 @@ impl Visitor for MaxColumnPosition {
             }
         }
         Ok(VisitControl::Continue)
+    }
+
+    fn visit_function_call(&mut self, func: &FunctionCall) -> std::result::Result<VisitControl, !> {
+        let Some(lambda_arg) = &func.lambda else {
+            return Ok(VisitControl::Continue);
+        };
+
+        let semantic_lambda = match lambda_arg {
+            LambdaArgument::Lambda(lambda) => Some((func.args.as_slice(), lambda)),
+            LambdaArgument::Ambiguous(lambda)
+                if GENERAL_LAMBDA_FUNCTIONS.contains(&Ascii::new(func.name.name.as_str())) =>
+            {
+                let Some((_, args)) = func.args.split_last() else {
+                    return Ok(VisitControl::Continue);
+                };
+                Some((args, lambda))
+            }
+            // For non-lambda functions the trailing arrow remains an ordinary
+            // JSON expression, so let the normal AST walk visit `args`.
+            LambdaArgument::Ambiguous(_) => None,
+        };
+        let Some((args, lambda)) = semantic_lambda else {
+            return Ok(VisitControl::Continue);
+        };
+
+        for arg in args {
+            if let VisitControl::Break(value) = arg.walk(self)? {
+                return Ok(VisitControl::Break(value));
+            }
+        }
+
+        self.lambda_params.push(
+            lambda
+                .params
+                .iter()
+                .map(|param| self.name_resolution_ctx.normalize_identifier(param).name)
+                .collect(),
+        );
+        let result = lambda.expr.walk(self);
+        self.lambda_params.pop();
+        match result? {
+            VisitControl::Break(value) => Ok(VisitControl::Break(value)),
+            VisitControl::Continue | VisitControl::SkipChildren => Ok(VisitControl::SkipChildren),
+        }
+    }
+}
+
+#[cfg(test)]
+mod max_column_position_tests {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::*;
+
+    fn has_column_name_ref(sql: &str) -> bool {
+        let tokens = tokenize_sql(sql).unwrap();
+        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let mut visitor = MaxColumnPosition::default();
+        expr.walk(&mut visitor).unwrap();
+        visitor.has_name_ref
+    }
+
+    #[test]
+    fn ignores_lambda_params_but_preserves_ordinary_json_arrow_columns() {
+        assert!(!has_column_name_ref("array_transform([1], x -> 1)"));
+        assert!(!has_column_name_ref("array_transform([1], x -> x)"));
+        assert!(!has_column_name_ref("array_transform([1], X -> x)"));
+        assert!(has_column_name_ref(
+            "array_transform([1], x -> x + stage_column)"
+        ));
+        assert!(has_column_name_ref("concat(1, 2, doc -> 'key')"));
     }
 }

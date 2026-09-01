@@ -586,9 +586,143 @@ select * from t_native where query('content:book OR content:basket');
 9 You can not judge a book by its cover
 
 statement ok
+CREATE TABLE t_japanese (
+    id int,
+    content string,
+    INVERTED INDEX idx_japanese (content) tokenizer = 'japanese' filters = 'japanese_stop,japanese_stemmer'
+)
+
+statement ok
+INSERT INTO t_japanese VALUES
+(1, '東京国際空港は東京都大田区にあります'),
+(2, '成田国際空港は千葉県成田市にあります'),
+(3, '関西国際空港は大阪府にあります'),
+(4, '私は毎朝りんごを食べました'),
+(5, '彼は昨日パンを食べた'),
+(6, '京都で美しい桜を見ました'),
+(7, '新幹線で東京から京都まで旅行しました'),
+(8, '図書館で日本の歴史について本を読みました'),
+(9, '子供たちは公園で元気に走っています'),
+(10, '会社で新しい検索システムを開発しました'),
+(11, '富士山は日本で最も高い山です'),
+(12, '北海道では冬に美しい雪が降ります'),
+(13, '寿司と天ぷらは人気のある日本料理です'),
+(14, '毎晩家族と一緒にテレビを見ています'),
+(15, '先生が黒板に漢字を書きました'),
+(16, '昨日は雨が降ったので家で音楽を聞きました'),
+(17, 'コンピューターで大量のデータを分析します'),
+(18, 'データベースは情報を効率的に保存します')
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:東京') ORDER BY id;
+----
+1 東京国際空港は東京都大田区にあります
+7 新幹線で東京から京都まで旅行しました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:大阪府') ORDER BY id;
+----
+3 関西国際空港は大阪府にあります
+
+# Verify compound-word tokenization and phrase matching.
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:"東京国際空港"') ORDER BY id;
+----
+1 東京国際空港は東京都大田区にあります
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:国際 AND content:空港') ORDER BY id;
+----
+1 東京国際空港は東京都大田区にあります
+2 成田国際空港は千葉県成田市にあります
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:京都') ORDER BY id;
+----
+6 京都で美しい桜を見ました
+7 新幹線で東京から京都まで旅行しました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:図書館') ORDER BY id;
+----
+8 図書館で日本の歴史について本を読みました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:検索') ORDER BY id;
+----
+10 会社で新しい検索システムを開発しました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:富士山') ORDER BY id;
+----
+11 富士山は日本で最も高い山です
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:北海道') ORDER BY id;
+----
+12 北海道では冬に美しい雪が降ります
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:日本料理') ORDER BY id;
+----
+13 寿司と天ぷらは人気のある日本料理です
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:データ') ORDER BY id;
+----
+17 コンピューターで大量のデータを分析します
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:データベース') ORDER BY id;
+----
+18 データベースは情報を効率的に保存します
+
+# JapaneseBaseFormTokenFilter normalizes conjugated verbs to their dictionary form.
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:食べる') ORDER BY id;
+----
+4 私は毎朝りんごを食べました
+5 彼は昨日パンを食べた
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:見る') ORDER BY id;
+----
+6 京都で美しい桜を見ました
+14 毎晩家族と一緒にテレビを見ています
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:読む') ORDER BY id;
+----
+8 図書館で日本の歴史について本を読みました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:走る') ORDER BY id;
+----
+9 子供たちは公園で元気に走っています
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:書く') ORDER BY id;
+----
+15 先生が黒板に漢字を書きました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:聞く') ORDER BY id;
+----
+16 昨日は雨が降ったので家で音楽を聞きました
+
+query IT
+SELECT id, content FROM t_japanese WHERE query('content:降る') ORDER BY id;
+----
+16 昨日は雨が降ったので家で音楽を聞きました
+
+# JapaneseStopTagsTokenFilter removes particles such as は from both documents and queries.
+query I
+SELECT id FROM t_japanese WHERE query('content:は') ORDER BY id;
+----
+
+statement ok
 use default
 
 statement ok
 drop database test_inverted_index
-
 

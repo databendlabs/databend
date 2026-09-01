@@ -133,7 +133,7 @@ impl<'a> StatEvaluator<'a> {
         });
         let input_domains = HashMap::from([(0, input.domain.clone())]);
         let (_, Some(domain)) = ConstantFolder::fold_with_domain(
-            &expr,
+            Cow::Owned(expr),
             &input_domains,
             self.func_ctx,
             self.fn_registry,
@@ -265,7 +265,7 @@ impl<'a> CowStat<'a> {
                 distribution: match distribution {
                     BorrowedDistribution::Unknown => OwnedDistribution::Unknown,
                     BorrowedDistribution::Histogram(histogram) => {
-                        OwnedDistribution::Histogram(histogram.clone())
+                        OwnedDistribution::Histogram(histogram.to_owned())
                     }
                     BorrowedDistribution::Boolean(distribution) => {
                         OwnedDistribution::Boolean(distribution)

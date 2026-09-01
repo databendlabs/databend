@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -237,8 +238,9 @@ pub fn can_filter_null(
     if replace.can_replace {
         let columns = null_scalar_expr.columns_and_data_types(metadata);
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
-        let (expr, _) = ConstantFolder::fold_context_independent(&expr, &BUILTIN_FUNCTIONS);
-        if let Expr::Constant(Constant { scalar, .. }) = expr
+        let (expr, _) =
+            ConstantFolder::fold_context_independent(Cow::Owned(expr), &BUILTIN_FUNCTIONS);
+        if let Expr::Constant(Constant { scalar, .. }) = expr.as_ref()
             && matches!(scalar, Scalar::Boolean(false) | Scalar::Null)
         {
             return Ok(true);

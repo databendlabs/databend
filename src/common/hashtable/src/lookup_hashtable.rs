@@ -17,7 +17,7 @@ use std::iter::TrustedLen;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use databend_common_base::mem_allocator::DefaultAllocator;
+use databend_common_base::mem_allocator::TrackingAllocator;
 
 use crate::HashtableLike;
 use crate::table0::Entry;
@@ -26,7 +26,7 @@ pub struct LookupHashtable<
     K: Sized,
     const CAPACITY: usize,
     V,
-    A: Allocator + Clone = DefaultAllocator,
+    A: Allocator + Clone = TrackingAllocator,
 > {
     flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -324,7 +325,7 @@ impl PhysicalPlanBuilder {
             // on tenant_id would fail when the query only selects id.
             if let Some(secure_preds) = &scan.secure_predicates {
                 for pred in secure_preds {
-                    used = used.union(&pred.used_columns()).cloned().collect();
+                    pred.collect_used_columns(&mut used);
                 }
             }
 
@@ -453,7 +454,8 @@ impl PhysicalPlanBuilder {
                     .as_raw_expr()
                     .type_check(&metadata)?
                     .project_column_ref(|col| Ok(col.column_name.clone()))?;
-                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (folded, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote = folded.as_remote_expr();
                 serialized.push(serde_json::to_string(&remote).map_err(|e| {
                     ErrorCode::Internal(format!(
@@ -567,8 +569,11 @@ impl PhysicalPlanBuilder {
                                 input_schema.index_of(&col.index.to_string())
                             })?;
                         let expr = cast_expr_to_non_null_boolean(expr)?;
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let (expr, _) = ConstantFolder::fold(
+                            Cow::Owned(expr),
+                            &self.func_ctx,
+                            &BUILTIN_FUNCTIONS,
+                        );
                         Ok(expr.as_remote_expr())
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -770,6 +775,7 @@ impl PhysicalPlanBuilder {
                             func_name: "and_filters".to_string(),
                             params: vec![],
                             arguments: vec![lhs, rhs],
+                            return_type: Box::new(DataType::Boolean),
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
@@ -780,7 +786,8 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
-                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (filter, _) =
+                    ConstantFolder::fold(Cow::Owned(filter), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -890,7 +897,8 @@ impl PhysicalPlanBuilder {
             .unwrap();
 
         let expr = cast_expr_to_non_null_boolean(expr)?;
-        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let expr = expr.into_owned();
 
         let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
         let inverted_filter =
@@ -972,11 +980,14 @@ impl PhysicalPlanBuilder {
         let output_schema = projection.project_schema(&agg.schema);
 
         let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&lhs, &rhs]);
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],
                 arguments: vec![lhs, rhs],
+                return_type: Box::new(return_type),
             })
         });
         let filter = predicate

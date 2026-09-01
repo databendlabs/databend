@@ -560,6 +560,14 @@ impl QueryContext {
         self.shared.get_query_lineage()
     }
 
+    pub(crate) fn attach_pending_lineage_logs(&self, logs: Vec<String>) {
+        self.shared.attach_pending_lineage_logs(logs);
+    }
+
+    pub(crate) fn take_pending_lineage_logs(&self) -> Vec<String> {
+        self.shared.take_pending_lineage_logs()
+    }
+
     /// Reconcile captured lineage after execution resolves the actual target.
     ///
     /// A missing captured id belongs to paths such as CTAS whose target is created during
@@ -608,6 +616,11 @@ impl QueryContext {
 
     pub fn set_finish_time(&self, time: SystemTime) {
         *self.shared.finish_time.write() = Some(time)
+    }
+
+    /// Return the completion time captured by the query-finish logger.
+    pub fn get_query_finish_time(&self) -> Option<SystemTime> {
+        *self.shared.finish_time.read()
     }
 
     pub fn clear_tables_cache(&self) {
@@ -750,7 +763,6 @@ impl QueryContext {
         struct FilterLogEntry {
             filter_id: usize,
             probe_expr: String,
-            bloom_column: Option<String>,
             has_bloom: bool,
             has_inlist: bool,
             has_min_max: bool,
@@ -775,7 +787,6 @@ impl QueryContext {
                 .map(|entry| FilterLogEntry {
                     filter_id: entry.id,
                     probe_expr: entry.probe_expr.sql_display(),
-                    bloom_column: entry.bloom.as_ref().map(|bloom| bloom.column_name.clone()),
                     has_bloom: entry.bloom.is_some(),
                     has_inlist: entry.inlist.is_some(),
                     has_min_max: entry.min_max.is_some(),
@@ -807,7 +818,6 @@ impl QueryContext {
                 let FilterLogEntry {
                     filter_id,
                     probe_expr,
-                    bloom_column,
                     has_bloom,
                     has_inlist,
                     has_min_max,
@@ -845,10 +855,6 @@ impl QueryContext {
                             .unwrap_or_else(|| "unknown".to_string())
                     )),
                 ];
-
-                if let Some(column) = bloom_column {
-                    detail_children.push(FormatTreeNode::new(format!("bloom column: {}", column)));
-                }
 
                 if has_bloom {
                     detail_children.push(FormatTreeNode::new(format!(

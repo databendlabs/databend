@@ -60,6 +60,10 @@ impl AggregationStatistics {
         );
     }
 
+    pub fn log_finish_statistics_values(&mut self, output_rows: usize, hash_index_resizes: usize) {
+        self.log_finish(output_rows, hash_index_resizes, None);
+    }
+
     pub fn log_task_finish_statistics(
         &mut self,
         task_id: u64,

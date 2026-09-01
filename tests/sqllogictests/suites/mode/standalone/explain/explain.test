@@ -350,7 +350,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 ├── filters: [t1.a (#0) > 1 and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4]
-├── estimated rows: 3.52
+├── estimated rows: 4.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── join type: CROSS
@@ -489,11 +489,11 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── estimated rows: 28.16
+├── estimated rows: 32.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 │   ├── filters: [t1.a (#0) > 1 and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4]
-│   ├── estimated rows: 3.52
+│   ├── estimated rows: 4.00
 │   └── HashJoin
 │       ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 │       ├── join type: CROSS
@@ -554,7 +554,7 @@ TopN(Final)
     └── Filter
         ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
         ├── filters: [(t1.a (#0) > 1 or t1.b (#1) < 2) and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4]
-        ├── estimated rows: 3.87
+        ├── estimated rows: 4.18
         └── HashJoin
             ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
             ├── join type: CROSS
@@ -984,7 +984,7 @@ HashJoin
 ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 1.55
+├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── scan id: 0

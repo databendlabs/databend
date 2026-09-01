@@ -29,6 +29,7 @@ use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::StatBounds;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -363,14 +364,15 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(col_stat) = v {
-                let Some(min) = col_stat.min.clone() else {
-                    continue;
-                };
-                let Some(max) = col_stat.max.clone() else {
-                    continue;
-                };
-
                 let null_count = StatCount::exact(col_stat.null_count);
+                if num_rows.is_some_and(|num_rows| num_rows > 0 && col_stat.null_count == num_rows)
+                {
+                    column_stats.insert(*k, ColumnStat::AllNull { null_count });
+                    continue;
+                }
+                let (Some(min), Some(max)) = (col_stat.min.clone(), col_stat.max.clone()) else {
+                    continue;
+                };
                 let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
@@ -393,13 +395,12 @@ impl Operator for Scan {
                         .ok()
                     })
                 };
-                column_stats.insert(*k, ColumnStat {
-                    min,
-                    max,
-                    ndv,
-                    null_count,
-                    histogram,
-                });
+                let Ok(bounds) = StatBounds::new(min, max) else {
+                    continue;
+                };
+                if let Ok(column_stat) = ColumnStat::new(bounds, ndv, null_count, histogram) {
+                    column_stats.insert(*k, column_stat);
+                }
             }
         }
         let mut output_top_n: TopNSet = self.statistics.top_n.clone();

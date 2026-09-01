@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_base::runtime::Runtime;
@@ -333,7 +334,8 @@ pub fn create_push_down_filters(
         })?
         .unwrap();
     let expr = cast_expr_to_non_null_boolean(expr)?;
-    let (filter, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+    let (filter, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
+    let filter = filter.into_owned();
     let remote_filter = filter.as_remote_expr();
 
     // prepare the inverse filter expression

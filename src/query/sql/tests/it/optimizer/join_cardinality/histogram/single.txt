@@ -1,0 +1,24 @@
+=== single_join_cardinality ===
+description: SINGLE joins are derived from scalar subqueries; input cardinalities exercise both the original and optimizer-commuted orientations.
+
+case          : left_single_from_scalar_subquery
+description   : The optimized SQL plan keeps the scalar-subquery join in its LEFT SINGLE orientation.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : left_single_from_scalar_projection
+sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
+join          : LEFT SINGLE cardinality=26.000
+stat          : r.k (#0) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : l.k (#2) min=1, max=5, ndv=1.438 (upper=1.800), null=16.650, histogram=none
+
+case          : right_single_from_optimizer_commute
+description   : The optimizer derives RIGHT SINGLE from scalar-subquery SQL; the explicit CommuteJoin fallback covers the same optimizer rewrite when needed.
+left stats    : rows=1000, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=9, min=1, max=5, ndv=3, histogram_input=present
+query         : right_single_from_scalar_projection
+sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
+optimizer     : full optimizer
+join          : RIGHT SINGLE cardinality=9.000
+stat          : r.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : l.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+

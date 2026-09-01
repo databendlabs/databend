@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
@@ -31,11 +32,13 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
@@ -46,6 +49,7 @@ use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
 use log::debug;
+use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -147,6 +151,42 @@ pub struct ReclusterMutator {
     strategy: Arc<dyn ReclusterStrategy>,
 }
 
+/// Caps the selected block bytes of one recluster task.
+///
+/// Takes the tighter of the node-global (`GLOBAL_MEM_STAT`) and query-local
+/// remaining-memory views; logs when pressure shrinks the task below the
+/// nominal `recluster_block_size`.
+fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
+    let settings = ctx.get_settings();
+    let recluster_block_size = settings.get_recluster_block_size()? as usize;
+    let max_memory_usage = settings.get_max_memory_usage()? as usize;
+    // `max_memory_usage == 0` means memory usage is unlimited.
+    if max_memory_usage == 0 {
+        return Ok(recluster_block_size);
+    }
+    let global_memory_usage = GLOBAL_MEM_STAT.get_memory_usage();
+    let query_memory_usage = ctx.get_nodes_memory_usage();
+    // The tighter view wins: the larger of the two usages.
+    let memory_usage = global_memory_usage.max(query_memory_usage);
+    let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
+    if memory_budget == 0 {
+        return Err(ErrorCode::MemoryExceedsLimit(format!(
+            "Not enough memory for recluster: max_memory_usage = {}, global_used = {}, query_used = {}.",
+            max_memory_usage, global_memory_usage, query_memory_usage
+        )));
+    }
+    // Actual block sizes are checked during task selection.
+    let memory_threshold = recluster_block_size.min(memory_budget);
+    // Log only when pressure actually shrinks the task.
+    if memory_threshold < recluster_block_size {
+        info!(
+            "recluster: memory pressure shrinks task threshold: max_memory_usage = {}, global_used = {}, query_used = {}, threshold = {}.",
+            max_memory_usage, global_memory_usage, query_memory_usage, memory_threshold
+        );
+    }
+    Ok(memory_threshold)
+}
+
 impl ReclusterMutator {
     /// Build a recluster mutator from table metadata and current snapshot state.
     pub fn try_create(
@@ -156,9 +196,9 @@ impl ReclusterMutator {
         mode: ReclusterMode,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
-        let Some(cluster_key_id) = table.cluster_key_id() else {
-            return Err(ErrorCode::Internal("recluster requires cluster key id"));
-        };
+        let cluster_key_info = table
+            .cluster_key_info()
+            .expect("recluster requires cluster key metadata");
         let block_thresholds = table.get_block_thresholds();
 
         let depth_threshold = table
@@ -174,26 +214,10 @@ impl ReclusterMutator {
                 }
             }) as f64;
 
-        let settings = ctx.get_settings();
-        let recluster_block_size = settings.get_recluster_block_size()? as usize;
-        let max_memory_usage = settings.get_max_memory_usage()? as usize;
-        let memory_threshold = if max_memory_usage == 0 {
-            recluster_block_size
-        } else {
-            let memory_usage = ctx.get_nodes_memory_usage();
-            let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
-            if memory_budget == 0 {
-                return Err(ErrorCode::MemoryExceedsLimit(format!(
-                    "Not enough memory for recluster: max_memory_usage = {}, used = {}.",
-                    max_memory_usage, memory_usage
-                )));
-            }
-            // Actual block sizes are checked during task selection.
-            recluster_block_size.min(memory_budget)
-        };
+        let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
+        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
             max_tasks = cluster.nodes.len();
         }
 
@@ -203,7 +227,14 @@ impl ReclusterMutator {
             ));
         };
         let cluster_key_exprs =
-            parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
+            match parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)? {
+                ClusterKeys::Linear(keys) | ClusterKeys::Vector { keys, .. } => keys,
+                ClusterKeys::Hilbert(_) => {
+                    return Err(ErrorCode::Unimplemented(
+                        "Hilbert reclustering is not supported yet",
+                    ));
+                }
+            };
         let (properties, strategy) = ReclusterProperties::try_create(
             table,
             &schema,
@@ -211,7 +242,7 @@ impl ReclusterMutator {
             mode,
             depth_threshold,
             block_thresholds,
-            cluster_key_id,
+            cluster_key_info,
             memory_threshold,
         )?;
 
@@ -234,7 +265,7 @@ impl ReclusterMutator {
         cluster_key_exprs: Vec<Expr<usize>>,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
-        cluster_key_id: u32,
+        cluster_key_info: ClusterKeyInfo,
         partition_key_count: usize,
         max_tasks: usize,
         mode: ReclusterMode,
@@ -251,7 +282,7 @@ impl ReclusterMutator {
             mode,
             depth_threshold,
             block_thresholds,
-            cluster_key_id,
+            cluster_key_info,
             partition_key_count,
             memory_threshold,
             vector_cluster_info,
@@ -324,7 +355,7 @@ impl ReclusterMutator {
                     sort_by_cluster_stats(
                         Some(window[0].stats()),
                         Some(window[1].stats()),
-                        self.properties.cluster_key_id,
+                        self.properties.cluster_key_info.cluster_key_id(),
                     ) == cmp::Ordering::Greater
                 })
             };
@@ -549,14 +580,14 @@ impl ReclusterMutator {
         let mut removed_segment_indexes = removed_segment_infos.keys().copied().collect::<Vec<_>>();
         removed_segment_indexes.sort_unstable_by(|a, b| b.cmp(a));
 
-        let default_cluster_key_id = Some(self.properties.cluster_key_id);
+        let cluster_key_info = Some(&self.properties.cluster_key_info);
         let mut removed_segment_summary = Statistics::default();
         for segment_info in removed_segment_infos.values() {
             // Summary still comes from SegmentInfo, not normalized cached blocks.
             merge_statistics_mut(
                 &mut removed_segment_summary,
                 &segment_info.summary,
-                default_cluster_key_id,
+                cluster_key_info,
             );
         }
 

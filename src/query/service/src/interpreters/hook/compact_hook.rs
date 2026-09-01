@@ -22,10 +22,12 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
@@ -272,11 +274,22 @@ pub(crate) async fn compact_table(
                 &compact_target.database,
                 &compact_target.table,
             )?;
+            // Spill is disabled to keep this synchronous hook fast (spilling adds
+            // disk IO). Admission must then keep tasks inside the memory budget.
+            // TODO: remove once the async hook is enabled.
             ctx.set_enable_sort_spill(false);
+            let target = if is_materialized_view_engine(table.engine()) {
+                MaintenanceTarget::MaterializedView {
+                    table_id: table.get_id(),
+                }
+            } else {
+                MaintenanceTarget::Table
+            };
             let recluster = ReclusterPlan {
                 catalog: compact_target.catalog,
                 database: compact_target.database,
                 table: compact_target.table,
+                target,
                 limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                 selection: None,
                 is_final: false,

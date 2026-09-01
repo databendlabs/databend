@@ -56,6 +56,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -104,6 +105,9 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
     r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
+    // Added by the binder for CLUSTER BY LINEAR/HILBERT. User-specified
+    // reserved options are rejected before the CreateTablePlan is built.
+    r.insert(OPT_KEY_CLUSTER_TYPE);
 
     r.insert(OPT_KEY_ENGINE);
 
@@ -129,6 +133,36 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
 pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
     LazyLock::new(|| {
         let mut r = HashSet::new();
+        r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
+        r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
+        r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
+        r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
+        r.insert(FUSE_OPT_KEY_FILE_SIZE);
+        r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
+        r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
+        r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+        r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
+        r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
+        r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
+        r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
+        r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
+        r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
+        r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
+        r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
+        r.insert(OPT_KEY_TABLE_COMPRESSION);
+        r.insert(OPT_KEY_STORAGE_FORMAT);
+        r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
+        r.insert(OPT_KEY_SEGMENT_FORMAT);
+        r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
+        r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
+        r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+        r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+        r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
+        r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
+        r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
+        r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
+
+        // Added by the MV binder after user-specified reserved keys are rejected.
         r.insert(OPT_KEY_DATABASE_ID);
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
         r

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -33,8 +35,13 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
+use crate::ColumnEntry;
 use crate::LineageSourceRelation;
+use crate::MaterializedCteLineageSource;
+use crate::Metadata;
+use crate::Symbol;
 use crate::ViewLineageSourceColumn;
+use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::lineage_enabled;
@@ -97,6 +104,7 @@ impl Binder {
 
         // Check and bind common table expression
         let mut cte_suffix_name = None;
+        let mut materialized_cte_lineage = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
@@ -108,6 +116,15 @@ impl Binder {
                     &materialized_cte_info.bound_context.columns,
                 );
             } else if cte_info.user_specified_materialized {
+                if lineage_enabled() {
+                    // The main query scans a temporary table, so retain a separately bound
+                    // producer definition that lineage extraction can follow by output position.
+                    materialized_cte_lineage = Some(self.bind_cte_definition(
+                        &table_name,
+                        cte_map.as_ref(),
+                        &cte_info.query,
+                    )?);
+                }
                 cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
                 if self
@@ -141,8 +158,13 @@ impl Binder {
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
-        // Resolve table with catalog
-        let table_meta = {
+        // Resolve table with catalog, allowing internal rewrites to bind an exact table instance.
+        let table_meta = if let Some(table) =
+            self.pre_resolved_tables
+                .get(&(catalog.clone(), database.clone(), table_name.clone()))
+        {
+            table.clone()
+        } else {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
                 format!("{}${}", &table_name, cte_suffix_name)
             } else {
@@ -251,14 +273,13 @@ impl Binder {
                 .cte_context
                 .set_cte_context(new_bind_context.cte_context.clone());
 
-            let cols = table_meta
+            for (field, column) in table_meta
                 .schema()
                 .fields()
                 .iter()
-                .map(|f| f.name().clone())
-                .collect::<Vec<_>>();
-            for (index, column_name) in cols.iter().enumerate() {
-                new_bind_context.columns[index].column_name = column_name.clone();
+                .zip(new_bind_context.columns.iter_mut())
+            {
+                column.column_name.clone_from(field.name());
             }
 
             if let Some(alias) = alias {
@@ -370,6 +391,53 @@ impl Binder {
                     sample,
                     true,
                 )?;
+                if let Some((definition, producer_context)) = materialized_cte_lineage {
+                    let producer_columns = producer_context
+                        .columns
+                        .iter()
+                        .filter(|column| column.visibility == Visibility::Visible)
+                        .collect::<Vec<_>>();
+                    let consumer_column_count = bind_context
+                        .columns
+                        .iter()
+                        .filter(|column| column.visibility == Visibility::Visible)
+                        .count();
+                    if consumer_column_count != producer_columns.len() {
+                        return Err(ErrorCode::Internal(format!(
+                            "Materialized CTE '{}' has {} producer columns but {} temporary-table columns",
+                            table_name,
+                            producer_columns.len(),
+                            consumer_column_count
+                        )));
+                    }
+                    let column_mapping = {
+                        let metadata = self.metadata.read();
+                        bind_context
+                            .columns
+                            .iter()
+                            .filter_map(|consumer| {
+                                let output_position =
+                                    materialized_cte_output_position(&metadata, consumer.index)?;
+                                let producer = producer_columns.get(output_position)?;
+                                Some((
+                                    consumer.index,
+                                    materialized_cte_producer_column(
+                                        &metadata,
+                                        consumer.index,
+                                        producer.index,
+                                    ),
+                                ))
+                            })
+                            .collect::<HashMap<_, _>>()
+                    };
+                    self.metadata.write().add_materialized_cte_lineage_source(
+                        table_index,
+                        MaterializedCteLineageSource {
+                            definition,
+                            column_mapping,
+                        },
+                    );
+                }
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
@@ -404,6 +472,68 @@ impl Binder {
             });
         }
     }
+}
+
+fn materialized_cte_producer_column(
+    metadata: &Metadata,
+    consumer_index: Symbol,
+    producer_index: Symbol,
+) -> Symbol {
+    let ColumnEntry::BaseTableColumn(consumer) = metadata.column(consumer_index) else {
+        return producer_index;
+    };
+    let Some(consumer_path) = consumer.path_indices.as_deref() else {
+        return producer_index;
+    };
+    let Some(nested_path) = consumer_path.get(1..) else {
+        return producer_index;
+    };
+
+    let ColumnEntry::BaseTableColumn(producer) = metadata.column(producer_index) else {
+        return producer_index;
+    };
+    let mut producer_path = if let Some(path) = &producer.path_indices {
+        path.clone()
+    } else if let Some(position) = materialized_cte_output_position(metadata, producer_index) {
+        vec![position]
+    } else {
+        return producer_index;
+    };
+    producer_path.extend_from_slice(nested_path);
+
+    metadata
+        .columns_by_table_index(producer.table_index)
+        .find_map(|column| match column {
+            ColumnEntry::BaseTableColumn(column)
+                if column.path_indices.as_deref() == Some(producer_path.as_slice()) =>
+            {
+                Some(column.column_index)
+            }
+            _ => None,
+        })
+        .unwrap_or(producer_index)
+}
+
+fn materialized_cte_output_position(metadata: &Metadata, column_index: Symbol) -> Option<usize> {
+    let ColumnEntry::BaseTableColumn(column) = metadata.column(column_index) else {
+        return None;
+    };
+    if let Some(path) = &column.path_indices {
+        return path.first().copied();
+    }
+    if let Some(position) = column.column_position {
+        return position.checked_sub(1);
+    }
+
+    metadata
+        .columns_by_table_index(column.table_index)
+        .filter(|column| {
+            matches!(
+                column,
+                ColumnEntry::BaseTableColumn(column) if column.path_indices.is_none()
+            )
+        })
+        .position(|column| column.index() == column_index)
 }
 
 fn stream_lineage_source_relation(

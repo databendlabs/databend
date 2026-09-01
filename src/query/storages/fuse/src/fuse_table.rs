@@ -51,6 +51,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -79,6 +80,7 @@ use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::bind_normalized_key_exprs;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
@@ -92,6 +94,7 @@ use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -101,6 +104,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
@@ -202,7 +206,6 @@ impl FuseTable {
         storage_class_specs: Option<S3StorageClass>,
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
-        Self::normalize_deprecated_cluster_type(&mut table_info);
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let (mut operator, table_type) = match table_info.db_type.clone() {
             DatabaseType::NormalDB => {
@@ -323,20 +326,6 @@ impl FuseTable {
             changes_desc: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
-    }
-
-    fn normalize_deprecated_cluster_type(table_info: &mut TableInfo) {
-        let Some(cluster_type) = table_info.meta.options.remove(OPT_KEY_CLUSTER_TYPE) else {
-            return;
-        };
-
-        if matches!(
-            cluster_type.to_ascii_lowercase().as_str(),
-            HILBERT_CLUSTER_TYPE
-        ) {
-            table_info.meta.cluster_key = None;
-            table_info.meta.cluster_key_v2 = None;
-        }
     }
 
     pub fn from_table_meta(
@@ -608,7 +597,7 @@ impl FuseTable {
             .map(String::as_str)
     }
 
-    fn resolve_partition_keys(&self) -> Option<Vec<AstExpr>> {
+    pub(crate) fn resolve_partition_keys(&self) -> Option<Vec<AstExpr>> {
         self.partition_key_str()
             .map(|partition_key| parse_cluster_key_exprs(partition_key).unwrap())
     }
@@ -626,6 +615,27 @@ impl FuseTable {
                 .is_some_and(|mode| mode.eq_ignore_ascii_case("hash"))
     }
 
+    pub fn cluster_type(&self) -> Option<ClusterType> {
+        self.cluster_key_id()?;
+        // Legacy Hilbert layouts are intentionally outside the supported upgrade path because
+        // they were not used in the deployments covered by this migration. Persisted `hilbert`
+        // metadata is therefore interpreted as the current two-dimensional Hilbert format.
+        match self.table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE) {
+            Some(value) if value.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE) => {
+                Some(ClusterType::Hilbert)
+            }
+            _ => Some(ClusterType::Linear),
+        }
+    }
+
+    /// Cluster identity used by snapshot and statistics metadata.
+    pub fn cluster_key_info(&self) -> Option<ClusterKeyInfo> {
+        Some(ClusterKeyInfo::new(
+            self.cluster_key_meta()?,
+            self.cluster_type()?,
+        ))
+    }
+
     pub fn partition_pruning_info(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -635,32 +645,31 @@ impl FuseTable {
     }
 
     pub fn linear_partition_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        self.linear_keys(ctx, self.resolve_partition_keys())
+        let Some(key_exprs) = self.resolve_partition_keys() else {
+            return vec![];
+        };
+        let keys = bind_normalized_key_exprs(ctx, Arc::new(self.clone()), key_exprs).unwrap();
+        self.keys_to_remote_exprs(keys)
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        self.linear_keys(ctx, self.resolve_cluster_keys())
-    }
-
-    fn linear_keys(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        key_exprs: Option<Vec<AstExpr>>,
-    ) -> Vec<RemoteExpr<String>> {
-        let Some(key_exprs) = key_exprs else {
+        let Some(key_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
+        let keys = parse_cluster_keys(ctx, Arc::new(self.clone()), key_exprs).unwrap();
+        if keys.is_hilbert() {
+            vec![]
+        } else {
+            self.keys_to_remote_exprs(keys.into_keys())
+        }
+    }
 
-        let table_meta = Arc::new(self.clone());
-        parse_cluster_keys(ctx, table_meta.clone(), key_exprs)
-            .unwrap()
-            .iter()
+    fn keys_to_remote_exprs(&self, keys: Vec<Expr<usize>>) -> Vec<RemoteExpr<String>> {
+        keys.into_iter()
             .map(|key| {
-                key.project_column_ref(|index| {
-                    Ok(table_meta.schema().field(*index).name().to_string())
-                })
-                .unwrap()
-                .as_remote_expr()
+                key.project_column_ref(|index| Ok(self.schema().field(*index).name().to_string()))
+                    .unwrap()
+                    .as_remote_expr()
             })
             .collect()
     }
@@ -690,6 +699,7 @@ impl FuseTable {
         };
         let cluster_keys = parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
         cluster_keys
+            .into_keys()
             .into_iter()
             .map(|v| v.data_type().clone())
             .collect()
@@ -1661,9 +1671,6 @@ mod tests {
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
     use databend_common_meta_app::storage::StorageParams;
-    use databend_storages_common_table_meta::table::HILBERT_CLUSTER_TYPE;
-    use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
-    use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
     use super::ApproxDistinctColumns;
     use super::FuseTable;
@@ -1685,40 +1692,6 @@ mod tests {
             db_type: DatabaseType::NormalDB,
             ..Default::default()
         }
-    }
-
-    #[test]
-    fn test_normalize_deprecated_hilbert_cluster_type() {
-        let mut table_info = table_info_with_db("default");
-        table_info.meta.cluster_key = Some("(a)".to_string());
-        table_info.meta.cluster_key_v2 = Some((2, "(b)".to_string()));
-        table_info.meta.options.insert(
-            OPT_KEY_CLUSTER_TYPE.to_string(),
-            HILBERT_CLUSTER_TYPE.to_string(),
-        );
-
-        FuseTable::normalize_deprecated_cluster_type(&mut table_info);
-
-        assert_eq!(table_info.meta.cluster_key, None);
-        assert_eq!(table_info.meta.cluster_key_v2, None);
-        assert!(!table_info.meta.options.contains_key(OPT_KEY_CLUSTER_TYPE));
-    }
-
-    #[test]
-    fn test_normalize_deprecated_linear_cluster_type() {
-        let mut table_info = table_info_with_db("default");
-        table_info.meta.cluster_key = Some("(a)".to_string());
-        table_info.meta.cluster_key_v2 = Some((2, "(b)".to_string()));
-        table_info.meta.options.insert(
-            OPT_KEY_CLUSTER_TYPE.to_string(),
-            LINEAR_CLUSTER_TYPE.to_string(),
-        );
-
-        FuseTable::normalize_deprecated_cluster_type(&mut table_info);
-
-        assert_eq!(table_info.meta.cluster_key.as_deref(), Some("(a)"));
-        assert_eq!(table_info.meta.cluster_key_v2, Some((2, "(b)".to_string())));
-        assert!(!table_info.meta.options.contains_key(OPT_KEY_CLUSTER_TYPE));
     }
 
     #[test]

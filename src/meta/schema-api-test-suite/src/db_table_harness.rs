@@ -283,7 +283,10 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             ..Default::default()
         };
 
-        self.mt.update_multi_table_meta(req).await?.unwrap();
+        self.mt
+            .update_multi_table_meta(&self.tenant(), req)
+            .await?
+            .unwrap();
 
         Ok(file_infos)
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
@@ -29,6 +30,7 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -103,8 +105,12 @@ pub struct Binder {
     /// Only that CTE should treat self references as `RecursiveCteScan`.
     pub bind_recursive_cte: Option<String>,
     pub m_cte_table_name: HashMap<String, String>,
+    /// Binder-local table instances that take precedence over catalog resolution.
+    pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
     pub enable_result_cache: bool,
+
+    pub enable_materialized_view_rewrite: bool,
 
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
@@ -121,6 +127,10 @@ impl Binder {
             .get_settings()
             .get_enable_query_result_cache()
             .unwrap_or_default();
+        let enable_materialized_view_rewrite = ctx
+            .get_settings()
+            .get_enable_materialized_view_rewrite()
+            .unwrap_or(true);
         Binder {
             ctx,
             dialect,
@@ -130,9 +140,16 @@ impl Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
+            pre_resolved_tables: HashMap::new(),
             enable_result_cache,
+            enable_materialized_view_rewrite,
             subquery_executor: None,
         }
+    }
+
+    pub fn with_materialized_view_rewrite(mut self, enable: bool) -> Self {
+        self.enable_materialized_view_rewrite = enable;
+        self
     }
 
     pub fn with_subquery_executor(
@@ -151,7 +168,10 @@ impl Binder {
             .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
-        self.bind_query_index(&mut bind_context, &plan).await?;
+        if self.enable_materialized_view_rewrite {
+            self.bind_query_materialized_views(&mut bind_context, &plan)
+                .await?;
+        }
         self.ctx.set_status_info(&format!(
             "[SQL-BINDER] Statement binding completed, execution time: {:?}",
             start.elapsed()
@@ -299,6 +319,13 @@ impl Binder {
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
+            Statement::CreateShare(stmt) => self.bind_create_share(stmt).await?,
+            Statement::DropShare(stmt) => self.bind_drop_share(stmt).await?,
+            Statement::AlterShare(stmt) => self.bind_alter_share(stmt).await?,
+            Statement::GrantShare(stmt) => self.bind_grant_share(stmt).await?,
+            Statement::RevokeShare(stmt) => self.bind_revoke_share(stmt).await?,
+            Statement::ShowShares(stmt) => self.bind_show_shares(stmt).await?,
+            Statement::DescShare(stmt) => self.bind_desc_share(stmt).await?,
             Statement::UseDatabase { database } => {
                 let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan { database }))
@@ -349,12 +376,20 @@ impl Binder {
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
             Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
             Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
+            Statement::RefreshLineage(stmt) => self.bind_refresh_lineage(stmt),
             Statement::CreateMaterializedView(stmt) => {
                 self.bind_create_materialized_view(stmt).await?
+            }
+            Statement::AlterMaterializedView(stmt) => {
+                self.bind_alter_materialized_view(stmt).await?
             }
             Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
             Statement::RefreshMaterializedView(stmt) => {
                 self.bind_refresh_materialized_view(stmt).await?
+            }
+            Statement::ShowCreateMaterializedView(stmt) => {
+                self.bind_show_create_materialized_view(bind_context, stmt)
+                    .await?
             }
             Statement::ShowMaterializedViews(stmt) => {
                 self.bind_show_materialized_views(bind_context, stmt)
@@ -951,9 +986,12 @@ impl Binder {
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;
 
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            match new_expr {
+            let (new_expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &self.ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
+            match new_expr.into_owned() {
                 Expr::Constant(Constant { scalar, .. }) => {
                     let value = scalar.into_string().unwrap();
                     if variable.to_lowercase().as_str() == "timezone" {
