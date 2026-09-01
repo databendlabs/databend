@@ -50,7 +50,6 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 
 use crate::MetadataRef;
-use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 /// Parse persisted materialized-view SQL and require a query statement.
 ///
@@ -348,7 +347,7 @@ impl Visitor for AggregateFieldCounter {
 
     fn visit_function_call(&mut self, call: &FunctionCall) -> VisitResult {
         let name = call.name.name.to_ascii_lowercase();
-        if SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&name.as_str()) {
+        if AggregateFunctionFactory::instance().contains_base(&name) {
             self.count += if name == "avg" { 2 } else { 1 };
             return Ok(VisitControl::SkipChildren);
         }
@@ -485,8 +484,7 @@ impl VisitorMut for AggregateExprRewriter<'_> {
                     && !func.has_explicit_lambda()
                     && func.order_by.is_empty()
                     && func.params.is_empty()
-                    && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
-                        .contains(&func.name.name.to_ascii_lowercase().as_str()) =>
+                    && AggregateFunctionFactory::instance().contains_base(&func.name.name) =>
             {
                 let original = expr.clone();
                 let Expr::FunctionCall { func, .. } = &original else {
@@ -632,10 +630,9 @@ impl Visitor for MaterializedViewChecker {
         if call.window.is_some() || call.filter.is_some() || !call.order_by.is_empty() {
             self.not_supported = true;
         }
-        if AggregateFunctionFactory::instance().contains(&name) {
+        if AggregateFunctionFactory::instance().contains_base(&name) {
             self.has_aggregate = true;
-            if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&name.as_str())
-                || call.distinct
+            if call.distinct
                 || call.filter.is_some()
                 || call.window.is_some()
                 || !call.order_by.is_empty()
@@ -718,6 +715,7 @@ mod tests {
             "SELECT amount AS value FROM t",
             "SELECT amount AS value FROM t WHERE amount > 0",
             "SELECT category, sum(amount) AS total FROM t WHERE amount > 0 GROUP BY category",
+            "SELECT category, stddev(amount) AS deviation FROM t GROUP BY category",
         ] {
             let checker = check_query(sql)?;
             assert!(checker.is_supported(), "should support: {sql}");
@@ -823,6 +821,20 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_rewrite_registered_aggregate_state() -> Result<()> {
+        let (query, rewriter) =
+            rewrite("SELECT category, stddev(amount) AS deviation FROM t GROUP BY category")?;
+
+        assert_eq!(rewriter.logical_names(), ["category", "deviation"]);
+        assert_eq!(rewriter.physical_names(), ["deviation", "category"]);
+        assert!(
+            query
+                .to_string()
+                .contains("stddev_state(amount) AS deviation")
+        );
+        Ok(())
+    }
     #[test]
     fn test_rewrite_rejects_invalid_output_names() {
         let error = rewrite("SELECT amount + 1 FROM t").unwrap_err();

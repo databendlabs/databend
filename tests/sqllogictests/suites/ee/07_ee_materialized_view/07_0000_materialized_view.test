@@ -48,14 +48,21 @@ from source
 where active
 group by category
 
+# Registered aggregates outside the legacy MV whitelist are persisted as states too.
+statement ok
+create materialized view mv_stddev (category_name, deviation) as
+select category, stddev_pop(amount)
+from source
+group by category
+
 query I
 select count(*)
 from system.tables
 where database = 'test_materialized_view'
   and table_type = 'MATERIALIZED VIEW'
-  and name in ('mv_detail', 'mv_projection', 'mv_aggregate')
+  and name in ('mv_detail', 'mv_projection', 'mv_aggregate', 'mv_stddev')
 ----
-3
+4
 
 # CREATE leaves MV storage empty. The first explicit refresh consumes the full endpoint.
 statement ok
@@ -72,6 +79,9 @@ refresh materialized view mv_projection
 
 statement ok
 refresh materialized view mv_aggregate
+
+statement ok
+refresh materialized view mv_stddev
 
 query II
 select item_id, doubled_amount from mv_detail order by item_id
@@ -93,6 +103,14 @@ order by category_name
 ----
 a 10 1 10.0
 b 30 1 30.0
+
+query TF
+select category_name, deviation
+from mv_stddev
+order by category_name
+----
+a 5.0
+b 0.0
 
 # An append-only source endpoint may advance without producing aggregate states when all changed
 # rows are rejected by the MV predicate. Refresh must still checkpoint the endpoint as a valid no-op.
@@ -528,12 +546,15 @@ drop materialized view if exists mv_detail
 statement ok
 drop materialized view mv_aggregate
 
+statement ok
+drop materialized view mv_stddev
+
 query I
 select count(*)
 from system.tables
 where database = 'test_materialized_view'
   and table_type = 'MATERIALIZED VIEW'
-  and name in ('mv_detail', 'mv_projection', 'mv_aggregate')
+  and name in ('mv_detail', 'mv_projection', 'mv_aggregate', 'mv_stddev')
 ----
 0
 
