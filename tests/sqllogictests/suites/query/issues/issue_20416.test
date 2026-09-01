@@ -1,0 +1,203 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/20416
+# DATE +/- INTERVAL always returns TIMESTAMP. Databend keeps its documented
+# absolute TIMESTAMP range, so arithmetic beyond year 9999 reports an error.
+
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+DROP TABLE IF EXISTS issue_20416
+
+statement ok
+CREATE TABLE issue_20416(c DATE)
+
+statement ok
+INSERT INTO issue_20416 VALUES ('9999-12-31')
+
+# The return type depends only on DATE and INTERVAL, not on the interval value.
+query TTTTTT
+SELECT typeof(DATE '2024-01-01' + INTERVAL 1 YEAR),
+       typeof(DATE '2024-01-01' + INTERVAL 1 MONTH),
+       typeof(DATE '2024-01-01' + INTERVAL 1 DAY),
+       typeof(DATE '2024-01-01' + INTERVAL 1 HOUR),
+       typeof(INTERVAL 1 DAY + DATE '2024-01-01'),
+       typeof(DATE '2024-01-01' - INTERVAL 1 DAY)
+----
+TIMESTAMP TIMESTAMP TIMESTAMP TIMESTAMP TIMESTAMP TIMESTAMP
+
+# Months are applied first with month-end clamping, followed by days and time.
+query TTTT
+SELECT DATE '2024-02-29' + INTERVAL 1 YEAR,
+       DATE '2024-01-31' + INTERVAL 1 MONTH,
+       DATE '2023-01-30' + to_interval('1 month 1 day'),
+       DATE '2024-03-31' - to_interval('1 month 1 day')
+----
+2025-02-28 00:00:00.000000 2024-02-29 00:00:00.000000 2023-03-01 00:00:00.000000 2024-02-28 00:00:00.000000
+
+# Function aliases must select the same DATE/INTERVAL overload and order.
+query TTTT
+SELECT typeof(add(DATE '2023-01-30', to_interval('1 month 1 day'))),
+       add(DATE '2023-01-30', to_interval('1 month 1 day')),
+       typeof(subtract(DATE '2024-03-31', to_interval('1 month 1 day'))),
+       subtract(DATE '2024-03-31', to_interval('1 month 1 day'))
+----
+TIMESTAMP 2023-03-01 00:00:00.000000 TIMESTAMP 2024-02-28 00:00:00.000000
+
+# Resolve the timezone only after all civil interval components are applied.
+statement ok
+SET timezone = 'America/New_York'
+
+query TTT
+SELECT DATE '2024-03-10' + INTERVAL 1 DAY,
+       DATE '2024-03-10' + INTERVAL 24 HOUR,
+       TIMESTAMP '2024-02-10 02:30:00' + to_interval('1 month 1 day')
+----
+2024-03-11 00:00:00.000000 2024-03-11 00:00:00.000000 2024-03-11 02:30:00.000000
+
+# A zero interval must preserve both distinct instants in a repeated local hour.
+query BB
+SELECT to_datetime('2024-11-03 05:30:00Z') + INTERVAL 0 SECOND
+           = to_datetime('2024-11-03 05:30:00Z'),
+       to_datetime('2024-11-03 06:30:00Z') + INTERVAL 0 SECOND
+           = to_datetime('2024-11-03 06:30:00Z')
+----
+1 1
+
+statement ok
+SET timezone = 'UTC'
+
+# Values in Databend's valid upper tail must not be clamped to Jiff's lower
+# maximum of 9999-12-30 22:00:00 UTC.
+query TTT
+SELECT c + INTERVAL 1 SECOND,
+       c + INTERVAL 86399 SECOND,
+       CAST(c AS TIMESTAMP)
+FROM issue_20416
+----
+9999-12-31 00:00:01.000000 9999-12-31 23:59:59.000000 9999-12-31 00:00:00.000000
+
+# Calendar projections must read the real upper tail instead of Jiff's clamp.
+query TTIIII
+WITH upper_tail AS (
+    SELECT c + INTERVAL 86399 SECOND AS value FROM issue_20416
+)
+SELECT value,
+       CAST(value AS DATE),
+       to_day_of_month(value),
+       to_hour(value),
+       to_minute(value),
+       to_second(value)
+FROM upper_tail
+----
+9999-12-31 23:59:59.000000 9999-12-31 31 23 59 59
+
+# Literal expressions cover constant folding; columns cover runtime evaluation.
+query error 1006.*Invalid date
+SELECT DATE '9999-12-31' + INTERVAL 1 DAY
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 1 DAY FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c - INTERVAL -1 DAY FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 24 HOUR FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 1440 MINUTE FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 86400 SECOND FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 1 MONTH FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 1 YEAR FROM issue_20416
+
+# The complete interval is checked after all three components are applied.
+query T
+SELECT c + to_interval('1 month -31 days') FROM issue_20416
+----
+9999-12-31 00:00:00.000000
+
+# A wider civil intermediate may cross year 10000 before later components
+# return the final value to Databend's valid range.
+query T
+SELECT c + to_interval('13 months -397 days') FROM issue_20416
+----
+9999-12-31 00:00:00.000000
+
+# The absolute Timestamp maximum is parseable but cannot be incremented.
+query T
+SELECT to_datetime('9999-12-31 23:59:59.999999Z')
+----
+9999-12-31 23:59:59.999999
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+# DATE bounds are civil bounds and cannot be bypassed by the UTC offset.
+query T
+SELECT c + INTERVAL 1 SECOND FROM issue_20416
+----
+9999-12-31 00:00:01.000000
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 1 DAY FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 24 HOUR FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 1440 MINUTE FROM issue_20416
+
+query error 1006.*Invalid date
+SELECT c + INTERVAL 86400 SECOND FROM issue_20416
+
+query T
+SELECT to_datetime('9999-12-31 23:59:59.999999Z')
+----
++10000-01-01 07:59:59.999999
+
+# The DATE-to-TIMESTAMP domain must admit a runtime error/NULL at this bound.
+query B
+SELECT try_to_timestamp(DATE '0001-01-01') IS NULL
+----
+1
+
+statement ok
+SET timezone = 'UTC'
+
+query error 1006.*Invalid date
+SELECT to_datetime('9999-12-31 23:59:59.999999Z') + INTERVAL 1 MICROSECOND
+
+# TIMESTAMP_TZ formatting still relies on Jiff. Reject its unsupported tail
+# with a query error instead of constructing a value that panics on display.
+query error 1006.*Invalid date
+SELECT to_timestamp_tz('9999-12-30 21:00:00 +0000') + INTERVAL 2 HOUR
+
+query error 1006.*Invalid date
+SELECT to_timestamp_tz('9999-12-30 21:00:00 +0000')
+       + to_interval(concat(to_string(number + 2), ' hours'))
+FROM numbers(1)
+
+# Lower-bound overflow is symmetric.
+query error 1006.*Invalid date
+SELECT DATE '0001-01-01' - INTERVAL 1 DAY
+
+query error 1006.*Invalid date
+SELECT to_datetime('0001-01-01 00:00:00Z') - INTERVAL 1 MICROSECOND
+
+statement ok
+SET timezone = 'Etc/GMT+8'
+
+query error 1006.*Invalid date
+SELECT DATE '0001-01-01' - INTERVAL 1 SECOND
+
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+DROP TABLE issue_20416

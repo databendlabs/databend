@@ -50,7 +50,7 @@ use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::clamp_timestamp;
-use databend_common_expression::types::timestamp::string_to_timestamp;
+use databend_common_expression::types::timestamp::string_to_timestamp_micros;
 use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
@@ -63,6 +63,7 @@ use databend_common_expression::utils::auto_detect_datetime::parse_timestamp_tz_
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
 use dtparse::parse;
@@ -256,8 +257,8 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 #[allow(clippy::result_large_err)]
 fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i64, ErrorCode> {
     // Layer 1: ISO parse
-    let iso_err = match string_to_timestamp(val, &func_ctx.tz) {
-        Ok(ts) => return Ok(ts.timestamp().as_microsecond()),
+    let iso_err = match string_to_timestamp_micros(val, &func_ctx.tz) {
+        Ok(ts) => return Ok(ts),
         Err(e) => e,
     };
     // Layer 2+3: Epoch detection + AUTO structured format detection
@@ -280,7 +281,7 @@ fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i6
                         Some(off) => format!("{}{}", naive_dt, off),
                         None => naive_dt.to_string(),
                     };
-                    string_to_timestamp(naive_dt, &func_ctx.tz)
+                    string_to_timestamp_micros(naive_dt, &func_ctx.tz)
                 })
         })
         .unwrap_or_else(|_| {
@@ -290,7 +291,7 @@ fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i6
             )))
         });
         match dtparse_result {
-            Ok(ts) => return Ok(ts.timestamp().as_microsecond()),
+            Ok(ts) => return Ok(ts),
             Err(e) => return Err(e),
         }
     }
@@ -366,11 +367,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                     res.push(TIMESTAMP_MAX);
                     break;
                 }
-                let mut d = string_to_timestamp(v, &ctx.tz);
+                let mut d = string_to_timestamp_micros(v, &ctx.tz);
                 // the string max domain maybe truncated into `"2024-09-02 00:0�"`
                 const MAX_LEN: usize = "1000-01-01".len();
                 if d.is_err() && v.len() > MAX_LEN {
-                    d = string_to_timestamp(&v[0..MAX_LEN], &ctx.tz);
+                    d = string_to_timestamp_micros(&v[0..MAX_LEN], &ctx.tz);
                     if i == 0 {
                         extend_num = -1;
                     } else {
@@ -379,10 +380,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 }
 
                 if let Ok(ts) = d {
-                    res.push(
-                        ts.timestamp().as_microsecond()
-                            + extend_num * (24 * 60 * 60 * MICROS_PER_SEC - 1),
-                    );
+                    res.push(ts + extend_num * (24 * 60 * 60 * MICROS_PER_SEC - 1));
                 } else {
                     return FunctionDomain::MayThrow;
                 }
@@ -676,8 +674,8 @@ fn needs_civil_date_synthesis(
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, TimestampType, _>(
         "to_timestamp",
-        |_, domain| {
-            int32_domain_to_timestamp_domain(domain)
+        |ctx, domain| {
+            date_domain_to_timestamp_domain(ctx, domain)
                 .map(FunctionDomain::Domain)
                 .unwrap_or(FunctionDomain::MayThrow)
         },
@@ -685,8 +683,8 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     );
     registry.register_combine_nullable_1_arg::<DateType, TimestampType, _, _>(
         "try_to_timestamp",
-        |_, domain| {
-            if let Some(domain) = int32_domain_to_timestamp_domain(domain) {
+        |ctx, domain| {
+            if let Some(domain) = date_domain_to_timestamp_domain(ctx, domain) {
                 FunctionDomain::Domain(NullableDomain {
                     has_null: false,
                     value: Some(Box::new(domain)),
@@ -709,6 +707,16 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
             }
         })(val, ctx)
     }
+}
+
+fn date_domain_to_timestamp_domain(
+    ctx: &FunctionContext,
+    domain: &SimpleDomain<i32>,
+) -> Option<SimpleDomain<i64>> {
+    Some(SimpleDomain {
+        min: calc_date_to_timestamp(domain.min, &ctx.tz).ok()?,
+        max: calc_date_to_timestamp(domain.max, &ctx.tz).ok()?,
+    })
 }
 
 fn register_date_to_timestamp_tz(registry: &mut FunctionRegistry) {
@@ -989,12 +997,11 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn timestamp_to_date_days(value: i64, tz: &TimeZone) -> i32 {
-    timestamp_days_via_lut(value, tz).unwrap_or_else(|| timestamp_days_via_jiff(value, tz))
-}
-
-fn timestamp_days_via_lut(value: i64, tz: &TimeZone) -> Option<i32> {
-    let components = fast_components_from_timestamp(value, tz)?;
-    days_from_components(components.year, components.month, components.day)
+    components_from_timestamp(value, tz)
+        .and_then(|components| {
+            days_from_components(components.year, components.month, components.day)
+        })
+        .unwrap_or_else(|| timestamp_days_via_jiff(value, tz))
 }
 
 fn days_from_components(year: i32, month: u8, day: u8) -> Option<i32> {

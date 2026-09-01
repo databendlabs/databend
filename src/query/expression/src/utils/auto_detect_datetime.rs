@@ -27,7 +27,7 @@ use crate::types::timestamp::MICROS_PER_SEC;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::types::timestamp::clamp_timestamp;
-use crate::types::timestamp::string_to_timestamp;
+use crate::types::timestamp::string_to_timestamp_micros;
 use crate::types::timestamp_tz::string_to_timestamp_tz;
 
 // ---------------------------------------------------------------------------
@@ -200,8 +200,8 @@ pub fn parse_timestamp_with_auto(
     tz: &TimeZone,
     enable_auto: bool,
 ) -> Result<i64, ErrorCode> {
-    match string_to_timestamp(val, tz) {
-        Ok(ts) => Ok(ts.timestamp().as_microsecond()),
+    match string_to_timestamp_micros(val, tz) {
+        Ok(ts) => Ok(ts),
         Err(e) => {
             if enable_auto {
                 if let Some(mut micros) = parse_epoch_str(val) {

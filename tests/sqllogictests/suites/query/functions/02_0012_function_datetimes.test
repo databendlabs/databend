@@ -112,10 +112,12 @@ select to_datetime('0001-01-01 00:00:00')
 ----
 0001-01-01 00:00:00.000000
 
-statement error 1046
+query ?
 select to_datetime('9999-12-31 23:59:59')
+----
+9999-12-31 23:59:59.000000
 
-# Max datetime in UTC
+# Former Jiff boundary remains a normal Databend timestamp.
 query ?
 select to_datetime('9999-12-30 22:00:00')
 ----
@@ -826,7 +828,7 @@ select add_days(to_date('9999-12-30'), 1)
 query ?
 select add_days(to_datetime('9999-12-30 21:59:59'), 1)
 ----
-9999-12-30 22:00:00.000000
+9999-12-31 21:59:59.000000
 
 # 2020-2-29T10:00:00 + 25 hours
 query ?
@@ -844,7 +846,7 @@ select add_hours(to_date(18321), 1)
 query ?
 select add_hours(to_date('9999-12-30'), 24)
 ----
-9999-12-30 22:00:00.000000
+9999-12-31 00:00:00.000000
 
 query ?
 select add_hours(to_datetime('9999-12-29 23:59:59'), 1)

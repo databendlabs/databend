@@ -24,8 +24,10 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::vectorize_with_builder_1_arg;
-use databend_common_timezone::fast_utc_from_local;
+use databend_common_timezone::utc_from_local;
 use jiff::SignedDuration;
 use jiff::Unit;
 use jiff::Zoned;
@@ -53,19 +55,19 @@ pub fn calc_date_to_timestamp(val: i32, tz: &TimeZone) -> std::result::Result<i6
     let month = local_date.month() as u8;
     let day = local_date.day() as u8;
 
-    if let Some(micros) = fast_utc_from_local(tz, year, month, day, 0, 0, 0, 0) {
-        return Ok(micros);
+    if let Some(micros) = utc_from_local(tz, year, month, day, 0, 0, 0, 0) {
+        return ensure_timestamp_range(micros);
     }
 
     let midnight = local_date.to_datetime(Time::midnight());
     match midnight.to_zoned(tz.clone()) {
-        Ok(zoned) => Ok(zoned.timestamp().as_microsecond()),
+        Ok(zoned) => ensure_timestamp_range(zoned.timestamp().as_microsecond()),
         Err(_err) => {
             for minutes in 1..=1440 {
                 let delta = SignedDuration::from_secs((minutes * 60) as i64);
                 if let Ok(adj) = midnight.checked_add(delta) {
                     if let Ok(zoned) = adj.to_zoned(tz.clone()) {
-                        return Ok(zoned.timestamp().as_microsecond());
+                        return ensure_timestamp_range(zoned.timestamp().as_microsecond());
                     }
                 } else {
                     break;
@@ -79,8 +81,18 @@ pub fn calc_date_to_timestamp(val: i32, tz: &TimeZone) -> std::result::Result<i6
                 .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
                 .unwrap()
                 .as_microsecond();
-            Ok(ts + tz_offset_micros)
+            ensure_timestamp_range(ts + tz_offset_micros)
         }
+    }
+}
+
+fn ensure_timestamp_range(micros: i64) -> std::result::Result<i64, String> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+        Ok(micros)
+    } else {
+        Err(format!(
+            "Invalid date: timestamp value {micros} is out of range"
+        ))
     }
 }
 

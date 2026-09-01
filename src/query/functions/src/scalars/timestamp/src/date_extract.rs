@@ -37,7 +37,7 @@ use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_timezone::DateTimeComponents;
-use databend_common_timezone::fast_components_from_timestamp;
+use databend_common_timezone::components_from_timestamp;
 use jiff::Timestamp;
 use jiff::Zoned;
 use jiff::civil::Date;
@@ -59,7 +59,7 @@ struct ToNumberImpl;
 
 impl ToNumberImpl {
     fn eval_timestamp<T: ToNumber>(us: i64, tz: &TimeZone) -> T::Output {
-        if let Some(components) = fast_components_from_timestamp(us, tz) {
+        if let Some(components) = components_from_timestamp(us, tz) {
             return T::from_components(&components);
         }
         let dt = timestamp_from_micros(us, tz);
@@ -675,6 +675,9 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         "to_hour",
         |_, _| FunctionDomain::Full,
         |val, ctx| {
+            if let Some(components) = components_from_timestamp(val, &ctx.func_ctx.tz) {
+                return components.hour;
+            }
             let datetime = timestamp_from_micros(val, &ctx.func_ctx.tz);
             datetime.hour() as u8
         },
@@ -683,6 +686,9 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         "to_minute",
         |_, _| FunctionDomain::Full,
         |val, ctx| {
+            if let Some(components) = components_from_timestamp(val, &ctx.func_ctx.tz) {
+                return components.minute;
+            }
             let datetime = timestamp_from_micros(val, &ctx.func_ctx.tz);
             datetime.minute() as u8
         },
@@ -691,6 +697,9 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         "to_second",
         |_, _| FunctionDomain::Full,
         |val, ctx| {
+            if let Some(components) = components_from_timestamp(val, &ctx.func_ctx.tz) {
+                return components.second;
+            }
             let datetime = timestamp_from_micros(val, &ctx.func_ctx.tz);
             datetime.second() as u8
         },

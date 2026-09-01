@@ -17,6 +17,8 @@ use std::sync::LazyLock;
 use std::sync::RwLock;
 
 use jiff::SignedDuration;
+use jiff::Timestamp;
+use jiff::Zoned;
 use jiff::civil::Date;
 use jiff::civil::Time;
 use jiff::civil::Weekday;
@@ -27,6 +29,11 @@ const LUT_MIN_YEAR: i32 = 1900;
 const LUT_MAX_YEAR: i32 = 2299;
 const SECONDS_PER_DAY: i64 = 86_400;
 const MICROS_PER_SEC: i64 = 1_000_000;
+/// Largest whole microsecond accepted by Jiff's absolute `Timestamp`.
+pub const JIFF_TIMESTAMP_MAX_MICROS: i64 = 253_402_207_200_999_999;
+const GREGORIAN_CYCLE_YEARS: i32 = 400;
+const GREGORIAN_CYCLE_DAYS: i64 = 146_097;
+const GREGORIAN_CYCLE_MICROS: i64 = GREGORIAN_CYCLE_DAYS * SECONDS_PER_DAY * MICROS_PER_SEC;
 
 #[derive(Clone)]
 struct DayEntry {
@@ -333,6 +340,55 @@ pub fn fast_components_from_timestamp(micros: i64, tz: &TimeZone) -> Option<Date
     Some(entry.build_components(seconds, micros))
 }
 
+/// Convert UTC microseconds to local calendar components throughout Databend's
+/// timestamp range.
+///
+/// Jiff intentionally reserves enough civil-date headroom for every possible
+/// UTC offset, so its maximum absolute timestamp is earlier than Databend's
+/// `9999-12-31 23:59:59.999999` limit. Values in that small upper tail are
+/// shifted back by one 400-year Gregorian cycle for timezone conversion and
+/// shifted forward again in the returned civil year. This does not enlarge
+/// Databend's timestamp range.
+pub fn components_from_timestamp(micros: i64, tz: &TimeZone) -> Option<DateTimeComponents> {
+    if micros > JIFF_TIMESTAMP_MAX_MICROS {
+        let proxy_micros = micros.checked_sub(GREGORIAN_CYCLE_MICROS)?;
+        let timestamp = Timestamp::from_microsecond(proxy_micros).ok()?;
+        return components_from_zoned(
+            timestamp.to_zoned(tz.clone()),
+            micros,
+            GREGORIAN_CYCLE_YEARS,
+        );
+    }
+
+    if let Some(components) = fast_components_from_timestamp(micros, tz) {
+        return Some(components);
+    }
+
+    let timestamp = Timestamp::from_microsecond(micros).ok()?;
+    components_from_zoned(timestamp.to_zoned(tz.clone()), micros, 0)
+}
+
+fn components_from_zoned(zoned: Zoned, micros: i64, year_shift: i32) -> Option<DateTimeComponents> {
+    let year = i32::from(zoned.year()).checked_add(year_shift)?;
+    let month = zoned.month() as u8;
+    let day = zoned.day() as u8;
+
+    Some(DateTimeComponents {
+        year,
+        month,
+        day,
+        hour: zoned.hour() as u8,
+        minute: zoned.minute() as u8,
+        second: zoned.second() as u8,
+        micro: micros.rem_euclid(MICROS_PER_SEC) as u32,
+        weekday: zoned.weekday(),
+        days_in_month: last_day_of_month(year, month),
+        day_of_year: day_of_year(year, month, day),
+        offset_seconds: zoned.offset().seconds(),
+        unix_seconds: micros.div_euclid(MICROS_PER_SEC),
+    })
+}
+
 /// Convert a local calendar time into UTC microseconds using the cached LUT.
 /// Returns `None` when the request lies outside the supported year range
 /// (1900–2299) or when the local timestamp falls in a DST gap. For DST folds
@@ -360,6 +416,81 @@ pub fn fast_utc_from_local(
         return None;
     }
     Some(total as i64)
+}
+
+/// Convert local calendar components to UTC microseconds throughout
+/// Databend's timestamp range, including the small upper tail beyond Jiff's
+/// absolute timestamp ceiling.
+pub fn utc_from_local(
+    tz: &TimeZone,
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+) -> Option<i64> {
+    if let Some(micros) = fast_utc_from_local(tz, year, month, day, hour, minute, second, micro) {
+        return Some(micros);
+    }
+    if !valid_local_components(year, month, day, hour, minute, second, micro) {
+        return None;
+    }
+    if let Some(micros) = jiff_utc_from_local(tz, year, month, day, hour, minute, second, micro) {
+        return Some(micros);
+    }
+
+    // Only the Databend/Jiff upper-bound mismatch is eligible for the proxy.
+    // Retrying arbitrary conversion failures could turn a DST gap into a
+    // different instant using an unrelated timezone rule.
+    if year != 9999 && year != 10000 {
+        return None;
+    }
+    let proxy_year = year.checked_sub(GREGORIAN_CYCLE_YEARS)?;
+    let proxy_micros =
+        jiff_utc_from_local(tz, proxy_year, month, day, hour, minute, second, micro)?;
+    let micros = proxy_micros.checked_add(GREGORIAN_CYCLE_MICROS)?;
+    (micros > JIFF_TIMESTAMP_MAX_MICROS).then_some(micros)
+}
+
+fn jiff_utc_from_local(
+    tz: &TimeZone,
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+) -> Option<i64> {
+    let year = i16::try_from(year).ok()?;
+    let date = Date::new(year, month as i8, day as i8).ok()?;
+    date.at(
+        hour as i8,
+        minute as i8,
+        second as i8,
+        i32::try_from(micro.checked_mul(1_000)?).ok()?,
+    )
+    .to_zoned(tz.clone())
+    .ok()
+    .map(|zoned| zoned.timestamp().as_microsecond())
+}
+
+fn valid_local_components(
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+) -> bool {
+    if month == 0 || month > 12 || hour >= 24 || minute >= 60 || second >= 60 || micro >= 1_000_000
+    {
+        return false;
+    }
+    day > 0 && day <= last_day_of_month(year, month)
 }
 
 fn days_before_year(year: i32) -> i64 {

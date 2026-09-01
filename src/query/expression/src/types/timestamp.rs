@@ -14,6 +14,7 @@
 
 use std::cmp::Ordering;
 use std::fmt::Display;
+use std::fmt::Write;
 use std::io::Cursor;
 
 use databend_common_column::buffer::Buffer;
@@ -21,9 +22,15 @@ use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use databend_common_io::datetime::parse_standard_timestamp;
+use databend_common_timezone::DateTimeComponents;
+use databend_common_timezone::JIFF_TIMESTAMP_MAX_MICROS;
+use databend_common_timezone::components_from_timestamp;
+use databend_common_timezone::utc_from_local;
 use jiff::Timestamp;
 use jiff::Zoned;
 use jiff::fmt::strtime;
+use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use num_traits::AsPrimitive;
 
@@ -220,7 +227,84 @@ pub fn string_to_timestamp(
 }
 
 #[inline]
+pub fn string_to_timestamp_micros(
+    ts_str: impl AsRef<[u8]>,
+    tz: &TimeZone,
+) -> databend_common_exception::Result<i64> {
+    let raw = ts_str.as_ref();
+    match string_to_timestamp(raw, tz) {
+        Ok(timestamp) => ensure_timestamp_range(timestamp.timestamp().as_microsecond()),
+        Err(original_error) => {
+            let parsed = match parse_standard_timestamp(raw) {
+                Some(Ok(parsed)) if parsed.year >= 9999 => parsed,
+                Some(Err(err)) => return Err(err),
+                _ => return Err(original_error),
+            };
+            let fixed_tz = match parsed.provided_offset {
+                Some(offset_seconds) => Some(TimeZone::fixed(
+                    Offset::from_seconds(offset_seconds)
+                        .map_err(|err| ErrorCode::BadBytes(err.to_string()))?,
+                )),
+                None => None,
+            };
+            let resolved_tz = fixed_tz.as_ref().unwrap_or(tz);
+            let micros = utc_from_local(
+                resolved_tz,
+                parsed.year,
+                parsed.month,
+                parsed.day,
+                parsed.hour,
+                parsed.minute,
+                parsed.second,
+                parsed.micro,
+            )
+            .ok_or_else(|| ErrorCode::BadBytes("timestamp is out of range".to_string()))?;
+            ensure_timestamp_range(micros)
+        }
+    }
+}
+
+fn ensure_timestamp_range(micros: i64) -> databend_common_exception::Result<i64> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+        Ok(micros)
+    } else {
+        Err(ErrorCode::BadBytes("timestamp is out of range".to_string()))
+    }
+}
+
+fn components_to_string(components: DateTimeComponents) -> String {
+    let mut output = String::with_capacity(TIMESTAMP_FORMAT.len());
+    if (0..=9999).contains(&components.year) {
+        write!(&mut output, "{:04}", components.year).unwrap();
+    } else if components.year > 9999 {
+        write!(&mut output, "+{}", components.year).unwrap();
+    } else {
+        write!(&mut output, "-{:04}", components.year.unsigned_abs()).unwrap();
+    }
+    write!(
+        &mut output,
+        "-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
+        components.month,
+        components.day,
+        components.hour,
+        components.minute,
+        components.second,
+        components.micro,
+    )
+    .unwrap();
+    output
+}
+
+#[inline]
 pub fn timestamp_to_string(ts: i64, tz: &TimeZone) -> impl Display {
-    let zdt = timestamp_from_micros(ts, tz);
-    strtime::format(TIMESTAMP_FORMAT, &zdt).unwrap()
+    if ts <= JIFF_TIMESTAMP_MAX_MICROS {
+        return strtime::format(TIMESTAMP_FORMAT, &timestamp_from_micros(ts, tz)).unwrap();
+    }
+
+    match components_from_timestamp(ts, tz) {
+        Some(components) => components_to_string(components),
+        // Preserve the historical best-effort behavior for corrupt values
+        // outside Databend's declared timestamp range.
+        None => strtime::format(TIMESTAMP_FORMAT, &timestamp_from_micros(ts, tz)).unwrap(),
+    }
 }

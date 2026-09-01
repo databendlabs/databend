@@ -27,22 +27,25 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_timezone::DateTimeComponents;
+use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::fast_components_from_timestamp;
+use databend_common_timezone::utc_from_local;
 use jiff::Timestamp;
 use jiff::Zoned;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 
-use crate::date_arithmetic::EvalDaysImpl;
-use crate::date_arithmetic::EvalMonthsImpl;
 use crate::date_arithmetic::timestamp_tz_components_via_lut;
 use crate::date_conversion::calc_date_to_timestamp;
 use crate::date_conversion::today_date;
@@ -121,22 +124,22 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, DateType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, TimestampType, _, _>(
         "plus",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<DateType, IntervalType, DateType>(
+        vectorize_with_builder_2_arg::<DateType, IntervalType, TimestampType>(
             |date, interval, output, ctx| {
-                eval_date_plus(date, interval, output, ctx);
+                eval_date_interval(date, interval, output, ctx, true);
             },
         ),
     );
 
-    registry.register_passthrough_nullable_2_arg::<IntervalType, DateType, DateType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<IntervalType, DateType, TimestampType, _, _>(
         "plus",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<IntervalType, DateType, DateType>(
+        vectorize_with_builder_2_arg::<IntervalType, DateType, TimestampType>(
             |interval, date, output, ctx| {
-                eval_date_plus(date, interval, output, ctx);
+                eval_date_interval(date, interval, output, ctx, true);
             },
         ),
     );
@@ -153,7 +156,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         output,
                         ctx,
                         |input| input,
-                        |result| result,
+                        ensure_timestamp_range,
                         ctx.func_ctx.tz.clone(),
                     );
                 },
@@ -173,7 +176,11 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         return;
                     }
                 };
-                let local = a.timestamp().wrapping_add(offset_micros);
+                let Some(local) = a.timestamp().checked_add(offset_micros) else {
+                    ctx.set_error(output.len(), "invalid timestamp timezone value");
+                    output.push(timestamp_tz::default());
+                    return;
+                };
                 eval_timestamp_plus(
                     a,
                     b,
@@ -181,8 +188,11 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     ctx,
                     move |_| local,
                     move |result| {
-                        let utc = result.wrapping_sub(offset_micros);
-                        timestamp_tz::new(utc, offset)
+                        let utc = result.checked_sub(offset_micros).ok_or_else(|| {
+                            "Invalid date: timestamp timezone value is out of range".to_string()
+                        })?;
+                        ensure_timestamp_tz_range(utc)?;
+                        Ok(timestamp_tz::new(utc, offset))
                     },
                     TimeZone::UTC,
                 );
@@ -202,7 +212,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         output,
                         ctx,
                         |input| input,
-                        |result| result,
+                        ensure_timestamp_range,
                         ctx.func_ctx.tz.clone(),
                     );
                 },
@@ -223,7 +233,11 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         return;
                     }
                 };
-                let local = a.timestamp().wrapping_add(offset_micros);
+                let Some(local) = a.timestamp().checked_add(offset_micros) else {
+                    ctx.set_error(output.len(), "invalid timestamp timezone value");
+                    output.push(timestamp_tz::default());
+                    return;
+                };
                 eval_timestamp_plus(
                     a,
                     b,
@@ -231,8 +245,11 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     ctx,
                     move |_| local,
                     move |result| {
-                        let utc = result.wrapping_sub(offset_micros);
-                        timestamp_tz::new(utc, offset)
+                        let utc = result.checked_sub(offset_micros).ok_or_else(|| {
+                            "Invalid date: timestamp timezone value is out of range".to_string()
+                        })?;
+                        ensure_timestamp_tz_range(utc)?;
+                        Ok(timestamp_tz::new(utc, offset))
                     },
                     TimeZone::UTC,
                 );
@@ -254,12 +271,12 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, DateType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, TimestampType, _, _>(
         "minus",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<DateType, IntervalType, DateType>(
+        vectorize_with_builder_2_arg::<DateType, IntervalType, TimestampType>(
             |date, interval, output, ctx| {
-                eval_date_minus(date, interval, output, ctx);
+                eval_date_interval(date, interval, output, ctx, false);
             },
         ),
     );
@@ -276,7 +293,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         output,
                         ctx,
                         |input| input,
-                        |result| result,
+                        ensure_timestamp_range,
                         ctx.func_ctx.tz.clone(),
                     );
                 },
@@ -297,7 +314,11 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         return;
                     }
                 };
-                let local = a.timestamp().wrapping_add(offset_micros);
+                let Some(local) = a.timestamp().checked_add(offset_micros) else {
+                    ctx.set_error(output.len(), "invalid timestamp timezone value");
+                    output.push(timestamp_tz::default());
+                    return;
+                };
                 eval_timestamp_minus(
                     a,
                     b,
@@ -305,8 +326,11 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     ctx,
                     move |_| local,
                     move |result| {
-                        let utc = result.wrapping_sub(offset_micros);
-                        timestamp_tz::new(utc, offset)
+                        let utc = result.checked_sub(offset_micros).ok_or_else(|| {
+                            "Invalid date: timestamp timezone value is out of range".to_string()
+                        })?;
+                        ensure_timestamp_tz_range(utc)?;
+                        Ok(timestamp_tz::new(utc, offset))
                     },
                     TimeZone::UTC,
                 );
@@ -550,15 +574,11 @@ fn eval_timestamp_plus<F1, F2, T>(
     timezone: TimeZone,
 ) where
     F1: FnOnce(T) -> i64,
-    F2: FnOnce(i64) -> T,
+    F2: FnOnce(i64) -> std::result::Result<T, String>,
     T: Default,
 {
-    // plus microseconds and days
-    let ts = fn_input(a)
-        .wrapping_add(b.microseconds())
-        .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-    match EvalMonthsImpl::eval_timestamp(ts, &timezone, b.months(), false) {
-        Ok(t) => output.push(fn_result(t)),
+    match apply_interval_to_timestamp(fn_input(a), b, &timezone, true).and_then(fn_result) {
+        Ok(t) => output.push(t),
         Err(e) => {
             ctx.set_error(output.len(), e);
             output.push(T::default());
@@ -576,15 +596,11 @@ fn eval_timestamp_minus<F1, F2, T>(
     timezone: TimeZone,
 ) where
     F1: FnOnce(T) -> i64,
-    F2: FnOnce(i64) -> T,
+    F2: FnOnce(i64) -> std::result::Result<T, String>,
     T: Default,
 {
-    // plus microseconds and days
-    let ts = fn_input(a)
-        .wrapping_sub(b.microseconds())
-        .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
-    match EvalMonthsImpl::eval_timestamp(ts, &timezone, -b.months(), false) {
-        Ok(t) => output.push(fn_result(t)),
+    match apply_interval_to_timestamp(fn_input(a), b, &timezone, false).and_then(fn_result) {
+        Ok(t) => output.push(t),
         Err(e) => {
             ctx.set_error(output.len(), e);
             output.push(T::default());
@@ -592,61 +608,203 @@ fn eval_timestamp_minus<F1, F2, T>(
     }
 }
 
-fn eval_date_plus(
-    date: i32,
+fn apply_interval_to_timestamp(
+    timestamp: i64,
     interval: months_days_micros,
-    output: &mut Vec<i32>,
-    ctx: &mut EvalContext,
-) {
-    match apply_interval_to_date(date, interval, true) {
-        Ok(result) => output.push(result),
-        Err(err) => {
-            ctx.set_error(output.len(), err);
-            output.push(0);
-        }
-    }
-}
-
-fn eval_date_minus(
-    date: i32,
-    interval: months_days_micros,
-    output: &mut Vec<i32>,
-    ctx: &mut EvalContext,
-) {
-    match apply_interval_to_date(date, interval, false) {
-        Ok(result) => output.push(result),
-        Err(err) => {
-            ctx.set_error(output.len(), err);
-            output.push(0);
-        }
-    }
-}
-
-fn apply_interval_to_date(
-    mut date: i32,
-    interval: months_days_micros,
+    timezone: &TimeZone,
     is_addition: bool,
-) -> std::result::Result<i32, String> {
-    if interval.microseconds() != 0 {
-        return Err(
-            "DATE +/- INTERVAL with time parts should be evaluated as TIMESTAMP".to_string(),
-        );
+) -> std::result::Result<i64, String> {
+    if interval.months() == 0 && interval.days() == 0 && interval.microseconds() == 0 {
+        return Ok(timestamp);
     }
 
-    let (days, months) = if is_addition {
-        (interval.days(), interval.months())
+    let components = components_from_timestamp(timestamp, timezone)
+        .ok_or_else(|| "Invalid date: cannot resolve timestamp components".to_string())?;
+    apply_interval_to_civil(
+        components.year,
+        components.month,
+        components.day,
+        components.hour,
+        components.minute,
+        components.second,
+        components.micro,
+        Some(components.offset_seconds),
+        false,
+        interval,
+        timezone,
+        is_addition,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_interval_to_civil(
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+    preferred_offset: Option<i32>,
+    enforce_date_range: bool,
+    interval: months_days_micros,
+    timezone: &TimeZone,
+    is_addition: bool,
+) -> std::result::Result<i64, String> {
+    let direction = if is_addition { 1_i64 } else { -1_i64 };
+    let months = direction * i64::from(interval.months());
+    let month_index = i64::from(year)
+        .checked_mul(12)
+        .and_then(|value| value.checked_add(i64::from(month) - 1))
+        .and_then(|value| value.checked_add(months))
+        .ok_or_else(|| "Invalid date: month arithmetic is out of range".to_string())?;
+    let year = month_index.div_euclid(12);
+    let month = (month_index.rem_euclid(12) + 1) as u8;
+    let day = day.min(days_in_month(year, month));
+
+    // DuckDB preserves the three interval components and applies them as
+    // months, days, then microseconds in civil time. Keep that civil
+    // intermediate widened until every component has been applied. Besides
+    // matching DST behavior, this permits a temporarily out-of-range year to
+    // be brought back into Databend's range by a later interval component.
+    let micros_per_day = i128::from(months_days_micros::MICROS_PER_DAY);
+    let civil_days = civil_date_to_days(year, month, day);
+    let time_micros = i128::from(hour) * 3_600_000_000
+        + i128::from(minute) * 60_000_000
+        + i128::from(second) * 1_000_000
+        + i128::from(micro);
+    let direction = i128::from(direction);
+    let civil_micros = civil_days * micros_per_day
+        + time_micros
+        + direction * i128::from(interval.days()) * micros_per_day
+        + direction * i128::from(interval.microseconds());
+
+    let result_days = civil_micros.div_euclid(micros_per_day);
+    let time_micros = civil_micros.rem_euclid(micros_per_day) as i64;
+    let (year, month, day) = civil_date_from_days(result_days);
+    let year = i32::try_from(year).map_err(|_| "Invalid date: year is out of range".to_string())?;
+    let hour = (time_micros / 3_600_000_000) as u8;
+    let minute = (time_micros % 3_600_000_000 / 60_000_000) as u8;
+    let second = (time_micros % 60_000_000 / 1_000_000) as u8;
+    let micro = (time_micros % 1_000_000) as u32;
+
+    if enforce_date_range && !(1..=9999).contains(&year) {
+        return Err("Invalid date: calendar arithmetic is out of range".to_string());
+    }
+
+    // Preserve the source side of a DST fold when that offset is still valid
+    // for the target civil time. In particular, adding a zero interval must
+    // not change either repeated local time into the other one.
+    if let Some(offset_seconds) = preferred_offset {
+        let candidate = civil_micros - i128::from(offset_seconds) * 1_000_000;
+        if let Ok(candidate) = i64::try_from(candidate)
+            && components_from_timestamp(candidate, timezone).is_some_and(|components| {
+                components.year == year
+                    && components.month == month
+                    && components.day == day
+                    && components.hour == hour
+                    && components.minute == minute
+                    && components.second == second
+                    && components.micro == micro
+                    && components.offset_seconds == offset_seconds
+            })
+        {
+            return Ok(candidate);
+        }
+    }
+
+    utc_from_local(timezone, year, month, day, hour, minute, second, micro)
+        .ok_or_else(|| "Invalid date: calendar arithmetic is out of range".to_string())
+}
+
+fn days_in_month(year: i64, month: u8) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 => 29,
+        2 => 28,
+        _ => unreachable!("month arithmetic produced an invalid month"),
+    }
+}
+
+// Proleptic Gregorian conversion based on a 400-year era. Day zero is
+// 1970-01-01. Euclidean division keeps the conversion symmetric for years
+// before year 1 and lets interval components cancel across the DATE bounds.
+fn civil_date_to_days(year: i64, month: u8, day: u8) -> i128 {
+    let mut year = i128::from(year);
+    let month = i128::from(month);
+    let day = i128::from(day);
+    year -= i128::from(month <= 2);
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let month_prime = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * month_prime + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+fn civil_date_from_days(days: i128) -> (i128, u8, u8) {
+    let days = days + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i128::from(month <= 2);
+    (year, month as u8, day as u8)
+}
+
+fn ensure_timestamp_range(timestamp: i64) -> std::result::Result<i64, String> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&timestamp) {
+        Ok(timestamp)
     } else {
-        (-interval.days(), -interval.months())
-    };
-
-    if days != 0 {
-        date = EvalDaysImpl::eval_date(date, days);
+        Err(format!(
+            "Invalid date: timestamp value {timestamp} is out of range"
+        ))
     }
-    if months != 0 {
-        date = EvalMonthsImpl::eval_date(date, months, false)?;
-    }
+}
 
-    Ok(date)
+fn ensure_timestamp_tz_range(timestamp: i64) -> std::result::Result<i64, String> {
+    ensure_timestamp_range(timestamp)?;
+    Timestamp::from_microsecond(timestamp)
+        .map(|_| timestamp)
+        .map_err(|_| "Invalid date: timestamp timezone value is out of supported range".to_string())
+}
+
+fn eval_date_interval(
+    date: i32,
+    interval: months_days_micros,
+    output: &mut Vec<i64>,
+    ctx: &mut EvalContext,
+    is_addition: bool,
+) {
+    let date = date_from_days(date);
+    let result = apply_interval_to_civil(
+        i32::from(date.year()),
+        date.month() as u8,
+        date.day() as u8,
+        0,
+        0,
+        0,
+        0,
+        None,
+        true,
+        interval,
+        &ctx.func_ctx.tz,
+        is_addition,
+    )
+    .and_then(ensure_timestamp_range);
+    match result {
+        Ok(result) => output.push(result),
+        Err(err) => {
+            ctx.set_error(output.len(), err);
+            output.push(0);
+        }
+    }
 }
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {
