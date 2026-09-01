@@ -747,3 +747,37 @@ impl Plan {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vacuum_plans_have_no_result_set() {
+        let plans = [
+            Plan::VacuumTable(Box::new(VacuumTablePlan {
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            })),
+            Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+                catalog: "default".to_string(),
+                database: String::new(),
+            })),
+            Plan::VacuumTemporaryFiles(Box::new(VacuumTemporaryFilesPlan {
+                limit: None,
+                retain: None,
+            })),
+            Plan::VacuumVirtualColumn(Box::new(VacuumVirtualColumnPlan {
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            })),
+        ];
+
+        for plan in plans {
+            assert!(plan.schema().fields().is_empty());
+            assert!(!plan.has_result_set());
+        }
+    }
+}

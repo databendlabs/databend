@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
-use databend_common_expression::types::UInt64Type;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;
@@ -75,12 +72,8 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             .plan
             .limit
             .map(|limit| limit.saturating_sub(removed_files as u64));
-        let cleaned_temp_table_sessions =
-            vacuum_inactive_temp_tables(&table_ctx, session_limit).await? as u64;
+        vacuum_inactive_temp_tables(&table_ctx, session_limit).await?;
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            UInt64Type::from_data(vec![removed_files as u64]),
-            UInt64Type::from_data(vec![cleaned_temp_table_sessions]),
-        ])])
+        Ok(PipelineBuildResult::create())
     }
 }

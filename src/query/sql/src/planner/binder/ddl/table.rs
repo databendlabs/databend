@@ -182,9 +182,7 @@ use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
-use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
-use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
@@ -1894,20 +1892,16 @@ impl Binder {
             catalog,
             database,
             table,
-            option,
+            ..
         } = stmt;
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        let option = VacuumTableOption {
-            dry_run: option.dry_run,
-        };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
             catalog,
             database,
             table,
-            option,
         })))
     }
 
@@ -1918,9 +1912,7 @@ impl Binder {
         stmt: &VacuumDropTableStmt,
     ) -> Result<Plan> {
         let VacuumDropTableStmt {
-            catalog,
-            database,
-            option,
+            catalog, database, ..
         } = stmt;
 
         let catalog = catalog
@@ -1932,16 +1924,9 @@ impl Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| "".to_string());
 
-        let option = {
-            VacuumDropTableOption {
-                dry_run: option.dry_run,
-                limit: option.limit,
-            }
-        };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
             catalog,
             database,
-            option,
         })))
     }
 
