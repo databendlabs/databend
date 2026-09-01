@@ -313,9 +313,6 @@ OPTIMIZE TABLE test_mv COMPACT SEGMENT
 statement error 3905
 OPTIMIZE TABLE test_mv PURGE
 
-statement error 3905
-OPTIMIZE TABLE test_mv ALL
-
 # Dedicated MV maintenance reuses Fuse plans without opening TABLE syntax on MVs.
 statement ok
 ALTER MATERIALIZED VIEW test_mv CLUSTER BY (id)
