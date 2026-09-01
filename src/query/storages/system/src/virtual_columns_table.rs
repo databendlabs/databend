@@ -25,6 +25,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -38,6 +39,7 @@ use jsonb::keypath::OwnedKeyPaths;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::extract_leveled_strings;
 
 pub struct VirtualColumnsTable {
     table_info: TableInfo,
@@ -54,8 +56,22 @@ impl AsyncSystemTable for VirtualColumnsTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        let mut filtered_db_names = Vec::new();
+        let mut filtered_table_names = Vec::new();
+        if let Some(filters) = push_downs.and_then(|push_down| push_down.filters) {
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+            (filtered_db_names, filtered_table_names) = extract_leveled_strings(
+                &expr,
+                &["database", "table"],
+                &ctx.get_function_context()?,
+            )?;
+        }
+        let filtered_db_names = (!filtered_db_names.is_empty()).then_some(filtered_db_names);
+        let filtered_table_names =
+            (!filtered_table_names.is_empty()).then_some(filtered_table_names);
+
         let tenant = ctx.get_tenant();
         let session_state = ctx.session_state()?;
 
@@ -70,8 +86,20 @@ impl AsyncSystemTable for VirtualColumnsTable {
 
         let dbs = catalog.list_databases(&tenant).await?;
         for db in dbs {
+            if filtered_db_names
+                .as_ref()
+                .is_some_and(|names| !names.iter().any(|name| name == db.name()))
+            {
+                continue;
+            }
             let tables = catalog.list_tables(&tenant, db.name()).await?;
             for table in tables {
+                if filtered_table_names
+                    .as_ref()
+                    .is_some_and(|names| !names.iter().any(|name| name == table.name()))
+                {
+                    continue;
+                }
                 if !table.storage_format_as_parquet() {
                     continue;
                 }

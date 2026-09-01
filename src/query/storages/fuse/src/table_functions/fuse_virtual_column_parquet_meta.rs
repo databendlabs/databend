@@ -270,15 +270,22 @@ pub(crate) fn collect_virtual_column_entries(
     let mut entries = Vec::new();
     let mut shared_buckets = HashMap::new();
 
-    for (source_column_id, node) in &virtual_meta.virtual_column_nodes {
+    let mut source_column_ids = virtual_meta
+        .virtual_column_nodes
+        .keys()
+        .copied()
+        .collect::<Vec<_>>();
+    source_column_ids.sort_unstable();
+    for source_column_id in source_column_ids {
+        let node = &virtual_meta.virtual_column_nodes[&source_column_id];
         let source_column_name = source_column_names
-            .get(source_column_id)
+            .get(&source_column_id)
             .cloned()
             .unwrap_or_else(|| source_column_id.to_string());
         let mut key_paths = OwnedKeyPaths { paths: Vec::new() };
         collect_virtual_column_leaves(
             virtual_meta,
-            *source_column_id,
+            source_column_id,
             &source_column_name,
             node,
             &mut key_paths,
@@ -287,6 +294,9 @@ pub(crate) fn collect_virtual_column_entries(
         );
     }
 
+    let mut shared_buckets = shared_buckets.into_iter().collect::<Vec<_>>();
+    shared_buckets
+        .sort_by_key(|((source_column_id, data_type), _)| (*source_column_id, *data_type));
     for ((source_column_id, data_type), mut bucket) in shared_buckets {
         bucket.paths.sort();
         let metas = virtual_meta
