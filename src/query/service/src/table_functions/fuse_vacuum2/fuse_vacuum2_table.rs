@@ -23,12 +23,10 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::StringType;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_storages_fuse::FuseTable;
@@ -94,7 +92,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
         LicenseManagerSwitch::instance().check_enterprise_enabled(ctx.get_license_key(), Vacuum)?;
 
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-        let res = match &self.args {
+        match &self.args {
             Vacuum2TableArgs::SingleTable {
                 arg_database_name,
                 arg_table_name,
@@ -111,9 +109,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
             }
             Vacuum2TableArgs::All => self.apply_all_tables(ctx, catalog.as_ref()).await?,
         };
-        Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(res),
-        ])))
+        Ok(None)
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
@@ -161,7 +157,7 @@ impl FuseVacuum2Table {
         database_name: &str,
         table_name: &str,
         respect_flash_back: bool,
-    ) -> Result<Vec<String>> {
+    ) -> Result<()> {
         let tbl = catalog
             .get_table(&ctx.get_tenant(), database_name, table_name)
             .await?;
@@ -181,7 +177,7 @@ impl FuseVacuum2Table {
         &self,
         ctx: &Arc<dyn TableContext>,
         catalog: &dyn Catalog,
-    ) -> Result<Vec<String>> {
+    ) -> Result<()> {
         let tenant_id = ctx.get_tenant();
         let dbs = catalog.list_databases(&tenant_id).await?;
         let num_db = dbs.len();
@@ -242,6 +238,6 @@ impl FuseVacuum2Table {
             }
         }
 
-        Ok(vec![])
+        Ok(())
     }
 }

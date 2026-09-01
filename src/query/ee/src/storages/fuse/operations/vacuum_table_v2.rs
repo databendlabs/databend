@@ -106,7 +106,7 @@ pub async fn do_vacuum2(
     table: &dyn Table,
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
-) -> Result<Vec<String>> {
+) -> Result<()> {
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -114,7 +114,7 @@ pub async fn do_vacuum2(
                 "Transaction is active, skipping vacuum, target table {}",
                 table_info.desc
             );
-            return Ok(vec![]);
+            return Ok(());
         }
     }
 
@@ -127,7 +127,7 @@ pub async fn do_vacuum2(
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
-        return Ok(vec![]);
+        return Ok(());
     };
 
     let start = std::time::Instant::now();
@@ -232,8 +232,6 @@ pub async fn do_vacuum2(
         .await?;
     let inverted_indexes = &table_info.meta.indexes;
 
-    let mut removed_files = Vec::new();
-
     // order is important
     // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
@@ -250,7 +248,7 @@ pub async fn do_vacuum2(
         inverted_indexes,
         start,
     };
-    let block_gc_stats = purge_blocks_before_gc_root(&block_gc_ctx, &mut removed_files).await?;
+    let block_gc_stats = purge_blocks_before_gc_root(&block_gc_ctx).await?;
     ctx.set_status_info(&format!(
         "Filtered and removed blocks for table {}, elapsed: {:?}, blocks scanned: {}, blocks removed: {}, files removed: {}",
         table_info.desc,
@@ -265,12 +263,10 @@ pub async fn do_vacuum2(
     // segment stats should be removed before segments.
     if !stats_to_gc.is_empty() {
         file_remover.remove_file_in_batch(&stats_to_gc).await?;
-        removed_files.extend(stats_to_gc.iter().cloned());
     }
 
     if !segments_to_gc.is_empty() {
         file_remover.remove_file_in_batch(&segments_to_gc).await?;
-        removed_files.extend(segments_to_gc.iter().cloned());
     }
 
     // Evict snapshot caches from the local node.
@@ -288,7 +284,6 @@ pub async fn do_vacuum2(
         }
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
-    removed_files.extend(snapshots_to_gc.iter().cloned());
 
     // Legacy branch/tag refs were removed without compatibility guarantees.
     // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
@@ -298,32 +293,30 @@ pub async fn do_vacuum2(
         .ref_snapshot_location_prefix();
     let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
+    let removed_files = block_gc_stats.removed_files
+        + stats_to_gc.len()
+        + segments_to_gc.len()
+        + snapshots_to_gc.len();
     ctx.set_status_info(&format!(
-        "Removed files for table {}, elapsed: {:?}, removed_files: {:?}",
+        "Removed files for table {}, elapsed: {:?}, files removed: {}",
         table_info.desc,
         start.elapsed(),
-        slice_summary(&removed_files),
+        removed_files,
     ));
 
-    Ok(removed_files)
+    Ok(())
 }
 
-async fn purge_blocks_before_gc_root(
-    block_gc: &BlockGcContext<'_>,
-    removed_files: &mut Vec<String>,
-) -> Result<BlockGcStats> {
+async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
     info!("Listing block files until prefix: {}", block_gc.until);
 
     match block_gc.dal.info().scheme() {
-        Scheme::Fs => purge_blocks_before_gc_root_fs(block_gc, removed_files).await,
-        _ => purge_blocks_before_gc_root_object_store_streaming(block_gc, removed_files).await,
+        Scheme::Fs => purge_blocks_before_gc_root_fs(block_gc).await,
+        _ => purge_blocks_before_gc_root_object_store_streaming(block_gc).await,
     }
 }
 
-async fn purge_blocks_before_gc_root_fs(
-    block_gc: &BlockGcContext<'_>,
-    removed_files: &mut Vec<String>,
-) -> Result<BlockGcStats> {
+async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
     let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
         block_gc.dal,
@@ -352,27 +345,13 @@ async fn purge_blocks_before_gc_root_fs(
         if !block_gc.gc_root_blocks.contains(&block_path) {
             block_chunk.push(block_path);
             if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
-                purge_block_chunk(
-                    &file_remover,
-                    block_gc,
-                    &block_chunk,
-                    removed_files,
-                    &mut stats,
-                )
-                .await?;
+                purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
                 block_chunk.clear();
             }
         }
     }
     if !block_chunk.is_empty() {
-        purge_block_chunk(
-            &file_remover,
-            block_gc,
-            &block_chunk,
-            removed_files,
-            &mut stats,
-        )
-        .await?;
+        purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
     }
 
     Ok(stats)
@@ -380,7 +359,6 @@ async fn purge_blocks_before_gc_root_fs(
 
 async fn purge_blocks_before_gc_root_object_store_streaming(
     block_gc: &BlockGcContext<'_>,
-    removed_files: &mut Vec<String>,
 ) -> Result<BlockGcStats> {
     let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let mut lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
@@ -418,27 +396,13 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
 
         block_chunk.push(path.to_owned());
         if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
-            purge_block_chunk(
-                &file_remover,
-                block_gc,
-                &block_chunk,
-                removed_files,
-                &mut stats,
-            )
-            .await?;
+            purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
             block_chunk.clear();
         }
     }
 
     if !block_chunk.is_empty() {
-        purge_block_chunk(
-            &file_remover,
-            block_gc,
-            &block_chunk,
-            removed_files,
-            &mut stats,
-        )
-        .await?;
+        purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
     }
 
     Ok(stats)
@@ -476,7 +440,6 @@ async fn purge_block_chunk(
     file_remover: &Files,
     block_gc: &BlockGcContext<'_>,
     block_chunk: &[String],
-    removed_files: &mut Vec<String>,
     stats: &mut BlockGcStats,
 ) -> Result<()> {
     if let Err(err) = block_gc.ctx.check_aborting() {
@@ -506,13 +469,11 @@ async fn purge_block_chunk(
     if !indexes_to_gc.is_empty() {
         file_remover.remove_file_in_batch(&indexes_to_gc).await?;
         stats.removed_files += indexes_to_gc.len();
-        removed_files.extend(indexes_to_gc);
     }
 
     file_remover.remove_file_in_batch(block_chunk).await?;
     stats.removed_blocks += block_chunk.len();
     stats.removed_files += block_chunk.len();
-    removed_files.extend(block_chunk.iter().cloned());
 
     block_gc.ctx.set_status_info(&format!(
         "Removed block chunk for table {}, elapsed: {:?}, block chunk: {}, blocks scanned: {}, blocks removed in chunk: {}, total blocks removed: {}",
@@ -713,8 +674,7 @@ mod tests {
             };
             assert_ne!(dal.info().scheme(), Scheme::Fs);
 
-            let mut removed_files = Vec::new();
-            let stats = purge_blocks_before_gc_root(&block_gc, &mut removed_files).await?;
+            let stats = purge_blocks_before_gc_root(&block_gc).await?;
 
             assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS);
             assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
@@ -820,8 +780,7 @@ mod tests {
                 };
                 anyhow::ensure!(dal.info().scheme() == Scheme::S3, "expected an S3 operator");
 
-                let mut removed_files = Vec::new();
-                let stats = purge_blocks_before_gc_root(&block_gc, &mut removed_files).await?;
+                let stats = purge_blocks_before_gc_root(&block_gc).await?;
 
                 anyhow::ensure!(stats.scanned_blocks == CANDIDATE_BLOCKS);
                 anyhow::ensure!(stats.removed_blocks == CANDIDATE_BLOCKS - 1);

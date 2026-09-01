@@ -220,12 +220,21 @@ async fn test_vacuum2_protected_segments_span_multiple_chunks() -> anyhow::Resul
     }
     assert_eq!(live_blocks.len(), SEGMENT_COUNT + 1);
 
-    fixture
-        .execute_command(&format!(
-            "call system$fuse_vacuum2('{}', '{}')",
+    let stream = fixture
+        .execute_query(&format!(
+            "select * from fuse_vacuum2('{}', '{}')",
             db_name, tbl_name
         ))
         .await?;
+    let vacuum_result: Vec<DataBlock> = stream.try_collect().await?;
+    assert_eq!(
+        vacuum_result
+            .iter()
+            .map(|block| block.num_rows())
+            .sum::<usize>(),
+        0,
+        "vacuum2 should not return per-file result rows"
+    );
 
     // The core assertion: every block still referenced by the live snapshot must
     // survive. Dropping any protected-segment chunk during the read would leave
