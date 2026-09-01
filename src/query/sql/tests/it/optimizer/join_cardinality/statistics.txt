@@ -361,14 +361,14 @@ right ddl      : CREATE TABLE r(id INT NOT NULL, c INT NOT NULL)
 right rows     : 100
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
 input stat    : right.id min=1, max=100, ndv=Some(100), null=0
-join          : INNER cardinality=9.500
-stat          : l.id (#0) min=1, max=100, ndv=0.950, null=0.000, histogram=rows=9.500, ndv=9.500, bucket_count=100, buckets=[1..1:0.095/1.000, 2..2:0.095/1.000, 3..3:0.095/1.000, ..., 98..98:0.095/1.000, 99..99:0.095/1.000, 100..100:0.095/1.000]
-stat          : l.k (#1) min=1, max=100, ndv=0.950, null=0.000, histogram=none
-stat          : r.id (#2) min=1, max=100, ndv=0.950, null=0.000, histogram=rows=9.500, ndv=9.500, bucket_count=100, buckets=[1..1:0.095/1.000, 2..2:0.095/1.000, 3..3:0.095/1.000, ..., 98..98:0.095/1.000, 99..99:0.095/1.000, 100..100:0.095/1.000]
-stat          : r.c (#3) min=5, max=5, ndv=0.615 (upper=0.950), null=0.000, histogram=none
+join          : INNER cardinality=97.468
+stat          : l.id (#0) min=1, max=100, ndv=95.000, null=0.000, histogram=rows=97.468, ndv=97.468, bucket_count=100, buckets=[1..1:0.975/1.000, 2..2:0.975/1.000, 3..3:0.975/1.000, ..., 98..98:0.975/1.000, 99..99:0.975/1.000, 100..100:0.975/1.000]
+stat          : l.k (#1) min=1, max=100, ndv=95.000, null=0.000, histogram=none
+stat          : r.id (#2) min=1, max=100, ndv=95.000, null=0.000, histogram=rows=97.468, ndv=97.468, bucket_count=100, buckets=[1..1:0.975/1.000, 2..2:0.975/1.000, 3..3:0.975/1.000, ..., 98..98:0.975/1.000, 99..99:0.975/1.000, 100..100:0.975/1.000]
+stat          : r.c (#3) min=5, max=5, ndv=1.000, null=0.000, histogram=none
 
 === inner_only_modeled_non_equi ===
-description: A Join containing only a cross-side comparison with a singleton operand uses the shared selectivity estimator through the production optimizer path.
+description: A cross-side comparison normalizes both side-local distributions to pair-row mass before applying its selectivity to the Cartesian input.
 sql           : SELECT * FROM l INNER JOIN r ON l.k > r.c
 left ddl      : CREATE TABLE l(k INT NOT NULL)
 left rows     : 100
@@ -376,9 +376,22 @@ input stat    : left.k min=1, max=100, ndv=Some(100), null=0
 right ddl      : CREATE TABLE r(c INT NOT NULL)
 right rows     : 10
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
-join          : INNER cardinality=9.500
-stat          : l.k (#0) min=1, max=100, ndv=0.950, null=0.000, histogram=none
-stat          : r.c (#1) min=5, max=5, ndv=0.091 (upper=0.095), null=0.000, histogram=none
+join          : INNER cardinality=950.000
+stat          : l.k (#0) min=1, max=100, ndv=95.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== inner_domain_true_non_equi ===
+description: Domain folding proves a cross-side predicate true for every pair and bypasses probabilistic residual estimation.
+sql           : SELECT * FROM l INNER JOIN r ON l.k < r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 10
+input stat    : left.k min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 20
+input stat    : right.c min=100, max=200, ndv=Some(20), null=0
+join          : INNER cardinality=200.000
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.c (#1) min=100, max=200, ndv=20.000, null=0.000, histogram=none
 
 === inner_only_unknown_non_equi ===
 description: A Join containing only a comparison between two varying columns uses the conservative unknown-selectivity fallback.
@@ -413,10 +426,10 @@ input stat    : left.k min=1, max=100, ndv=Some(100), null=0
 right ddl      : CREATE TABLE r(c INT NOT NULL)
 right rows     : 10
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
-join          : LEFT OUTER cardinality=131.854
+join          : LEFT OUTER cardinality=950.000
 stat          : l.k (#0) min=1, max=100, ndv=100.000, null=0.000, histogram=none
-stat          : r.c (#1) min=5, max=5, ndv=1.000, null=36.854, histogram=none
-stat          : c (#2) min=5, max=5, ndv=1.000, null=36.854, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+stat          : c (#2) min=5, max=5, ndv=1.000, null=0.000, histogram=none
 
 === right_outer_only_modeled_non_equi ===
 description: With one row on the non-preserved side, a non-equi RIGHT join returns exactly the fifteen preserved matched-or-unmatched rows.
@@ -461,10 +474,10 @@ input stat    : right.id min=1, max=100, ndv=Some(100), null=0
 join          : LEFT OUTER cardinality=100.000
 stat          : l.id (#0) min=1, max=100, ndv=100.000, null=0.000, histogram=none
 stat          : l.k (#1) min=1, max=100, ndv=100.000, null=0.000, histogram=none
-stat          : r.id (#2) min=1, max=100, ndv=9.500, null=90.500, histogram=none
-stat          : r.c (#3) min=5, max=5, ndv=1.000 (upper=1.000), null=90.500, histogram=none
-stat          : id (#4) min=1, max=100, ndv=100.000, null=90.500, histogram=none
-stat          : c (#5) min=5, max=5, ndv=1.000 (upper=1.000), null=90.500, histogram=none
+stat          : r.id (#2) min=1, max=100, ndv=97.468, null=2.532, histogram=none
+stat          : r.c (#3) min=5, max=5, ndv=1.000, null=2.532, histogram=none
+stat          : id (#4) min=1, max=100, ndv=100.000, null=2.532, histogram=none
+stat          : c (#5) min=5, max=5, ndv=1.000, null=2.532, histogram=none
 
 === left_semi_only_modeled_non_equi ===
 description: A non-equi LEFT SEMI join estimates left rows matching at least one right peer instead of preserving the full left input.
@@ -475,8 +488,8 @@ input stat    : left.k min=1, max=100, ndv=Some(100), null=0
 right ddl      : CREATE TABLE r(c INT NOT NULL)
 right rows     : 10
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
-join          : LEFT SEMI cardinality=9.104
-stat          : l.k (#0) min=1, max=100, ndv=0.950, null=0.000, histogram=none
+join          : LEFT SEMI cardinality=100.000
+stat          : l.k (#0) min=1, max=100, ndv=95.000, null=0.000, histogram=none
 stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
 
 === right_semi_only_modeled_non_equi ===
@@ -488,9 +501,9 @@ input stat    : left.k min=1, max=100, ndv=Some(100), null=0
 right ddl      : CREATE TABLE r(c INT NOT NULL)
 right rows     : 10
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
-join          : RIGHT SEMI cardinality=6.150
-stat          : l.k (#0) min=1, max=100, ndv=6.150, null=0.000, histogram=none
-stat          : r.c (#1) min=5, max=5, ndv=0.091 (upper=0.095), null=0.000, histogram=none
+join          : RIGHT SEMI cardinality=10.000
+stat          : l.k (#0) min=1, max=100, ndv=10.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
 
 === left_anti_only_modeled_non_equi ===
 description: A non-equi LEFT ANTI join subtracts modeled left matches while retaining the conservative reserve for uncertain overlap.
@@ -501,8 +514,8 @@ input stat    : left.k min=1, max=100, ndv=Some(100), null=0
 right ddl      : CREATE TABLE r(c INT NOT NULL)
 right rows     : 10
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
-join          : LEFT ANTI cardinality=90.896
-stat          : l.k (#0) min=1, max=100, ndv=90.896, null=0.000, histogram=none
+join          : LEFT ANTI cardinality=10.000
+stat          : l.k (#0) min=1, max=100, ndv=10.000, null=0.000, histogram=none
 stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
 
 === right_anti_only_modeled_non_equi ===
@@ -514,9 +527,9 @@ input stat    : left.k min=1, max=100, ndv=Some(100), null=0
 right ddl      : CREATE TABLE r(c INT NOT NULL)
 right rows     : 10
 input stat    : right.c min=5, max=5, ndv=Some(1), null=0
-join          : RIGHT ANTI cardinality=3.850
-stat          : l.k (#0) min=1, max=100, ndv=3.850, null=0.000, histogram=none
-stat          : r.c (#1) min=5, max=5, ndv=0.992 (upper=1.000), null=0.000, histogram=none
+join          : RIGHT ANTI cardinality=1.000
+stat          : l.k (#0) min=1, max=100, ndv=1.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=0.651 (upper=1.000), null=0.000, histogram=none
 
 === asof_residual_uses_matched_pair_upper_bound ===
 description: ASOF avoids an independent peer-match model and only caps equality-derived side matches by the combined matched-pair estimate.
@@ -529,12 +542,7 @@ right ddl      : CREATE TABLE r(id INT NOT NULL, t INT NOT NULL)
 right rows     : 100
 input stat    : right.id min=1, max=100, ndv=Some(100), null=0
 input stat    : right.t min=100, max=200, ndv=Some(100), null=0
-join          : ASOF cardinality=59.460
-stat          : l.id (#0) min=1, max=100, ndv=59.460, null=0.000, histogram=none
-stat          : l.t (#1) min=1, max=10, ndv=9.999 (upper=10.000), null=0.000, histogram=none
-stat          : r.id (#2) min=1, max=100, ndv=59.460, null=0.000, histogram=none
-stat          : r.t (#3) min=100, max=200, ndv=59.460, null=0.000, histogram=none
-stat          : lead (#4) min=100, max=200, ndv=0.000, null=59.460, histogram=none
+join          : ASOF cardinality=0.000
 
 === inner_unsupported_multicolumn_expression_uses_partial_stats ===
 description: When a two-column arithmetic key has no derived distribution, the direct peer's available statistics still participate in NULL-aware fallback and output propagation.

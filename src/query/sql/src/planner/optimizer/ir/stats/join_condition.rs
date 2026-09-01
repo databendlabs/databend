@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,6 +32,7 @@ use databend_common_statistics::StatBounds;
 use super::ColumnStat;
 use super::Selectivity;
 use super::SelectivityVisitor;
+use crate::Symbol;
 use crate::optimizer::ir::Statistics;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
@@ -139,6 +141,7 @@ impl NonEquiCondition {
         predicate: &ScalarExpr,
         input: &Statistics,
         input_cardinality: StatCardinality,
+        column_row_scales: &HashMap<Symbol, StatCardinality>,
     ) -> Result<Self> {
         let selectivity = SelectivityVisitor::estimate(
             predicate,
@@ -146,6 +149,7 @@ impl NonEquiCondition {
             &input.column_stats,
             &input.top_n,
             &input.count_min_sketch,
+            column_row_scales,
         )?;
         Ok(Self { selectivity })
     }

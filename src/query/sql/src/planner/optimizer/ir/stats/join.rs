@@ -376,9 +376,11 @@ impl JoinStatsEstimator {
         }
 
         if !join.non_equi_conditions.is_empty() {
-            let input = combined_input_statistics(
+            let (input, column_row_scales) = combined_input_statistics(
                 &self.left_input.statistics,
                 &self.right_input.statistics,
+                left_stat_cardinality,
+                right_stat_cardinality,
             );
             let input_cardinality = input
                 .precise_cardinality
@@ -389,8 +391,12 @@ impl JoinStatsEstimator {
                     )
                 });
             for predicate in &join.non_equi_conditions {
-                let evaluated =
-                    NonEquiCondition::estimate_locally(predicate, &input, input_cardinality)?;
+                let evaluated = NonEquiCondition::estimate_locally(
+                    predicate,
+                    &input,
+                    input_cardinality,
+                    &column_row_scales,
+                )?;
                 self.contributions
                     .push(JoinConditionContribution::from_non_equi(&evaluated));
             }
@@ -1166,8 +1172,34 @@ fn estimate_anti_join_cardinality(
     input_cardinality - adjusted_matched_rows
 }
 
-fn combined_input_statistics(left: &Statistics, right: &Statistics) -> Statistics {
-    Statistics {
+fn combined_input_statistics(
+    left: &Statistics,
+    right: &Statistics,
+    left_cardinality: StatCardinality,
+    right_cardinality: StatCardinality,
+) -> (Statistics, HashMap<Symbol, StatCardinality>) {
+    // Residual predicates are evaluated over the L x R pair population. A left-side count occurs
+    // once for every right row and vice versa, so carry the peer cardinality as each column's
+    // row-mass scale. Value domains and NDV remain side-local and do not need replication.
+    let mut column_row_scales = HashMap::new();
+    for column in left
+        .column_stats
+        .keys()
+        .chain(left.top_n.keys())
+        .chain(left.count_min_sketch.keys())
+    {
+        column_row_scales.insert(*column, right_cardinality);
+    }
+    for column in right
+        .column_stats
+        .keys()
+        .chain(right.top_n.keys())
+        .chain(right.count_min_sketch.keys())
+    {
+        column_row_scales.insert(*column, left_cardinality);
+    }
+
+    let statistics = Statistics {
         precise_cardinality: left.precise_cardinality.and_then(|left| {
             right
                 .precise_cardinality
@@ -1191,7 +1223,8 @@ fn combined_input_statistics(left: &Statistics, right: &Statistics) -> Statistic
             .chain(&right.count_min_sketch)
             .map(|(column, sketch)| (*column, sketch.clone()))
             .collect(),
-    }
+    };
+    (statistics, column_row_scales)
 }
 
 fn identity_column(expression: &ScalarExpr) -> Option<Symbol> {

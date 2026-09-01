@@ -586,7 +586,7 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
         },
         SqlJoinStatisticsCase {
             name: "inner_only_modeled_non_equi",
-            description: "A Join containing only a cross-side comparison with a singleton operand uses the shared selectivity estimator through the production optimizer path.",
+            description: "A cross-side comparison normalizes both side-local distributions to pair-row mass before applying its selectivity to the Cartesian input.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k > r.c",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k INT NOT NULL)", 100, [(
@@ -596,6 +596,20 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             right: sql_join_table("CREATE TABLE r(c INT NOT NULL)", 10, [(
                 "c",
                 r#"{"min": 5, "max": 5, "ndv": 1, "null_count": 0}"#,
+            )])?,
+        },
+        SqlJoinStatisticsCase {
+            name: "inner_domain_true_non_equi",
+            description: "Domain folding proves a cross-side predicate true for every pair and bypasses probabilistic residual estimation.",
+            sql: "SELECT * FROM l INNER JOIN r ON l.k < r.c",
+            expected_join_type: JoinType::Inner,
+            left: sql_join_table("CREATE TABLE l(k INT NOT NULL)", 10, [(
+                "k",
+                r#"{"min": 1, "max": 10, "ndv": 10, "null_count": 0}"#,
+            )])?,
+            right: sql_join_table("CREATE TABLE r(c INT NOT NULL)", 20, [(
+                "c",
+                r#"{"min": 100, "max": 200, "ndv": 20, "null_count": 0}"#,
             )])?,
         },
         SqlJoinStatisticsCase {

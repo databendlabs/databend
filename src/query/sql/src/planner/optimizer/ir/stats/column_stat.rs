@@ -18,6 +18,7 @@ use databend_common_expression::Domain;
 use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::BorrowedDistribution;
 use databend_common_expression::stat_distribution::NdvEstimate;
+use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
@@ -558,6 +559,65 @@ impl ColumnStat {
             | ColumnStat::Float { null_count, .. }
             | ColumnStat::Bytes { null_count, .. }
             | ColumnStat::AllNull { null_count } => *null_count = value,
+        }
+    }
+
+    /// Replicate count-valued statistics without changing the value domain or NDV.
+    pub(crate) fn scale_row_mass(&mut self, scale: StatCardinality) {
+        let scale_value = scale.value();
+        if scale_value == 1.0 {
+            return;
+        }
+
+        let null_count = if scale_value == 0.0 {
+            StatCount::exact(0)
+        } else {
+            match (self.null_count(), scale) {
+                (StatCount::Exact(count), StatCardinality::Exact(scale)) => count
+                    .checked_mul(scale)
+                    .map(StatCount::exact)
+                    .unwrap_or_else(|| {
+                        StatCount::estimate(count as f64 * scale as f64, f64::INFINITY)
+                    }),
+                (count, scale) => StatCount::estimate(
+                    count.expected() * scale.value(),
+                    count.upper() * scale.value(),
+                ),
+            }
+        };
+        self.set_null_count(null_count);
+
+        match self {
+            ColumnStat::Int {
+                histogram: Some(histogram),
+                ..
+            } => histogram.scale_counts(scale_value),
+            ColumnStat::UInt {
+                histogram: Some(histogram),
+                ..
+            } => histogram.scale_counts(scale_value),
+            ColumnStat::Float {
+                histogram: Some(histogram),
+                ..
+            } => histogram.scale_counts(scale_value),
+            ColumnStat::Bytes {
+                histogram: Some(histogram),
+                ..
+            } => histogram.scale_counts(scale_value),
+            ColumnStat::Boolean { .. }
+            | ColumnStat::AllNull { .. }
+            | ColumnStat::Int {
+                histogram: None, ..
+            }
+            | ColumnStat::UInt {
+                histogram: None, ..
+            }
+            | ColumnStat::Float {
+                histogram: None, ..
+            }
+            | ColumnStat::Bytes {
+                histogram: None, ..
+            } => {}
         }
     }
 
