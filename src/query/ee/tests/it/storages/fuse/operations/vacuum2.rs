@@ -33,27 +33,69 @@ use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use futures::TryStreamExt;
 
+async fn table_storage_files(
+    ctx: &QueryContext,
+    storage_root: &str,
+    db_name: &str,
+    table_name: &str,
+) -> Result<Vec<std::path::PathBuf>> {
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog.get_table(&tenant, db_name, table_name).await?;
+    let database = catalog.get_database(&tenant, db_name).await?;
+    let table_path = Path::new(storage_root)
+        .join(database.get_db_info().database_id.db_id.to_string())
+        .join(table.get_id().to_string());
+
+    Ok(walkdir::WalkDir::new(table_path)
+        .into_iter()
+        .map(|entry| entry.unwrap())
+        .filter(|entry| entry.file_type().is_file())
+        .map(|entry| entry.into_path())
+        .collect())
+}
+
+async fn assert_only_current_snapshot_files(
+    ctx: &QueryContext,
+    storage_root: &str,
+    db_name: &str,
+    table_name: &str,
+) -> Result<()> {
+    let files = table_storage_files(ctx, storage_root, db_name, table_name).await?;
+
+    // Vacuum keeps the current snapshot and its location hint.
+    assert_eq!(files.len(), 2);
+    assert!(
+        files
+            .iter()
+            .any(|path| path.to_string_lossy().contains("/_ss/"))
+    );
+    assert!(files.iter().any(|path| {
+        path.to_string_lossy()
+            .contains("last_snapshot_location_hint_v2")
+    }));
+    Ok(())
+}
+
 // TODO investigate this
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum2_all() -> anyhow::Result<()> {
+async fn test_vacuum_tables_commands() -> anyhow::Result<()> {
     let ee_setup = EESetup::new();
     let fixture = TestFixture::setup_with_custom(ee_setup).await?;
-    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
     let session = fixture.default_session();
     session.get_settings().set_data_retention_time_in_days(0)?;
 
     let ctx = fixture.new_query_ctx().await?;
-
-    let setup_statements = vec![
-        // create non-system db1, create fuse and non-fuse table in it.
+    let setup_statements = [
+        // Create Fuse and non-Fuse tables in a named database.
         "create database db1",
         "create table db1.t1 (c int) as select 1",
         "insert into db1.t1 values (1)",
         "truncate table db1.t1",
         "create table db1.t2 (c int) engine = memory as select 1",
         "truncate table db1.t2",
-        // create fuse and non-fuse tables in default db
+        // Create Fuse and non-Fuse tables in the default database.
         "create table default.t1 (c int) as select 1",
         "insert into default.t1 values (1)",
         "truncate table default.t1",
@@ -61,70 +103,102 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
         "truncate table default.t2",
     ];
 
-    for stmt in setup_statements {
-        fixture.execute_command(stmt).await?;
+    for statement in setup_statements {
+        fixture.execute_command(statement).await?;
     }
-
-    // vacuum them all
-    let res = fixture.execute_command("call system$fuse_vacuum2()").await;
-
-    // Check that:
-
-    // 1. non-fuse tables should not stop us
-
-    assert!(res.is_ok());
-
-    //  2. fuse table data should be vacuumed
 
     let storage_root = fixture.storage_root();
+    assert!(
+        table_storage_files(&ctx, storage_root, "db1", "t1")
+            .await?
+            .len()
+            > 2
+    );
+    assert!(
+        table_storage_files(&ctx, storage_root, "default", "t1")
+            .await?
+            .len()
+            > 2
+    );
 
-    async fn check_files_left(
-        ctx: &QueryContext,
-        storage_root: &str,
-        db_name: &str,
-        tbl_name: &str,
-    ) -> Result<()> {
-        let tenant = ctx.get_tenant();
-        let table = ctx
-            .get_default_catalog()?
-            .get_table(&tenant, db_name, tbl_name)
-            .await?;
+    // A scoped command vacuums only the selected database and skips non-Fuse tables.
+    fixture.execute_command("vacuum tables from db1").await?;
+    assert_only_current_snapshot_files(&ctx, storage_root, "db1", "t1").await?;
+    assert!(
+        table_storage_files(&ctx, storage_root, "default", "t1")
+            .await?
+            .len()
+            > 2
+    );
 
-        let db = ctx
-            .get_default_catalog()?
-            .get_database(&tenant, db_name)
-            .await?;
+    // The unscoped command processes all non-system databases.
+    fixture.execute_command("vacuum tables").await?;
+    assert_only_current_snapshot_files(&ctx, storage_root, "default", "t1").await?;
 
-        let path = Path::new(storage_root)
-            .join(db.get_db_info().database_id.db_id.to_string())
-            .join(table.get_id().to_string());
+    Ok(())
+}
 
-        let walker = walkdir::WalkDir::new(path).into_iter();
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_all_command() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
 
-        let mut files_left = Vec::new();
-        for entry in walker {
-            let entry = entry.unwrap();
-            if entry.file_type().is_file() {
-                files_left.push(entry);
-            }
-        }
+    let database = "vacuum_all_db";
+    fixture
+        .execute_command(&format!("create database {database}"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "create table {database}.active (c int) as select 1"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {database}.active values (2)"))
+        .await?;
+    fixture
+        .execute_command(&format!("truncate table {database}.active"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "create table {database}.dropped (c int) as select 1"
+        ))
+        .await?;
 
-        // There should be one snapshot file and one snapshot hint file left
-        assert_eq!(files_left.len(), 2);
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let dropped = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, database, "dropped")
+        .await?;
+    let dropped = FuseTable::try_from_table(dropped.as_ref())?;
+    let dropped_operator = dropped.get_operator();
+    let mut dropped_prefix =
+        FuseTable::parse_storage_prefix_from_table_info(dropped.get_table_info())?;
+    dropped_prefix.push('/');
+    assert!(
+        !dropped_operator
+            .list_with(&dropped_prefix)
+            .recursive(true)
+            .await?
+            .is_empty()
+    );
 
-        files_left.sort_by(|a, b| a.file_name().cmp(b.file_name()));
-        // First is the only snapshot left
-        files_left[0].path().to_string_lossy().contains("/_ss/");
-        // Second one is the last snapshot location hint
-        files_left[1]
-            .path()
-            .to_string_lossy()
-            .contains("last_snapshot_location_hint_v2");
-        Ok::<(), ErrorCode>(())
-    }
+    fixture
+        .execute_command(&format!("drop table {database}.dropped"))
+        .await?;
+    fixture.execute_command("vacuum all").await?;
 
-    check_files_left(&ctx, storage_root, "db1", "t1").await?;
-    check_files_left(&ctx, storage_root, "default", "t1").await?;
+    assert_only_current_snapshot_files(&ctx, fixture.storage_root(), database, "active").await?;
+    assert!(
+        dropped_operator
+            .list_with(&dropped_prefix)
+            .recursive(true)
+            .await?
+            .is_empty()
+    );
 
     Ok(())
 }
