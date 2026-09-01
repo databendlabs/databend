@@ -182,18 +182,18 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
 approx = "0.5.1"
-arrow = { version = "58.1.0" }
-arrow-array = { version = "58.1.0" }
-arrow-buffer = { version = "58.1.0" }
-arrow-cast = { version = "58.1.0", features = ["prettyprint"] }
-arrow-csv = { version = "58.1.0" }
-arrow-data = { version = "58.1.0" }
-arrow-flight = { version = "58.1.0", features = ["flight-sql-experimental", "tls-ring"] }
-arrow-ipc = { version = "58.1.0", features = ["lz4", "zstd"] }
-arrow-json = { version = "58.1.0" }
-arrow-ord = { version = "58.1.0" }
-arrow-schema = { version = "58.1.0", features = ["serde"] }
-arrow-select = { version = "58.1.0" }
+arrow = { version = "58.4.0" }
+arrow-array = { version = "58.4.0" }
+arrow-buffer = { version = "58.4.0" }
+arrow-cast = { version = "58.4.0", features = ["prettyprint"] }
+arrow-csv = { version = "58.4.0" }
+arrow-data = { version = "58.4.0" }
+arrow-flight = { version = "58.4.0", features = ["flight-sql-experimental", "tls-ring"] }
+arrow-ipc = { version = "58.4.0", features = ["lz4", "zstd"] }
+arrow-json = { version = "58.4.0" }
+arrow-ord = { version = "58.4.0" }
+arrow-schema = { version = "58.4.0", features = ["serde"] }
+arrow-select = { version = "58.4.0" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
@@ -334,11 +334,11 @@ jaq-std = "3.0.1"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.6"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
-lance-core = "5.1.0-beta.3"
-lance-encoding = { version = "5.1.0-beta.3", features = ["protoc"] }
-lance-file = "5.1.0-beta.3"
-lance-io = { version = "5.1.0-beta.3", default-features = false }
-lance-table = "5.1.0-beta.3"
+lance-core = "6.1.0"
+lance-encoding = { version = "6.1.0", features = ["protoc"] }
+lance-file = "6.1.0"
+lance-io = { version = "6.1.0", default-features = false }
+lance-table = "6.1.0"
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
 lexical-core = "1"
@@ -372,9 +372,9 @@ num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
 object_store = "0.12.4"
-object_store_opendal = { version = "0.54.1" }
+object_store_opendal = { version = "0.55.0" }
 once_cell = "1.15.0"
-opendal = { version = "0.54.1", features = [
+opendal = { version = "0.55.0", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -625,14 +625,14 @@ debug-assertions = true
 overflow-checks = true
 rpath = true
 
-[patch."https://github.com/datafuse-extras/arrow-rs.git"]
-arrow-array = { version = "=58.1.0" }
-arrow-buffer = { version = "=58.1.0" }
-arrow-cast = { version = "=58.1.0" }
-arrow-data = { version = "=58.1.0" }
-arrow-ipc = { version = "=58.1.0" }
-arrow-schema = { version = "=58.1.0" }
-arrow-select = { version = "=58.1.0" }
+[patch."https://github.com/b41sh/arrow-rs.git"]
+arrow-array = { version = "=58.4.0" }
+arrow-buffer = { version = "=58.4.0" }
+arrow-cast = { version = "=58.4.0" }
+arrow-data = { version = "=58.4.0" }
+arrow-ipc = { version = "=58.4.0" }
+arrow-schema = { version = "=58.4.0" }
+arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
 arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
@@ -647,17 +647,11 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.2.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "a16344417d1fec6df4a62d8e77679211e909f86e" }
-lance-arrow = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
-lance-core = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
-lance-encoding = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
-lance-file = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
-lance-io = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
-lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lindera-tantivy = { git = "https://github.com/datafuse-extras/lindera-tantivy", rev = "a40ccd7" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
-parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "bbbe79543" }
+parquet = { git = "https://github.com/b41sh/arrow-rs.git", rev = "a84f0aa7c483a48e3eff2a8a95a34af4c14faa58" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
