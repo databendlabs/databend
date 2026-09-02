@@ -777,16 +777,24 @@ mod tests {
                 limit: None,
                 retain: None,
             })),
-            Plan::VacuumVirtualColumn(Box::new(VacuumVirtualColumnPlan {
-                catalog: "default".to_string(),
-                database: "default".to_string(),
-                table: "t".to_string(),
-            })),
         ];
 
         for plan in plans {
             assert!(plan.schema().fields().is_empty());
             assert!(!plan.has_result_set());
         }
+    }
+
+    #[test]
+    fn virtual_column_vacuum_has_removed_files_result() {
+        let plan = Plan::VacuumVirtualColumn(Box::new(VacuumVirtualColumnPlan {
+            catalog: "default".to_string(),
+            database: "default".to_string(),
+            table: "t".to_string(),
+        }));
+
+        assert_eq!(plan.schema().fields().len(), 1);
+        assert_eq!(plan.schema().field(0).name(), "removed_files");
+        assert!(plan.has_result_set());
     }
 }
