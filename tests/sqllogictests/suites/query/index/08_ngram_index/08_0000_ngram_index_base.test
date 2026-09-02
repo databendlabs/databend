@@ -20,22 +20,22 @@ INSERT INTO t1 VALUES
 query TIII
 select name, index_size, bloom_index_size, ngram_index_size from system.tables where name='t1' and database='test_gram_index';
 ----
-t1 1049435 1049435 1048617
+t1 33621 33621 32809
 
 query III
 select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1')
 ----
-4 1049435 1048617
+4 33621 32809
 
 query IIIII
 select block_count, row_count, index_size, bloom_index_size, ngram_index_size from fuse_segment('test_gram_index', 't1');
 ----
-1 4 1049435 1049435 1048617
+1 4 33621 33621 32809
 
 query IIIII
 select block_count, row_count, index_size, bloom_index_size, ngram_index_size from fuse_snapshot('test_gram_index', 't1');
 ----
-1 4 1049435 1049435 1048617
+1 4 33621 33621 32809
 
 statement ok
 CREATE TABLE t2 (id int, content string, name string)
@@ -52,14 +52,20 @@ CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 511
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 10485761
 
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content) false_positive_rate = 0
+
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content) false_positive_rate = 1
+
 statement ok
-CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576
+CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576 false_positive_rate = 0.02
 
 query TTTT
 select name, type, original, definition from system.indexes where database = 'test_gram_index' AND type = 'NGRAM';
 ----
 idx1 NGRAM (empty) t1(content)bloom_size='1048576' gram_size='5'
-idx2 NGRAM (empty) t2(content)bloom_size='1048576' gram_size='5'
+idx2 NGRAM (empty) t2(content)bloom_size='1048576' false_positive_rate='0.02' gram_size='5'
 
 statement error
 CREATE INVERTED INDEX idx1 ON t1(content)
@@ -82,5 +88,3 @@ use default
 
 statement ok
 drop database test_gram_index
-
-

@@ -46,7 +46,6 @@ use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::debug;
 use log::error;
 use log::warn;
@@ -302,12 +301,6 @@ impl ReclusterTableInterpreter {
                     "Unclustered table '{}.{}'",
                     database, table,
                 )));
-            }
-            if FuseTable::try_from_table(tbl.as_ref())?.cluster_type() == Some(ClusterType::Hilbert)
-            {
-                return Err(ErrorCode::Unimplemented(
-                    "Hilbert reclustering is not supported yet",
-                ));
             }
             self.build_push_downs(push_downs, &tbl)?;
 

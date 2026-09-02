@@ -33,7 +33,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
-use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -46,6 +45,7 @@ use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
@@ -86,6 +86,9 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
 const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = MAX_SEGMENT_LOCATIONS_PER_CLAIM;
+/// Hilbert MBR overlap is conservative, so execution never uses a threshold below 8.
+const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
+/// Maximum block count for applying the Linear small-table depth threshold.
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 /// Candidate tasks plus cached segment metadata for one scanned window.
@@ -219,18 +222,28 @@ impl ReclusterMutator {
             .expect("recluster requires cluster key metadata");
         let block_thresholds = table.get_block_thresholds();
 
-        let depth_threshold = table
+        let configured_depth = table
             .get_table_info()
             .options()
             .get(FUSE_OPT_KEY_RECLUSTER_DEPTH)
-            .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or({
-                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT {
-                    MIN_RECLUSTER_DEPTH
-                } else {
-                    DEFAULT_RECLUSTER_DEPTH
-                }
-            }) as f64;
+            .map(|value| {
+                value.parse::<u64>().map_err(|error| {
+                    ErrorCode::InvalidArgument(format!(
+                        "invalid {FUSE_OPT_KEY_RECLUSTER_DEPTH} value {value}: {error}"
+                    ))
+                })
+            })
+            .transpose()?;
+        let depth_threshold = match (configured_depth, cluster_key_info.cluster_type) {
+            (Some(depth), ClusterType::Hilbert) => depth.max(MIN_HILBERT_RECLUSTER_DEPTH),
+            (Some(depth), ClusterType::Linear) => depth,
+            (None, ClusterType::Linear)
+                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT =>
+            {
+                MIN_RECLUSTER_DEPTH
+            }
+            _ => DEFAULT_RECLUSTER_DEPTH,
+        } as f64;
 
         let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
@@ -244,19 +257,12 @@ impl ReclusterMutator {
                 "recluster requires cluster key expressions",
             ));
         };
-        let cluster_key_exprs =
-            match parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)? {
-                ClusterKeys::Linear(keys) | ClusterKeys::Vector { keys, .. } => keys,
-                ClusterKeys::Hilbert(_) => {
-                    return Err(ErrorCode::Unimplemented(
-                        "Hilbert reclustering is not supported yet",
-                    ));
-                }
-            };
+        let parsed_cluster_keys =
+            parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let (properties, strategy) = ReclusterProperties::try_create(
             table,
             &schema,
-            cluster_key_exprs,
+            parsed_cluster_keys,
             mode,
             depth_threshold,
             block_thresholds,

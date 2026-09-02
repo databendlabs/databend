@@ -6000,9 +6000,12 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 
 pub fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string()).parse(i);
+    let float_to_string =
+        |i| map(rule! { LiteralFloat }, |token| token.text().to_string()).parse(i);
 
     rule!(
         #bool_to_string
+        | #float_to_string
         | #parameter_to_string
     )
     .parse(i)
