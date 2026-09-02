@@ -60,9 +60,9 @@ struct PrefixRouteScore {
 }
 
 #[derive(Default)]
-struct PredicateColumns {
-    equality: HashSet<String>,
-    range: HashSet<String>,
+struct PredicateColumns<'a> {
+    equality: HashSet<&'a str>,
+    range: HashSet<&'a str>,
 }
 
 struct RewriteCandidate {
@@ -318,6 +318,19 @@ fn estimate_compute_cost(s_expr: &SExpr) -> f64 {
 /// Estimate the read cost of a rewritten plan. Cluster-key pruning is applied
 /// at the scan itself; relational operators only adjust the amount of data
 /// flowing through their child scans.
+///
+/// The rewrite cost is modeled as:
+///
+/// ```text
+/// C_rewrite = C_scan + C_compute
+/// C_compute = sum(output_rows of non-scan operators)
+///             + 5 * sum(input_rows of aggregate operators)
+/// C_scan = sum(table_rows * cluster_pruning_factor * filter_selectivity)
+/// filter_selectivity = clamp(output_rows / input_rows, 0, 1)
+/// ```
+///
+/// Unknown cardinalities use `UNKNOWN_CARDINALITY_COST` rather than being
+/// treated as free.
 fn estimate_scan_cost(s_expr: &SExpr, scan_pruning_factor: f64) -> f64 {
     match s_expr.plan() {
         RelOperator::Scan(scan) => scan_cost(scan, scan_pruning_factor),
@@ -364,7 +377,7 @@ fn scan_pruning_factor_for_plan(metadata: &Metadata, plan: &SExpr) -> f64 {
         return 1.0;
     };
     let table = metadata.table(scan.table_index).table();
-    let score = cluster_prefix_score(&cluster_key_columns(table.as_ref()), &predicate_columns);
+    let score = cluster_prefix_score(table.as_ref(), &predicate_columns);
     cluster_pruning_factor(score)
 }
 
@@ -375,13 +388,13 @@ fn find_scan(s_expr: &SExpr) -> Option<&Scan> {
     s_expr.children().find_map(find_scan)
 }
 
-fn predicate_columns_from_plan(s_expr: &SExpr) -> PredicateColumns {
+fn predicate_columns_from_plan<'a>(s_expr: &'a SExpr) -> PredicateColumns<'a> {
     let mut columns = PredicateColumns::default();
     collect_predicate_columns_for_scan(s_expr, &mut columns);
     columns
 }
 
-fn collect_predicate_columns_for_scan(s_expr: &SExpr, columns: &mut PredicateColumns) {
+fn collect_predicate_columns_for_scan<'a>(s_expr: &'a SExpr, columns: &mut PredicateColumns<'a>) {
     match s_expr.plan() {
         RelOperator::Scan(scan) => {
             if let Some(predicates) = &scan.push_down_predicates {
@@ -418,7 +431,10 @@ fn contains_aggregate(s_expr: &SExpr) -> bool {
     matches!(s_expr.plan(), RelOperator::Aggregate(_)) || s_expr.children().any(contains_aggregate)
 }
 
-fn collect_predicate_columns_from_scalar(expr: &ScalarExpr, columns: &mut PredicateColumns) {
+fn collect_predicate_columns_from_scalar<'a>(
+    expr: &'a ScalarExpr,
+    columns: &mut PredicateColumns<'a>,
+) {
     let ScalarExpr::FunctionCall(function) = expr else {
         return;
     };
@@ -435,11 +451,11 @@ fn collect_predicate_columns_from_scalar(expr: &ScalarExpr, columns: &mut Predic
         let column = match (&function.arguments[0], &function.arguments[1]) {
             (ScalarExpr::BoundColumnRef(column), ScalarExpr::ConstantExpr(_))
             | (ScalarExpr::BoundColumnRef(column), ScalarExpr::TypedConstantExpr(_, _)) => {
-                Some(column.column.column_name.clone())
+                Some(column.column.column_name.as_str())
             }
             (ScalarExpr::ConstantExpr(_), ScalarExpr::BoundColumnRef(column))
             | (ScalarExpr::TypedConstantExpr(_, _), ScalarExpr::BoundColumnRef(column)) => {
-                Some(column.column.column_name.clone())
+                Some(column.column.column_name.as_str())
             }
             _ => None,
         };
@@ -461,13 +477,19 @@ fn collect_predicate_columns_from_scalar(expr: &ScalarExpr, columns: &mut Predic
     }
 }
 
-fn cluster_prefix_score<S: AsRef<str>>(
-    cluster_key_columns: &[S],
-    predicate_columns: &PredicateColumns,
+fn cluster_prefix_score(
+    table: &dyn Table,
+    predicate_columns: &PredicateColumns<'_>,
 ) -> PrefixRouteScore {
+    let Some(cluster_keys) = table.resolve_cluster_keys() else {
+        return PrefixRouteScore::default();
+    };
+
     let mut score = PrefixRouteScore::default();
-    for column in cluster_key_columns {
-        let column = column.as_ref();
+    for cluster_key in &cluster_keys {
+        let Some(column) = simple_cluster_key_column(cluster_key) else {
+            return PrefixRouteScore::default();
+        };
         if predicate_columns.equality.contains(column) {
             score.matched_prefix += 1;
             score.equality_prefix += 1;
@@ -481,19 +503,11 @@ fn cluster_prefix_score<S: AsRef<str>>(
     score
 }
 
-fn cluster_key_columns(table: &dyn Table) -> Vec<String> {
-    table
-        .resolve_cluster_keys()
-        .unwrap_or_default()
-        .iter()
-        .map(|expr| match expr {
-            ast::Expr::ColumnRef { column, .. } if column.table.is_none() => {
-                Some(column.column.name().to_string())
-            }
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>()
-        .unwrap_or_default()
+fn simple_cluster_key_column(expr: &ast::Expr) -> Option<&str> {
+    match expr {
+        ast::Expr::ColumnRef { column, .. } if column.table.is_none() => Some(column.column.name()),
+        _ => None,
+    }
 }
 
 fn input_cardinality(s_expr: &SExpr) -> Option<f64> {
