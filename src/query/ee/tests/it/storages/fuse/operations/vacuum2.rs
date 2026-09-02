@@ -176,28 +176,45 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     .await?;
     assert_eq!(snapshots.len(), 3);
 
-    // The history is S3 -> S2 -> S1, newest first. Set LVT to S2.
+    // Start with S3 -> S2 -> S1, then flash back to S2. S3 remains in
+    // storage, but the current committed chain is S2 -> S1.
+    let abandoned_snapshot = &snapshots[0].0;
     let lvt_snapshot = &snapshots[1].0;
     let oldest_snapshot = &snapshots[2].0;
+    fixture
+        .execute_command(&format!(
+            "alter table {db_name}.{tbl_name} flashback to (snapshot => '{}')",
+            lvt_snapshot.snapshot_id.simple()
+        ))
+        .await?;
+
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let table = catalog
+        .get_table(&table_ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    assert_eq!(current_snapshot.snapshot_id, lvt_snapshot.snapshot_id);
+    assert_ne!(current_snapshot.snapshot_id, abandoned_snapshot.snapshot_id);
+
+    // Fix LVT at S2 so the test does not depend on the host clock.
     catalog
         .set_table_lvt(
-            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTimeIdent::new(table_ctx.get_tenant(), fuse_table.get_id()),
             &LeastVisibleTime::new(lvt_snapshot.timestamp.unwrap()),
         )
         .await?;
 
-    let table_ctx: Arc<dyn TableContext> = ctx;
-
-    // Without flashback protection, S2 is only an anchor from object listing.
-    // Vacuum uses its committed predecessor S1 as the GC root.
+    // Without flashback protection, S2 is an anchor from object listing.
+    // Vacuum uses its predecessor S1 as the GC root.
     let selection = fuse_table
         .prepare_snapshot_gc_selection(&table_ctx, false)
         .await?
         .expect("S1 should be selected as the GC root");
     assert_eq!(selection.gc_root.snapshot_id, oldest_snapshot.snapshot_id);
 
-    // With flashback protection, vacuum follows the committed snapshot chain
-    // and selects the first snapshot at or before LVT, which is S2.
+    // With flashback protection, vacuum walks the current committed chain and
+    // selects the first snapshot at or before LVT, which is S2.
     let selection = fuse_table
         .prepare_snapshot_gc_selection(&table_ctx, true)
         .await?
