@@ -26,7 +26,7 @@ USE computed_partition_by
 statement ok
 CREATE TABLE computed_partitioned(
     id INT,
-    p INT AS (id % 2) STORED
+    p SMALLINT AS (id % 2) STORED
 )
 PARTITION BY (p)
 WRITE_DISTRIBUTION_MODE='hash'
