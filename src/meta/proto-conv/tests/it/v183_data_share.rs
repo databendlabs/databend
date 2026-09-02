@@ -37,6 +37,7 @@ fn want() -> DataShareMeta {
         }),
         tables: BTreeMap::from([(101, DataShareTableGrant {
             shared_on: Utc.timestamp_opt(1_754_956_802, 0).unwrap(),
+            storage_params: None,
         })]),
         connection: Some("share_conn".to_string()),
     }
