@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use indexmap::IndexSet;
 use log::debug;
@@ -64,16 +62,13 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             // window-global block index range. `indices` maps each local index
             // back to its `blocks` index.
             let stats = blocks[i].stats();
-            let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
-            if min.len() != properties.scalar_cluster_key_types.len()
-                || max.len() != properties.scalar_cluster_key_types.len()
-            {
+            let Some(view) = stats.try_view(&properties.scalar_cluster_key_types) else {
                 continue;
-            }
+            };
             let point: &mut (Vec<usize>, Vec<usize>) =
-                points_map.entry(ScalarSlice(min)).or_default();
+                points_map.entry(view.min().to_vec()).or_default();
             point.0.push(local_idx);
-            let point = points_map.entry(ScalarSlice(max)).or_default();
+            let point = points_map.entry(view.max().to_vec()).or_default();
             point.1.push(local_idx);
         }
         if points_map.is_empty() {
@@ -370,13 +365,10 @@ pub(crate) fn select_scalar_segments(
         }
 
         total_blocks += compact_segment.summary.block_count as usize;
-        let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
-        if min.len() != properties.scalar_cluster_key_types.len()
-            || max.len() != properties.scalar_cluster_key_types.len()
-        {
+        let Some(view) = stats.try_view(&properties.scalar_cluster_key_types) else {
             continue;
-        }
-        segment_stats.push((i, stats.min, stats.max));
+        };
+        segment_stats.push((i, view.min().to_vec(), view.max().to_vec()));
         segments[i] = Some(SelectedReclusterSegment {
             loc: loc.clone(),
             info: compact_segment.clone(),
@@ -396,10 +388,9 @@ pub(crate) fn select_scalar_segments(
     let mut current_window_max_depth = 0usize;
     let mut segment_points = BTreeMap::new();
     for (i, min, max) in &segment_stats {
-        let point: &mut (Vec<usize>, Vec<usize>) =
-            segment_points.entry(ScalarSlice(min)).or_default();
+        let point: &mut (Vec<usize>, Vec<usize>) = segment_points.entry(min.clone()).or_default();
         point.0.push(*i);
-        let point = segment_points.entry(ScalarSlice(max)).or_default();
+        let point = segment_points.entry(max.clone()).or_default();
         point.1.push(*i);
     }
 
@@ -478,32 +469,6 @@ pub(crate) fn select_scalar_segments(
         .filter(|window| !window.is_empty())
         .collect())
 }
-
-#[derive(Clone, Copy)]
-struct ScalarSlice<'a>(&'a [Scalar]);
-
-impl Ord for ScalarSlice<'_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0
-            .iter()
-            .map(Scalar::as_ref)
-            .cmp(other.0.iter().map(Scalar::as_ref))
-    }
-}
-
-impl PartialOrd for ScalarSlice<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for ScalarSlice<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl Eq for ScalarSlice<'_> {}
 
 fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) -> usize {
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.

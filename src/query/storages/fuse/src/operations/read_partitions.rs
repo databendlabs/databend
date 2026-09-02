@@ -63,7 +63,6 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
@@ -801,7 +800,13 @@ impl FuseTable {
         let window = (max_threads * 8).clamp(64, 1024);
         prune_pipeline.resize(1, false)?;
         prune_pipeline.add_transform(|input, output| {
-            RuntimeTopNSegmentReorder::<M>::create(input, output, filter.clone(), order, window)
+            RuntimeTopNSegmentReorder::<M>::create(
+                input,
+                output,
+                filter.clone(),
+                order.clone(),
+                window,
+            )
         })?;
         prune_pipeline.try_resize(max_threads)
     }
@@ -1296,40 +1301,40 @@ impl FuseTable {
         let limit = Self::limit_without_order_or_filters(&push_downs);
 
         let mut block_metas = block_metas.to_vec();
-        if let Some((top_k, default)) = &top_k {
-            let default_stats = ColumnStatistics {
-                min: default.clone(),
-                max: default.clone(),
-                // These fields will not be used in the following sorting.
-                null_count: 0,
-                in_memory_size: 0,
-                distinct_of_values: None,
-            };
-            if top_k.asc {
-                block_metas.sort_by(|a, b| {
-                    let a =
-                        a.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    let b =
-                        b.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
-                });
-            } else {
-                block_metas.sort_by(|a, b| {
-                    let a =
-                        a.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    let b =
-                        b.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
-                });
-            }
+        if let Some((top_k, _)) = &top_k {
+            let mut ranked = block_metas
+                .into_iter()
+                .map(|meta| {
+                    let bounds = meta
+                        .1
+                        .col_stats
+                        .get(&top_k.field.column_id)
+                        .and_then(|stats| stats.try_view_with_table_type(top_k.field.data_type()))
+                        .map(|view| (view.min().clone(), view.max().clone()));
+                    (meta, bounds)
+                })
+                .collect::<Vec<_>>();
+            ranked.sort_by(|(_, a), (_, b)| {
+                // Unknown bounds are scheduled first for both directions: without usable stats
+                // we cannot prove that a block is less promising than any comparable block.
+                let (a, b) = match (a, b) {
+                    (Some(a), Some(b)) => (a, b),
+                    (Some(_), None) => return std::cmp::Ordering::Less,
+                    (None, Some(_)) => return std::cmp::Ordering::Greater,
+                    (None, None) => return std::cmp::Ordering::Equal,
+                };
+                let (primary, secondary) = if top_k.asc {
+                    (a.0.partial_cmp(&b.0), a.1.partial_cmp(&b.1))
+                } else {
+                    (b.1.partial_cmp(&a.1), b.0.partial_cmp(&a.0))
+                };
+                let ordering = match primary {
+                    Some(std::cmp::Ordering::Equal) => secondary,
+                    ordering => ordering,
+                };
+                ordering.unwrap_or(std::cmp::Ordering::Equal)
+            });
+            block_metas = ranked.into_iter().map(|(meta, _)| meta).collect();
         }
 
         let (mut statistics, mut partitions) = match &push_downs {
@@ -1486,11 +1491,13 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let create_on = meta.create_on;
 
-        let sort_min_max = top_k.as_ref().map(|(top_k, default)| {
+        // Do not manufacture a sentinel range for missing or incompatible statistics. `None`
+        // tells downstream TopK consumers to fail open instead of treating a guess as a bound.
+        let sort_min_max = top_k.as_ref().and_then(|(top_k, _)| {
             meta.col_stats
                 .get(&top_k.field.column_id)
+                .and_then(|stat| stat.try_view_with_table_type(top_k.field.data_type()))
                 .map(|stat| (stat.min().clone(), stat.max().clone()))
-                .unwrap_or((default.clone(), default.clone()))
         });
 
         FuseBlockPartInfo::create(
@@ -1542,10 +1549,12 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let create_on = meta.create_on;
 
-        let sort_min_max = top_k.map(|(top_k, default)| {
+        // Keep unusable statistics unknown; a fabricated default could become an unsafe TopK
+        // bound after a schema change.
+        let sort_min_max = top_k.and_then(|(top_k, _)| {
             let stat = meta.col_stats.get(&top_k.field.column_id);
-            stat.map(|stat| (stat.min().clone(), stat.max().clone()))
-                .unwrap_or((default.clone(), default))
+            stat.and_then(|stat| stat.try_view_with_table_type(top_k.field.data_type()))
+                .map(|stat| (stat.min().clone(), stat.max().clone()))
         });
 
         // TODO
@@ -1568,7 +1577,89 @@ impl FuseTable {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::meta::Compression;
+
     use super::*;
+
+    fn decimal_block_meta(size: DecimalSize) -> BlockMeta {
+        BlockMeta::new(
+            1,
+            1,
+            1,
+            HashMap::from([(
+                7,
+                ColumnStatistics::new(
+                    Scalar::Decimal(DecimalScalar::Decimal64(100, size)),
+                    Scalar::Decimal(DecimalScalar::Decimal64(900, size)),
+                    0,
+                    8,
+                    None,
+                ),
+            )]),
+            HashMap::new(),
+            None,
+            ("block.parquet".to_string(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Zstd,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_partition_top_k_decimal_stats_align_and_fail_open() -> Result<()> {
+        let old_size = DecimalSize::new(10, 2)?;
+        let current_size = DecimalSize::new(15, 2)?;
+        let field =
+            TableField::new_from_column_id("d", TableDataType::Decimal(current_size.into()), 7);
+        let top_k = TopK {
+            limit: 1,
+            field,
+            asc: true,
+            leaf_id: 0,
+        };
+
+        let compatible = FuseTable::all_columns_part(
+            None,
+            &None,
+            &Some((top_k.clone(), Scalar::Null)),
+            &decimal_block_meta(old_size),
+        );
+        let compatible = FuseBlockPartInfo::from_part(&compatible)?;
+        assert_eq!(
+            compatible.sort_min_max,
+            Some((
+                Scalar::Decimal(DecimalScalar::Decimal64(100, current_size)),
+                Scalar::Decimal(DecimalScalar::Decimal64(900, current_size)),
+            ))
+        );
+
+        let incompatible = FuseTable::all_columns_part(
+            None,
+            &None,
+            &Some((top_k, Scalar::Null)),
+            &decimal_block_meta(DecimalSize::new(10, 3)?),
+        );
+        assert!(
+            FuseBlockPartInfo::from_part(&incompatible)?
+                .sort_min_max
+                .is_none()
+        );
+        Ok(())
+    }
 
     fn segment_location(segment_idx: usize, location: &str, snapshot_loc: &str) -> SegmentLocation {
         SegmentLocation {

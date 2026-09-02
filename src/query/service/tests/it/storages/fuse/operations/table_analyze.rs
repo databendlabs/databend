@@ -20,6 +20,8 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_storage::MetaHLL12;
@@ -130,8 +132,11 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
     let after_update = fuse_table.read_table_snapshot().await?.unwrap();
     let base_summary = after_update.summary.clone();
     let id_stats = base_summary.col_stats.get(&0).unwrap();
-    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
-    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(0)));
+    let id_view = id_stats
+        .try_view(&DataType::Number(NumberDataType::Int32))
+        .unwrap();
+    assert_eq!(id_view.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_view.min(), &Scalar::Number(NumberScalar::Int32(0)));
     assert!(base_summary.additional_stats_meta.is_some());
     assert_eq!(base_summary.additional_stats_meta.unwrap().row_count, 4);
 
@@ -166,8 +171,11 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
     let after_analyze = fuse_table.read_table_snapshot().await?.unwrap();
     let last_summary = after_analyze.summary.clone();
     let id_stats = last_summary.col_stats.get(&0).unwrap();
-    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
-    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    let id_view = id_stats
+        .try_view(&DataType::Number(NumberDataType::Int32))
+        .unwrap();
+    assert_eq!(id_view.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_view.min(), &Scalar::Number(NumberScalar::Int32(1)));
     assert!(last_summary.additional_stats_meta.is_some());
     assert_eq!(
         last_summary

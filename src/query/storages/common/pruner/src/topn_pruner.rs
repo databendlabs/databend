@@ -24,7 +24,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatisticsView;
 
 use crate::BlockMetaIndex;
 
@@ -121,26 +121,28 @@ impl TopNPruner {
             return Ok(metas);
         };
 
+        let sort_data_type = self
+            .schema
+            .field_with_name(column)?
+            .data_type()
+            .remove_nullable();
         // String Type min/max is truncated
-        if matches!(
-            self.schema.field_with_name(column)?.data_type(),
-            TableDataType::String
-        ) {
+        if matches!(&sort_data_type, TableDataType::String) {
             return Ok(metas);
         }
-
-        let mut id_stats = metas
-            .iter()
-            .map(|(id, meta)| {
-                let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
-                    ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {}",
-                        sort_column_id
-                    ))
-                })?;
-                Ok((id.clone(), stat.clone(), meta.clone()))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut id_stats = Vec::with_capacity(metas.len());
+        for (id, meta) in &metas {
+            let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
+                ErrorCode::UnknownException(format!(
+                    "Unable to get the colStats by ColumnId: {}",
+                    sort_column_id
+                ))
+            })?;
+            let Some(stat) = stat.try_view_with_table_type(&sort_data_type) else {
+                return Ok(metas);
+            };
+            id_stats.push((id.clone(), stat.into_owned(), meta.clone()));
+        }
 
         if self.filter_only_use_index {
             // For descending order, we determine a lower bound for the Nth largest value.
@@ -343,13 +345,13 @@ fn compare_scalar_for_sorting(
 }
 
 fn compare_block_stats(
-    left: &ColumnStatistics,
-    right: &ColumnStatistics,
+    left: &ColumnStatisticsView<'_>,
+    right: &ColumnStatisticsView<'_>,
     asc: bool,
     nulls_first: bool,
 ) -> Ordering {
-    if nulls_first && (left.null_count + right.null_count != 0) {
-        return left.null_count.cmp(&right.null_count).reverse();
+    if nulls_first && (left.null_count() + right.null_count() != 0) {
+        return left.null_count().cmp(&right.null_count()).reverse();
     }
 
     let (left_scalar, right_scalar) = if asc {
@@ -362,7 +364,7 @@ fn compare_block_stats(
 }
 
 fn truncate_blocks_after_limit(
-    stats: &[(BlockMetaIndex, ColumnStatistics, Arc<BlockMeta>)],
+    stats: &[(BlockMetaIndex, ColumnStatisticsView<'_>, Arc<BlockMeta>)],
     asc: bool,
     nulls_first: bool,
     limit: usize,
@@ -392,8 +394,8 @@ fn truncate_blocks_after_limit(
 }
 
 fn ranges_do_not_overlap(
-    current: &ColumnStatistics,
-    next: &ColumnStatistics,
+    current: &ColumnStatisticsView<'_>,
+    next: &ColumnStatisticsView<'_>,
     asc: bool,
     nulls_first: bool,
 ) -> bool {
@@ -417,6 +419,8 @@ mod tests {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::number::NumberDataType;
     use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -563,7 +567,12 @@ mod tests {
             .map(|(idx, meta)| {
                 (
                     idx.clone(),
-                    meta.col_stats.get(&column_id).unwrap().clone(),
+                    meta.col_stats
+                        .get(&column_id)
+                        .unwrap()
+                        .try_view(&DataType::Number(NumberDataType::Int64))
+                        .unwrap()
+                        .into_owned(),
                     meta.clone(),
                 )
             })
@@ -640,6 +649,62 @@ mod tests {
         );
         let result = pruner.prune(metas).unwrap();
         assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_prune_topn_uses_schema_aligned_decimal_statistics() {
+        let old_size = DecimalSize::new(10, 2).unwrap();
+        let new_size = DecimalSize::new(15, 2).unwrap();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Decimal(new_size.into()),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Decimal(new_size),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+        let decimal_stats = |min, max, size| {
+            ColumnStatistics::new(
+                Scalar::Decimal(DecimalScalar::Decimal64(min, size)),
+                Scalar::Decimal(DecimalScalar::Decimal64(max, size)),
+                0,
+                0,
+                None,
+            )
+        };
+        let metas = vec![
+            build_block_with_stats(column_id, 1, decimal_stats(700, 800, new_size), 5),
+            build_block_with_stats(column_id, 0, decimal_stats(100, 200, old_size), 5),
+        ];
+
+        let pruner = TopNPruner::create(schema, vec![(sort_expr, true, false)], 1, false);
+        let result = pruner.prune(metas).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0.block_id, 0);
+
+        let incompatible_size = DecimalSize::new(10, 3).unwrap();
+        let incompatible = vec![
+            build_block_with_stats(column_id, 0, decimal_stats(100, 200, incompatible_size), 5),
+            build_block_with_stats(column_id, 1, decimal_stats(700, 800, new_size), 5),
+        ];
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Decimal(new_size.into()),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Decimal(new_size),
+            display_name: "c".to_string(),
+        };
+        let result = TopNPruner::create(schema, vec![(sort_expr, true, false)], 1, false)
+            .prune(incompatible)
+            .unwrap();
+        assert_eq!(result.len(), 2);
     }
 
     fn build_block(

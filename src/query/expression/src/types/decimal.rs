@@ -426,6 +426,12 @@ impl DecimalScalar {
         })
     }
 
+    pub fn data_kind(&self) -> DecimalDataKind {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(_, _) => DecimalDataKind::DECIMAL,
+        })
+    }
+
     pub fn scale(&self) -> u8 {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(_, size) => size.scale,

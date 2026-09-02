@@ -254,11 +254,16 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
     }
     match data_type {
         DataType::Nullable(box inner_ty) => {
-            if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
-                return Domain::Nullable(NullableDomain {
-                    has_null: true,
-                    value: None,
-                });
+            if stats.len() == 1 {
+                let Some(view) = stats[0].try_view(data_type) else {
+                    return Domain::full(data_type);
+                };
+                if view.min().is_null() || view.max().is_null() {
+                    return Domain::Nullable(NullableDomain {
+                        has_null: true,
+                        value: None,
+                    });
+                }
             }
             let has_null = if stats.len() == 1 && !matches!(inner_ty, &DataType::Array(_)) {
                 stats[0].null_count > 0
@@ -299,8 +304,11 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
         DataType::Vector(_) => Domain::full(data_type),
         _ => {
             let stat = stats[0];
-            let min = stat.min();
-            let max = stat.max();
+            let Some(view) = stat.try_view(data_type) else {
+                return Domain::full(data_type);
+            };
+            let min = view.min();
+            let max = view.max();
 
             with_number_mapped_type!(|NUM_TYPE| match data_type {
                 DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -322,10 +330,8 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     max: DateType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
                 DataType::Decimal(size) => {
-                    debug_assert_eq!(*size, min.as_decimal().unwrap().size());
-                    debug_assert_eq!(*size, max.as_decimal().unwrap().size());
-
-                    let domain = match min.as_decimal().unwrap() {
+                    let min_decimal = min.as_decimal().unwrap();
+                    let domain = match min_decimal {
                         DecimalScalar::Decimal64(_, _) => {
                             let domain = SimpleDomain {
                                 min: Decimal64Type::try_downcast_scalar(&min.as_ref()).unwrap(),

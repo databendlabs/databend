@@ -28,6 +28,7 @@ use std::sync::atomic::Ordering;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use parking_lot::RwLock;
 use tokio::sync::watch;
@@ -39,9 +40,10 @@ use crate::sbbf::Sbbf;
 pub type RuntimeBloomFilter = Arc<Sbbf>;
 pub type RuntimeScanFilterFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeScanOrder {
     pub column_id: ColumnId,
+    pub data_type: DataType,
     pub asc: bool,
     pub nulls_first: bool,
 }
@@ -49,11 +51,14 @@ pub struct RuntimeScanOrder {
 impl RuntimeScanOrder {
     /// Rank column statistics for scheduling: parts more likely to hold top
     /// rows under this order rank first.
-    pub fn rank<'a>(
+    pub fn rank(
         &self,
-        stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
-    ) -> RuntimeTopNRank<&'a Scalar> {
+        stats: Option<&HashMap<ColumnId, ColumnStatistics>>,
+    ) -> RuntimeTopNRank<Scalar> {
         let Some(stat) = stats.and_then(|stats| stats.get(&self.column_id)) else {
+            return RuntimeTopNRank::Unknown;
+        };
+        let Some(view) = stat.try_view(&self.data_type) else {
             return RuntimeTopNRank::Unknown;
         };
         // Under NULLS FIRST null rows sort before every value: parts holding
@@ -61,11 +66,11 @@ impl RuntimeScanOrder {
         if self.nulls_first && stat.null_count > 0 {
             return RuntimeTopNRank::Best;
         }
-        let key = if self.asc { stat.min() } else { stat.max() };
+        let key = if self.asc { view.min() } else { view.max() };
         if matches!(key, Scalar::Null) {
             return RuntimeTopNRank::Unknown;
         }
-        RuntimeTopNRank::Value(key)
+        RuntimeTopNRank::Value(key.clone())
     }
 
     /// Compare two scheduling ranks under this order: better-ranked parts
@@ -101,16 +106,6 @@ pub enum RuntimeTopNRank<S> {
     Best,
     Value(S),
     Unknown,
-}
-
-impl RuntimeTopNRank<&Scalar> {
-    pub fn cloned(self) -> RuntimeTopNRank<Scalar> {
-        match self {
-            RuntimeTopNRank::Best => RuntimeTopNRank::Best,
-            RuntimeTopNRank::Value(value) => RuntimeTopNRank::Value(value.clone()),
-            RuntimeTopNRank::Unknown => RuntimeTopNRank::Unknown,
-        }
-    }
 }
 
 pub trait RuntimeScanFilter: Send + Sync {
@@ -209,6 +204,7 @@ impl RuntimeFilterNotify {
 /// their local boundary tightens, so contention is negligible.
 pub struct RuntimeTopNFilter {
     column_id: u32,
+    data_type: DataType,
     asc: bool,
     nulls_first: bool,
     boundary: RwLock<Option<Scalar>>,
@@ -216,9 +212,10 @@ pub struct RuntimeTopNFilter {
 }
 
 impl RuntimeTopNFilter {
-    pub fn new(column_id: u32, asc: bool, nulls_first: bool) -> Self {
+    pub fn new(column_id: u32, data_type: DataType, asc: bool, nulls_first: bool) -> Self {
         Self {
             column_id,
+            data_type,
             asc,
             nulls_first,
             boundary: RwLock::new(None),
@@ -305,8 +302,11 @@ impl RuntimeScanFilter for RuntimeTopNFilter {
         let Some(stat) = stats.get(&self.column_id) else {
             return false;
         };
+        let Some(view) = stat.try_view(&self.data_type) else {
+            return false;
+        };
 
-        self.boundary_excludes(stat.min(), stat.max(), stat.null_count)
+        self.boundary_excludes(view.min(), view.max(), view.null_count())
     }
 
     fn recheck_notified(&self) -> RuntimeScanFilterFuture {
@@ -316,6 +316,7 @@ impl RuntimeScanFilter for RuntimeTopNFilter {
     fn preferred_order(&self) -> Option<RuntimeScanOrder> {
         Some(RuntimeScanOrder {
             column_id: self.column_id,
+            data_type: self.data_type.clone(),
             asc: self.asc,
             nulls_first: self.nulls_first,
         })
@@ -529,9 +530,20 @@ mod tests {
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Expr;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use tokio::time::Duration;
+
+    fn int64_filter(column_id: u32, asc: bool, nulls_first: bool) -> RuntimeTopNFilter {
+        RuntimeTopNFilter::new(
+            column_id,
+            DataType::Number(NumberDataType::Int64),
+            asc,
+            nulls_first,
+        )
+    }
     use tokio::time::timeout;
 
     use super::*;
@@ -540,9 +552,43 @@ mod tests {
         Scalar::Number(NumberScalar::Int64(value))
     }
 
+    fn decimal64(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    #[test]
+    fn runtime_top_n_filter_aligns_decimal_stats_and_fails_open() {
+        let current_size = DecimalSize::new(15, 2).unwrap();
+        let filter = RuntimeTopNFilter::new(7, DataType::Decimal(current_size), true, false);
+        filter.update(&decimal64(500, 15, 2));
+
+        let widened = HashMap::from([(
+            7,
+            ColumnStatistics::new(decimal64(600, 10, 2), decimal64(900, 10, 2), 0, 0, None),
+        )]);
+        assert!(filter.should_prune(Some(&widened)));
+        assert!(matches!(
+            filter.preferred_order().unwrap().rank(Some(&widened)),
+            RuntimeTopNRank::Value(value) if value == decimal64(600, 15, 2)
+        ));
+
+        let incompatible = HashMap::from([(
+            7,
+            ColumnStatistics::new(decimal64(600, 10, 3), decimal64(900, 10, 3), 0, 0, None),
+        )]);
+        assert!(!filter.should_prune(Some(&incompatible)));
+        assert!(matches!(
+            filter.preferred_order().unwrap().rank(Some(&incompatible)),
+            RuntimeTopNRank::Unknown
+        ));
+    }
+
     #[test]
     fn runtime_top_n_filter_is_monotonic_and_tie_safe() {
-        let asc = RuntimeTopNFilter::new(7, true, false);
+        let asc = int64_filter(7, true, false);
         assert!(!asc.boundary_excludes(&int64(11), &int64(20), 0));
 
         asc.update(&int64(10));
@@ -556,7 +602,7 @@ mod tests {
         asc.update(&int64(8));
         assert_eq!(asc.boundary(), Some(int64(8)));
 
-        let desc = RuntimeTopNFilter::new(7, false, false);
+        let desc = int64_filter(7, false, false);
         desc.update(&int64(10));
         assert!(desc.boundary_excludes(&int64(1), &int64(9), 0));
         assert!(!desc.boundary_excludes(&int64(1), &int64(10), 0));
@@ -571,7 +617,7 @@ mod tests {
 
     #[test]
     fn runtime_top_n_filter_ranks_nulls_by_ordering() {
-        let nulls_last = RuntimeTopNFilter::new(1, true, false);
+        let nulls_last = int64_filter(1, true, false);
         nulls_last.update(&int64(10));
         // Nulls sort after the boundary, so null rows are prunable too.
         assert!(nulls_last.boundary_excludes(&int64(11), &int64(20), 5));
@@ -579,7 +625,7 @@ mod tests {
         assert!(nulls_last.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
         assert!(!nulls_last.boundary_excludes(&int64(9), &int64(20), 5));
 
-        let nulls_first = RuntimeTopNFilter::new(1, true, true);
+        let nulls_first = int64_filter(1, true, true);
         nulls_first.update(&int64(10));
         // Null rows are always candidates under NULLS FIRST.
         assert!(!nulls_first.boundary_excludes(&int64(11), &int64(20), 1));
@@ -589,7 +635,7 @@ mod tests {
 
     #[test]
     fn runtime_top_n_filter_concurrent_updates_keep_tightest() {
-        let filter = Arc::new(RuntimeTopNFilter::new(1, true, false));
+        let filter = Arc::new(int64_filter(1, true, false));
         let threads: Vec<_> = (0..4)
             .map(|t| {
                 let filter = filter.clone();
@@ -615,7 +661,7 @@ mod tests {
 
     #[tokio::test]
     async fn runtime_scan_filter_notifications_are_repeatable() {
-        let filter = RuntimeTopNFilter::new(1, true, false);
+        let filter = int64_filter(1, true, false);
 
         let first = filter.recheck_notified();
         filter.update(&int64(10));
@@ -648,7 +694,7 @@ mod tests {
 
     #[test]
     fn runtime_scan_filters_combine_filters() {
-        let top_n = Arc::new(RuntimeTopNFilter::new(1, true, false));
+        let top_n = Arc::new(int64_filter(1, true, false));
         top_n.update(&int64(10));
         let limit = Arc::new(RuntimeLimitFilter::new());
 
@@ -677,7 +723,7 @@ mod tests {
 
     #[test]
     fn runtime_scan_filters_prune_by_column_stats() {
-        let asc_filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        let asc_filter = Arc::new(int64_filter(3, true, false));
         asc_filter.update(&int64(10));
         let mut asc = RuntimeScanFilters::default();
         asc.push(asc_filter);
@@ -694,13 +740,13 @@ mod tests {
         assert!(!asc.should_prune(None));
 
         // Under NULLS FIRST null rows are always candidates.
-        let nulls_first_filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
+        let nulls_first_filter = Arc::new(int64_filter(3, true, true));
         nulls_first_filter.update(&int64(10));
         let mut nulls_first = RuntimeScanFilters::default();
         nulls_first.push(nulls_first_filter);
         assert!(!nulls_first.should_prune(Some(&columns)));
 
-        let desc_filter = Arc::new(RuntimeTopNFilter::new(3, false, false));
+        let desc_filter = Arc::new(int64_filter(3, false, false));
         desc_filter.update(&int64(10));
         let mut desc = RuntimeScanFilters::default();
         desc.push(desc_filter);

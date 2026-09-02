@@ -315,7 +315,6 @@ impl Table for ParquetTable {
             .take(sample_meta_count)
             .collect::<Vec<_>>();
 
-        let num_columns = self.leaf_fields.len();
         let now = Instant::now();
         log::info!("begin read {} parquet file metas", file_locations.len());
         let metas = read_metas_in_parallel(
@@ -334,7 +333,7 @@ impl Table for ParquetTable {
             file_locations.len(),
             elapsed
         );
-        let provider = create_stats_provider(&metas, total_files, num_columns);
+        let provider = create_stats_provider(&metas, total_files, &self.leaf_fields);
         Ok(Box::new(provider))
     }
 

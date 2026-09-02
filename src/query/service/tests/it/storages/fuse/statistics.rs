@@ -73,6 +73,17 @@ use databend_storages_common_table_meta::table::ClusterType;
 use opendal::Operator;
 use rand::Rng;
 
+fn assert_column_stats_bounds(
+    stats: &ColumnStatistics,
+    data_type: &TableDataType,
+    min: &Scalar,
+    max: &Scalar,
+) {
+    let view = stats.try_view_with_table_type(data_type).unwrap();
+    assert_eq!(view.min(), min);
+    assert_eq!(view.max(), max);
+}
+
 #[test]
 fn test_ft_stats_block_stats() -> anyhow::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
@@ -87,12 +98,20 @@ fn test_ft_stats_block_stats() -> anyhow::Result<()> {
     let r = gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
-    assert_eq!(col_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_column_stats_bounds(
+        col_stats,
+        schema.field(0).data_type(),
+        &Scalar::Number(NumberScalar::Int32(1)),
+        &Scalar::Number(NumberScalar::Int32(3)),
+    );
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min(), &Scalar::String("aa".to_string()));
-    assert_eq!(col_stats.max(), &Scalar::String("bb".to_string()));
+    assert_column_stats_bounds(
+        col_stats,
+        schema.field(1).data_type(),
+        &Scalar::String("aa".to_string()),
+        &Scalar::String("bb".to_string()),
+    );
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
@@ -120,12 +139,20 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> anyhow::Result<()> 
     )?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
-    assert_eq!(col_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_column_stats_bounds(
+        col_stats,
+        schema.field(0).data_type(),
+        &Scalar::Number(NumberScalar::Int32(1)),
+        &Scalar::Number(NumberScalar::Int32(3)),
+    );
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min(), &Scalar::String("aa".to_string()));
-    assert_eq!(col_stats.max(), &Scalar::String("bb".to_string()));
+    assert_column_stats_bounds(
+        col_stats,
+        schema.field(1).data_type(),
+        &Scalar::String("aa".to_string()),
+        &Scalar::String("bb".to_string()),
+    );
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
@@ -154,12 +181,20 @@ fn test_ft_tuple_stats_block_stats() -> anyhow::Result<()> {
     let r = gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(col0_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
-    assert_eq!(col0_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_column_stats_bounds(
+        col0_stats,
+        &TableDataType::Number(NumberDataType::Int32),
+        &Scalar::Number(NumberScalar::Int32(1)),
+        &Scalar::Number(NumberScalar::Int32(3)),
+    );
 
     let col1_stats = r.get(&1).unwrap();
-    assert_eq!(col1_stats.min(), &Scalar::Number(NumberScalar::Int32(4)));
-    assert_eq!(col1_stats.max(), &Scalar::Number(NumberScalar::Int32(6)));
+    assert_column_stats_bounds(
+        col1_stats,
+        &TableDataType::Number(NumberDataType::Int32),
+        &Scalar::Number(NumberScalar::Int32(4)),
+        &Scalar::Number(NumberScalar::Int32(6)),
+    );
     Ok(())
 }
 
@@ -186,33 +221,26 @@ fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
     let r = reducers::reduce_block_statistics(&col_stats);
     assert_eq!(3, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(
-        col0_stats.min(),
-        &Scalar::Number(NumberScalar::Int32(val_start_with))
-    );
-    assert_eq!(
-        col0_stats.max(),
-        &Scalar::Number(NumberScalar::Int32(num_of_blocks as i32))
+    assert_column_stats_bounds(
+        col0_stats,
+        schema.field_of_column_id(0)?.data_type(),
+        &Scalar::Number(NumberScalar::Int32(val_start_with)),
+        &Scalar::Number(NumberScalar::Int32(num_of_blocks as i32)),
     );
 
     let col1_stats = r.get(&1).unwrap();
-    assert_eq!(
-        col1_stats.min(),
-        &Scalar::Number(NumberScalar::Int32(val_start_with * 2))
-    );
-
-    assert_eq!(
-        col1_stats.max(),
-        &Scalar::Number(NumberScalar::Int32((num_of_blocks * 2) as i32))
+    assert_column_stats_bounds(
+        col1_stats,
+        schema.field_of_column_id(1)?.data_type(),
+        &Scalar::Number(NumberScalar::Int32(val_start_with * 2)),
+        &Scalar::Number(NumberScalar::Int32((num_of_blocks * 2) as i32)),
     );
     let col2_stats = r.get(&2).unwrap();
-    assert_eq!(
-        col2_stats.min(),
-        &Scalar::Number(NumberScalar::Int32(val_start_with * 3))
-    );
-    assert_eq!(
-        col2_stats.max(),
-        &Scalar::Number(NumberScalar::Int32((num_of_blocks * 3) as i32))
+    assert_column_stats_bounds(
+        col2_stats,
+        schema.field_of_column_id(2)?.data_type(),
+        &Scalar::Number(NumberScalar::Int32(val_start_with * 3)),
+        &Scalar::Number(NumberScalar::Int32((num_of_blocks * 3) as i32)),
     );
     Ok(())
 }
@@ -620,14 +648,14 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
 
     let state = stats_gen.gen_with_origin_stats(blocks, origin)?;
     let stats = state.cluster_stats.unwrap();
-    assert_eq!(stats.min().as_slice(), &[
-        Scalar::from(1i32),
-        Scalar::from(1i32)
-    ]);
-    assert_eq!(stats.max().as_slice(), &[
-        Scalar::from(4i32),
-        Scalar::from(100i32)
-    ]);
+    let view = stats
+        .try_view(&[
+            DataType::Number(NumberDataType::Int32),
+            DataType::Number(NumberDataType::Int32),
+        ])
+        .unwrap();
+    assert_eq!(view.min(), &[Scalar::from(1i32), Scalar::from(1i32)]);
+    assert_eq!(view.max(), &[Scalar::from(4i32), Scalar::from(100i32)]);
     assert_eq!(
         state.column_min_max[&10],
         (Some(Scalar::from(1i32)), Some(Scalar::from(4i32)))
@@ -703,8 +731,11 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
     );
     let state = stats_gen.gen_with_origin_stats(blocks.clone(), origin.clone())?;
     let stats = state.cluster_stats.unwrap();
-    assert_eq!(stats.min().as_slice(), &[Scalar::from(1i32)]);
-    assert_eq!(stats.max().as_slice(), &[Scalar::from(3i32)]);
+    let view = stats
+        .try_view(&[DataType::Number(NumberDataType::Int32)])
+        .unwrap();
+    assert_eq!(view.min(), &[Scalar::from(1i32)]);
+    assert_eq!(view.max(), &[Scalar::from(3i32)]);
 
     // add expression executor.
     let expr = RawExpr::FunctionCall {
@@ -747,8 +778,11 @@ async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
     );
     let state = stats_gen.gen_with_origin_stats(blocks.clone(), origin.clone())?;
     let stats = state.cluster_stats.unwrap();
-    assert_eq!(stats.min().as_slice(), &[Scalar::from(2i64)]);
-    assert_eq!(stats.max().as_slice(), &[Scalar::from(4i64)]);
+    let view = stats
+        .try_view(&[DataType::Number(NumberDataType::Int64)])
+        .unwrap();
+    assert_eq!(view.min(), &[Scalar::from(2i64)]);
+    assert_eq!(view.max(), &[Scalar::from(4i64)]);
 
     // different cluster_key_id.
     let stats_gen = ClusterStatsGenerator::new(
@@ -889,17 +923,18 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> anyhow::Res
             // Finally:
             // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
             let col_stats = stats_of_columns.get(&0).unwrap();
+            let view = col_stats.try_view(&DataType::String).unwrap();
             assert!(
-                col_stats.max().clone() >= max_expr.to_owned(),
+                view.max().clone() >= max_expr.to_owned(),
                 "left [{}]\nright [{}]",
-                col_stats.max().clone(),
+                view.max().clone(),
                 max_expr
             );
             // check that, trimmed "col_stats.min always less than or equal to the untrimmed "mn_expr"
             assert!(
-                col_stats.min().clone() <= min_expr.to_owned(),
+                view.min().clone() <= min_expr.to_owned(),
                 "left [{}]\nright [{}]",
-                col_stats.min().clone(),
+                view.min().clone(),
                 min_expr
             );
         }

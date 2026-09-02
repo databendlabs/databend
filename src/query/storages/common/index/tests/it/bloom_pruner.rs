@@ -172,13 +172,7 @@ fn test_bloom_filter_rewrites_string_literal_integer_comparison() {
             let field = bloom_columns.get(&i)?;
             let column = entry.as_column().unwrap();
             let (min, max) = column.domain().to_minmax();
-            Some((field.column_id, ColumnStatistics {
-                min,
-                max,
-                null_count: 0,
-                in_memory_size: 0,
-                distinct_of_values: None,
-            }))
+            Some((field.column_id, ColumnStatistics::new(min, max, 0, 0, None)))
         })
         .collect();
 
@@ -751,13 +745,10 @@ fn eval_index_expr(
                 .map(|nullable| nullable.validity.null_count())
                 .unwrap_or_default() as u64;
             let (min, max) = column.domain().to_minmax();
-            Some((field.column_id, ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size: 0,
-                distinct_of_values: None,
-            }))
+            Some((
+                field.column_id,
+                ColumnStatistics::new(min, max, null_count, 0, None),
+            ))
         })
         .collect();
 

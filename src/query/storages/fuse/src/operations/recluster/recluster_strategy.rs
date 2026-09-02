@@ -62,6 +62,7 @@ pub(crate) struct ReclusterProperties {
     pub(crate) partition_key_count: usize,
     pub(crate) memory_threshold: usize,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
+    pub(crate) cluster_stats_data_types: Vec<DataType>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
 }
 
@@ -99,13 +100,14 @@ impl ReclusterProperties {
                     (dimensions, Arc::new(HilbertReclusterStrategy))
                 }
             };
+        let cluster_stats_data_types = cluster_key_exprs
+            .iter()
+            .map(|expr| expr.data_type().clone())
+            .collect::<Vec<_>>();
         let scalar_cluster_key_types = if cluster_key_info.cluster_type == ClusterType::Hilbert {
             Vec::new()
         } else {
-            cluster_key_exprs
-                .iter()
-                .map(|expr| expr.data_type().clone())
-                .collect()
+            cluster_stats_data_types.clone()
         };
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
@@ -117,6 +119,7 @@ impl ReclusterProperties {
             partition_key_count: table.partition_key_count(),
             memory_threshold,
             prepared_cluster_key_exprs,
+            cluster_stats_data_types,
             scalar_cluster_key_types,
         };
         Ok((properties, strategy))
@@ -148,10 +151,11 @@ impl ReclusterProperties {
                 Arc::new(LinearReclusterStrategy)
             }
         };
-        let scalar_cluster_key_types = cluster_key_exprs
+        let cluster_stats_data_types = cluster_key_exprs
             .iter()
             .map(|expr| expr.data_type().clone())
-            .collect();
+            .collect::<Vec<_>>();
+        let scalar_cluster_key_types = cluster_stats_data_types.clone();
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
         let properties = Self {
@@ -162,6 +166,7 @@ impl ReclusterProperties {
             partition_key_count,
             memory_threshold,
             prepared_cluster_key_exprs,
+            cluster_stats_data_types,
             scalar_cluster_key_types,
         };
         (properties, strategy)
@@ -203,8 +208,10 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         col_stats: &StatisticsOfColumns,
     ) -> ClusterStatistics {
         if let Some(stats) = cluster_stats {
-            if self.can_reuse_cluster_stats(properties, stats) {
-                return stats.clone();
+            if self.can_reuse_cluster_stats(properties, stats)
+                && let Some(stats) = stats.normalized(&properties.cluster_stats_data_types)
+            {
+                return stats;
             }
         }
 
