@@ -42,6 +42,8 @@ use crate::meta::VectorDistanceType;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
+use crate::meta::stat_cmp::try_cmp_stat_scalar_slices;
+use crate::meta::stat_cmp::try_cmp_stat_scalars;
 use crate::table::ClusterType;
 use crate::table::HILBERT_CLUSTER_DIMENSIONS;
 
@@ -115,8 +117,16 @@ pub fn cluster_stats_scalar_overlap(left: &ClusterStatistics, right: &ClusterSta
         return true;
     }
 
-    scalar_tuple_cmp(left_min, right_max) != Ordering::Greater
-        && scalar_tuple_cmp(right_min, left_max) != Ordering::Greater
+    // An inconclusive comparison cannot prove the ranges are apart, so report overlap. This
+    // happens when a metadata-only decimal precision widening leaves one side tagged with the
+    // previous `DecimalSize` in a way that cannot be reconciled.
+    match (
+        scalar_tuple_cmp(left_min, right_max),
+        scalar_tuple_cmp(right_min, left_max),
+    ) {
+        (Some(left), Some(right)) => left != Ordering::Greater && right != Ordering::Greater,
+        _ => true,
+    }
 }
 
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
@@ -160,27 +170,36 @@ pub fn reduce_cluster_min_max(
 
     match cluster_type {
         ClusterType::Linear => {
-            let min = min_stats
-                .iter()
-                .copied()
-                .min_by(|left, right| scalar_tuple_cmp(left, right))?
-                .to_vec();
-            let max = max_stats
-                .iter()
-                .copied()
-                .max_by(|left, right| scalar_tuple_cmp(left, right))?
-                .to_vec();
-            Some((min, max))
+            // Pick the extremes explicitly instead of `min_by`/`max_by`: those swallow an
+            // inconclusive comparison as `Equal` and would take each end from a different input,
+            // producing a range whose min and max disagree. Bail out instead.
+            let mut min = min_stats[0];
+            let mut max = max_stats[0];
+            for next in min_stats.iter().skip(1) {
+                if scalar_tuple_cmp(next, min)? == Ordering::Less {
+                    min = next;
+                }
+            }
+            for next in max_stats.iter().skip(1) {
+                if scalar_tuple_cmp(next, max)? == Ordering::Greater {
+                    max = next;
+                }
+            }
+            Some((min.to_vec(), max.to_vec()))
         }
         ClusterType::Hilbert => {
             if min_stats.len() != max_stats.len()
                 || min_stats.iter().zip(max_stats).any(|(min, max)| {
                     min.len() != HILBERT_CLUSTER_DIMENSIONS
                         || max.len() != HILBERT_CLUSTER_DIMENSIONS
-                        || min
-                            .iter()
-                            .zip(*max)
-                            .any(|(min, max)| min.as_ref().cmp(&max.as_ref()) == Ordering::Greater)
+                        || min.iter().zip(*max).any(|(min, max)| {
+                            // An inconclusive comparison means we cannot confirm min <= max, so
+                            // reject the input rather than build a range we cannot verify.
+                            !matches!(
+                                try_cmp_stat_scalars(&min.as_ref(), &max.as_ref()),
+                                Some(Ordering::Less | Ordering::Equal)
+                            )
+                        })
                 })
             {
                 return None;
@@ -190,12 +209,13 @@ pub fn reduce_cluster_min_max(
             let mut max = max_stats[0].to_vec();
             for (next_min, next_max) in min_stats.iter().zip(max_stats).skip(1) {
                 for dimension in 0..HILBERT_CLUSTER_DIMENSIONS {
-                    if next_min[dimension].as_ref().cmp(&min[dimension].as_ref()) == Ordering::Less
+                    if try_cmp_stat_scalars(&next_min[dimension].as_ref(), &min[dimension].as_ref())
+                        == Some(Ordering::Less)
                     {
                         min[dimension] = next_min[dimension].clone();
                     }
-                    if next_max[dimension].as_ref().cmp(&max[dimension].as_ref())
-                        == Ordering::Greater
+                    if try_cmp_stat_scalars(&next_max[dimension].as_ref(), &max[dimension].as_ref())
+                        == Some(Ordering::Greater)
                     {
                         max[dimension] = next_max[dimension].clone();
                     }
@@ -206,10 +226,12 @@ pub fn reduce_cluster_min_max(
     }
 }
 
-fn scalar_tuple_cmp(left: &[Scalar], right: &[Scalar]) -> Ordering {
-    left.iter()
-        .map(Scalar::as_ref)
-        .cmp(right.iter().map(Scalar::as_ref))
+/// Lexicographic comparison of cluster statistics tuples.
+///
+/// Returns `None` when the tuples are not comparable, so callers must decide what that means for
+/// them rather than silently treating the values as equal.
+fn scalar_tuple_cmp(left: &[Scalar], right: &[Scalar]) -> Option<Ordering> {
+    try_cmp_stat_scalar_slices(left, right)
 }
 
 const COUNT_MIN_SKETCH_WIDTH: usize = 2048;
@@ -389,12 +411,15 @@ impl ColumnTopN {
     }
 
     fn find(&self, scalar: &ScalarRef<'_>) -> std::result::Result<usize, usize> {
-        match self
-            .values
-            .binary_search_by(|entry| entry.scalar.as_ref().cmp(scalar))
-        {
+        // `binary_search_by` needs a total order, and raw `Ord` supplies one only by collapsing
+        // incomparable pairs to `Equal`. Compare through the statistics-aware helper and treat an
+        // inconclusive result as `Greater`, so the search still terminates and the existing
+        // `partial_cmp` recheck below rejects a bogus hit.
+        match self.values.binary_search_by(|entry| {
+            try_cmp_stat_scalars(&entry.scalar.as_ref(), scalar).unwrap_or(Ordering::Greater)
+        }) {
             Ok(index)
-                if self.values[index].scalar.as_ref().partial_cmp(scalar)
+                if try_cmp_stat_scalars(&self.values[index].scalar.as_ref(), scalar)
                     == Some(Ordering::Equal) =>
             {
                 Ok(index)
@@ -696,6 +721,8 @@ pub fn merge_column_count_min_sketch_mut(lhs: &mut BlockCountMinSketch, rhs: Blo
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberScalar;
 
     use super::*;
@@ -1084,6 +1111,94 @@ mod tests {
         sketch.add_with_count(scalar_ref, 10);
 
         assert_eq!(sketch.estimate(&scalar), Some(110));
+    }
+
+    fn decimal_scalar(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    // A metadata-only decimal precision widening leaves one side tagged with the previous
+    // `DecimalSize`. Raw comparison collapses that to `Equal`, which would report every pair of
+    // ranges as overlapping and stop recluster from making progress.
+    #[test]
+    fn cluster_stats_scalar_overlap_across_widened_precision() {
+        let stats = |min: Scalar, max: Scalar| ClusterStatistics::new(0, vec![min], vec![max], 0);
+
+        let stale = stats(decimal_scalar(100, 10, 2), decimal_scalar(200, 10, 2));
+        let current = stats(decimal_scalar(700, 15, 2), decimal_scalar(800, 15, 2));
+        assert!(!cluster_stats_scalar_overlap(&stale, &current));
+
+        let wide = stats(decimal_scalar(100, 10, 2), decimal_scalar(900, 10, 2));
+        assert!(cluster_stats_scalar_overlap(&wide, &current));
+
+        // A scale change cannot be reconciled, so the check must stay conservative.
+        let other_scale = stats(decimal_scalar(100, 10, 4), decimal_scalar(200, 10, 4));
+        assert!(cluster_stats_scalar_overlap(&other_scale, &current));
+    }
+
+    #[test]
+    fn reduce_cluster_min_max_across_widened_precision() {
+        let stale_min = vec![decimal_scalar(900, 10, 2)];
+        let stale_max = vec![decimal_scalar(950, 10, 2)];
+        let current_min = vec![decimal_scalar(100, 15, 2)];
+        let current_max = vec![decimal_scalar(200, 15, 2)];
+
+        let (min, max) = reduce_cluster_min_max(
+            &[stale_min.as_slice(), current_min.as_slice()],
+            &[stale_max.as_slice(), current_max.as_slice()],
+            ClusterType::Linear,
+        )
+        .expect("bounds are comparable");
+        assert_eq!(min, current_min);
+        assert_eq!(max, stale_max);
+
+        // Mixed scales have no sound reduction; bail out rather than take each end from a
+        // different input.
+        let other_scale_min = vec![decimal_scalar(100, 10, 4)];
+        let other_scale_max = vec![decimal_scalar(200, 10, 4)];
+        assert!(
+            reduce_cluster_min_max(
+                &[stale_min.as_slice(), other_scale_min.as_slice()],
+                &[stale_max.as_slice(), other_scale_max.as_slice()],
+                ClusterType::Linear,
+            )
+            .is_none()
+        );
+    }
+
+    // `ColumnTopN` keeps its values sorted and looks them up by binary search, which needs a
+    // consistent order. A stale precision must not make an existing value unfindable or corrupt
+    // the ordering.
+    #[test]
+    fn column_top_n_finds_values_across_widened_precision() {
+        let mut top_n = ColumnTopN::with_capacity(8);
+        top_n.add(decimal_scalar(100, 10, 2).as_ref(), 3);
+        top_n.add(decimal_scalar(300, 10, 2).as_ref(), 5);
+
+        // The same value tagged with the widened precision must hit the existing entry rather
+        // than insert a duplicate.
+        top_n.add(decimal_scalar(100, 15, 2).as_ref(), 4);
+        assert_eq!(top_n.values.len(), 2);
+        assert_eq!(
+            top_n
+                .get_entry(&decimal_scalar(100, 15, 2))
+                .map(|e| e.count),
+            Some(7)
+        );
+
+        // Values stay sorted by raw value regardless of the precision they carry.
+        let scalars = top_n
+            .values
+            .iter()
+            .map(|entry| entry.scalar.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(scalars, vec![
+            decimal_scalar(100, 10, 2),
+            decimal_scalar(300, 10, 2)
+        ]);
     }
 }
 

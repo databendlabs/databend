@@ -32,11 +32,15 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::decimal::DecimalDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_index::eliminate_cast;
+use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -551,4 +555,61 @@ fn build_spatial_stats(
         is_valid: true,
     };
     [(column_id, stats)].into_iter().collect()
+}
+
+// A metadata-only decimal precision widening leaves persisted bounds tagged with the previous
+// `DecimalSize`. The domain must be built at the current schema size so pruning still works;
+// previously this hit a `debug_assert_eq!` on the size instead.
+#[test]
+fn test_statistics_to_domain_retags_widened_decimal() {
+    let current = DecimalSize::new(15, 2).unwrap();
+    let stale = ColumnStatistics::new(
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            100,
+            DecimalSize::new(10, 2).unwrap(),
+        )),
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            200,
+            DecimalSize::new(10, 2).unwrap(),
+        )),
+        0,
+        0,
+        None,
+    );
+
+    let domain = statistics_to_domain(vec![&stale], &DataType::Decimal(current));
+
+    // The bounds keep their raw values and are reported at the current precision.
+    match domain {
+        Domain::Decimal(DecimalDomain::Decimal64(inner, size)) => {
+            assert_eq!(size, current);
+            assert_eq!(inner.min, 100);
+            assert_eq!(inner.max, 200);
+        }
+        other => panic!("expected a Decimal64 domain, got {other:?}"),
+    }
+}
+
+// Bounds that cannot be retagged did not come from a metadata-only widening, so no sound domain
+// can be derived from them and pruning must fall back to the full domain.
+#[test]
+fn test_statistics_to_domain_falls_back_for_incompatible_decimal() {
+    let current = DataType::Decimal(DecimalSize::new(15, 2).unwrap());
+    // A different scale means the raw value denotes a different number.
+    let other_scale = ColumnStatistics::new(
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            100,
+            DecimalSize::new(10, 4).unwrap(),
+        )),
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            200,
+            DecimalSize::new(10, 4).unwrap(),
+        )),
+        0,
+        0,
+        None,
+    );
+
+    let domain = statistics_to_domain(vec![&other_scale], &current);
+    assert_eq!(domain, Domain::full(&current));
 }

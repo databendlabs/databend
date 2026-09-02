@@ -29,6 +29,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::try_cmp_stat_scalars;
 use parking_lot::RwLock;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -80,10 +81,15 @@ impl RuntimeScanOrder {
             (RuntimeTopNRank::Best, _) => CmpOrdering::Less,
             (_, RuntimeTopNRank::Best) => CmpOrdering::Greater,
             (RuntimeTopNRank::Value(a), RuntimeTopNRank::Value(b)) => {
+                // Persisted bounds may carry a stale decimal precision after a metadata-only
+                // widening; comparing them raw would report every rank as equal. An
+                // incomparable pair carries no ordering information, so treat it as a tie.
+                let ordering = try_cmp_stat_scalars(&a.borrow().as_ref(), &b.borrow().as_ref())
+                    .unwrap_or(CmpOrdering::Equal);
                 if self.asc {
-                    a.borrow().cmp(b.borrow())
+                    ordering
                 } else {
-                    b.borrow().cmp(a.borrow())
+                    ordering.reverse()
                 }
             }
             (RuntimeTopNRank::Value(_), RuntimeTopNRank::Unknown) => CmpOrdering::Less,
@@ -234,7 +240,9 @@ impl RuntimeTopNFilter {
     fn tighter(&self, candidate: &Scalar, current: Option<&Scalar>) -> bool {
         match current {
             None => true,
-            Some(old) => match candidate.partial_cmp(old) {
+            // Boundaries are produced by the running query, so they normally share a size; an
+            // incomparable pair cannot be proven tighter, so keep the published one.
+            Some(old) => match try_cmp_stat_scalars(&candidate.as_ref(), &old.as_ref()) {
                 Some(CmpOrdering::Less) => self.asc,
                 Some(CmpOrdering::Greater) => !self.asc,
                 _ => false,
@@ -289,9 +297,11 @@ impl RuntimeTopNFilter {
         }
 
         if self.asc {
-            min.partial_cmp(boundary) == Some(CmpOrdering::Greater)
+            // A stale decimal precision makes the comparison inconclusive; keep the block rather
+            // than prune on an ordering we cannot establish.
+            try_cmp_stat_scalars(&min.as_ref(), &boundary.as_ref()) == Some(CmpOrdering::Greater)
         } else {
-            max.partial_cmp(boundary) == Some(CmpOrdering::Less)
+            try_cmp_stat_scalars(&max.as_ref(), &boundary.as_ref()) == Some(CmpOrdering::Less)
         }
     }
 }
@@ -529,6 +539,8 @@ mod tests {
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Expr;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use tokio::time::Duration;
@@ -725,5 +737,68 @@ mod tests {
         let ready = RuntimeFilterReady::for_statistics_probe_exprs(false, [&probe_expr]);
         assert!(ready.statistics_column_names().is_empty());
         assert!(!ready.has_statistics_pruning());
+    }
+    fn decimal(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    // A metadata-only decimal precision widening leaves persisted block bounds tagged with the
+    // previous `DecimalSize`. Raw comparison against the boundary collapses to `Equal`, so no
+    // block is ever excluded; comparing by scale and raw value restores the filter.
+    #[test]
+    fn runtime_top_n_filter_excludes_blocks_across_widened_precision() {
+        let asc = RuntimeTopNFilter::new(7, true, false);
+        asc.update(&decimal(500, 15, 2));
+
+        // Bounds tagged with the old precision but wholly above the boundary.
+        assert!(asc.boundary_excludes(&decimal(600, 10, 2), &decimal(700, 10, 2), 0));
+        // Straddling the boundary: must be kept.
+        assert!(!asc.boundary_excludes(&decimal(400, 10, 2), &decimal(700, 10, 2), 0));
+
+        let desc = RuntimeTopNFilter::new(7, false, false);
+        desc.update(&decimal(500, 15, 2));
+        assert!(desc.boundary_excludes(&decimal(100, 10, 2), &decimal(400, 10, 2), 0));
+        assert!(!desc.boundary_excludes(&decimal(100, 10, 2), &decimal(600, 10, 2), 0));
+    }
+
+    // A scale change is not a widening: the comparison is genuinely inconclusive, so the block
+    // must be kept rather than pruned on an ordering that cannot be established.
+    #[test]
+    fn runtime_top_n_filter_keeps_blocks_with_incomparable_bounds() {
+        let asc = RuntimeTopNFilter::new(7, true, false);
+        asc.update(&decimal(500, 15, 2));
+
+        assert!(!asc.boundary_excludes(&decimal(600, 10, 4), &decimal(700, 10, 4), 0));
+    }
+
+    // Ranking feeds the read order; mixed precisions must still sort by value, otherwise every
+    // part looks equally promising and the scheduling degrades.
+    #[test]
+    fn runtime_scan_order_ranks_across_widened_precision() {
+        let low = RuntimeTopNRank::Value(decimal(100, 10, 2));
+        let high = RuntimeTopNRank::Value(decimal(900, 15, 2));
+
+        let asc = RuntimeScanOrder {
+            column_id: 7,
+            asc: true,
+            nulls_first: false,
+        };
+        assert_eq!(asc.compare_ranks(&low, &high), CmpOrdering::Less);
+        assert_eq!(asc.compare_ranks(&high, &low), CmpOrdering::Greater);
+
+        let desc = RuntimeScanOrder {
+            column_id: 7,
+            asc: false,
+            nulls_first: false,
+        };
+        assert_eq!(desc.compare_ranks(&low, &high), CmpOrdering::Greater);
+        assert_eq!(desc.compare_ranks(&high, &low), CmpOrdering::Less);
+
+        // A scale change is inconclusive, so neither rank is preferred.
+        let other_scale = RuntimeTopNRank::Value(decimal(900, 10, 4));
+        assert_eq!(asc.compare_ranks(&low, &other_scale), CmpOrdering::Equal);
     }
 }

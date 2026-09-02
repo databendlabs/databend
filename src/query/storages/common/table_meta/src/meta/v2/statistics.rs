@@ -341,10 +341,27 @@ impl ColumnStatistics {
         }
     }
 
+    /// The lowest value seen for this column, as persisted.
+    ///
+    /// # Do not compare this with `<`, `>`, `cmp`, or `==`
+    ///
+    /// Statistics are read back against the current schema but were written against the schema in
+    /// effect at the time. After a metadata-only decimal precision widening this value may still
+    /// carry the previous `DecimalSize`, and decimals of different sizes have no defined ordering:
+    /// `Ord for Scalar` reports them as `Equal` and `PartialEq` reports them as different, neither
+    /// raising an error.
+    ///
+    /// Use [`try_cmp_stat_scalars`](crate::meta::try_cmp_stat_scalars) or
+    /// [`retag_stat_scalar`](crate::meta::retag_stat_scalar) for comparison, ordering, and overlap
+    /// checks. Reading the raw value for serialization, display, or re-derivation is fine.
     pub fn min(&self) -> &Scalar {
         &self.min
     }
 
+    /// The highest value seen for this column, as persisted.
+    ///
+    /// See [`Self::min`]: raw comparison is unsafe here, use
+    /// [`try_cmp_stat_scalars`](crate::meta::try_cmp_stat_scalars) instead.
     pub fn max(&self) -> &Scalar {
         &self.max
     }
@@ -390,10 +407,20 @@ impl ClusterStatistics {
         }
     }
 
+    /// The lower bound of the cluster-key tuple, as persisted.
+    ///
+    /// See [`ColumnStatistics::min`]: raw comparison is unsafe here too, because a metadata-only
+    /// decimal precision widening can leave positions tagged with the previous `DecimalSize`. Use
+    /// [`try_cmp_stat_scalar_slices`](crate::meta::try_cmp_stat_scalar_slices) for ordering and
+    /// overlap checks, or
+    /// [`total_cmp_stat_scalar_slices`](crate::meta::total_cmp_stat_scalar_slices) for a map key.
     pub fn min(&self) -> &Vec<Scalar> {
         &self.min
     }
 
+    /// The upper bound of the cluster-key tuple, as persisted.
+    ///
+    /// See [`Self::min`] for why raw comparison is unsafe here.
     pub fn max(&self) -> &Vec<Scalar> {
         &self.max
     }

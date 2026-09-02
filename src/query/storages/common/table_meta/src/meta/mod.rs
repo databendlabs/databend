@@ -19,6 +19,7 @@ pub mod compression;
 mod current;
 pub mod format;
 mod histogram_serde;
+mod stat_cmp;
 mod statistics;
 mod utils;
 mod v0;
@@ -36,6 +37,13 @@ pub use format::NUM_BLOCK_ID_BITS;
 pub use format::decode;
 pub(crate) use format::load_json;
 pub use histogram_serde::LegacyHistogram;
+pub use stat_cmp::common_stat_decimal_size;
+pub use stat_cmp::retag_stat_scalar;
+pub use stat_cmp::total_cmp_stat_scalar_slices;
+pub use stat_cmp::total_cmp_stat_scalars;
+pub use stat_cmp::try_cmp_stat_scalar_slices;
+pub use stat_cmp::try_cmp_stat_scalars;
+pub use stat_cmp::try_stat_ranges_disjoint;
 pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only

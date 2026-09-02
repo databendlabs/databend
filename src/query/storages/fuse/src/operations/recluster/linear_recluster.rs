@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::total_cmp_stat_scalar_slices;
 use indexmap::IndexSet;
 use log::debug;
 
@@ -480,14 +481,16 @@ pub(crate) fn select_scalar_segments(
 }
 
 #[derive(Clone, Copy)]
+/// A cluster-key point used as a `BTreeMap` key.
+///
+/// Ordering goes through [`total_cmp_stat_scalar_slices`] rather than raw `Ord`: persisted decimal
+/// bounds may carry a stale precision after a metadata-only widening, and raw comparison reports
+/// such pairs as equal, which would merge distinct points into one map entry.
 struct ScalarSlice<'a>(&'a [Scalar]);
 
 impl Ord for ScalarSlice<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0
-            .iter()
-            .map(Scalar::as_ref)
-            .cmp(other.0.iter().map(Scalar::as_ref))
+        total_cmp_stat_scalar_slices(self.0, other.0)
     }
 }
 

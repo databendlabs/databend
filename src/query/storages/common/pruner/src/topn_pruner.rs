@@ -22,9 +22,12 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::retag_stat_scalar;
 
 use crate::BlockMetaIndex;
 
@@ -122,25 +125,41 @@ impl TopNPruner {
         };
 
         // String Type min/max is truncated
-        if matches!(
-            self.schema.field_with_name(column)?.data_type(),
-            TableDataType::String
-        ) {
+        let sort_data_type = self.schema.field_with_name(column)?.data_type();
+        if matches!(sort_data_type, TableDataType::String) {
             return Ok(metas);
         }
 
-        let mut id_stats = metas
-            .iter()
-            .map(|(id, meta)| {
-                let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
-                    ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {}",
-                        sort_column_id
-                    ))
-                })?;
-                Ok((id.clone(), stat.clone(), meta.clone()))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        // A metadata-only decimal precision widening leaves persisted bounds tagged with the
+        // previous `DecimalSize`. Retag them to the current schema once here, so every comparison
+        // below stays meaningful; comparing mixed sizes would collapse to `Ordering::Equal` and
+        // silently disable this pruner.
+        let target_size = match DataType::from(sort_data_type).remove_nullable() {
+            DataType::Decimal(size) => Some(size),
+            _ => None,
+        };
+
+        let mut id_stats = Vec::with_capacity(metas.len());
+        for (id, meta) in &metas {
+            let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
+                ErrorCode::UnknownException(format!(
+                    "Unable to get the colStats by ColumnId: {}",
+                    sort_column_id
+                ))
+            })?;
+            let stat = match target_size {
+                None => stat.clone(),
+                Some(size) => {
+                    // Bounds that cannot be retagged did not come from a metadata-only widening,
+                    // so there is no sound ordering to prune by; keep every block.
+                    let Some(stat) = retag_column_statistics(stat, size) else {
+                        return Ok(metas);
+                    };
+                    stat
+                }
+            };
+            id_stats.push((id.clone(), stat, meta.clone()));
+        }
 
         if self.filter_only_use_index {
             // For descending order, we determine a lower bound for the Nth largest value.
@@ -306,6 +325,25 @@ fn block_score_range(scores: &[F32]) -> Option<(F32, F32)> {
     Some((min_score, max_score))
 }
 
+/// Retag a column's persisted bounds to `target_size`, keeping every other field.
+///
+/// Returns `None` when the bounds did not come from a metadata-only precision widening of this
+/// column, in which case there is no sound way to compare them against current-schema values.
+fn retag_column_statistics(
+    stat: &ColumnStatistics,
+    target_size: DecimalSize,
+) -> Option<ColumnStatistics> {
+    let min = retag_stat_scalar(stat.min(), target_size)?;
+    let max = retag_stat_scalar(stat.max(), target_size)?;
+    Some(ColumnStatistics::new(
+        min,
+        max,
+        stat.null_count,
+        stat.in_memory_size,
+        stat.distinct_of_values,
+    ))
+}
+
 fn compare_scalar_for_sorting(
     left: &Scalar,
     right: &Scalar,
@@ -417,6 +455,8 @@ mod tests {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::number::NumberDataType;
     use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -730,5 +770,103 @@ mod tests {
         let matched_scores = scores.iter().map(|v| (*v).into()).collect();
         index.matched_scores = Some(matched_scores);
         (index, meta)
+    }
+    fn decimal_type(precision: u8, scale: u8) -> TableDataType {
+        TableDataType::Decimal(DecimalDataType::from(
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    fn decimal_scalar(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    fn build_decimal_block(
+        column_id: ColumnId,
+        block_id: usize,
+        min: (i64, u8),
+        max: (i64, u8),
+        matched_rows: usize,
+    ) -> (BlockMetaIndex, Arc<BlockMeta>) {
+        let column_stats = ColumnStatistics::new(
+            decimal_scalar(min.0, min.1, 2),
+            decimal_scalar(max.0, max.1, 2),
+            0,
+            0,
+            None,
+        );
+        build_block_with_stats(column_id, block_id, column_stats, matched_rows)
+    }
+
+    // After a metadata-only precision widening, older blocks keep the previous `DecimalSize`.
+    // Comparing those bounds raw collapses to `Ordering::Equal`, which silently disables this
+    // pruner; retagging to the current schema restores it.
+    #[test]
+    fn test_prune_topn_across_widened_decimal_precision() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            decimal_type(15, 2),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Decimal(DecimalSize::new(15, 2).unwrap()),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        // Block 0 holds the smallest values but is still tagged with the old precision.
+        let metas = vec![
+            build_decimal_block(column_id, 0, (100, 10), (200, 10), 5),
+            build_decimal_block(column_id, 1, (5000, 15), (6000, 15), 5),
+            build_decimal_block(column_id, 2, (9000, 15), (9500, 15), 5),
+        ];
+
+        let pruner = TopNPruner::create(schema, vec![(sort_expr, true, false)], 5, true);
+        let result = pruner.prune(metas).unwrap();
+        let mut kept: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        kept.sort_unstable();
+
+        // Only the block containing the 5 smallest values needs to be read.
+        assert_eq!(kept, vec![0]);
+    }
+
+    // Bounds that cannot be retagged did not come from a metadata-only widening, so there is no
+    // sound ordering to prune by and every block must be kept.
+    #[test]
+    fn test_prune_topn_keeps_all_blocks_for_incompatible_decimal_scale() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            decimal_type(15, 2),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Decimal(DecimalSize::new(15, 2).unwrap()),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        // A scale of 4 against a schema scale of 2 cannot be reconciled.
+        let mismatched = ColumnStatistics::new(
+            decimal_scalar(100, 10, 4),
+            decimal_scalar(200, 10, 4),
+            0,
+            0,
+            None,
+        );
+        let metas = vec![
+            build_block_with_stats(column_id, 0, mismatched, 5),
+            build_decimal_block(column_id, 1, (9000, 15), (9500, 15), 5),
+        ];
+
+        let pruner = TopNPruner::create(schema, vec![(sort_expr, true, false)], 5, true);
+        let result = pruner.prune(metas).unwrap();
+        let mut kept: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        kept.sort_unstable();
+        assert_eq!(kept, vec![0, 1]);
     }
 }

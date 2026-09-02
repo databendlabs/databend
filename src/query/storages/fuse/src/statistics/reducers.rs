@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -30,7 +31,10 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::common_stat_decimal_size;
 pub use databend_storages_common_table_meta::meta::reduce_cluster_statistics;
+use databend_storages_common_table_meta::meta::retag_stat_scalar;
+use databend_storages_common_table_meta::meta::try_cmp_stat_scalars;
 use databend_storages_common_table_meta::meta::validate_segment_partition_statistics;
 
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
@@ -58,43 +62,95 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     col_to_stats_lit
         .iter()
         .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
+            // Omit the column when its bounds cannot be reduced; a partial range would be worse
+            // than none, since consumers treat a missing entry as "no information".
+            if let Some(col_stats) = reduce_column_statistics(stats) {
+                acc.insert(*id, col_stats);
+            }
             acc
         })
 }
 
-pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
-    let mut min_stats = Vec::with_capacity(stats.len());
-    let mut max_stats = Vec::with_capacity(stats.len());
-    let mut ndvs = Vec::with_capacity(stats.len());
+/// Reduce per-block statistics for one column into a single range.
+///
+/// Returns `None` when the inputs carry no usable range, which happens when a column mixes
+/// genuinely incomparable bounds. Callers must then omit the column rather than persist a range
+/// that cannot be trusted: `ColumnStatistics::new` asserts that min and max share a type, and
+/// picking each end independently from incomparable inputs can violate that.
+///
+/// Decimal bounds left tagged with an older precision by a metadata-only widening are aligned to
+/// the widest precision before comparison, so they still reduce normally.
+pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(
+    stats: &[T],
+) -> Option<ColumnStatistics> {
+    if stats.is_empty() {
+        return None;
+    }
+
     let mut null_count = 0;
     let mut in_memory_size = 0;
+    let mut ndvs = Vec::with_capacity(stats.len());
+    let mut bounds = Vec::with_capacity(stats.len() * 2);
 
     for col_stats in stats.iter() {
         let col_stats = col_stats.borrow();
-        min_stats.push(col_stats.min().clone());
-        max_stats.push(col_stats.max().clone());
+        bounds.push(col_stats.min());
+        bounds.push(col_stats.max());
         ndvs.push(col_stats.distinct_of_values);
         null_count += col_stats.null_count;
         in_memory_size += col_stats.in_memory_size;
     }
 
-    let min = min_stats
-        .into_iter()
-        .filter(|s| !s.is_null())
-        .min_by(|x, y| x.cmp(y))
-        .unwrap_or(Scalar::Null);
+    // Align stale decimal precisions to the widest one seen, so the comparisons below are
+    // meaningful and the resulting min/max agree on a single size.
+    let target_size = common_stat_decimal_size(&bounds);
+    let align = |scalar: &Scalar| -> Option<Scalar> {
+        match target_size {
+            Some(size) => retag_stat_scalar(scalar, size),
+            None => Some(scalar.clone()),
+        }
+    };
 
-    let max = max_stats
-        .into_iter()
-        .filter(|s| !s.is_null())
-        .max_by(|x, y| x.cmp(y))
-        .unwrap_or(Scalar::Null);
+    let mut min: Option<Scalar> = None;
+    let mut max: Option<Scalar> = None;
+    for col_stats in stats.iter() {
+        let col_stats = col_stats.borrow();
+        if !col_stats.min().is_null() {
+            let candidate = align(col_stats.min())?;
+            min = match min {
+                None => Some(candidate),
+                Some(current) => {
+                    match try_cmp_stat_scalars(&candidate.as_ref(), &current.as_ref())? {
+                        Ordering::Less => Some(candidate),
+                        _ => Some(current),
+                    }
+                }
+            };
+        }
+        if !col_stats.max().is_null() {
+            let candidate = align(col_stats.max())?;
+            max = match max {
+                None => Some(candidate),
+                Some(current) => {
+                    match try_cmp_stat_scalars(&candidate.as_ref(), &current.as_ref())? {
+                        Ordering::Greater => Some(candidate),
+                        _ => Some(current),
+                    }
+                }
+            };
+        }
+    }
+
     let distinct_of_values = ndvs
         .into_iter()
         .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
-    ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values)
+    Some(ColumnStatistics::new(
+        min.unwrap_or(Scalar::Null),
+        max.unwrap_or(Scalar::Null),
+        null_count,
+        in_memory_size,
+        distinct_of_values,
+    ))
 }
 
 // Generate virtual column statistics from virtual column meta.
@@ -140,7 +196,9 @@ pub fn generate_virtual_column_statistics<T: Borrow<HashMap<ColumnId, VirtualCol
                     .map(|(_, stat)| stat.clone())
                     .collect::<Vec<_>>();
                 let col_stats = reduce_column_statistics(&stats);
-                acc.insert(*id, col_stats);
+                if let Some(col_stats) = col_stats {
+                    acc.insert(*id, col_stats);
+                }
             }
             acc
         },
@@ -193,8 +251,9 @@ pub fn reduce_virtual_column_statistics<T: Borrow<Option<StatisticsOfColumns>>>(
                     }
                 }
 
-                if type_set.len() <= 1 {
-                    let col_stats = reduce_column_statistics(stats);
+                if type_set.len() <= 1
+                    && let Some(col_stats) = reduce_column_statistics(stats)
+                {
                     acc.insert(*id, col_stats);
                 }
                 acc
@@ -515,4 +574,84 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         virtual_block_count: merged_virtual_block_count,
         additional_stats_meta: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    fn size(precision: u8, scale: u8) -> DecimalSize {
+        DecimalSize::new(precision, scale).unwrap()
+    }
+
+    fn decimal(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(value, size(precision, scale)))
+    }
+
+    fn stats(min: Scalar, max: Scalar) -> ColumnStatistics {
+        ColumnStatistics::new(min, max, 0, 16, None)
+    }
+
+    // A metadata-only decimal precision widening leaves older blocks tagged with the previous
+    // `DecimalSize`. Reducing across the boundary must still find the true extremes.
+    #[test]
+    fn test_reduce_column_statistics_across_widened_precision() {
+        let old = stats(decimal(100, 10, 2), decimal(200, 10, 2));
+        let new = stats(decimal(500, 15, 2), decimal(800, 15, 2));
+
+        let reduced = reduce_column_statistics(&[new, old]).expect("bounds are comparable");
+
+        // Both ends must agree on one size, otherwise `ColumnStatistics::new` would have
+        // asserted; the widest precision seen wins.
+        assert_eq!(reduced.min(), &decimal(100, 15, 2));
+        assert_eq!(reduced.max(), &decimal(800, 15, 2));
+    }
+
+    // Without alignment, `min_by`/`max_by` take each end from a different input and produce a
+    // range whose min and max disagree on their size.
+    #[test]
+    fn test_reduce_column_statistics_keeps_bounds_on_one_size() {
+        let old = stats(decimal(900, 10, 2), decimal(950, 10, 2));
+        let new = stats(decimal(100, 15, 2), decimal(200, 15, 2));
+
+        let reduced = reduce_column_statistics(&[old, new]).expect("bounds are comparable");
+
+        let min_size = reduced.min().as_decimal().unwrap().size();
+        let max_size = reduced.max().as_decimal().unwrap().size();
+        assert_eq!(min_size, max_size);
+        assert_eq!(reduced.min(), &decimal(100, 15, 2));
+        assert_eq!(reduced.max(), &decimal(950, 15, 2));
+    }
+
+    // A scale change is not a metadata-only widening: the raw value denotes a different number,
+    // so there is no sound way to reduce the bounds.
+    #[test]
+    fn test_reduce_column_statistics_rejects_incompatible_scale() {
+        let a = stats(decimal(100, 10, 2), decimal(200, 10, 2));
+        let b = stats(decimal(100, 10, 4), decimal(200, 10, 4));
+
+        assert!(reduce_column_statistics(&[a, b]).is_none());
+        assert!(reduce_column_statistics::<ColumnStatistics>(&[]).is_none());
+    }
+
+    // Columns whose bounds cannot be reduced are omitted rather than persisted with a range that
+    // cannot be trusted.
+    #[test]
+    fn test_reduce_block_statistics_omits_incomparable_column() {
+        let comparable = HashMap::from([(1u32, stats(decimal(100, 10, 2), decimal(200, 10, 2)))]);
+        let incomparable = HashMap::from([
+            (1u32, stats(decimal(300, 15, 2), decimal(400, 15, 2))),
+            (2u32, stats(decimal(100, 10, 2), decimal(200, 10, 2))),
+        ]);
+        let scale_change = HashMap::from([(2u32, stats(decimal(100, 10, 4), decimal(200, 10, 4)))]);
+
+        let reduced = reduce_block_statistics(&[comparable, incomparable, scale_change]);
+
+        // Column 1 widened cleanly and survives; column 2 mixes scales and is dropped.
+        assert_eq!(reduced.get(&1).map(|s| s.min()), Some(&decimal(100, 15, 2)));
+        assert!(!reduced.contains_key(&2));
+    }
 }

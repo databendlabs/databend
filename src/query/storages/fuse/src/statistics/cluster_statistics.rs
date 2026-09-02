@@ -43,6 +43,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::meta::try_cmp_stat_scalar_slices;
 use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use log::warn;
@@ -477,18 +478,16 @@ pub fn sort_by_cluster_stats(
                 return Ordering::Equal;
             }
 
-            let ord_min = a
-                .min()
-                .iter()
-                .map(Scalar::as_ref)
-                .cmp(b.min().iter().map(Scalar::as_ref));
-            if ord_min != Ordering::Equal {
+            // A metadata-only decimal precision widening can leave one side tagged with the
+            // previous `DecimalSize`. An inconclusive comparison carries no ordering information,
+            // so report the pair as equal and leave the relative order to the caller's sort.
+            let ord_min = try_cmp_stat_scalar_slices(a.min(), b.min());
+            if let Some(ord_min) = ord_min
+                && ord_min != Ordering::Equal
+            {
                 return ord_min;
             }
-            a.max()
-                .iter()
-                .map(Scalar::as_ref)
-                .cmp(b.max().iter().map(Scalar::as_ref))
+            try_cmp_stat_scalar_slices(a.max(), b.max()).unwrap_or(Ordering::Equal)
         }
         _ => Ordering::Equal,
     }
