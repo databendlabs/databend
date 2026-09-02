@@ -46,6 +46,7 @@ pub enum SpillerType {
     Aggregation,
     MaterializedCTE,
     ResultSet,
+    Recluster,
 }
 
 impl Display for SpillerType {
@@ -58,6 +59,7 @@ impl Display for SpillerType {
             SpillerType::Aggregation => write!(f, "Aggregation"),
             SpillerType::MaterializedCTE => write!(f, "MaterializedCTE"),
             SpillerType::ResultSet => write!(f, "ResultSet"),
+            SpillerType::Recluster => write!(f, "Recluster"),
         }
     }
 }
