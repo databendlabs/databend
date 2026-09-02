@@ -23,6 +23,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
+tonic_013 = { package = "tonic", version = "0.13.1", features = ["transport"] }
 
 [lints]
 workspace = true

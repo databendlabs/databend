@@ -170,16 +170,16 @@ group by a, b, c
 EvalScalar
 ├── output columns: [source.a (#0), source.b (#1), source.c (#2), sum(t) (#7), count(t) (#8)]
 ├── expressions: [mv_by_abc.a (#27), mv_by_abc.b (#28), mv_by_abc.c (#29), sum_t (#32), count_t (#33)]
-├── estimated rows: 1.00
+├── estimated rows: 5.00
 └── AggregateFinal
     ├── output columns: [sum_t (#32), count_t (#33), mv_by_abc.a (#27), mv_by_abc.b (#28), mv_by_abc.c (#29)]
     ├── group by: [a, b, c]
     ├── aggregate functions: [sum_merge(sum_t), count_merge(count_t)]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 5.00
     └── AggregatePartial
         ├── group by: [a, b, c]
         ├── aggregate functions: [sum_merge(sum_t), count_merge(count_t)]
-        ├── estimated rows: 1.00
+        ├── estimated rows: 5.00
         └── TableScan
             ├── table: default.explain_materialized_view_rewrite.mv_by_abc
             ├── scan id: 2
@@ -190,7 +190,7 @@ EvalScalar
             ├── partitions scanned: 2
             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+            └── estimated rows: 5.00
 
 # A separate detail MV covers non-aggregate projection and predicate matching.
 statement ok

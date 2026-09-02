@@ -11,3 +11,17 @@ sql: to_decimal(number, number)
 status: error
 code: 1065
 message: Invalid arguments for `to_decimal`, precision is only allowed to be a constant
+
+=== partially_folded_if_keeps_argument_alignment ===
+description: Removing constant IF branches must preserve alignment with planner arguments.
+sql: if(false, 1, number > 0, 2, 3)
+status: ok
+scalar: if(false, 1, gt(number (#0), 0), 2, 3)
+type: UInt8
+
+=== partially_folded_if_with_nested_cast ===
+description: A nested cast selected by constant folding must not be treated as a top-level cast rewrite.
+sql: if(true, CAST(number AS BIGINT), 0)
+status: ok
+scalar: if(true, CAST(number (#0) AS Int64 NULL), 0)
+type: Int64 NULL

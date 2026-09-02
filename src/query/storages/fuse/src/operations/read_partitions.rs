@@ -58,6 +58,7 @@ use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
@@ -1022,6 +1023,10 @@ impl FuseTable {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
+            let false_positive_rate = match index.options.get("false_positive_rate") {
+                None => DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
+                Some(s) => s.parse::<f64>()?,
+            };
 
             for column_id in &index.column_ids {
                 let Some((pos, field)) = table_schema
@@ -1031,7 +1036,13 @@ impl FuseTable {
                 else {
                     continue;
                 };
-                ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
+                ngram_index_args.push(NgramArgs::new(
+                    pos,
+                    field.clone(),
+                    gram_size,
+                    bloom_size,
+                    false_positive_rate,
+                ));
             }
         }
         Ok(ngram_index_args)

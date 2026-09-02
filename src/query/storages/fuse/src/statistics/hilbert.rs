@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::BinaryColumn;
 use databend_common_expression::types::DataType;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use rayon::prelude::*;
 
 use super::endpoint_sort;
@@ -29,12 +34,94 @@ const MIN_RECTS_PER_SWEEP_PARTITION: usize = 4096;
 // 10% extra copies so parallelism cannot cause disproportionate CPU and memory amplification.
 const MAX_EXTRA_SWEEP_REPLICAS_PERCENT: usize = 10;
 
-#[derive(Clone, Copy)]
-struct Rect<T> {
-    x_min: T,
-    x_max: T,
-    y_min: T,
-    y_max: T,
+/// Closed two-dimensional MBR used by Hilbert diagnostics and recluster selection.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct HilbertRect<T> {
+    pub(crate) x_min: T,
+    pub(crate) x_max: T,
+    pub(crate) y_min: T,
+    pub(crate) y_max: T,
+}
+
+impl HilbertRect<usize> {
+    /// Minimum bounding rectangle of a non-empty member set.
+    pub(crate) fn bounding(boxes: &[Self], members: &[usize]) -> Self {
+        let mut iter = members.iter();
+        let first = iter
+            .next()
+            .map(|idx| boxes[*idx])
+            .expect("bounding rectangle requires at least one member");
+        iter.fold(first, |acc, idx| {
+            let item = boxes[*idx];
+            Self {
+                x_min: acc.x_min.min(item.x_min),
+                x_max: acc.x_max.max(item.x_max),
+                y_min: acc.y_min.min(item.y_min),
+                y_max: acc.y_max.max(item.y_max),
+            }
+        })
+    }
+
+    /// Whether two closed rectangles share at least one point.
+    pub(crate) fn intersects(&self, other: &Self) -> bool {
+        self.x_min <= other.x_max
+            && other.x_min <= self.x_max
+            && self.y_min <= other.y_max
+            && other.y_min <= self.y_max
+    }
+}
+
+/// Read a validated two-dimensional MBR from persisted Hilbert cluster statistics.
+pub(crate) fn hilbert_rect_from_stats(stats: &ClusterStatistics) -> Result<HilbertRect<Scalar>> {
+    let (min, max) = valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS)
+        .ok_or_else(|| {
+            ErrorCode::Internal("Hilbert overlap requires normalized 2D cluster statistics")
+        })?;
+    Ok(HilbertRect {
+        x_min: min[0].clone(),
+        x_max: max[0].clone(),
+        y_min: min[1].clone(),
+        y_max: max[1].clone(),
+    })
+}
+
+/// Coordinate-compress scalar MBR endpoints while preserving closed-range overlap semantics.
+pub(crate) fn rank_hilbert_rects(bounds: &[HilbertRect<Scalar>]) -> Vec<HilbertRect<usize>> {
+    let mut x = Vec::with_capacity(bounds.len() * 2);
+    let mut y = Vec::with_capacity(bounds.len() * 2);
+    for item in bounds {
+        x.push(&item.x_min);
+        x.push(&item.x_max);
+        y.push(&item.y_min);
+        y.push(&item.y_max);
+    }
+    sort_dedup_scalars(&mut x);
+    sort_dedup_scalars(&mut y);
+
+    bounds
+        .iter()
+        .map(|item| HilbertRect {
+            x_min: rank_scalar(&x, &item.x_min),
+            x_max: rank_scalar(&x, &item.x_max),
+            y_min: rank_scalar(&y, &item.y_min),
+            y_max: rank_scalar(&y, &item.y_max),
+        })
+        .collect()
+}
+
+fn sort_dedup_scalars(values: &mut Vec<&Scalar>) {
+    values.sort_unstable_by(|left, right| scalar_cmp(left, right));
+    values.dedup_by(|left, right| scalar_cmp(left, right) == Ordering::Equal);
+}
+
+fn scalar_cmp(left: &Scalar, right: &Scalar) -> Ordering {
+    left.as_ref().cmp(&right.as_ref())
+}
+
+fn rank_scalar(sorted: &[&Scalar], value: &Scalar) -> usize {
+    sorted
+        .binary_search_by(|probe| scalar_cmp(probe, value))
+        .expect("coordinate was collected before ranking")
 }
 
 struct RankedDimension {
@@ -185,7 +272,7 @@ trait SweepEvents {
 }
 
 struct RankedEvents<'a> {
-    boxes: &'a [Rect<u32>],
+    boxes: &'a [HilbertRect<u32>],
     starts: &'a [u32],
     ends: &'a [u32],
 }
@@ -338,7 +425,7 @@ fn sweep_overlap_pairs<E: SweepEvents>(partition: &SweepPartition<E>) -> u64 {
 }
 
 struct RankedSweep {
-    boxes: Vec<Rect<u32>>,
+    boxes: Vec<HilbertRect<u32>>,
     starts: Vec<u32>,
     ends: Vec<u32>,
     outer_count: usize,
@@ -367,7 +454,7 @@ fn arrange_sweep(x: RankedDimension, y: RankedDimension) -> RankedSweep {
             .ranks
             .into_iter()
             .zip(y.ranks)
-            .map(|(x, y)| Rect {
+            .map(|(x, y)| HilbertRect {
                 x_min: x[0],
                 x_max: x[1],
                 y_min: y[0],
@@ -386,7 +473,7 @@ fn arrange_sweep(x: RankedDimension, y: RankedDimension) -> RankedSweep {
             .ranks
             .into_iter()
             .zip(y.ranks)
-            .map(|(x, y)| Rect {
+            .map(|(x, y)| HilbertRect {
                 x_min: y[0],
                 x_max: y[1],
                 y_min: x[0],
@@ -407,7 +494,7 @@ fn arrange_sweep(x: RankedDimension, y: RankedDimension) -> RankedSweep {
 /// Duplicate start coordinates collapse naturally, so the actual partition count may be lower than
 /// requested. Boundaries define half-open outer ranges except rectangle overlap remains closed.
 fn partition_boundaries(
-    boxes: &[Rect<u32>],
+    boxes: &[HilbertRect<u32>],
     starts: &[u32],
     outer_count: usize,
     requested_partitions: usize,
@@ -450,7 +537,7 @@ struct SweepPlan {
 /// diagnostics cannot run; callers retain a narrower valid plan, with the single-partition plan as
 /// the unconditional fallback.
 fn build_sweep_plan(
-    boxes: &[Rect<u32>],
+    boxes: &[HilbertRect<u32>],
     boundaries: Vec<u32>,
     extra_replica_limit: usize,
 ) -> Option<SweepPlan> {
@@ -491,7 +578,7 @@ fn build_sweep_plan(
 }
 
 fn choose_sweep_plan(
-    boxes: &[Rect<u32>],
+    boxes: &[HilbertRect<u32>],
     starts: &[u32],
     outer_count: usize,
     max_threads: usize,
@@ -532,7 +619,7 @@ fn local_rank(coordinates: &[u32], coordinate: u32) -> u32 {
 }
 
 fn build_sweep_partition(
-    boxes: &[Rect<u32>],
+    boxes: &[HilbertRect<u32>],
     members: Vec<u32>,
     outer_left: u32,
     outer_right: u32,
@@ -729,7 +816,7 @@ mod tests {
 
     use super::*;
 
-    fn naive_diagnostics(rects: &[Rect<u8>]) -> (usize, u64) {
+    fn naive_diagnostics(rects: &[HilbertRect<u8>]) -> (usize, u64) {
         let pairs = (0..rects.len())
             .flat_map(|left| ((left + 1)..rects.len()).map(move |right| (left, right)))
             .filter(|(left, right)| {
@@ -753,7 +840,7 @@ mod tests {
         (depth, pairs)
     }
 
-    fn assert_matches_naive(rects: &[Rect<u8>]) {
+    fn assert_matches_naive(rects: &[HilbertRect<u8>]) {
         let ty = DataType::Number(NumberDataType::UInt8);
         let mut builders = [
             ColumnBuilder::with_capacity(&ty, rects.len() * 2),
@@ -816,7 +903,7 @@ mod tests {
                 state ^= state >> 27;
                 let y_min = (state % 224) as u8;
                 let y_max = y_min + ((state >> 8) % 16) as u8;
-                Rect {
+                HilbertRect {
                     x_min,
                     x_max,
                     y_min,
@@ -826,19 +913,19 @@ mod tests {
             .collect::<Vec<_>>();
         assert_matches_naive(&rects);
         assert_matches_naive(&[
-            Rect {
+            HilbertRect {
                 x_min: 0,
                 x_max: 1,
                 y_min: 0,
                 y_max: 1,
             },
-            Rect {
+            HilbertRect {
                 x_min: 1,
                 x_max: 2,
                 y_min: 1,
                 y_max: 2,
             },
-            Rect {
+            HilbertRect {
                 x_min: 1,
                 x_max: 1,
                 y_min: 1,

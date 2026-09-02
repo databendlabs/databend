@@ -278,6 +278,10 @@ impl ClusteringInformationImpl<'_> {
             )));
         }
         let capacity = snapshot.summary.block_count as usize;
+        // `clustering_information` intentionally measures only the declared cluster-key domains
+        // across the whole table. PARTITION BY boundaries are outside this function's metric, even
+        // though pruning and recluster execution are partition-local. Changing that established
+        // definition and its reported values should be handled in a separate compatibility PR.
         let mut endpoint_builders = (!key_types.is_empty()).then(|| {
             key_types
                 .iter()

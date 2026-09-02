@@ -319,15 +319,16 @@ fn extract_leveled_strings(
     let leveled_results =
         FilterHelpers::find_leveled_eq_filters(expr, level_names, func_ctx, &BUILTIN_FUNCTIONS)?;
 
-    for (i, scalars) in leveled_results.iter().enumerate() {
-        for r in scalars.iter() {
+    for (i, scalars) in leveled_results.into_iter().enumerate() {
+        for r in scalars {
+            let data_type = r.as_ref().infer_data_type();
             let e = Expr::Constant(Constant {
                 span: None,
-                scalar: r.clone(),
-                data_type: r.as_ref().infer_data_type(),
+                scalar: r,
+                data_type,
             });
 
-            if let Ok(s) = check_string::<usize>(None, func_ctx, &e, &BUILTIN_FUNCTIONS) {
+            if let Ok(s) = check_string::<usize>(None, func_ctx, e, &BUILTIN_FUNCTIONS) {
                 match i {
                     0 => res1.push(s),
                     1 => res2.push(s),
