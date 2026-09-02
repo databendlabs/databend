@@ -150,7 +150,7 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
         .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
         .await?;
 
-    for value in 1..=3 {
+    for value in 1..=4 {
         fixture
             .execute_command(&format!(
                 "insert into {db_name}.{tbl_name} values ({value})"
@@ -174,17 +174,17 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     )
     .try_collect()
     .await?;
-    assert_eq!(snapshots.len(), 3);
+    assert_eq!(snapshots.len(), 4);
 
-    // Start with S3 -> S2 -> S1, then flash back to S2. S3 remains in
-    // storage, but the current committed chain is S2 -> S1.
-    let abandoned_snapshot = &snapshots[0].0;
-    let lvt_snapshot = &snapshots[1].0;
-    let oldest_snapshot = &snapshots[2].0;
+    // Start with S4 -> S3 -> S2 -> S1, then flash back to S2. Object
+    // listing still sees S4 and S3, but the current chain is S2 -> S1.
+    let lvt_snapshot = &snapshots[0].0;
+    let abandoned_gc_root = &snapshots[1].0;
+    let flashback_snapshot = &snapshots[2].0;
     fixture
         .execute_command(&format!(
             "alter table {db_name}.{tbl_name} flashback to (snapshot => '{}')",
-            lvt_snapshot.snapshot_id.simple()
+            flashback_snapshot.snapshot_id.simple()
         ))
         .await?;
 
@@ -194,10 +194,10 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
-    assert_eq!(current_snapshot.snapshot_id, lvt_snapshot.snapshot_id);
-    assert_ne!(current_snapshot.snapshot_id, abandoned_snapshot.snapshot_id);
+    assert_eq!(current_snapshot.snapshot_id, flashback_snapshot.snapshot_id);
 
-    // Fix LVT at S2 so the test does not depend on the host clock.
+    // Fix LVT at S4. The persisted LVT is monotonic, so set_lvt() keeps this
+    // value even though the current snapshot is S2.
     catalog
         .set_table_lvt(
             &LeastVisibleTimeIdent::new(table_ctx.get_tenant(), fuse_table.get_id()),
@@ -205,22 +205,25 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
         )
         .await?;
 
-    // Without flashback protection, S2 is an anchor from object listing.
-    // Vacuum uses its predecessor S1 as the GC root.
+    // Without flashback protection, object listing uses S4 as the anchor and
+    // selects its predecessor S3, which belongs to the abandoned branch.
     let selection = fuse_table
         .prepare_snapshot_gc_selection(&table_ctx, false)
         .await?
-        .expect("S1 should be selected as the GC root");
-    assert_eq!(selection.gc_root.snapshot_id, oldest_snapshot.snapshot_id);
+        .expect("S3 should be selected as the GC root");
+    assert_eq!(selection.gc_root.snapshot_id, abandoned_gc_root.snapshot_id);
 
-    // With flashback protection, vacuum walks the current committed chain and
-    // selects the first snapshot at or before LVT, which is S2.
+    // With flashback protection, vacuum walks the current committed chain from
+    // S2. It selects S2 and does not use a snapshot from the abandoned branch.
     let selection = fuse_table
         .prepare_snapshot_gc_selection(&table_ctx, true)
         .await?
         .expect("S2 should be selected as the GC root");
-    assert_eq!(selection.gc_root.snapshot_id, lvt_snapshot.snapshot_id);
-    assert_eq!(selection.gc_root.timestamp, lvt_snapshot.timestamp);
+    assert_eq!(
+        selection.gc_root.snapshot_id,
+        flashback_snapshot.snapshot_id
+    );
+    assert_eq!(selection.gc_root.timestamp, flashback_snapshot.timestamp);
 
     Ok(())
 }
