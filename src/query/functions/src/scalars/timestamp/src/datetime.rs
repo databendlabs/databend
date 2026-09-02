@@ -369,8 +369,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 let mut d = string_to_timestamp(v, &ctx.tz);
                 // the string max domain maybe truncated into `"2024-09-02 00:0�"`
                 const MAX_LEN: usize = "1000-01-01".len();
-                if d.is_err() && v.len() > MAX_LEN {
-                    d = string_to_timestamp(&v[0..MAX_LEN], &ctx.tz);
+                if d.is_err()
+                    && v.len() > MAX_LEN
+                    && let Some(prefix) = v.get(..MAX_LEN)
+                {
+                    d = string_to_timestamp(prefix, &ctx.tz);
                     if i == 0 {
                         extend_num = -1;
                     } else {
@@ -907,8 +910,11 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
                 let mut extend_num = 0;
                 let mut d = string_to_date(v, &ctx.tz);
-                if d.is_err() && v.len() > 10 {
-                    d = string_to_date(&v[0..10], &ctx.tz);
+                if d.is_err()
+                    && v.len() > 10
+                    && let Some(prefix) = v.get(..10)
+                {
+                    d = string_to_date(prefix, &ctx.tz);
                     if i == 0 {
                         extend_num = -1;
                     } else {
