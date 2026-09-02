@@ -251,6 +251,23 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )])?,
         },
         SqlJoinStatisticsCase {
+            name: "intersect_multi_key_null_only_match_preserves_all_null",
+            description: "A null-only match on one null-safe INTERSECT key keeps the shared key AllNull even when another key has ordinary value bounds.",
+            sql: "SELECT k, k FROM l INTERSECT SELECT a, b FROM r",
+            expected_join_type: JoinType::LeftSemi,
+            left: sql_join_table("CREATE TABLE l(k INT NULL)", 2, [(
+                "k",
+                r#"{"min": 1, "max": 1, "ndv": 1, "null_count": 1}"#,
+            )])?,
+            right: sql_join_table("CREATE TABLE r(a INT NULL, b INT NULL)", 2, [
+                (
+                    "a",
+                    r#"{"min": null, "max": null, "ndv": 0, "null_count": 2}"#,
+                ),
+                ("b", r#"{"min": 1, "max": 1, "ndv": 1, "null_count": 1}"#),
+            ])?,
+        },
+        SqlJoinStatisticsCase {
             name: "intersect_missing_peer_statistics_uses_null_safe_fallback",
             description: "An incomplete null-safe equality keeps the preserved-side INTERSECT cardinality without inventing a matched value distribution.",
             sql: "SELECT k FROM l INTERSECT SELECT k FROM r",

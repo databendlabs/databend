@@ -114,20 +114,19 @@ impl JoinColumnStatsBuilder<'_> {
 
         if candidates
             .iter()
-            .all(|candidate| matches!(candidate, ColumnStat::AllNull { .. }))
+            .any(|candidate| matches!(candidate, ColumnStat::AllNull { .. }))
         {
+            // An AllNull distribution is a stronger intersection constraint than a value
+            // distribution: every row satisfying this equality has a NULL value. Keep it
+            // when another null-safe equality on the same column has ordinary value bounds.
+            // Its NULL matches still have to satisfy every condition, so retain the minimum
+            // count across all candidate distributions.
             let null_count = candidates
                 .iter()
                 .map(|candidate| candidate.null_count())
                 .reduce(min_count)
                 .unwrap();
             return Ok(Some(ColumnStat::AllNull { null_count }));
-        }
-        if candidates
-            .iter()
-            .any(|candidate| matches!(candidate, ColumnStat::AllNull { .. }))
-        {
-            return Ok(None);
         }
 
         let mut bounds = first.bounds().unwrap();
