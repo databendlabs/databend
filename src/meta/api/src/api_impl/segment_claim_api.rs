@@ -281,11 +281,22 @@ mod tests {
             .await?
             .claim_id
             .expect("first disjoint claim should succeed");
-        store
+        let second = store
             .create_segment_claim(create_req("q2", vec!["s2"]))
             .await?
             .claim_id
             .expect("second disjoint claim should succeed");
+
+        // Claim records are table-scoped, but all tables share one sequence key. This keeps claim
+        // IDs globally unique for the query node's holder registry.
+        let mut other_table_req = create_req("other-table", vec!["s1"]);
+        other_table_req.table_id = TABLE_ID + 1;
+        let other_table = store
+            .create_segment_claim(other_table_req)
+            .await?
+            .claim_id
+            .expect("the same segment location on another table should succeed");
+        assert!(first < second && second < other_table);
 
         let claims = store
             .list_segment_claims(ListSegmentClaimsReq {
