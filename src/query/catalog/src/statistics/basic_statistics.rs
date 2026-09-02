@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
@@ -31,19 +32,24 @@ pub struct BasicColumnStatistics {
     pub in_memory_size: u64,
 }
 
-impl From<ColumnStatistics> for BasicColumnStatistics {
-    fn from(value: ColumnStatistics) -> Self {
-        Self {
-            min: value.min.to_datum(),
-            max: value.max.to_datum(),
-            ndv: value.distinct_of_values,
-            null_count: value.null_count,
-            in_memory_size: value.in_memory_size,
-        }
-    }
-}
-
 impl BasicColumnStatistics {
+    pub fn try_from_column_statistics(
+        value: &ColumnStatistics,
+        data_type: &DataType,
+    ) -> Option<Self> {
+        let null_count = value.null_count;
+        let in_memory_size = value.in_memory_size;
+        let ndv = value.distinct_of_values;
+        let (min, max) = value.try_view(data_type)?.datum_bounds();
+        Some(Self {
+            min,
+            max,
+            ndv,
+            null_count,
+            in_memory_size,
+        })
+    }
+
     pub fn new_null() -> Self {
         Self {
             min: None,

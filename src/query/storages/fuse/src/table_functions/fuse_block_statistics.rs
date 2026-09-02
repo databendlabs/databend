@@ -94,6 +94,7 @@ impl TableMetaFunc for FuseBlockStatistics {
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), schema.clone());
 
         let mut num_rows = 0;
+        let leaf_fields = schema.leaf_fields();
         let chunk_size = std::cmp::min(
             ctx.get_settings().get_max_threads()? as usize * 4,
             snapshot.summary.block_count as usize,
@@ -119,7 +120,10 @@ impl TableMetaFunc for FuseBlockStatistics {
                         .map(|stats| stats.iter().collect::<BTreeMap<_, _>>());
 
                     for (column_id, column_stat) in col_stats {
-                        let Ok(field) = schema.field_of_column_id(*column_id) else {
+                        let Some(field) = leaf_fields
+                            .iter()
+                            .find(|field| field.column_id() == *column_id)
+                        else {
                             continue;
                         };
                         block_locations.push(block.location.0.clone());
@@ -130,7 +134,7 @@ impl TableMetaFunc for FuseBlockStatistics {
                             field.data_type().remove_nullable(),
                             &func_ctx,
                         );
-                        statistics.push(Some(stat));
+                        statistics.push(stat);
                         spatial_statistics.push(None);
                         vector_statistics.push(None);
 
@@ -202,10 +206,11 @@ fn build_column_statistics_variant(
     column_stat: &databend_storages_common_table_meta::meta::ColumnStatistics,
     field_type: TableDataType,
     func_ctx: &FunctionContext,
-) -> Vec<u8> {
+) -> Option<Vec<u8>> {
+    let view = column_stat.try_view_with_table_type(&field_type)?;
     let scalar = Scalar::Tuple(vec![
-        column_stat.min.clone(),
-        column_stat.max.clone(),
+        view.min().clone(),
+        view.max().clone(),
         Scalar::Number(NumberScalar::UInt64(column_stat.null_count)),
         Scalar::Number(NumberScalar::UInt64(column_stat.in_memory_size)),
         column_stat
@@ -230,7 +235,7 @@ fn build_column_statistics_variant(
         ],
     };
 
-    build_variant(scalar, &data_type, func_ctx)
+    Some(build_variant(scalar, &data_type, func_ctx))
 }
 
 fn build_spatial_statistics_variant(

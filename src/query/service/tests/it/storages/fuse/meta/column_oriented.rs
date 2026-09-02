@@ -139,8 +139,10 @@ async fn generate_column_oriented_segment()
 fn check_column_stats_and_meta(
     block_metas: &[BlockMeta],
     column_oriented_segment: &ColumnOrientedSegment,
+    table_schema: &TableSchema,
     projection: &[u32],
 ) {
+    let leaf_fields = table_schema.leaf_fields();
     for (i, block_meta) in block_metas.iter().enumerate() {
         for (col_id, col_stat) in block_meta.col_stats.iter() {
             if !projection.contains(col_id) {
@@ -160,8 +162,15 @@ fn check_column_stats_and_meta(
                 .unwrap()
                 .as_u_int64()
                 .unwrap();
-            assert_eq!(min, col_stat.min.as_ref());
-            assert_eq!(max, col_stat.max.as_ref());
+            let field = leaf_fields
+                .iter()
+                .find(|field| field.column_id() == *col_id)
+                .unwrap();
+            let view = col_stat
+                .try_view_with_table_type(field.data_type())
+                .unwrap();
+            assert_eq!(min, view.min().as_ref());
+            assert_eq!(max, view.max().as_ref());
             assert_eq!(null_count, &col_stat.null_count);
             assert_eq!(in_memory_size, &col_stat.in_memory_size);
             assert_eq!(distinct_of_values, &col_stat.distinct_of_values.unwrap());
@@ -350,10 +359,11 @@ fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrie
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_segment_builder() -> anyhow::Result<()> {
-    let (column_oriented_segment, block_metas, _) = generate_column_oriented_segment().await?;
+    let (column_oriented_segment, block_metas, table_schema) =
+        generate_column_oriented_segment().await?;
 
     check_block_level_meta(&block_metas, &column_oriented_segment);
-    check_column_stats_and_meta(&block_metas, &column_oriented_segment, &[]);
+    check_column_stats_and_meta(&block_metas, &column_oriented_segment, &table_schema, &[]);
     check_summary(&block_metas, &column_oriented_segment);
 
     Ok(())
@@ -413,7 +423,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     assert_eq!(col_meta_type(), meta_1.data_type);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
-    check_column_stats_and_meta(&block_metas, &cached, &[col_id]);
+    check_column_stats_and_meta(&block_metas, &cached, &table_schema, &[col_id]);
 
     // 3. read and cache meta and stats of column 2
     let col_id = 2;
@@ -427,7 +437,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     assert_eq!(cached.segment_schema.fields.len(), 13);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
-    check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
+    check_column_stats_and_meta(&block_metas, &cached, &table_schema, &[1, 2]);
 
     // 4. read column 1 again, should hit cache
     let col_id = 1;
@@ -441,7 +451,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     assert_eq!(cached.segment_schema.fields.len(), 13);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
-    check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
+    check_column_stats_and_meta(&block_metas, &cached, &table_schema, &[1, 2]);
     assert_eq!(column_oriented_segment.summary, cached.summary);
     assert_eq!(
         column_oriented_segment.segment_schema,

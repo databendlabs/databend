@@ -32,11 +32,15 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDomain;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_index::eliminate_cast;
+use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -117,6 +121,33 @@ fn test_range_index_prunes_integer_column_eq_numeric_string_literal() {
     let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
     assert!(!index.apply(&stats, None, |_| false).unwrap());
+}
+
+#[test]
+fn test_decimal_statistics_use_current_schema_size() {
+    let old_size = DecimalSize::new(10, 2).unwrap();
+    let new_size = DecimalSize::new(15, 2).unwrap();
+    let statistics = ColumnStatistics::new(
+        Scalar::Decimal(DecimalScalar::Decimal64(123, old_size)),
+        Scalar::Decimal(DecimalScalar::Decimal64(456, old_size)),
+        0,
+        1000,
+        None,
+    );
+
+    let domain = statistics_to_domain(vec![&statistics], &DataType::Decimal(new_size));
+    match domain {
+        Domain::Decimal(DecimalDomain::Decimal64(domain, size)) => {
+            assert_eq!(domain.min, 123);
+            assert_eq!(domain.max, 456);
+            assert_eq!(size, new_size);
+        }
+        domain => panic!("unexpected domain: {domain:?}"),
+    }
+
+    let incompatible_type = DataType::Decimal(DecimalSize::new(15, 3).unwrap());
+    let domain = statistics_to_domain(vec![&statistics], &incompatible_type);
+    assert_eq!(domain, Domain::full(&incompatible_type));
 }
 
 #[test]
@@ -458,13 +489,7 @@ fn create_stats(domains: &[(&str, Scalar, Scalar)], schema: &TableSchema) -> Sta
         .map(|(name, min, max)| {
             (
                 schema.leaf_columns_of(&name.to_string())[0],
-                ColumnStatistics {
-                    min: min.clone(),
-                    max: max.clone(),
-                    null_count: 0,
-                    in_memory_size: 1000,
-                    distinct_of_values: None,
-                },
+                ColumnStatistics::new(min.clone(), max.clone(), 0, 1000, None),
             )
         })
         .collect()

@@ -1314,6 +1314,7 @@ impl Table for FuseTable {
                 .unwrap_or(0);
             FuseTableColumnStatisticsProvider::new(
                 stats,
+                self.schema(),
                 histograms,
                 top_n,
                 count_min_sketch,
@@ -1387,31 +1388,36 @@ impl Table for FuseTable {
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
+        let leaf_fields = self.schema().leaf_fields();
         let r = reduced
             .into_iter()
-            .map(|(k, v)| {
+            .filter_map(|(k, v)| {
+                let field = leaf_fields.iter().find(|field| field.column_id() == k)?;
+                let view = v.try_view_with_table_type(field.data_type())?;
                 let truncate_len = col_stats_truncate_lens
                     .get(&k)
                     .map(|&n| n as usize)
                     .unwrap_or(STATS_STRING_PREFIX_LEN);
-                let min_may_be_truncated = match &v.min {
+                let min = view.min().clone();
+                let max = view.max().clone();
+                let min_may_be_truncated = match &min {
                     Scalar::String(s) => s.len() >= truncate_len,
                     _ => false,
                 };
-                let max_may_be_truncated = match &v.max {
+                let max_may_be_truncated = match &max {
                     Scalar::String(s) => s.len() >= truncate_len,
                     _ => false,
                 };
-                (k, ColumnRange {
+                Some((k, ColumnRange {
                     min: Bound {
                         may_be_truncated: min_may_be_truncated,
-                        value: v.min,
+                        value: min,
                     },
                     max: Bound {
                         may_be_truncated: max_may_be_truncated,
-                        value: v.max,
+                        value: max,
                     },
-                })
+                }))
             })
             .collect();
         Ok(Some(r))

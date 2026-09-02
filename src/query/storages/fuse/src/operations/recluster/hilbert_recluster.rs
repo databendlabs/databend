@@ -295,8 +295,9 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
         stats: &ClusterStatistics,
     ) -> bool {
         stats.cluster_key_id == properties.cluster_key_info.cluster_key_id()
-            && stats.min().len() == properties.prepared_cluster_key_exprs.len()
-            && stats.max().len() == properties.prepared_cluster_key_exprs.len()
+            && stats
+                .try_view(&properties.cluster_stats_data_types)
+                .is_some()
             && valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS).is_some()
     }
 }

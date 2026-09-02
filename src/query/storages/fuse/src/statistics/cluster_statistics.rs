@@ -43,7 +43,6 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::PartitionStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
-use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use log::warn;
 
@@ -477,18 +476,7 @@ pub fn sort_by_cluster_stats(
                 return Ordering::Equal;
             }
 
-            let ord_min = a
-                .min()
-                .iter()
-                .map(Scalar::as_ref)
-                .cmp(b.min().iter().map(Scalar::as_ref));
-            if ord_min != Ordering::Equal {
-                return ord_min;
-            }
-            a.max()
-                .iter()
-                .map(Scalar::as_ref)
-                .cmp(b.max().iter().map(Scalar::as_ref))
+            a.try_cmp(b).unwrap_or(Ordering::Equal)
         }
         _ => Ordering::Equal,
     }
@@ -710,9 +698,17 @@ pub(crate) fn get_min_max_stats(
     cluster_stats: Option<&ClusterStatistics>,
     default_key_id: Option<u32>,
 ) -> (Vec<Scalar>, Vec<Scalar>) {
-    if let Some(v) = cluster_stats.filter(|stats| Some(stats.cluster_key_id) == default_key_id) {
-        // Cluster stats min/max are guaranteed when generated; reuse them directly.
-        return (v.min().clone(), v.max().clone());
+    if let Some(view) = cluster_stats
+        .filter(|stats| Some(stats.cluster_key_id) == default_key_id)
+        .and_then(|stats| {
+            let data_types = prepared_exprs
+                .iter()
+                .map(|expr| expr.data_type.clone())
+                .collect::<Vec<_>>();
+            stats.try_view(&data_types)
+        })
+    {
+        return (view.min().to_vec(), view.max().to_vec());
     }
 
     let func_ctx = FunctionContext::default();
@@ -770,20 +766,26 @@ pub(crate) fn hilbert_bounds_for_diagnostics(
     cluster_key_id: u32,
 ) -> [Scalar; HILBERT_CLUSTER_DIMENSIONS * 2] {
     debug_assert_eq!(prepared_exprs.len(), HILBERT_CLUSTER_DIMENSIONS);
-    if let Some((min, max)) = cluster_stats
-        .filter(|stats| {
-            stats.cluster_key_id == cluster_key_id
-                && stats.min().len() == HILBERT_CLUSTER_DIMENSIONS
-                && stats.max().len() == HILBERT_CLUSTER_DIMENSIONS
-        })
-        .and_then(|stats| valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS))
+    let data_types = prepared_exprs
+        .iter()
+        .map(|expr| expr.data_type.clone())
+        .collect::<Vec<_>>();
+    if let Some(view) = cluster_stats
+        .filter(|stats| stats.cluster_key_id == cluster_key_id)
+        .and_then(|stats| stats.try_view(&data_types))
     {
-        return [
-            min[0].clone(),
-            max[0].clone(),
-            min[1].clone(),
-            max[1].clone(),
-        ];
+        let min = view.min();
+        let max = view.max();
+        if min.len() == HILBERT_CLUSTER_DIMENSIONS
+            && min.iter().zip(max).all(|(min, max)| min <= max)
+        {
+            return [
+                min[0].clone(),
+                max[0].clone(),
+                min[1].clone(),
+                max[1].clone(),
+            ];
+        }
     }
 
     let (min, max) = get_min_max_stats(prepared_exprs, col_stats, None, None);
@@ -821,6 +823,8 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::type_check::check;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::UInt32Type;
@@ -831,6 +835,44 @@ mod tests {
 
     fn int32_scalar(value: i32) -> Scalar {
         Scalar::Number(NumberScalar::Int32(value))
+    }
+
+    fn decimal64_scalar(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    #[test]
+    fn test_sort_by_cluster_stats_handles_decimal_precision_widening() {
+        let old = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(100, 10, 2)],
+            vec![decimal64_scalar(200, 10, 2)],
+            0,
+        );
+        let widened = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(300, 15, 2)],
+            vec![decimal64_scalar(400, 15, 2)],
+            0,
+        );
+        assert_eq!(
+            sort_by_cluster_stats(Some(&old), Some(&widened), 0),
+            Ordering::Less
+        );
+
+        let incompatible = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(3000, 15, 3)],
+            vec![decimal64_scalar(4000, 15, 3)],
+            0,
+        );
+        assert_eq!(
+            sort_by_cluster_stats(Some(&old), Some(&incompatible), 0),
+            Ordering::Equal
+        );
     }
 
     fn int32_column_expr(index: usize, name: &str) -> Expr<usize> {
@@ -1010,8 +1052,11 @@ mod tests {
         assert_eq!(partition_stats.values, vec![Scalar::Number(
             NumberScalar::Int64(7)
         )]);
-        assert_eq!(cluster_stats.min, vec![int32_scalar(1)]);
-        assert_eq!(cluster_stats.max, vec![int32_scalar(2)]);
+        let view = cluster_stats
+            .try_view(&[DataType::Number(NumberDataType::Int32)])
+            .unwrap();
+        assert_eq!(view.min(), &[int32_scalar(1)]);
+        assert_eq!(view.max(), &[int32_scalar(2)]);
         Ok(())
     }
 
@@ -1063,9 +1108,15 @@ mod tests {
 
         let state = generator.gen_with_origin_stats(block, None)?;
         let stats = state.cluster_stats.unwrap();
+        let view = stats
+            .try_view(&[
+                DataType::Number(NumberDataType::Int32),
+                DataType::Number(NumberDataType::Int32),
+            ])
+            .unwrap();
         assert_eq!(stats.cluster_key_id, 7);
-        assert_eq!(stats.min(), &vec![int32_scalar(3), int32_scalar(7)]);
-        assert_eq!(stats.max(), &vec![int32_scalar(3), int32_scalar(7)]);
+        assert_eq!(view.min(), &[int32_scalar(3), int32_scalar(7)]);
+        assert_eq!(view.max(), &[int32_scalar(3), int32_scalar(7)]);
         assert_eq!(stats.level, -1);
         Ok(())
     }
@@ -1097,8 +1148,14 @@ mod tests {
         let state = generator.gen_stats_for_append(block)?;
         assert_eq!(state.data_block.num_columns(), 2);
         let stats = state.cluster_stats.unwrap();
-        assert_eq!(stats.min(), &vec![int32_scalar(1), int32_scalar(2)]);
-        assert_eq!(stats.max(), &vec![int32_scalar(3), int32_scalar(4)]);
+        let view = stats
+            .try_view(&[
+                DataType::Number(NumberDataType::Int32),
+                DataType::Number(NumberDataType::Int32),
+            ])
+            .unwrap();
+        assert_eq!(view.min(), &[int32_scalar(1), int32_scalar(2)]);
+        assert_eq!(view.max(), &[int32_scalar(3), int32_scalar(4)]);
         assert_eq!(stats.level, 4);
         Ok(())
     }

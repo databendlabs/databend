@@ -26,6 +26,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_storage::MetaHLL;
 use serde::Deserialize;
@@ -42,6 +44,9 @@ use crate::meta::VectorDistanceType;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
+use crate::meta::v2::align_stat_scalars;
+use crate::meta::v2::compare_statistics_scalar_slices;
+use crate::meta::v2::compare_statistics_scalars as stats_scalar_cmp;
 use crate::table::ClusterType;
 use crate::table::HILBERT_CLUSTER_DIMENSIONS;
 
@@ -84,19 +89,20 @@ pub fn valid_cluster_stats_hilbert_minmax(
     stats: &ClusterStatistics,
     expected_dim_len: usize,
 ) -> Option<(&[Scalar], &[Scalar])> {
-    let min = stats.min();
-    let max = stats.max();
+    let min = stats.raw_min();
+    let max = stats.raw_max();
     if min.len() != max.len() || min.len() < expected_dim_len {
         return None;
     }
     let start = min.len() - expected_dim_len;
     let min = &min[start..];
     let max = &max[start..];
-    if min
-        .iter()
-        .zip(max)
-        .any(|(min, max)| min.as_ref().cmp(&max.as_ref()) == Ordering::Greater)
-    {
+    if min.iter().zip(max).any(|(min, max)| {
+        !matches!(
+            stats_scalar_cmp(&min.as_ref(), &max.as_ref()),
+            Some(Ordering::Less | Ordering::Equal)
+        )
+    }) {
         return None;
     }
     Some((min, max))
@@ -104,10 +110,10 @@ pub fn valid_cluster_stats_hilbert_minmax(
 
 /// Conservative scalar-key overlap check; incomplete stats are treated as overlapping.
 pub fn cluster_stats_scalar_overlap(left: &ClusterStatistics, right: &ClusterStatistics) -> bool {
-    let left_min = left.min();
-    let left_max = left.max();
-    let right_min = right.min();
-    let right_max = right.max();
+    let left_min = left.raw_min();
+    let left_max = left.raw_max();
+    let right_min = right.raw_min();
+    let right_max = right.raw_max();
     if left_min.len() != left_max.len()
         || right_min.len() != right_max.len()
         || left_min.len() != right_min.len()
@@ -115,8 +121,13 @@ pub fn cluster_stats_scalar_overlap(left: &ClusterStatistics, right: &ClusterSta
         return true;
     }
 
-    scalar_tuple_cmp(left_min, right_max) != Ordering::Greater
-        && scalar_tuple_cmp(right_min, left_max) != Ordering::Greater
+    match (
+        scalar_tuple_cmp(left_min, right_max),
+        scalar_tuple_cmp(right_min, left_max),
+    ) {
+        (Some(left), Some(right)) => left != Ordering::Greater && right != Ordering::Greater,
+        _ => true,
+    }
 }
 
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
@@ -138,8 +149,8 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
         if stats.cluster_key_id != cluster_key_id {
             return None;
         }
-        min_stats.push(stats.min().as_slice());
-        max_stats.push(stats.max().as_slice());
+        min_stats.push(stats.raw_min());
+        max_stats.push(stats.raw_max());
         levels.push(stats.level);
     }
 
@@ -153,34 +164,49 @@ pub fn reduce_cluster_min_max(
     max_stats: &[&[Scalar]],
     cluster_type: ClusterType,
 ) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
-    debug_assert_eq!(min_stats.len(), max_stats.len());
-    if min_stats.is_empty() {
+    if min_stats.is_empty() || min_stats.len() != max_stats.len() {
         return None;
     }
 
+    let data_types = common_cluster_data_types(min_stats, max_stats)?;
+    let min_stats = min_stats
+        .iter()
+        .map(|stats| align_stat_scalars(stats, &data_types))
+        .collect::<Option<Vec<_>>>()?;
+    let max_stats = max_stats
+        .iter()
+        .map(|stats| align_stat_scalars(stats, &data_types))
+        .collect::<Option<Vec<_>>>()?;
+
     match cluster_type {
         ClusterType::Linear => {
-            let min = min_stats
-                .iter()
-                .copied()
-                .min_by(|left, right| scalar_tuple_cmp(left, right))?
-                .to_vec();
-            let max = max_stats
-                .iter()
-                .copied()
-                .max_by(|left, right| scalar_tuple_cmp(left, right))?
-                .to_vec();
+            let mut min = &min_stats[0];
+            let mut max = &max_stats[0];
+            for next in min_stats.iter().skip(1) {
+                if scalar_tuple_cmp(next, min)? == Ordering::Less {
+                    min = next;
+                }
+            }
+            for next in max_stats.iter().skip(1) {
+                if scalar_tuple_cmp(next, max)? == Ordering::Greater {
+                    max = next;
+                }
+            }
+            let min = min.to_vec();
+            let max = max.to_vec();
             Some((min, max))
         }
         ClusterType::Hilbert => {
             if min_stats.len() != max_stats.len()
-                || min_stats.iter().zip(max_stats).any(|(min, max)| {
+                || min_stats.iter().zip(&max_stats).any(|(min, max)| {
                     min.len() != HILBERT_CLUSTER_DIMENSIONS
                         || max.len() != HILBERT_CLUSTER_DIMENSIONS
-                        || min
-                            .iter()
-                            .zip(*max)
-                            .any(|(min, max)| min.as_ref().cmp(&max.as_ref()) == Ordering::Greater)
+                        || min.iter().zip(max.iter()).any(|(min, max)| {
+                            !matches!(
+                                stats_scalar_cmp(&min.as_ref(), &max.as_ref()),
+                                Some(Ordering::Less | Ordering::Equal)
+                            )
+                        })
                 })
             {
                 return None;
@@ -190,12 +216,13 @@ pub fn reduce_cluster_min_max(
             let mut max = max_stats[0].to_vec();
             for (next_min, next_max) in min_stats.iter().zip(max_stats).skip(1) {
                 for dimension in 0..HILBERT_CLUSTER_DIMENSIONS {
-                    if next_min[dimension].as_ref().cmp(&min[dimension].as_ref()) == Ordering::Less
+                    if stats_scalar_cmp(&next_min[dimension].as_ref(), &min[dimension].as_ref())
+                        == Some(Ordering::Less)
                     {
                         min[dimension] = next_min[dimension].clone();
                     }
-                    if next_max[dimension].as_ref().cmp(&max[dimension].as_ref())
-                        == Ordering::Greater
+                    if stats_scalar_cmp(&next_max[dimension].as_ref(), &max[dimension].as_ref())
+                        == Some(Ordering::Greater)
                     {
                         max[dimension] = next_max[dimension].clone();
                     }
@@ -206,10 +233,57 @@ pub fn reduce_cluster_min_max(
     }
 }
 
-fn scalar_tuple_cmp(left: &[Scalar], right: &[Scalar]) -> Ordering {
-    left.iter()
-        .map(Scalar::as_ref)
-        .cmp(right.iter().map(Scalar::as_ref))
+fn scalar_tuple_cmp(left: &[Scalar], right: &[Scalar]) -> Option<Ordering> {
+    compare_statistics_scalar_slices(left, right)
+}
+
+fn common_cluster_data_types(
+    min_stats: &[&[Scalar]],
+    max_stats: &[&[Scalar]],
+) -> Option<Vec<DataType>> {
+    let dimensions = min_stats.first()?.len();
+    if min_stats
+        .iter()
+        .chain(max_stats)
+        .any(|stats| stats.len() != dimensions)
+    {
+        return None;
+    }
+
+    (0..dimensions)
+        .map(|dimension| {
+            let mut target = None;
+            for scalar in min_stats
+                .iter()
+                .chain(max_stats)
+                .map(|stats| &stats[dimension])
+            {
+                if scalar.is_null() {
+                    continue;
+                }
+                let data_type = scalar.as_ref().infer_data_type();
+                target = match target {
+                    None => Some(data_type),
+                    Some(DataType::Decimal(current)) => match (scalar, data_type) {
+                        (Scalar::Decimal(decimal), DataType::Decimal(candidate))
+                            if decimal.data_kind() == candidate.data_kind()
+                                && current.data_kind() == candidate.data_kind()
+                                && current.scale() == candidate.scale() =>
+                        {
+                            Some(DataType::Decimal(DecimalSize::new_unchecked(
+                                current.precision().max(candidate.precision()),
+                                current.scale(),
+                            )))
+                        }
+                        _ => return None,
+                    },
+                    Some(current) if current == data_type => Some(current),
+                    Some(_) => return None,
+                };
+            }
+            Some(target.unwrap_or(DataType::Null))
+        })
+        .collect()
 }
 
 const COUNT_MIN_SKETCH_WIDTH: usize = 2048;
@@ -233,13 +307,23 @@ pub struct ColumnTopN {
     pub min_index: Option<usize>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+#[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct ColumnTopNEntry {
     pub scalar: Scalar,
     /// Cached frequency for this scalar.
     pub count: u64,
     pub error: u64,
 }
+
+impl PartialEq for ColumnTopNEntry {
+    fn eq(&self, other: &Self) -> bool {
+        stats_scalar_cmp(&self.scalar.as_ref(), &other.scalar.as_ref()) == Some(Ordering::Equal)
+            && self.count == other.count
+            && self.error == other.error
+    }
+}
+
+impl Eq for ColumnTopNEntry {}
 
 impl PartialOrd for ColumnTopNEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -249,8 +333,11 @@ impl PartialOrd for ColumnTopNEntry {
 
 impl Ord for ColumnTopNEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.scalar
-            .cmp(&other.scalar)
+        stats_scalar_cmp(&self.scalar.as_ref(), &other.scalar.as_ref())
+            // `Ord` is retained for the public entry type, but ColumnTopN itself never uses this
+            // fallback to merge values. Incompatible values are ordered deterministically here
+            // and rejected by the Option-returning comparator in lookup/merge paths.
+            .unwrap_or_else(|| format!("{:?}", self.scalar).cmp(&format!("{:?}", other.scalar)))
             .then_with(|| other.count.cmp(&self.count))
             .then_with(|| self.error.cmp(&other.error))
     }
@@ -265,7 +352,16 @@ impl PartialEq for ColumnTopN {
 impl Eq for ColumnTopN {}
 
 impl ColumnTopN {
+    /// Create an enabled TopN sketch.
+    ///
+    /// A zero-capacity empty value is reserved internally as the tombstone used after
+    /// incompatible segment statistics are encountered. Table-option parsing maps zero to
+    /// `None`, so callers that actually construct a sketch must always request positive capacity.
     pub fn with_capacity(capacity: usize) -> Self {
+        assert!(
+            capacity > 0,
+            "ColumnTopN capacity must be greater than zero"
+        );
         Self {
             capacity,
             values: vec![],
@@ -278,7 +374,7 @@ impl ColumnTopN {
     }
 
     pub fn get_entry(&self, scalar: &Scalar) -> Option<&ColumnTopNEntry> {
-        self.find(&scalar.as_ref())
+        self.find(&scalar.as_ref())?
             .ok()
             .and_then(|index| self.values.get(index))
     }
@@ -288,6 +384,25 @@ impl ColumnTopN {
     }
 
     pub fn merge(&mut self, other: ColumnTopN) -> Result<()> {
+        if !self.merge_compatible(other) {
+            self.disable();
+        }
+        Ok(())
+    }
+
+    /// Merge another sketch after proving all scalar values use compatible statistics types.
+    ///
+    /// `false` means the caller must discard this column's TopN statistics. It is deliberately
+    /// not an error: unusable optimizer statistics must never block a table write.
+    fn merge_compatible(&mut self, mut other: ColumnTopN) -> bool {
+        let Some(decimal_size) = common_top_n_decimal_size(&self.values, &other.values) else {
+            return false;
+        };
+        if let Some(decimal_size) = decimal_size {
+            retag_top_n_decimals(&mut self.values, decimal_size);
+            retag_top_n_decimals(&mut other.values, decimal_size);
+        }
+
         if self.capacity == 0 {
             self.capacity = other.capacity;
         }
@@ -301,7 +416,7 @@ impl ColumnTopN {
         if self.capacity == 0 {
             self.values.clear();
             self.min_index = None;
-            return Ok(());
+            return true;
         }
 
         let lhs_values = std::mem::take(&mut self.values);
@@ -313,27 +428,34 @@ impl ColumnTopN {
 
         loop {
             match (lhs_iter.peek(), rhs_iter.peek()) {
-                (Some(lhs), Some(rhs)) => match lhs.scalar.cmp(&rhs.scalar) {
-                    Ordering::Less => {
-                        let mut entry = lhs_iter.next().unwrap();
-                        entry.count = entry.count.saturating_add(rhs_missing_error);
-                        entry.error = entry.error.saturating_add(rhs_missing_error);
-                        values.push(entry);
+                (Some(lhs), Some(rhs)) => {
+                    let Some(ordering) =
+                        stats_scalar_cmp(&lhs.scalar.as_ref(), &rhs.scalar.as_ref())
+                    else {
+                        return false;
+                    };
+                    match ordering {
+                        Ordering::Less => {
+                            let mut entry = lhs_iter.next().unwrap();
+                            entry.count = entry.count.saturating_add(rhs_missing_error);
+                            entry.error = entry.error.saturating_add(rhs_missing_error);
+                            values.push(entry);
+                        }
+                        Ordering::Equal => {
+                            let mut entry = lhs_iter.next().unwrap();
+                            let rhs = rhs_iter.next().unwrap();
+                            entry.count = entry.count.saturating_add(rhs.count);
+                            entry.error = entry.error.saturating_add(rhs.error);
+                            values.push(entry);
+                        }
+                        Ordering::Greater => {
+                            let mut entry = rhs_iter.next().unwrap();
+                            entry.count = entry.count.saturating_add(lhs_missing_error);
+                            entry.error = entry.error.saturating_add(lhs_missing_error);
+                            values.push(entry);
+                        }
                     }
-                    Ordering::Equal => {
-                        let mut entry = lhs_iter.next().unwrap();
-                        let rhs = rhs_iter.next().unwrap();
-                        entry.count = entry.count.saturating_add(rhs.count);
-                        entry.error = entry.error.saturating_add(rhs.error);
-                        values.push(entry);
-                    }
-                    Ordering::Greater => {
-                        let mut entry = rhs_iter.next().unwrap();
-                        entry.count = entry.count.saturating_add(lhs_missing_error);
-                        entry.error = entry.error.saturating_add(lhs_missing_error);
-                        values.push(entry);
-                    }
-                },
+                }
                 (Some(_), None) => {
                     for mut entry in lhs_iter {
                         entry.count = entry.count.saturating_add(rhs_missing_error);
@@ -356,7 +478,7 @@ impl ColumnTopN {
 
         self.values = values;
         self.prune_to_capacity();
-        Ok(())
+        true
     }
 
     pub fn finish(mut self) -> Self {
@@ -369,9 +491,16 @@ impl ColumnTopN {
             return;
         }
 
-        if let Ok(index) = self.find(&scalar) {
-            self.update_existing(index, count, error);
-            return;
+        match self.find(&scalar) {
+            Some(Ok(index)) => {
+                self.update_existing(index, count, error);
+                return;
+            }
+            Some(Err(_)) => {}
+            None => {
+                self.disable();
+                return;
+            }
         }
 
         let mut entry = ColumnTopNEntry {
@@ -388,19 +517,34 @@ impl ColumnTopN {
         self.insert_new(entry);
     }
 
-    fn find(&self, scalar: &ScalarRef<'_>) -> std::result::Result<usize, usize> {
-        match self
-            .values
-            .binary_search_by(|entry| entry.scalar.as_ref().cmp(scalar))
+    fn find(&self, scalar: &ScalarRef<'_>) -> Option<std::result::Result<usize, usize>> {
+        // Decimal entries may legitimately differ in precision, so validate the whole tiny
+        // sketch before relying on its ordering. Non-Decimal sketches are homogeneous by
+        // construction and keep the ordinary O(log n) lookup path.
+        if matches!(scalar, &ScalarRef::Decimal(_))
+            && self
+                .values
+                .iter()
+                .any(|entry| stats_scalar_cmp(&entry.scalar.as_ref(), scalar).is_none())
         {
-            Ok(index)
-                if self.values[index].scalar.as_ref().partial_cmp(scalar)
-                    == Some(Ordering::Equal) =>
-            {
-                Ok(index)
-            }
-            Ok(index) | Err(index) => Err(index),
+            return None;
         }
+
+        let mut left = 0;
+        let mut size = self.values.len();
+        while size > 0 {
+            let half = size / 2;
+            let mid = left + half;
+            match stats_scalar_cmp(&self.values[mid].scalar.as_ref(), scalar)? {
+                Ordering::Less => {
+                    left = mid + 1;
+                    size -= half + 1;
+                }
+                Ordering::Greater => size = half,
+                Ordering::Equal => return Some(Ok(mid)),
+            }
+        }
+        Some(Err(left))
     }
 
     fn update_existing(&mut self, index: usize, count: u64, error: u64) {
@@ -414,11 +558,19 @@ impl ColumnTopN {
     }
 
     fn insert_new(&mut self, entry: ColumnTopNEntry) {
-        let index = self
-            .find(&entry.scalar.as_ref())
-            .unwrap_or_else(|index| index);
+        let Some(index) = self.find(&entry.scalar.as_ref()) else {
+            self.disable();
+            return;
+        };
+        let index = index.unwrap_or_else(|index| index);
         self.values.insert(index, entry);
         self.on_insert(index);
+    }
+
+    fn disable(&mut self) {
+        self.capacity = 0;
+        self.values.clear();
+        self.min_index = None;
     }
 
     fn prune_to_capacity(&mut self) {
@@ -526,14 +678,89 @@ pub fn merge_column_top_n_mut(lhs: &mut BlockTopN, rhs: BlockTopN) -> Result<()>
     for (column_id, column_top_n) in rhs {
         match lhs.entry(column_id) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().merge(column_top_n)?;
+                // An empty zero-capacity value is an in-memory tombstone: once any segment has
+                // incompatible TopN values, later merges must not recreate partial statistics for
+                // only a suffix of the table. Consumers observe no entries, which is fail-open.
+                if entry.get().capacity == 0 && entry.get().values.is_empty() {
+                    continue;
+                }
+                if column_top_n.capacity == 0 && column_top_n.values.is_empty() {
+                    entry.insert(ColumnTopN::default());
+                    continue;
+                }
+                if !entry.get_mut().merge_compatible(column_top_n) {
+                    entry.insert(ColumnTopN::default());
+                }
             }
             Entry::Vacant(entry) => {
-                entry.insert(column_top_n.finish());
+                let mut column_top_n = column_top_n;
+                if column_top_n.values.is_empty() {
+                    if column_top_n.capacity == 0 {
+                        entry.insert(ColumnTopN::default());
+                    }
+                    continue;
+                }
+                if let Some(decimal_size) = common_top_n_decimal_size(&column_top_n.values, &[]) {
+                    if let Some(decimal_size) = decimal_size {
+                        retag_top_n_decimals(&mut column_top_n.values, decimal_size);
+                    }
+                    entry.insert(column_top_n.finish());
+                } else {
+                    entry.insert(ColumnTopN::default());
+                }
             }
         }
     }
     Ok(())
+}
+
+/// Validate two sorted TopN value sets and return the widest compatible Decimal size, if any.
+/// `None` is reserved for incompatible scalar kinds/scales; `Some(None)` means non-Decimal or
+/// empty statistics.
+fn common_top_n_decimal_size(
+    lhs: &[ColumnTopNEntry],
+    rhs: &[ColumnTopNEntry],
+) -> Option<Option<DecimalSize>> {
+    let mut entries = lhs.iter().chain(rhs);
+    let Some(first) = entries.next() else {
+        return Some(None);
+    };
+    let first = first.scalar.as_ref();
+    let mut decimal_size = match first {
+        ScalarRef::Decimal(decimal) if decimal.data_kind() == decimal.size().data_kind() => {
+            Some(decimal.size())
+        }
+        ScalarRef::Decimal(_) => return None,
+        _ => None,
+    };
+
+    for entry in entries {
+        let scalar = entry.scalar.as_ref();
+        stats_scalar_cmp(&first, &scalar)?;
+        if let ScalarRef::Decimal(decimal) = scalar {
+            let size = decimal.size();
+            if decimal.data_kind() != size.data_kind() {
+                return None;
+            }
+            if decimal_size.is_some_and(|current| size.precision() > current.precision()) {
+                decimal_size = Some(size);
+            }
+        }
+    }
+    Some(decimal_size)
+}
+
+fn retag_top_n_decimals(values: &mut [ColumnTopNEntry], target_size: DecimalSize) {
+    for entry in values {
+        let Scalar::Decimal(decimal) = &entry.scalar else {
+            continue;
+        };
+        entry.scalar = Scalar::Decimal(match decimal {
+            DecimalScalar::Decimal64(value, _) => DecimalScalar::Decimal64(*value, target_size),
+            DecimalScalar::Decimal128(value, _) => DecimalScalar::Decimal128(*value, target_size),
+            DecimalScalar::Decimal256(value, _) => DecimalScalar::Decimal256(*value, target_size),
+        });
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -709,6 +936,13 @@ mod tests {
         Scalar::Number(NumberScalar::Int32(value))
     }
 
+    fn decimal64_scalar(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
     #[test]
     fn cluster_stats_scalar_overlap_uses_lexicographic_ranges() {
         let stats = |min: &[i32], max: &[i32]| {
@@ -729,6 +963,38 @@ mod tests {
             &left,
             &stats(&[2, 201], &[3, 0])
         ));
+    }
+
+    #[test]
+    fn cluster_stats_decimal_overlap_ignores_compatible_precision() {
+        let left = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(100, 10, 2)],
+            vec![decimal64_scalar(200, 10, 2)],
+            0,
+        );
+        let overlapping = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(150, 15, 2)],
+            vec![decimal64_scalar(300, 15, 2)],
+            0,
+        );
+        let disjoint = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(201, 15, 2)],
+            vec![decimal64_scalar(300, 15, 2)],
+            0,
+        );
+        let incompatible = ClusterStatistics::new(
+            0,
+            vec![decimal64_scalar(2010, 15, 3)],
+            vec![decimal64_scalar(3000, 15, 3)],
+            0,
+        );
+
+        assert!(cluster_stats_scalar_overlap(&left, &overlapping));
+        assert!(!cluster_stats_scalar_overlap(&left, &disjoint));
+        assert!(cluster_stats_scalar_overlap(&left, &incompatible));
     }
 
     #[test]
@@ -763,6 +1029,65 @@ mod tests {
     }
 
     #[test]
+    fn reduce_cluster_decimal_stats_normalizes_precision() {
+        let old_min = vec![decimal64_scalar(100, 10, 2)];
+        let old_max = vec![decimal64_scalar(200, 10, 2)];
+        let new_min = vec![decimal64_scalar(50, 15, 2)];
+        let new_max = vec![decimal64_scalar(300, 15, 2)];
+        let expected_min = vec![decimal64_scalar(50, 15, 2)];
+        let expected_max = vec![decimal64_scalar(300, 15, 2)];
+
+        for (mins, maxs) in [
+            (vec![old_min.as_slice(), new_min.as_slice()], vec![
+                old_max.as_slice(),
+                new_max.as_slice(),
+            ]),
+            (vec![new_min.as_slice(), old_min.as_slice()], vec![
+                new_max.as_slice(),
+                old_max.as_slice(),
+            ]),
+        ] {
+            let (min, max) = reduce_cluster_min_max(&mins, &maxs, ClusterType::Linear).unwrap();
+            assert_eq!(min, expected_min);
+            assert_eq!(max, expected_max);
+        }
+
+        let incompatible_min = vec![decimal64_scalar(500, 15, 3)];
+        let incompatible_max = vec![decimal64_scalar(3000, 15, 3)];
+        assert!(
+            reduce_cluster_min_max(
+                &[&old_min, &incompatible_min],
+                &[&old_max, &incompatible_max],
+                ClusterType::Linear,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn reduce_hilbert_decimal_stats_normalizes_precision() {
+        let old_min = vec![decimal64_scalar(100, 10, 2), decimal64_scalar(500, 10, 2)];
+        let old_max = vec![decimal64_scalar(200, 10, 2), decimal64_scalar(600, 10, 2)];
+        let new_min = vec![decimal64_scalar(50, 15, 2), decimal64_scalar(550, 15, 2)];
+        let new_max = vec![decimal64_scalar(300, 15, 2), decimal64_scalar(700, 15, 2)];
+
+        let (min, max) = reduce_cluster_min_max(
+            &[&old_min, &new_min],
+            &[&old_max, &new_max],
+            ClusterType::Hilbert,
+        )
+        .unwrap();
+        assert_eq!(min, vec![
+            decimal64_scalar(50, 15, 2),
+            decimal64_scalar(500, 15, 2),
+        ]);
+        assert_eq!(max, vec![
+            decimal64_scalar(300, 15, 2),
+            decimal64_scalar(700, 15, 2),
+        ]);
+    }
+
+    #[test]
     fn valid_hilbert_stats_reject_malformed_ranges() {
         let stats = |dimensions: (i32, i32, i32, i32)| {
             ClusterStatistics::new(
@@ -792,6 +1117,94 @@ mod tests {
 
         assert_eq!(top_n.get(&int32_scalar(5)), Some(10));
         assert_eq!(top_n.get(&uint_scalar(5)), None);
+    }
+
+    #[test]
+    fn column_top_n_disables_on_incomparable_insert() {
+        let mut top_n = ColumnTopN::with_capacity(2);
+        top_n.add(int32_scalar(5).as_ref(), 10);
+        top_n.add(uint_scalar(7).as_ref(), 3);
+
+        assert_eq!(top_n.capacity, 0);
+        assert!(top_n.values.is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "ColumnTopN capacity must be greater than zero")]
+    fn column_top_n_rejects_zero_capacity() {
+        let _ = ColumnTopN::with_capacity(0);
+    }
+
+    #[test]
+    fn column_top_n_decimal_lookup_ignores_precision() {
+        let mut top_n = ColumnTopN::with_capacity(2);
+        top_n.add(decimal64_scalar(123, 10, 2).as_ref(), 7);
+
+        assert_eq!(top_n.get(&decimal64_scalar(123, 15, 2)), Some(7));
+        assert_eq!(top_n.get(&decimal64_scalar(124, 15, 2)), None);
+        assert_eq!(top_n.get(&decimal64_scalar(123, 15, 3)), None);
+    }
+
+    #[test]
+    fn column_top_n_merges_decimal_precision_widening_without_equal_collapse() {
+        let mut lhs = ColumnTopN::with_capacity(4);
+        lhs.add(decimal64_scalar(100, 10, 2).as_ref(), 3);
+        lhs.add(decimal64_scalar(200, 10, 2).as_ref(), 5);
+        let mut rhs = ColumnTopN::with_capacity(4);
+        rhs.add(decimal64_scalar(200, 15, 2).as_ref(), 7);
+        rhs.add(decimal64_scalar(700, 15, 2).as_ref(), 11);
+
+        lhs.merge(rhs).unwrap();
+
+        assert_eq!(lhs.get(&decimal64_scalar(100, 15, 2)), Some(3));
+        assert_eq!(lhs.get(&decimal64_scalar(200, 15, 2)), Some(12));
+        assert_eq!(lhs.get(&decimal64_scalar(700, 15, 2)), Some(11));
+        assert_eq!(lhs.values.len(), 3);
+        assert!(lhs.values.iter().all(|entry| {
+            matches!(
+                entry.scalar,
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    _,
+                    size
+                )) if size == DecimalSize::new(15, 2).unwrap()
+            )
+        }));
+    }
+
+    #[test]
+    fn merge_column_top_n_discards_incompatible_decimal_stats() {
+        let mut lhs_top_n = ColumnTopN::with_capacity(2);
+        lhs_top_n.add(decimal64_scalar(100, 10, 2).as_ref(), 3);
+        let mut lhs = BlockTopN::from([(7, lhs_top_n)]);
+
+        let mut incompatible = ColumnTopN::with_capacity(2);
+        incompatible.add(decimal64_scalar(100, 10, 3).as_ref(), 5);
+        merge_column_top_n_mut(&mut lhs, BlockTopN::from([(7, incompatible)])).unwrap();
+
+        let discarded = lhs.get(&7).unwrap();
+        assert_eq!(discarded.capacity, 0);
+        assert!(discarded.values.is_empty());
+
+        // The tombstone prevents a later compatible segment from recreating partial TopN stats.
+        let mut later = ColumnTopN::with_capacity(2);
+        later.add(decimal64_scalar(100, 15, 2).as_ref(), 11);
+        merge_column_top_n_mut(&mut lhs, BlockTopN::from([(7, later)])).unwrap();
+        assert!(lhs[&7].values.is_empty());
+
+        let mut decimal64 = ColumnTopN::with_capacity(2);
+        decimal64.add(decimal64_scalar(100, 18, 2).as_ref(), 3);
+        let mut decimal128 = ColumnTopN::with_capacity(2);
+        decimal128.add(
+            Scalar::Decimal(DecimalScalar::Decimal128(
+                100,
+                DecimalSize::new(19, 2).unwrap(),
+            ))
+            .as_ref(),
+            5,
+        );
+        let mut cross_kind = BlockTopN::from([(8, decimal64)]);
+        merge_column_top_n_mut(&mut cross_kind, BlockTopN::from([(8, decimal128)])).unwrap();
+        assert!(cross_kind[&8].values.is_empty());
     }
 
     #[test]
@@ -1064,6 +1477,18 @@ mod tests {
                 .map(|row| sketch.offset_with_hashes(hashes, row))
                 .collect::<Vec<_>>(),
             vec![31, 74, 181, 224]
+        );
+    }
+
+    #[test]
+    fn count_min_sketch_decimal_hash_ignores_precision() {
+        let sketch = ColumnCountMinSketch::new(64, 4);
+        let old = decimal64_scalar(123, 10, 2);
+        let widened = decimal64_scalar(123, 15, 2);
+
+        assert_eq!(
+            sketch.hash_scalar(&old.as_ref()),
+            sketch.hash_scalar(&widened.as_ref())
         );
     }
 

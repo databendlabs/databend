@@ -610,7 +610,8 @@ impl AggregationContext {
         for (idx, field) in on_conflict_fields.iter().enumerate() {
             let column_id = field.table_field.column_id();
             let (min, max) = &columns_min_max[idx];
-            if !Self::check_overlapped_by_stats(column_stats.get(&column_id), min, max) {
+            let stats = column_stats.get(&column_id);
+            if !Self::check_overlapped_by_stats(stats, field.table_field.data_type(), min, max) {
                 return false;
             }
         }
@@ -619,15 +620,18 @@ impl AggregationContext {
 
     fn check_overlapped_by_stats(
         column_stats: Option<&ColumnStatistics>,
+        data_type: &databend_common_expression::TableDataType,
         key_min: &Scalar,
         key_max: &Scalar,
     ) -> bool {
         if let Some(stats) = column_stats {
-            let max = stats.max();
-            let min = stats.min();
-            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
-                || // coincide overlap
-                (max == key_max && min == key_min)
+            let Some(view) = stats.try_view_with_table_type(data_type) else {
+                return true;
+            };
+            // The ranges are disjoint only when both required comparisons are valid and one
+            // range is strictly below the other. Incomparable statistics fail open.
+            key_max.partial_cmp(view.min()) != Some(std::cmp::Ordering::Less)
+                && view.max().partial_cmp(key_min) != Some(std::cmp::Ordering::Less)
         } else {
             // if column range index does not exist, assume overlapped
             true
@@ -794,6 +798,8 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
 
@@ -1003,5 +1009,59 @@ mod tests {
         assert!(overlap);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_check_overlap_uses_schema_aligned_decimal_statistics() {
+        let old_size = DecimalSize::new(10, 2).unwrap();
+        let new_size = DecimalSize::new(15, 2).unwrap();
+        let field = TableField::new("d", TableDataType::Decimal(new_size.into()));
+        let column_id = field.column_id();
+        let on_conflict_fields = vec![OnConflictField {
+            table_field: field,
+            field_index: 0,
+        }];
+        let column_stats = HashMap::from([(
+            column_id,
+            ColumnStatistics::new(
+                Scalar::Decimal(DecimalScalar::Decimal64(100, old_size)),
+                Scalar::Decimal(DecimalScalar::Decimal64(200, old_size)),
+                0,
+                0,
+                None,
+            ),
+        )]);
+        let input_column_min_max = [(
+            Scalar::Decimal(DecimalScalar::Decimal64(700, new_size)),
+            Scalar::Decimal(DecimalScalar::Decimal64(800, new_size)),
+        )];
+
+        assert!(!AggregationContext::check_overlap(
+            &on_conflict_fields,
+            &column_stats,
+            &input_column_min_max,
+        ));
+
+        let incompatible_stats = HashMap::from([(
+            column_id,
+            ColumnStatistics::new(
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    100,
+                    DecimalSize::new(10, 3).unwrap(),
+                )),
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    200,
+                    DecimalSize::new(10, 3).unwrap(),
+                )),
+                0,
+                0,
+                None,
+            ),
+        )]);
+        assert!(AggregationContext::check_overlap(
+            &on_conflict_fields,
+            &incompatible_stats,
+            &input_column_min_max,
+        ));
     }
 }

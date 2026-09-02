@@ -19,8 +19,6 @@ use std::collections::HashSet;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::Scalar;
-use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -58,43 +56,23 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     col_to_stats_lit
         .iter()
         .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
+            // A range is safe only when every input contributes compatible statistics for the
+            // column. This also prevents a column dropped after an incompatible merge from being
+            // recreated later using only newly appended blocks.
+            if stats.len() == stats_of_columns.len()
+                && let Some(col_stats) = reduce_column_statistics(stats)
+            {
+                acc.insert(*id, col_stats);
+            }
             acc
         })
 }
 
-pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
-    let mut min_stats = Vec::with_capacity(stats.len());
-    let mut max_stats = Vec::with_capacity(stats.len());
-    let mut ndvs = Vec::with_capacity(stats.len());
-    let mut null_count = 0;
-    let mut in_memory_size = 0;
-
-    for col_stats in stats.iter() {
-        let col_stats = col_stats.borrow();
-        min_stats.push(col_stats.min().clone());
-        max_stats.push(col_stats.max().clone());
-        ndvs.push(col_stats.distinct_of_values);
-        null_count += col_stats.null_count;
-        in_memory_size += col_stats.in_memory_size;
-    }
-
-    let min = min_stats
-        .into_iter()
-        .filter(|s| !s.is_null())
-        .min_by(|x, y| x.cmp(y))
-        .unwrap_or(Scalar::Null);
-
-    let max = max_stats
-        .into_iter()
-        .filter(|s| !s.is_null())
-        .max_by(|x, y| x.cmp(y))
-        .unwrap_or(Scalar::Null);
-    let distinct_of_values = ndvs
-        .into_iter()
-        .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
-    ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values)
+pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(
+    stats: &[T],
+) -> Option<ColumnStatistics> {
+    let stats = stats.iter().map(Borrow::borrow).collect::<Vec<_>>();
+    ColumnStatistics::try_reduce(&stats)
 }
 
 // Generate virtual column statistics from virtual column meta.
@@ -134,13 +112,17 @@ pub fn generate_virtual_column_statistics<T: Borrow<HashMap<ColumnId, VirtualCol
                 .map(|(ty, _)| *ty)
                 .collect::<HashSet<_>>();
             // only collect stats if all block has same type and the type is not Jsonb
-            if data_type_set.len() == 1 && !data_type_set.contains(&VIRTUAL_COLUMN_JSONB_TYPE) {
+            if types_and_stats.len() == stats_of_virtual_columns.len()
+                && data_type_set.len() == 1
+                && !data_type_set.contains(&VIRTUAL_COLUMN_JSONB_TYPE)
+            {
                 let stats = types_and_stats
                     .iter()
                     .map(|(_, stat)| stat.clone())
                     .collect::<Vec<_>>();
-                let col_stats = reduce_column_statistics(&stats);
-                acc.insert(*id, col_stats);
+                if let Some(col_stats) = reduce_column_statistics(&stats) {
+                    acc.insert(*id, col_stats);
+                }
             }
             acc
         },
@@ -175,26 +157,9 @@ pub fn reduce_virtual_column_statistics<T: Borrow<Option<StatisticsOfColumns>>>(
         col_to_stats_lit
             .iter()
             .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-                // Check that all non-null min and max Scalars have the same type.
-                let mut type_set = HashSet::new();
-                for s in stats.iter() {
-                    let min = s.min();
-                    let min_type = min.as_ref().infer_data_type();
-                    if !matches!(min_type, DataType::Null) {
-                        type_set.insert(min_type);
-                    }
-                    let max = s.max();
-                    let max_type = max.as_ref().infer_data_type();
-                    if !matches!(max_type, DataType::Null) {
-                        type_set.insert(max_type);
-                    }
-                    if type_set.len() > 1 {
-                        break;
-                    }
-                }
-
-                if type_set.len() <= 1 {
-                    let col_stats = reduce_column_statistics(stats);
+                if stats.len() == stats_of_columns.len()
+                    && let Some(col_stats) = reduce_column_statistics(stats)
+                {
                     acc.insert(*id, col_stats);
                 }
                 acc
@@ -515,4 +480,68 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         virtual_block_count: merged_virtual_block_count,
         additional_stats_meta: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    use super::reduce_block_statistics;
+    use super::reduce_column_statistics;
+
+    #[test]
+    fn test_reduce_decimal_statistics_with_widened_precision() {
+        let old_size = DecimalSize::new(10, 2).unwrap();
+        let new_size = DecimalSize::new(15, 2).unwrap();
+        let old_stats = ColumnStatistics::new(
+            Scalar::Decimal(DecimalScalar::Decimal64(100, old_size)),
+            Scalar::Decimal(DecimalScalar::Decimal64(200, old_size)),
+            0,
+            10,
+            Some(2),
+        );
+        let new_stats = ColumnStatistics::new(
+            Scalar::Decimal(DecimalScalar::Decimal64(700, new_size)),
+            Scalar::Decimal(DecimalScalar::Decimal64(800, new_size)),
+            0,
+            10,
+            Some(2),
+        );
+
+        let reduced = reduce_column_statistics(&[new_stats, old_stats]).unwrap();
+        let view = reduced
+            .try_view(&databend_common_expression::types::DataType::Decimal(
+                new_size,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            view.min(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(100, new_size))
+        );
+        assert_eq!(
+            view.max(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(800, new_size))
+        );
+    }
+
+    #[test]
+    fn test_reduce_block_statistics_does_not_recreate_partial_column_stats() {
+        let stats = ColumnStatistics::new(
+            Scalar::Number(1_i64.into()),
+            Scalar::Number(9_i64.into()),
+            0,
+            16,
+            None,
+        );
+        let with_stats = HashMap::from([(1, stats)]);
+        let without_stats = HashMap::new();
+
+        assert!(reduce_block_statistics(&[with_stats, without_stats]).is_empty());
+    }
 }

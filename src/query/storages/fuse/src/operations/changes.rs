@@ -35,6 +35,9 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::DecimalScalar;
@@ -790,10 +793,14 @@ fn estimate_append_candidate_rows(
         let block_rows = if let Some(version_stats) = block.col_stats.get(&ORIGIN_VERSION_COLUMN_ID)
         {
             let null_rows = version_stats.null_count.min(row_count);
-            let origin_version_before_offset = matches!(
-                &version_stats.max,
-                Scalar::Number(NumberScalar::UInt64(max)) if *max < seq
-            );
+            let origin_version_before_offset = version_stats
+                .try_view(&DataType::Number(NumberDataType::UInt64))
+                .is_some_and(|stats| {
+                    matches!(
+                        stats.max(),
+                        Scalar::Number(NumberScalar::UInt64(max)) if *max < seq
+                    )
+                });
             let origin_block_from_base = block
                 .col_stats
                 .get(&ORIGIN_BLOCK_ID_COLUMN_ID)
@@ -801,10 +808,15 @@ fn estimate_append_candidate_rows(
                     if stats.null_count > 0 {
                         return false;
                     }
+                    let Some(stats) =
+                        stats.try_view(&DataType::Decimal(DecimalSize::default_128()))
+                    else {
+                        return false;
+                    };
                     let (
                         Scalar::Decimal(DecimalScalar::Decimal128(min, _)),
                         Scalar::Decimal(DecimalScalar::Decimal128(max, _)),
-                    ) = (&stats.min, &stats.max)
+                    ) = (stats.min(), stats.max())
                     else {
                         return false;
                     };

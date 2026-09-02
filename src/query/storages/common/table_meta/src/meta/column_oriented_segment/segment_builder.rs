@@ -146,8 +146,8 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             .push(block_meta.create_on.map(|t| t.timestamp()));
         for (col_id, col_stat) in self.column_stats.iter_mut() {
             let stat = &block_meta.col_stats[col_id];
-            col_stat.min.push(stat.min.as_ref());
-            col_stat.max.push(stat.max.as_ref());
+            col_stat.min.push(stat.raw_min().as_ref());
+            col_stat.max.push(stat.raw_max().as_ref());
             col_stat.null_count.push(stat.null_count);
             col_stat.in_memory_size.push(stat.in_memory_size);
             col_stat.distinct_of_values.push(stat.distinct_of_values);
