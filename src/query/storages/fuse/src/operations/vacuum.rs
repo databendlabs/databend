@@ -754,12 +754,16 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2025, 1, 10, 12, 0, 0).unwrap();
         let retention_period = TimeDelta::days(2);
 
+        // When the latest snapshot is newer than the retention boundary, use
+        // now - retention as the cutoff.
         let latest_after_cutoff = Utc.with_ymd_and_hms(2025, 1, 9, 12, 0, 0).unwrap();
         assert_eq!(
             retention_cutoff(now, latest_after_cutoff, retention_period),
             Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap()
         );
 
+        // The cutoff must not move past the latest snapshot. This also keeps
+        // the result valid when the host clock is ahead of snapshot time.
         let latest_before_cutoff = Utc.with_ymd_and_hms(2025, 1, 7, 12, 0, 0).unwrap();
         assert_eq!(
             retention_cutoff(now, latest_before_cutoff, retention_period),
