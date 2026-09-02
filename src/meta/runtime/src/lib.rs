@@ -47,9 +47,9 @@ pub use in_process_grpc::InProcessGrpcEndpoint;
 pub use in_process_grpc::InProcessGrpcStream;
 use in_process_grpc::connect_in_process_grpc;
 pub use metrics::DatabendMetrics;
-use tonic_013::transport::Certificate;
-use tonic_013::transport::ClientTlsConfig;
-use tonic_013::transport::Endpoint;
+use tonic::transport::Certificate;
+use tonic::transport::ClientTlsConfig;
+use tonic::transport::Endpoint;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
 
@@ -132,13 +132,13 @@ impl SpawnApi for DatabendRuntime {
         Box::pin(runtime::UnlimitedFuture::create(fut))
     }
 
-    fn prepare_request<T>(request: tonic_013::Request<T>) -> tonic_013::Request<T> {
+    fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
         let mut req = request;
 
         if let Some(current) = SpanContext::current_local_parent() {
-            let key = tonic_013::metadata::MetadataKey::from_bytes(HEADER_TRACE_PARENT.as_bytes())
+            let key = tonic::metadata::MetadataKey::from_bytes(HEADER_TRACE_PARENT.as_bytes())
                 .unwrap();
-            let val = tonic_013::metadata::AsciiMetadataValue::try_from(
+            let val = tonic::metadata::AsciiMetadataValue::try_from(
                 &current.encode_w3c_traceparent(),
             )
             .unwrap();
@@ -147,8 +147,8 @@ impl SpawnApi for DatabendRuntime {
 
         // Inject query ID if available
         if let Some(query_id) = runtime::ThreadTracker::query_id() {
-            let key = tonic_013::metadata::AsciiMetadataKey::from_str("QueryID");
-            let value = tonic_013::metadata::AsciiMetadataValue::from_str(query_id);
+            let key = tonic::metadata::AsciiMetadataKey::from_str("QueryID");
+            let value = tonic::metadata::AsciiMetadataValue::from_str(query_id);
 
             if let Some((key, value)) = key.ok().zip(value.ok()) {
                 req.metadata_mut().insert(key, value);
@@ -160,11 +160,11 @@ impl SpawnApi for DatabendRuntime {
 
     fn trace_request<'a, T, F, Fut, R>(
         name: &'static str,
-        request: tonic_013::Request<T>,
+        request: tonic::Request<T>,
         f: F,
     ) -> BoxFuture<'a, R>
     where
-        F: FnOnce(tonic_013::Request<T>) -> Fut,
+        F: FnOnce(tonic::Request<T>) -> Fut,
         Fut: Future<Output = R> + Send + 'a,
         R: Send + 'a,
     {
