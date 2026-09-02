@@ -19,8 +19,9 @@ use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::types::UInt64Type;
 use databend_common_sql::plans::VacuumVirtualColumnPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::cleanup_vacuum_virtual_column_files;
@@ -31,7 +32,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextTableAccess;
 
 pub struct VacuumVirtualColumnInterpreter {
@@ -57,9 +57,6 @@ impl Interpreter for VacuumVirtualColumnInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
-
         let table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
@@ -87,18 +84,24 @@ impl Interpreter for VacuumVirtualColumnInterpreter {
 
         execute_complete_pipeline(self.ctx.clone(), build_res).await?;
 
-        if vacuum_result.need_cleanup {
+        let cleanup_removed_files = if vacuum_result.need_cleanup {
             if vacuum_result.need_commit {
                 let latest_table = fuse_table.refresh(self.ctx.as_ref()).await?;
                 let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
-                cleanup_vacuum_virtual_column_files(self.ctx.clone(), latest_fuse_table).await?;
+                cleanup_vacuum_virtual_column_files(self.ctx.clone(), latest_fuse_table).await?
             } else {
-                cleanup_vacuum_virtual_column_files(self.ctx.clone(), fuse_table).await?;
+                cleanup_vacuum_virtual_column_files(self.ctx.clone(), fuse_table).await?
             }
-        }
+        } else {
+            0
+        };
 
+        let removed_files = vacuum_result.removed_files + cleanup_removed_files;
         drop(lock_guard);
-        Ok(PipelineBuildResult::create())
+
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![removed_files]),
+        ])])
     }
 }
 

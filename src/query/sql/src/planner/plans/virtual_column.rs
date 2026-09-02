@@ -54,6 +54,9 @@ pub struct VacuumVirtualColumnPlan {
 
 impl VacuumVirtualColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "removed_files",
+            DataType::Number(NumberDataType::UInt64),
+        )]))
     }
 }
