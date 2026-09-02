@@ -44,6 +44,7 @@ use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
+use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
@@ -1002,12 +1003,7 @@ impl BindContext {
                     });
 
                 let source_column_id = virtual_column_name.source_column_id;
-                let path_name = &virtual_column_name.key_name;
-                let column_name = if path_name.starts_with('[') {
-                    format!("{source_column_name}{path_name}")
-                } else {
-                    format!("{source_column_name}.{path_name}")
-                };
+                let column_name = format_virtual_column_name(source_column_name, &key_paths);
                 // todo
                 let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
                 let is_try = true;
@@ -1112,4 +1108,15 @@ pub fn apply_alias_for_columns(
         columns[index].column_name = column_name;
     }
     Ok(())
+}
+
+fn format_virtual_column_name(source_column_name: &str, key_paths: &OwnedKeyPaths) -> String {
+    let mut name = source_column_name.to_string();
+    for path in &key_paths.paths {
+        match path {
+            OwnedKeyPath::Index(index) => name.push_str(&format!("[{index}]")),
+            OwnedKeyPath::Name(key) => name.push_str(&format!("['{key}']")),
+        }
+    }
+    name
 }

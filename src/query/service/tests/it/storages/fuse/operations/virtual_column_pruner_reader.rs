@@ -43,6 +43,7 @@ use databend_storages_common_table_meta::meta::VirtualSegmentColumnPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use jsonb::OwnedJsonb;
+use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use jsonb::keypath::parse_key_paths;
 
@@ -456,12 +457,11 @@ fn build_virtual_column_field(
     query_column_id: u32,
     key_paths: OwnedKeyPaths,
 ) -> VirtualColumnField {
-    let name = format_virtual_column_name(source_name, &key_paths);
     VirtualColumnField {
         source_column_id,
         source_name: source_name.to_string(),
         query_column_id,
-        name,
+        name: format_virtual_column_name(source_name, &key_paths),
         key_paths,
         cast_func_name: None,
         data_type: Box::new(TableDataType::Variant),
@@ -469,7 +469,14 @@ fn build_virtual_column_field(
 }
 
 fn format_virtual_column_name(source: &str, key_paths: &OwnedKeyPaths) -> String {
-    format!("{source}.{}", key_paths.to_canonical_path())
+    let mut name = source.to_string();
+    for path in &key_paths.paths {
+        match path {
+            OwnedKeyPath::Index(index) => name.push_str(&format!("[{index}]")),
+            OwnedKeyPath::Name(key) => name.push_str(&format!("['{key}']")),
+        }
+    }
+    name
 }
 
 fn collect_plan_kinds(plan: &VirtualColumnReadPlan, kinds: &mut HashSet<&'static str>) {

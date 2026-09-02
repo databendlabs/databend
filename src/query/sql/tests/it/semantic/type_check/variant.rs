@@ -86,8 +86,8 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
 
     let metadata = metadata.read();
     assert_eq!(metadata.columns().len(), 4);
-    assert_virtual_column(metadata.column(Symbol::new(2)), "v.a[0]");
-    assert_virtual_column(metadata.column(Symbol::new(3)), "v.b.c");
+    assert_virtual_column(metadata.column(Symbol::new(2)), "v['a'][0]");
+    assert_virtual_column(metadata.column(Symbol::new(3)), "v['b']['c']");
 
     let case = SqlTestCase {
         name: "nested_get_virtual_column_rewrite_skips_intermediate_paths",

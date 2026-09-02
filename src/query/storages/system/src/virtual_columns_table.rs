@@ -118,35 +118,36 @@ impl AsyncSystemTable for VirtualColumnsTable {
                 // observed data types across segments.
                 let segments_io =
                     SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
-                let segments = segments_io
-                    .read_segments::<SegmentInfo>(&snapshot.segments, true)
-                    .await?;
                 let mut merged: BTreeMap<(u32, String), Vec<VirtualColumnPhysicalType>> =
                     BTreeMap::new();
-                for segment in segments {
-                    let Ok(segment) = segment else {
-                        continue;
-                    };
-                    let Some(schema) = &segment.summary.virtual_segment_schema else {
-                        continue;
-                    };
-                    for column in &schema.column_paths {
-                        for path in &column.paths {
-                            let column_id = path.column_id;
-                            let entry = merged
-                                .entry((column.source_column_id, path.path.clone()))
-                                .or_default();
-                            for block in &segment.blocks {
-                                let Some(column_meta) = block
-                                    .virtual_block_meta
-                                    .as_ref()
-                                    .and_then(|meta| meta.virtual_column_metas.get(&column_id))
-                                else {
-                                    continue;
-                                };
-                                let physical_type = column_meta.physical_type();
-                                if !entry.contains(&physical_type) {
-                                    entry.push(physical_type);
+                let chunk_size = (ctx.get_settings().get_max_threads()? as usize * 4).max(1);
+                for chunk in snapshot.segments.chunks(chunk_size) {
+                    let segments = segments_io
+                        .read_segments::<SegmentInfo>(chunk, true)
+                        .await?;
+                    for segment in segments {
+                        let segment = segment?;
+                        let Some(schema) = &segment.summary.virtual_segment_schema else {
+                            continue;
+                        };
+                        for column in &schema.column_paths {
+                            for path in &column.paths {
+                                let column_id = path.column_id;
+                                let entry = merged
+                                    .entry((column.source_column_id, path.path.clone()))
+                                    .or_default();
+                                for block in &segment.blocks {
+                                    let Some(column_meta) = block
+                                        .virtual_block_meta
+                                        .as_ref()
+                                        .and_then(|meta| meta.virtual_column_metas.get(&column_id))
+                                    else {
+                                        continue;
+                                    };
+                                    let physical_type = column_meta.physical_type();
+                                    if !entry.contains(&physical_type) {
+                                        entry.push(physical_type);
+                                    }
                                 }
                             }
                         }

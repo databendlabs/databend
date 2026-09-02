@@ -62,7 +62,7 @@ pub struct VirtualColumnField {
     /// virtual column id; each segment may assign a different real column id
     /// for the same path, so readers must map this id through the segment schema.
     pub query_column_id: u32,
-    /// Full query field name, including the source column, e.g. `v.user.name` or `v[0].id`.
+    /// Full query field name using bracket path notation.
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: OwnedKeyPaths,
@@ -77,7 +77,7 @@ pub struct VirtualColumnField {
 /// source-column/canonical-path identity used to locate segment-local stats.
 #[derive(Clone, Debug)]
 pub struct VirtualPredicateRef {
-    /// Full query/pipeline field name used by expression column references.
+    /// Unique internal query/pipeline field name used by expression column references.
     pub name: String,
     /// Id of the authoritative source Variant column.
     pub source_column_id: u32,

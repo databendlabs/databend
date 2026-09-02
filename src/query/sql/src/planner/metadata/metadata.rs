@@ -856,7 +856,7 @@ pub struct VirtualColumn {
     /// Query-time temporary column id.
     pub query_column_id: u32,
     pub column_index: Symbol,
-    /// Full query/pipeline name including the source column, e.g. `v.user.name` or `v[0]`.
+    /// Full query/pipeline name using bracket path notation.
     pub column_name: String,
     pub key_paths: OwnedKeyPaths,
     pub data_type: TableDataType,
