@@ -22,10 +22,13 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::plans::VacuumTablesPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::interpreters::Interpreter;
+use databend_query::interpreters::VacuumTablesInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
@@ -206,6 +209,64 @@ async fn test_vacuum_tables_commands() -> anyhow::Result<()> {
     // The unscoped command processes all non-system databases.
     fixture.execute_command("vacuum tables").await?;
     assert_only_current_snapshot_files(&ctx, storage_root, "default", "t1").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_tables_propagates_query_abort() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let database = "vacuum_abort_db";
+    for statement in [
+        format!("create database {database}"),
+        format!("create table {database}.t1 (c int) as select 1"),
+        format!("insert into {database}.t1 values (2)"),
+        format!("truncate table {database}.t1"),
+        format!("create table {database}.t2 (c int) as select 1"),
+        format!("insert into {database}.t2 values (2)"),
+        format!("truncate table {database}.t2"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let storage_root = fixture.storage_root();
+    for table in ["t1", "t2"] {
+        assert!(
+            table_storage_files(&ctx, storage_root, database, table)
+                .await?
+                .len()
+                > 2
+        );
+    }
+
+    ctx.get_current_session()
+        .force_kill_query(ErrorCode::AbortedQuery("cancel batch vacuum"));
+    let result = VacuumTablesInterpreter::try_create(ctx.clone(), VacuumTablesPlan {
+        catalog: "default".to_string(),
+        database: Some(database.to_string()),
+    })?
+    .execute2()
+    .await;
+
+    match result {
+        Err(error) => assert_eq!(error.code(), ErrorCode::ABORTED_QUERY),
+        Ok(_) => panic!("batch vacuum must propagate query cancellation"),
+    }
+    for table in ["t1", "t2"] {
+        assert!(
+            table_storage_files(&ctx, storage_root, database, table)
+                .await?
+                .len()
+                > 2,
+            "batch vacuum must stop without processing remaining tables after cancellation"
+        );
+    }
 
     Ok(())
 }

@@ -110,6 +110,9 @@ async fn vacuum_database(
         }
 
         if let Err(error) = handler.do_vacuum2(table, ctx.clone(), false).await {
+            if error.code() == ErrorCode::ABORTED_QUERY {
+                return Err(error);
+            }
             warn!(
                 "vacuum2 table {}.{} failed: {}",
                 database_name, table_name, error
