@@ -85,7 +85,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 let mut names = virtual_column
                     .virtual_column_fields
                     .iter()
-                    .map(|c| c.name.clone())
+                    .map(|column| column.name.clone())
                     .collect::<Vec<_>>();
                 names.sort();
                 names.iter().join(", ")
