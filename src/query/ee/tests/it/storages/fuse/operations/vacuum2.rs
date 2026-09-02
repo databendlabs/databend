@@ -22,10 +22,16 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
@@ -125,6 +131,70 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
 
     check_files_left(&ctx, storage_root, "db1", "t1").await?;
     check_files_left(&ctx, storage_root, "default", "t1").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(1)?;
+    fixture.create_default_database().await?;
+
+    let db_name = fixture.default_db_name();
+    let tbl_name = "t_respect_flash_back";
+    fixture
+        .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
+        .await?;
+
+    for value in 1..=3 {
+        fixture
+            .execute_command(&format!(
+                "insert into {db_name}.{tbl_name} values ({value})"
+            ))
+            .await?;
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let latest_location = fuse_table.snapshot_loc().unwrap();
+    let snapshot_version = TableMetaLocationGenerator::snapshot_version(&latest_location);
+    let snapshots: Vec<_> = SnapshotHistoryReader::snapshot_history(
+        MetaReaders::table_snapshot_reader(fuse_table.get_operator()),
+        latest_location,
+        snapshot_version,
+        fuse_table.meta_location_generator().clone(),
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(snapshots.len(), 3);
+
+    // History is newest-first. Persist the middle snapshot as LVT so set_lvt()
+    // returns a deterministic cutoff instead of depending on the host clock.
+    let expected_gc_root = &snapshots[1].0;
+    catalog
+        .set_table_lvt(
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTime::new(expected_gc_root.timestamp.unwrap()),
+        )
+        .await?;
+
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let selection = fuse_table
+        .prepare_snapshot_gc_selection(&table_ctx, true)
+        .await?
+        .expect("the persisted LVT should select a flashback GC root");
+
+    assert_eq!(selection.gc_root.snapshot_id, expected_gc_root.snapshot_id);
+    assert_eq!(selection.gc_root.timestamp, expected_gc_root.timestamp);
 
     Ok(())
 }

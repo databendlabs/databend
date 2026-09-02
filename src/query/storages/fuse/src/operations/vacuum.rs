@@ -84,6 +84,22 @@ use crate::io::TableMetaLocationGenerator;
 ///   the above risks will not exist.
 pub const ASSUMPTION_MAX_TXN_DURATION: Duration = Duration::days(3);
 
+fn retention_cutoff(
+    now: DateTime<Utc>,
+    latest_snapshot_timestamp: DateTime<Utc>,
+    retention_period: TimeDelta,
+) -> DateTime<Utc> {
+    std::cmp::min(now - retention_period, latest_snapshot_timestamp)
+}
+
+fn flashback_gc_root_lvt(respect_flash_back: bool, lvt: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    respect_flash_back.then_some(lvt)
+}
+
+fn is_flashback_gc_root(snapshot_timestamp: Option<DateTime<Utc>>, lvt: DateTime<Utc>) -> bool {
+    snapshot_timestamp.is_some_and(|timestamp| timestamp <= lvt)
+}
+
 pub struct SnapshotGcSelection {
     pub gc_root: Arc<TableSnapshot>,
     pub snapshots_to_gc: Vec<String>,
@@ -436,9 +452,7 @@ impl FuseTable {
                     return Ok(None);
                 };
 
-                if respect_flash_back {
-                    respect_flash_back_with_lvt = Some(lvt);
-                }
+                respect_flash_back_with_lvt = flashback_gc_root_lvt(respect_flash_back, lvt);
 
                 ctx.set_status_info(&format!(
                     "Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
@@ -555,7 +569,7 @@ impl FuseTable {
             let latest_location = self.snapshot_loc().unwrap();
             let gc_root = self
                 .find_location(ctx, latest_location, |snapshot| {
-                    snapshot.timestamp.is_some_and(|ts| ts <= lvt)
+                    is_flashback_gc_root(snapshot.timestamp, lvt)
                 })
                 .await
                 .ok();
@@ -677,7 +691,7 @@ impl FuseTable {
         let catalog = ctx.get_default_catalog()?;
         // safe to unwrap, as we have checked the version is v4
         let latest_ts = latest_snapshot.timestamp.unwrap();
-        let lvt_point_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
+        let lvt_point_candidate = retention_cutoff(Utc::now(), latest_ts, retention_period);
 
         let lvt_point = catalog
             .set_table_lvt(
@@ -723,5 +737,48 @@ pub fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
         )
     } else {
         format!("{:?}", s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+
+    use super::*;
+
+    #[test]
+    fn test_retention_cutoff_is_bounded_by_latest_snapshot() {
+        let now = Utc.with_ymd_and_hms(2025, 1, 10, 12, 0, 0).unwrap();
+        let retention_period = TimeDelta::days(2);
+
+        let latest_after_cutoff = Utc.with_ymd_and_hms(2025, 1, 9, 12, 0, 0).unwrap();
+        assert_eq!(
+            retention_cutoff(now, latest_after_cutoff, retention_period),
+            Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap()
+        );
+
+        let latest_before_cutoff = Utc.with_ymd_and_hms(2025, 1, 7, 12, 0, 0).unwrap();
+        assert_eq!(
+            retention_cutoff(now, latest_before_cutoff, retention_period),
+            latest_before_cutoff
+        );
+    }
+
+    #[test]
+    fn test_flashback_gc_root_respects_flag_and_lvt_boundary() {
+        let lvt = Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap();
+
+        assert_eq!(flashback_gc_root_lvt(false, lvt), None);
+        assert_eq!(flashback_gc_root_lvt(true, lvt), Some(lvt));
+        assert!(!is_flashback_gc_root(None, lvt));
+        assert!(!is_flashback_gc_root(
+            Some(lvt + TimeDelta::microseconds(1)),
+            lvt
+        ));
+        assert!(is_flashback_gc_root(Some(lvt), lvt));
+        assert!(is_flashback_gc_root(
+            Some(lvt - TimeDelta::microseconds(1)),
+            lvt
+        ));
     }
 }
