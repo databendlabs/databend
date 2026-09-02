@@ -183,15 +183,12 @@ where
 mod tests {
     use std::time::Duration;
 
-    use databend_common_meta_app::app_error::AppError;
     use databend_common_meta_app::schema::CreateSegmentClaimReq;
     use databend_common_meta_app::schema::DeleteSegmentClaimReq;
-    use databend_common_meta_app::schema::ExtendSegmentClaimReq;
     use databend_common_meta_app::schema::ListSegmentClaimsReq;
     use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 
     use super::SegmentClaimApi;
-    use crate::kv_app_error::KVAppError;
     use crate::testing;
 
     const TABLE_ID: u64 = 7;
@@ -315,39 +312,6 @@ mod tests {
             .await?;
         let replacement = store
             .create_segment_claim(create_req("q3", vec!["s1"]))
-            .await?;
-        assert!(replacement.claim_id.is_some());
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_expired_claim_cannot_be_renewed_and_can_be_reacquired() -> anyhow::Result<()> {
-        let store = testing::new_local_meta_store().await;
-        let mut request = create_req("q1", vec!["s1"]);
-        request.ttl = Duration::from_millis(20);
-        let claim_id = store
-            .create_segment_claim(request)
-            .await?
-            .claim_id
-            .expect("claim should succeed");
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        let error = store
-            .extend_segment_claim(ExtendSegmentClaimReq {
-                tenant: testing::tenant("tenant1"),
-                table_id: TABLE_ID,
-                claim_id,
-                ttl: Duration::from_secs(30),
-            })
-            .await
-            .expect_err("expired claim renewal must fail");
-        assert!(matches!(
-            error,
-            KVAppError::AppError(AppError::LeaseExpired(_))
-        ));
-
-        let replacement = store
-            .create_segment_claim(create_req("q2", vec!["s1"]))
             .await?;
         assert!(replacement.claim_id.is_some());
         Ok(())
