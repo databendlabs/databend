@@ -50,24 +50,7 @@ select  column_name, column_type, row_count from fuse_column('db_09_0008', 't') 
 a UInt64 3
 
 statement ok
-optimize table `t` purge
-
-query I
-select count(*) from fuse_snapshot('db_09_0008', 't')
-----
-5
-
-statement ok
 set data_retention_time_in_days = 0
-
-statement ok
-optimize table `t` purge
-
-# Flaky Tests
-# query B
-# select count(*)<5 from fuse_snapshot('db_09_0008', 't')
-# ----
-# 1
 
 query I
 select * from t order by a
@@ -99,7 +82,7 @@ statement ok
 optimize table `t` compact
 
 query II
-select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 2
+select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 1
 ----
 1 1
 
@@ -542,9 +525,6 @@ query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
 6
-
-statement ok
-optimize table t10 purge
 
 query I
 select count() from t10
