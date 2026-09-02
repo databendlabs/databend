@@ -156,7 +156,6 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
                 "insert into {db_name}.{tbl_name} values ({value})"
             ))
             .await?;
-        tokio::time::sleep(Duration::from_millis(2)).await;
     }
 
     let ctx = fixture.new_query_ctx().await?;
@@ -177,24 +176,34 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     .await?;
     assert_eq!(snapshots.len(), 3);
 
-    // History is newest-first. Persist the middle snapshot as LVT so set_lvt()
-    // returns a deterministic cutoff instead of depending on the host clock.
-    let expected_gc_root = &snapshots[1].0;
+    // The history is S3 -> S2 -> S1, newest first. Set LVT to S2.
+    let lvt_snapshot = &snapshots[1].0;
+    let oldest_snapshot = &snapshots[2].0;
     catalog
         .set_table_lvt(
             &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
-            &LeastVisibleTime::new(expected_gc_root.timestamp.unwrap()),
+            &LeastVisibleTime::new(lvt_snapshot.timestamp.unwrap()),
         )
         .await?;
 
     let table_ctx: Arc<dyn TableContext> = ctx;
+
+    // Without flashback protection, S2 is only an anchor from object listing.
+    // Vacuum uses its committed predecessor S1 as the GC root.
+    let selection = fuse_table
+        .prepare_snapshot_gc_selection(&table_ctx, false)
+        .await?
+        .expect("S1 should be selected as the GC root");
+    assert_eq!(selection.gc_root.snapshot_id, oldest_snapshot.snapshot_id);
+
+    // With flashback protection, vacuum follows the committed snapshot chain
+    // and selects the first snapshot at or before LVT, which is S2.
     let selection = fuse_table
         .prepare_snapshot_gc_selection(&table_ctx, true)
         .await?
-        .expect("the persisted LVT should select a flashback GC root");
-
-    assert_eq!(selection.gc_root.snapshot_id, expected_gc_root.snapshot_id);
-    assert_eq!(selection.gc_root.timestamp, expected_gc_root.timestamp);
+        .expect("S2 should be selected as the GC root");
+    assert_eq!(selection.gc_root.snapshot_id, lvt_snapshot.snapshot_id);
+    assert_eq!(selection.gc_root.timestamp, lvt_snapshot.timestamp);
 
     Ok(())
 }
