@@ -1,0 +1,49 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS computed_partition_by
+
+statement ok
+CREATE DATABASE computed_partition_by
+
+statement ok
+USE computed_partition_by
+
+# Stored computed partition columns must be generated before hash routing and
+# physical partition layout.
+statement ok
+CREATE TABLE computed_partitioned(
+    id INT,
+    p INT AS (id % 2) STORED
+)
+PARTITION BY (p)
+WRITE_DISTRIBUTION_MODE='hash'
+ROW_PER_BLOCK=100000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO computed_partitioned(id) SELECT number::INT FROM numbers(4)
+
+query III
+SELECT count(*), min(p), max(p) FROM computed_partitioned
+----
+4 0 1
+
+query T
+EXPLAIN SELECT id FROM computed_partitioned WHERE p = 0
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
+statement ok
+DROP DATABASE computed_partition_by
