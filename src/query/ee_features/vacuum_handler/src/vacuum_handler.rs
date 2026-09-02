@@ -29,13 +29,6 @@ pub type VacuumDropTablesResult = Result<(Option<Vec<VacuumDropFileInfo>>, HashS
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
-    async fn do_vacuum(
-        &self,
-        table: &dyn Table,
-        ctx: Arc<dyn TableContext>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>>;
-
     async fn do_vacuum2(
         &self,
         table: &dyn Table,
@@ -73,16 +66,6 @@ pub struct VacuumHandlerWrapper {
 impl VacuumHandlerWrapper {
     pub fn new(handler: Box<dyn VacuumHandler>) -> Self {
         Self { handler }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn do_vacuum(
-        &self,
-        table: &dyn Table,
-        ctx: Arc<dyn TableContext>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        self.handler.do_vacuum(table, ctx, dry_run).await
     }
 
     #[async_backtrace::framed]

@@ -25,7 +25,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::DistributionLevel;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_args::TableArgs;
@@ -467,17 +466,6 @@ impl Table for HiveTable {
             "truncate for table {} is not implemented",
             self.name()
         )))
-    }
-
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _instant: Option<NavigationPoint>,
-        _limit: Option<usize>,
-        _dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        Ok(None)
     }
 
     async fn table_statistics(

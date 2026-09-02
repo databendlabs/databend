@@ -24,7 +24,6 @@ use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 
-use crate::storages::fuse::do_vacuum;
 use crate::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use crate::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use crate::storages::fuse::vacuum_drop_tables;
@@ -32,15 +31,6 @@ pub struct RealVacuumHandler {}
 
 #[async_trait::async_trait]
 impl VacuumHandler for RealVacuumHandler {
-    async fn do_vacuum(
-        &self,
-        table: &dyn Table,
-        ctx: Arc<dyn TableContext>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        do_vacuum(table, ctx, dry_run).await
-    }
-
     async fn do_vacuum2(
         &self,
         table: &dyn Table,

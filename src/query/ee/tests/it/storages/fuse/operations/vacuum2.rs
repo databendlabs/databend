@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextTableAccess;
@@ -113,6 +114,42 @@ async fn test_vacuum_table_command() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_optimize_table_purge_uses_vacuum2() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let database = "optimize_purge_db";
+    let table = "t";
+    for statement in [
+        format!("create database {database}"),
+        format!("create table {database}.{table} (c int) as select 1"),
+        format!("insert into {database}.{table} values (2)"),
+        format!("truncate table {database}.{table}"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let storage_root = fixture.storage_root();
+    assert!(
+        table_storage_files(&ctx, storage_root, database, table)
+            .await?
+            .len()
+            > 2
+    );
+
+    fixture
+        .execute_command(&format!("optimize table {database}.{table} purge"))
+        .await?;
+    assert_only_current_snapshot_files(&ctx, storage_root, database, table).await?;
+
+    Ok(())
+}
+
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_tables_commands() -> anyhow::Result<()> {
@@ -169,6 +206,57 @@ async fn test_vacuum_tables_commands() -> anyhow::Result<()> {
     // The unscoped command processes all non-system databases.
     fixture.execute_command("vacuum tables").await?;
     assert_only_current_snapshot_files(&ctx, storage_root, "default", "t1").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_table_preserves_tagged_snapshot() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    RealTableRefHandler::init()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let database = "vacuum_tag_db";
+    let table = "t";
+    for statement in [
+        "set enable_experimental_table_ref=1".to_string(),
+        format!("create database {database}"),
+        format!("create table {database}.{table} (c int)"),
+        format!("insert into {database}.{table} values (1), (2)"),
+        format!("alter table {database}.{table} create tag before_vacuum"),
+        format!("truncate table {database}.{table}"),
+        format!("insert into {database}.{table} values (3)"),
+        format!("vacuum table {database}.{table}"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let tagged_stream = fixture
+        .execute_query(&format!(
+            "select c from {database}.{table} at (tag => \"before_vacuum\")"
+        ))
+        .await?;
+    let tagged_blocks: Vec<DataBlock> = tagged_stream.try_collect().await?;
+    assert_eq!(
+        tagged_blocks.iter().map(DataBlock::num_rows).sum::<usize>(),
+        2,
+        "vacuum must preserve data referenced only by a live table tag"
+    );
+
+    let current_stream = fixture
+        .execute_query(&format!("select c from {database}.{table}"))
+        .await?;
+    let current_blocks: Vec<DataBlock> = current_stream.try_collect().await?;
+    assert_eq!(
+        current_blocks
+            .iter()
+            .map(DataBlock::num_rows)
+            .sum::<usize>(),
+        1
+    );
 
     Ok(())
 }

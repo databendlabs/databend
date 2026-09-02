@@ -19,7 +19,6 @@ mod changes;
 mod commit;
 mod common;
 mod compact;
-mod gc;
 mod inverted_index;
 mod merge;
 mod merge_into;

@@ -22,10 +22,12 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::TimeDelta;
 use chrono::Utc;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -192,6 +194,61 @@ pub async fn is_gc_candidate_segment_block(
 }
 
 impl FuseTable {
+    /// Protect live table-tag references from VACUUM2 and remove expired tags.
+    pub async fn protect_table_tag_references(
+        &self,
+        catalog: &Arc<dyn Catalog>,
+        root_snapshot_location: &str,
+        snapshot_files_to_gc: &mut Vec<String>,
+        protected_segments: &mut HashSet<Location>,
+    ) -> Result<()> {
+        let now = Utc::now();
+        let tags = catalog
+            .list_table_tags(ListTableTagsReq {
+                table_id: self.get_id(),
+                include_expired: true,
+            })
+            .await?;
+
+        let mut protected_snapshot_locs = HashSet::new();
+        for (tag_name, seq_tag) in tags {
+            if seq_tag
+                .data
+                .expire_at
+                .is_some_and(|expire_at| expire_at <= now)
+            {
+                if let Err(error) = catalog
+                    .drop_table_tag(DropTableTagReq {
+                        table_id: self.get_id(),
+                        tag_name,
+                        seq: Some(seq_tag.seq),
+                    })
+                    .await
+                {
+                    warn!(
+                        "drop expired tag failed, ignored, table: {}, err: {}",
+                        self.table_info.desc, error
+                    );
+                }
+                continue;
+            }
+
+            let tag_snapshot_loc = seq_tag.data.snapshot_loc;
+            if tag_snapshot_loc.as_str() < root_snapshot_location {
+                if let Some(snapshot) =
+                    SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &tag_snapshot_loc)
+                        .await?
+                {
+                    protected_segments.extend(snapshot.segments.iter().cloned());
+                }
+                protected_snapshot_locs.insert(tag_snapshot_loc);
+            }
+        }
+
+        snapshot_files_to_gc.retain(|path| !protected_snapshot_locs.contains(path));
+        Ok(())
+    }
+
     pub async fn vacuum_table(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -229,7 +286,7 @@ impl FuseTable {
     /// List files until a specific timestamp
     ///
     /// This implementation uses UUID v7 timestamp extraction for precise filtering.
-    /// Used by both do_vacuum and do_vacuum2.
+    /// Used by vacuum2.
     pub async fn list_files_until_timestamp(
         &self,
         path: &str,
