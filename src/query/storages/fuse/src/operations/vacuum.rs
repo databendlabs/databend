@@ -96,7 +96,10 @@ fn flashback_gc_root_lvt(respect_flash_back: bool, lvt: DateTime<Utc>) -> Option
     respect_flash_back.then_some(lvt)
 }
 
-fn is_flashback_gc_root(snapshot_timestamp: Option<DateTime<Utc>>, lvt: DateTime<Utc>) -> bool {
+fn is_snapshot_at_or_before_lvt(
+    snapshot_timestamp: Option<DateTime<Utc>>,
+    lvt: DateTime<Utc>,
+) -> bool {
     snapshot_timestamp.is_some_and(|timestamp| timestamp <= lvt)
 }
 
@@ -569,7 +572,7 @@ impl FuseTable {
             let latest_location = self.snapshot_loc().unwrap();
             let gc_root = self
                 .find_location(ctx, latest_location, |snapshot| {
-                    is_flashback_gc_root(snapshot.timestamp, lvt)
+                    is_snapshot_at_or_before_lvt(snapshot.timestamp, lvt)
                 })
                 .await
                 .ok();
@@ -765,18 +768,18 @@ mod tests {
     }
 
     #[test]
-    fn test_flashback_gc_root_respects_flag_and_lvt_boundary() {
+    fn test_snapshot_at_or_before_lvt_boundary() {
         let lvt = Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap();
 
         assert_eq!(flashback_gc_root_lvt(false, lvt), None);
         assert_eq!(flashback_gc_root_lvt(true, lvt), Some(lvt));
-        assert!(!is_flashback_gc_root(None, lvt));
-        assert!(!is_flashback_gc_root(
+        assert!(!is_snapshot_at_or_before_lvt(None, lvt));
+        assert!(!is_snapshot_at_or_before_lvt(
             Some(lvt + TimeDelta::microseconds(1)),
             lvt
         ));
-        assert!(is_flashback_gc_root(Some(lvt), lvt));
-        assert!(is_flashback_gc_root(
+        assert!(is_snapshot_at_or_before_lvt(Some(lvt), lvt));
+        assert!(is_snapshot_at_or_before_lvt(
             Some(lvt - TimeDelta::microseconds(1)),
             lvt
         ));
