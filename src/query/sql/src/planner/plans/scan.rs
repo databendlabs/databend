@@ -429,7 +429,11 @@ impl Operator for Scan {
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,
         };
-        let max_cardinality = cardinality;
+        // PREWHERE changes the expected output, but not the table source size
+        // used by the scoped broadcast-risk heuristic.
+        let max_cardinality = num_rows
+            .map(|num_rows| num_rows as f64)
+            .unwrap_or(f64::INFINITY);
 
         // If prewhere is not none, we can't get precise cardinality
         let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
@@ -621,7 +625,7 @@ mod tests {
 
         assert_eq!(stats.cardinality, 0.0);
         assert_eq!(stats.statistics.precise_cardinality, None);
-        assert_eq!(stats.max_cardinality, 0.0);
+        assert_eq!(stats.max_cardinality, f64::INFINITY);
         Ok(())
     }
 }

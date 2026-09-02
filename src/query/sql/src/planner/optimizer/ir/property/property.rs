@@ -58,9 +58,14 @@ pub struct Statistics {
 #[derive(Clone, Debug)]
 pub struct StatInfo {
     pub cardinality: f64,
-    /// A conservative risk bound for the rows that may reach this subtree's
-    /// output. It is deliberately separate from the expected cardinality used
-    /// by the cost model.
+    /// Broadcast-risk heuristic tracking the largest known source cardinality
+    /// behind this subtree. It is deliberately separate from the expected
+    /// output cardinality used by the cost model.
+    ///
+    /// This is not a proof-grade upper bound on output rows: joins and SRFs can
+    /// expand their inputs. The scoped guard uses it only to reject automatic
+    /// broadcast when a finite source is severely larger than the estimated
+    /// build output.
     pub max_cardinality: f64,
     pub statistics: Statistics,
 }

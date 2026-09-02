@@ -988,9 +988,10 @@ impl Join {
         };
         Ok(Arc::new(StatInfo {
             cardinality,
-            // Keep the largest source/output risk visible. The expected join
-            // cardinality remains unchanged for costing; this separate value
-            // prevents an underestimated derived subtree from being broadcast.
+            // Preserve the largest known source risk behind either input.
+            // This intentionally does not model many-to-many output fan-out;
+            // max_cardinality is a scoped source-risk heuristic, not a strict
+            // upper bound on join output rows.
             max_cardinality: left_max_cardinality
                 .max(right_max_cardinality)
                 .max(cardinality),
@@ -1514,10 +1515,10 @@ fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
     let cardinality = stat_info.cardinality;
     let risk_cardinality = stat_info.max_cardinality;
 
-    // This guard is intentionally limited to finite source-derived bounds.
-    // Unknown bounds retain the pre-existing distribution choice; treating
-    // every unknown subtree as unsafe changes broad classes of unrelated plans
-    // without evidence that their build side is actually underestimated.
+    // This scoped guard compares the expected build output with its largest
+    // known source. Unknown source sizes retain the pre-existing distribution
+    // choice; output-expansion risks such as many-to-many fan-out are outside
+    // this heuristic and require a separate model.
     if !risk_cardinality.is_finite() {
         return true;
     }

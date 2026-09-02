@@ -149,19 +149,14 @@ impl UnionAll {
             .filter_map(Result::transpose)
             .collect::<Result<ColumnStatSet>>()?;
 
-        let left_max_cardinality = left_stat_info
-            .max_cardinality
-            .max(left_stat_info.cardinality);
-        let right_max_cardinality = right_stat_info
-            .max_cardinality
-            .max(right_stat_info.cardinality);
-        // UNION ALL retains every row from both branches, so branch risks are
-        // additive. IEEE addition preserves infinity for unknown inputs.
-        let max_cardinality = left_max_cardinality + right_max_cardinality;
-
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality: max_cardinality.max(cardinality),
+            // Retain the largest source observed through either branch. This
+            // field is a source-risk heuristic, not a UNION output-row bound.
+            max_cardinality: left_stat_info
+                .max_cardinality
+                .max(right_stat_info.max_cardinality)
+                .max(cardinality),
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
@@ -367,7 +362,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn union_all_sums_branch_risk_bounds() -> Result<()> {
+    fn union_all_keeps_largest_source_risk() -> Result<()> {
         let union = UnionAll {
             left_outputs: vec![],
             right_outputs: vec![],
@@ -386,7 +381,7 @@ mod tests {
         let output =
             union.derive_union_stats(stat(50_000.0, 60_000_000.0), stat(50_000.0, 60_000_000.0))?;
         assert_eq!(output.cardinality, 100_000.0);
-        assert_eq!(output.max_cardinality, 120_000_000.0);
+        assert_eq!(output.max_cardinality, 60_000_000.0);
 
         let unknown = union.derive_union_stats(stat(1.0, f64::INFINITY), stat(1.0, 10.0))?;
         assert!(unknown.max_cardinality.is_infinite());
