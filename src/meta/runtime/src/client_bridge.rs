@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use databend_meta::runtime_api as server_rt;
 use databend_meta_client::runtime_api as client_rt;
-use tonic_013::Request;
+use tonic::Request;
 
 use crate::DatabendMetrics;
 use crate::DatabendRuntime;

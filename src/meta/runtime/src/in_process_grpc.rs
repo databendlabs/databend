@@ -35,9 +35,9 @@ use tokio::io::AsyncWrite;
 use tokio::io::DuplexStream;
 use tokio::io::ReadBuf;
 use tokio::sync::mpsc;
-use tonic_013::transport::Endpoint;
-use tonic_013::transport::server::Connected;
-use tonic_013::transport::server::TcpConnectInfo;
+use tonic::transport::Endpoint;
+use tonic::transport::server::Connected;
+use tonic::transport::server::TcpConnectInfo;
 use tower::service_fn;
 
 const IN_PROCESS_GRPC_BUFFER_SIZE: usize = 64 * 1024;
