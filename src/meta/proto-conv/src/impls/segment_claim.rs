@@ -38,7 +38,7 @@ impl FromToProto for mt::SegmentClaimMeta {
             node: p.node,
             query_id: p.query_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            segment_locations: p.segment_locations.into_iter().collect(),
+            segment_locations: p.segment_locations.into_keys().collect(),
         })
     }
 
@@ -50,7 +50,12 @@ impl FromToProto for mt::SegmentClaimMeta {
             node: self.node.clone(),
             query_id: self.query_id.clone(),
             created_on: self.created_on.to_pb(),
-            segment_locations: self.segment_locations.iter().cloned().collect(),
+            segment_locations: self
+                .segment_locations
+                .iter()
+                .cloned()
+                .map(|location| (location, true))
+                .collect(),
         }
     }
 }
