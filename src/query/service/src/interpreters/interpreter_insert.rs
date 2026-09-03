@@ -291,7 +291,7 @@ impl InsertInterpreter {
         }))
     }
 
-    pub(crate) fn try_create_materialized_view_refresh(
+    pub fn try_create_materialized_view_refresh(
         ctx: Arc<QueryContext>,
         plan: Insert,
         target_table_id: u64,

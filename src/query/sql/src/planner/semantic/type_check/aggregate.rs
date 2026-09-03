@@ -65,7 +65,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
-        if func.lambda.is_some() || !self.aggregate_function_factory.contains(func_name) {
+        if func.has_explicit_lambda() || !self.aggregate_function_factory.contains(func_name) {
             return Ok(None);
         }
 
@@ -414,7 +414,7 @@ where A: TypeCheckAdapter
             let max_num_buckets: u64 = check_number(
                 None,
                 &FunctionContext::default(),
-                &arguments[1].as_expr()?,
+                arguments[1].as_expr()?,
                 &BUILTIN_FUNCTIONS,
             )?;
 

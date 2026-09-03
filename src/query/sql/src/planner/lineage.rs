@@ -165,6 +165,28 @@ impl Plan {
     pub fn query_lineage(&self) -> Result<Option<QueryLineage>> {
         RelationExtractor::new(self).extract_query_lineage()
     }
+
+    /// Extract CREATE VIEW lineage from a stored View query using its current object identity.
+    pub fn query_lineage_for_view(
+        &self,
+        target_relation: QueryLineageRelation,
+    ) -> Result<QueryLineage> {
+        if target_relation.kind != QueryLineageRelationKind::View {
+            return Err(ErrorCode::Internal(
+                "View lineage target must have VIEW relation kind".to_string(),
+            ));
+        }
+
+        let extractor = RelationExtractor::new(self);
+        let target_columns = extractor.view_target_columns(self, &[])?;
+        let target_bindings =
+            extractor.query_output_columns_targets(self, target_relation, target_columns)?;
+        let lineage = RelationLineage::from_query_plan(self, target_bindings)?;
+        Ok(QueryLineage::from_relation_lineage(
+            QueryLineageKind::CreateView,
+            lineage,
+        ))
+    }
 }
 
 impl RelationLineage {
@@ -768,7 +790,19 @@ impl LineageResolver {
         let RelOperator::Scan(scan) = operator else {
             return Ok(());
         };
+        let materialized_cte = metadata.materialized_cte_lineage_source(scan.table_index);
+        if let Some(source) = materialized_cte {
+            self.collect_s_expr(&source.definition, metadata)?;
+        }
         for column in &scan.columns {
+            if let Some(output_column) = materialized_cte
+                .and_then(|source| source.column_mapping.get(column))
+                .copied()
+            {
+                self.definitions
+                    .insert(*column, vec![SourceExpr::Symbol(output_column)]);
+                continue;
+            }
             let Some(source) = source_column_from_symbol(metadata, *column)? else {
                 continue;
             };
@@ -914,6 +948,14 @@ fn source_column_from_output(
 
 fn source_column_from_symbol(metadata: &Metadata, symbol: Symbol) -> Result<Option<SourceColumn>> {
     if symbol.is_dummy_column() || symbol.as_usize() >= metadata.columns().len() {
+        return Ok(None);
+    }
+
+    // A user-specified materialized CTE is scanned through a temporary table,
+    // but its outputs retain producer definitions in metadata for lineage.
+    // Prefer those definitions because the temporary table is only an
+    // execution detail, not a lineage source.
+    if metadata.materialized_cte_lineage_output(symbol).is_some() {
         return Ok(None);
     }
 
@@ -1328,6 +1370,36 @@ mod tests {
         }])?;
 
         assert_source_columns(&lineage, "dst", "x", &["a", "b"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_lineage_for_existing_view_uses_current_target() -> Result<()> {
+        let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
+        let table_index = add_fake_table(&metadata, 10, "src", &["a"]);
+        let a = column_index(&metadata, table_index, "a");
+        let query = query_plan(metadata.clone(), scan_expr(&metadata, table_index), vec![
+            binding(a, "renamed", Some(table_index)),
+        ]);
+        let target = relation(
+            "default",
+            "db",
+            "existing_view",
+            Some(42),
+            QueryLineageRelationKind::View,
+        );
+
+        let lineage = query.query_lineage_for_view(target.clone())?;
+
+        assert_eq!(lineage.kind, QueryLineageKind::CreateView);
+        assert_eq!(lineage.targets.len(), 1);
+        assert_eq!(lineage.targets[0].relation, target);
+        assert_eq!(lineage.targets[0].sources.len(), 1);
+        assert_eq!(
+            lineage.targets[0].sources[0].columns[0].target.name,
+            "renamed"
+        );
+        assert_eq!(lineage.targets[0].sources[0].columns[0].target.id, 0);
         Ok(())
     }
 
@@ -2041,6 +2113,7 @@ mod tests {
             func_name: "plus".to_string(),
             params: vec![],
             arguments: vec![left, right],
+            return_type: Box::new(int_data_type()),
         }
         .into()
     }

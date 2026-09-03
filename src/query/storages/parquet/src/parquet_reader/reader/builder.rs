@@ -227,7 +227,15 @@ impl<'a> ParquetReaderBuilder<'a> {
         need_file_row_number: bool,
     ) -> Result<ParquetWholeFileReader> {
         let batch_size = self.ctx.get_settings().get_parquet_max_block_size()? as usize;
+        self.build_full_reader_with_batch_size(source_type, need_file_row_number, batch_size)
+    }
 
+    pub fn build_full_reader_with_batch_size(
+        &mut self,
+        source_type: ParquetSourceType,
+        need_file_row_number: bool,
+        batch_size: usize,
+    ) -> Result<ParquetWholeFileReader> {
         if !need_file_row_number {
             self.build_predicate()?;
         }

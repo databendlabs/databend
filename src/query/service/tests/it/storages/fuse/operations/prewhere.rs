@@ -24,6 +24,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
@@ -40,6 +41,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -84,6 +86,7 @@ async fn run_prewhere_test_with_threshold(
         part,
         num_rows,
         scan_id,
+        runtime_filter_stats,
     } = prepare_prewhere_data().await?;
     let _ = _fixture;
 
@@ -104,6 +107,13 @@ async fn run_prewhere_test_with_threshold(
     // Use the new unified API that handles all states internally
     let (data_block, row_selection, bitmap_selection) =
         read_state.deserialize_and_filter(column_chunks.clone(), &part)?;
+
+    // Static prewhere leaves one row, and both Bloom filters match it. A zero
+    // filtered-row count proves Bloom was not evaluated on the four rows that
+    // prewhere had already rejected.
+    for stats in runtime_filter_stats {
+        assert_eq!(stats.snapshot().bloom_rows_filtered, 0);
+    }
 
     // Verify the final data_block (all columns in order: x, y, z, d, e)
     // The new API internally handles all filter stages (prewhere + runtime filters)
@@ -167,8 +177,7 @@ async fn run_prewhere_test_with_threshold(
     Ok(())
 }
 
-fn create_bloom_filter_for_int32(values: &[i32]) -> Sbbf {
-    let column = Int32Type::from_data(values.to_vec());
+fn create_bloom_filter(column: Column) -> Sbbf {
     let data_type = column.data_type();
     let num_rows = column.len();
     let method =
@@ -178,7 +187,7 @@ fn create_bloom_filter_for_int32(values: &[i32]) -> Sbbf {
     let mut hashes = Vec::with_capacity(num_rows);
     hash_by_method_for_bloom(&method, group_columns, num_rows, &mut hashes).unwrap();
 
-    let mut filter = Sbbf::new_with_ndv_fpp(values.len() as u64, 0.01).unwrap();
+    let mut filter = Sbbf::new_with_ndv_fpp(num_rows as u64, 0.01).unwrap();
     filter.insert_hash_batch(&hashes);
     filter
 }
@@ -192,6 +201,7 @@ struct PrewhereTestSetup {
     part: FuseBlockPartInfo,
     num_rows: usize,
     scan_id: usize,
+    runtime_filter_stats: Vec<Arc<RuntimeFilterStats>>,
 }
 
 async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
@@ -339,47 +349,57 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         block_meta_index: None,
     };
 
-    let bloom_y = create_bloom_filter_for_int32(&[30]);
-    let bloom_d = create_bloom_filter_for_int32(&[3000]);
+    let bloom_y_plus_ten = create_bloom_filter(Int64Type::from_data(vec![40]));
+    let bloom_d = create_bloom_filter(Int32Type::from_data(vec![3000]));
+    let probe_y = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "y".to_string(),
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "y".to_string(),
+    });
+    let ten = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::Int32(10)),
+        data_type: DataType::Number(NumberDataType::Int32),
+    });
+    let probe_y_plus_ten = check_function(None, "plus", &[], &[probe_y, ten], &BUILTIN_FUNCTIONS)?;
+    let probe_d = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "d".to_string(),
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "d".to_string(),
+    });
 
     let scan_id = 999;
+    let bloom_y_stats = Arc::new(RuntimeFilterStats::default());
+    let bloom_d_stats = Arc::new(RuntimeFilterStats::default());
     let mut filters = HashMap::new();
     filters.insert(scan_id, RuntimeFilterInfo {
         filters: vec![
             RuntimeFilterEntry {
                 id: 0,
-                probe_expr: Expr::Constant(Constant {
-                    span: None,
-                    scalar: Scalar::Null,
-                    data_type: DataType::Null,
-                }),
+                probe_expr: probe_y_plus_ten,
                 bloom: Some(RuntimeFilterBloom {
-                    column_name: "y".to_string(),
-                    filter: Arc::new(bloom_y),
+                    filter: Arc::new(bloom_y_plus_ten),
                 }),
                 inlist: None,
                 inlist_value_count: 0,
                 min_max: None,
-                stats: Arc::new(RuntimeFilterStats::default()),
+                stats: bloom_y_stats.clone(),
                 build_rows: 1,
                 build_table_rows: None,
                 enabled: true,
             },
             RuntimeFilterEntry {
                 id: 1,
-                probe_expr: Expr::Constant(Constant {
-                    span: None,
-                    scalar: Scalar::Null,
-                    data_type: DataType::Null,
-                }),
+                probe_expr: probe_d,
                 bloom: Some(RuntimeFilterBloom {
-                    column_name: "d".to_string(),
                     filter: Arc::new(bloom_d),
                 }),
                 inlist: None,
                 inlist_value_count: 0,
                 min_max: None,
-                stats: Arc::new(RuntimeFilterStats::default()),
+                stats: bloom_d_stats.clone(),
                 build_rows: 1,
                 build_table_rows: None,
                 enabled: true,
@@ -397,6 +417,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         part,
         num_rows,
         scan_id,
+        runtime_filter_stats: vec![bloom_y_stats, bloom_d_stats],
     })
 }
 

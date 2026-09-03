@@ -82,6 +82,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -289,6 +290,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         tenant: &Tenant,
         source_table_id: u64,
     ) -> Result<Option<u64>>;
+
+    /// Get a consistent snapshot of active MV bindings for a source table.
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        Ok(MVSourceBindingSnapshot {
+            generation: 0,
+            materialized_views: vec![],
+        })
+    }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::Symbol;
 use crate::optimizer::Optimizer;
@@ -88,22 +89,28 @@ fn flatten_conjuncts(predicate: &ScalarExpr) -> Vec<ScalarExpr> {
 
 fn build_conjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
     predicates.into_iter().reduce(|acc, predicate| {
+        let return_type =
+            ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&acc, &predicate]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: Span::None,
             func_name: "and".to_string(),
             params: vec![],
             arguments: vec![acc, predicate],
+            return_type: Box::new(return_type),
         })
     })
 }
 
 fn build_disjunction(predicates: Vec<ScalarExpr>) -> Option<ScalarExpr> {
     predicates.into_iter().reduce(|acc, predicate| {
+        let return_type =
+            ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&acc, &predicate]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: Span::None,
             func_name: "or".to_string(),
             params: vec![],
             arguments: vec![acc, predicate],
+            return_type: Box::new(return_type),
         })
     })
 }
@@ -209,11 +216,16 @@ impl CTEFilterPushdownOptimizer {
                     filter.predicates.iter().skip(1).fold(
                         filter.predicates[0].clone(),
                         |acc, pred| {
+                            let return_type =
+                                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                                    &acc, pred,
+                                ]);
                             ScalarExpr::FunctionCall(FunctionCall {
                                 span: Span::None,
                                 func_name: "and".to_string(),
                                 params: vec![],
                                 arguments: vec![acc, pred.clone()],
+                                return_type: Box::new(return_type),
                             })
                         },
                     )
@@ -253,21 +265,14 @@ impl CTEFilterPushdownOptimizer {
     }
 
     #[recursive::recursive]
-    fn add_filters_to_ctes(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let new_children = s_expr
-            .children()
-            .map(|child| self.add_filters_to_ctes(child))
-            .collect::<Result<Vec<_>>>()?;
+    fn add_filters_to_ctes(&self, mut s_expr: SExpr) -> Result<SExpr> {
+        let mut new_children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            let child = self.add_filters_to_ctes(Arc::unwrap_or_clone(child))?;
+            new_children.push(Arc::new(child));
+        }
 
-        let mut result = if new_children
-            .iter()
-            .zip(s_expr.children())
-            .any(|(new, old)| !new.eq(old))
-        {
-            s_expr.replace_children(new_children.into_iter().map(Arc::new))
-        } else {
-            s_expr.clone()
-        };
+        let mut result = s_expr.replace_children(new_children);
 
         if let RelOperator::MaterializedCTE(cte) = s_expr.plan() {
             if let Some(Some(predicates)) = self.cte_filters.get(&cte.cte_name) {
@@ -278,10 +283,10 @@ impl CTEFilterPushdownOptimizer {
                         predicates: pushdown_predicates,
                     };
 
-                    let filter_expr = SExpr::create_unary(
-                        Arc::new(RelOperator::Filter(filter)),
-                        Arc::new(result.child(0)?.clone()),
-                    );
+                    assert_eq!(result.children.len(), 1);
+                    let child = result.children.pop().unwrap();
+                    let filter_expr =
+                        SExpr::create_unary(Arc::new(RelOperator::Filter(filter)), child);
 
                     result = result.replace_children(vec![Arc::new(filter_expr)]);
                 }
@@ -294,18 +299,18 @@ impl CTEFilterPushdownOptimizer {
 
 #[async_trait]
 impl Optimizer for CTEFilterPushdownOptimizer {
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.cte_filters.clear();
 
-        self.collect_filters(s_expr)?;
+        self.collect_filters(&s_expr)?;
 
         if self.cte_filters.iter().all(|(_, v)| v.is_none()) {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         let expr_with_filters = self.add_filters_to_ctes(s_expr)?;
 
-        self.rule_optimizer.optimize(&expr_with_filters).await
+        self.rule_optimizer.optimize(expr_with_filters).await
     }
 
     fn name(&self) -> String {
@@ -353,6 +358,7 @@ mod tests {
                 }
                 .into(),
             ],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 
@@ -372,6 +378,7 @@ mod tests {
                 bound_column(left_index, left_table_index, left_name),
                 bound_column(right_index, right_table_index, right_name),
             ],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 
@@ -384,6 +391,7 @@ mod tests {
                     func_name: "and".to_string(),
                     params: vec![],
                     arguments: vec![acc, arg],
+                    return_type: Box::new(DataType::Boolean),
                 })
             })
             .unwrap()
@@ -398,6 +406,7 @@ mod tests {
                     func_name: "or".to_string(),
                     params: vec![],
                     arguments: vec![acc, arg],
+                    return_type: Box::new(DataType::Boolean),
                 })
             })
             .unwrap()

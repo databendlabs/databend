@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
@@ -80,7 +81,7 @@ impl RuleFilterNulls {
             return None;
         }
 
-        if (column_stats.null_count.expected() / cardinality) >= NULL_THRESHOLD_RATIO {
+        if (column_stats.null_count().expected() / cardinality) >= NULL_THRESHOLD_RATIO {
             Some(join_key_null_filter(key_expr))
         } else {
             None
@@ -183,6 +184,7 @@ fn join_key_null_filter(key: &ScalarExpr) -> ScalarExpr {
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![key.clone()],
+        return_type: Box::new(DataType::Boolean),
     })
 }
 

@@ -92,6 +92,7 @@ use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_common_storage::EndpointPolicyScope;
@@ -1269,6 +1270,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::ModifyConnection { new_connection } => Ok(
@@ -1605,6 +1607,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::UnsetOptions { targets } => {
@@ -1613,6 +1616,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::RefreshTableCache => {
@@ -1804,8 +1808,15 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
+        let table_meta = self.ctx.get_table(&catalog, &database, &table).await?;
+        let is_materialized_view = is_materialized_view_engine(table_meta.engine());
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
+            AstOptimizeTableAction::All if is_materialized_view => {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "OPTIMIZE TABLE ALL is not supported on materialized view '{catalog}.{database}.{table}'; use OPTIMIZE TABLE ... COMPACT instead"
+                )));
+            }
             AstOptimizeTableAction::All => {
                 let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
                     catalog,
@@ -1821,6 +1832,11 @@ impl Binder {
                     s_expr: Box::new(s_expr),
                     need_purge: true,
                 }
+            }
+            AstOptimizeTableAction::Purge { before } if is_materialized_view => {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "OPTIMIZE TABLE PURGE is not supported on materialized view '{catalog}.{database}.{table}'"
+                )));
             }
             AstOptimizeTableAction::Purge { before } => {
                 let instant = if let Some(point) = before {

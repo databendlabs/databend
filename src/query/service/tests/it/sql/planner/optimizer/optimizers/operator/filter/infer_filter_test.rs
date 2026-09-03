@@ -1393,18 +1393,20 @@ fn test_replaced_remaining_predicate_must_still_type_check() -> anyhow::Result<(
         func_name: "strip_null_value".to_string(),
         params: vec![],
         arguments: vec![variant_col.clone()],
+        return_type: Box::new(DataType::Variant),
     });
     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![strip_null_value],
+        return_type: Box::new(DataType::Boolean),
     });
 
     let result = run_optimizer(vec![builder.eq(int_col, variant_col), is_not_null])?;
 
     assert!(
-        result.iter().all(|expr| expr.data_type().is_ok()),
+        result.iter().all(|expr| expr.as_expr().is_ok()),
         "Inferred predicates should not contain invalid function arguments"
     );
 

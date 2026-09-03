@@ -198,14 +198,15 @@ impl BloomPrunerCreator {
         }
         let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
         for (i, scalar) in result.ngram_scalars.into_iter() {
-            let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+            let digests = BloomIndex::calculate_ngram_nullable_column(
                 Value::Scalar(scalar.clone()),
                 ngram_args[i].gram_size(),
                 BloomIndex::ngram_hash,
             )
-            .next() else {
+            .collect::<Vec<_>>();
+            if digests.is_empty() {
                 continue;
-            };
+            }
             if let Entry::Vacant(e) = like_scalar_map.entry(scalar) {
                 e.insert(digests);
             }

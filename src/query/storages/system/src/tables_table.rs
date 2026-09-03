@@ -71,6 +71,7 @@ use log::warn;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::collect_visible_tables;
+use crate::util::disable_catalog_refresh;
 use crate::util::extract_leveled_strings;
 use crate::util::generate_default_catalog_meta;
 use crate::util::should_use_optimized_visibility_path;
@@ -183,8 +184,17 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 self.get_table_info().catalog(),
                 ctx.session_state()?,
             )
-            .await?
-            .disable_table_info_refresh()?;
+            .await?;
+        // This implementation is also shared by system.views and the history variants. Only the
+        // current system.tables rows should resolve ATTACH schemas from the latest source snapshot.
+        let refresh = !WITH_HISTORY
+            && WITHOUT_VIEW
+            && ctx.get_settings().get_enable_table_schema_refresh()?;
+        let catalog = if refresh {
+            catalog
+        } else {
+            disable_catalog_refresh(catalog)?
+        };
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
         let func_ctx = ctx.get_function_context()?;
@@ -194,7 +204,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
         } else {
-            self.get_full_data_from_catalogs(ctx, push_downs, catalog)
+            self.get_full_data_from_catalogs(ctx, push_downs, catalog, refresh)
                 .await
         }
     }
@@ -554,6 +564,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         catalog_impl: Arc<dyn Catalog>,
+        refresh: bool,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
@@ -630,31 +641,33 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     &BUILTIN_FUNCTIONS,
                 )?;
 
-                for (i, scalars) in leveld_results.iter().enumerate() {
+                for (i, scalars) in leveld_results.into_iter().enumerate() {
                     if i == 3 {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_number::<u64, usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 tables_ids.push(s);
                             }
                         }
                     } else {
-                        for r in scalars.iter() {
+                        for r in scalars {
+                            let data_type = r.as_ref().infer_data_type();
                             let e = Expr::Constant(Constant {
                                 span: None,
-                                scalar: r.clone(),
-                                data_type: r.as_ref().infer_data_type(),
+                                scalar: r,
+                                data_type,
                             });
 
                             if let Ok(s) =
-                                check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                                check_string::<usize>(None, &func_ctx, e, &BUILTIN_FUNCTIONS)
                             {
                                 match i {
                                     0 => catalog_name.push(s),
@@ -1020,8 +1033,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         if WITHOUT_VIEW {
             for tbl in &database_tables {
-                // For performance considerations, allows using stale statistics data.
-                let require_fresh = false;
+                // ATTACH statistics in the meta server are frozen at attach time. Refresh them
+                // from the current source snapshot only when schema refresh is explicitly enabled.
+                let require_fresh =
+                    refresh && FuseTable::is_table_attached(&tbl.get_table_info().meta.options);
                 let stats = if get_stats {
                     match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
                         Ok(stats) => stats,

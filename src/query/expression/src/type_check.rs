@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -232,30 +233,30 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
 pub fn check_string<Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
-    expr: &Expr<Index>,
+    expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<String> {
-    let origin_ty = expr.data_type();
-    let (expr, _) = if origin_ty != &DataType::String {
+    let (expr, _) = if expr.data_type() != &DataType::String {
         ConstantFolder::fold(
-            &Expr::Cast(Cast {
+            Cow::Owned(Expr::Cast(Cast {
                 span,
                 is_try: false,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
                 dest_type: DataType::String,
-            }),
+            })),
             func_ctx,
             fn_registry,
         )
     } else {
-        ConstantFolder::fold(expr, func_ctx, fn_registry)
+        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
     };
+    let expr = expr.into_owned();
 
     match expr {
         Expr::Constant(Constant {
             scalar: Scalar::String(string),
             ..
-        }) => Ok(string.clone()),
+        }) => Ok(string),
         _ => Err(
             ErrorCode::from_string_no_backtrace("expected string literal".to_string())
                 .set_span(span),
@@ -266,24 +267,25 @@ pub fn check_string<Index: ColumnIndex>(
 pub fn check_number<T: Number, Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
-    expr: &Expr<Index>,
+    expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
-    let origin_ty = expr.data_type();
-    let (expr, _) = if origin_ty != &DataType::Number(T::data_type()) {
+    let origin_ty = expr.data_type().clone();
+    let (expr, _) = if origin_ty != DataType::Number(T::data_type()) {
         ConstantFolder::fold(
-            &Expr::Cast(Cast {
+            Cow::Owned(Expr::Cast(Cast {
                 span,
                 is_try: false,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
                 dest_type: DataType::Number(T::data_type()),
-            }),
+            })),
             func_ctx,
             fn_registry,
         )
     } else {
-        ConstantFolder::fold(expr, func_ctx, fn_registry)
+        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
     };
+    let expr = expr.into_owned();
 
     match expr {
         Expr::Constant(Constant {
@@ -432,6 +434,30 @@ pub fn check_function<Index: ColumnIndex>(
     };
 
     Err(ErrorCode::SemanticError(msg).set_span(span))
+}
+
+pub fn infer_function_return_type<T>(
+    span: Span,
+    name: &str,
+    params: &[Scalar],
+    argument_types: impl Iterator<Item = T>,
+    fn_registry: &FunctionRegistry,
+) -> Result<DataType>
+where
+    T: Borrow<DataType>,
+{
+    let arguments = argument_types
+        .enumerate()
+        .map(|(id, data_type)| {
+            Expr::ColumnRef(ColumnRef {
+                span,
+                id,
+                data_type: data_type.borrow().clone(),
+                display_name: id.to_string(),
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(check_function(span, name, params, &arguments, fn_registry)?.into_data_type())
 }
 
 fn format_function_signature<Index: ColumnIndex>(

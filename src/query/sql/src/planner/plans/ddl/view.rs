@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
@@ -28,6 +32,33 @@ pub struct CreateViewPlan {
     pub column_names: Vec<String>,
     pub subquery: String,
     pub query_plan: Option<Box<Plan>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefreshLineageSelector {
+    AllViews,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RefreshLineagePlan {
+    pub selector: RefreshLineageSelector,
+    pub dry_run: bool,
+}
+
+impl RefreshLineagePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("object_domain", DataType::String),
+            DataField::new("catalog", DataType::String.wrap_nullable()),
+            DataField::new("database", DataType::String.wrap_nullable()),
+            DataField::new("object_name", DataType::String),
+            DataField::new("status", DataType::String),
+            DataField::new("edge_count", DataType::Number(NumberDataType::UInt64)),
+            DataField::new("upsert_count", DataType::Number(NumberDataType::UInt64)),
+            DataField::new("delete_count", DataType::Number(NumberDataType::UInt64)),
+            DataField::new("error", DataType::String.wrap_nullable()),
+        ])
+    }
 }
 
 impl PartialEq for CreateViewPlan {

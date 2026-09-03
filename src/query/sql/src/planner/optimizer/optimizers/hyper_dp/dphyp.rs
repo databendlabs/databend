@@ -681,12 +681,12 @@ impl DPhpyOptimizer {
 
         if !optimized {
             self.opt_ctx.set_flag("dphyp_optimized", false);
-            return Ok(s_expr.as_ref().clone());
+            return Ok(Arc::unwrap_or_clone(s_expr));
         }
 
         if self.join_relations.len() == 1 || join_conditions.is_empty() {
             self.opt_ctx.set_flag("dphyp_optimized", true);
-            return Ok(s_expr.as_ref().clone());
+            return Ok(Arc::unwrap_or_clone(s_expr));
         }
 
         let model = DPhypJoinOrderModel {
@@ -697,7 +697,7 @@ impl DPhpyOptimizer {
 
         if !self.build_join_order_edges(&mut hyper_dp, &join_conditions)? {
             self.opt_ctx.set_flag("dphyp_optimized", false);
-            return Ok(s_expr.as_ref().clone());
+            return Ok(Arc::unwrap_or_clone(s_expr));
         }
 
         if let Some(join_expr) = hyper_dp.find_best_order()? {
@@ -708,7 +708,7 @@ impl DPhpyOptimizer {
         } else {
             // Maybe exist cross join, which make graph disconnected
             self.opt_ctx.set_flag("dphyp_optimized", false);
-            Ok(s_expr.as_ref().clone())
+            Ok(Arc::unwrap_or_clone(s_expr))
         }
     }
 
@@ -885,8 +885,8 @@ impl Optimizer for DPhpyOptimizer {
         "DPhpyOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_async(s_expr).await
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        self.optimize_async(&s_expr).await
     }
 }
 

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -23,6 +22,7 @@ use databend_common_sql::plans::UnsetOptionsPlan;
 use databend_meta_client::types::MatchSeq;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -57,9 +57,7 @@ impl Interpreter for UnsetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
-
-        // check mutability
-        table.check_mutable()?;
+        check_maintenance_target(table.as_ref(), &self.plan.target)?;
 
         let table_version = table.get_table_info().ident.seq;
 

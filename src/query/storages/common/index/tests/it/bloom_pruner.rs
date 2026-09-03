@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::io::Write;
@@ -55,6 +56,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::BloomIndexType;
+use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
@@ -190,10 +192,12 @@ fn test_bloom_filter_rewrites_string_literal_integer_comparison() {
             schema,
         )
         .unwrap();
-    let folded = ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0;
+    let folded =
+        ConstantFolder::fold_with_domain(Cow::Owned(expr), &domains, &func_ctx, &BUILTIN_FUNCTIONS)
+            .0;
 
     assert!(matches!(
-        folded,
+        folded.as_ref(),
         Expr::Constant(Constant {
             scalar: Scalar::Boolean(false),
             ..
@@ -681,12 +685,13 @@ fn eval_index_expr(
     writeln!(file, "expr     : {expr}").unwrap();
 
     let func_ctx = FunctionContext::default();
-    let (fold_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
-    let expr = if fold_expr != expr {
-        writeln!(file, "fold_expr: {fold_expr}").unwrap();
-        fold_expr
-    } else {
-        expr
+    let (fold_expr, _) = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS);
+    let expr = match fold_expr {
+        Cow::Borrowed(_) => expr,
+        Cow::Owned(fold_expr) => {
+            writeln!(file, "fold_expr: {fold_expr}").unwrap();
+            fold_expr
+        }
     };
 
     let bloom_fields = bloom_columns.values().cloned().collect::<Vec<_>>();
@@ -712,14 +717,15 @@ fn eval_index_expr(
         let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
             continue;
         };
-        let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+        let digests = BloomIndex::calculate_ngram_nullable_column(
             Value::Scalar(scalar.clone()),
             ngram_arg.gram_size(),
             BloomIndex::ngram_hash,
         )
-        .next() else {
+        .collect::<Vec<_>>();
+        if digests.is_empty() {
             continue;
-        };
+        }
         like_scalar_map.entry(scalar).or_insert(digests);
     }
 
@@ -765,14 +771,21 @@ fn eval_index_expr(
             schema,
         )
         .unwrap();
-    let result =
-        match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
-            Expr::Constant(Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            }) => FilterEvalResult::MustFalse,
-            _ => FilterEvalResult::Uncertain,
-        };
+    let result = match ConstantFolder::fold_with_domain(
+        Cow::Borrowed(&expr),
+        &domains,
+        &func_ctx,
+        &BUILTIN_FUNCTIONS,
+    )
+    .0
+    .as_ref()
+    {
+        Expr::Constant(Constant {
+            scalar: Scalar::Boolean(false),
+            ..
+        }) => FilterEvalResult::MustFalse,
+        _ => FilterEvalResult::Uncertain,
+    };
     let domains = BTreeMap::from_iter(domains);
 
     writeln!(file, "filter   : {expr}").unwrap();
@@ -887,7 +900,13 @@ fn ngram_args(schema: &TableSchema, cols: &[FieldIndex]) -> Vec<NgramArgs> {
         let table_field = schema.field(i);
         let data_type = DataType::from(table_field.data_type());
         if Xor8Filter::supported_type(&data_type) {
-            ngram_args.push(NgramArgs::new(i, table_field.clone(), 3, 1024))
+            ngram_args.push(NgramArgs::new(
+                i,
+                table_field.clone(),
+                3,
+                1024,
+                DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
+            ))
         }
     }
     ngram_args

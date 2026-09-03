@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use databend_common_ast::Span;
@@ -19,6 +20,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -61,31 +63,41 @@ impl<'a> CoreExprArena<'a> {
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
         let uni_case_func_name = Ascii::new(func_name);
-        if func.lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
-            return Err(
-                ErrorCode::SemanticError("only lambda functions allowed in lambda syntax")
-                    .set_span(span),
-            );
-        }
-
         let Some(func_name) = GENERAL_LAMBDA_FUNCTIONS
             .iter()
             .cloned()
             .find(|name| *name == uni_case_func_name)
             .map(Ascii::into_inner)
         else {
+            if func.has_explicit_lambda() {
+                return Err(ErrorCode::SemanticError(
+                    "only lambda functions allowed in lambda syntax",
+                )
+                .set_span(span));
+            }
             return Ok(None);
         };
-        let Some(lambda) = func.lambda.as_ref() else {
+        let Some(lambda_arg) = func.lambda.as_ref() else {
             return Err(ErrorCode::SemanticError(format!(
                 "function {func_name} must have a lambda expression",
             ))
             .set_span(span));
         };
 
-        Ok(Some(
-            self.lambda_function(span, func_name, &func.args, lambda)?,
-        ))
+        let (args, lambda) = match lambda_arg {
+            LambdaArgument::Lambda(lambda) => (func.args.as_slice(), lambda),
+            LambdaArgument::Ambiguous(lambda) => {
+                let Some((_, args)) = func.args.split_last() else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "function {func_name} must have a lambda expression",
+                    ))
+                    .set_span(span));
+                };
+                (args, lambda)
+            }
+        };
+
+        Ok(Some(self.lambda_function(span, func_name, args, lambda)?))
     }
 
     pub(super) fn lambda_function(
@@ -435,7 +447,8 @@ where A: super::TypeCheckAdapter
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
@@ -607,7 +620,7 @@ where A: super::TypeCheckAdapter
         let expr = lambda_scalar
             .type_check(&lambda_schema)?
             .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
         let remote_lambda_expr = expr.as_remote_expr();
         let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 

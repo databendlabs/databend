@@ -20,10 +20,12 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_sql::LineageSource;
 use databend_common_sql::LineageTarget;
 use databend_common_sql::Planner;
+use databend_common_sql::QueryExecutor;
 use databend_common_sql::QueryLineage;
 use databend_common_sql::QueryLineageColumn;
 use databend_common_sql::QueryLineageColumnEdge;
@@ -32,7 +34,6 @@ use databend_common_sql::QueryLineageRelation;
 use databend_common_sql::QueryLineageRelationKind;
 use databend_common_sql::plans::Plan;
 use databend_common_sql_test_support::init_testing_globals_with_config;
-use databend_common_tracing::HistoryTableConfig;
 
 use crate::framework::LiteTableContext;
 
@@ -162,6 +163,53 @@ async fn test_query_lineage_insert_select_with_auto_materialized_cte_from_sql() 
     assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
         "src.a", "src.b",
     ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_insert_select_with_explicit_materialized_cte_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    let sql = "INSERT INTO dst WITH q(x, filter_col) AS MATERIALIZED (SELECT a + b, c FROM src) SELECT x FROM q WHERE filter_col > 0";
+    let mut planner = Planner::new_with_query_executor(
+        ctx.clone(),
+        Arc::new(LineageQueryExecutor { ctx: ctx.clone() }),
+    );
+    let (plan, _) = planner.plan_sql(sql).await?;
+    let lineage = plan
+        .query_lineage()?
+        .ok_or_else(|| ErrorCode::Internal(format!("missing query lineage for SQL: {sql}")))?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &[
+        "src.a", "src.b",
+    ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_explicit_materialized_cte_tuple_field_from_sql() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(t TUPLE(a INT, b INT))")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    let direct = query_lineage_from_sql(&ctx, "INSERT INTO dst SELECT t.1 FROM src").await?;
+    assert_lineage_sources(&direct, QueryLineageKind::Dml, "dst", "x", &["src.t:a"]);
+
+    let sql = "INSERT INTO dst WITH q(t) AS MATERIALIZED (SELECT t FROM src) SELECT t.1 FROM q";
+    let mut planner = Planner::new_with_query_executor(
+        ctx.clone(),
+        Arc::new(LineageQueryExecutor { ctx: ctx.clone() }),
+    );
+    let (plan, _) = planner.plan_sql(sql).await?;
+    let lineage = plan
+        .query_lineage()?
+        .ok_or_else(|| ErrorCode::Internal(format!("missing query lineage for SQL: {sql}")))?;
+
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &["src.t:a"]);
     Ok(())
 }
 
@@ -469,16 +517,23 @@ async fn test_query_lineage_merge_insert_subset_preserves_target_column_id() -> 
 
 async fn lineage_test_context() -> Result<Arc<LiteTableContext>> {
     let mut config = InnerConfig::default();
-    config.log.history.on = true;
-    config.log.history.tables.push(HistoryTableConfig {
-        table_name: "lineage_history".to_string(),
-        retention: 168,
-        invisible: false,
-    });
+    config.lineage.lineage_on = true;
     // Lite globals are thread-local in debug builds. Initialize capture on the test's current
     // thread before LiteTableContext::create() attempts to install the default configuration.
     init_testing_globals_with_config(config);
     LiteTableContext::create().await
+}
+
+struct LineageQueryExecutor {
+    ctx: Arc<LiteTableContext>,
+}
+
+#[async_trait::async_trait]
+impl QueryExecutor for LineageQueryExecutor {
+    async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>> {
+        self.ctx.register_table_sql(sql).await?;
+        Ok(Vec::new())
+    }
 }
 
 async fn query_lineage_from_sql(ctx: &Arc<LiteTableContext>, sql: &str) -> Result<QueryLineage> {

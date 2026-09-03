@@ -532,6 +532,12 @@ fn test_like(file: &mut impl Write) {
     ];
     run_ast(file, "lhs like rhs", &columns);
 
+    let columns = [
+        ("lhs", StringType::from_data(vec!["x", "", "x"])),
+        ("rhs", StringType::from_data(vec!["", "", "%"])),
+    ];
+    run_ast(file, "lhs like rhs", &columns);
+
     run_ast(file, "parse_json('\"hello\"') like 'h%'", &[]);
     run_ast(file, "parse_json('{\"abc\":1,\"def\":22}') like '%e%'", &[]);
     run_ast(
@@ -581,6 +587,44 @@ fn test_like(file: &mut impl Write) {
         ("rhs", StringType::from_data(vec!["aA%", "aA%"])),
     ];
     run_ast(file, r#""ilike"(lhs, rhs, 'A')"#, &columns);
+
+    let columns = [
+        (
+            "cond",
+            BooleanType::from_data(vec![true, false, true, false, true, false]),
+        ),
+        (
+            "lhs",
+            StringType::from_data_with_validity(
+                vec!["alpha", "", "beta", "zeta", "", "omega"],
+                vec![true, false, true, true, false, true],
+            ),
+        ),
+    ];
+    run_ast(file, "if(cond, lhs like '%', not(lhs like '%'))", &columns);
+    run_ast(
+        file,
+        "not(if(cond, lhs like '%', not(lhs like '%')))",
+        &columns,
+    );
+    run_ast(
+        file,
+        "is_true(if(cond, lhs like '%', not(lhs like '%')))",
+        &columns,
+    );
+    run_ast(
+        file,
+        // The SQL binder lowers COALESCE(nullable, fallback) to this guarded form.
+        "if(is_not_null(if(cond, lhs like '%', not(lhs like '%'))), \
+         assume_not_null(if(cond, lhs like '%', not(lhs like '%'))), false)",
+        &columns,
+    );
+    run_ast(
+        file,
+        "if(cond, if(is_not_null(lhs like '%'), assume_not_null(lhs like '%'), false), \
+         is_true(not(lhs like '%')))",
+        &columns,
+    );
 }
 
 fn test_regexp(file: &mut impl Write) {

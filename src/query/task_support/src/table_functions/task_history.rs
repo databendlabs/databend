@@ -32,8 +32,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::date::date_from_days;
+use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -253,26 +254,16 @@ pub(crate) struct TableHistoryArgsParsed {
 }
 
 fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
-    if v.as_timestamp().is_some() {
-        Some(
-            v.as_timestamp()
-                .map(|s| s.to_timestamp(&TimeZone::UTC).to_string())
-                .unwrap(),
-        )
-    } else if v.as_date().is_some() {
-        Some(
-            v.as_date()
-                .map(|s| {
-                    s.to_date(&TimeZone::UTC)
-                        .at(0, 0, 0, 0)
-                        .in_tz("UTC")
-                        .unwrap()
-                        .to_string()
-                })
-                .unwrap(),
-        )
-    } else {
-        None
+    match v {
+        Scalar::Timestamp(ts) => Some(timestamp_from_micros(*ts, &TimeZone::UTC).to_string()),
+        Scalar::Date(date) => Some(
+            date_from_days(*date)
+                .at(0, 0, 0, 0)
+                .in_tz("UTC")
+                .unwrap() // FIXME: maybe overflow
+                .to_string(),
+        ),
+        _ => None,
     }
 }
 

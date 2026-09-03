@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops::BitAnd;
@@ -179,9 +180,9 @@ pub struct EvalContext<'a> {
     pub num_rows: usize,
 
     pub func_ctx: &'a FunctionContext,
-    /// Validity bitmap of outer nullable column. This is an optimization
-    /// to avoid recording errors on the NULL value which has a corresponding
-    /// default value in nullable's inner column.
+    /// Active rows propagated by nullable and conditional partial evaluation.
+    /// Functions evaluate all rows by default, but expensive functions may opt in to skipping
+    /// inactive rows with `PartialEvalPolicy::SkipInactiveRows`.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,
@@ -224,6 +225,12 @@ pub struct FunctionRegistry {
     pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
     pub derive_stat: HashMap<String, DeriveStat>,
+    /// Function overloads whose evaluation or domain calculation reads [`FunctionContext`].
+    ///
+    /// The key is the canonical function name and the registry-local function ID. Keeping this
+    /// per overload avoids disabling context-free folding for unrelated overloads that share a
+    /// name, such as numeric and timestamp arithmetic.
+    context_dependent_functions: HashMap<String, HashSet<usize>>,
 }
 
 impl FunctionRegistry {
@@ -367,6 +374,40 @@ impl FunctionRegistry {
                 .cloned()
                 .unwrap_or_default(),
         )
+    }
+
+    /// Register a group of functions whose result or domain can depend on [`FunctionContext`].
+    ///
+    /// Only functions and factories added by `register` are marked. Existing overloads with the
+    /// same name remain context independent.
+    pub fn register_context_dependent(&mut self, register: impl FnOnce(&mut FunctionRegistry)) {
+        let existing = self.registered_function_ids();
+        register(self);
+
+        for (name, id) in self.registered_function_ids().difference(&existing) {
+            self.context_dependent_functions
+                .entry(name.clone())
+                .or_default()
+                .insert(*id);
+        }
+    }
+
+    pub fn is_context_dependent(&self, id: &FunctionID) -> bool {
+        self.context_dependent_functions
+            .get(id.name().as_ref())
+            .is_some_and(|ids| ids.contains(&id.id()))
+    }
+
+    fn registered_function_ids(&self) -> HashSet<(String, usize)> {
+        self.funcs
+            .iter()
+            .flat_map(|(name, funcs)| funcs.iter().map(|(_, id)| (name.clone(), *id)))
+            .chain(
+                self.factories
+                    .iter()
+                    .flat_map(|(name, funcs)| funcs.iter().map(|(_, id)| (name.clone(), *id))),
+            )
+            .collect()
     }
 
     pub fn register_function(&mut self, func: Function) {

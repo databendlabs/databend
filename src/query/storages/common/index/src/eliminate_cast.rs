@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_ast::Span;
@@ -114,12 +115,13 @@ impl RewriteVisitor<'_> {
 
                 Ok(Some(
                     ConstantFolder::fold_with_domain(
-                        &func_expr,
+                        Cow::Owned(func_expr),
                         &self.input_domains,
                         self.func_ctx,
                         self.fn_registry,
                     )
-                    .0,
+                    .0
+                    .into_owned(),
                 ))
             }
         }
@@ -160,12 +162,13 @@ impl RewriteVisitor<'_> {
 
         Ok(Some(
             ConstantFolder::fold_with_domain(
-                &func_expr,
+                Cow::Owned(func_expr),
                 &self.input_domains,
                 self.func_ctx,
                 self.fn_registry,
             )
-            .0,
+            .0
+            .into_owned(),
         ))
     }
 
@@ -194,7 +197,7 @@ impl RewriteVisitor<'_> {
 
         // check domain for possible overflow
         ConstantFolder::<String>::fold_with_domain(
-            &cast.clone().into(),
+            Cow::Owned(cast.clone().into()),
             &self.input_domains,
             self.func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -210,13 +213,15 @@ pub(super) fn cast_const(
     constant: Constant,
 ) -> Option<Scalar> {
     let (_, Some(domain)) = ConstantFolder::<String>::fold(
-        &Cast {
-            span: None,
-            is_try: false,
-            expr: Box::new(constant.into()),
-            dest_type,
-        }
-        .into(),
+        Cow::Owned(
+            Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(constant.into()),
+                dest_type,
+            }
+            .into(),
+        ),
         func_ctx,
         &BUILTIN_FUNCTIONS,
     ) else {

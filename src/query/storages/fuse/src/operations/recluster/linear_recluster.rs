@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
-use databend_common_expression::compare_scalars;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use indexmap::IndexSet;
 use log::debug;
@@ -64,7 +63,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
         blocks: &[&ReclusterBlock],
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        let mut points_map = HashMap::new();
+        let mut points_map = BTreeMap::new();
         for (local_idx, &i) in indices.iter().enumerate() {
             // Use a group-local block index (0..block_count) as the point key so
             // dense lookup vectors are sized by the group block count, not the
@@ -77,21 +76,21 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             {
                 continue;
             }
-            let point: &mut (Vec<usize>, Vec<usize>) = points_map.entry(min.to_vec()).or_default();
+            let point: &mut (Vec<usize>, Vec<usize>) =
+                points_map.entry(ScalarSlice(min)).or_default();
             point.0.push(local_idx);
-            let point = points_map.entry(max.to_vec()).or_default();
+            let point = points_map.entry(ScalarSlice(max)).or_default();
             point.1.push(local_idx);
         }
         if points_map.is_empty() {
             return Ok(Vec::new());
         }
         let block_count = indices.len();
-        let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
-        let order = compare_scalars(&keys, &properties.scalar_cluster_key_types)?;
+        let values = points_map.into_values().collect::<Vec<_>>();
 
         // PASS 1: sweep sorted points and record folded point depths plus each
         // block's open/close positions.
-        let num_points = order.len();
+        let num_points = values.len();
         let mut point_depths = vec![0usize; num_points];
         let unset_pos = usize::MAX;
         let mut open_pos = vec![unset_pos; block_count];
@@ -102,9 +101,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
         // Peak tuple: (max point position, max depth, width of depth > threshold region).
         let mut peaks = Vec::new();
         let mut current_peak: Option<(usize, usize, usize)> = None;
-        for i in 0..num_points {
-            let value_idx = order[i] as usize;
-            let (starts, ends) = &values[value_idx];
+        for (i, (starts, ends)) in values.iter().enumerate() {
             let point_depth = calc_point_depth(live_count, starts, ends);
             point_depths[i] = point_depth;
             if point_depth > max_depth {
@@ -341,10 +338,10 @@ impl ReclusterStrategy for LinearReclusterStrategy {
 
                     let (cur, use_ends) = if left_depth >= right_depth {
                         left -= 1;
-                        (order[left] as usize, true)
+                        (left, true)
                     } else {
                         right += 1;
-                        (order[right] as usize, false)
+                        (right, false)
                     };
                     let group_indices = if use_ends {
                         &values[cur].1
@@ -483,7 +480,7 @@ pub(crate) fn select_scalar_segments(
 
     let mut total_blocks = 0;
     let mut segments = vec![None; compact_segments.len()];
-    let mut segment_points: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
+    let mut segment_stats = Vec::with_capacity(compact_segments.len());
 
     // Phase 1: collect segment ranges for the sweep-line selection. Large
     // unclustered segments are skipped because rewriting them is not useful.
@@ -506,14 +503,7 @@ pub(crate) fn select_scalar_segments(
         {
             continue;
         }
-        segment_points
-            .entry(min.to_vec())
-            .and_modify(|v| v.0.push(i))
-            .or_insert((vec![i], vec![]));
-        segment_points
-            .entry(max.to_vec())
-            .and_modify(|v| v.1.push(i))
-            .or_insert((vec![], vec![i]));
+        segment_stats.push((i, stats.min, stats.max));
         segments[i] = Some(SelectedReclusterSegment {
             loc: loc.clone(),
             info: compact_segment.clone(),
@@ -531,13 +521,17 @@ pub(crate) fn select_scalar_segments(
     let mut prev_window: Option<(IndexSet<usize>, usize)> = None;
     let mut current_window: IndexSet<usize> = IndexSet::new();
     let mut current_window_max_depth = 0usize;
-    let (keys, values): (Vec<_>, Vec<_>) = segment_points.into_iter().unzip();
-    let sorted_indices = compare_scalars(&keys, &properties.scalar_cluster_key_types)?;
+    let mut segment_points = BTreeMap::new();
+    for (i, min, max) in &segment_stats {
+        let point: &mut (Vec<usize>, Vec<usize>) =
+            segment_points.entry(ScalarSlice(min)).or_default();
+        point.0.push(*i);
+        let point = segment_points.entry(ScalarSlice(max)).or_default();
+        point.1.push(*i);
+    }
 
-    for idx in sorted_indices {
-        let start = &values[idx as usize].0;
-        let end = &values[idx as usize].1;
-        let point_depth = calc_point_depth(unfinished_intervals.len(), start, end);
+    for (_, (start, end)) in segment_points {
+        let point_depth = calc_point_depth(unfinished_intervals.len(), &start, &end);
 
         // A window is just a contiguous run of segments, so partitioning the
         // run keeps windows segment-disjoint without any extra bookkeeping.
@@ -611,6 +605,32 @@ pub(crate) fn select_scalar_segments(
         .filter(|window| !window.is_empty())
         .collect())
 }
+
+#[derive(Clone, Copy)]
+struct ScalarSlice<'a>(&'a [Scalar]);
+
+impl Ord for ScalarSlice<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .iter()
+            .map(Scalar::as_ref)
+            .cmp(other.0.iter().map(Scalar::as_ref))
+    }
+}
+
+impl PartialOrd for ScalarSlice<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ScalarSlice<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for ScalarSlice<'_> {}
 
 fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) -> usize {
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.

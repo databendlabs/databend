@@ -87,6 +87,40 @@ statement ok
 drop table if EXISTS world
 
 statement ok
+DROP STAGE IF EXISTS parquet_legacy_compat
+
+statement ok
+CREATE STAGE parquet_legacy_compat
+
+statement ok
+COPY INTO @parquet_legacy_compat
+FROM (
+    SELECT
+        true AS b,
+        'legacy'::STRING AS s,
+        CAST(123.45 AS DECIMAL(18, 2)) AS d64,
+        CAST('12345678901234567890123456789012345678.90' AS DECIMAL(40, 2)) AS d256,
+        ['nested'] AS nested
+)
+FILE_FORMAT = (type = PARQUET)
+SINGLE = TRUE
+
+query I
+SELECT count_if(
+    b
+    AND s = 'legacy'
+    AND d64 = CAST(123.45 AS DECIMAL(18, 2))
+    AND d256 = CAST('12345678901234567890123456789012345678.90' AS DECIMAL(40, 2))
+    AND nested[1] = 'nested'
+)
+FROM @parquet_legacy_compat
+----
+1
+
+statement ok
+DROP STAGE parquet_legacy_compat
+
+statement ok
 CREATE TABLE stage_partition_src(dt DATE, ts TIMESTAMP, val INT)
 
 statement ok

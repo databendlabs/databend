@@ -392,6 +392,8 @@ pub enum TokenKind {
     //    so, uncomment the keyword in the reserved list.
     #[token("ACCOUNT", ignore(ascii_case))]
     ACCOUNT,
+    #[token("ACCOUNTS", ignore(ascii_case))]
+    ACCOUNTS,
     #[token("ALL", ignore(ascii_case))]
     ALL,
     #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
@@ -1124,6 +1126,8 @@ pub enum TokenKind {
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]
     REFERENCE_USAGE,
+    #[token("LINEAGE", ignore(ascii_case))]
+    LINEAGE,
     #[token("REFRESH", ignore(ascii_case))]
     REFRESH,
     #[token("REGEXP", ignore(ascii_case))]

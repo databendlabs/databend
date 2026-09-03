@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_expression::Constant;
@@ -30,8 +31,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::ComparisonOp;
-use databend_common_statistics::HistogramBounds;
-use databend_common_statistics::HistogramRangeBounds;
+use databend_common_statistics::StatRangeBounds;
 use databend_storages_common_table_meta::meta::PartitionStatistics;
 
 use crate::statistics::partition_values;
@@ -64,11 +64,12 @@ impl PartitionPruner {
             .into_iter()
             .map(|expr| {
                 ConstantFolder::fold(
-                    &expr.as_expr(&BUILTIN_FUNCTIONS),
+                    Cow::Owned(expr.as_expr(&BUILTIN_FUNCTIONS)),
                     &func_ctx,
                     &BUILTIN_FUNCTIONS,
                 )
                 .0
+                .into_owned()
             })
             .collect();
 
@@ -95,10 +96,11 @@ impl PartitionPruner {
         let filter = visit_expr(&self.filter, &mut visitor)
             .unwrap()
             .unwrap_or_else(|| self.filter.clone());
-        let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (filter, _) =
+            ConstantFolder::fold(Cow::Owned(filter), &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         !matches!(
-            filter,
+            filter.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -185,13 +187,13 @@ impl PartitionPredicateRewriter<'_> {
             return true;
         };
         let (equality, _) = ConstantFolder::fold_with_domain(
-            &equality,
+            Cow::Owned(equality),
             input_domains,
             self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
         !matches!(
-            equality,
+            equality.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -216,31 +218,17 @@ fn predicate_domain(constraints: &[RangeConstraint<String>]) -> Option<Domain> {
         return Some(constraint.constant.as_ref().domain(data_type));
     }
 
-    let (min, max) = Domain::full(&data_type.remove_nullable()).to_minmax();
-    let mut bounds = HistogramBounds::new(min.to_datum()?, max.to_datum()?);
+    let mut bounds = data_type.full_stat_bounds().ok()?;
     for constraint in constraints {
         let op = ComparisonOp::try_from_func_name(&constraint.operator)?;
         let value = constraint.constant.clone().to_datum()?;
         let (lower, upper) = op.range_bounds(value)?;
-        bounds = match HistogramBounds::from_range_constraint(
-            bounds.lower_bound(),
-            bounds.upper_bound(),
-            &lower,
-            &upper,
-        )
-        .ok()?
-        {
-            HistogramRangeBounds::Bounds(bounds) => bounds,
-            HistogramRangeBounds::Empty | HistogramRangeBounds::Imprecise => return None,
+        bounds = match bounds.restrict_by_range(&lower, &upper) {
+            StatRangeBounds::Bounds(bounds) => bounds,
+            StatRangeBounds::Empty | StatRangeBounds::Imprecise => return None,
         };
     }
-    Domain::from_datum(
-        data_type,
-        bounds.lower_bound().clone(),
-        bounds.upper_bound().clone(),
-        false,
-    )
-    .ok()
+    Domain::from_bounds(data_type, bounds, false).ok()
 }
 
 fn collect_conjunctive_ranges(

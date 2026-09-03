@@ -308,7 +308,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(*v as i64, &self.common_settings.settings.jiff_timezone).to_string();
+        let s = date_to_string(*v as i64);
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

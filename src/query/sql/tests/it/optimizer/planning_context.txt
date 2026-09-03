@@ -1,0 +1,112 @@
+=== issue_reproduction_keeps_left_join ===
+description: The statement-dependent OR predicate must keep null-extended rows and the left join.
+sql: SELECT l.id
+FROM (SELECT 1 AS id UNION ALL SELECT 2 AS id) AS l
+LEFT JOIN (SELECT 1 AS id) AS r ON l.id = r.id
+WHERE r.id = 1
+   OR now() > TIMESTAMP '2020-01-01 00:00:00'
+ORDER BY l.id
+raw_plan:
+Sort
+├── sort keys: [id (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [id (#2) AS (#2)]
+    └── Filter
+        ├── filters: [or(eq(id (#4), 1), gt(now(), '2020-01-01 00:00:00.000000'))]
+        └── Join(Left)
+            ├── build keys: [id (#4)]
+            ├── probe keys: [id (#2)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [CAST(id (#3) AS UInt8 NULL) AS (#4)]
+            │   └── EvalScalar
+            │       ├── scalars: [1 AS (#3)]
+            │       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── UnionAll
+                ├── output: [id (#2)]
+                ├── left: [id (#0)]
+                ├── right: [id (#1)]
+                ├── cte_scan_names: []
+                ├── logical_recursive_cte_id: None
+                ├── EvalScalar
+                │   ├── scalars: [1 AS (#0)]
+                │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+                └── EvalScalar
+                    ├── scalars: [2 AS (#1)]
+                    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+optimized_plan:
+Sort
+├── sort keys: [id (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [id (#2) AS (#2), id (#4) AS (#5)]
+    └── Filter
+        ├── filters: [or_filters(eq(id (#4), 1), gt(now(), '2020-01-01 00:00:00.000000'))]
+        └── Join(Left)
+            ├── build keys: [id (#4)]
+            ├── probe keys: [id (#2)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [1 AS (#3), CAST(1 AS UInt8 NULL) AS (#4)]
+            │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── UnionAll
+                ├── output: [id (#2)]
+                ├── left: [id (#0)]
+                ├── right: [id (#1)]
+                ├── cte_scan_names: []
+                ├── logical_recursive_cte_id: None
+                ├── EvalScalar
+                │   ├── scalars: [1 AS (#0)]
+                │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+                └── EvalScalar
+                    ├── scalars: [2 AS (#1)]
+                    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== immutable_null_rejecting_predicate_uses_inner_join ===
+description: A context-independent null-rejecting predicate should still convert the outer join.
+sql: SELECT l.id
+FROM planning_left_rows AS l
+LEFT JOIN planning_right_rows AS r ON l.id = r.id
+WHERE r.id > 0
+raw_plan:
+EvalScalar
+├── scalars: [planning_left_rows.id (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(planning_right_rows.id (#1), 0)]
+    └── Join(Left)
+        ├── build keys: [planning_right_rows.id (#1)]
+        ├── probe keys: [planning_left_rows.id (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.planning_right_rows (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.planning_left_rows (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [planning_left_rows.id (#0) AS (#0), planning_right_rows.id (#1) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [planning_right_rows.id (#1)]
+    ├── probe keys: [planning_left_rows.id (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.planning_right_rows (#1)
+    │   ├── filters: [gt(planning_right_rows.id (#1), 0)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.planning_left_rows (#0)
+        ├── filters: [gt(planning_left_rows.id (#0), 0)]
+        ├── order by: []
+        └── limit: NONE
+
+

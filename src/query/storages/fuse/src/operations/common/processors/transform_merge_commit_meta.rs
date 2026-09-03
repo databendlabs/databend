@@ -449,4 +449,16 @@ mod tests {
             5
         );
     }
+
+    #[test]
+    fn test_logical_insert_rows_saturates_for_physical_row_reduction() {
+        let compacted = commit_meta_with_rows(1, 5, 0);
+
+        assert_eq!(
+            compacted
+                .conflict_resolve_context
+                .logical_insert_rows(compacted.logical_deleted_rows),
+            0
+        );
+    }
 }

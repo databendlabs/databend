@@ -7,6 +7,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
@@ -38,8 +39,10 @@ iceberg-catalog-rest = { workspace = true }
 iceberg-catalog-s3tables = { workspace = true }
 log = { workspace = true }
 parquet = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
 

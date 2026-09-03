@@ -50,6 +50,7 @@ use crate::ParquetReaderBuilder;
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
 use crate::parquet_part::DeleteTask;
+use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::RowGroupReader;
 use crate::parquet_reader::cached_range_full_read;
@@ -65,8 +66,58 @@ enum State {
         location: String,
         meta: ParquetFileMeta,
     },
-    // (bytes, path, file-meta)
-    ReadFiles(Vec<(Bytes, String, ParquetFileMeta)>),
+    ReadFiles {
+        // Compressed files are fetched concurrently, then decoded one at a time.
+        buffers: VecDeque<(Bytes, String, ParquetFileMeta)>,
+        reader: Option<SmallFileReader>,
+    },
+}
+
+struct SmallFileReader {
+    blocks: DataBlockIterator,
+    path: String,
+    meta: ParquetFileMeta,
+    rows_start: u64,
+    copy_status_registered: bool,
+}
+
+impl SmallFileReader {
+    fn next_block(
+        &mut self,
+        internal_columns: &[InternalColumnType],
+        is_copy: bool,
+        copy_status: &CopyStatus,
+    ) -> Result<Option<DataBlock>> {
+        let Some(mut block) = self.blocks.next().transpose()? else {
+            if is_copy && !self.copy_status_registered {
+                copy_status.add_chunk(self.path.as_str(), FileStatus {
+                    num_rows_loaded: 0,
+                    error: None,
+                });
+                self.copy_status_registered = true;
+            }
+            return Ok(None);
+        };
+
+        add_internal_columns_with_meta(
+            internal_columns,
+            self.path.clone(),
+            &mut block,
+            &mut self.rows_start,
+            self.meta.content_key.as_deref(),
+            self.meta.last_modified,
+        );
+
+        if is_copy {
+            copy_status.add_chunk(self.path.as_str(), FileStatus {
+                num_rows_loaded: block.num_rows(),
+                error: None,
+            });
+            self.copy_status_registered = true;
+        }
+
+        Ok(Some(block))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -193,7 +244,7 @@ impl Processor for ParquetSource {
             None => match &self.state {
                 State::Init => Ok(Event::Async),
                 State::ReadRowGroup { .. } => Ok(Event::Sync),
-                State::ReadFiles(_) => Ok(Event::Sync),
+                State::ReadFiles { .. } => Ok(Event::Sync),
             },
             Some(data_block) => {
                 let progress_values = ProgressValues {
@@ -247,42 +298,43 @@ impl Processor for ParquetSource {
                 }
                 // Else: The reader is finished. We should try to build another reader.
             }
-            State::ReadFiles(buffers) => {
-                let mut blocks = Vec::with_capacity(buffers.len());
-                for (buffer, path, meta) in buffers {
-                    let bs: Result<Vec<DataBlock>> = self
+            State::ReadFiles {
+                mut buffers,
+                mut reader,
+            } => {
+                loop {
+                    if let Some(current) = reader.as_mut() {
+                        if let Some(block) = current.next_block(
+                            &self.internal_columns,
+                            self.is_copy,
+                            &self.copy_status,
+                        )? {
+                            self.generated_data = Some(block);
+                            break;
+                        }
+                        reader = None;
+                    }
+
+                    let Some((buffer, path, meta)) = buffers.pop_front() else {
+                        break;
+                    };
+                    let blocks = self
                         .whole_file_reader
                         .as_ref()
                         .unwrap()
-                        .read_blocks_from_binary(buffer, &path)?
-                        .collect();
-                    let mut bs = bs?;
-
-                    if self.is_copy {
-                        let num_rows = bs.iter().map(|b| b.num_rows()).sum();
-                        self.copy_status.add_chunk(path.as_str(), FileStatus {
-                            num_rows_loaded: num_rows,
-                            error: None,
-                        });
-                    }
-                    let mut rows_start = 0;
-                    for b in bs.iter_mut() {
-                        add_internal_columns_with_meta(
-                            &self.internal_columns,
-                            path.to_string(),
-                            b,
-                            &mut rows_start,
-                            meta.content_key.as_deref(),
-                            meta.last_modified,
-                        );
-                    }
-                    blocks.extend(bs);
+                        .read_blocks_from_binary(buffer, &path)?;
+                    reader = Some(SmallFileReader {
+                        blocks,
+                        path,
+                        meta,
+                        rows_start: 0,
+                        copy_status_registered: false,
+                    });
                 }
 
-                if !blocks.is_empty() {
-                    self.generated_data = Some(DataBlock::concat(&blocks)?);
+                if reader.is_some() || !buffers.is_empty() {
+                    self.state = State::ReadFiles { buffers, reader };
                 }
-                // Else: no output data is generated.
             }
             _ => unreachable!(),
         }
@@ -340,7 +392,10 @@ impl Processor for ParquetSource {
                                 });
                             }
                             let results = futures::future::try_join_all(handlers).await?;
-                            self.state = State::ReadFiles(results);
+                            self.state = State::ReadFiles {
+                                buffers: results.into(),
+                                reader: None,
+                            };
                         }
                         ParquetPart::File(part) => {
                             let readers = self.get_rows_readers(part, None).await?;

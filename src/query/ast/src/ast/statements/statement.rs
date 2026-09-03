@@ -180,6 +180,15 @@ pub enum Statement {
         database: Identifier,
     },
 
+    // Shares
+    CreateShare(CreateShareStmt),
+    DropShare(DropShareStmt),
+    AlterShare(AlterShareStmt),
+    GrantShare(GrantShareStmt),
+    RevokeShare(RevokeShareStmt),
+    ShowShares(ShowSharesStmt),
+    DescShare(DescShareStmt),
+
     // Tables
     ShowTables(ShowTablesStmt),
     ShowCreateTable(ShowCreateTableStmt),
@@ -218,6 +227,7 @@ pub enum Statement {
     DropView(DropViewStmt),
     ShowViews(ShowViewsStmt),
     DescribeView(DescribeViewStmt),
+    RefreshLineage(RefreshLineageStmt),
 
     // Materialized Views
     CreateMaterializedView(CreateMaterializedViewStmt),
@@ -543,6 +553,8 @@ impl Statement {
             | Statement::ShowDatabases(..)
             | Statement::ShowDropDatabases(..)
             | Statement::ShowCreateDatabase(..)
+            | Statement::ShowShares(..)
+            | Statement::DescShare(..)
             | Statement::UseDatabase { .. }
             | Statement::ShowCreateMaterializedView(..)
             | Statement::ShowTables(..)
@@ -563,6 +575,7 @@ impl Statement {
             | Statement::ShowColumns(..)
             | Statement::ShowViews(..)
             | Statement::DescribeView(..)
+            | Statement::RefreshLineage(..)
             | Statement::ShowMaterializedViews(..)
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
@@ -612,6 +625,11 @@ impl Statement {
             | Statement::InspectWarehouse(..) => true,
 
             Statement::CreateDatabase(..)
+            | Statement::CreateShare(..)
+            | Statement::DropShare(..)
+            | Statement::AlterShare(..)
+            | Statement::GrantShare(..)
+            | Statement::RevokeShare(..)
             | Statement::CreateTable(..)
             | Statement::CreateView(..)
             | Statement::CreateIndex(..)
@@ -915,6 +933,13 @@ impl Display for Statement {
             Statement::UndropDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
+            Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterShare(stmt) => write!(f, "{stmt}")?,
+            Statement::GrantShare(stmt) => write!(f, "{stmt}")?,
+            Statement::RevokeShare(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
+            Statement::DescShare(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
             Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
@@ -946,6 +971,7 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshLineage(stmt) => write!(f, "{stmt}")?,
             Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterMaterializedView(stmt) => write!(f, "{stmt}")?,
             Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,

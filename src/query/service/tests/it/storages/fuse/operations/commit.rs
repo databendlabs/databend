@@ -902,7 +902,10 @@ impl TableContextRuntimeFilter for CtxDelegation {
         HashMap::new()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        _id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         todo!()
     }
 

@@ -259,6 +259,10 @@ impl<'a> ClusteringInformationImpl<'a> {
         let prepared_cluster_key_exprs = prepare_cluster_key_exprs(&stats_exprs, schema.as_ref());
 
         let capacity = snapshot.summary.block_count as usize;
+        // `clustering_information` intentionally measures only the declared cluster-key domains
+        // across the whole table. PARTITION BY boundaries are outside this function's metric, even
+        // though pruning and recluster execution are partition-local. Changing that established
+        // definition and its reported values should be handled in a separate compatibility PR.
         let mut ranges = if use_hilbert_stats {
             Vec::new()
         } else {

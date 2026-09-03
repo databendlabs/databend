@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
@@ -695,11 +696,14 @@ impl RuleEliminateSelfJoin {
                 .saturating_add(non_equi_conditions.len()),
         );
         for cond in equi_conditions.into_iter() {
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&cond.left, &cond.right]);
             predicates.push(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
                 arguments: vec![cond.left, cond.right],
+                return_type: Box::new(return_type),
             }));
         }
         predicates.extend(non_equi_conditions);
@@ -715,7 +719,7 @@ impl RuleEliminateSelfJoin {
         }
 
         let root = if predicates.is_empty() {
-            join_tree.as_ref().clone()
+            Arc::unwrap_or_clone(join_tree)
         } else {
             SExpr::create_unary(
                 Arc::new(RelOperator::Filter(Filter { predicates })),
@@ -730,7 +734,7 @@ impl RuleEliminateSelfJoin {
     fn push_down_filter(&self, root: SExpr) -> Result<SExpr> {
         static RULES: &[RuleID] = &[RuleID::PushDownFilterJoin, RuleID::EliminateFilter];
         let optimizer = RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES);
-        optimizer.optimize_sync(&root)
+        optimizer.optimize_sync(root)
     }
 }
 

@@ -13,6 +13,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
@@ -32,6 +33,7 @@ databend-common-version = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-fail-safe = { workspace = true }
+databend-enterprise-materialized-view = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }

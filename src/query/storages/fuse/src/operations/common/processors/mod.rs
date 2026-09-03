@@ -12,26 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod hilbert_range_exchange;
 mod multi_table_insert_commit;
 mod sink_commit;
 mod transform_block_writer;
 mod transform_constraint_verify;
+mod transform_hilbert_cluster;
 mod transform_merge_commit_meta;
 mod transform_mutation_aggregator;
 mod transform_partition_by;
+mod transform_reaggregate_aggregate_state;
 mod transform_serialize_block;
 mod transform_serialize_segment;
 mod transform_vector_cluster;
 
+pub use hilbert_range_exchange::HilbertRangeExchange;
 pub use multi_table_insert_commit::CommitMultiTableInsert;
 pub use sink_commit::CommitSink;
 pub use sink_commit::is_auto_vacuum_enabled;
 pub use transform_block_writer::TransformBlockBuilder;
 pub use transform_block_writer::TransformBlockWriter;
 pub use transform_constraint_verify::TransformConstraintVerify;
+pub use transform_hilbert_cluster::TransformHilbertCluster;
 pub use transform_merge_commit_meta::TransformMergeCommitMeta;
 pub use transform_mutation_aggregator::TableMutationAggregator;
 pub use transform_partition_by::TransformPartitionBy;
+pub use transform_reaggregate_aggregate_state::TransformReaggregateAggregateStateBlock;
+pub use transform_reaggregate_aggregate_state::add_aggregate_state_reaggregate_transform;
 pub use transform_serialize_block::TransformSerializeBlock;
 pub use transform_serialize_segment::TransformSerializeSegment;
 pub use transform_serialize_segment::new_serialize_segment_processor;

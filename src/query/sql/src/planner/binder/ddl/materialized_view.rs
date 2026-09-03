@@ -22,6 +22,7 @@ use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::CreateMaterializedViewStmt;
 use databend_common_ast::ast::DropMaterializedViewStmt;
 use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::RefreshMaterializedViewStmt;
 use databend_common_ast::ast::SetExpr;
@@ -44,26 +45,38 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
+use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::WriteDistributionMode;
 use databend_storages_common_table_meta::table::is_fuse_engine;
 use log::debug;
 
 use crate::BindContext;
+use crate::MaterializedViewCandidate;
+use crate::MaterializedViewCandidateReadMode;
 use crate::MetadataRef;
 use crate::SelectBuilder;
 use crate::TableEntry;
 use crate::binder::Binder;
+use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::optimizer::ir::SExpr;
-use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
+use crate::parse_materialized_view_query;
 use crate::planner::semantic::MaterializedViewChecker;
 use crate::planner::semantic::MaterializedViewRewriter;
 use crate::planner::semantic::ViewRewriter;
@@ -75,13 +88,16 @@ use crate::plans::CreateTablePlan;
 use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::MaintenanceTarget;
+use crate::plans::ModifyTableCommentPlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ScalarExpr;
+use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateMaterializedViewPlan;
+use crate::plans::UnsetOptionsPlan;
 
 fn is_supported_materialized_view_source(table: &dyn Table) -> bool {
     !table.is_temp()
@@ -122,6 +138,180 @@ fn normalize_null_fields(schema: TableSchemaRef) -> TableSchemaRef {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_query_materialized_views(
+        &mut self,
+        bind_context: &mut BindContext,
+        plan: &Plan,
+    ) -> Result<()> {
+        let metadata = match plan {
+            Plan::Query { metadata, .. } => Some(metadata),
+            Plan::Explain { kind, plan, .. }
+                if matches!(kind, ExplainKind::Plan) && matches!(**plan, Plan::Query { .. }) =>
+            {
+                match plan.as_ref() {
+                    Plan::Query { metadata, .. } => Some(metadata),
+                    _ => unreachable!(),
+                }
+            }
+            _ => None,
+        };
+        if let Some(metadata) = metadata {
+            self.do_bind_query_materialized_views(bind_context, metadata)
+                .await?;
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn do_bind_query_materialized_views(
+        &mut self,
+        bind_context: &mut BindContext,
+        metadata: &MetadataRef,
+    ) -> Result<()> {
+        if bind_context.planning_agg_index
+            || bind_context.planning_materialized_view_rewrite
+            || !self.ctx.get_can_scan_from_agg_index()
+            || !self.enable_materialized_view_rewrite
+        {
+            return Ok(());
+        }
+
+        let tenant = self.ctx.get_tenant();
+        let source_entries = metadata.read().tables().to_vec();
+        for source_entry in source_entries {
+            if source_entry.is_source_of_view()
+                || source_entry.is_source_of_index()
+                || source_entry.is_source_of_stage()
+            {
+                continue;
+            }
+            let source_table = source_entry.table();
+            if !is_fuse_engine(source_table.engine()) {
+                continue;
+            }
+
+            let catalog = self.ctx.get_catalog(source_entry.catalog()).await?;
+            let source_table_id = source_table.get_id();
+            let snapshot = catalog
+                .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                .await?;
+            if snapshot.materialized_views.is_empty() {
+                continue;
+            }
+
+            let source_info = source_table.get_table_info();
+            let source_table_seq = source_info.ident.seq;
+            let source_snapshot_location = source_info
+                .meta
+                .options
+                .get(OPT_KEY_SNAPSHOT_LOCATION)
+                .cloned();
+            let mut candidates = Vec::with_capacity(snapshot.materialized_views.len());
+            for mv in snapshot.materialized_views {
+                if mv
+                    .table_meta
+                    .data
+                    .materialized_view_source_table_id()
+                    .map_err(ErrorCode::from)?
+                    != source_table_id
+                {
+                    continue;
+                }
+                let database_id = mv
+                    .table_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_DATABASE_ID)
+                    .ok_or_else(|| ErrorCode::Internal("materialized view database id is missing"))?
+                    .parse::<u64>()?;
+                let mv_database = catalog.get_db_name_by_id(database_id).await?;
+                let Some(mv_name) = catalog.get_table_name_by_id(mv.mv_id).await? else {
+                    continue;
+                };
+                let current_mv = catalog.get_table(&tenant, &mv_database, &mv_name).await?;
+                let mv_table =
+                    catalog.get_table_by_info(&databend_common_meta_app::schema::TableInfo {
+                        ident: databend_common_meta_app::schema::TableIdent::new(
+                            mv.mv_id,
+                            mv.table_meta.seq,
+                        ),
+                        meta: mv.table_meta.data.clone(),
+                        ..current_mv.get_table_info().clone()
+                    })?;
+
+                let logical_query = parse_materialized_view_query(
+                    &mv.definition.data.original_query,
+                    "invalid materialized view logical query",
+                )?;
+                let mut candidate_context = BindContext::with_parent(bind_context.clone())?;
+                candidate_context.planning_materialized_view_rewrite = true;
+                let (definition, definition_context) =
+                    self.bind_query(&mut candidate_context, &logical_query)?;
+
+                let mut read_context = BindContext::with_parent(bind_context.clone())?;
+                read_context.planning_materialized_view_rewrite = true;
+                let (read_plan, read_context, read_mode) = self.bind_materialized_view_with_mode(
+                    &mut read_context,
+                    source_entry.catalog(),
+                    &mv_database,
+                    &mv_name,
+                    None,
+                    mv_table,
+                    &None,
+                    &None,
+                    None,
+                    Some((source_table.clone(), source_entry.database().to_string())),
+                    false,
+                )?;
+                let read_mode = match read_mode {
+                    MaterializedViewReadMode::Fresh => MaterializedViewCandidateReadMode::Fresh,
+                    MaterializedViewReadMode::Hybrid => MaterializedViewCandidateReadMode::Hybrid,
+                    MaterializedViewReadMode::LiveFallback => continue,
+                };
+                candidates.push(MaterializedViewCandidate {
+                    source_table_id,
+                    source_table_index: source_entry.index(),
+                    mv_table_id: mv.mv_id,
+                    definition,
+                    read_plan,
+                    read_mode,
+                    logical_sql: mv.definition.data.original_query.clone(),
+                    mv_table_seq: mv.table_meta.seq,
+                    mv_snapshot_location: mv
+                        .table_meta
+                        .data
+                        .options
+                        .get(OPT_KEY_SNAPSHOT_LOCATION)
+                        .cloned(),
+                    source_table_seq,
+                    source_snapshot_location: source_snapshot_location.clone(),
+                    definition_output_columns: definition_context
+                        .columns
+                        .iter()
+                        .map(|column| column.index)
+                        .collect(),
+                    read_output_columns: read_context
+                        .columns
+                        .iter()
+                        .map(|column| column.index)
+                        .collect(),
+                });
+            }
+            if !candidates.is_empty() {
+                metadata
+                    .write()
+                    .add_materialized_view_candidates(source_table_id, candidates);
+            }
+        }
+        Ok(())
+    }
+
+    fn check_materialized_view_license(&self) -> Result<()> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)
+    }
+
     async fn resolve_materialized_view_target(
         &self,
         catalog: &Option<Identifier>,
@@ -184,7 +374,7 @@ impl Binder {
                 data_types.push(infer_schema_type(function.return_type.as_ref())?);
             }
             for item in &aggregate.group_items {
-                data_types.push(infer_schema_type(&item.scalar.data_type()?)?);
+                data_types.push(infer_schema_type(item.scalar.data_type().as_ref())?);
             }
             data_types
         } else {
@@ -263,6 +453,8 @@ impl Binder {
         &mut self,
         stmt: &CreateMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let CreateMaterializedViewStmt {
             create_option,
             catalog,
@@ -270,6 +462,8 @@ impl Binder {
             view,
             columns,
             cluster_by,
+            comment,
+            table_options,
             query,
         } = stmt;
 
@@ -292,11 +486,7 @@ impl Binder {
         let checker = MaterializedViewChecker::check_query(query);
         if !checker.is_supported() {
             return Err(ErrorCode::SemanticError(format!(
-                "Materialized View only support simple query, like: \
-                    `SELECT ... FROM ... WHERE ... GROUP BY ...`, \
-                     and these aggregate funcs: {}, \
-                     non-deterministic functions are not support like: NOW()",
-                SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
+                "Materialized View only supports simple SELECT queries over one table, with optional WHERE/GROUP BY clauses, registered aggregate functions, and deterministic expressions",
             )));
         }
 
@@ -378,8 +568,8 @@ impl Binder {
                 ]),
             });
         let source_catalog = self.ctx.get_catalog(&source_catalog_name).await?;
-        let expected_source_generation = source_catalog
-            .get_mv_current_source_generation(&tenant, source_table_id)
+        let expected_source_generation = get_materialized_view_handler()
+            .get_mv_current_source_generation(source_catalog.as_ref(), &tenant, source_table_id)
             .await?
             .unwrap_or(0);
 
@@ -473,6 +663,24 @@ impl Binder {
         //    Fuse storage; MVDefinition holds the original query, rewritten storage
         //    query, and logical schema (with final projection expressions).
         let mut options = BTreeMap::new();
+        for (key, value) in table_options {
+            self.insert_table_option_with_validation(
+                &mut options,
+                key.to_lowercase(),
+                value.clone(),
+            )?;
+        }
+        if let Some(compression) = options.get(OPT_KEY_TABLE_COMPRESSION) {
+            let _: TableCompression = compression.as_str().try_into()?;
+        }
+        if let Some(mode) = options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+            let mode = mode.parse::<WriteDistributionMode>()?;
+            if mode == WriteDistributionMode::Hash {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                )));
+            }
+        }
         options.insert(
             OPT_KEY_DATABASE_ID.to_owned(),
             target_database_id.to_string(),
@@ -481,6 +689,11 @@ impl Binder {
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID.to_owned(),
             source_table_id.to_string(),
         );
+        // CreateTableInterpreter removes this transport option and stores it in TableMeta.comment;
+        // ALTER MATERIALIZED VIEW SET OPTIONS does not accept COMMENT.
+        if let Some(comment) = comment {
+            options.insert(OPT_KEY_COMMENT.to_owned(), comment.clone());
+        }
 
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
@@ -550,6 +763,8 @@ impl Binder {
         &mut self,
         stmt: &AlterMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let AlterMaterializedViewStmt {
             catalog,
             database,
@@ -622,6 +837,34 @@ impl Binder {
                     is_final: *is_final,
                 })))
             }
+            AlterTableAction::SetOptions { set_options } => {
+                Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
+                    set_options: set_options.clone(),
+                    catalog,
+                    database,
+                    table,
+                    target: MaintenanceTarget::MaterializedView { table_id },
+                })))
+            }
+            AlterTableAction::UnsetOptions { targets } => {
+                Ok(Plan::UnsetOptions(Box::new(UnsetOptionsPlan {
+                    options: targets.iter().map(|i| i.name.to_lowercase()).collect(),
+                    catalog,
+                    database,
+                    table,
+                    target: MaintenanceTarget::MaterializedView { table_id },
+                })))
+            }
+            AlterTableAction::ModifyTableComment { new_comment } => {
+                Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    if_exists: false,
+                    new_comment: new_comment.to_string(),
+                    catalog,
+                    database,
+                    table,
+                    target: MaintenanceTarget::MaterializedView { table_id },
+                })))
+            }
             _ => Err(ErrorCode::SemanticError(format!(
                 "unsupported ALTER MATERIALIZED VIEW action: {action}"
             ))),
@@ -633,6 +876,8 @@ impl Binder {
         &mut self,
         stmt: &DropMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let DropMaterializedViewStmt {
             if_exists,
             catalog,
@@ -658,6 +903,8 @@ impl Binder {
         &mut self,
         stmt: &RefreshMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let RefreshMaterializedViewStmt {
             catalog,
             database,
@@ -682,6 +929,8 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &ShowCreateMaterializedViewStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let ShowCreateMaterializedViewStmt {
             catalog,
             database,
@@ -709,6 +958,8 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowMaterializedViewsStmt,
     ) -> Result<Plan> {
+        self.check_materialized_view_license()?;
+
         let ShowMaterializedViewsStmt {
             catalog,
             database,

@@ -517,7 +517,7 @@ impl DictionaryOperator {
     fn format_key(&self, key: ScalarRef<'_>) -> String {
         match key {
             ScalarRef::String(s) => format!("'{}'", s.replace("'", "\\'")),
-            ScalarRef::Date(d) => format!("{}", date_to_string(d as i64, &TimeZone::UTC)),
+            ScalarRef::Date(d) => format!("{}", date_to_string(d as i64)),
             ScalarRef::Timestamp(t) => {
                 format!("{}", timestamp_to_string(t, &TimeZone::UTC))
             }

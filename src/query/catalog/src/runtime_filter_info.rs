@@ -407,7 +407,6 @@ pub struct RuntimeFilterEntry {
 
 #[derive(Clone)]
 pub struct RuntimeFilterBloom {
-    pub column_name: String,
     pub filter: RuntimeBloomFilter,
 }
 

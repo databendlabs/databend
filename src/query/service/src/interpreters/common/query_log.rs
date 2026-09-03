@@ -53,28 +53,13 @@ fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i3
     match err {
         None => (log_type, 0, "".to_string(), "".to_string()),
         Some(e) => {
-            if e.code() == ErrorCode::ABORTED_QUERY {
-                (
-                    LogType::Aborted,
-                    e.code().into(),
-                    e.to_string(),
-                    e.backtrace_str(),
-                )
-            } else if e.code() == ErrorCode::ABORTED_QUERY {
-                (
-                    LogType::Closed,
-                    e.code().into(),
-                    e.to_string(),
-                    e.backtrace_str(),
-                )
-            } else {
-                (
-                    LogType::Error,
-                    e.code().into(),
-                    e.to_string(),
-                    e.backtrace_str(),
-                )
-            }
+            let log_type = match e.code() {
+                ErrorCode::ABORTED_QUERY => LogType::Aborted,
+                ErrorCode::CLOSED_QUERY => LogType::Closed,
+                _ => LogType::Error,
+            };
+
+            (log_type, e.code().into(), e.to_string(), e.backtrace_str())
         }
     }
 }

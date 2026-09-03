@@ -67,6 +67,7 @@ use iceberg::io::FileIOBuilder;
 use crate::IcebergMutableCatalog;
 use crate::append::IcebergCommitSink;
 use crate::append::IcebergDataFileWriter;
+use crate::credential::with_refreshing_credentials;
 use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
@@ -95,13 +96,15 @@ impl IcebergTable {
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let (table, statistics) = Self::parse_engine_options(&info.meta.engine_options)?;
         let catalog = IcebergMutableCatalog::try_create(info.catalog_info.clone())?;
+        let catalog = catalog.iceberg_catalog();
+        let table = with_refreshing_credentials(catalog.clone(), table)?;
 
         Ok(Box::new(Self {
             info,
             table,
             snapshot_id: None,
             statistics,
-            catalog: catalog.iceberg_catalog(),
+            catalog,
         }))
     }
 
@@ -127,25 +130,23 @@ impl IcebergTable {
         table_name: &str,
     ) -> Result<iceberg::table::Table> {
         let db_ident = iceberg::NamespaceIdent::new(database.to_string());
+        let table_ident = iceberg::TableIdent::new(db_ident, table_name.to_string());
         // here we don't call table_exists to avoid extra network call
-        let table = ctl
-            .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
-            .await
-            .map_err(|err| {
-                let err_str = format!("{err:?}");
-                if err_str.contains("does not exist")
-                    || err_str.contains("NoSuchTableError")
-                    || err_str.contains("TableNotFound")
-                    || err_str.contains("not found")
-                {
-                    ErrorCode::UnknownTable(format!(
-                        "Iceberg table '{database}.{table_name}' not found: {err_str}"
-                    ))
-                } else {
-                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err_str}"))
-                }
-            })?;
-        Ok(table)
+        let table = ctl.load_table(&table_ident).await.map_err(|err| {
+            let err_str = format!("{err:?}");
+            if err_str.contains("does not exist")
+                || err_str.contains("NoSuchTableError")
+                || err_str.contains("TableNotFound")
+                || err_str.contains("not found")
+            {
+                ErrorCode::UnknownTable(format!(
+                    "Iceberg table '{database}.{table_name}' not found: {err_str}"
+                ))
+            } else {
+                ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err_str}"))
+            }
+        })?;
+        with_refreshing_credentials(ctl, table)
     }
 
     pub fn get_schema(table: &iceberg::table::Table) -> Result<TableSchema> {

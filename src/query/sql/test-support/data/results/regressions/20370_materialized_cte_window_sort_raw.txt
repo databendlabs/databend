@@ -1,0 +1,39 @@
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: __materialized_cte_0_queries
+│   ├── ref_count: 0
+│   ├── channel_size: None
+│   └── EvalScalar
+│       ├── scalars: [CAST('2026-01-01 00:00:01' AS Timestamp NULL) AS (#0), CAST('2026-01-01 00:00:02' AS Timestamp NULL) AS (#1)]
+│       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+└── EvalScalar
+    ├── scalars: [ts (#8) AS (#8), delta (#9) AS (#9), sum(delta) OVER (ORDER BY ts) (#10) AS (#10)]
+    └── Window
+        ├── aggregate function: sum
+        ├── partition items: []
+        ├── order by items: [ts (#8) AS (#8)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [ts (#8) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [ts (#8) AS (#8), delta (#9) AS (#9)]
+                └── UnionAll
+                    ├── output: [ts (#8), delta (#9)]
+                    ├── left: [start_time (#2), CAST(delta (#4) AS Int16)]
+                    ├── right: [end_time (#6), CAST(delta (#7) AS Int16)]
+                    ├── cte_scan_names: []
+                    ├── logical_recursive_cte_id: None
+                    ├── EvalScalar
+                    │   ├── scalars: [start_time (#2) AS (#2), 1 AS (#4)]
+                    │   └── MaterializedCTERef
+                    │       ├── cte_name: __materialized_cte_0_queries
+                    │       ├── output columns: [start_time (#2), end_time (#3)]
+                    │       └── column mapping: [start_time (#2) -> start_time (#0), end_time (#3) -> end_time (#1)]
+                    └── EvalScalar
+                        ├── scalars: [end_time (#6) AS (#6), -1 AS (#7)]
+                        └── MaterializedCTERef
+                            ├── cte_name: __materialized_cte_0_queries
+                            ├── output columns: [start_time (#5), end_time (#6)]
+                            └── column mapping: [start_time (#5) -> start_time (#0), end_time (#6) -> end_time (#1)]
+

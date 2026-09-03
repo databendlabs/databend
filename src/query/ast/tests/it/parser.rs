@@ -16,6 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -440,6 +442,9 @@ SELECT * from s;"#,
         r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
         r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
         r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
+        r#"REFRESH LINEAGE FOR ALL VIEWS;"#,
+        r#"refresh lineage for all views dry run;"#,
+        r#"SELECT lineage FROM lineage;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"COMMENT IF EXISTS ON TABLE t IS 'test'"#,
         r#"COMMENT ON COLUMN t.C1 IS 'test'"#,
@@ -475,6 +480,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';"#,
+        r#"DROP SHARE IF EXISTS share1;"#,
+        r#"ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE share1;"#,
+        r#"GRANT SELECT ON TABLE db1.t1 TO SHARE share1;"#,
         r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
@@ -492,6 +502,8 @@ SELECT * from s;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE share1;"#,
+        r#"REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;"#,
         r#"drop role 'role1';"#,
         r#"GRANT ROLE test TO ROLE 'test-user';"#,
         r#"GRANT ROLE test TO ROLE `test-user`;"#,
@@ -1408,6 +1420,24 @@ fn test_create_table_options_before_partition_by() {
 }
 
 #[test]
+fn test_ngram_index_accepts_float_options() {
+    let cases = [
+        "CREATE NGRAM INDEX idx ON t(a) false_positive_rate=0.02",
+        "CREATE TABLE t(a STRING, NGRAM INDEX idx(a) false_positive_rate=0.02)",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let displayed = stmt.to_string();
+        assert!(displayed.contains("false_positive_rate = '0.02'"));
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
 fn test_stage_local_filesystem_uri_errors() {
     let cases = [
         (
@@ -1751,9 +1781,12 @@ fn test_expr() {
         r#"ARRAY_MAP(v -> v + 1)"#,
         r#"ARRAY_FILTER(a, v -> v + 1)"#,
         r#"JSON_PATH_TRANSFORM(a, b, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v -> 'name')"#,
+        r#"ARRAY_TRANSFORM(a, (v -> v) + 1)"#,
         r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
         r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
         r#"TO_STRING(col -> 'name')"#,
+        r#"CONCAT(a, b, doc -> 'key')"#,
         r#"CONCAT(a -> 'k', b)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
@@ -1763,6 +1796,47 @@ fn test_expr() {
     for case in cases {
         run_parser(file, expr, case);
     }
+}
+
+#[test]
+fn test_ambiguous_trailing_lambda_argument() {
+    let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 3);
+    assert!(matches!(func.args[2], Expr::JsonOp { .. }));
+    let Some(LambdaArgument::Ambiguous(lambda)) = func.lambda else {
+        panic!("expected an ambiguous trailing lambda argument");
+    };
+    assert_eq!(lambda.params[0].name, "doc");
+    assert!(matches!(*lambda.expr, Expr::Literal { .. }));
+}
+
+#[test]
+fn test_json_arrow_argument_before_aggregate_filter() {
+    let tokens = tokenize_sql("json_object_agg('k', doc -> 'v') FILTER (WHERE ok)").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 2);
+    assert!(matches!(func.args[1], Expr::JsonOp { .. }));
+    assert!(func.lambda.is_none());
+    assert!(func.filter.is_some());
 }
 
 // FIXME: this test cause stack overflow

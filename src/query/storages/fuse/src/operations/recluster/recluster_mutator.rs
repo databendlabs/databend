@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
@@ -31,7 +32,6 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -44,10 +44,12 @@ use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
 use log::debug;
+use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -83,6 +85,9 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
 const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
+/// Hilbert MBR overlap is conservative, so execution never uses a threshold below 8.
+const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
+/// Maximum block count for applying the Linear small-table depth threshold.
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 /// Candidate tasks plus cached segment metadata for one scanned window.
@@ -149,6 +154,42 @@ pub struct ReclusterMutator {
     strategy: Arc<dyn ReclusterStrategy>,
 }
 
+/// Caps the selected block bytes of one recluster task.
+///
+/// Takes the tighter of the node-global (`GLOBAL_MEM_STAT`) and query-local
+/// remaining-memory views; logs when pressure shrinks the task below the
+/// nominal `recluster_block_size`.
+fn recluster_memory_threshold(ctx: &dyn TableContext) -> Result<usize> {
+    let settings = ctx.get_settings();
+    let recluster_block_size = settings.get_recluster_block_size()? as usize;
+    let max_memory_usage = settings.get_max_memory_usage()? as usize;
+    // `max_memory_usage == 0` means memory usage is unlimited.
+    if max_memory_usage == 0 {
+        return Ok(recluster_block_size);
+    }
+    let global_memory_usage = GLOBAL_MEM_STAT.get_memory_usage();
+    let query_memory_usage = ctx.get_nodes_memory_usage();
+    // The tighter view wins: the larger of the two usages.
+    let memory_usage = global_memory_usage.max(query_memory_usage);
+    let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
+    if memory_budget == 0 {
+        return Err(ErrorCode::MemoryExceedsLimit(format!(
+            "Not enough memory for recluster: max_memory_usage = {}, global_used = {}, query_used = {}.",
+            max_memory_usage, global_memory_usage, query_memory_usage
+        )));
+    }
+    // Actual block sizes are checked during task selection.
+    let memory_threshold = recluster_block_size.min(memory_budget);
+    // Log only when pressure actually shrinks the task.
+    if memory_threshold < recluster_block_size {
+        info!(
+            "recluster: memory pressure shrinks task threshold: max_memory_usage = {}, global_used = {}, query_used = {}, threshold = {}.",
+            max_memory_usage, global_memory_usage, query_memory_usage, memory_threshold
+        );
+    }
+    Ok(memory_threshold)
+}
+
 impl ReclusterMutator {
     /// Build a recluster mutator from table metadata and current snapshot state.
     pub fn try_create(
@@ -163,39 +204,33 @@ impl ReclusterMutator {
             .expect("recluster requires cluster key metadata");
         let block_thresholds = table.get_block_thresholds();
 
-        let depth_threshold = table
+        let configured_depth = table
             .get_table_info()
             .options()
             .get(FUSE_OPT_KEY_RECLUSTER_DEPTH)
-            .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or({
-                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT {
-                    MIN_RECLUSTER_DEPTH
-                } else {
-                    DEFAULT_RECLUSTER_DEPTH
-                }
-            }) as f64;
-
-        let settings = ctx.get_settings();
-        let recluster_block_size = settings.get_recluster_block_size()? as usize;
-        let max_memory_usage = settings.get_max_memory_usage()? as usize;
-        let memory_threshold = if max_memory_usage == 0 {
-            recluster_block_size
-        } else {
-            let memory_usage = ctx.get_nodes_memory_usage();
-            let memory_budget = max_memory_usage.saturating_sub(memory_usage) * 30 / 100;
-            if memory_budget == 0 {
-                return Err(ErrorCode::MemoryExceedsLimit(format!(
-                    "Not enough memory for recluster: max_memory_usage = {}, used = {}.",
-                    max_memory_usage, memory_usage
-                )));
+            .map(|value| {
+                value.parse::<u64>().map_err(|error| {
+                    ErrorCode::InvalidArgument(format!(
+                        "invalid {FUSE_OPT_KEY_RECLUSTER_DEPTH} value {value}: {error}"
+                    ))
+                })
+            })
+            .transpose()?;
+        let depth_threshold = match (configured_depth, cluster_key_info.cluster_type) {
+            (Some(depth), ClusterType::Hilbert) => depth.max(MIN_HILBERT_RECLUSTER_DEPTH),
+            (Some(depth), ClusterType::Linear) => depth,
+            (None, ClusterType::Linear)
+                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT =>
+            {
+                MIN_RECLUSTER_DEPTH
             }
-            // Actual block sizes are checked during task selection.
-            recluster_block_size.min(memory_budget)
-        };
+            _ => DEFAULT_RECLUSTER_DEPTH,
+        } as f64;
+
+        let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
+        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
             max_tasks = cluster.nodes.len();
         }
 
@@ -204,19 +239,12 @@ impl ReclusterMutator {
                 "recluster requires cluster key expressions",
             ));
         };
-        let cluster_key_exprs =
-            match parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)? {
-                ClusterKeys::Linear(keys) | ClusterKeys::Vector { keys, .. } => keys,
-                ClusterKeys::Hilbert(_) => {
-                    return Err(ErrorCode::Unimplemented(
-                        "Hilbert reclustering is not supported yet",
-                    ));
-                }
-            };
+        let parsed_cluster_keys =
+            parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let (properties, strategy) = ReclusterProperties::try_create(
             table,
             &schema,
-            cluster_key_exprs,
+            parsed_cluster_keys,
             mode,
             depth_threshold,
             block_thresholds,

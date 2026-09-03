@@ -15,11 +15,14 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef as ExprColumnRef;
+use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -45,9 +48,9 @@ use databend_common_sql::plans::CastExpr;
 use databend_common_sql::plans::ComparisonOp;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
-use databend_common_statistics::Datum;
 use databend_common_statistics::F64;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::StatBounds;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
@@ -156,7 +159,29 @@ fn column_stats_to_string(column_stats: &ColumnStatSet) -> String {
     keys.sort();
 
     keys.iter()
-        .map(|i| format!("{i} {:?}", column_stats[i]))
+        .map(|i| {
+            let stat = &column_stats[i];
+            match stat.bounds() {
+                Some(bounds) => {
+                    let (min, max) = bounds.debug_parts();
+                    let histogram = match stat {
+                        ColumnStat::Int { histogram, .. } => format!("{histogram:?}"),
+                        ColumnStat::UInt { histogram, .. } => format!("{histogram:?}"),
+                        ColumnStat::Float { histogram, .. } => format!("{histogram:?}"),
+                        ColumnStat::Bytes { histogram, .. } => format!("{histogram:?}"),
+                        ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => {
+                            "None".to_string()
+                        }
+                    };
+                    format!(
+                        "{i} ColumnStat {{ min: {min}, max: {max}, ndv: {:?}, null_count: {:?}, histogram: {histogram} }}",
+                        stat.ndv(),
+                        stat.null_count(),
+                    )
+                }
+                None => format!("{i} AllNull {{ null_count: {:?} }}", stat.null_count()),
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -189,12 +214,22 @@ fn count_min_sketch_to_string(count_min_sketch: &CountMinSketchSet) -> String {
 }
 
 fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> ScalarExpr {
+    raw_expr_to_typed_scalar(raw_expr, columns).0
+}
+
+fn raw_expr_to_typed_scalar(
+    raw_expr: &RawExpr,
+    columns: &[(&str, DataType)],
+) -> (ScalarExpr, Expr) {
     match raw_expr {
-        RawExpr::Constant { scalar, .. } => ScalarExpr::ConstantExpr(ConstantExpr {
-            span: None,
-            value: scalar.clone(),
-        }),
-        RawExpr::ColumnRef { id, .. } => {
+        RawExpr::Constant { scalar, .. } => (
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: scalar.clone(),
+            }),
+            type_check::check(raw_expr, &BUILTIN_FUNCTIONS).unwrap(),
+        ),
+        RawExpr::ColumnRef { span, id, .. } => {
             let index = *id;
             let (name, data_type) = &columns[index];
             let column = ColumnBindingBuilder::new(
@@ -204,30 +239,67 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
                 Visibility::Visible,
             )
             .build();
-            ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+            (
+                ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+                Expr::ColumnRef(ExprColumnRef {
+                    span: *span,
+                    id: index,
+                    data_type: data_type.clone(),
+                    display_name: name.to_string(),
+                }),
+            )
         }
         RawExpr::Cast {
+            span,
             expr,
             dest_type,
             is_try,
             ..
-        } => ScalarExpr::CastExpr(CastExpr {
-            span: None,
-            is_try: *is_try,
-            argument: Box::new(raw_expr_to_scalar(expr, columns)),
-            target_type: Box::new(dest_type.clone()),
-        }),
+        } => {
+            let (scalar, typed_expr) = raw_expr_to_typed_scalar(expr, columns);
+            let typed_expr =
+                type_check::check_cast(*span, *is_try, typed_expr, dest_type, &BUILTIN_FUNCTIONS)
+                    .unwrap();
+            (
+                ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: *is_try,
+                    argument: Box::new(scalar),
+                    target_type: Box::new(dest_type.clone()),
+                }),
+                typed_expr,
+            )
+        }
         RawExpr::FunctionCall {
-            name, args, params, ..
-        } => ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: name.clone(),
-            params: params.clone(),
-            arguments: args
+            span,
+            name,
+            args,
+            params,
+        } => {
+            let (arguments, typed_arguments): (Vec<_>, Vec<_>) = args
                 .iter()
-                .map(|arg| raw_expr_to_scalar(arg, columns))
-                .collect(),
-        }),
+                .map(|arg| raw_expr_to_typed_scalar(arg, columns))
+                .unzip();
+            let typed_expr = type_check::check_function(
+                *span,
+                name,
+                params,
+                &typed_arguments,
+                &BUILTIN_FUNCTIONS,
+            )
+            .unwrap();
+            let return_type = typed_expr.data_type().clone();
+            (
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: name.clone(),
+                    params: params.clone(),
+                    arguments,
+                    return_type: Box::new(return_type),
+                }),
+                typed_expr,
+            )
+        }
         RawExpr::LambdaFunctionCall { .. } => {
             unreachable!("lambda expressions are not used in tests")
         }
@@ -242,9 +314,9 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "comparison_predicates",
         "Comparison predicates should update estimated rows and column stats consistently.",
     )?;
-    let comparison_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(10),
-        max: Datum::UInt(19),
+    let comparison_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 10,
+        max: 19,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -304,9 +376,9 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "topn_equality_cache",
         "Equality predicates should use exact TopN frequencies when the constant is cached.",
     )?;
-    let top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(999),
+    let top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 999,
         ndv: NdvEstimate::exact(1000.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -340,9 +412,9 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "count_min_sketch_equality_cache",
         "Equality predicates should use Count-Min Sketch estimates when the value is clearly above the NDV fallback.",
     )?;
-    let count_min_sketch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(999),
+    let count_min_sketch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 999,
         ndv: NdvEstimate::exact(100.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -393,13 +465,14 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "count_min_sketch_hot_value_with_coarse_error",
         "Count-Min Sketch estimates should still be used when the error bound is coarse but the value is clearly hot.",
     )?;
-    let hot_count_min_sketch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(9999),
-        ndv: NdvEstimate::exact(2001.0),
-        null_count: StatCount::exact(0),
-        histogram: None,
-    })]);
+    let hot_count_min_sketch_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 9999,
+            ndv: NdvEstimate::exact(2001.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        })]);
     let mut hot_count_min_sketch = ColumnCountMinSketch::new(2000, 4);
     hot_count_min_sketch.add_with_count(Scalar::Number(NumberScalar::UInt64(0)).as_ref(), 160000);
     let hot_count_min_sketch =
@@ -454,9 +527,9 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "count_min_sketch_precedes_approximate_topn",
         "Count-Min Sketch should be used when an approximate TopN hit is looser than the CMS estimate.",
     )?;
-    let wide_hot_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(99999),
+    let wide_hot_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 99999,
         ndv: NdvEstimate::exact(100000.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -558,9 +631,9 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "topn_equality_cache_fallback",
         "Approximate TopN hits should fall back when the lower bound does not exceed the NDV estimate.",
     )?;
-    let fallback_top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(999),
+    let fallback_top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 999,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -593,9 +666,9 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "topn_nullable_not_equal",
         "TopN inequality estimates should exclude null rows from SQL not-equal matches.",
     )?;
-    let nullable_top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(1),
-        max: Datum::UInt(9),
+    let nullable_top_n_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 1,
+        max: 9,
         ndv: NdvEstimate::exact(5.0),
         null_count: StatCount::exact(50),
         histogram: None,
@@ -635,9 +708,9 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         "typed_comparison_predicates",
         "Typed comparison predicates should respect integer boundaries and nullable inputs.",
     )?;
-    let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(1),
-        max: Datum::Int(10),
+    let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: 1,
+        max: 10,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -650,9 +723,9 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
             int_stats.clone(),
         )?;
     }
-    let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(1),
-        max: Datum::Int(10),
+    let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: 1,
+        max: 10,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(30),
         histogram: None,
@@ -669,9 +742,9 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         "typed_constant_compatibility",
         "Constant constraints should apply only when the typed comparison is compatible.",
     )?;
-    let date_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(20),
-        max: Datum::Int(29),
+    let date_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: 20,
+        max: 29,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -684,9 +757,9 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
             date_stats.clone(),
         )?;
     }
-    let number_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(1),
-        max: Datum::Int(10),
+    let number_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: 1,
+        max: 10,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -720,6 +793,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
                 DataType::Number(NumberDataType::UInt64),
             ),
         ],
+        return_type: Box::new(DataType::Boolean),
     });
     run_scalar_case_with_predicates(
         &mut file,
@@ -731,9 +805,9 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         None,
     )?;
     let decimal_size = DecimalSize::new(10, 2).unwrap();
-    let decimal_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Float(1.0.into()),
-        max: Datum::Float(4.0.into()),
+    let decimal_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Float {
+        min: 1.0.into(),
+        max: 4.0.into(),
         ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -755,9 +829,9 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         "string_comparison_predicates",
         "String equality should use domain and function statistics without assuming unbounded strings are impossible.",
     )?;
-    let string_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Bytes(b"b".to_vec()),
-        max: Datum::Bytes(b"e".to_vec()),
+    let string_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Bytes {
+        min: b"b".to_vec(),
+        max: b"e".to_vec(),
         ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -776,12 +850,11 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         "boolean_comparison_predicates",
         "Boolean comparison predicates should keep constrained bounds and NDV consistent.",
     )?;
-    let bool_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Bool(false),
-        max: Datum::Bool(true),
+    let bool_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Boolean {
+        min: false,
+        max: true,
         ndv: NdvEstimate::exact(2.0),
         null_count: StatCount::exact(0),
-        histogram: None,
     })]);
     run_case(
         &mut file,
@@ -807,17 +880,17 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         "histogram_comparison_predicates",
         "Histogram comparisons should restrict bucket ranges, counts, and accuracy consistently.",
     )?;
-    let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(1),
-        max: Datum::Int(10),
+    let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: 1,
+        max: 10,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Int(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     for expr in ["h >= 10", "h < 10", "h != 5"] {
         run_case(
@@ -827,17 +900,17 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             edge_histogram_stats.clone(),
         )?;
     }
-    let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(9),
+    let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 9,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case(
         &mut file,
@@ -845,21 +918,22 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("u", UInt8Type::data_type())],
         uint8_histogram_stats,
     )?;
-    let multi_bucket_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(19),
-        ndv: NdvEstimate::exact(20.0),
-        null_count: StatCount::exact(0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
-            accuracy: true,
-            row_scale: 1.0,
-            buckets: vec![
-                TypedHistogramBucket::new(0, 9, 50.0, 10.0),
-                TypedHistogramBucket::new(10, 19, 50.0, 10.0),
-            ],
-            avg_spacing: None,
-        })),
-    })]);
+    let multi_bucket_histogram_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 19,
+            ndv: NdvEstimate::exact(20.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![
+                    TypedHistogramBucket::new(0, 9, 50.0, 10.0),
+                    TypedHistogramBucket::new(10, 19, 50.0, 10.0),
+                ],
+                avg_spacing: None,
+            }),
+        })]);
     for expr in ["m >= 5", "m < 15"] {
         run_case(
             &mut file,
@@ -868,12 +942,12 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             multi_bucket_histogram_stats.clone(),
         )?;
     }
-    let skewed_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(9),
+    let skewed_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 9,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![
@@ -881,7 +955,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
                 TypedHistogramBucket::new(5, 9, 5.0, 5.0),
             ],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -890,17 +964,17 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         skewed_histogram_stats,
         StatCardinality::estimate(55.0),
     )?;
-    let nullable_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(9),
+    let nullable_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 9,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(30),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 70.0, 10.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -909,17 +983,17 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         nullable_histogram_stats,
         StatCardinality::estimate(100.0),
     )?;
-    let tail_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(737),
+    let tail_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 737,
         ndv: NdvEstimate::exact(738.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 737, 738.0, 738.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     for expr in ["tail > 731", "tail > 700", "tail > 737"] {
         run_case_with_predicates(
@@ -936,12 +1010,12 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         "histogram_multi_step_propagation",
         "Partial numeric buckets should keep row-mass alignment and accumulated range constraints visible across AND predicates.",
     )?;
-    let float_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Float(F64::from(0.0)),
-        max: Datum::Float(F64::from(20.0)),
+    let float_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Float {
+        min: F64::from(0.0),
+        max: F64::from(20.0),
         ndv: NdvEstimate::exact(20.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Float(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![
@@ -949,7 +1023,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
                 TypedHistogramBucket::new(F64::from(10.0), F64::from(20.0), 100.0, 10.0),
             ],
             avg_spacing: None,
-        })),
+        }),
     })]);
     let float_column = || {
         ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -978,6 +1052,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             func_name: op.to_func_name().to_string(),
             params: vec![],
             arguments: vec![float_column(), float_constant(value)],
+            return_type: Box::new(DataType::Boolean),
         })
     };
     let float_gte_15 = float_predicate(ComparisonOp::GTE, 15.0);
@@ -1006,17 +1081,17 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         "histogram_row_count_mismatch",
         "Histograms with row counts above the non-null cardinality should scale output row mass without trusting bucket distincts as exact.",
     )?;
-    let row_count_mismatch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(9),
+    let row_count_mismatch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 9,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(50),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -1031,23 +1106,21 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         "distorted_histogram_ranges",
         "Distorted histograms should still record precise range constraints while using the lower-bound selectivity fallback.",
     )?;
-    let distorted_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(1000),
-        ndv: NdvEstimate::exact(100.0),
-        null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Float(TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(
-                F64::from(0.0),
-                F64::from(1000.0),
-                100.0,
-                100.0,
-            )],
-            avg_spacing: Some(1e13),
-        })),
-    })]);
+    let distorted_histogram_stats = ColumnStatSet::from_iter([(
+        Symbol::new(0),
+        ColumnStat::new(
+            StatBounds::UInt { min: 0, max: 1000 },
+            NdvEstimate::exact(100.0),
+            StatCount::exact(0),
+            Some(Histogram::UInt(TypedHistogram {
+                accuracy: false,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 1000, 100.0, 100.0)],
+                avg_spacing: Some(1e13),
+            })),
+        )
+        .unwrap(),
+    )]);
     run_case_with_predicates(
         &mut file,
         &["d >= 500"],
@@ -1062,12 +1135,12 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         "Whole-bucket range pruning may trust ANALYZE distinct counts, but derived bucket distinct values are only estimates.",
     )?;
     let analyzed_string_histogram_stats =
-        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-            min: Datum::Bytes(b"a".to_vec()),
-            max: Datum::Bytes(b"z".to_vec()),
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Bytes {
+            min: b"a".to_vec(),
+            max: b"z".to_vec(),
             ndv: NdvEstimate::exact(26.0),
             null_count: StatCount::exact(0),
-            histogram: Some(Histogram::Bytes(TypedHistogram {
+            histogram: Some(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![
@@ -1075,7 +1148,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
                     TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 40.0, 20.0),
                 ],
                 avg_spacing: None,
-            })),
+            }),
         })]);
     run_case_with_predicates(
         &mut file,
@@ -1087,21 +1160,22 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     // A previous independent filter may scale the analyzed histogram without
     // observing which values survived. The [m,z] bucket's derived distinct count
     // is 10, but a real filtered input can still keep all 20 values in that range.
-    let derived_string_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Bytes(b"a".to_vec()),
-        max: Datum::Bytes(b"z".to_vec()),
-        ndv: NdvEstimate::new(13.0, 26.0),
-        null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Bytes(TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![
-                TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 30.0, 3.0),
-                TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 20.0, 10.0),
-            ],
-            avg_spacing: None,
-        })),
-    })]);
+    let derived_string_histogram_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Bytes {
+            min: b"a".to_vec(),
+            max: b"z".to_vec(),
+            ndv: NdvEstimate::new(13.0, 26.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(TypedHistogram {
+                accuracy: false,
+                row_scale: 1.0,
+                buckets: vec![
+                    TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 30.0, 3.0),
+                    TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 20.0, 10.0),
+                ],
+                avg_spacing: None,
+            }),
+        })]);
     run_case_with_predicates(
         &mut file,
         &["s >= 'm'"],
@@ -1129,16 +1203,16 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         "Logical predicate composition should combine selectivity estimates and null handling.",
     )?;
     let logical_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(10),
             histogram: None,
@@ -1201,9 +1275,9 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         "missing_stats_logical_predicates",
         "Boolean predicates should use an equal true/false distribution, while numeric estimates below the lower-bound threshold should take priority over AND fallbacks.",
     )?;
-    let partial_stats = ColumnStatSet::from_iter([(Symbol::new(1), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(3),
+    let partial_stats = ColumnStatSet::from_iter([(Symbol::new(1), ColumnStat::UInt {
+        min: 0,
+        max: 3,
         ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -1237,17 +1311,17 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         "histogram_logical_predicates",
         "AND constraints should be visible to later predicates, while OR and NOT should only affect final selectivity.",
     )?;
-    let histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(9),
+    let histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 9,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -1292,29 +1366,29 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         histogram_stats.clone(),
     )?;
     let combined_histogram_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
-            histogram: Some(Histogram::UInt(TypedHistogram {
+            histogram: Some(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
                 avg_spacing: None,
-            })),
+            }),
         }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
-            histogram: Some(Histogram::UInt(TypedHistogram {
+            histogram: Some(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
                 avg_spacing: None,
-            })),
+            }),
         }),
     ]);
     run_case_with_predicates(
@@ -1334,29 +1408,29 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         "Constant folding should compose with arithmetic distribution predicates and visible AND constraints.",
     )?;
     let distribution_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
-            histogram: Some(Histogram::UInt(TypedHistogram {
+            histogram: Some(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
                 avg_spacing: None,
-            })),
+            }),
         }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(4),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 4,
             ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
-            histogram: Some(Histogram::UInt(TypedHistogram {
+            histogram: Some(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 4, 50.0, 5.0)],
                 avg_spacing: None,
-            })),
+            }),
         }),
     ]);
     run_case_with_predicates(
@@ -1413,9 +1487,9 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         )?;
     }
 
-    let nested_constant_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(3),
+    let nested_constant_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 3,
         ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -1442,30 +1516,30 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         "Domain-folded constants should still compose with remaining predicate selectivity.",
     )?;
     let domain_folded_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(0),
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 0,
             ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(0),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 0,
             ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
-        (Symbol::new(2), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(4),
+        (Symbol::new(2), ColumnStat::UInt {
+            min: 0,
+            max: 4,
             ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
-        (Symbol::new(3), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(4),
+        (Symbol::new(3), ColumnStat::UInt {
+            min: 0,
+            max: 4,
             ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: None,
@@ -1495,17 +1569,17 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         "estimated_zero_predicates",
         "Estimated zero selectivity should not be treated as a proven empty result.",
     )?;
-    let estimated_zero_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(5),
+    let estimated_zero_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 5,
         ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::estimate(8.0, 8.0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: false,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -1515,17 +1589,17 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         StatCardinality::estimate(8.0),
     )?;
     let estimated_zero_cardinality_stats =
-        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(5),
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 5,
             ndv: NdvEstimate::exact(6.0),
             null_count: StatCount::exact(2),
-            histogram: Some(Histogram::UInt(TypedHistogram {
+            histogram: Some(TypedHistogram {
                 accuracy: false,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
                 avg_spacing: None,
-            })),
+            }),
         })]);
     run_case_with_predicates(
         &mut file,
@@ -1534,18 +1608,19 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         estimated_zero_cardinality_stats,
         StatCardinality::estimate(0.0),
     )?;
-    let unsatisfiable_range_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(5),
-        ndv: NdvEstimate::exact(6.0),
-        null_count: StatCount::exact(2),
-        histogram: Some(Histogram::UInt(TypedHistogram {
-            accuracy: true,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-            avg_spacing: None,
-        })),
-    })]);
+    let unsatisfiable_range_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 5,
+            ndv: NdvEstimate::exact(6.0),
+            null_count: StatCount::exact(2),
+            histogram: Some(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+                avg_spacing: None,
+            }),
+        })]);
     run_case_with_predicates(
         &mut file,
         &["n > 10"],
@@ -1553,18 +1628,19 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         unsatisfiable_range_stats,
         StatCardinality::estimate(8.0),
     )?;
-    let exact_zero_cardinality_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(5),
-        ndv: NdvEstimate::exact(6.0),
-        null_count: StatCount::exact(2),
-        histogram: Some(Histogram::UInt(TypedHistogram {
-            accuracy: true,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-            avg_spacing: None,
-        })),
-    })]);
+    let exact_zero_cardinality_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 5,
+            ndv: NdvEstimate::exact(6.0),
+            null_count: StatCount::exact(2),
+            histogram: Some(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+                avg_spacing: None,
+            }),
+        })]);
     run_case_with_predicates(
         &mut file,
         &["n > 1"],
@@ -1578,17 +1654,8 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         "exact_null_predicates",
         "Exact all-null input domains should fold is_not_null to an empty result and clear distributions.",
     )?;
-    let exact_all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(5),
-        ndv: NdvEstimate::exact(6.0),
+    let exact_all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::AllNull {
         null_count: StatCount::exact(8),
-        histogram: Some(Histogram::UInt(TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-            avg_spacing: None,
-        })),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -1597,17 +1664,17 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         exact_all_null_stats,
         StatCardinality::exact(8),
     )?;
-    let exact_nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(5),
+    let exact_nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 5,
         ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(2),
-        histogram: Some(Histogram::UInt(TypedHistogram {
+        histogram: Some(TypedHistogram {
             accuracy: false,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
             avg_spacing: None,
-        })),
+        }),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -1629,16 +1696,16 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         "Modulo predicates should narrow value ranges only when the comparison is satisfiable.",
     )?;
     let mod_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(9),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(10),
             histogram: None,
@@ -1660,9 +1727,9 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         mod_stats,
         StatCardinality::estimate(100.0),
     )?;
-    let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(-9),
-        max: Datum::Int(9),
+    let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: -9,
+        max: 9,
         ndv: NdvEstimate::exact(19.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -1676,9 +1743,9 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             StatCardinality::estimate(100.0),
         )?;
     }
-    let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(i64::MIN),
-        max: Datum::Int(9),
+    let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
+        min: i64::MIN,
+        max: 9,
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -1696,9 +1763,9 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         "like_predicates",
         "LIKE predicates should use string-domain statistics when estimating selectivity.",
     )?;
-    let like_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Bytes("aa".as_bytes().to_vec()),
-        max: Datum::Bytes("zz".as_bytes().to_vec()),
+    let like_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Bytes {
+        min: "aa".as_bytes().to_vec(),
+        max: "zz".as_bytes().to_vec(),
         ndv: NdvEstimate::exact(40.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -1718,16 +1785,16 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         )?;
     }
     let dynamic_like_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::Bytes("aa".as_bytes().to_vec()),
-            max: Datum::Bytes("zz".as_bytes().to_vec()),
+        (Symbol::new(0), ColumnStat::Bytes {
+            min: "aa".as_bytes().to_vec(),
+            max: "zz".as_bytes().to_vec(),
             ndv: NdvEstimate::exact(40.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::Bytes("a%".as_bytes().to_vec()),
-            max: Datum::Bytes("z%".as_bytes().to_vec()),
+        (Symbol::new(1), ColumnStat::Bytes {
+            min: "a%".as_bytes().to_vec(),
+            max: "z%".as_bytes().to_vec(),
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,

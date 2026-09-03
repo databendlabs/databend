@@ -5,7 +5,7 @@ runs:
   steps:
     - uses: ./.github/actions/setup_test
       with:
-        artifacts: sqllogictests,meta,query
+        artifacts: meta,query
 
     - name: Install lsof
       shell: bash

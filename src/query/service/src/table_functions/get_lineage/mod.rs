@@ -50,6 +50,8 @@ use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_meta_client::types::MetaId;
+pub(crate) use edge_reader::LineageEdgeReader;
+pub(crate) use edge_reader::RawLineageEdge;
 pub use neighbors::GetLineageNeighborsTable;
 
 use crate::sessions::TableContext;

@@ -150,6 +150,20 @@ impl CommitTableMetaError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "Cannot attach a row access or masking policy to shared table id {table_id}; revoke the table from all shares first"
+)]
+pub struct SharedTableSecurityPolicy {
+    table_id: u64,
+}
+
+impl SharedTableSecurityPolicy {
+    pub fn new(table_id: u64) -> Self {
+        Self { table_id }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("InvalidMaterializedView: {reason}")]
 pub struct InvalidMaterializedView {
     reason: String,
@@ -919,6 +933,9 @@ pub enum AppError {
     CommitTableMetaError(#[from] CommitTableMetaError),
 
     #[error(transparent)]
+    SharedTableSecurityPolicy(#[from] SharedTableSecurityPolicy),
+
+    #[error(transparent)]
     InvalidMaterializedView(#[from] InvalidMaterializedView),
 
     #[error(transparent)]
@@ -1220,6 +1237,8 @@ impl AppErrorMessage for CommitTableMetaError {
     }
 }
 
+impl AppErrorMessage for SharedTableSecurityPolicy {}
+
 impl AppErrorMessage for InvalidMaterializedView {}
 
 impl AppErrorMessage for MaterializedViewAlreadyExists {
@@ -1442,6 +1461,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
+            AppError::SharedTableSecurityPolicy(err) => ErrorCode::AlterTableError(err.message()),
             AppError::InvalidMaterializedView(err) => {
                 ErrorCode::InvalidMaterializedView(err.message())
             }

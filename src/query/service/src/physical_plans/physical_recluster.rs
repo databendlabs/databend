@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -21,24 +25,35 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
+use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::HilbertRangeExchange;
+use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
+use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
+use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -48,6 +63,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
+use crate::spillers::ReclusterSpiller;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -112,6 +128,25 @@ impl IPhysicalPlan for Recluster {
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
                 let task = &self.tasks[0];
+                let settings = builder.ctx.get_settings();
+                // Execution-time guard: planning-time admission runs on the
+                // coordinator and cannot see this node's live memory pressure.
+                // Oversized tasks are only tolerable when sort spill can absorb
+                // the pressure; otherwise fail fast instead of risking an OOM kill.
+                if !builder.ctx.get_enable_sort_spill() {
+                    let max_memory_usage = settings.get_max_memory_usage()? as usize;
+                    // `max_memory_usage == 0` means memory usage is unlimited.
+                    if max_memory_usage != 0 {
+                        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+                        let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
+                        if task.total_bytes > memory_budget {
+                            return Err(ErrorCode::MemoryExceedsLimit(format!(
+                                "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
+                                task.total_bytes, global_used, max_memory_usage
+                            )));
+                        }
+                    }
+                }
                 let recluster_block_nums = task.parts.len();
                 let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
@@ -173,25 +208,24 @@ impl IPhysicalPlan for Recluster {
                 }
 
                 let input_schema = DataSchema::from(table.schema_with_stream()).into();
-                let cluster_stats_gen = table.get_cluster_stats_gen(
+                let mut cluster_stats_gen = table.get_cluster_stats_gen(
                     builder.ctx.clone(),
                     task.level + 1,
                     block_thresholds,
                     input_schema,
                 )?;
-                let operators = cluster_stats_gen.eval_operators.clone();
-                if !operators.is_empty() {
+                if !cluster_stats_gen.eval_operators.is_empty() {
+                    let eval_operators = cluster_stats_gen.eval_operators.clone();
                     let func_ctx2 = cluster_stats_gen.func_ctx.clone();
                     builder.main_pipeline.add_transformer(move || {
                         CompoundBlockOperator::new(
-                            operators.clone(),
+                            eval_operators.clone(),
                             func_ctx2.clone(),
                             num_input_columns,
                         )
                     });
                 }
 
-                let settings = builder.ctx.get_settings();
                 let max_threads = settings.get_max_threads()? as usize;
 
                 let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
@@ -200,63 +234,52 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
-                if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
-                    let vector_column_input_offset = vector_operator.vector_column_input_offset;
-                    let dimension = vector_operator.info.dimension;
-                    let distance_type = vector_operator.info.distance_type;
-                    builder.main_pipeline.try_resize(1)?;
-                    builder.main_pipeline.add_accumulating_transformer(move || {
-                        TransformVectorCluster::new(
-                            vector_column_input_offset,
-                            dimension,
-                            distance_type,
-                            rows_per_block,
-                        )
-                    });
-                    builder.main_pipeline.try_resize(max_threads)?;
-                }
-
-                // construct output fields
-                let output_fields = cluster_stats_gen.out_fields.clone();
-                let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs = cluster_stats_gen.sort_descs();
-                let skip_partial_sort =
-                    task.all_ordered && cluster_stats_gen.vector_operator().is_none();
-
-                // merge sort
-                let sort_pipeline_builder = SortPipelineBuilder::create(
-                    builder.ctx.clone(),
-                    schema,
-                    sort_descs.into(),
-                    None,
-                    settings.get_enable_fixed_rows_sort()?,
-                )?
-                .with_block_size_hit(rows_per_block);
-                if !skip_partial_sort {
-                    let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
-                    builder.main_pipeline.add_transformer(move || {
-                        TransformSortPartial::new(LimitType::None, partial_sort_descs.clone())
-                    });
-                }
-                sort_pipeline_builder.build_merge_sort_pipeline(
-                    &mut builder.main_pipeline,
-                    false,
-                    false,
-                )?;
-
-                // Compact after merge sort. This ordered compactor keeps block growth bounded
-                // without requiring a hard post-sort size cap, since final serialized sizes are
-                // not known yet and over-splitting here would create small fragmented blocks.
                 let compact_thresholds = block_thresholds
                     .set_rows_per_block(rows_per_block)
                     .set_bytes_per_block(bytes_per_block);
-                build_ordered_compact_pipeline(
-                    &mut builder.main_pipeline,
-                    compact_thresholds,
-                    max_threads,
-                    cluster_stats_gen.extra_key_num,
-                )?;
 
+                if cluster_stats_gen.is_hilbert() {
+                    build_hilbert_layout_pipeline(
+                        builder,
+                        task,
+                        &mut cluster_stats_gen,
+                        rows_per_block,
+                        compact_thresholds,
+                        max_threads,
+                    )?;
+                } else {
+                    build_regular_layout_pipeline(
+                        builder,
+                        task,
+                        &cluster_stats_gen,
+                        rows_per_block,
+                        compact_thresholds,
+                        max_threads,
+                    )?;
+                }
+
+                let reaggregated = add_aggregate_state_reaggregate_transform(
+                    &mut builder.main_pipeline,
+                    table.engine(),
+                    table.schema().as_ref(),
+                )?;
+                // Re-aggregation flushes rows in hash-table order, which
+                // breaks the ordering the merge sort just established.
+                // Re-sort each block before serialization: serialize-time
+                // cluster statistics read the first and last rows of a
+                // sorted block. Compact relies on the partial sort inside
+                // `cluster_gen_for_append` for the same guarantee.
+                if reaggregated {
+                    let resort_descs: Arc<[_]> = cluster_stats_gen.sort_descs().into();
+                    if !resort_descs.is_empty() {
+                        builder.main_pipeline.add_transformer(move || {
+                            TransformSortPartial::new(LimitType::None, resort_descs.clone())
+                        });
+                    }
+                }
+
+                // All layouts share the ordinary block statistics and serialization path after
+                // they have formed output blocks and removed layout-only temporary columns.
                 builder.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         let proc = TransformSerializeBlock::try_create(
@@ -277,4 +300,146 @@ impl IPhysicalPlan for Recluster {
             )),
         }
     }
+}
+
+fn build_hilbert_layout_pipeline(
+    builder: &mut PipelineBuilder,
+    task: &ReclusterTask,
+    cluster_stats_gen: &mut ClusterStatsGenerator,
+    rows_per_block: usize,
+    compact_thresholds: BlockThresholds,
+    max_threads: usize,
+) -> Result<()> {
+    let dimension_offsets = cluster_stats_gen.hilbert_dimension_offsets()?;
+    let worker_count = builder.main_pipeline.output_len().max(1);
+    let target_blocks = task.total_rows.div_ceil(rows_per_block).max(1);
+    let num_collectors = max_threads
+        .min(target_blocks)
+        .clamp(1, u8::MAX as usize + 1);
+    let exchange = HilbertRangeExchange::create(
+        dimension_offsets,
+        task.total_rows,
+        worker_count,
+        num_collectors,
+    );
+
+    // The barrier uses the complete sort spill policy, including the sort-spill enable switch;
+    // the configured sort batch size controls each oldest-first spill unit.
+    let spiller = ReclusterSpiller::create(builder.ctx.clone())?;
+
+    // Every input stream samples locally, then all streams replay against one immutable task-local
+    // weighted range plan.
+    let worker_id = AtomicUsize::new(0);
+    let range_exchange = exchange.clone();
+    builder.main_pipeline.add_transform(move |input, output| {
+        let id = worker_id.fetch_add(1, Ordering::Relaxed);
+        let memory_settings = spiller.memory_settings().clone();
+        Ok(ProcessorPtr::create(TransformHilbertCluster::<
+            ReclusterSpiller,
+        >::create(
+            input,
+            output,
+            exchange.clone(),
+            id,
+            spiller.clone(),
+            memory_settings,
+        )))
+    })?;
+
+    builder.main_pipeline.try_resize(num_collectors)?;
+    builder
+        .main_pipeline
+        .exchange(num_collectors, range_exchange)?;
+
+    // Each collector owns a disjoint Hilbert-key interval. Sort only inside that interval, then
+    // compact locally so every output block covers a continuous key range without a global merge.
+    let mut sort_fields = cluster_stats_gen.out_fields.clone();
+    let hilbert_value_offset = sort_fields.len();
+    sort_fields.push(DataField::new(
+        "_task_hilbert_value",
+        DataType::Number(NumberDataType::UInt32),
+    ));
+    let sort_schema = DataSchemaRefExt::create(sort_fields);
+    let sort_desc = vec![SortColumnDescription {
+        offset: hilbert_value_offset,
+        asc: true,
+        nulls_first: false,
+    }];
+    SortPipelineBuilder::create(
+        builder.ctx.clone(),
+        sort_schema,
+        sort_desc.into(),
+        None,
+        builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
+    )?
+    .with_block_size_hit(rows_per_block)
+    .build_local_full_sort_pipeline(&mut builder.main_pipeline, false)?;
+
+    // The ordinary cluster statistics generator removes all trailing temporary columns before
+    // serialization; include the task-local Hilbert sort key.
+    cluster_stats_gen.extra_key_num += 1;
+    let extra_key_num = cluster_stats_gen.extra_key_num;
+    builder.main_pipeline.add_accumulating_transformer(move || {
+        OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+    });
+    builder
+        .main_pipeline
+        .add_block_meta_transformer(|| TransformCompactBlock);
+    Ok(())
+}
+
+fn build_regular_layout_pipeline(
+    builder: &mut PipelineBuilder,
+    task: &ReclusterTask,
+    cluster_stats_gen: &ClusterStatsGenerator,
+    rows_per_block: usize,
+    compact_thresholds: BlockThresholds,
+    max_threads: usize,
+) -> Result<()> {
+    if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
+        let vector_column_input_offset = vector_operator.vector_column_input_offset;
+        let dimension = vector_operator.info.dimension;
+        let distance_type = vector_operator.info.distance_type;
+        builder.main_pipeline.try_resize(1)?;
+        builder.main_pipeline.add_accumulating_transformer(move || {
+            TransformVectorCluster::new(
+                vector_column_input_offset,
+                dimension,
+                distance_type,
+                rows_per_block,
+            )
+        });
+        builder.main_pipeline.try_resize(max_threads)?;
+    }
+
+    // Linear and vector clustering use their regular global row-sort pipeline.
+    let schema = DataSchemaRefExt::create(cluster_stats_gen.out_fields.clone());
+    let sort_descs = cluster_stats_gen.sort_descs();
+    let skip_partial_sort = task.all_ordered && cluster_stats_gen.is_linear();
+    let sort_pipeline_builder = SortPipelineBuilder::create(
+        builder.ctx.clone(),
+        schema,
+        sort_descs.into(),
+        None,
+        builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
+    )?
+    .with_block_size_hit(rows_per_block);
+    if !skip_partial_sort {
+        let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
+        builder.main_pipeline.add_transformer(move || {
+            TransformSortPartial::new(LimitType::None, partial_sort_descs.clone())
+        });
+    }
+    sort_pipeline_builder.build_merge_sort_pipeline(&mut builder.main_pipeline, false, false)?;
+
+    builder.main_pipeline.try_resize(1)?;
+    let extra_key_num = cluster_stats_gen.extra_key_num;
+    builder.main_pipeline.add_accumulating_transformer(move || {
+        OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+    });
+    builder.main_pipeline.try_resize(max_threads)?;
+    builder
+        .main_pipeline
+        .add_block_meta_transformer(|| TransformCompactBlock);
+    Ok(())
 }

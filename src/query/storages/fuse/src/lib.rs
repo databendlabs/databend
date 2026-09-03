@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(
+    clippy::arc_with_non_send_sync,
     clippy::cloned_ref_to_slice_refs,
     clippy::collapsible_if,
     clippy::let_and_return,

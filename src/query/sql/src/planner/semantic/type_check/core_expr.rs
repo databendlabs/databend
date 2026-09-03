@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -715,8 +717,10 @@ where A: TypeCheckAdapter
         for (display_name, param) in params {
             let box (scalar, _) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (expr, _) =
+                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let constant = expr
+                .into_owned()
                 .into_constant()
                 .map_err(|_| {
                     ErrorCode::SemanticError(format!(
@@ -994,6 +998,61 @@ mod tests {
 
         assert_sql_lowers_to("abs(DISTINCT 1)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::ScalarFunction { .. }));
+        });
+    }
+
+    #[test]
+    fn lowers_trailing_lambda_through_the_existing_lambda_path() {
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value + 1)",
+            |arena, root| {
+                let CoreExpr::LambdaFunction {
+                    args,
+                    lambda_params,
+                    lambda_expr,
+                    ..
+                } = arena.get(root)
+                else {
+                    panic!("json_path_transform should lower as a lambda function");
+                };
+                assert_eq!(args.len(), 2);
+                assert_eq!(lambda_params[0].name, "value");
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "plus",
+                    ..
+                }));
+            },
+        );
+
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value -> 'name')",
+            |arena, root| {
+                let CoreExpr::LambdaFunction { lambda_expr, .. } = arena.get(root) else {
+                    panic!("json_path_transform should lower as a lambda function");
+                };
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "get",
+                    ..
+                }));
+            },
+        );
+
+        assert_sql_lower_error_contains(
+            "array_transform(arr, (value -> value) + 1)",
+            "must have a lambda expression",
+        );
+        assert_sql_lowers_to("to_string(doc -> 'key')", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::Call { .. }));
+        });
+        assert_sql_lowers_to("concat(a, b, doc -> 'key')", |arena, root| {
+            let CoreExpr::Call { args, .. } = arena.get(root) else {
+                panic!("concat should lower as a scalar function");
+            };
+            assert_eq!(args.len(), 3);
+            assert!(matches!(arena.get(args[2]), CoreExpr::Call {
+                func_name: "get",
+                ..
+            }));
         });
     }
 
