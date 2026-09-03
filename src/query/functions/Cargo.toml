@@ -20,6 +20,7 @@ databend-common-expression = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-statistics = { workspace = true }
+databend-common-timezone = { workspace = true }
 databend-common-vector = { workspace = true }
 databend-functions-scalar-arithmetic = { workspace = true }
 databend-functions-scalar-datetime = { workspace = true }
@@ -36,7 +37,6 @@ itertools = { workspace = true }
 jaq-core = { workspace = true }
 jaq-json = { workspace = true }
 jaq-std = { workspace = true }
-jiff = { workspace = true }
 jsonb = { workspace = true }
 libm = { workspace = true }
 match-template = { workspace = true }
@@ -60,6 +60,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-expression-test-support = { workspace = true }

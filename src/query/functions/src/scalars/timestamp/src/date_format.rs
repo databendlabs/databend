@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt;
 use std::borrow::Cow;
-use std::fmt::Display;
-use std::fmt::FormattingOptions;
 use std::io::Write;
 use std::sync::LazyLock;
 
+use chrono::format::Item;
+use chrono::format::StrftimeItems;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::DateType;
@@ -178,8 +177,7 @@ pub(super) fn pg_format_to_strftime(pg_format_string: &str) -> String {
     result
 }
 
-// jiff don't support local formats:
-// https://github.com/BurntSushi/jiff/issues/219
+// Keep locale-dependent formats stable across datetime backends.
 fn replace_time_format(format: &str) -> Cow<'_, str> {
     if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
         let format = format
@@ -201,27 +199,15 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
             |micros, format, output, ctx| {
                 let ts = timestamp_from_micros(micros, &ctx.func_ctx.tz);
                 let format = prepare_format_string(format, &ctx.func_ctx.date_format_style);
-                let mut buf = String::new();
-                let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
-                if Display::fmt(&ts.strftime(&format), &mut formatter).is_err() {
+                let items = StrftimeItems::new(&format).collect::<Vec<_>>();
+                if items.iter().any(|item| matches!(item, Item::Error)) {
                     ctx.set_error(output.len(), format!("{format} is invalid time format"));
                     output.builder.commit_row();
                     output.validity.push(true);
-                    return;
-                }
-                match write!(output.builder.row_buffer, "{}", buf) {
-                    Ok(_) => {
-                        output.builder.commit_row();
-                        output.validity.push(true);
-                    }
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("{format} is invalid time format, error {e}"),
-                        );
-                        output.builder.commit_row();
-                        output.validity.push(true);
-                    }
+                } else {
+                    let rendered = ts.format_with_items(items.iter()).to_string();
+                    output.builder.put_and_commit(rendered);
+                    output.validity.push(true);
                 }
             },
         ),

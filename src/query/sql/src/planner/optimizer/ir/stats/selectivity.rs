@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
@@ -32,8 +33,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_statistics::TypedHistogram;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 
 use super::constraint::ConstraintContext;
 use super::constraint::ValueConstraint;
@@ -118,7 +117,7 @@ impl SelectivityEstimator {
         // distort the selectivity estimate. Use the current UTC instant for this estimation path;
         // other context fields keep their existing defaults.
         let func_ctx = FunctionContext {
-            now: Zoned::now().with_time_zone(TimeZone::UTC),
+            now: Utc::now(),
             ..FunctionContext::default()
         };
         if self.cardinality == StatCardinality::Exact(0) {

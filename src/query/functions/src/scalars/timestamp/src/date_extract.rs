@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Datelike;
+use chrono::NaiveDate;
 use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
@@ -34,36 +36,29 @@ use databend_common_expression::types::number::UInt16Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
-use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_timezone::DateTimeComponents;
-use databend_common_timezone::fast_components_from_timestamp;
-use jiff::Timestamp;
-use jiff::Zoned;
-use jiff::civil::Date;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
+use databend_common_timezone::components_from_timestamp;
+use databend_common_timezone::wall_clock_is_monotonic;
 
+/// Projection of a timestamp onto a calendar number, such as `to_year`.
 pub(super) trait ToNumber {
     type Output;
-
-    fn to_number(dt: &Zoned) -> Self::Output;
 
     fn from_components(components: &DateTimeComponents) -> Self::Output;
 }
 
+/// Projections that also apply to a bare date, with no timezone involved.
 trait DateToNumber: ToNumber {
-    fn to_number_from_date(date: &Date) -> Self::Output;
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output;
 }
 
 struct ToNumberImpl;
 
 impl ToNumberImpl {
-    fn eval_timestamp<T: ToNumber>(us: i64, tz: &TimeZone) -> T::Output {
-        if let Some(components) = fast_components_from_timestamp(us, tz) {
-            return T::from_components(&components);
-        }
-        let dt = timestamp_from_micros(us, tz);
-        T::to_number(&dt)
+    fn eval_timestamp<T: ToNumber>(us: i64, tz: &Tz) -> T::Output {
+        T::from_components(&components_from_timestamp(us, tz))
     }
 
     fn eval_date<T: DateToNumber>(days: i32) -> T::Output {
@@ -102,21 +97,11 @@ fn timestamp_to_u32_domain<T: ToNumber<Output = u32>>(
 
 /// Whether `[min_us, max_us]` contains no time-zone transition. Within one offset
 /// segment, the local wall clock is strictly increasing.
-pub(super) fn tz_wall_clock_single_segment(tz: &TimeZone, min_us: i64, max_us: i64) -> bool {
-    if tz.to_fixed_offset().is_ok() {
-        return true;
-    }
-    let (Ok(min_ts), Ok(max_ts)) = (
-        Timestamp::from_microsecond(min_us),
-        Timestamp::from_microsecond(max_us),
-    ) else {
-        return false;
-    };
-    match tz.following(min_ts).next() {
-        None => true,
-        // A transition exactly at `max` already applies to `f(max)`.
-        Some(transition) => transition.timestamp() > max_ts,
-    }
+///
+/// A transition landing exactly on `max_us` counts as inside the range, so the
+/// answer stays conservative at the boundary.
+pub(super) fn tz_wall_clock_single_segment(tz: &Tz, min_us: i64, max_us: i64) -> bool {
+    wall_clock_is_monotonic(tz, min_us, max_us)
 }
 
 /// Range-sensitive monotonicity for calendar projections. Nullable domains are judged
@@ -161,35 +146,27 @@ struct ToWeekOfYear;
 impl ToNumber for ToYYYYMM {
     type Output = u32;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.year() as u32 * 100 + dt.month() as u32
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.year as u32 * 100 + components.month as u32
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.year as u32 * 100 + c.month as u32
     }
 }
 
 impl DateToNumber for ToYYYYMM {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.year() as u32 * 100 + date.month() as u32
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.year() as u32 * 100 + date.month()
     }
 }
 
 impl ToNumber for ToMillennium {
     type Output = u16;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        (dt.year() as u16).div_ceil(1000)
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        (components.year as u16).div_ceil(1000)
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        (c.year as u16).div_ceil(1000)
     }
 }
 
 impl DateToNumber for ToMillennium {
-    fn to_number_from_date(date: &Date) -> Self::Output {
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
         (date.year() as u16).div_ceil(1000)
     }
 }
@@ -197,93 +174,62 @@ impl DateToNumber for ToMillennium {
 impl ToNumber for ToWeekOfYear {
     type Output = u32;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.date().iso_week_date().week() as u32
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.iso_year_week().1
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.iso_year_week().1
     }
 }
 
 impl DateToNumber for ToWeekOfYear {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.iso_week_date().week() as u32
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.iso_week().week()
     }
 }
 
 impl ToNumber for ToYYYYMMDD {
     type Output = u32;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.year() as u32 * 10_000 + dt.month() as u32 * 100 + dt.day() as u32
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.year as u32 * 10_000 + components.month as u32 * 100 + components.day as u32
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.year as u32 * 10_000 + c.month as u32 * 100 + c.day as u32
     }
 }
 
 impl DateToNumber for ToYYYYMMDD {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.year() as u32 * 10_000 + date.month() as u32 * 100 + date.day() as u32
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.year() as u32 * 10_000 + date.month() * 100 + date.day()
     }
 }
 
 impl ToNumber for ToYYYYMMDDHH {
     type Output = u64;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.year() as u64 * 1_000_000
-            + dt.month() as u64 * 10_000
-            + dt.day() as u64 * 100
-            + dt.hour() as u64
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.year as u64 * 1_000_000
-            + components.month as u64 * 10_000
-            + components.day as u64 * 100
-            + components.hour as u64
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.year as u64 * 1_000_000 + c.month as u64 * 10_000 + c.day as u64 * 100 + c.hour as u64
     }
 }
 
 impl ToNumber for ToYYYYMMDDHHMMSS {
     type Output = u64;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.year() as u64 * 10_000_000_000
-            + dt.month() as u64 * 100_000_000
-            + dt.day() as u64 * 1_000_000
-            + dt.hour() as u64 * 10_000
-            + dt.minute() as u64 * 100
-            + dt.second() as u64
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.year as u64 * 10_000_000_000
-            + components.month as u64 * 100_000_000
-            + components.day as u64 * 1_000_000
-            + components.hour as u64 * 10_000
-            + components.minute as u64 * 100
-            + components.second as u64
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.year as u64 * 10_000_000_000
+            + c.month as u64 * 100_000_000
+            + c.day as u64 * 1_000_000
+            + c.hour as u64 * 10_000
+            + c.minute as u64 * 100
+            + c.second as u64
     }
 }
 
 impl ToNumber for ToYear {
     type Output = u16;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.year() as u16
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.year as u16
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.year as u16
     }
 }
 
 impl DateToNumber for ToYear {
-    fn to_number_from_date(date: &Date) -> Self::Output {
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
         date.year() as u16
     }
 }
@@ -291,58 +237,43 @@ impl DateToNumber for ToYear {
 impl ToNumber for ToISOYear {
     type Output = u16;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.date().iso_week_date().year() as _
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.iso_year_week().0 as u16
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.iso_year_week().0 as u16
     }
 }
 
 impl DateToNumber for ToISOYear {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.iso_week_date().year() as u16
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.iso_week().year() as u16
     }
 }
 
 impl ToNumber for ToYYYYWW {
     type Output = u32;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        let week_date = dt.date().iso_week_date();
-        let year = week_date.year() as u32 * 100;
-        year + dt.date().iso_week_date().week() as u32
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        let (iso_year, iso_week) = components.iso_year_week();
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        let (iso_year, iso_week) = c.iso_year_week();
         iso_year as u32 * 100 + iso_week
     }
 }
 
 impl DateToNumber for ToYYYYWW {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        let week_date = date.iso_week_date();
-        week_date.year() as u32 * 100 + week_date.week() as u32
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        let week = date.iso_week();
+        week.year() as u32 * 100 + week.week()
     }
 }
 
 impl ToNumber for ToQuarter {
     type Output = u8;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        // begin with 0
-        ((dt.month() - 1) / 3 + 1) as u8
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        (components.month - 1) / 3 + 1
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        (c.month - 1) / 3 + 1
     }
 }
 
 impl DateToNumber for ToQuarter {
-    fn to_number_from_date(date: &Date) -> Self::Output {
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
         (date.month() as u8 - 1) / 3 + 1
     }
 }
@@ -350,17 +281,13 @@ impl DateToNumber for ToQuarter {
 impl ToNumber for ToMonth {
     type Output = u8;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.month() as u8
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.month
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.month
     }
 }
 
 impl DateToNumber for ToMonth {
-    fn to_number_from_date(date: &Date) -> Self::Output {
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
         date.month() as u8
     }
 }
@@ -368,35 +295,27 @@ impl DateToNumber for ToMonth {
 impl ToNumber for ToDayOfYear {
     type Output = u16;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.day_of_year() as u16
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.day_of_year
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.day_of_year
     }
 }
 
 impl DateToNumber for ToDayOfYear {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.day_of_year() as u16
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.ordinal() as u16
     }
 }
 
 impl ToNumber for ToDayOfMonth {
     type Output = u8;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.day() as u8
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.day
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.day
     }
 }
 
 impl DateToNumber for ToDayOfMonth {
-    fn to_number_from_date(date: &Date) -> Self::Output {
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
         date.day() as u8
     }
 }
@@ -404,36 +323,28 @@ impl DateToNumber for ToDayOfMonth {
 impl ToNumber for ToDayOfWeek {
     type Output = u8;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.weekday().to_monday_one_offset() as u8
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.weekday.to_monday_one_offset() as u8
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.weekday_from_monday_one()
     }
 }
 
 impl DateToNumber for ToDayOfWeek {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.weekday().to_monday_one_offset() as u8
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.weekday().number_from_monday() as u8
     }
 }
 
 impl ToNumber for DayOfWeek {
     type Output = u8;
 
-    fn to_number(dt: &Zoned) -> Self::Output {
-        dt.weekday().to_sunday_zero_offset() as u8
-    }
-
-    fn from_components(components: &DateTimeComponents) -> Self::Output {
-        components.weekday.to_sunday_zero_offset() as u8
+    fn from_components(c: &DateTimeComponents) -> Self::Output {
+        c.weekday_from_sunday_zero()
     }
 }
 
 impl DateToNumber for DayOfWeek {
-    fn to_number_from_date(date: &Date) -> Self::Output {
-        date.weekday().to_sunday_zero_offset() as u8
+    fn to_number_from_date(date: &NaiveDate) -> Self::Output {
+        date.weekday().num_days_from_sunday() as u8
     }
 }
 
@@ -674,25 +585,16 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<TimestampType, UInt8Type, _>(
         "to_hour",
         |_, _| FunctionDomain::Full,
-        |val, ctx| {
-            let datetime = timestamp_from_micros(val, &ctx.func_ctx.tz);
-            datetime.hour() as u8
-        },
+        |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).hour,
     );
     registry.register_1_arg::<TimestampType, UInt8Type, _>(
         "to_minute",
         |_, _| FunctionDomain::Full,
-        |val, ctx| {
-            let datetime = timestamp_from_micros(val, &ctx.func_ctx.tz);
-            datetime.minute() as u8
-        },
+        |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).minute,
     );
     registry.register_1_arg::<TimestampType, UInt8Type, _>(
         "to_second",
         |_, _| FunctionDomain::Full,
-        |val, ctx| {
-            let datetime = timestamp_from_micros(val, &ctx.func_ctx.tz);
-            datetime.second() as u8
-        },
+        |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).second,
     );
 }

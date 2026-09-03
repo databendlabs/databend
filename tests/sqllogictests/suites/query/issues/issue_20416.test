@@ -1,0 +1,240 @@
+statement ok
+SET timezone = 'UTC'
+
+query T
+SELECT to_timestamp_tz('9999-12-31 23:59:59.999999 +0000')
+----
+9999-12-31 23:59:59.999999 +0000
+
+query T
+SELECT to_timestamp_tz(to_timestamp('9999-12-31 23:59:59.999999'))
+----
+9999-12-31 23:59:59.999999 +0000
+
+query T
+SELECT to_timestamp_tz(to_date('9999-12-31'))
+----
+9999-12-31 00:00:00.000000 +0000
+
+query T
+SELECT timestamp_tz_from_parts(9999, 12, 31, 23, 59, 59, 999999000, 'UTC')
+----
+9999-12-31 23:59:59.999999 +0000
+
+query T
+SELECT to_timestamp_tz('9999-12-31 23:59:59.999999 +0000') + to_interval('0 day')
+----
+9999-12-31 23:59:59.999999 +0000
+
+query T
+SELECT to_timestamp('253402300799', '%s')
+----
+9999-12-31 23:59:59.000000
+
+statement error 1006
+SELECT to_timestamp('9999-12-31 23:59:59.999999 -00:01')
+
+statement error 1006
+SELECT to_timestamp('0001-01-01 00:00:00.000000 +00:01')
+
+statement error 1006
+SELECT to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z')
+
+statement error 1006
+SELECT to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z')
+
+statement error 1006
+SELECT to_timestamp('253402300800', '%s')
+
+query BBBBB
+SELECT
+    try_to_timestamp('9999-12-31 23:59:59.999999 -00:01') IS NULL,
+    try_to_timestamp('0001-01-01 00:00:00.000000 +00:01') IS NULL,
+    try_to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
+    try_to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
+    try_to_timestamp('253402300800', '%s') IS NULL
+----
+1	1	1	1	1
+
+query TT
+SELECT typeof(DATE '9999-12-31' + to_interval('0 day')), DATE '9999-12-31' + to_interval('0 day')
+----
+TIMESTAMP	9999-12-31 00:00:00.000000
+
+query T
+SELECT TIMESTAMP '0001-01-01 00:00:00' - to_interval('1 minute')
+----
+0001-01-01 00:00:00.000000
+
+query T
+SELECT TIMESTAMP '9999-12-31 23:59:59.999999' + to_interval('1 microsecond')
+----
+0001-01-01 00:00:00.000000
+
+query T
+SELECT DATE '0001-01-01' - to_interval('1 day')
+----
+0001-01-01 00:00:00.000000
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01 00:00:00' + to_interval('100000000 day')
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01 00:00:00' + to_interval('-100000000 day')
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+query TT
+SELECT to_date(to_timestamp(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000'))), try_to_date(to_timestamp(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000')))
+----
+9999-12-31	9999-12-31
+
+statement ok
+CREATE OR REPLACE TABLE issue_20416_interval_cases(ts TIMESTAMP, delta VARCHAR, is_subtract BOOLEAN, expected BIGINT)
+
+statement ok
+CREATE OR REPLACE TABLE issue_20416_domain_cases(ts TIMESTAMP)
+
+statement ok
+CREATE OR REPLACE TABLE issue_20416_local_cases(value VARCHAR, expected BIGINT)
+
+statement ok
+CREATE OR REPLACE TABLE issue_20416_age_cases(value TIMESTAMP_TZ)
+
+statement ok
+SET timezone = 'America/New_York'
+
+statement ok
+INSERT INTO issue_20416_interval_cases VALUES
+    (TIMESTAMP '2024-03-09 02:30:00', '1 day', false, 1710055800),
+    (TIMESTAMP '2024-10-03 01:30:00', '1 month', false, 1730611800),
+    (TIMESTAMP '2024-12-03 01:30:00', '1 month', true, 1730615400),
+    (TIMESTAMP '2024-03-10 03:30:00', '1 hour', true, 1710052200),
+    (TIMESTAMP '2024-03-10 01:30:00', '1 hour', false, 1710055800),
+    (to_timestamp(1730611800), '1 hour', false, 1730615400),
+    (to_timestamp(1730615400), '1 hour', true, 1730611800)
+
+query I
+SELECT count_if(to_unix_timestamp(if(is_subtract, ts - to_interval(delta), ts + to_interval(delta))) = expected)
+FROM issue_20416_interval_cases
+----
+7
+
+statement ok
+INSERT INTO issue_20416_domain_cases VALUES
+    (to_timestamp(1710052200)),
+    (to_timestamp(1710054000)),
+    (to_timestamp(1710055800))
+
+query II
+SELECT to_unix_timestamp(ts), to_minute(ts)
+FROM issue_20416_domain_cases
+WHERE to_minute(ts) = 0
+ORDER BY ts
+----
+1710054000	0
+
+statement ok
+INSERT INTO issue_20416_age_cases VALUES
+    (to_timestamp_tz('2024-06-01 12:00:00 +05:30')),
+    (to_timestamp_tz('2024-06-01 12:00:00 -08:00')),
+    (to_timestamp_tz('2024-06-01 12:00:00 +00:00'))
+
+query I
+SELECT count_if(age(value)::string LIKE '%12:00:00') FROM issue_20416_age_cases
+----
+3
+
+statement ok
+DELETE FROM issue_20416_interval_cases
+
+statement ok
+SET timezone = 'Australia/Lord_Howe'
+
+statement ok
+INSERT INTO issue_20416_interval_cases VALUES
+    (to_timestamp(1728143100), '30 minute', true, 1728141300),
+    (to_timestamp(1728141300), '30 minute', false, 1728143100)
+
+query I
+SELECT count_if(to_unix_timestamp(if(is_subtract, ts - to_interval(delta), ts + to_interval(delta))) = expected)
+FROM issue_20416_interval_cases
+----
+2
+
+query I
+SELECT count_if(age(value)::string LIKE '%12:00:00') FROM issue_20416_age_cases
+----
+3
+
+statement ok
+DELETE FROM issue_20416_interval_cases
+
+statement ok
+SET timezone = 'Europe/Dublin'
+
+statement ok
+INSERT INTO issue_20416_interval_cases VALUES
+    (to_timestamp(1729989000), '1 hour', false, 1729992600),
+    (to_timestamp(1729992600), '1 hour', true, 1729989000)
+
+query I
+SELECT count_if(to_unix_timestamp(if(is_subtract, ts - to_interval(delta), ts + to_interval(delta))) = expected)
+FROM issue_20416_interval_cases
+----
+2
+
+statement ok
+DELETE FROM issue_20416_interval_cases
+
+statement ok
+SET timezone = 'Pacific/Apia'
+
+statement ok
+INSERT INTO issue_20416_interval_cases VALUES
+    (to_timestamp(1325241000), '1 day', true, 1325154600),
+    (to_timestamp(1325154600), '1 day', false, 1325241000)
+
+query I
+SELECT count_if(to_unix_timestamp(if(is_subtract, ts - to_interval(delta), ts + to_interval(delta))) = expected)
+FROM issue_20416_interval_cases
+----
+2
+
+statement ok
+SET timezone = 'Africa/Algiers'
+
+statement ok
+INSERT INTO issue_20416_local_cases VALUES ('1939-11-19 00:00:00', -950490000)
+
+query I
+SELECT count_if(to_unix_timestamp(to_timestamp(value)) = expected) FROM issue_20416_local_cases
+----
+1
+
+statement ok
+DELETE FROM issue_20416_local_cases
+
+statement ok
+SET timezone = 'America/St_Johns'
+
+statement ok
+INSERT INTO issue_20416_local_cases VALUES ('1990-10-28 00:00:00', 657081000)
+
+query I
+SELECT count_if(to_unix_timestamp(to_timestamp(value)) = expected) FROM issue_20416_local_cases
+----
+1
+
+statement ok
+DROP TABLE issue_20416_interval_cases
+
+statement ok
+DROP TABLE issue_20416_domain_cases
+
+statement ok
+DROP TABLE issue_20416_local_cases
+
+statement ok
+DROP TABLE issue_20416_age_cases

@@ -218,7 +218,7 @@ impl FieldEncoderToString {
     fn timestamp_text(&self, value: i64) -> String {
         match self.settings.http_json_result_mode {
             HttpHandlerDataFormat::Display => {
-                timestamp_to_string(value, &self.settings.jiff_timezone).to_string()
+                timestamp_to_string(value, &self.settings.timezone).to_string()
             }
             HttpHandlerDataFormat::Driver => value.to_string(),
         }

@@ -24,7 +24,6 @@ use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::OutputFormatSettings;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
-use jiff::fmt::strtime;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
@@ -96,14 +95,14 @@ fn scalar_to_json(
         ScalarRef::Decimal(x) => Ok(serde_json::to_value(x.to_string()).unwrap()),
         ScalarRef::Date(v) => {
             let dt = date_from_days(v);
-            Ok(serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap())
+            Ok(serde_json::to_value(dt.format("%Y-%m-%d").to_string()).unwrap())
         }
         ScalarRef::Interval(v) => {
             Ok(serde_json::to_value(interval_to_string(&v).to_string()).unwrap())
         }
         ScalarRef::Timestamp(v) => {
-            let dt = timestamp_from_micros(v, &format.jiff_timezone);
-            Ok(serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap())
+            let dt = timestamp_from_micros(v, &format.timezone);
+            Ok(serde_json::to_value(dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap())
         }
         ScalarRef::TimestampTz(v) => Ok(serde_json::to_value(v.to_string()).unwrap()),
         ScalarRef::EmptyArray => Ok(JsonValue::Array(vec![])),

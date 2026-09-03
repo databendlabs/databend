@@ -488,8 +488,6 @@ where A: TypeCheckAdapter
             Self::rewrite_substring(&mut args);
         }
 
-        self.adjust_date_interval_function_args(func_name, &mut args)?;
-
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         // inject the params
