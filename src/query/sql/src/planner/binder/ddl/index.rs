@@ -83,6 +83,7 @@ static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|
     let mut r = HashSet::new();
     r.insert("english");
     r.insert("chinese");
+    r.insert("japanese");
     r
 });
 
@@ -92,6 +93,8 @@ static INDEX_FILTER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     r.insert("english_stop");
     r.insert("english_stemmer");
     r.insert("chinese_stop");
+    r.insert("japanese_stop");
+    r.insert("japanese_stemmer");
     r
 });
 
@@ -644,6 +647,22 @@ impl Binder {
                         }
                     }
                     options.insert("bloom_size".to_string(), value);
+                }
+                "false_positive_rate" => {
+                    match value.parse::<f64>() {
+                        Ok(num) if num.is_finite() && num > 0.0 && num < 1.0 => {}
+                        Ok(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(
+                                "`false_positive_rate` must be finite and between 0 and 1",
+                            ));
+                        }
+                        Err(_) => {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{value}` is not a legal number",
+                            )));
+                        }
+                    }
+                    options.insert("false_positive_rate".to_string(), value);
                 }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(

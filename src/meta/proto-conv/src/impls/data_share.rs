@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::data_share as mt;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_protos::pb;
 
 use crate::FromToProto;
@@ -89,11 +90,13 @@ fn database_to_pb(grant: &mt::DataShareDatabaseGrant) -> pb::DataShareDatabaseGr
 fn table_from_pb(p: pb::DataShareTableGrant) -> Result<mt::DataShareTableGrant, Incompatible> {
     Ok(mt::DataShareTableGrant {
         shared_on: DateTime::<Utc>::from_pb(p.shared_on)?,
+        storage_params: p.storage_params.map(StorageParams::from_pb).transpose()?,
     })
 }
 
 fn table_to_pb(grant: &mt::DataShareTableGrant) -> pb::DataShareTableGrant {
     pb::DataShareTableGrant {
         shared_on: grant.shared_on.to_pb(),
+        storage_params: grant.storage_params.as_ref().map(|params| params.to_pb()),
     }
 }

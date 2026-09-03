@@ -21,6 +21,7 @@ use databend_meta_client::kvapi;
 
 use crate::data_id::DataId;
 use crate::schema::EmptyProto;
+use crate::storage::StorageParams;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::resource::TenantResource;
 
@@ -124,6 +125,11 @@ pub struct DataShareDatabaseGrant {
 pub struct DataShareTableGrant {
     /// When this table was attached to the share.
     pub shared_on: DateTime<Utc>,
+    /// Provider table storage location with all credentials removed.
+    ///
+    /// `None` is retained for grants written before this field was introduced.
+    /// Credentials are always resolved from [`DataShareMeta::connection`].
+    pub storage_params: Option<StorageParams>,
 }
 
 #[cfg(test)]

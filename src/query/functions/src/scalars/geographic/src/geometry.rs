@@ -394,27 +394,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         Ok(wkb)
     });
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
-        "to_string",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
-            let row = builder.len();
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(row) {
-                    builder.commit_row();
-                    return;
+    registry.register_context_dependent(|registry| {
+        registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
+            "to_string",
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.commit_row();
+                        return;
+                    }
                 }
-            }
 
-            match geometry_format(ewkb, ctx.func_ctx.geometry_output_format) {
-                Ok(data) => builder.put_str(&data),
-                Err(e) => {
-                    ctx.set_error(row, e.to_string());
+                match geometry_format(ewkb, ctx.func_ctx.geometry_output_format) {
+                    Ok(data) => builder.put_str(&data),
+                    Err(e) => {
+                        ctx.set_error(row, e.to_string());
+                    }
                 }
-            }
-            builder.commit_row();
-        }),
-    );
+                builder.commit_row();
+            }),
+        );
+    });
 
     geo_convert_fn::<GeometryType, StringType>("st_geohash", registry, |input| {
         point_to_geohash(input, None)

@@ -18,13 +18,83 @@ use std::ops::Range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 
+/// Closed two-dimensional MBR used by Hilbert diagnostics and recluster selection.
 #[derive(Clone, Copy, Default)]
-struct Rect<T> {
-    x_min: T,
-    x_max: T,
-    y_min: T,
-    y_max: T,
+pub(crate) struct HilbertRect<T> {
+    pub(crate) x_min: T,
+    pub(crate) x_max: T,
+    pub(crate) y_min: T,
+    pub(crate) y_max: T,
+}
+
+impl HilbertRect<usize> {
+    /// Minimum bounding rectangle of a non-empty member set.
+    pub(crate) fn bounding(boxes: &[Self], members: &[usize]) -> Self {
+        let mut iter = members.iter();
+        let first = iter
+            .next()
+            .map(|idx| boxes[*idx])
+            .expect("bounding rectangle requires at least one member");
+        iter.fold(first, |acc, idx| {
+            let item = boxes[*idx];
+            Self {
+                x_min: acc.x_min.min(item.x_min),
+                x_max: acc.x_max.max(item.x_max),
+                y_min: acc.y_min.min(item.y_min),
+                y_max: acc.y_max.max(item.y_max),
+            }
+        })
+    }
+
+    /// Whether two closed rectangles share at least one point.
+    pub(crate) fn intersects(&self, other: &Self) -> bool {
+        self.x_min <= other.x_max
+            && other.x_min <= self.x_max
+            && self.y_min <= other.y_max
+            && other.y_min <= self.y_max
+    }
+}
+
+/// Read a validated two-dimensional MBR from persisted Hilbert cluster statistics.
+pub(crate) fn hilbert_rect_from_stats(stats: &ClusterStatistics) -> Result<HilbertRect<Scalar>> {
+    let (min, max) = valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS)
+        .ok_or_else(|| {
+            ErrorCode::Internal("Hilbert overlap requires normalized 2D cluster statistics")
+        })?;
+    Ok(HilbertRect {
+        x_min: min[0].clone(),
+        x_max: max[0].clone(),
+        y_min: min[1].clone(),
+        y_max: max[1].clone(),
+    })
+}
+
+/// Coordinate-compress scalar MBR endpoints while preserving closed-range overlap semantics.
+pub(crate) fn rank_hilbert_rects(bounds: &[HilbertRect<Scalar>]) -> Vec<HilbertRect<usize>> {
+    let mut x = Vec::with_capacity(bounds.len() * 2);
+    let mut y = Vec::with_capacity(bounds.len() * 2);
+    for item in bounds {
+        x.push(&item.x_min);
+        x.push(&item.x_max);
+        y.push(&item.y_min);
+        y.push(&item.y_max);
+    }
+    sort_dedup_scalars(&mut x);
+    sort_dedup_scalars(&mut y);
+
+    bounds
+        .iter()
+        .map(|item| HilbertRect {
+            x_min: rank_scalar(&x, &item.x_min),
+            x_max: rank_scalar(&x, &item.x_max),
+            y_min: rank_scalar(&y, &item.y_min),
+            y_max: rank_scalar(&y, &item.y_max),
+        })
+        .collect()
 }
 
 fn sort_dedup_scalars(values: &mut Vec<&Scalar>) {
@@ -155,35 +225,22 @@ pub(crate) fn hilbert_diagnostics(bounds: &[[Scalar; 4]]) -> Result<(usize, u64)
         return Ok((0, 0));
     }
 
-    let mut boxes = vec![Rect::default(); bounds.len()];
-    let mut coordinates = Vec::with_capacity(bounds.len().saturating_mul(2));
-    for item in bounds {
-        coordinates.push(&item[0]);
-        coordinates.push(&item[1]);
-    }
-    sort_dedup_scalars(&mut coordinates);
-    for (item, ranked) in bounds.iter().zip(&mut boxes) {
-        ranked.x_min = rank_scalar(&coordinates, &item[0]) as u32;
-        ranked.x_max = rank_scalar(&coordinates, &item[1]) as u32;
-    }
-
-    coordinates.clear();
-    for item in bounds {
-        coordinates.push(&item[2]);
-        coordinates.push(&item[3]);
-    }
-    sort_dedup_scalars(&mut coordinates);
-    for (item, ranked) in bounds.iter().zip(&mut boxes) {
-        ranked.y_min = rank_scalar(&coordinates, &item[2]) as u32;
-        ranked.y_max = rank_scalar(&coordinates, &item[3]) as u32;
-    }
-
-    let x_count = boxes.iter().map(|item| item.x_max).max().unwrap_or(0) as usize + 1;
-    let y_count = boxes.iter().map(|item| item.y_max).max().unwrap_or(0) as usize + 1;
-    let mut starts = (0..boxes.len() as u32).collect::<Vec<_>>();
+    let scalar_boxes = bounds
+        .iter()
+        .map(|item| HilbertRect {
+            x_min: item[0].clone(),
+            x_max: item[1].clone(),
+            y_min: item[2].clone(),
+            y_max: item[3].clone(),
+        })
+        .collect::<Vec<_>>();
+    let boxes = rank_hilbert_rects(&scalar_boxes);
+    let x_count = boxes.iter().map(|item| item.x_max).max().unwrap_or(0) + 1;
+    let y_count = boxes.iter().map(|item| item.y_max).max().unwrap_or(0) + 1;
+    let mut starts = (0..boxes.len()).collect::<Vec<_>>();
     let mut ends = starts.clone();
-    starts.sort_unstable_by_key(|idx| (boxes[*idx as usize].x_min, *idx));
-    ends.sort_unstable_by_key(|idx| (boxes[*idx as usize].x_max, *idx));
+    starts.sort_unstable_by_key(|idx| (boxes[*idx].x_min, *idx));
+    ends.sort_unstable_by_key(|idx| (boxes[*idx].x_max, *idx));
 
     let mut depth_tree = RangeAddMaxTree::new(y_count);
     let mut active_y = ActiveYIntervals::new(y_count);
@@ -193,8 +250,8 @@ pub(crate) fn hilbert_diagnostics(bounds: &[[Scalar; 4]]) -> Result<(usize, u64)
     let mut end_pos = 0usize;
 
     for x in 0..x_count {
-        while start_pos < starts.len() && boxes[starts[start_pos] as usize].x_min as usize == x {
-            let item = boxes[starts[start_pos] as usize];
+        while start_pos < starts.len() && boxes[starts[start_pos]].x_min == x {
+            let item = boxes[starts[start_pos]];
             let y_min = item.y_min as usize;
             let y_max = item.y_max as usize;
             overlap_pairs =
@@ -205,8 +262,8 @@ pub(crate) fn hilbert_diagnostics(bounds: &[[Scalar; 4]]) -> Result<(usize, u64)
         }
         max_depth = max_depth.max(depth_tree.max());
 
-        while end_pos < ends.len() && boxes[ends[end_pos] as usize].x_max as usize == x {
-            let item = boxes[ends[end_pos] as usize];
+        while end_pos < ends.len() && boxes[ends[end_pos]].x_max == x {
+            let item = boxes[ends[end_pos]];
             let y_min = item.y_min as usize;
             let y_max = item.y_max as usize;
             depth_tree.add(y_min, y_max + 1, -1);

@@ -455,27 +455,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         Ok(npoints as u32)
     });
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _>(
-        "to_string",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeographyType, StringType>(|ewkb, builder, ctx| {
-            let row = builder.len();
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(row) {
-                    builder.commit_row();
-                    return;
+    registry.register_context_dependent(|registry| {
+        registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _>(
+            "to_string",
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_1_arg::<GeographyType, StringType>(|ewkb, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.commit_row();
+                        return;
+                    }
                 }
-            }
 
-            match geography_format(ewkb.0, ctx.func_ctx.geometry_output_format) {
-                Ok(data) => builder.put_str(&data),
-                Err(e) => {
-                    ctx.set_error(row, e.to_string());
+                match geography_format(ewkb.0, ctx.func_ctx.geometry_output_format) {
+                    Ok(data) => builder.put_str(&data),
+                    Err(e) => {
+                        ctx.set_error(row, e.to_string());
+                    }
                 }
-            }
-            builder.commit_row();
-        }),
-    );
+                builder.commit_row();
+            }),
+        );
+    });
 
     geo_convert_fn::<VariantType, GeographyType>("to_geography", registry, |val| {
         let raw_jsonb = RawJsonb::new(val);
