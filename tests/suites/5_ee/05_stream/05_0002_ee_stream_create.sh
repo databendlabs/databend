@@ -35,10 +35,6 @@ echo "alter table db_stream.base set options(change_tracking = true)" | bendsql_
 echo "create stream db_stream.s4 on table db_stream.base at (stream => db_stream.s2)" | bendsql_connect_root
 echo "select a from db_stream.s2" | bendsql_connect_root
 
-echo "select count(*) from fuse_snapshot('db_stream', 'base')" | bendsql_connect_root
-echo "set data_retention_time_in_days=0; optimize table db_stream.base purge before (stream => db_stream.s2)" | bendsql_connect_root
-echo "select count(*) from fuse_snapshot('db_stream', 'base')" | bendsql_connect_root
-
 echo "drop stream if exists db_stream.s2" | bendsql_connect_root
 echo "drop stream if exists db_stream.t2" | bendsql_connect_root
 echo "drop table if exists db_stream.base all" | bendsql_connect_root

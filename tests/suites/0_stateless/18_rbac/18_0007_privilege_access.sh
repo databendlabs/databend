@@ -105,12 +105,17 @@ select * from t20_0012 order by c;
 
 ## optimize table - test permission denied
 echo "select 'test -- optimize table'" | $TEST_USER_CONNECT
-echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
+echo "optimize table t20_0012 compact" | $TEST_USER_CONNECT
+
+## global vacuum drop table - test permission denied
+## This must require global SUPER instead of trying to resolve an empty database name.
+echo "select 'test -- vacuum drop table'" | $TEST_USER_CONNECT
+echo "vacuum drop table" | $TEST_USER_CONNECT
 
 ## grant user privilege and test optimize
 run_root_sql "GRANT Super ON *.* TO 'test-user';"
 run_test_user "
-set data_retention_time_in_days=0; optimize table t20_0012 all;
+optimize table t20_0012 compact;
 select count(*)>=1 from fuse_snapshot('default', 't20_0012');
 "
 

@@ -115,37 +115,36 @@ pub struct VacuumTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub option: VacuumTableOption,
 }
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if let Some(summary) = self.option.dry_run {
-            if summary {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
-                    DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            } else {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("file", DataType::String),
-                    DataField::new("file_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            }
-        } else {
-            Arc::new(DataSchema::new(vec![
-                DataField::new("snapshot_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("snapshot_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("segments_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("segments_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("block_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("block_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("index_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("index_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
-            ]))
-        }
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Vacuum tables
+#[derive(Clone, Debug)]
+pub struct VacuumTablesPlan {
+    pub catalog: String,
+    pub database: Option<String>,
+}
+
+impl VacuumTablesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Vacuum all
+#[derive(Clone, Debug)]
+pub struct VacuumAllPlan {
+    pub catalog: String,
+}
+
+impl VacuumAllPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
     }
 }
 
@@ -154,37 +153,11 @@ impl VacuumTablePlan {
 pub struct VacuumDropTablePlan {
     pub catalog: String,
     pub database: String,
-    pub option: VacuumDropTableOption,
 }
 
 impl VacuumDropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if let Some(summary) = self.option.dry_run {
-            if summary {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("table", DataType::String),
-                    DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
-                    DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            } else {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("table", DataType::String),
-                    DataField::new("file", DataType::String),
-                    DataField::new("file_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            }
-        } else {
-            Arc::new(DataSchema::new(vec![
-                DataField::new(
-                    "success_tables_count",
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                DataField::new(
-                    "failed_tables_count",
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-            ]))
-        }
+        Arc::new(DataSchema::empty())
     }
 }
 
@@ -196,26 +169,8 @@ pub struct VacuumTemporaryFilesPlan {
 
 impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::new(vec![
-            DataField::new("spill_files", DataType::Number(NumberDataType::UInt64)),
-            DataField::new(
-                "temp_table_sessions",
-                DataType::Number(NumberDataType::UInt64),
-            ),
-        ]))
+        Arc::new(DataSchema::empty())
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct VacuumDropTableOption {
-    // Some(true) means dry run with summary option
-    pub dry_run: Option<bool>,
-    pub limit: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VacuumTableOption {
-    pub dry_run: Option<bool>,
 }
 
 #[derive(Clone, Debug)]

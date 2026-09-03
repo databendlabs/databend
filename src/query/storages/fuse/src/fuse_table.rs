@@ -126,7 +126,6 @@ use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
-use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
@@ -144,7 +143,6 @@ use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
-use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -1173,29 +1171,6 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
-    }
-
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => {
-                table
-                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
-                    .await
-            }
-            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
-                warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
-            }
-            Err(e) => Err(e),
-        }
     }
 
     async fn table_statistics(

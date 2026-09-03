@@ -242,12 +242,11 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     let compact_task = async move {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
         let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
-        if let Plan::OptimizeCompactBlock { s_expr, need_purge } = compact_plan {
+        if let Plan::OptimizeCompactBlock { s_expr } = compact_plan {
             let optimize_interpreter = OptimizeCompactBlockInterpreter::try_create(
                 ctx.clone(),
                 *s_expr.clone(),
                 LockTableOption::LockWithRetry,
-                need_purge,
             )?;
             let _ = optimize_interpreter.execute(ctx).await?;
         }

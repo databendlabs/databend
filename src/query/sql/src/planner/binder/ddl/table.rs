@@ -59,8 +59,10 @@ use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::VacuumAllStmt;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
+use databend_common_ast::ast::VacuumTablesStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
@@ -92,7 +94,6 @@ use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_common_storage::EndpointPolicyScope;
@@ -167,7 +168,6 @@ use crate::plans::ModifyTableCommentPlan;
 use crate::plans::ModifyTableConnectionPlan;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::OptimizeCompactSegmentPlan;
-use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshTableCachePlan;
@@ -182,10 +182,10 @@ use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
-use crate::plans::VacuumDropTableOption;
+use crate::plans::VacuumAllPlan;
 use crate::plans::VacuumDropTablePlan;
-use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
 #[derive(Visitor)]
@@ -1795,7 +1795,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
-        bind_context: &mut BindContext,
+        _bind_context: &mut BindContext,
         stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
@@ -1808,51 +1808,8 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
-        let table_meta = self.ctx.get_table(&catalog, &database, &table).await?;
-        let is_materialized_view = is_materialized_view_engine(table_meta.engine());
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
-            AstOptimizeTableAction::All if is_materialized_view => {
-                return Err(ErrorCode::InvalidOperation(format!(
-                    "OPTIMIZE TABLE ALL is not supported on materialized view '{catalog}.{database}.{table}'; use OPTIMIZE TABLE ... COMPACT instead"
-                )));
-            }
-            AstOptimizeTableAction::All => {
-                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
-                    catalog,
-                    database,
-                    table,
-                    limit: CompactionLimits {
-                        segment_limit: limit,
-                        block_limit: None,
-                    },
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
-                Plan::OptimizeCompactBlock {
-                    s_expr: Box::new(s_expr),
-                    need_purge: true,
-                }
-            }
-            AstOptimizeTableAction::Purge { before } if is_materialized_view => {
-                return Err(ErrorCode::InvalidOperation(format!(
-                    "OPTIMIZE TABLE PURGE is not supported on materialized view '{catalog}.{database}.{table}'"
-                )));
-            }
-            AstOptimizeTableAction::Purge { before } => {
-                let instant = if let Some(point) = before {
-                    let point = self.resolve_data_travel_point(bind_context, point)?;
-                    Some(point)
-                } else {
-                    None
-                };
-                Plan::OptimizePurge(Box::new(OptimizePurgePlan {
-                    catalog,
-                    database,
-                    table,
-                    instant,
-                    num_snapshot_limit: limit,
-                }))
-            }
             AstOptimizeTableAction::Compact { target } => match target {
                 CompactTarget::Block => {
                     let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
@@ -1867,7 +1824,6 @@ impl Binder {
                     let s_expr = SExpr::create_leaf(Arc::new(compact_block));
                     Plan::OptimizeCompactBlock {
                         s_expr: Box::new(s_expr),
-                        need_purge: false,
                     }
                 }
                 CompactTarget::Segment => {
@@ -1890,24 +1846,45 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &VacuumTableStmt,
     ) -> Result<Plan> {
-        let VacuumTableStmt {
-            catalog,
-            database,
-            table,
-            option,
-        } = stmt;
+        let database = stmt
+            .database
+            .as_ref()
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = normalize_identifier(&stmt.table, &self.name_resolution_ctx).name;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
-
-        let option = VacuumTableOption {
-            dry_run: option.dry_run,
-        };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
-            catalog,
+            catalog: self.ctx.get_current_catalog(),
             database,
             table,
-            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_tables(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTablesStmt,
+    ) -> Result<Plan> {
+        let database = stmt
+            .database
+            .as_ref()
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name);
+
+        Ok(Plan::VacuumTables(Box::new(VacuumTablesPlan {
+            catalog: self.ctx.get_current_catalog(),
+            database,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_all(
+        &mut self,
+        _bind_context: &mut BindContext,
+        _stmt: &VacuumAllStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::VacuumAll(Box::new(VacuumAllPlan {
+            catalog: self.ctx.get_current_catalog(),
         })))
     }
 
@@ -1917,31 +1894,15 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &VacuumDropTableStmt,
     ) -> Result<Plan> {
-        let VacuumDropTableStmt {
-            catalog,
-            database,
-            option,
-        } = stmt;
-
-        let catalog = catalog
+        let database = stmt
+            .database
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| "".to_string());
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name)
+            .unwrap_or_default();
 
-        let option = {
-            VacuumDropTableOption {
-                dry_run: option.dry_run,
-                limit: option.limit,
-            }
-        };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
-            catalog,
+            catalog: self.ctx.get_current_catalog(),
             database,
-            option,
         })))
     }
 

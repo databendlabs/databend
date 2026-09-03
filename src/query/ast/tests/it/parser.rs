@@ -366,8 +366,8 @@ SELECT * from s;"#,
         r#"drop role if exists 'test'"#,
         r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
-        r#"OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;"#,
-        r#"OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;"#,
+        r#"OPTIMIZE TABLE t PURGE;"#,
+        r#"OPTIMIZE TABLE db.t PURGE;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);"#,
         r#"ALTER TABLE t1 swap with t2;"#,
@@ -426,13 +426,14 @@ SELECT * from s;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c refresh cache;"#,
         r#"VACUUM TABLE t;"#,
-        r#"VACUUM TABLE t DRY RUN;"#,
-        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
+        r#"VACUUM TABLE db.t;"#,
+        r#"VACUUM TABLES;"#,
+        r#"VACUUM TABLES FROM db;"#,
+        r#"VACUUM ALL;"#,
         r#"VACUUM DROP TABLE;"#,
-        r#"VACUUM DROP TABLE DRY RUN;"#,
-        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
-        r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
+        r#"VACUUM DROPPED OBJECTS;"#,
+        r#"VACUUM DROPPED OBJECTS FROM db;"#,
         r#"VACUUM TEMPORARY FILES RETAIN 7 DAYS LIMIT 10;"#,
         r#"ATTACH TABLE db.attached (c1, c2) 's3://testbucket/data/' CONNECTION=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE DICTIONARY IF NOT EXISTS db.dict1 (id int, name string) PRIMARY KEY id SOURCE(mysql(host='127.0.0.1' port='3306')) COMMENT 'test dictionary';"#,
@@ -1373,6 +1374,38 @@ fn test_statement_error() {
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.1).unwrap();
+    }
+}
+
+#[test]
+fn test_removed_vacuum_syntax() {
+    let cases = [
+        "VACUUM TABLE t DRY RUN",
+        "VACUUM TABLE t DRY RUN SUMMARY",
+        "VACUUM TABLE catalog.db.t",
+        "VACUUM TABLES FROM catalog.db",
+        "VACUUM TABLES FROM db LIMIT 10",
+        "VACUUM ALL FROM db",
+        "VACUUM ALL LIMIT 10",
+        "VACUUM DROP TABLE DRY RUN",
+        "VACUUM DROP TABLE DRY RUN SUMMARY",
+        "VACUUM DROP TABLE FROM db LIMIT 10",
+        "VACUUM DROP TABLE FROM catalog.db",
+        "VACUUM DROPPED OBJECTS FROM db LIMIT 10",
+        "VACUUM DROPPED OBJECTS FROM catalog.db",
+        "VACUUM TEMPORARY TABLES",
+        "OPTIMIZE TABLE t ALL",
+        "OPTIMIZE TABLE t PURGE LIMIT 10",
+        "OPTIMIZE TABLE catalog.db.t PURGE",
+        "OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')",
+    ];
+
+    for case in cases {
+        let tokens = tokenize_sql(case).unwrap();
+        assert!(
+            parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+            "removed syntax should fail to parse: {case}"
+        );
     }
 }
 

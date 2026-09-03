@@ -34,9 +34,12 @@ const PATTERNS: &[&str] = &[
     "SHOW STATISTICS",
     "SHOW WORKLOAD GROUPS",
     "SHOW ONLINE NODES",
+    "VACUUM TABLE",
+    "VACUUM TABLES",
+    "VACUUM ALL",
     "VACUUM DROP TABLE",
+    "VACUUM DROPPED OBJECTS",
     "VACUUM TEMPORARY FILES",
-    "VACUUM TEMPORARY TABLES",
     "VACUUM VIRTUAL COLUMN",
 ];
 
@@ -264,10 +267,9 @@ mod tests {
             Some("Did you mean `SHOW TABLE_FUNCTIONS` or `SHOW TABLES`?".to_string())
         );
 
-        // Multiple suggestions when scores are very close
         assert_eq!(
             suggest_correction("vacuum temp"),
-            Some("Did you mean `VACUUM TEMPORARY FILES` or `VACUUM TEMPORARY TABLES`?".to_string())
+            Some("Did you mean `VACUUM TEMPORARY FILES`?".to_string())
         );
     }
 
@@ -276,10 +278,7 @@ mod tests {
         // Single word prefixes should get context help
         assert_eq!(
             suggest_correction("vacuum"),
-            Some(
-                "Try: `VACUUM DROP TABLE`, `VACUUM TEMPORARY FILES`, or `VACUUM TEMPORARY TABLES`"
-                    .to_string()
-            )
+            Some("Try: `VACUUM TABLE`, `VACUUM TABLES`, or `VACUUM ALL`".to_string())
         );
 
         let result = suggest_correction("show").unwrap();
@@ -366,7 +365,7 @@ mod tests {
         );
         assert_eq!(
             suggest_correction("vacuum temp"),
-            Some("Did you mean `VACUUM TEMPORARY FILES` or `VACUUM TEMPORARY TABLES`?".to_string())
+            Some("Did you mean `VACUUM TEMPORARY FILES`?".to_string())
         );
 
         // Should not recognize invalid starts

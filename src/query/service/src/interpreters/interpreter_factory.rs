@@ -491,24 +491,27 @@ impl InterpreterFactory {
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
-                ctx,
-                *purge.clone(),
-            )?)),
             Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
                 OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
-            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+            Plan::OptimizeCompactBlock { s_expr } => {
                 Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
                     ctx,
                     *s_expr.clone(),
                     LockTableOption::LockWithRetry,
-                    *need_purge,
                 )?))
             }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
+            )?)),
+            Plan::VacuumTables(vacuum_tables) => Ok(Arc::new(VacuumTablesInterpreter::try_create(
+                ctx,
+                *vacuum_tables.clone(),
+            )?)),
+            Plan::VacuumAll(vacuum_all) => Ok(Arc::new(VacuumAllInterpreter::try_create(
+                ctx,
+                *vacuum_all.clone(),
             )?)),
             Plan::VacuumDropTable(vacuum_drop_table) => Ok(Arc::new(
                 VacuumDropTablesInterpreter::try_create(ctx, *vacuum_drop_table.clone())?,

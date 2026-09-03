@@ -161,6 +161,8 @@ impl Walk for Statement {
             Statement::RenameTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::OptimizeTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::VacuumTable(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::VacuumTables(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::VacuumAll(_) => {}
             Statement::VacuumDropTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::VacuumTemporaryFiles(_) => {}
             Statement::VacuumVirtualColumn(stmt) => try_walk!(stmt.walk(visitor)),
@@ -390,6 +392,8 @@ impl WalkMut for Statement {
             Statement::RenameTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::OptimizeTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::VacuumTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::VacuumTables(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::VacuumAll(_) => {}
             Statement::VacuumDropTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::VacuumTemporaryFiles(_) => {}
             Statement::VacuumVirtualColumn(stmt) => try_walk!(stmt.walk_mut(visitor)),

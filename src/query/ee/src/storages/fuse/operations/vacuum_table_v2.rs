@@ -580,13 +580,12 @@ async fn vacuum_base_snapshot_phase(
         .iter()
         .cloned()
         .collect::<HashSet<_>>();
-    let _ = fuse_table
-        .process_tags_for_purge(
+    fuse_table
+        .protect_table_tag_references(
             &catalog,
             &selection.gc_root_path,
             &mut selection.snapshots_to_gc,
             &mut protected_segments,
-            false,
         )
         .await?;
 

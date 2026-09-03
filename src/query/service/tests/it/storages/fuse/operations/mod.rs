@@ -19,7 +19,6 @@ mod clustering;
 mod commit;
 
 mod create_or_replace_ownership_object;
-mod gc;
 mod internal_column;
 mod mutation;
 mod navigate;

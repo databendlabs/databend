@@ -624,42 +624,6 @@ impl WalkMut for OptimizeTableStmt {
     }
 }
 
-impl Walk for VacuumTableOption {
-    fn walk<V: Visitor + ?Sized>(
-        &self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl WalkMut for VacuumTableOption {
-    fn walk_mut<V: VisitorMut + ?Sized>(
-        &mut self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl Walk for VacuumDropTableOption {
-    fn walk<V: Visitor + ?Sized>(
-        &self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl WalkMut for VacuumDropTableOption {
-    fn walk_mut<V: VisitorMut + ?Sized>(
-        &mut self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
 impl Walk for RefreshVirtualColumnStmt {
     fn walk<V: Visitor + ?Sized>(
         &self,

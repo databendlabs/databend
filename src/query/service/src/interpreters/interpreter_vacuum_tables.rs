@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_sql::plans::VacuumTablePlan;
+use databend_common_sql::plans::VacuumTablesPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -25,23 +25,23 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextTableAccess;
-use crate::table_functions::fuse_vacuum2::vacuum_table;
+use crate::table_functions::fuse_vacuum2::vacuum_tables;
 
-pub struct VacuumTableInterpreter {
+pub struct VacuumTablesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: VacuumTablePlan,
+    plan: VacuumTablesPlan,
 }
 
-impl VacuumTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumTablePlan) -> Result<Self> {
-        Ok(VacuumTableInterpreter { ctx, plan })
+impl VacuumTablesInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumTablesPlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for VacuumTableInterpreter {
+impl Interpreter for VacuumTablesInterpreter {
     fn name(&self) -> &str {
-        "VacuumTableInterpreter"
+        "VacuumTablesInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -55,14 +55,7 @@ impl Interpreter for VacuumTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        vacuum_table(
-            &table_ctx,
-            catalog.as_ref(),
-            &self.plan.database,
-            &self.plan.table,
-            false,
-        )
-        .await?;
+        vacuum_tables(&table_ctx, catalog.as_ref(), self.plan.database.as_deref()).await?;
 
         Ok(PipelineBuildResult::create())
     }
