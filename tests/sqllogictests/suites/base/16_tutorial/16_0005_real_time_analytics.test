@@ -1,0 +1,77 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/003-real-time-analytics.sql
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE TABLE citydrive_videos (
+    video_id     STRING,
+    vehicle_id   STRING,
+    capture_date DATE,
+    route_name   STRING,
+    weather      STRING,
+    camera       STRING,
+    duration_sec INT
+)
+
+statement ok
+CREATE OR REPLACE TABLE frame_events (
+    frame_id     STRING,
+    video_id     STRING,
+    frame_index  INT,
+    collected_at TIMESTAMP,
+    event_tag    STRING,
+    risk_score   DOUBLE,
+    speed_kmh    DOUBLE
+)
+
+statement ok
+INSERT INTO citydrive_videos VALUES
+                                 ('VID-001','VEH-21','2025-01-01','Downtown Loop','Rain','roof_cam', 3580),
+                                 ('VID-002','VEH-05','2025-01-01','Port Perimeter','Overcast','front_cam',4020),
+                                 ('VID-003','VEH-11','2025-01-02','Airport Connector','Clear','front_cam',3655)
+
+statement ok
+INSERT INTO frame_events VALUES
+                             ('FRAME-0101','VID-001',125,'2025-01-01 08:15:21','hard_brake',0.81,32.4),
+                             ('FRAME-0102','VID-001',416,'2025-01-01 08:33:54','pedestrian',0.67,24.8),
+                             ('FRAME-0201','VID-002',298,'2025-01-01 11:12:02','lane_merge',0.74,48.1),
+                             ('FRAME-0301','VID-003',188,'2025-01-02 09:44:18','hard_brake',0.59,52.6)
+
+query TTI
+SELECT v.route_name,
+       v.weather,
+       COUNT(f.frame_id) AS flagged_frames
+FROM citydrive_videos AS v
+         LEFT JOIN frame_events AS f USING (video_id)
+WHERE v.capture_date >= '2025-01-01'
+GROUP BY v.route_name, v.weather
+ORDER BY flagged_frames DESC, v.route_name
+----
+Downtown Loop Rain 2
+Airport Connector Clear 1
+Port Perimeter Overcast 1
+
+query TTIRR
+SELECT video_id,
+       frame_id,
+       frame_index,
+       risk_score,
+       AVG(risk_score) OVER (
+                    PARTITION BY video_id
+                    ORDER BY frame_index
+                    ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+                ) AS rolling_risk
+FROM frame_events
+ORDER BY video_id, frame_index
+----
+VID-001 FRAME-0101 125 0.81 0.81
+VID-001 FRAME-0102 416 0.67 0.74
+VID-002 FRAME-0201 298 0.74 0.74
+VID-003 FRAME-0301 188 0.59 0.59
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo
