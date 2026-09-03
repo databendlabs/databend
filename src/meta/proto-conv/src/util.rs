@@ -213,7 +213,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (181, "2026-07-21: Add: materialized_view.proto/{MVDefinition,MVSourceBinding,MVSourceBindingVersion}"),
     (182, "2026-08-05: Add: datatype.proto/AggregateState"),
     (183, "2026-08-18: Add: data share metadata with id-only grants"),
-    (184, "2026-08-31: Add: segment_claim.proto/SegmentClaimMeta"),
+    (184, "2026-09-01: Add: provider storage location to data share table grants"),
+    (185, "2026-09-03: Add: segment_claim.proto/SegmentClaimMeta"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
