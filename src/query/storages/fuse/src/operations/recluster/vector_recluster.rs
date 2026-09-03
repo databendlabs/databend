@@ -373,6 +373,9 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                     max_depth: task_depth,
                     average_depth,
                     estimated_depth_gain,
+                    task_threshold_bytes: properties.memory_threshold,
+                    // Filled in by `task_candidate`, which groups by segment.
+                    touched_segment_count: 0,
                 },
                 &task_indices,
                 blocks,

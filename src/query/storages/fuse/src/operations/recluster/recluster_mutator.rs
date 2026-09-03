@@ -360,6 +360,9 @@ impl ReclusterMutator {
                         max_depth: 0,
                         average_depth: 0.0,
                         estimated_depth_gain: 0,
+                        task_threshold_bytes: self.properties.memory_threshold,
+                        // Repack-only candidate rewrites no blocks.
+                        touched_segment_count: 0,
                     },
                     selected_blocks: Vec::new(),
                     output_level: 0,
@@ -690,6 +693,9 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
                 estimated_depth_gain: block_count.saturating_sub(1) as u64,
+                task_threshold_bytes: self.properties.memory_threshold,
+                // Filled in by `task_candidate`, which groups by segment.
+                touched_segment_count: 0,
             };
             return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }

@@ -210,6 +210,9 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 max_depth,
                 average_depth,
                 estimated_depth_gain: 0,
+                task_threshold_bytes: properties.memory_threshold,
+                // Filled in by `task_candidate`, which groups blocks by segment.
+                touched_segment_count: 0,
             };
             candidates.push(task_candidate(group, score, &task_indices, blocks));
         };
@@ -225,12 +228,21 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             // the actual overlap depth of what got selected cannot exceed how
             // many blocks made it into the task.
             let max_depth = max_depth.min(local_indices.len());
+            // v2 ranks plans before they become candidates, so the segment span
+            // has to be known here for scoring to see it.
+            let touched_segment_count = local_indices
+                .iter()
+                .map(|&local_idx| blocks[indices[local_idx]].index.segment_idx)
+                .collect::<HashSet<_>>()
+                .len();
             let score = CandidateScore {
                 selected_total_bytes: task_bytes,
                 selected_block_count: local_indices.len(),
                 max_depth,
                 average_depth,
                 estimated_depth_gain,
+                task_threshold_bytes: properties.memory_threshold,
+                touched_segment_count,
             };
             plans.push(CandidatePlan {
                 peak_pos,

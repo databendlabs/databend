@@ -778,7 +778,7 @@ async fn test_removed_segments_match_selected_blocks() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_density_selection_accounts_for_task_slot_cost() -> anyhow::Result<()> {
+async fn test_density_selection_prefers_well_filled_task() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_recluster_block_size(1000)?;
@@ -790,9 +790,9 @@ async fn test_density_selection_accounts_for_task_slot_cost() -> anyhow::Result<
 
     // Both regions fit one memory budget, but only one task slot is available.
     // The tiny region has a better raw bytes/gain ratio, while the large region
-    // removes much more depth in one distributed task. Selection accounts for
-    // that fixed task-slot cost, so the high-total-gain task runs first instead
-    // of spending the slot on a small local cleanup.
+    // removes much more depth in one distributed task. Ranking discounts a
+    // candidate by how poorly it fills the task budget, so the high-total-gain
+    // task runs first instead of spending the slot on a small local cleanup.
     let segment_locations = gen_recluster_segments_by_block_specs(
         &data_accessor,
         &location_generator,
