@@ -25,7 +25,9 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
@@ -87,6 +89,20 @@ use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableFactory;
+
+fn should_use_distributed_block_meta_shuffle(
+    enable_distributed_pruning: bool,
+    enable_prune_pipeline: bool,
+    is_multi_node: bool,
+    partitions: &Partitions,
+    is_fuse: bool,
+) -> bool {
+    enable_distributed_pruning
+        && enable_prune_pipeline
+        && is_multi_node
+        && is_fuse
+        && partitions.partitions_type() == PartInfoType::LazyLevel
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
@@ -207,32 +223,45 @@ impl IPhysicalPlan for TableScan {
             true,
         )?;
 
-        let schema = self.source.schema();
-        // Fill internal columns if needed.
-        if let Some(internal_columns) = &self.internal_column {
-            builder.main_pipeline.add_transformer(|| {
-                TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
-            });
-        }
-
-        let mut projection = self
-            .name_mapping
-            .keys()
-            .map(|name| schema.index_of(name.as_str()))
-            .collect::<Result<Vec<usize>>>()?;
-        projection.sort();
-
-        // if projection is sequential, no need to add projection
-        if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
-            let ops = vec![BlockOperator::Project { projection }];
-            let num_input_columns = schema.num_fields();
-            builder.main_pipeline.add_transformer(|| {
-                CompoundBlockOperator::new(ops.clone(), builder.func_ctx.clone(), num_input_columns)
-            });
-        }
-
-        Ok(())
+        build_scan_output_pipeline(
+            builder,
+            &self.source,
+            &self.name_mapping,
+            &self.internal_column,
+        )
     }
+}
+
+pub(crate) fn build_scan_output_pipeline(
+    builder: &mut PipelineBuilder,
+    source: &DataSourcePlan,
+    name_mapping: &BTreeMap<String, String>,
+    internal_column: &Option<BTreeMap<FieldIndex, InternalColumn>>,
+) -> Result<()> {
+    let schema = source.schema();
+    // Fill internal columns if needed.
+    if let Some(internal_columns) = internal_column {
+        builder.main_pipeline.add_transformer(|| {
+            TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
+        });
+    }
+
+    let mut projection = name_mapping
+        .keys()
+        .map(|name| schema.index_of(name.as_str()))
+        .collect::<Result<Vec<usize>>>()?;
+    projection.sort();
+
+    // if projection is sequential, no need to add projection
+    if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
+        let ops = vec![BlockOperator::Project { projection }];
+        let num_input_columns = schema.num_fields();
+        builder.main_pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(ops.clone(), builder.func_ctx.clone(), num_input_columns)
+        });
+    }
+
+    Ok(())
 }
 
 impl TableScan {
@@ -528,6 +557,18 @@ impl PhysicalPlanBuilder {
         if scan.is_lazy_table {
             let mut metadata = self.metadata.write();
             metadata.set_table_source(scan.table_index, source.clone());
+        }
+
+        let use_distributed_block_meta_shuffle = should_use_distributed_block_meta_shuffle(
+            self.ctx.get_settings().get_enable_distributed_pruning()?,
+            self.ctx.get_settings().get_enable_prune_pipeline()?,
+            !self.ctx.get_cluster().is_empty(),
+            &source.parts,
+            FuseTable::try_from_table(table.as_ref()).is_ok(),
+        );
+
+        if use_distributed_block_meta_shuffle {
+            self.distributed_fuse_pruning_scans.insert(scan.scan_id);
         }
 
         let mut plan = TableScan::create(

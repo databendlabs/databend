@@ -52,6 +52,7 @@ pub use compact::CompactOptions;
 pub use merge_into::*;
 pub use mutation::*;
 pub use mutation_source::*;
+pub use read::BlockPartitionMeta;
 pub use read::DeserializeDataTransform;
 pub use read::ReadState;
 pub use read::need_reserve_block_info;

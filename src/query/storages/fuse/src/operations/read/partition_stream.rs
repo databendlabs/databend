@@ -65,22 +65,38 @@ impl PartitionStream for StealPartitionStream {
 
 pub struct ReceiverPartitionStream {
     receiver: Receiver<Result<PartInfoPtr>>,
+    max_batch_size: usize,
 }
 
 impl ReceiverPartitionStream {
-    pub fn new(receiver: Receiver<Result<PartInfoPtr>>) -> Self {
-        Self { receiver }
+    pub fn with_batch_size(receiver: Receiver<Result<PartInfoPtr>>, max_batch_size: usize) -> Self {
+        Self {
+            receiver,
+            max_batch_size: max_batch_size.max(1),
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl PartitionStream for ReceiverPartitionStream {
     async fn fetch(&self, _id: usize) -> Result<Option<Vec<PartInfoPtr>>> {
-        match self.receiver.recv().await {
-            Ok(Ok(part)) => Ok(Some(vec![part])),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Ok(None),
+        let first = match self.receiver.recv().await {
+            Ok(Ok(part)) => part,
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Ok(None),
+        };
+
+        let mut parts = Vec::with_capacity(self.max_batch_size);
+        parts.push(first);
+        while parts.len() < self.max_batch_size {
+            match self.receiver.try_recv() {
+                Ok(Ok(part)) => parts.push(part),
+                Ok(Err(e)) => return Err(e),
+                Err(_) => break,
+            }
         }
+
+        Ok(Some(parts))
     }
 }
 
@@ -228,5 +244,55 @@ impl Processor for PartitionStreamSource {
 
     fn set_id(&mut self, id: NodeIndex) {
         self.id = id;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+
+    use super::*;
+    use crate::FuseLazyPartInfo;
+
+    #[tokio::test]
+    async fn test_receiver_partition_stream_batches_parts() -> Result<()> {
+        let (tx, rx) = async_channel::unbounded();
+        for index in 0..3 {
+            tx.send(Ok(FuseLazyPartInfo::create(
+                index,
+                (format!("segment-{index}"), 1),
+            )))
+            .await
+            .unwrap();
+        }
+        drop(tx);
+
+        let stream = ReceiverPartitionStream::with_batch_size(rx, 2);
+        assert_eq!(stream.fetch(0).await?.unwrap().len(), 2);
+        assert_eq!(stream.fetch(0).await?.unwrap().len(), 1);
+        assert!(stream.fetch(0).await?.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_receiver_partition_stream_forwards_errors() {
+        let (tx, rx) = async_channel::unbounded();
+        tx.send(Err(ErrorCode::Internal("prune failed")))
+            .await
+            .unwrap();
+        drop(tx);
+
+        let stream = ReceiverPartitionStream::with_batch_size(rx, 2);
+        assert!(stream.fetch(0).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_receiver_partition_stream_empty_channel_finishes() -> Result<()> {
+        let (tx, rx) = async_channel::unbounded();
+        drop(tx);
+
+        let stream = ReceiverPartitionStream::with_batch_size(rx, 8);
+        assert!(stream.fetch(0).await?.is_none());
+        Ok(())
     }
 }

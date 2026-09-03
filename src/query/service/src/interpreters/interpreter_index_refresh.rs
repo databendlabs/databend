@@ -46,9 +46,11 @@ use databend_storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
 use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::FuseBlockRead;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -400,6 +402,20 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        if let Some(read) = FuseBlockRead::from_physical_plan(v) {
+            // Refresh replaces lazy segments with eagerly pruned block partitions, so the
+            // metadata-pruning exchange is no longer applicable.
+            return Ok(PhysicalPlan::new(TableScan {
+                meta: PhysicalPlanMeta::with_plan_id("TableScan", read.meta.plan_id),
+                scan_id: read.scan_id,
+                name_mapping: read.name_mapping.clone(),
+                source: Box::new(self.source.clone()),
+                internal_column: read.internal_column.clone(),
+                table_index: read.table_index,
+                stat_info: read.stat_info.clone(),
+            }));
+        }
+
         let Some(table_scan) = TableScan::from_physical_plan(v) else {
             return Err(children);
         };

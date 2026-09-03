@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
@@ -31,6 +32,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::optimize_distributed_fuse_pruning;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::sessions::TableContext;
 
@@ -44,6 +46,9 @@ pub struct PhysicalPlanBuilder {
     pub cte_required_columns: HashMap<String, ColumnSet>,
     pub is_cte_required_columns_collected: bool,
     pub build_depth: usize,
+    /// Scan IDs that can use the post-pruning block metadata exchange if their finalized
+    /// physical-plan fragment runs on all executors.
+    pub distributed_fuse_pruning_scans: HashSet<usize>,
 }
 
 impl PhysicalPlanBuilder {
@@ -58,6 +63,7 @@ impl PhysicalPlanBuilder {
             cte_required_columns: HashMap::new(),
             is_cte_required_columns_collected: false,
             build_depth: 0,
+            distributed_fuse_pruning_scans: HashSet::new(),
         }
     }
 
@@ -74,6 +80,7 @@ impl PhysicalPlanBuilder {
         let is_root_build = self.build_depth == 0;
         if is_root_build {
             self.ctx.clear_pruned_partitions_stats();
+            self.distributed_fuse_pruning_scans.clear();
         }
 
         if !self.is_cte_required_columns_collected {
@@ -89,6 +96,7 @@ impl PhysicalPlanBuilder {
 
         let mut plan = build_result?;
         if is_root_build {
+            plan = optimize_distributed_fuse_pruning(&plan, &self.distributed_fuse_pruning_scans);
             plan.adjust_plan_id(&mut 0);
             self.publish_synchronous_pruning_stats(&plan);
         }

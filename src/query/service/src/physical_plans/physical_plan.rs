@@ -37,6 +37,7 @@ use serde::Serializer;
 use crate::physical_plans::EvalScalar;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::Filter;
+use crate::physical_plans::FuseBlockRead;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::TableScan;
 use crate::physical_plans::format::FormatContext;
@@ -74,11 +75,16 @@ pub trait DeriveHandle: Send + Sync + 'static {
 }
 
 /// The scan a runtime scan filter (TopN boundary / limit early-stop) may
-/// attach to: only `Filter`/`EvalScalar` may sit in between; anything else
-/// (Sort, Join, Exchange, ...) stops the traversal. Guarded by
+/// attach to: a distributed Fuse metadata exchange is part of the scan itself, while only
+/// `Filter`/`EvalScalar` may sit above it; anything else (Sort, Join, Exchange, ...) stops the
+/// traversal. Guarded by
 /// `runtime_scan_data_source_only_crosses_row_preserving_wrappers`.
 #[recursive::recursive]
 pub fn runtime_scan_data_source(plan: &PhysicalPlan) -> Option<&DataSourcePlan> {
+    if let Some(scan) = plan.as_any().downcast_ref::<FuseBlockRead>() {
+        return Some(&scan.source);
+    }
+
     if let Some(scan) = plan.as_any().downcast_ref::<TableScan>() {
         return Some(&scan.source);
     }

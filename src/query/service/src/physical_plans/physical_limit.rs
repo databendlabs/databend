@@ -229,7 +229,13 @@ impl PhysicalPlanBuilder {
             plan: &PhysicalPlan,
             sources: &mut HashMap<IndexType, DataSourcePlan>,
         ) {
-            if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
+            if let Some(scan) = crate::physical_plans::FuseBlockRead::from_physical_plan(plan) {
+                if let Some(table_index) = scan.table_index {
+                    sources
+                        .entry(table_index)
+                        .or_insert_with(|| (*scan.source).clone());
+                }
+            } else if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
                 if let Some(table_index) = scan.table_index {
                     sources
                         .entry(table_index)
