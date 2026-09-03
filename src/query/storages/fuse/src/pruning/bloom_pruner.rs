@@ -31,6 +31,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_index::NgramLikeScalarMap;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
@@ -141,8 +142,8 @@ pub struct BloomPrunerCreator {
     /// pre calculated digest for constant Scalar for eq conditions
     eq_scalar_map: HashMap<Scalar, u64>,
 
-    /// pre calculated digest for constant Scalar for like conditions
-    like_scalar_map: HashMap<Scalar, Vec<u64>>,
+    /// Pre-calculated digests for LIKE constants, grouped by NGRAM argument index.
+    like_scalar_map: NgramLikeScalarMap,
 
     /// Ngram args aligned with BloomColumn using Ngram
     ngram_args: Vec<NgramArgs>,
@@ -196,19 +197,22 @@ impl BloomPrunerCreator {
                 e.insert(digest);
             }
         }
-        let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
-        for (i, scalar) in result.ngram_scalars.into_iter() {
+        let mut like_scalar_map = NgramLikeScalarMap::new();
+        for (index, scalar) in result.ngram_scalars {
+            let ngram_arg = &ngram_args[index];
             let mut digests = Vec::new();
-            BloomIndex::calculate_ngram_nullable_column(
+            BloomIndex::calculate_ngram_digests(
                 Value::Scalar(scalar.clone()),
-                ngram_args[i].gram_size(),
-                |ngram| digests.push(BloomIndex::ngram_hash(ngram)),
+                ngram_arg.gram_size(),
+                ngram_arg.hash_algorithm(),
+                |digest| digests.push(digest),
             );
-            if digests.is_empty() {
-                continue;
-            }
-            if let Entry::Vacant(e) = like_scalar_map.entry(scalar) {
-                e.insert(digests);
+            if !digests.is_empty() {
+                like_scalar_map
+                    .entry(index)
+                    .or_default()
+                    .entry(scalar)
+                    .or_insert(digests);
             }
         }
         let mut index_fields = result.bloom_fields;
@@ -253,6 +257,7 @@ impl BloomPrunerCreator {
                         field.column_id(),
                         ngram_arg.gram_size(),
                         ngram_arg.bloom_size(),
+                        ngram_arg.hash_algorithm(),
                     ));
                 }
                 Ok::<_, ErrorCode>(acc)

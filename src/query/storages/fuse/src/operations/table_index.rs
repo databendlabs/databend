@@ -317,6 +317,7 @@ fn build_refresh_index_arg(
                         arg.column_id(),
                         arg.gram_size(),
                         arg.bloom_size(),
+                        arg.hash_algorithm(),
                     )
                 })
                 .collect::<Vec<_>>();
