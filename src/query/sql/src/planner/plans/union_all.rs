@@ -151,6 +151,12 @@ impl UnionAll {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            // Retain the largest source observed through either branch. This
+            // field is a source-risk heuristic, not a UNION output-row bound.
+            max_cardinality: left_stat_info
+                .max_cardinality
+                .max(right_stat_info.max_cardinality)
+                .max(cardinality),
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
@@ -348,5 +354,37 @@ impl Operator for UnionAll {
         ]);
 
         Ok(children_required)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn union_all_keeps_largest_source_risk() -> Result<()> {
+        let union = UnionAll {
+            left_outputs: vec![],
+            right_outputs: vec![],
+            cte_scan_names: vec![],
+            logical_recursive_cte_id: None,
+            output_indexes: vec![],
+        };
+        let stat = |cardinality, max_cardinality| {
+            Arc::new(StatInfo {
+                cardinality,
+                max_cardinality,
+                statistics: Statistics::default(),
+            })
+        };
+
+        let output =
+            union.derive_union_stats(stat(50_000.0, 60_000_000.0), stat(50_000.0, 60_000_000.0))?;
+        assert_eq!(output.cardinality, 100_000.0);
+        assert_eq!(output.max_cardinality, 60_000_000.0);
+
+        let unknown = union.derive_union_stats(stat(1.0, f64::INFINITY), stat(1.0, 10.0))?;
+        assert!(unknown.max_cardinality.is_infinite());
+        Ok(())
     }
 }

@@ -40,6 +40,10 @@ impl ProjectSet {
         input_stat.statistics.precise_cardinality = None;
         // We assume that the SRF function will expand by at least x3 per row.
         input_stat.cardinality *= 3.0;
+        // Preserve the largest known source/output scale for the scoped
+        // broadcast-risk heuristic. The expected x3 expansion is not a strict
+        // SRF output bound, and this field does not claim to be one.
+        input_stat.max_cardinality = input_stat.max_cardinality.max(input_stat.cardinality);
         Ok(Arc::new(input_stat.clone()))
     }
 }

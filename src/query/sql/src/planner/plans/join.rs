@@ -941,6 +941,8 @@ impl Join {
     ) -> Result<Arc<StatInfo>> {
         let left_cardinality = left_stat_info.cardinality;
         let right_cardinality = right_stat_info.cardinality;
+        let left_max_cardinality = left_stat_info.max_cardinality.max(left_cardinality);
+        let right_max_cardinality = right_stat_info.max_cardinality.max(right_cardinality);
         let mut left_column_stats = JoinSideColumnStats::split(
             Side::Left,
             left_stat_info.statistics.column_stats.clone(),
@@ -986,6 +988,13 @@ impl Join {
         };
         Ok(Arc::new(StatInfo {
             cardinality,
+            // Preserve the largest known source risk behind either input.
+            // This intentionally does not model many-to-many output fan-out;
+            // max_cardinality is a scoped source-risk heuristic, not a strict
+            // upper bound on join output rows.
+            max_cardinality: left_max_cardinality
+                .max(right_max_cardinality)
+                .max(cardinality),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -1261,18 +1270,27 @@ impl Operator for Join {
         ) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+            let build_stat_info = rel_expr.stat_info_child_group(1)?;
+            let max_broadcast_build_rows = settings.get_max_broadcast_join_build_rows()?;
+            let cluster_nodes = ctx.get_cluster().nodes.len();
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
             // where n is the number of servers in the cluster.
             let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
-                (ctx.get_cluster().nodes.len() - 1) as f64
+                cluster_nodes.saturating_sub(1) as f64
             } else {
                 // Use a very large value to prevent broadcast join.
                 1000.0
             };
             if !settings.get_enforce_shuffle_join()?
-                && (right_stat_info.cardinality * broadcast_join_threshold
-                    < left_stat_info.cardinality
-                    || settings.get_enforce_broadcast_join()?)
+                && (settings.get_enforce_broadcast_join()?
+                    || (broadcast_build_allowed(
+                        false,
+                        cluster_nodes,
+                        self.join_type,
+                        &build_stat_info,
+                        max_broadcast_build_rows,
+                    ) && right_stat_info.cardinality * broadcast_join_threshold
+                        < left_stat_info.cardinality))
             {
                 if child_index == 1 {
                     required.distribution = Distribution::Broadcast;
@@ -1306,7 +1324,7 @@ impl Operator for Join {
     fn compute_required_prop_children(
         &self,
         ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
@@ -1423,6 +1441,10 @@ impl Operator for Join {
             }
         }
 
+        let enforce_broadcast_join = settings.get_enforce_broadcast_join()?;
+        let build_stat_info = rel_expr.stat_info_child_group(1)?;
+        let max_broadcast_build_rows = settings.get_max_broadcast_join_build_rows()?;
+        let cluster_nodes = ctx.get_cluster().nodes.len();
         if !matches!(
             self.join_type,
             JoinType::Right
@@ -1439,6 +1461,13 @@ impl Operator for Join {
                 | JoinType::RightAsof
                 | JoinType::FullAsof
         ) && !settings.get_enforce_shuffle_join()?
+            && broadcast_build_allowed(
+                enforce_broadcast_join,
+                cluster_nodes,
+                self.join_type,
+                build_stat_info.as_ref(),
+                max_broadcast_build_rows,
+            )
         {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;
@@ -1467,6 +1496,43 @@ impl Operator for Join {
 
         Ok(children_required)
     }
+}
+
+fn broadcast_build_allowed(
+    enforce_broadcast: bool,
+    cluster_nodes: usize,
+    join_type: JoinType,
+    stat_info: &StatInfo,
+    max_build_rows: u64,
+) -> bool {
+    enforce_broadcast
+        || cluster_nodes <= 1
+        || matches!(join_type, JoinType::Cross)
+        || is_safe_broadcast_build(stat_info, max_build_rows)
+}
+
+fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
+    let cardinality = stat_info.cardinality;
+    let risk_cardinality = stat_info.max_cardinality;
+
+    // This scoped guard compares the expected build output with its largest
+    // known source. Unknown source sizes retain the pre-existing distribution
+    // choice; output-expansion risks such as many-to-many fan-out are outside
+    // this heuristic and require a separate model.
+    if !risk_cardinality.is_finite() {
+        return true;
+    }
+
+    let max_cardinality = risk_cardinality.max(cardinality);
+    cardinality.is_finite()
+        && cardinality >= 0.0
+        && risk_cardinality >= 0.0
+        && (max_build_rows == 0 || max_cardinality <= max_build_rows as f64)
+        && if cardinality == 0.0 {
+            max_cardinality == 0.0
+        } else {
+            !stat_info.cardinality_is_severely_underestimated()
+        }
 }
 
 #[cfg(test)]
@@ -1541,6 +1607,7 @@ mod tests {
     fn stat_info(cardinality: f64, column: Symbol, stat: ColumnStat) -> Arc<StatInfo> {
         Arc::new(StatInfo {
             cardinality,
+            max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality: Some(cardinality as u64),
                 column_stats: HashMap::from([(column, stat)]),
@@ -1697,5 +1764,81 @@ mod tests {
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())
+    }
+
+    fn estimated_stat(cardinality: f64, max_cardinality: f64) -> Arc<StatInfo> {
+        Arc::new(StatInfo {
+            cardinality,
+            max_cardinality,
+            statistics: Statistics::default(),
+        })
+    }
+
+    #[test]
+    fn test_broadcast_build_guard_enforces_risk_bound() {
+        const DEFAULT_MAX_BUILD_ROWS: u64 = 100_000_000;
+
+        assert!(is_safe_broadcast_build(
+            &estimated_stat(1_000.0, 100_000.0),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+        assert!(!is_safe_broadcast_build(
+            &estimated_stat(10.0, 200_000_000.0),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+        assert!(!is_safe_broadcast_build(
+            &estimated_stat(10.0, 100_000.0),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+        assert!(is_safe_broadcast_build(
+            &estimated_stat(200_000_000.0, 200_000_000.0),
+            0,
+        ));
+        assert!(!is_safe_broadcast_build(
+            &estimated_stat(0.0, 1.0),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+        assert!(is_safe_broadcast_build(
+            &StatInfo::default(),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+        assert!(is_safe_broadcast_build(
+            &estimated_stat(1_000.0, f64::INFINITY),
+            DEFAULT_MAX_BUILD_ROWS,
+        ));
+    }
+
+    #[test]
+    fn test_explicit_broadcast_overrides_automatic_guard() {
+        let unsafe_build = estimated_stat(10.0, 200_000_000.0);
+
+        assert!(broadcast_build_allowed(
+            true,
+            3,
+            JoinType::Inner,
+            &unsafe_build,
+            100_000_000,
+        ));
+        assert!(broadcast_build_allowed(
+            false,
+            1,
+            JoinType::Inner,
+            &unsafe_build,
+            100_000_000,
+        ));
+        assert!(broadcast_build_allowed(
+            false,
+            3,
+            JoinType::Cross,
+            &unsafe_build,
+            100_000_000,
+        ));
+        assert!(!broadcast_build_allowed(
+            false,
+            3,
+            JoinType::Inner,
+            &unsafe_build,
+            100_000_000,
+        ));
     }
 }

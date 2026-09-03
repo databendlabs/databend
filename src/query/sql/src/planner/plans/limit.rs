@@ -48,8 +48,18 @@ impl Limit {
             _ => None,
         };
 
+        let max_cardinality = if let Some(limit) = self.limit {
+            stat_info
+                .max_cardinality
+                .max(stat_info.cardinality)
+                .min(limit as f64)
+        } else {
+            stat_info.max_cardinality.max(stat_info.cardinality)
+        };
+
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),

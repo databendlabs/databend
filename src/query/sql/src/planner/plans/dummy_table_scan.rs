@@ -140,6 +140,7 @@ impl Operator for DummyTableScan {
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: 1.0,
+            max_cardinality: 1.0,
             statistics: Statistics {
                 precise_cardinality: Some(1),
                 column_stats: Default::default(),

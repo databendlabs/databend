@@ -130,6 +130,10 @@ impl Operator for TopN {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality: stat_info
+                .max_cardinality
+                .max(stat_info.cardinality)
+                .min(output_rows as f64),
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),

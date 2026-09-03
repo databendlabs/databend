@@ -144,6 +144,20 @@ async fn test_set_settings() {
         }
 
         {
+            assert_eq!(settings.get_max_broadcast_join_build_rows().unwrap(), 0);
+            settings
+                .set_setting(
+                    "max_broadcast_join_build_rows".to_string(),
+                    "100000000".to_string(),
+                )
+                .unwrap();
+            assert_eq!(
+                settings.get_max_broadcast_join_build_rows().unwrap(),
+                100_000_000
+            );
+        }
+
+        {
             assert_eq!(settings.get_proxy_routing_model().unwrap(), "statistics");
             settings
                 .set_setting("proxy_routing_model".to_string(), "prefix".to_string())

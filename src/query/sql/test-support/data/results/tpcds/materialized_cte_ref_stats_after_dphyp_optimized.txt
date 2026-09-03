@@ -169,7 +169,8 @@ Exchange(Merge)
     │                                                   │       ├── build keys: [item.i_item_sk (#317)]
     │                                                   │       ├── probe keys: [store_returns.sr_item_sk (#25)]
     │                                                   │       ├── other filters: []
-    │                                                   │       ├── Exchange(Broadcast)
+    │                                                   │       ├── Exchange(Hash)
+    │                                                   │       │   ├── Exchange(Hash): keys: [item.i_item_sk (#317)]
     │                                                   │       │   └── Join(Inner)
     │                                                   │       │       ├── build keys: [item.i_item_sk (#317)]
     │                                                   │       │       ├── probe keys: [catalog_sales.cs_item_sk (#58)]
@@ -210,11 +211,13 @@ Exchange(Merge)
     │                                                   │       │                                       ├── filters: []
     │                                                   │       │                                       ├── order by: []
     │                                                   │       │                                       └── limit: NONE
-    │                                                   │       └── Scan
-    │                                                   │           ├── table: default.store_returns (#1)
-    │                                                   │           ├── filters: []
-    │                                                   │           ├── order by: []
-    │                                                   │           └── limit: NONE
+    │                                                   │       └── Exchange(Hash)
+    │                                                   │           ├── Exchange(Hash): keys: [store_returns.sr_item_sk (#25)]
+    │                                                   │           └── Scan
+    │                                                   │               ├── table: default.store_returns (#1)
+    │                                                   │               ├── filters: []
+    │                                                   │               ├── order by: []
+    │                                                   │               └── limit: NONE
     │                                                   └── Scan
     │                                                       ├── table: default.store_sales (#0)
     │                                                       ├── filters: []
