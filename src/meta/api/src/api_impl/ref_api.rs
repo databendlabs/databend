@@ -61,7 +61,10 @@ async fn build_lvt_condition(
     };
 
     if let Some(current_lvt) = current_lvt {
-        if current_lvt.time > lvt_check.time {
+        if lvt_check
+            .time
+            .is_none_or(|snapshot_time| current_lvt.time > snapshot_time)
+        {
             return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
                 TableSnapshotExpired::new(
                     table_id,
@@ -331,7 +334,7 @@ mod tests {
             expire_at,
             lvt_check: TableLvtCheck {
                 tenant: testing::tenant(TENANT),
-                time: lvt_time,
+                time: Some(lvt_time),
             },
         }
     }

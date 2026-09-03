@@ -113,7 +113,7 @@ impl TableRefHandler for RealTableRefHandler {
                 expire_at: plan.retain.map(|v| Utc::now() + v),
                 lvt_check: TableLvtCheck {
                     tenant: ctx.get_tenant(),
-                    time: snapshot_timestamp,
+                    time: Some(snapshot_timestamp),
                 },
             })
             .await
