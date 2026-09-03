@@ -1,0 +1,111 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/cloud-control-server/simple_server.py
+#
+# Cover CREATE TASK from Databend Cloud tutorial
+# webapi/tutorial/data/*/008-etl-tasks.sql.
+# CREATE TASK only parses the body; the COPY/INSERT statements themselves are
+# executed in base/16_tutorial/16_0009_etl_tasks.test.
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE STAGE citydrive_logs_stage
+
+statement ok
+CREATE OR REPLACE TABLE raw_logs (
+    doc_id    STRING,
+    doc_body  VARIANT,
+    loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+statement ok
+CREATE OR REPLACE TABLE parsed_logs (
+    doc_id      STRING,
+    event_tag   STRING,
+    speed_kmh   DOUBLE,
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+statement ok
+DROP TASK IF EXISTS task_generate_logs
+
+statement ok
+DROP TASK IF EXISTS task_load_logs
+
+statement ok
+DROP TASK IF EXISTS task_parse_logs
+
+statement ok
+CREATE OR REPLACE TASK task_generate_logs
+    WAREHOUSE = 'default'
+    SCHEDULE = 2 MINUTE
+AS
+    COPY INTO @citydrive_logs_stage
+    FROM (
+        SELECT CONCAT('FRAME-', LPAD(CAST(number AS STRING), 4, '0')) AS doc_id,
+               GET(ARRAY('hard_brake', 'pedestrian', 'lane_merge'), number % 3 + 1) AS event_tag,
+               20 + RAND() * 40 AS speed_kmh
+        FROM numbers(3)
+    )
+    FILE_FORMAT = (TYPE = NDJSON)
+
+query T
+SELECT name FROM system.tasks WHERE name = 'task_generate_logs'
+----
+task_generate_logs
+
+statement ok
+CREATE OR REPLACE TASK task_load_logs
+    WAREHOUSE = 'default'
+    SCHEDULE = 1 MINUTE
+AS
+    COPY INTO raw_logs (doc_id, doc_body)
+    FROM (
+        SELECT $1:doc_id::STRING,
+               $1 AS doc_body
+        FROM @citydrive_logs_stage
+    )
+    PATTERN = '.*[.]ndjson'
+    FILE_FORMAT = (TYPE = NDJSON)
+    PURGE = true
+
+query T
+SELECT name FROM system.tasks WHERE name = 'task_load_logs'
+----
+task_load_logs
+
+statement ok
+CREATE OR REPLACE TASK task_parse_logs
+    WAREHOUSE = 'default'
+    SCHEDULE = 1 MINUTE
+    WHEN STREAM_STATUS('citydrive_demo.raw_logs_stream') = TRUE
+AS
+    INSERT INTO parsed_logs (doc_id, event_tag, speed_kmh)
+    SELECT doc_id,
+           doc_body['event_tag']::STRING AS event_tag,
+           doc_body['speed_kmh']::DOUBLE AS speed_kmh
+    FROM raw_logs_stream
+
+query T
+SELECT name FROM system.tasks WHERE name = 'task_parse_logs'
+----
+task_parse_logs
+
+statement ok
+DROP TASK IF EXISTS task_parse_logs
+
+statement ok
+DROP TASK IF EXISTS task_load_logs
+
+statement ok
+DROP TASK IF EXISTS task_generate_logs
+
+statement ok
+DROP STAGE IF EXISTS citydrive_logs_stage
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo
