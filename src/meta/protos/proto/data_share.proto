@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "config.proto";
+
 message DataShareMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -37,4 +39,7 @@ message DataShareDatabaseGrant {
 
 message DataShareTableGrant {
   string shared_on = 1;
+  // Provider table storage location without credentials. Credentials are
+  // resolved from the share connection at query time.
+  optional StorageConfig storage_params = 2;
 }
