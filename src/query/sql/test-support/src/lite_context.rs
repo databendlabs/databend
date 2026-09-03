@@ -1938,6 +1938,15 @@ impl TableContextTableAccess for LiteTableContext {
         Ok(None)
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        Ok(None)
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         Ok("lite_temp".to_string())
     }

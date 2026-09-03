@@ -787,6 +787,15 @@ impl TableContextTableAccess for CtxDelegation {
         todo!()
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        todo!()
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }

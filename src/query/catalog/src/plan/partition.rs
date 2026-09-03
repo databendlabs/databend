@@ -457,10 +457,6 @@ impl ReclusterParts {
     pub fn is_empty(&self) -> bool {
         self.tasks.is_empty() && self.remained_blocks.is_empty()
     }
-
-    pub fn is_distributed(&self, _ctx: Arc<dyn TableContext>) -> bool {
-        self.tasks.len() > 1
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
@@ -468,4 +464,7 @@ pub struct ReclusterInfoSideCar {
     pub merged_blocks: Vec<BlockMetaWithHLL>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
+    /// Acquire the table lock only around refresh, sequence validation, and CAS publish.
+    #[serde(default)]
+    pub acquire_commit_lock: bool,
 }
