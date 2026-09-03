@@ -486,7 +486,7 @@ impl InterpreterFactory {
             Plan::ReclusterTable(recluster) => Ok(Arc::new(ReclusterTableInterpreter::try_create(
                 ctx,
                 *recluster.clone(),
-                LockTableOption::LockWithRetry,
+                true,
             )?)),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
@@ -82,19 +81,19 @@ const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterPlan,
-    lock_opt: LockTableOption,
+    allow_segment_claims: bool,
 }
 
 impl ReclusterTableInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: ReclusterPlan,
-        lock_opt: LockTableOption,
+        allow_segment_claims: bool,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
             plan,
-            lock_opt,
+            allow_segment_claims,
         })
     }
 }
@@ -267,22 +266,13 @@ impl ReclusterTableInterpreter {
             limit,
             ..
         } = &self.plan;
-        // `NoLock` means the caller already owns the lifecycle lock (for example, MV refresh).
-        // Otherwise table and materialized-view reclustering initially use segment claims while
-        // planning and the shared table lock as a short commit gate.
+        // Callers that already own the lifecycle lock (for example, MV refresh) disable segment
+        // claims to avoid reacquiring the shared table lock at the commit gate.
         let mut use_segment_claims =
-            settings.get_enable_table_lock()? && self.lock_opt != LockTableOption::NoLock;
-        let outer_lock_guard = if use_segment_claims {
-            None
-        } else {
-            self.ctx
-                .clone()
-                .acquire_table_lock(catalog, database, table, &self.lock_opt)
-                .await?
-        };
+            self.allow_segment_claims && settings.get_enable_table_lock()?;
 
-        // The former outer table lock evicted this cache. Concurrent planning must do
-        // that explicitly so the claim set is matched against the latest snapshot.
+        // Concurrent planning must evict this cache so the claim set is matched against the
+        // latest snapshot.
         if use_segment_claims {
             self.ctx.evict_table_from_cache(catalog, database, table)?;
         }
@@ -412,7 +402,6 @@ impl ReclusterTableInterpreter {
         // window is acceptable: refresh and task planning normally outlast claim cleanup, and any
         // skipped work remains eligible for a later recluster.
         drop(complete_executor);
-        drop(outer_lock_guard);
 
         execution_result?;
         Ok(false)
