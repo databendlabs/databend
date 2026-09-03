@@ -46,7 +46,7 @@ impl VacuumHandler for RealVacuumHandler {
         table: &dyn Table,
         ctx: Arc<dyn TableContext>,
         respect_flash_back: bool,
-    ) -> Result<Vec<String>> {
+    ) -> Result<()> {
         do_vacuum2(table, ctx, respect_flash_back).await
     }
 

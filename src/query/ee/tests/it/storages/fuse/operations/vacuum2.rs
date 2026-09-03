@@ -22,10 +22,16 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
@@ -129,6 +135,99 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(1)?;
+    fixture.create_default_database().await?;
+
+    let db_name = fixture.default_db_name();
+    let tbl_name = "t_respect_flash_back";
+    fixture
+        .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
+        .await?;
+
+    for value in 1..=4 {
+        fixture
+            .execute_command(&format!(
+                "insert into {db_name}.{tbl_name} values ({value})"
+            ))
+            .await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let latest_location = fuse_table.snapshot_loc().unwrap();
+    let snapshot_version = TableMetaLocationGenerator::snapshot_version(&latest_location);
+    let snapshots: Vec<_> = SnapshotHistoryReader::snapshot_history(
+        MetaReaders::table_snapshot_reader(fuse_table.get_operator()),
+        latest_location,
+        snapshot_version,
+        fuse_table.meta_location_generator().clone(),
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(snapshots.len(), 4);
+
+    // Start with S4 -> S3 -> S2 -> S1, then flash back to S2. Object
+    // listing still sees S4 and S3, but the current chain is S2 -> S1.
+    let lvt_snapshot = &snapshots[0].0;
+    let abandoned_gc_root = &snapshots[1].0;
+    let flashback_snapshot = &snapshots[2].0;
+    fixture
+        .execute_command(&format!(
+            "alter table {db_name}.{tbl_name} flashback to (snapshot => '{}')",
+            flashback_snapshot.snapshot_id.simple()
+        ))
+        .await?;
+
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let table = catalog
+        .get_table(&table_ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    assert_eq!(current_snapshot.snapshot_id, flashback_snapshot.snapshot_id);
+
+    // Fix LVT at S4. The persisted LVT is monotonic, so set_lvt() keeps this
+    // value even though the current snapshot is S2.
+    catalog
+        .set_table_lvt(
+            &LeastVisibleTimeIdent::new(table_ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTime::new(lvt_snapshot.timestamp.unwrap()),
+        )
+        .await?;
+
+    // Without flashback protection, object listing uses S4 as the anchor and
+    // selects its predecessor S3, which belongs to the abandoned branch.
+    let selection = fuse_table
+        .prepare_snapshot_gc_selection(&table_ctx, false)
+        .await?
+        .expect("S3 should be selected as the GC root");
+    assert_eq!(selection.gc_root.snapshot_id, abandoned_gc_root.snapshot_id);
+
+    // With flashback protection, vacuum walks the current committed chain from
+    // S2. It selects S2 and does not use a snapshot from the abandoned branch.
+    let selection = fuse_table
+        .prepare_snapshot_gc_selection(&table_ctx, true)
+        .await?
+        .expect("S2 should be selected as the GC root");
+    assert_eq!(
+        selection.gc_root.snapshot_id,
+        flashback_snapshot.snapshot_id
+    );
+    assert_eq!(selection.gc_root.timestamp, flashback_snapshot.timestamp);
+
+    Ok(())
+}
+
 /// Regression test for chunked reads of protected gc-root segments.
 ///
 /// `do_vacuum2` reads the gc-root's protected segments in chunks of
@@ -220,12 +319,21 @@ async fn test_vacuum2_protected_segments_span_multiple_chunks() -> anyhow::Resul
     }
     assert_eq!(live_blocks.len(), SEGMENT_COUNT + 1);
 
-    fixture
-        .execute_command(&format!(
-            "call system$fuse_vacuum2('{}', '{}')",
+    let stream = fixture
+        .execute_query(&format!(
+            "select * from fuse_vacuum2('{}', '{}')",
             db_name, tbl_name
         ))
         .await?;
+    let vacuum_result: Vec<DataBlock> = stream.try_collect().await?;
+    assert_eq!(
+        vacuum_result
+            .iter()
+            .map(|block| block.num_rows())
+            .sum::<usize>(),
+        0,
+        "vacuum2 should not return per-file result rows"
+    );
 
     // The core assertion: every block still referenced by the live snapshot must
     // survive. Dropping any protected-segment chunk during the read would leave
