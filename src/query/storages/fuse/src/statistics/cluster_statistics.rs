@@ -546,12 +546,6 @@ pub(crate) fn aggregate_cluster_key_min_max(
     Ok((min, max.index(0).unwrap().to_owned(), true))
 }
 
-#[derive(Clone, Copy, Default)]
-pub(crate) struct BlockOverlapDepth {
-    pub(crate) overlap: usize,
-    pub(crate) depth: usize,
-}
-
 /// Iterative segment tree answering range-max queries over a fixed sequence.
 /// `build` is O(n), `range_max` is O(log n) over an inclusive `[l, r]` range.
 pub(crate) struct RangeMaxTree {
@@ -593,11 +587,11 @@ impl RangeMaxTree {
     }
 }
 
-/// Calculate scalar cluster overlap scores from min/max ranges.
-pub(crate) fn calculate_block_overlap_depths(
+/// Calculate each block's maximum scalar cluster depth from min/max ranges.
+pub(crate) fn calculate_block_depths(
     ranges: &[(Vec<Scalar>, Vec<Scalar>)],
     cluster_key_types: &[DataType],
-) -> Result<Vec<BlockOverlapDepth>> {
+) -> Result<Vec<usize>> {
     if ranges.is_empty() {
         return Ok(Vec::new());
     }
@@ -619,20 +613,15 @@ pub(crate) fn calculate_block_overlap_depths(
     let point_count = indices.len();
     let unset_pos = usize::MAX;
     let mut point_depths = vec![0usize; point_count];
-    let mut start_prefix_sums = vec![0usize; point_count];
     let mut open_pos = vec![unset_pos; ranges.len()];
     let mut close_pos = vec![unset_pos; ranges.len()];
     let mut live = vec![false; ranges.len()];
     let mut live_count = 0usize;
-    let mut start_count = 0usize;
 
     for (pos, idx) in indices.into_iter().enumerate() {
         let start = &values[idx as usize].0;
         let end = &values[idx as usize].1;
-        let point_depth = live_count + start.len();
-        point_depths[pos] = point_depth;
-        start_count += start.len();
-        start_prefix_sums[pos] = start_count;
+        point_depths[pos] = live_count + start.len();
 
         start.iter().for_each(|idx| {
             if !live[*idx] {
@@ -652,24 +641,16 @@ pub(crate) fn calculate_block_overlap_depths(
     }
 
     let range_max_tree = RangeMaxTree::build(&point_depths);
-    let mut stats = vec![BlockOverlapDepth::default(); ranges.len()];
+    let mut depths = vec![0; ranges.len()];
     for idx in 0..ranges.len() {
         let open = open_pos[idx];
         let close = close_pos[idx];
-        if open == unset_pos || close == unset_pos || close < open {
-            continue;
+        if open != unset_pos && close != unset_pos && open <= close {
+            depths[idx] = range_max_tree.range_max(open, close);
         }
-
-        // Count starts after this block opens and through its close point, matching
-        // the old sweep order where closing blocks were removed after start updates.
-        let next_overlap = start_prefix_sums[close] - start_prefix_sums[open];
-        stats[idx] = BlockOverlapDepth {
-            overlap: point_depths[open].saturating_sub(1) + next_overlap,
-            depth: range_max_tree.range_max(open, close),
-        };
     }
 
-    Ok(stats)
+    Ok(depths)
 }
 
 #[derive(Clone)]
@@ -898,7 +879,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_block_overlap_depths_keeps_boundary_touch_semantics() -> Result<()> {
+    fn test_calculate_block_depths_keeps_boundary_touch_semantics() -> Result<()> {
         let ranges = vec![
             (vec![int32_scalar(1)], vec![int32_scalar(2)]),
             (vec![int32_scalar(2)], vec![int32_scalar(3)]),
@@ -906,13 +887,9 @@ mod tests {
         ];
         let cluster_key_types = vec![DataType::Number(NumberDataType::Int32)];
 
-        let stats = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+        let depths = calculate_block_depths(&ranges, &cluster_key_types)?;
 
-        let actual = stats
-            .iter()
-            .map(|stat| (stat.overlap, stat.depth))
-            .collect::<Vec<_>>();
-        assert_eq!(actual, vec![(1, 2), (1, 2), (0, 1)]);
+        assert_eq!(depths, vec![2, 2, 1]);
         Ok(())
     }
 
