@@ -113,7 +113,6 @@ databend-common-storages-basic = { path = "src/query/storages/basic" }
 databend-common-storages-delta = { path = "src/query/storages/delta" }
 databend-common-storages-factory = { path = "src/query/storages/factory" }
 databend-common-storages-fuse = { path = "src/query/storages/fuse" }
-databend-common-storages-hive = { path = "src/query/storages/hive/hive" }
 databend-common-storages-iceberg = { path = "src/query/storages/iceberg" }
 databend-common-storages-information-schema = { path = "src/query/storages/information_schema" }
 databend-common-storages-orc = { path = "src/query/storages/orc" }
@@ -295,7 +294,6 @@ hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
-hive_metastore = "0.2.0"
 hostname = "0.3.1"
 http = "1"
 humantime = "2.1.0"
@@ -334,11 +332,11 @@ jaq-std = "3.0.1"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.6"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
-lance-core = "6.1.0"
-lance-encoding = { version = "6.1.0", features = ["protoc"] }
-lance-file = "6.1.0"
-lance-io = { version = "6.1.0", default-features = false }
-lance-table = "6.1.0"
+lance-core = "5.1.0-beta.3"
+lance-encoding = { version = "5.1.0-beta.3", features = ["protoc"] }
+lance-file = "5.1.0-beta.3"
+lance-io = { version = "5.1.0-beta.3", default-features = false }
+lance-table = "5.1.0-beta.3"
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
 lexical-core = "1"
@@ -625,7 +623,7 @@ debug-assertions = true
 overflow-checks = true
 rpath = true
 
-[patch."https://github.com/b41sh/arrow-rs.git"]
+[patch."https://github.com/datafuse-extras/arrow-rs.git"]
 arrow-array = { version = "=58.4.0" }
 arrow-buffer = { version = "=58.4.0" }
 arrow-cast = { version = "=58.4.0" }
@@ -647,11 +645,17 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.2.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "a16344417d1fec6df4a62d8e77679211e909f86e" }
+lance-arrow = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lance-core = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lance-encoding = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lance-file = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lance-io = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lindera-tantivy = { git = "https://github.com/datafuse-extras/lindera-tantivy", rev = "a40ccd7" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
-parquet = { git = "https://github.com/b41sh/arrow-rs.git", rev = "a84f0aa7c483a48e3eff2a8a95a34af4c14faa58" }
+parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }

@@ -36,7 +36,6 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
-use databend_common_storages_hive::HiveCreator;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -133,7 +132,6 @@ impl GlobalServices {
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
-                (CatalogType::Hive, Arc::new(HiveCreator)),
                 (CatalogType::Paimon, Arc::new(PaimonCreator)),
             ];
 
