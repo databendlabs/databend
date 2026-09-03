@@ -55,11 +55,11 @@ Memo
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
 │   │   ├── { dist: Broadcast }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   │   ├── { dist: Hash(t_10.a (#2)::Int32 NULL, t_100.a (#1)::Int32 NULL) }: expr: #2, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #3, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }: expr: #3, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 Join [#1, #2]
 │   ├── #1 Exchange: (Broadcast) [#3]
 │   ├── #2 Exchange: (Hash(t_10.a (#2)::Int32 NULL,t_100.a (#1)::Int32 NULL)) [#3]
-│   └── #3 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#3]
+│   └── #3 Exchange: (NodeToNodeHash(t_100.a (#1)::Int32 NULL)) [#3]
 ├── Group #4
 │   ├── Best properties
 │   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
@@ -67,12 +67,12 @@ Memo
 ├── Group #5
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 EvalScalar [#4]
-│   └── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#5]
+│   └── #1 Exchange: (NodeToNodeHash(t_100.a (#1)::Int32 NULL)) [#5]
 ├── Group #6
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#5]
 ├── Group #7
 │   ├── Best properties
@@ -94,12 +94,12 @@ Memo
 ├── Group #10
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_1000.a (#0)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: NodeToNodeHash(t_1000.a (#0)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 EvalScalar [#0]
-│   └── #1 Exchange: (Hash(t_1000.a (#0)::Int32 NULL)) [#10]
+│   └── #1 Exchange: (NodeToNodeHash(t_1000.a (#0)::Int32 NULL)) [#10]
 ├── Group #11
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_1000.a (#0)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_1000.a (#0)::Int32 NULL) }]
 │   └── #0 Aggregate [#10]
 ├── Group #12
 │   ├── Best properties
@@ -110,12 +110,12 @@ Memo
 ├── Group #13
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 Join [#12, #3]
-│   └── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#13]
+│   └── #1 Exchange: (NodeToNodeHash(t_100.a (#1)::Int32 NULL)) [#13]
 ├── Group #14
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#13]
 ├── Group #15
 │   ├── Best properties
@@ -123,7 +123,7 @@ Memo
 │   └── #0 Aggregate [#14]
 ├── Group #16
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#3]
 ├── Group #17
 │   ├── Best properties
@@ -140,12 +140,12 @@ Memo
 ├── Group #19
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 EvalScalar [#18]
-│   └── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#19]
+│   └── #1 Exchange: (NodeToNodeHash(t_100.a (#1)::Int32 NULL)) [#19]
 ├── Group #20
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#19]
 ├── Group #21
 │   ├── Best properties
@@ -153,7 +153,7 @@ Memo
 │   └── #0 Aggregate [#20]
 ├── Group #22
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#3]
 ├── Group #23
 │   ├── Best properties
@@ -170,12 +170,12 @@ Memo
 ├── Group #25
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 EvalScalar [#24]
-│   └── #1 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#25]
+│   └── #1 Exchange: (NodeToNodeHash(t_100.a (#1)::Int32 NULL)) [#25]
 ├── Group #26
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: NodeToNodeHash(t_100.a (#1)::Int32 NULL) }]
 │   └── #0 Aggregate [#25]
 └── Group #27
     ├── Best properties

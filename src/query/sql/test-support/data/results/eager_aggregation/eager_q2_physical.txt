@@ -8,7 +8,7 @@ Exchange
     ├── estimated rows: 1.00
     └── Exchange
         ├── output columns: [sum(l_extendedprice) (#25), sum(o_totalprice) (#26), orders.o_orderkey (#16)]
-        ├── exchange type: Hash(0)
+        ├── exchange type: NodeToNodeHash(0)
         └── AggregatePartial
             ├── group by: [o_orderkey]
             ├── aggregate functions: [sum(l_extendedprice), sum(o_totalprice)]

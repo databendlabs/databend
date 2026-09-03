@@ -30,8 +30,8 @@ Exchange(Merge)
     │       └── Aggregate(Partial)
     │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2)]
     │           ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
-    │           └── Exchange(Hash)
-    │               ├── Exchange(Hash): keys: [t.a (#0)]
+    │           └── Exchange(NodeToNodeHash)
+    │               ├── Exchange(NodeToNodeHash): keys: [t.a (#0)]
     │               └── Scan
     │                   ├── table: default.t (#0)
     │                   ├── filters: []
@@ -48,8 +48,8 @@ Exchange(Merge)
         │       └── Aggregate(Partial)
         │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
         │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
-        │           └── Exchange(Hash)
-        │               ├── Exchange(Hash): keys: [t.a (#0)]
+        │           └── Exchange(NodeToNodeHash)
+        │               ├── Exchange(NodeToNodeHash): keys: [t.a (#0)]
         │               └── MaterializedCTERef
         │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
         │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
@@ -65,8 +65,8 @@ Exchange(Merge)
             │       └── Aggregate(Partial)
             │           ├── group items: [t.a (#0) AS (#0)]
             │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
-            │           └── Exchange(Hash)
-            │               ├── Exchange(Hash): keys: [t.a (#0)]
+            │           └── Exchange(NodeToNodeHash)
+            │               ├── Exchange(NodeToNodeHash): keys: [t.a (#0)]
             │               └── MaterializedCTERef
             │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
             │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
@@ -165,8 +165,8 @@ Exchange(Merge)
     │       └── Aggregate(Partial)
     │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1), t.c (#2) AS (#2)]
     │           ├── aggregate functions: [sum(t.v (#3)) AS (#8), count(t.v (#3)) AS (#9), min(t.v (#3)) AS (#10), max(t.v (#3)) AS (#11)]
-    │           └── Exchange(Hash)
-    │               ├── Exchange(Hash): keys: [t.a (#0)]
+    │           └── Exchange(NodeToNodeHash)
+    │               ├── Exchange(NodeToNodeHash): keys: [t.a (#0)]
     │               └── Scan
     │                   ├── table: default.t (#0)
     │                   ├── filters: []
@@ -183,8 +183,8 @@ Exchange(Merge)
         │       └── Aggregate(Partial)
         │           ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
         │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
-        │           └── Exchange(Hash)
-        │               ├── Exchange(Hash): keys: [t.a (#0)]
+        │           └── Exchange(NodeToNodeHash)
+        │               ├── Exchange(NodeToNodeHash): keys: [t.a (#0)]
         │               └── MaterializedCTERef
         │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1_2
         │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1), t.c (#2)]
@@ -200,8 +200,8 @@ Exchange(Merge)
             │       └── Aggregate(Partial)
             │           ├── group items: [t.a (#0) AS (#0)]
             │           ├── aggregate functions: [sum(sum(v) (#8)) AS (#8), sum0(count(v) (#9)) AS (#9), min(min(v) (#10)) AS (#10), max(max(v) (#11)) AS (#11)]
-            │           └── Exchange(Hash)
-            │               ├── Exchange(Hash): keys: [t.a (#0)]
+            │           └── Exchange(NodeToNodeHash)
+            │               ├── Exchange(NodeToNodeHash): keys: [t.a (#0)]
             │               └── MaterializedCTERef
             │                   ├── cte_name: cte_hierarchical_groupingsets_17760633370082219301_cols_0_1
             │                   ├── output columns: [sum(v) (#8), count(v) (#9), min(v) (#10), max(v) (#11), t.a (#0), t.b (#1)]
