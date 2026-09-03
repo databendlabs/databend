@@ -44,7 +44,6 @@ pub use bloom_index::BloomIndexType;
 pub use bloom_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 pub use bloom_index::FilterEvalResult;
 pub use bloom_index::NgramArgs;
-pub use bloom_index::NgramIterator;
 pub use eliminate_cast::eliminate_cast;
 pub use hnsw_index::DistanceType;
 pub use hnsw_index::FixedLengthPriorityQueue;

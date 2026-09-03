@@ -387,8 +387,11 @@ mod tests {
 
     #[test]
     fn test_hashes_for_false_positive_rate() {
+        assert_eq!(
+            BloomFilter::hashes_for_false_positive_rate(crate::DEFAULT_NGRAM_FALSE_POSITIVE_RATE),
+            4
+        );
         assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.5), 1);
-        assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.1), 4);
         assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.01), 7);
         assert_eq!(BloomFilter::hashes_for_false_positive_rate(0.001), 10);
     }

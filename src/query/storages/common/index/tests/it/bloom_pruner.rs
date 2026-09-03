@@ -717,12 +717,12 @@ fn eval_index_expr(
         let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
             continue;
         };
-        let digests = BloomIndex::calculate_ngram_nullable_column(
+        let mut digests = Vec::new();
+        BloomIndex::calculate_ngram_nullable_column(
             Value::Scalar(scalar.clone()),
             ngram_arg.gram_size(),
-            BloomIndex::ngram_hash,
-        )
-        .collect::<Vec<_>>();
+            |ngram| digests.push(BloomIndex::ngram_hash(ngram)),
+        );
         if digests.is_empty() {
             continue;
         }
