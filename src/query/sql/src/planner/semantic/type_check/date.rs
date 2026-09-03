@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::Span;
-use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Literal;
@@ -23,19 +20,10 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::Weekday as ASTWeekday;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr as EExpr;
-use databend_common_expression::Scalar;
-use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use smallvec::smallvec;
 
 use super::CoreExprArena;
-use super::TypeChecker;
-use crate::binder::wrap_cast;
 use crate::planner::semantic::type_check::CoreExprId;
-use crate::plans::ScalarExpr;
 
 pub(super) enum DateArithmeticFunction {
     Add,
@@ -341,97 +329,4 @@ fn unsupported_date_interval(
         "Unsupported interval type {interval_kind} for {function_name}"
     ))
     .set_span(span)
-}
-
-impl<'a, A> TypeChecker<'a, A> {
-    pub(super) fn adjust_date_interval_operands(
-        &self,
-        op: &BinaryOperator,
-        left_expr: &mut ScalarExpr,
-        left_type: &DataType,
-        right_expr: &mut ScalarExpr,
-        right_type: &DataType,
-    ) -> Result<()> {
-        match op {
-            BinaryOperator::Plus => {
-                self.adjust_single_date_interval_operand(
-                    left_expr, left_type, right_expr, right_type,
-                )?;
-                self.adjust_single_date_interval_operand(
-                    right_expr, right_type, left_expr, left_type,
-                )?;
-            }
-            BinaryOperator::Minus => {
-                self.adjust_single_date_interval_operand(
-                    left_expr, left_type, right_expr, right_type,
-                )?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(super) fn adjust_date_interval_function_args(
-        &self,
-        func_name: &str,
-        args: &mut [ScalarExpr],
-    ) -> Result<()> {
-        if args.len() != 2 {
-            return Ok(());
-        }
-        let op = if func_name.eq_ignore_ascii_case("plus") {
-            BinaryOperator::Plus
-        } else if func_name.eq_ignore_ascii_case("minus") {
-            BinaryOperator::Minus
-        } else {
-            return Ok(());
-        };
-        let (left_slice, right_slice) = args.split_at_mut(1);
-        let left_expr = &mut left_slice[0];
-        let right_expr = &mut right_slice[0];
-        let left_type = left_expr.data_type().into_owned();
-        let right_type = right_expr.data_type().into_owned();
-        self.adjust_date_interval_operands(&op, left_expr, &left_type, right_expr, &right_type)
-    }
-
-    fn adjust_single_date_interval_operand(
-        &self,
-        date_expr: &mut ScalarExpr,
-        date_type: &DataType,
-        interval_expr: &ScalarExpr,
-        interval_type: &DataType,
-    ) -> Result<()> {
-        if date_type.remove_nullable() != DataType::Date
-            || interval_type.remove_nullable() != DataType::Interval
-        {
-            return Ok(());
-        }
-
-        if self.interval_contains_only_date_parts(interval_expr)? {
-            return Ok(());
-        }
-
-        // Preserve nullability when casting DATE to TIMESTAMP
-        let target_type = if date_type.is_nullable_or_null() {
-            DataType::Timestamp.wrap_nullable()
-        } else {
-            DataType::Timestamp
-        };
-        *date_expr = wrap_cast(date_expr, &target_type);
-        Ok(())
-    }
-
-    fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
-        let expr = interval_expr.as_expr()?;
-        let (folded, _) =
-            ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-        if let EExpr::Constant(Constant {
-            scalar: Scalar::Interval(value),
-            ..
-        }) = folded.as_ref()
-        {
-            return Ok(value.microseconds() == 0);
-        }
-        Ok(false)
-    }
 }

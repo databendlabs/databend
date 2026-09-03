@@ -76,8 +76,8 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use jiff::Timestamp;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
+use databend_common_timezone::components_from_timestamp;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
@@ -3499,7 +3499,7 @@ fn object_pick_or_delete_fn(
 
 fn cast_to_date(
     val: &[u8],
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto_detect_datetime_format: bool,
 ) -> Result<Option<i32>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
@@ -3517,7 +3517,7 @@ fn cast_to_date(
 
 fn cast_to_timestamp(
     val: &[u8],
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto_detect_datetime_format: bool,
 ) -> Result<Option<i64>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
@@ -3544,7 +3544,7 @@ fn cast_to_timestamp(
 
 fn cast_to_timestamp_tz(
     val: &[u8],
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto_detect_datetime_format: bool,
 ) -> Result<Option<timestamp_tz>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
@@ -3554,13 +3554,11 @@ fn cast_to_timestamp_tz(
         JsonbValue::Timestamp(ts) => {
             let mut value = ts.value;
             clamp_timestamp(&mut value);
-            let timestamp = Timestamp::from_microsecond(value).map_err(|err| {
-                jsonb::Error::Message(format!("unable to cast to type `TIMESTAMP_TZ` {}.", err))
-            })?;
-            let offset = tz.to_offset(timestamp);
+            let components = components_from_timestamp(value, tz);
+            let offset = components.offset_seconds;
             Ok(Some(timestamp_tz::new(
-                value - (offset.seconds() as i64 * MICROS_PER_SEC),
-                offset.seconds(),
+                value - i64::from(offset) * MICROS_PER_SEC,
+                offset,
             )))
         }
         JsonbValue::String(s) => {

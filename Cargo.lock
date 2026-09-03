@@ -443,7 +443,7 @@ dependencies = [
  "arrow-data 55.1.0",
  "arrow-schema 55.1.0",
  "chrono",
- "chrono-tz 0.10.3",
+ "chrono-tz 0.10.4",
  "half",
  "hashbrown 0.15.3",
  "num",
@@ -460,7 +460,7 @@ dependencies = [
  "arrow-data 57.3.0",
  "arrow-schema 57.3.0",
  "chrono",
- "chrono-tz 0.10.3",
+ "chrono-tz 0.10.4",
  "half",
  "hashbrown 0.16.1",
  "num-complex",
@@ -479,7 +479,7 @@ dependencies = [
  "arrow-data 58.4.0",
  "arrow-schema 58.4.0",
  "chrono",
- "chrono-tz 0.10.3",
+ "chrono-tz 0.10.4",
  "half",
  "hashbrown 0.17.0",
  "num-complex",
@@ -2613,9 +2613,9 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.44"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -2632,20 +2632,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d59ae0466b83e838b81a54256c39d5d7c20b9d7daa10510a242d9b75abd5936e"
 dependencies = [
  "chrono",
- "chrono-tz-build 0.2.1",
+ "chrono-tz-build",
  "phf 0.11.3",
  "serde",
 ]
 
 [[package]]
 name = "chrono-tz"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efdce149c370f133a071ca8ef6ea340b7b88748ab0810097a9e2976eaa34b4f3"
+checksum = "a6139a8597ed92cf816dfb33f5dd6cf0bb93a6adc938f11039f371bc5bcd26c3"
 dependencies = [
  "chrono",
- "chrono-tz-build 0.4.1",
- "phf 0.11.3",
+ "phf 0.12.1",
+ "serde",
 ]
 
 [[package]]
@@ -2656,16 +2656,6 @@ checksum = "433e39f13c9a060046954e0592a8d0a4bcb1040125cbf91cb8ee58964cfb350f"
 dependencies = [
  "parse-zoneinfo",
  "phf 0.11.3",
- "phf_codegen 0.11.3",
-]
-
-[[package]]
-name = "chrono-tz-build"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f10f8c9340e31fc120ff885fcdb54a0b48e474bbd77cab557f0c30a3e569402"
-dependencies = [
- "parse-zoneinfo",
  "phf_codegen 0.11.3",
 ]
 
@@ -3880,13 +3870,13 @@ dependencies = [
  "arrow-schema 58.4.0",
  "borsh",
  "bytemuck",
+ "chrono",
  "databend-common-base",
  "databend-common-exception",
  "either",
  "ethnum",
  "foreign_vec",
  "hex",
- "jiff",
  "log",
  "match-template",
  "num-traits",
@@ -4014,6 +4004,7 @@ dependencies = [
  "base64 0.22.1",
  "borsh",
  "bumpalo",
+ "chrono",
  "comfy-table",
  "databend-common-ast",
  "databend-common-base",
@@ -4040,7 +4031,6 @@ dependencies = [
  "hex",
  "hyper-util",
  "itertools 0.13.0",
- "jiff",
  "jsonb",
  "lexical-core",
  "log",
@@ -4094,10 +4084,10 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-settings",
+ "databend-common-timezone",
  "geozero",
  "goldenfile",
  "hex",
- "jiff",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -4132,6 +4122,7 @@ dependencies = [
  "borsh",
  "bstr",
  "bumpalo",
+ "chrono",
  "comfy-table",
  "ctor",
  "databend-common-ast",
@@ -4143,6 +4134,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-statistics",
+ "databend-common-timezone",
  "databend-common-vector",
  "databend-functions-scalar-arithmetic",
  "databend-functions-scalar-datetime",
@@ -4161,7 +4153,6 @@ dependencies = [
  "jaq-core",
  "jaq-json",
  "jaq-std",
- "jiff",
  "jsonb",
  "libm",
  "match-template",
@@ -4244,6 +4235,7 @@ dependencies = [
  "borsh",
  "byteorder",
  "bytes",
+ "chrono",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-timezone",
@@ -4287,7 +4279,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "chrono-tz 0.8.6",
+ "chrono-tz 0.10.4",
  "cron",
  "databend-base",
  "databend-common-ast",
@@ -4623,7 +4615,7 @@ name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "chrono-tz 0.8.6",
+ "chrono-tz 0.10.4",
  "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
@@ -4631,10 +4623,10 @@ dependencies = [
  "databend-common-exception",
  "databend-common-io",
  "databend-common-meta-app",
+ "databend-common-timezone",
  "databend-common-users",
  "databend-common-version",
  "itertools 0.13.0",
- "jiff",
  "log",
  "num_cpus",
  "once_cell",
@@ -4654,7 +4646,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "chrono",
- "chrono-tz 0.8.6",
+ "chrono-tz 0.10.4",
  "cidr",
  "cron",
  "ctor",
@@ -4703,7 +4695,6 @@ dependencies = [
  "goldenfile",
  "indexmap 2.14.0",
  "itertools 0.13.0",
- "jiff",
  "jsonb",
  "jwt-simple",
  "log",
@@ -5050,10 +5041,10 @@ dependencies = [
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
  "databend-common-storage",
+ "databend-common-timezone",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
- "jiff",
  "log",
  "opendal",
  "orc-rust 0.6.0",
@@ -5117,12 +5108,12 @@ dependencies = [
  "databend-common-pipeline",
  "databend-common-settings",
  "databend-common-storage",
+ "databend-common-timezone",
  "databend-storages-common-cache",
  "databend-storages-common-pruner",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures",
- "jiff",
  "log",
  "opendal",
  "parquet 58.4.0",
@@ -5273,7 +5264,8 @@ dependencies = [
 name = "databend-common-timezone"
 version = "0.1.0"
 dependencies = [
- "jiff",
+ "chrono",
+ "chrono-tz 0.10.4",
 ]
 
 [[package]]
@@ -5573,7 +5565,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-timezone",
  "dtparse",
- "jiff",
  "num-traits",
 ]
 
@@ -6388,7 +6379,7 @@ dependencies = [
  "bytesize 2.0.1",
  "cfg-if",
  "chrono",
- "chrono-tz 0.8.6",
+ "chrono-tz 0.10.4",
  "concurrent-queue",
  "cron",
  "csv-core",
@@ -6437,6 +6428,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-system",
  "databend-common-telemetry",
+ "databend-common-timezone",
  "databend-common-tracing",
  "databend-common-users",
  "databend-common-version",
@@ -6479,7 +6471,6 @@ dependencies = [
  "humantime",
  "hyper-util",
  "itertools 0.13.0",
- "jiff",
  "jsonb",
  "jwt-simple",
  "log",
@@ -6595,7 +6586,6 @@ dependencies = [
  "databend-common-storages-system",
  "databend-common-users",
  "itertools 0.13.0",
- "jiff",
  "serde_json",
 ]
 
@@ -6795,7 +6785,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
- "jiff",
+ "databend-common-timezone",
  "serde",
  "typetag",
 ]
@@ -13356,7 +13346,7 @@ dependencies = [
  "bytemuck",
  "bytes",
  "chrono",
- "chrono-tz 0.10.3",
+ "chrono-tz 0.10.4",
  "fallible-streaming-iterator",
  "flate2",
  "futures",
@@ -13382,7 +13372,7 @@ dependencies = [
  "bytemuck",
  "bytes",
  "chrono",
- "chrono-tz 0.10.3",
+ "chrono-tz 0.10.4",
  "fallible-streaming-iterator",
  "flate2",
  "futures",
@@ -13845,6 +13835,15 @@ dependencies = [
 
 [[package]]
 name = "phf"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "913273894cec178f401a31ec4b656318d95473527be05c0752cc41cdc32be8b7"
+dependencies = [
+ "phf_shared 0.12.1",
+]
+
+[[package]]
+name = "phf"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
@@ -13898,6 +13897,15 @@ name = "phf_shared"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
+dependencies = [
+ "siphasher 1.0.1",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06005508882fb681fd97892ecff4b7fd0fee13ef1aa569f8695dae7ab9099981"
 dependencies = [
  "siphasher 1.0.1",
 ]

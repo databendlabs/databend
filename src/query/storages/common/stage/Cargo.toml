@@ -15,7 +15,7 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
-jiff = { workspace = true }
+databend-common-timezone = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 

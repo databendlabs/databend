@@ -38,7 +38,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::*;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
@@ -115,7 +115,7 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let tz = TimeZone::UTC;
+        let tz = Tz::UTC;
         let mut items = Vec::with_capacity(self.values.len());
         let values = mem::take(&mut self.values);
         let data_type = builder.data_type();

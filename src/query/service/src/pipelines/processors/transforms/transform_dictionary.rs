@@ -40,7 +40,7 @@ use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_sql::binder::AsyncFunctionDesc;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
 use redis::AsyncCommands;
 use redis::Client;
 use redis::ConnectionInfo;
@@ -519,7 +519,7 @@ impl DictionaryOperator {
             ScalarRef::String(s) => format!("'{}'", s.replace("'", "\\'")),
             ScalarRef::Date(d) => format!("{}", date_to_string(d as i64)),
             ScalarRef::Timestamp(t) => {
-                format!("{}", timestamp_to_string(t, &TimeZone::UTC))
+                format!("{}", timestamp_to_string(t, &Tz::UTC))
             }
             _ => format!("{}", key),
         }

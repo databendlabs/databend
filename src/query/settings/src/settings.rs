@@ -27,8 +27,8 @@ use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_timezone::Tz;
 use itertools::Itertools;
-use jiff::tz::TimeZone;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -81,9 +81,9 @@ pub struct Settings {
 impl Settings {
     pub fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
         let tz = self.get_timezone()?;
-        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
-        })?;
+        let timezone = tz
+            .parse::<Tz>()
+            .map_err(|_| ErrorCode::InvalidTimezone("Invalid timezone format"))?;
         let geometry_format = self.get_geometry_output_format()?;
         let binary_format = self.get_binary_output_format()?;
         let is_rounding_mode = self
@@ -93,7 +93,7 @@ impl Settings {
         let disable_variant_check = self.get_disable_variant_check()?;
         let enable_auto_detect_datetime_format = self.get_enable_auto_detect_datetime_format()?;
         Ok(InputFormatSettings {
-            jiff_timezone,
+            timezone,
             geometry_format,
             binary_format,
             is_rounding_mode,
@@ -104,15 +104,15 @@ impl Settings {
 
     pub fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
         let tz = self.get_timezone()?;
-        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
-        })?;
+        let timezone = tz
+            .parse::<Tz>()
+            .map_err(|_| ErrorCode::InvalidTimezone("Invalid timezone format"))?;
         let geometry_format = self.get_geometry_output_format()?;
         let binary_format = self.get_binary_output_format()?;
         let http_json_result_mode = self.get_http_json_result_mode()?;
         let format_null_as_str = self.get_format_null_as_str()?;
         Ok(OutputFormatSettings {
-            jiff_timezone,
+            timezone,
             geometry_format,
             binary_format,
             http_json_result_mode,

@@ -105,6 +105,7 @@ databend-common-storages-parquet = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
 databend-common-telemetry = { workspace = true }
+databend-common-timezone = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }
@@ -143,7 +144,6 @@ hex = { workspace = true }
 http = { workspace = true }
 humantime = { workspace = true }
 itertools = { workspace = true }
-jiff = { workspace = true }
 jsonb = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }

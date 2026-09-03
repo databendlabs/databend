@@ -15,6 +15,7 @@ databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-settings = { workspace = true }
+databend-common-timezone = { workspace = true }
 
 aho-corasick = { workspace = true }
 async-trait = { workspace = true }
@@ -23,7 +24,6 @@ bstr = { workspace = true }
 geozero = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
-jiff = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 match-template = { workspace = true }
