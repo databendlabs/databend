@@ -122,7 +122,7 @@ explain select 1 from bloom_test_t where c2=0;
 EvalScalar
 ├── output columns: [1 (#3)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 1.60
 └── TableScan
     ├── table: default.default.bloom_test_t
     ├── scan id: 0
@@ -133,7 +133,7 @@ EvalScalar
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 0)], limit: NONE]
-    └── estimated rows: 0.00
+    └── estimated rows: 1.60
 
 query T
 explain select 1 from bloom_test_t where c2=3;

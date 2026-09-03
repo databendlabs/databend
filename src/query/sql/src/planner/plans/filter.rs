@@ -93,8 +93,9 @@ impl Operator for Filter {
                 .with_top_n(stat_info.statistics.top_n.clone())
                 .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone());
         let cardinality = sb.apply(&self.predicates)?;
+        let precise_cardinality = sb.is_proven_empty().then_some(0);
         // Derive column statistics
-        let column_stats = if cardinality == 0.0 {
+        let column_stats = if precise_cardinality == Some(0) {
             HashMap::new()
         } else {
             sb.into_column_stats()
@@ -102,11 +103,54 @@ impl Operator for Filter {
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
-                precise_cardinality: None,
+                precise_cardinality,
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+
+    use super::*;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::ConstantExpr;
+    use crate::plans::DummyTableScan;
+    use crate::plans::MutationSource;
+
+    fn constant_filter(value: bool, input: SExpr) -> SExpr {
+        SExpr::create_unary(
+            Filter {
+                predicates: vec![ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Boolean(value),
+                })],
+            },
+            input,
+        )
+    }
+
+    #[test]
+    fn test_filter_preserves_proven_empty_cardinality() -> Result<()> {
+        let expr = constant_filter(false, SExpr::create_leaf(DummyTableScan::default()));
+        let stat = RelExpr::with_s_expr(&expr).derive_cardinality()?;
+
+        assert_eq!(stat.cardinality, 0.0);
+        assert_eq!(stat.statistics.precise_cardinality, Some(0));
+        Ok(())
+    }
+
+    #[test]
+    fn test_filter_does_not_promote_estimated_zero_to_precise() -> Result<()> {
+        let expr = constant_filter(true, SExpr::create_leaf(MutationSource::default()));
+        let stat = RelExpr::with_s_expr(&expr).derive_cardinality()?;
+
+        assert_eq!(stat.cardinality, 0.0);
+        assert_eq!(stat.statistics.precise_cardinality, None);
+        Ok(())
     }
 }

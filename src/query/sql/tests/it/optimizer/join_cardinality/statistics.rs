@@ -718,8 +718,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )])?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_all_null_equality",
-            description: "Regular equality with an all-NULL key produces no matches through the scan-to-join statistics path.",
+            name: "inner_catalog_all_null_is_not_a_proof",
+            description: "Catalog all-NULL statistics may be stale, so regular equality keeps a non-zero fallback estimate instead of proving no matches.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k = r.k",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k INT NULL)", 4, [(

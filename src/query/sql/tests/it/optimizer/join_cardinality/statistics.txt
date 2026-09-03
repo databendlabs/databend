@@ -65,6 +65,8 @@ right ddl      : CREATE TABLE r(k INT NOT NULL)
 right rows     : 5
 input stat    : right.k min=10, max=14, ndv=Some(5), null=0
 join          : INNER cardinality=0.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=0.000, histogram=rows=4.000, ndv=3.000, buckets=[1..1:1.333/1.000, 2..2:1.333/1.000, 3..3:1.333/1.000]
+stat          : r.k (#1) min=10, max=14, ndv=5.000, null=0.000, histogram=rows=5.000, ndv=5.000, buckets=[10..10:1.000/1.000, 11..11:1.000/1.000, 12..12:1.000/1.000, 13..13:1.000/1.000, 14..14:1.000/1.000]
 
 === left_outer_disjoint_bounds ===
 description: A disjoint LEFT join preserves its outer input and NULL-extends every column on the nullable side, including non-key payloads.
@@ -181,6 +183,10 @@ right rows     : 100
 input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
 input stat    : right.k2 min=20, max=21, ndv=Some(2), null=0
 join          : INNER cardinality=0.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : l.k2 (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=100.000, ndv=2.000, buckets=[1..1:50.000/1.000, 2..2:50.000/1.000]
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : r.k2 (#3) min=20, max=21, ndv=2.000, null=0.000, histogram=rows=100.000, ndv=2.000, buckets=[20..20:50.000/1.000, 21..21:50.000/1.000]
 
 === inner_three_key_strictest_nonzero ===
 description: Three non-zero equality estimates select the strictest key while a later looser key does not replace the winner histogram.
@@ -254,6 +260,8 @@ right rows     : 2
 input stat    : right.k min=9007199254740992, max=9007199254741002, ndv=Some(1), null=0
 input hist    : right.k present
 join          : INNER cardinality=0.000
+stat          : l.k (#0) min=9007199254740992, max=9007199254741002, ndv=1.000, null=0.000, histogram=rows=3.000, ndv=1.000, buckets=[9007199254740992..9007199254740992:3.000/1.000]
+stat          : r.k (#1) min=9007199254740992, max=9007199254741002, ndv=1.000, null=0.000, histogram=rows=2.000, ndv=1.000, buckets=[9007199254740993..9007199254740993:2.000/1.000]
 
 === inner_mixed_integer_upper_only_extremes ===
 description: Upper-only UInt64 and Int64 statistics at opposite numeric extremes produce no overlap without overflowing conversion.
@@ -265,6 +273,8 @@ right ddl      : CREATE TABLE r(k BIGINT NOT NULL)
 right rows     : 1
 input stat    : right.k min=0, max=0, ndv=None, null=0
 join          : INNER cardinality=0.000
+stat          : l.k (#0) min=18446744073709551615, max=18446744073709551615, ndv=unknown (upper=1.000), null=0.000, histogram=none
+stat          : r.k (#1) min=0, max=0, ndv=unknown (upper=1.000), null=0.000, histogram=none
 
 === inner_float_cast_adjacent_large_integers ===
 description: Explicit Float64 comparison casts make adjacent integers above 2^53 collide, and the SQL estimate reflects that comparison domain.
@@ -426,8 +436,8 @@ join          : INNER cardinality=1.000
 stat          : l.k (#0) min=1, max=1000, ndv=unknown (upper=1.000), null=0.000, histogram=none
 stat          : r.k (#1) min=1, max=1000, ndv=unknown (upper=1.000), null=0.000, histogram=none
 
-=== inner_all_null_equality ===
-description: Regular equality with an all-NULL key produces no matches through the scan-to-join statistics path.
+=== inner_catalog_all_null_is_not_a_proof ===
+description: Catalog all-NULL statistics may be stale, so regular equality keeps a non-zero fallback estimate instead of proving no matches.
 sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
 left ddl      : CREATE TABLE l(k INT NULL)
 left rows     : 4
@@ -435,5 +445,6 @@ input stat    : left.k all_null=true, ndv=Some(0), null=4
 right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 10
 input stat    : right.k min=1, max=3, ndv=Some(3), null=2
-join          : INNER cardinality=0.000
+join          : INNER cardinality=32.000
+stat          : r.k (#1) min=1, max=3, ndv=3.000, null=0.000, histogram=none
 
