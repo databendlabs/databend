@@ -22,6 +22,9 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -31,6 +34,7 @@ use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::table::OPT_KEY_VACUUM2_FLASHBACK_BARRIER;
 use futures::TryStreamExt;
 
 // TODO investigate this
@@ -365,6 +369,124 @@ async fn test_vacuum2_rejects_transaction_whose_blocks_were_collected() -> anyho
     let blocks: Vec<DataBlock> = stream.try_collect().await?;
     let committed_rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
     assert_eq!(committed_rows, 2);
+
+    Ok(())
+}
+
+/// Flashback and its LVT validation must be one metadata transaction, otherwise a concurrent
+/// vacuum can make the target snapshot unsafe between validation and commit.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_flashback_rejects_snapshot_before_lvt() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.create_default_database().await?;
+    let db_name = fixture.default_db_name();
+    let tbl_name = "t_flashback_lvt";
+    fixture
+        .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {db_name}.{tbl_name} values (1)"))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let table_id = table.get_id();
+    let first_snapshot = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+
+    fixture
+        .execute_command(&format!("insert into {db_name}.{tbl_name} values (2)"))
+        .await?;
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let latest_timestamp = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap()
+        .timestamp
+        .unwrap();
+    ctx.get_default_catalog()?
+        .set_table_lvt(
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), table_id),
+            &LeastVisibleTime::new(latest_timestamp),
+        )
+        .await?;
+
+    let err = fixture
+        .execute_command(&format!(
+            "alter table {db_name}.{tbl_name} flashback to (snapshot => '{}')",
+            first_snapshot.snapshot_id.simple()
+        ))
+        .await
+        .expect_err("flashback target older than LVT must be rejected");
+    assert_eq!(err.code(), ErrorCode::TABLE_SNAPSHOT_EXPIRED);
+
+    Ok(())
+}
+
+/// Once the selected live GC root is beyond the three-day transaction window, a successful
+/// vacuum should remove the barrier with a table-sequence CAS.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_clears_expired_flashback_barrier() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.create_default_database().await?;
+    let db_name = fixture.default_db_name();
+    let tbl_name = "t_expired_flashback_barrier";
+    fixture
+        .execute_command(&format!(
+            "create table {db_name}.{tbl_name} (c int) data_retention_num_snapshots_to_keep=1"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {db_name}.{tbl_name} values (1)"))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let expired_barrier = (chrono::Utc::now() - chrono::Duration::days(4)).to_rfc3339();
+    catalog
+        .upsert_table_option(
+            &ctx.get_tenant(),
+            &db_name,
+            UpsertTableOptionReq::new(
+                &table.get_table_info().ident,
+                OPT_KEY_VACUUM2_FLASHBACK_BARRIER,
+                expired_barrier,
+            ),
+        )
+        .await?;
+
+    // Create another live snapshot after the expired barrier so it can be selected as the root.
+    fixture
+        .execute_command(&format!("insert into {db_name}.{tbl_name} values (2)"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "call system$fuse_vacuum2('{db_name}', '{tbl_name}')"
+        ))
+        .await?;
+
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    assert!(
+        !table
+            .get_table_info()
+            .meta
+            .options
+            .contains_key(OPT_KEY_VACUUM2_FLASHBACK_BARRIER),
+        "an expired barrier should be cleared after vacuum succeeds"
+    );
 
     Ok(())
 }
