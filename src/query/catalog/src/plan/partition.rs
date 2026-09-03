@@ -34,6 +34,7 @@ use rand::thread_rng;
 use sha2::Digest;
 
 use crate::plan::PartStatistics;
+use crate::plan::VirtualColumnLayout;
 use crate::table_context::TableContext;
 
 /// Partition information.
@@ -441,6 +442,7 @@ pub struct ReclusterTask {
     // All input blocks in this task are already ordered by the current cluster key.
     #[serde(default)]
     pub all_ordered: bool,
+    pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);

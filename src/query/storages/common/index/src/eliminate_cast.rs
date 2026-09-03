@@ -33,6 +33,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 pub(super) struct RewriteVisitor<'a> {
     pub input_domains: HashMap<String, Domain>,
+    /// Optional block-local physical types for virtual column references.
+    pub column_types: Option<&'a HashMap<String, DataType>>,
     pub func_ctx: &'a FunctionContext,
     pub fn_registry: &'a FunctionRegistry,
 }
@@ -40,6 +42,22 @@ pub(super) struct RewriteVisitor<'a> {
 type RewriteResult = std::result::Result<Option<Expr<String>>, !>;
 
 impl ExprVisitor<String> for RewriteVisitor<'_> {
+    fn enter_column_ref(&mut self, column: &ColumnRef<String>) -> RewriteResult {
+        let Some(data_type) = self
+            .column_types
+            .and_then(|column_types| column_types.get(&column.id))
+        else {
+            return Ok(None);
+        };
+        if data_type == &column.data_type {
+            return Ok(None);
+        }
+
+        let mut column = column.clone();
+        column.data_type = data_type.clone();
+        Ok(Some(column.into()))
+    }
+
     fn enter_function_call(&mut self, call: &FunctionCall<String>) -> RewriteResult {
         if call.id.name() == "eq" {
             let result = match call.args.as_slice() {
@@ -273,6 +291,7 @@ pub fn eliminate_cast(
 ) -> Option<Expr<String>> {
     let mut visitor = RewriteVisitor {
         input_domains,
+        column_types: None,
         func_ctx: &FunctionContext::default(),
         fn_registry: &BUILTIN_FUNCTIONS,
     };

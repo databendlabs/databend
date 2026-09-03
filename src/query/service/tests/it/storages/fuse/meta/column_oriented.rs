@@ -120,7 +120,10 @@ async fn generate_column_oriented_segment()
     let column_oriented_segment = {
         let mut segment_builder = ColumnOrientedSegmentBuilder::new(table_schema.clone(), 100);
         for block_meta in block_metas.iter() {
-            segment_builder.add_block(block_meta.clone()).unwrap();
+            // TODO: ColumnOrientedSegmentBuilder support virtual column
+            segment_builder
+                .add_block(block_meta.clone(), VirtualBlockInput::None)
+                .unwrap();
         }
         let cluster_key_info = ClusterKeyInfo::new((0, "(u64)".to_string()), ClusterType::Linear);
         segment_builder

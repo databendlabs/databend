@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnField;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
@@ -31,8 +31,10 @@ use databend_storages_common_index::VirtualColumnSharedColumnMetaMap;
 use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use opendal::Operator;
@@ -50,6 +52,7 @@ pub struct VirtualColumnPruner {
 struct VirtualColumnFieldMatch {
     field: VirtualColumnField,
     match_info: KeyPathMatchInfo,
+    encoded_path: String,
 }
 
 impl VirtualColumnPruner {
@@ -66,6 +69,7 @@ impl VirtualColumnPruner {
                 virtual_column_fields.push(VirtualColumnFieldMatch {
                     field: field.clone(),
                     match_info,
+                    encoded_path: field.key_paths.to_canonical_path(),
                 });
             }
             return Ok(Some(Arc::new(VirtualColumnPruner {
@@ -81,6 +85,7 @@ impl VirtualColumnPruner {
     pub async fn prune_virtual_columns(
         &self,
         virtual_block_meta: &Option<VirtualBlockMeta>,
+        virtual_segment_schema: Option<&VirtualSegmentSchema>,
     ) -> Result<Option<VirtualBlockMetaIndex>> {
         let Some(virtual_block_meta) = virtual_block_meta else {
             return Ok(None);
@@ -92,6 +97,18 @@ impl VirtualColumnPruner {
             &virtual_block_meta.virtual_location.0,
         ) {
             return Ok(None);
+        }
+
+        let virtual_column_stats = build_runtime_virtual_column_stats(
+            virtual_block_meta,
+            virtual_segment_schema,
+            &self.virtual_column_fields,
+        );
+        if let Some(mut index) =
+            self.try_prune_from_block_meta(virtual_block_meta, virtual_segment_schema)
+        {
+            index.virtual_column_stats = virtual_column_stats;
+            return Ok(Some(index));
         }
 
         let Ok(virtual_meta) =
@@ -169,9 +186,11 @@ impl VirtualColumnPruner {
                         source_column_id,
                         segments,
                         &virtual_meta,
+                        virtual_block_meta,
+                        virtual_segment_schema,
                         &mut virtual_column_metas,
                         &mut shared_virtual_column_ids,
-                    );
+                    )?;
                     plans.append(&mut node_plans);
                 }
             }
@@ -187,9 +206,11 @@ impl VirtualColumnPruner {
                         source_column_id,
                         parent_segments,
                         &virtual_meta,
+                        virtual_block_meta,
+                        virtual_segment_schema,
                         &mut virtual_column_metas,
                         &mut shared_virtual_column_ids,
-                    );
+                    )?;
                     let suffix_start = name_positions
                         .get(prefix_len.saturating_sub(1))
                         .copied()
@@ -209,7 +230,7 @@ impl VirtualColumnPruner {
 
             if !plans.is_empty() {
                 let entry = virtual_column_read_plan
-                    .entry(field.column_id)
+                    .entry(field.query_column_id)
                     .or_insert_with(Vec::new);
                 for plan in plans {
                     if !entry.contains(&plan) {
@@ -229,7 +250,7 @@ impl VirtualColumnPruner {
                 // If a requested path is absent from the trie/shared metadata, the path is absent
                 // for this block and can be materialized as NULL without reading the source column.
                 virtual_column_read_plan
-                    .entry(field.column_id)
+                    .entry(field.query_column_id)
                     .or_insert_with(Vec::new)
                     .push(VirtualColumnReadPlan::Missing);
             }
@@ -246,6 +267,7 @@ impl VirtualColumnPruner {
         if !virtual_column_read_plan.is_empty() {
             let virtual_block_meta = VirtualBlockMetaIndex {
                 virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
+                virtual_column_stats,
                 virtual_column_metas,
                 shared_virtual_column_ids,
                 ignored_source_column_ids,
@@ -255,27 +277,75 @@ impl VirtualColumnPruner {
         }
         Ok(None)
     }
-}
 
-fn virtual_column_data_type_code(data_type: &DataType) -> u8 {
-    match data_type.remove_nullable() {
-        DataType::Variant => 0,
-        DataType::Boolean => 1,
-        DataType::Number(NumberDataType::UInt64) => 2,
-        DataType::Number(NumberDataType::Int64) => 3,
-        DataType::Number(NumberDataType::Float64) => 4,
-        DataType::String => 5,
-        _ => unreachable!(),
-    }
-}
+    fn try_prune_from_block_meta(
+        &self,
+        virtual_block_meta: &VirtualBlockMeta,
+        virtual_segment_schema: Option<&VirtualSegmentSchema>,
+    ) -> Option<VirtualBlockMetaIndex> {
+        let schema = virtual_segment_schema?;
 
-fn build_virtual_column_meta(meta: &VirtualColumnIdWithMeta) -> VirtualColumnMeta {
-    VirtualColumnMeta {
-        offset: meta.meta.offset,
-        len: meta.meta.len,
-        num_values: meta.meta.num_values,
-        data_type: virtual_column_data_type_code(&meta.data_type),
-        column_stat: None,
+        let mut virtual_column_metas = BTreeMap::new();
+        let mut virtual_column_read_plan = BTreeMap::new();
+        for virtual_column_field in &self.virtual_column_fields {
+            let field = &virtual_column_field.field;
+            // Array indexes and unextracted/shared paths still need sidecar parquet meta.
+            if virtual_column_field.match_info.has_index {
+                return None;
+            }
+            let Some(path) =
+                schema.find_path_ref(field.source_column_id, &virtual_column_field.encoded_path)
+            else {
+                // The parent itself may have no leaf while descendant paths are
+                // materialized (for example only `geo.lat` exists in this block).
+                // BlockMeta cannot reconstruct that object, so inspect the
+                // sidecar trie instead of incorrectly declaring the parent missing.
+                if schema.has_descendant_paths(
+                    field.source_column_id,
+                    &virtual_column_field.encoded_path,
+                ) {
+                    return None;
+                }
+                if virtual_block_meta.virtual_columns_complete {
+                    virtual_column_read_plan
+                        .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
+                    continue;
+                }
+                return None;
+            };
+            // A parent path may coexist with materialized descendant paths, for example
+            // `geo` and `geo.lat` when some rows store a scalar and others an object.
+            // Reading such paths correctly needs Object/Coalesce read plans derived from
+            // the sidecar trie, which BlockMeta-only pruning cannot build yet.
+            if schema
+                .has_descendant_paths(field.source_column_id, &virtual_column_field.encoded_path)
+            {
+                return None;
+            }
+            let column_id = path.column_id;
+            match virtual_block_meta.virtual_column_metas.get(&column_id) {
+                Some(column_meta) => {
+                    virtual_column_metas.insert(column_id, column_meta.clone());
+                    virtual_column_read_plan.insert(field.query_column_id, vec![
+                        VirtualColumnReadPlan::BlockMetaDirect { column_id },
+                    ]);
+                }
+                None if virtual_block_meta.virtual_columns_complete => {
+                    virtual_column_read_plan
+                        .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
+                }
+                None => return None,
+            }
+        }
+
+        Some(VirtualBlockMetaIndex {
+            virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
+            virtual_column_stats: HashMap::new(),
+            virtual_column_metas,
+            shared_virtual_column_ids: BTreeMap::new(),
+            ignored_source_column_ids: self.source_column_ids.clone(),
+            virtual_column_read_plan,
+        })
     }
 }
 
@@ -300,15 +370,55 @@ fn node_has_jsonb_parent_plan(
     }
 }
 
+fn build_runtime_virtual_column_stats(
+    block_meta: &VirtualBlockMeta,
+    segment_schema: Option<&VirtualSegmentSchema>,
+    fields: &[VirtualColumnFieldMatch],
+) -> HashMap<ColumnId, ColumnStatistics> {
+    let Some(schema) = segment_schema else {
+        return HashMap::new();
+    };
+    fields
+        .iter()
+        .filter_map(|field| {
+            let path = schema.find_path_ref(field.field.source_column_id, &field.encoded_path)?;
+            let stat = block_meta
+                .virtual_column_metas
+                .get(&path.column_id)?
+                .column_stat
+                .clone()?;
+            Some((field.field.query_column_id, stat))
+        })
+        .collect()
+}
+
+fn direct_virtual_column_meta(
+    source_column_id: ColumnId,
+    canonical_path: &str,
+    footer_meta: &VirtualColumnIdWithMeta,
+    block_meta: &VirtualBlockMeta,
+    segment_schema: Option<&VirtualSegmentSchema>,
+) -> Result<VirtualColumnMeta> {
+    let block_column_meta = segment_schema
+        .and_then(|schema| schema.find_path_ref(source_column_id, canonical_path))
+        .map(|path| path.column_id)
+        .and_then(|column_id| block_meta.virtual_column_metas.get(&column_id));
+    match block_column_meta {
+        Some(meta) => Ok(meta.clone()),
+        None => footer_meta.to_virtual_column_meta(),
+    }
+}
+
 fn ensure_virtual_column_id(
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
     meta: &VirtualColumnIdWithMeta,
+    column_meta: VirtualColumnMeta,
 ) -> ColumnId {
-    let column_id = meta.column_id;
-    if !virtual_column_metas.contains_key(&column_id) {
-        virtual_column_metas.insert(column_id, build_virtual_column_meta(meta));
-    }
-    column_id
+    let parquet_column_id = meta.parquet_column_id;
+    virtual_column_metas
+        .entry(parquet_column_id)
+        .or_insert(column_meta);
+    parquet_column_id
 }
 
 fn ensure_shared_virtual_column_ids(
@@ -327,14 +437,15 @@ fn ensure_shared_virtual_column_ids(
     let Some((key_meta, value_meta)) = source_shared_metas.get(&data_type) else {
         return false;
     };
-    let key_id = key_meta.column_id;
-    let value_id = value_meta.column_id;
+    let key_id = key_meta.parquet_column_id;
+    let value_id = value_meta.parquet_column_id;
     if !virtual_column_metas.contains_key(&key_id) {
         virtual_column_metas.insert(key_id, VirtualColumnMeta {
             offset: key_meta.meta.offset,
             len: key_meta.meta.len,
             num_values: key_meta.meta.num_values,
             data_type: 0,
+            extended_physical_type: None,
             column_stat: None,
         });
     }
@@ -344,6 +455,7 @@ fn ensure_shared_virtual_column_ids(
             len: value_meta.meta.len,
             num_values: value_meta.meta.num_values,
             data_type: 0,
+            extended_physical_type: None,
             column_stat: None,
         });
     }
@@ -356,20 +468,40 @@ fn build_plans_for_node(
     source_column_id: u32,
     segments: &[String],
     virtual_meta: &VirtualColumnFileMeta,
+    block_meta: &VirtualBlockMeta,
+    segment_schema: Option<&VirtualSegmentSchema>,
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
     shared_virtual_column_ids: &mut BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
-) -> Vec<VirtualColumnReadPlan> {
+) -> Result<Vec<VirtualColumnReadPlan>> {
     let mut plans = Vec::new();
 
     if let Some(leaf) = node.leaf.as_ref() {
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
-                if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
-                    ensure_virtual_column_id(virtual_column_metas, meta);
-                    // Direct: read the materialized virtual column.
-                    let name = meta.column_id.to_string();
-                    plans.push(VirtualColumnReadPlan::Direct { name });
+                let meta = virtual_meta
+                    .column_metas
+                    .get(*leaf_index as usize)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "virtual column trie references missing parquet column {}",
+                            leaf_index
+                        ))
+                    })?;
+                let canonical_path = OwnedKeyPaths {
+                    paths: segments.iter().cloned().map(OwnedKeyPath::Name).collect(),
                 }
+                .to_canonical_path();
+                let column_meta = direct_virtual_column_meta(
+                    source_column_id,
+                    &canonical_path,
+                    meta,
+                    block_meta,
+                    segment_schema,
+                )?;
+                ensure_virtual_column_id(virtual_column_metas, meta, column_meta);
+                // Direct: read the materialized virtual column by parquet ordinal.
+                let name = meta.parquet_column_id.to_string();
+                plans.push(VirtualColumnReadPlan::Direct { name });
             }
             VirtualColumnNameIndex::Shared(index) => {
                 if ensure_shared_virtual_column_ids(
@@ -427,9 +559,11 @@ fn build_plans_for_node(
             source_column_id,
             &child_segments,
             virtual_meta,
+            block_meta,
+            segment_schema,
             virtual_column_metas,
             shared_virtual_column_ids,
-        );
+        )?;
         if let Some(plan) = coalesce_read_plans(child_plans) {
             entries.push((child_key, plan));
         }
@@ -439,7 +573,7 @@ fn build_plans_for_node(
         plans.push(VirtualColumnReadPlan::Object { entries });
     }
 
-    plans
+    Ok(plans)
 }
 
 fn coalesce_read_plans(mut plans: Vec<VirtualColumnReadPlan>) -> Option<VirtualColumnReadPlan> {
@@ -471,7 +605,7 @@ fn key_paths_match_info(key_paths: &OwnedKeyPaths) -> KeyPathMatchInfo {
             OwnedKeyPath::Index(_) => {
                 has_index = true;
             }
-            OwnedKeyPath::Name(name) | OwnedKeyPath::QuotedName(name) => {
+            OwnedKeyPath::Name(name) => {
                 if has_index {
                     continue;
                 }

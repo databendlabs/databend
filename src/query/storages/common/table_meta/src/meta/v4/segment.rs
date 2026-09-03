@@ -561,6 +561,7 @@ mod tests {
             spatial_index_location: None,
             spatial_stats: None,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta: None,
             compression: Compression::None,
             create_on: None,

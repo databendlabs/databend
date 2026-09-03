@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -19,19 +20,20 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::VariantType;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
@@ -40,6 +42,8 @@ use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
+use jsonb::keypath::OwnedKeyPath;
+use jsonb::keypath::OwnedKeyPaths;
 use log::warn;
 
 use crate::FuseTable;
@@ -51,44 +55,25 @@ use crate::io::read::load_virtual_column_file_meta;
 use crate::sessions::TableContext;
 use crate::table_functions::TableMetaFuncTemplate;
 use crate::table_functions::function_template::TableMetaFunc;
+use crate::table_functions::fuse_block_statistics::build_variant;
 
-pub struct FuseVirtualColumn;
-pub type FuseVirtualColumnFunc = TableMetaFuncTemplate<FuseVirtualColumn>;
+pub struct FuseVirtualColumnParquetMeta;
+pub type FuseVirtualColumnParquetMetaFunc = TableMetaFuncTemplate<FuseVirtualColumnParquetMeta>;
 
 #[async_trait::async_trait]
-impl TableMetaFunc for FuseVirtualColumn {
+impl TableMetaFunc for FuseVirtualColumnParquetMeta {
     fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
-            TableField::new("virtual_block_location", TableDataType::String),
+            TableField::new("virtual_location", TableDataType::String),
             TableField::new(
-                "virtual_block_size",
+                "virtual_column_size",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("shared_paths", TableDataType::String.wrap_nullable()),
-            TableField::new("column_name", TableDataType::String),
-            TableField::new("column_type", TableDataType::String),
-            TableField::new(
-                "column_id",
-                TableDataType::Number(NumberDataType::UInt32).wrap_nullable(),
-            ),
-            TableField::new(
-                "block_offset",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
-            TableField::new(
-                "bytes_compressed",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
-            TableField::new(
-                "source_column_id",
-                TableDataType::Number(NumberDataType::UInt32),
-            ),
-            TableField::new("source_column_name", TableDataType::String),
-            TableField::new("storage_kind", TableDataType::String),
-            TableField::new("num_values", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("direct_columns", TableDataType::Variant),
+            TableField::new("shared_columns", TableDataType::Variant),
         ])
     }
 
@@ -109,7 +94,7 @@ impl TableMetaFunc for FuseVirtualColumn {
     }
 }
 
-impl FuseVirtualColumn {
+impl FuseVirtualColumnParquetMeta {
     async fn apply_generic<R: SegmentReader>(
         ctx: &Arc<dyn TableContext>,
         tbl: &FuseTable,
@@ -121,32 +106,22 @@ impl FuseVirtualColumn {
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
-        let mut virtual_block_location = StringColumnBuilder::with_capacity(len);
-        let mut virtual_block_size = vec![];
-        let mut row_count = vec![];
-        let mut shared_paths = vec![];
-
-        let mut column_name = StringColumnBuilder::with_capacity(len);
-        let mut column_type = StringColumnBuilder::with_capacity(len);
-        let mut column_id = vec![];
-        let mut block_offset = vec![];
-        let mut bytes_compressed = vec![];
-        let mut source_column_id = vec![];
-        let mut source_column_name = StringColumnBuilder::with_capacity(len);
-        let mut storage_kind = StringColumnBuilder::with_capacity(len);
-        let mut num_values = vec![];
+        let mut virtual_locations = Vec::with_capacity(len);
+        let mut virtual_column_sizes = Vec::with_capacity(len);
+        let mut row_counts = Vec::with_capacity(len);
+        let mut direct_columns = Vec::with_capacity(len);
+        let mut shared_columns = Vec::with_capacity(len);
 
         let schema = tbl.schema();
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), schema.clone());
         let source_column_names = build_source_column_name_map(schema.as_ref());
-
+        let func_ctx = ctx.get_function_context()?;
         let mut num_rows = 0;
         let chunk_size =
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
-
         let projection = HashSet::new();
-        'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
-            let chunk_refs: Vec<&_> = chunk.iter().collect();
+        'outer: for chunk in snapshot.segments.chunks(chunk_size) {
+            let chunk_refs = chunk.iter().collect::<Vec<_>>();
             let segments = segments_io
                 .generic_read_compact_segments::<R>(&chunk_refs, true, &projection)
                 .await?;
@@ -172,31 +147,19 @@ impl FuseVirtualColumn {
                             continue;
                         }
                     };
-                    let entries =
-                        collect_virtual_column_entries(&virtual_meta, &source_column_names);
-
-                    for entry in entries {
-                        virtual_block_location.put_and_commit(location.clone());
-                        virtual_block_size.push(block_meta.virtual_column_size);
-                        row_count.push(entry.num_values);
-                        shared_paths.push(entry.shared_paths.clone());
-
-                        column_name.put_and_commit(&entry.column_name);
-                        column_type.put_and_commit(&entry.column_type);
-                        column_id.push(entry.column_id);
-
-                        block_offset.push(entry.offset);
-                        bytes_compressed.push(entry.len);
-                        source_column_id.push(entry.source_column_id);
-                        source_column_name.put_and_commit(&entry.source_column_name);
-                        storage_kind.put_and_commit(entry.storage_kind);
-                        num_values.push(entry.num_values);
-
-                        num_rows += 1;
-
-                        if num_rows >= limit {
-                            break 'FOR;
-                        }
+                    let (direct, shared) = virtual_column_file_variants(
+                        &virtual_meta,
+                        &source_column_names,
+                        &func_ctx,
+                    );
+                    virtual_locations.push(location);
+                    virtual_column_sizes.push(block_meta.virtual_column_size);
+                    row_counts.push(block.row_count());
+                    direct_columns.push(direct);
+                    shared_columns.push(shared);
+                    num_rows += 1;
+                    if num_rows >= limit {
+                        break 'outer;
                     }
                 }
             }
@@ -206,23 +169,80 @@ impl FuseVirtualColumn {
             vec![
                 BlockEntry::new_const_column_arg::<StringType>(snapshot_id, num_rows),
                 BlockEntry::new_const_column_arg::<TimestampType>(timestamp, num_rows),
-                Column::String(virtual_block_location.build()).into(),
-                UInt64Type::from_data(virtual_block_size).into(),
-                UInt64Type::from_data(row_count).into(),
-                StringType::from_opt_data(shared_paths).into(),
-                Column::String(column_name.build()).into(),
-                Column::String(column_type.build()).into(),
-                UInt32Type::from_opt_data(column_id).into(),
-                UInt64Type::from_opt_data(block_offset).into(),
-                UInt64Type::from_opt_data(bytes_compressed).into(),
-                UInt32Type::from_data(source_column_id).into(),
-                Column::String(source_column_name.build()).into(),
-                Column::String(storage_kind.build()).into(),
-                UInt64Type::from_data(num_values).into(),
+                StringType::from_data(virtual_locations).into(),
+                UInt64Type::from_data(virtual_column_sizes).into(),
+                UInt64Type::from_data(row_counts).into(),
+                VariantType::from_data(direct_columns).into(),
+                VariantType::from_data(shared_columns).into(),
             ],
             num_rows,
         ))
     }
+}
+
+pub(crate) fn virtual_column_file_variants(
+    virtual_meta: &VirtualColumnFileMeta,
+    source_column_names: &HashMap<u32, String>,
+    func_ctx: &FunctionContext,
+) -> (Vec<u8>, Vec<u8>) {
+    let entries = collect_virtual_column_entries(virtual_meta, source_column_names);
+    let mut direct = BTreeMap::new();
+    let mut shared = BTreeMap::new();
+    for entry in entries {
+        let value = Scalar::Tuple(vec![
+            Scalar::Number(NumberScalar::UInt32(entry.source_column_id)),
+            Scalar::String(entry.source_column_name),
+            entry
+                .column_id
+                .map(|value| Scalar::Number(NumberScalar::UInt32(value)))
+                .unwrap_or(Scalar::Null),
+            Scalar::String(entry.column_type),
+            entry
+                .offset
+                .map(|value| Scalar::Number(NumberScalar::UInt64(value)))
+                .unwrap_or(Scalar::Null),
+            entry
+                .len
+                .map(|value| Scalar::Number(NumberScalar::UInt64(value)))
+                .unwrap_or(Scalar::Null),
+            Scalar::Number(NumberScalar::UInt64(entry.num_values)),
+            entry
+                .shared_paths
+                .map(Scalar::String)
+                .unwrap_or(Scalar::Null),
+        ]);
+        let data_type = TableDataType::Tuple {
+            fields_name: vec![
+                "source_column_id".to_string(),
+                "source_column_name".to_string(),
+                "parquet_column_id".to_string(),
+                "type".to_string(),
+                "offset".to_string(),
+                "length".to_string(),
+                "num_values".to_string(),
+                "paths".to_string(),
+            ],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::UInt32),
+                TableDataType::String,
+                TableDataType::Number(NumberDataType::UInt32).wrap_nullable(),
+                TableDataType::String,
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::String.wrap_nullable(),
+            ],
+        };
+        if entry.storage_kind == "direct" {
+            direct.insert(entry.column_name, (value, data_type));
+        } else {
+            shared.insert(entry.column_name, (value, data_type));
+        }
+    }
+    (
+        build_named_tuple_variant(direct.into_iter().collect(), func_ctx),
+        build_named_tuple_variant(shared.into_iter().collect(), func_ctx),
+    )
 }
 
 pub(crate) struct VirtualColumnEntry {
@@ -250,23 +270,33 @@ pub(crate) fn collect_virtual_column_entries(
     let mut entries = Vec::new();
     let mut shared_buckets = HashMap::new();
 
-    for (source_column_id, node) in &virtual_meta.virtual_column_nodes {
+    let mut source_column_ids = virtual_meta
+        .virtual_column_nodes
+        .keys()
+        .copied()
+        .collect::<Vec<_>>();
+    source_column_ids.sort_unstable();
+    for source_column_id in source_column_ids {
+        let node = &virtual_meta.virtual_column_nodes[&source_column_id];
         let source_column_name = source_column_names
-            .get(source_column_id)
+            .get(&source_column_id)
             .cloned()
             .unwrap_or_else(|| source_column_id.to_string());
-        let mut segments = Vec::new();
+        let mut key_paths = OwnedKeyPaths { paths: Vec::new() };
         collect_virtual_column_leaves(
             virtual_meta,
-            *source_column_id,
+            source_column_id,
             &source_column_name,
             node,
-            &mut segments,
+            &mut key_paths,
             &mut entries,
             &mut shared_buckets,
         );
     }
 
+    let mut shared_buckets = shared_buckets.into_iter().collect::<Vec<_>>();
+    shared_buckets
+        .sort_by_key(|((source_column_id, data_type), _)| (*source_column_id, *data_type));
     for ((source_column_id, data_type), mut bucket) in shared_buckets {
         bucket.paths.sort();
         let metas = virtual_meta
@@ -325,7 +355,7 @@ fn push_shared_entries(
         shared_paths: Some(shared_paths),
         column_name: format!("{column_name}.entries.key"),
         column_type: key_meta.data_type.to_string(),
-        column_id: Some(key_meta.column_id),
+        column_id: Some(key_meta.parquet_column_id),
         offset: Some(key_meta.meta.offset),
         len: Some(key_meta.meta.len),
         num_values: key_meta.meta.num_values,
@@ -337,7 +367,7 @@ fn push_shared_entries(
         shared_paths: None,
         column_name: format!("{column_name}.entries.value"),
         column_type: value_meta.data_type.to_string(),
-        column_id: Some(value_meta.column_id),
+        column_id: Some(value_meta.parquet_column_id),
         offset: Some(value_meta.meta.offset),
         len: Some(value_meta.meta.len),
         num_values: value_meta.meta.num_values,
@@ -366,12 +396,13 @@ fn collect_virtual_column_leaves(
     source_column_id: u32,
     source_column_name: &str,
     node: &VirtualColumnNode,
-    segments: &mut Vec<String>,
+    key_paths: &mut OwnedKeyPaths,
     entries: &mut Vec<VirtualColumnEntry>,
     shared_buckets: &mut HashMap<(u32, VirtualColumnSharedDataType), SharedPathBucket>,
 ) {
     if let Some(leaf) = node.leaf.as_ref() {
-        let virtual_path = build_virtual_column_key_name(segments);
+        let canonical_path = key_paths.to_canonical_path();
+        let column_name = format!("{}.{}", source_column_name, &canonical_path);
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
                 if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
@@ -380,9 +411,9 @@ fn collect_virtual_column_leaves(
                         source_column_name: source_column_name.to_string(),
                         storage_kind: "direct",
                         shared_paths: None,
-                        column_name: format!("{}{}", source_column_name, virtual_path),
+                        column_name,
                         column_type: meta.data_type.to_string(),
-                        column_id: Some(meta.column_id),
+                        column_id: Some(meta.parquet_column_id),
                         offset: Some(meta.meta.offset),
                         len: Some(meta.meta.len),
                         num_values: meta.meta.num_values,
@@ -395,7 +426,7 @@ fn collect_virtual_column_leaves(
                     source_column_id,
                     source_column_name,
                     VirtualColumnSharedDataType::Jsonb,
-                    virtual_path,
+                    canonical_path,
                 );
             }
             VirtualColumnNameIndex::TypedShared { data_type, .. } => {
@@ -404,7 +435,7 @@ fn collect_virtual_column_leaves(
                     source_column_id,
                     source_column_name,
                     *data_type,
-                    virtual_path,
+                    canonical_path,
                 );
             }
         }
@@ -420,17 +451,17 @@ fn collect_virtual_column_leaves(
         let Some(segment) = virtual_meta.string_table.get(child_id as usize) else {
             continue;
         };
-        segments.push(segment.clone());
+        key_paths.paths.push(OwnedKeyPath::Name(segment.clone()));
         collect_virtual_column_leaves(
             virtual_meta,
             source_column_id,
             source_column_name,
             child_node,
-            segments,
+            key_paths,
             entries,
             shared_buckets,
         );
-        segments.pop();
+        key_paths.paths.pop();
     }
 }
 
@@ -438,18 +469,22 @@ pub(crate) fn build_source_column_name_map(schema: &TableSchema) -> HashMap<u32,
     schema
         .fields()
         .iter()
+        .filter(|field| field.data_type().remove_nullable() == TableDataType::Variant)
         .map(|field| (field.column_id, field.name.clone()))
         .collect()
 }
 
-fn build_virtual_column_key_name(segments: &[String]) -> String {
-    let mut name = String::new();
-    for segment in segments {
-        name.push('[');
-        name.push('\'');
-        name.push_str(segment);
-        name.push('\'');
-        name.push(']');
-    }
-    name
+fn build_named_tuple_variant(
+    fields: Vec<(String, (Scalar, TableDataType))>,
+    func_ctx: &FunctionContext,
+) -> Vec<u8> {
+    let (names, values): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
+    let (scalars, types): (Vec<_>, Vec<_>) = values.into_iter().unzip();
+
+    let scalar = Scalar::Tuple(scalars);
+    let data_type = TableDataType::Tuple {
+        fields_name: names,
+        fields_type: types,
+    };
+    build_variant(scalar, &data_type, func_ctx)
 }

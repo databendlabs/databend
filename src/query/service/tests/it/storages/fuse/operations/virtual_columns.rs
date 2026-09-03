@@ -53,8 +53,7 @@ async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<T
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    let results =
-        prepare_refresh_virtual_column(ctx.clone(), fuse_table, None, false, None).await?;
+    let results = prepare_refresh_virtual_column(ctx.clone(), fuse_table, None, true, None).await?;
     if !results.is_empty() {
         let mut build_res = PipelineBuildResult::create();
         commit_refresh_virtual_column(
@@ -128,7 +127,7 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
     let results =
-        prepare_refresh_virtual_column(table_ctx.clone(), fuse_table, None, false, None).await?;
+        prepare_refresh_virtual_column(table_ctx.clone(), fuse_table, None, true, None).await?;
 
     assert!(!results.is_empty());
 
@@ -188,8 +187,8 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
             assert!(schema.is_some());
             let schema = schema.unwrap();
             assert_eq!(schema.fields.len(), 2);
-            assert_eq!(schema.fields[0].name(), "v['a']");
-            assert_eq!(schema.fields[1].name(), "v['b']");
+            assert_eq!(schema.fields[0].name(), "v.a");
+            assert_eq!(schema.fields[1].name(), "v.b");
         }
     }
 
@@ -235,8 +234,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let fixture = setup_table_with_virtual_columns(2).await?;
 
     let table = fixture.latest_default_table().await?;
-    let original_schema = table.get_table_info().meta.virtual_schema.clone();
-    assert!(original_schema.is_some());
+    assert!(table.get_table_info().meta.virtual_schema.is_none());
 
     // Tamper block[0] in segment[0]: change _vb_v2 prefix to _vb (legacy).
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -255,6 +253,11 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
         .await?;
 
     let mut seg_info = SegmentInfo::try_from(seg.as_ref())?;
+    let original_virtual_segment_schema = seg_info
+        .summary
+        .virtual_segment_schema
+        .clone()
+        .expect("segment should have virtual_segment_schema");
     let mut blocks = seg_info.blocks.clone();
     let mut bm = Arc::unwrap_or_clone(blocks[0].clone());
     let vbm = bm
@@ -283,7 +286,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
         TestFixture::default_table_meta_timestamps(),
     )?;
     let mut segs = snapshot.segments.clone();
-    segs.push((new_seg_loc, SegmentInfo::VERSION));
+    segs.push((new_seg_loc.clone(), SegmentInfo::VERSION));
     new_snap.segments = segs;
     new_snap.summary = merge_statistics(snapshot.summary.clone(), &seg_info.summary, None);
     fuse_table
@@ -309,18 +312,27 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     assert_eq!(vacuum_result.removed_files, 1);
     assert!(!pipeline_is_empty);
 
-    // Verify metadata is unchanged because the commit pipeline was not executed.
+    // Verify table-level virtual schema stays unused and the segment-local
+    // schema is unchanged because the commit pipeline was not executed.
     let table = fixture.latest_default_table().await?;
-    let new_schema = table.get_table_info().meta.virtual_schema.clone();
-    assert!(new_schema.is_some());
-    assert_eq!(
-        original_schema.unwrap().fields.len(),
-        new_schema.unwrap().fields.len()
-    );
+    assert!(table.get_table_info().meta.virtual_schema.is_none());
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snap = fuse_table.read_table_snapshot().await?.unwrap();
     let reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table.schema());
+    let tampered_segment = reader
+        .read(&LoadParams {
+            location: new_seg_loc.clone(),
+            len_hint: None,
+            ver: SegmentInfo::VERSION,
+            put_cache: false,
+        })
+        .await?;
+    assert_eq!(
+        tampered_segment.summary.virtual_segment_schema.as_ref(),
+        Some(&original_virtual_segment_schema)
+    );
+
+    let snap = fuse_table.read_table_snapshot().await?.unwrap();
     let mut legacy_ref_count = 0;
     for (loc, ver) in &snap.segments {
         let seg = reader

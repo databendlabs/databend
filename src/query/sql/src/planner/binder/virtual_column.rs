@@ -131,7 +131,6 @@ impl Binder {
             .with_column("database")
             .with_column("table")
             .with_column("source_column")
-            .with_column("virtual_column_id")
             .with_column("virtual_column_name")
             .with_column("virtual_column_type");
 

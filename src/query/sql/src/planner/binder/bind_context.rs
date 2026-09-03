@@ -44,6 +44,7 @@ use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
+use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
@@ -985,53 +986,24 @@ impl BindContext {
         {
             btree_map::Entry::Vacant(e) => {
                 let mut metadata = metadata.write();
-                let table_entry = metadata.table(table_index);
-                let table = table_entry.table();
-                let table_info = table.get_table_info();
-
-                let virtual_schema = table_info.meta.virtual_schema.as_ref();
-                let column_id = virtual_schema
-                    .and_then(|virtual_schema| {
-                        virtual_schema
-                            .fields
-                            .iter()
-                            .find(|virtual_field| {
-                                virtual_field.source_column_id
-                                    == virtual_column_name.source_column_id
-                                    && virtual_field.name == virtual_column_name.key_name
-                            })
-                            .map(|virtual_field| virtual_field.column_id)
+                // Allocate a query-time temporary virtual column id. This is not
+                // a persisted segment-local column id: every segment resolves the
+                // canonical path to its own physical column id during pruning/read.
+                let column_id = metadata
+                    .virtual_columns_by_table_index(table_index)
+                    .filter_map(|column| match column {
+                        ColumnEntry::VirtualColumn(VirtualColumn {
+                            query_column_id, ..
+                        }) => Some(*query_column_id),
+                        _ => None,
                     })
-                    .unwrap_or_else(|| {
-                        // If the column_id does not exist, generate a temporary column_id.
-                        // This may occur in the following scenarios:
-                        // 1. The path is not an independent virtual column but is stored within shared data column.
-                        // 2. The path is an object composed of multiple virtual columns.
-                        // 3. The path is extracted from columns within a virtual column itself.
-                        // 4. The table option enables virtual columns, but no data has been written
-                        //    yet, so TableMeta.virtual_schema is still empty.
-                        let next_virtual_column_id = virtual_schema
-                            .map(|virtual_schema| virtual_schema.next_column_id)
-                            .unwrap_or(VIRTUAL_COLUMN_ID_START);
-                        let max_column_id = metadata
-                            .virtual_columns_by_table_index(table_index)
-                            .filter_map(|column| match column {
-                                ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) => {
-                                    Some(*column_id)
-                                }
-                                _ => None,
-                            })
-                            .max()
-                            .unwrap_or_else(|| next_virtual_column_id.saturating_sub(1));
-                        if max_column_id >= next_virtual_column_id {
-                            max_column_id + 1
-                        } else {
-                            next_virtual_column_id
-                        }
+                    .max()
+                    .map_or(VIRTUAL_COLUMN_ID_START, |column_id| {
+                        column_id.saturating_add(1)
                     });
 
                 let source_column_id = virtual_column_name.source_column_id;
-                let column_name = virtual_column_name.key_name.clone();
+                let column_name = format_virtual_column_name(source_column_name, &key_paths);
                 // todo
                 let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
                 let is_try = true;
@@ -1136,4 +1108,15 @@ pub fn apply_alias_for_columns(
         columns[index].column_name = column_name;
     }
     Ok(())
+}
+
+fn format_virtual_column_name(source_column_name: &str, key_paths: &OwnedKeyPaths) -> String {
+    let mut name = source_column_name.to_string();
+    for path in &key_paths.paths {
+        match path {
+            OwnedKeyPath::Index(index) => name.push_str(&format!("[{index}]")),
+            OwnedKeyPath::Name(key) => name.push_str(&format!("['{key}']")),
+        }
+    }
+    name
 }

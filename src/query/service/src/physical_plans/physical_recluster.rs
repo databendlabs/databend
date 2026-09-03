@@ -278,19 +278,35 @@ impl IPhysicalPlan for Recluster {
                     }
                 }
 
+                let virtual_column_layout = task.virtual_column_layout.clone();
+                let query_ctx = builder.ctx.clone();
                 // All layouts share the ordinary block statistics and serialization path after
                 // they have formed output blocks and removed layout-only temporary columns.
                 builder.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        let proc = TransformSerializeBlock::try_create(
-                            builder.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            table,
-                            cluster_stats_gen.clone(),
-                            MutationKind::Recluster,
-                            self.table_meta_timestamps,
-                        )?;
+                    move |transform_input_port, transform_output_port| {
+                        let proc = match &virtual_column_layout {
+                            Some(layout) => {
+                                TransformSerializeBlock::try_create_with_virtual_layout(
+                                    query_ctx.clone(),
+                                    transform_input_port,
+                                    transform_output_port,
+                                    table,
+                                    cluster_stats_gen.clone(),
+                                    MutationKind::Recluster,
+                                    Arc::new(layout.clone()),
+                                    self.table_meta_timestamps,
+                                )?
+                            }
+                            None => TransformSerializeBlock::try_create(
+                                query_ctx.clone(),
+                                transform_input_port,
+                                transform_output_port,
+                                table,
+                                cluster_stats_gen.clone(),
+                                MutationKind::Recluster,
+                                self.table_meta_timestamps,
+                            )?,
+                        };
                         proc.into_processor()
                     },
                 )

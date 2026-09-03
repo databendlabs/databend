@@ -1310,6 +1310,7 @@ mod tests {
             spatial_index_size: None,
             spatial_stats: None,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta: None,
             compression: Compression::Lz4,
             create_on: None,

@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::query_kind::QueryKind;
@@ -79,6 +80,8 @@ use crate::pruning::segment_pruner::SegmentPruner;
 
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
+use databend_common_catalog::plan::VirtualPredicateRef;
+
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
     pub dal: Operator,
@@ -93,6 +96,10 @@ pub struct PruningContext {
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
     pub spatial_index_pruner: Option<Arc<SpatialIndexPruner>>,
+
+    /// Virtual columns referenced by the pushed-down filter. Used to build
+    /// block-local range statistics for virtual column range pruning.
+    pub virtual_predicate_refs: Option<Arc<[VirtualPredicateRef]>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
     pub pruning_cost: PruningCostController,
@@ -203,6 +210,12 @@ impl PruningContext {
             VirtualColumnPruner::try_create(dal.clone(), push_down)?
         };
 
+        let virtual_predicate_refs = push_down
+            .as_ref()
+            .map(|push_down| push_down.virtual_predicate_refs(filter_expr.as_ref()))
+            .filter(|refs| !refs.is_empty())
+            .map(Arc::from);
+
         let spatial_index_pruner = if lightweight_pruning {
             None
         } else {
@@ -243,6 +256,7 @@ impl PruningContext {
             inverted_index_pruner,
             virtual_column_pruner,
             spatial_index_pruner,
+            virtual_predicate_refs,
             pruning_stats,
             pruning_cost,
         });
@@ -433,7 +447,11 @@ impl FusePruner {
                             )?;
                             res.extend(
                                 block_pruner
-                                    .pruning(segment_location.clone(), block_metas)
+                                    .pruning(
+                                        segment_location.clone(),
+                                        block_metas,
+                                        compact_segment_info.summary.virtual_segment_schema.clone(),
+                                    )
                                     .await?,
                             );
                         }
@@ -481,7 +499,15 @@ impl FusePruner {
                                     block_metas = Arc::new(sample_block_metas);
                                 }
                             }
-                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
+                            res.extend(
+                                block_pruner
+                                    .pruning(
+                                        location.clone(),
+                                        block_metas,
+                                        info.summary.virtual_segment_schema.clone(),
+                                    )
+                                    .await?,
+                            );
                         }
                     }
                     Result::<_>::Ok((res, deleted_segments))
@@ -564,6 +590,7 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             Arc::new(batch),
+                            None,
                         )
                         .await?;
 
@@ -684,7 +711,7 @@ impl FusePruner {
     }
 
     // Pruning stats.
-    pub fn pruning_stats(&self) -> databend_common_catalog::plan::PruningStatistics {
+    pub fn pruning_stats(&self) -> PruningStatistics {
         let stats = self.pruning_ctx.pruning_stats.clone();
 
         let segments_read_cost = stats.get_segments_read_cost();
@@ -725,7 +752,7 @@ impl FusePruner {
         let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
         let blocks_topn_pruning_cost = stats.get_blocks_topn_pruning_cost();
 
-        databend_common_catalog::plan::PruningStatistics {
+        PruningStatistics {
             segments_read_cost,
             segments_decompress_cost,
             segments_range_pruning_before,
