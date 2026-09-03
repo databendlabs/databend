@@ -27,9 +27,9 @@ use databend_common_expression::TableSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
+use databend_common_timezone::Tz;
 use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::record_batch_to_variant_block;
-use jiff::tz::TimeZone;
 use orc_rust::array_decoder::NaiveStripeDecoder;
 
 use crate::strip::StripeInMemory;
@@ -37,14 +37,14 @@ use crate::utils::map_orc_error;
 
 pub struct StripeDecoderForVariantTable {
     copy_status: Option<Arc<CopyStatus>>,
-    tz: TimeZone,
+    tz: Tz,
     internal_columns: Vec<InternalColumnType>,
 }
 
 impl StripeDecoderForVariantTable {
     pub fn new(
         table_ctx: Arc<dyn TableContext>,
-        tz: TimeZone,
+        tz: Tz,
         internal_columns: Vec<InternalColumnType>,
     ) -> Self {
         let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {

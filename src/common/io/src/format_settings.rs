@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use base64::Engine as _;
 use base64::engine::general_purpose;
 use databend_common_exception::ErrorCode;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
 
 use crate::GeometryDataType;
 
@@ -116,7 +116,7 @@ impl HttpHandlerDataFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputFormatSettings {
-    pub jiff_timezone: TimeZone,
+    pub timezone: Tz,
     pub geometry_format: GeometryDataType,
     pub binary_format: BinaryDisplayFormat,
 
@@ -129,7 +129,7 @@ pub struct InputFormatSettings {
 impl Default for InputFormatSettings {
     fn default() -> Self {
         Self {
-            jiff_timezone: TimeZone::UTC,
+            timezone: Tz::UTC,
             geometry_format: GeometryDataType::default(),
             binary_format: BinaryDisplayFormat::Hex,
             is_rounding_mode: true,
@@ -141,7 +141,7 @@ impl Default for InputFormatSettings {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutputFormatSettings {
-    pub jiff_timezone: TimeZone,
+    pub timezone: Tz,
     pub geometry_format: GeometryDataType,
     pub binary_format: BinaryDisplayFormat,
     pub http_json_result_mode: HttpHandlerDataFormat,
@@ -161,7 +161,7 @@ pub struct OutputFormatSettings {
 impl Default for OutputFormatSettings {
     fn default() -> Self {
         Self {
-            jiff_timezone: TimeZone::UTC,
+            timezone: Tz::UTC,
             geometry_format: GeometryDataType::default(),
             binary_format: BinaryDisplayFormat::Hex,
             http_json_result_mode: HttpHandlerDataFormat::Display,

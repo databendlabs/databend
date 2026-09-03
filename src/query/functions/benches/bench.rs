@@ -617,6 +617,10 @@ mod bitmap_scalar {
 mod datetime_fast_path {
     use std::sync::LazyLock;
 
+    use chrono::Datelike;
+    use chrono::NaiveDate;
+    use chrono::Offset;
+    use chrono::Timelike;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
@@ -632,8 +636,9 @@ mod datetime_fast_path {
     use databend_common_expression::types::timestamp::timestamp_to_string;
     use databend_common_expression_test_support as parser;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use jiff::civil::date;
-    use jiff::tz::TimeZone;
+    use databend_common_timezone::LocalTimeResolution;
+    use databend_common_timezone::Tz;
+    use databend_common_timezone::resolve_local_datetime;
     use rand::Rng;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
@@ -658,7 +663,7 @@ mod datetime_fast_path {
                 .iter()
                 .map(|&micros| microseconds_to_days(micros))
                 .collect();
-            let tz_sh = TimeZone::get("Asia/Shanghai").unwrap();
+            let tz_sh = "Asia/Shanghai".parse::<Tz>().unwrap();
             let mut string_builder = StringColumnBuilder::with_capacity(rows);
             let mut standard_builder = StringColumnBuilder::with_capacity(rows);
             for &micros in timestamps.iter() {
@@ -666,14 +671,14 @@ mod datetime_fast_path {
                 string_builder.put_and_commit(formatted);
 
                 let zoned = timestamp_from_micros(micros, &tz_sh);
-                let offset_secs = zoned.offset().seconds();
+                let offset_secs = zoned.offset().fix().local_minus_utc();
                 let offset_hours = offset_secs / 3600;
                 let offset_minutes = (offset_secs.abs() % 3600) / 60;
                 let standard = format!(
                     "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}{:+03}:{:02}",
-                    zoned.date().year(),
-                    zoned.date().month(),
-                    zoned.date().day(),
+                    zoned.date_naive().year(),
+                    zoned.date_naive().month(),
+                    zoned.date_naive().day(),
                     zoned.time().hour(),
                     zoned.time().minute(),
                     zoned.time().second(),
@@ -721,7 +726,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.timestamp_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -738,7 +743,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.timestamp_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -755,7 +760,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.date_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -772,7 +777,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.string_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -789,7 +794,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.standard_string_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -806,7 +811,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.standard_string_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -826,7 +831,7 @@ mod datetime_fast_path {
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.timestamp_entry()], data.rows());
         let func_ctx = FunctionContext {
-            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            tz: "Asia/Shanghai".parse::<Tz>().unwrap(),
             ..Default::default()
         };
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -843,8 +848,8 @@ mod datetime_fast_path {
     }
 
     fn generate_timestamp_values(rows: usize, interval: usize) -> Vec<i64> {
-        let tz_sh = TimeZone::get("Asia/Shanghai").unwrap();
-        let tz_alg = TimeZone::get("Africa/Algiers").unwrap();
+        let tz_sh = "Asia/Shanghai".parse::<Tz>().unwrap();
+        let tz_alg = "Africa/Algiers".parse::<Tz>().unwrap();
         let specials = [
             local_micros(&tz_sh, 1941, 3, 14, 23, 55, 0),
             local_micros(&tz_sh, 1941, 3, 15, 1, 5, 0),
@@ -869,7 +874,7 @@ mod datetime_fast_path {
     }
 
     fn local_micros(
-        tz: &TimeZone,
+        tz: &Tz,
         year: i32,
         month: u8,
         day: u8,
@@ -877,12 +882,13 @@ mod datetime_fast_path {
         minute: u8,
         second: u8,
     ) -> i64 {
-        let dt =
-            date(year as i16, month as i8, day as i8).at(hour as i8, minute as i8, second as i8, 0);
-        tz.to_ambiguous_zoned(dt)
-            .later()
+        let local = NaiveDate::from_ymd_opt(year, month as u32, day as u32)
             .unwrap()
-            .timestamp()
-            .as_microsecond()
+            .and_hms_opt(hour as u32, minute as u32, second as u32)
+            .unwrap();
+        resolve_local_datetime(tz, local, LocalTimeResolution::Later, None)
+            .unwrap()
+            .unix_seconds
+            * 1_000_000
     }
 }

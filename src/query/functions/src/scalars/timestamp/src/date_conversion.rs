@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::DateTime;
+use chrono::Datelike;
+use chrono::Timelike;
+use chrono::Utc;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -23,65 +27,34 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::utils::serialize::uniform_date;
 use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_timezone::Tz;
 use databend_common_timezone::fast_utc_from_local;
-use jiff::SignedDuration;
-use jiff::Unit;
-use jiff::Zoned;
-use jiff::civil::Date;
-use jiff::civil::Time;
-use jiff::civil::date;
-use jiff::tz::TimeZone;
+use databend_common_timezone::local_datetime_at;
 
 #[inline]
-pub(super) fn today_date(now: &Zoned, tz: &TimeZone) -> i32 {
-    let now = now.with_time_zone(tz.clone());
-    now.date()
-        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-        .unwrap()
-        .get_days()
+pub(super) fn today_date(now: &DateTime<Utc>, tz: &Tz) -> i32 {
+    let Some((local, _)) = local_datetime_at(tz, now.timestamp()) else {
+        return 0;
+    };
+    uniform_date(local.date())
 }
 
-// Summer Time in 1990 began at 2 a.m. (Beijing time) on Sunday, April 15th and ended at 2 a.m. (Beijing Daylight Saving Time) on Sunday, September 16th.
-// During this period, the summer working hours will be implemented, namely from April 15th to September 16th.
-// The working hours of all departments of The State Council are from 8 a.m. to 12 p.m. and from 1:30 p.m. to 5:30 p.m. The winter working hours will be implemented after September 17th.
-pub fn calc_date_to_timestamp(val: i32, tz: &TimeZone) -> std::result::Result<i64, String> {
-    let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
+/// Midnight of a calendar date, as microseconds since the epoch.
+///
+/// Midnight does not exist on every date: `Asia/Shanghai` skipped
+/// 1947-04-15 00:00:00 when DST began. Those cases follow the shared timezone
+/// policy and move forward to the first instant that does exist.
+pub fn calc_date_to_timestamp(val: i32, tz: &Tz) -> std::result::Result<i64, String> {
     let local_date = date_from_days(val);
-    let year = i32::from(local_date.year());
+    let year = local_date.year();
     let month = local_date.month() as u8;
     let day = local_date.day() as u8;
 
-    if let Some(micros) = fast_utc_from_local(tz, year, month, day, 0, 0, 0, 0) {
-        return Ok(micros);
-    }
-
-    let midnight = local_date.to_datetime(Time::midnight());
-    match midnight.to_zoned(tz.clone()) {
-        Ok(zoned) => Ok(zoned.timestamp().as_microsecond()),
-        Err(_err) => {
-            for minutes in 1..=1440 {
-                let delta = SignedDuration::from_secs((minutes * 60) as i64);
-                if let Ok(adj) = midnight.checked_add(delta) {
-                    if let Ok(zoned) = adj.to_zoned(tz.clone()) {
-                        return Ok(zoned.timestamp().as_microsecond());
-                    }
-                } else {
-                    break;
-                }
-            }
-
-            // The timezone database might not have explicit rules for extremely
-            // old/new dates, so fall back to the legacy behavior that applies the
-            // canonical offset we use for 1970-01-01.
-            let tz_offset_micros = tz
-                .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
-                .unwrap()
-                .as_microsecond();
-            Ok(ts + tz_offset_micros)
-        }
-    }
+    fast_utc_from_local(tz, year, month, day, 0, 0, 0, 0).ok_or_else(|| {
+        format!("Failed to convert date {local_date} to a timestamp in timezone {tz}")
+    })
 }
 
 fn normalize_time_precision(raw: i64) -> Result<u8, String> {
@@ -95,13 +68,17 @@ fn normalize_time_precision(raw: i64) -> Result<u8, String> {
 }
 
 fn current_time_string(func_ctx: &FunctionContext, precision: Option<u8>) -> String {
-    let datetime = func_ctx.now.with_time_zone(func_ctx.tz.clone()).datetime();
-    let nanos = datetime.subsec_nanosecond() as u32;
+    let now = func_ctx.now;
+    let Some((local, _)) = local_datetime_at(&func_ctx.tz, now.timestamp()) else {
+        return "00:00:00".to_string();
+    };
+    let nanos = now.timestamp_subsec_nanos();
+
     let mut value = format!(
         "{:02}:{:02}:{:02}",
-        datetime.hour(),
-        datetime.minute(),
-        datetime.second()
+        local.hour(),
+        local.minute(),
+        local.second()
     );
 
     let precision = precision.unwrap_or(9).min(9);
@@ -167,7 +144,7 @@ pub(super) fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<TimestampType, _>(
         "now",
         |_| FunctionDomain::Full,
-        |ctx| Value::Scalar(ctx.func_ctx.now.timestamp().as_microsecond()),
+        |ctx| Value::Scalar(ctx.func_ctx.now.timestamp_micros()),
     );
 
     registry.register_0_arg_core::<StringType, _>(

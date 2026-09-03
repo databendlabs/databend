@@ -24,7 +24,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_storage::init_stage_operator;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
 
 use super::OrcTable;
 use crate::processors::decoder::StripeDecoder;
@@ -99,11 +99,11 @@ impl OrcTable {
             pipeline.try_resize(max_threads)?;
             let settings = ctx.get_settings();
             let tz_string = settings.get_timezone()?;
-            let tz = TimeZone::get(&tz_string).map_err(|e| {
+            let tz = tz_string.parse::<Tz>().map_err(|e| {
                 ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
             })?;
             pipeline.add_accumulating_transformer(|| {
-                StripeDecoderForVariantTable::new(ctx.clone(), tz.clone(), internal_columns.clone())
+                StripeDecoderForVariantTable::new(ctx.clone(), tz, internal_columns.clone())
             });
         }
         Ok(())

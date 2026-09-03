@@ -11,5 +11,4 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-timezone = { workspace = true }
 dtparse = { workspace = true }
-jiff = { workspace = true }
 num-traits = { workspace = true }

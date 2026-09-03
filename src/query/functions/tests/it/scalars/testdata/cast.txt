@@ -1523,7 +1523,7 @@ evaluation:
 | Row 1  | '1969-09-23'        | '1969-09-23 00:00:00.000000'              |
 | Row 2  | '1970-01-01'        | '1970-01-01 00:00:00.000000'              |
 | Row 3  | '1970-04-11'        | '1970-04-11 00:00:00.000000'              |
-| Row 4  | '9999-12-31'        | '9999-12-30 22:00:00.000000'              |
+| Row 4  | '9999-12-31'        | '9999-12-31 00:00:00.000000'              |
 +--------+---------------------+-------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
@@ -1547,7 +1547,7 @@ evaluation:
 | Row 1  | -100                | '1969-09-23 00:00:00.000000'              |
 | Row 2  | 0                   | '1970-01-01 00:00:00.000000'              |
 | Row 3  | 100                 | '1970-04-11 00:00:00.000000'              |
-| Row 4  | 2932896             | '9999-12-30 22:00:00.000000'              |
+| Row 4  | 2932896             | '9999-12-31 00:00:00.000000'              |
 +--------+---------------------+-------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
@@ -1629,7 +1629,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTAMP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-TIME": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: input contains invalid characters. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
 
 
 
@@ -1829,7 +1829,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-DATE": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `CAST('A NON-DATE STR' AS Date)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: input contains invalid characters. while evaluating function `to_date('A NON-DATE STR')` in expr `CAST('A NON-DATE STR' AS Date)`
 
 
 
@@ -4013,7 +4013,7 @@ evaluation:
 | Row 1  | '1969-09-23'        | '1969-09-23 00:00:00.000000'              |
 | Row 2  | '1970-01-01'        | '1970-01-01 00:00:00.000000'              |
 | Row 3  | '1970-04-11'        | '1970-04-11 00:00:00.000000'              |
-| Row 4  | '9999-12-31'        | '9999-12-30 22:00:00.000000'              |
+| Row 4  | '9999-12-31'        | '9999-12-31 00:00:00.000000'              |
 +--------+---------------------+-------------------------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------+
@@ -4037,7 +4037,7 @@ evaluation:
 | Row 1  | -100                | '1969-09-23 00:00:00.000000'              |
 | Row 2  | 0                   | '1970-01-01 00:00:00.000000'              |
 | Row 3  | 100                 | '1970-04-11 00:00:00.000000'              |
-| Row 4  | 2932896             | '9999-12-30 22:00:00.000000'              |
+| Row 4  | 2932896             | '9999-12-31 00:00:00.000000'              |
 +--------+---------------------+-------------------------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------+

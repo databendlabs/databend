@@ -39,10 +39,10 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
+use databend_common_timezone::Tz;
 use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::read_record_batch_to_variant_column;
 use databend_storages_common_stage::record_batch_to_variant_block;
-use jiff::tz::TimeZone;
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
@@ -91,7 +91,7 @@ pub struct ParquetVariantSource {
     batch_size: usize,
     use_logic_type: bool,
 
-    tz: TimeZone,
+    tz: Tz,
 }
 
 impl ParquetVariantSource {
@@ -109,7 +109,7 @@ impl ParquetVariantSource {
 
         let settings = ctx.get_settings();
         let tz_string = settings.get_timezone()?;
-        let tz = TimeZone::get(&tz_string).map_err(|e| {
+        let tz = tz_string.parse::<Tz>().map_err(|e| {
             ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
         })?;
 
@@ -363,7 +363,7 @@ fn schema_to_tuple_type(schema: &TableSchema) -> TableDataType {
 pub fn read_small_file(
     bytes: Bytes,
     batch_size: usize,
-    tz: &TimeZone,
+    tz: &Tz,
     use_logic_type: bool,
 ) -> databend_common_exception::Result<DataBlock> {
     let len = bytes.len();

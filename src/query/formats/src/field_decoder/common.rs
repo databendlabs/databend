@@ -39,7 +39,7 @@ pub(crate) fn read_date(
     let s = std::str::from_utf8(data).map_err(|e| ErrorCode::BadBytes(format!("{e}")))?;
     let days = parse_date_with_auto(
         s,
-        &settings.settings.jiff_timezone,
+        &settings.settings.timezone,
         settings.settings.enable_auto_detect_datetime_format,
     )?;
     column.push(days);
@@ -68,7 +68,7 @@ pub(crate) fn read_timestamp(
 
     // Try ISO/standard timestamp text.
     let mut buffer_readr = Cursor::new(&data);
-    let t = buffer_readr.read_timestamp_text(&settings.settings.jiff_timezone);
+    let t = buffer_readr.read_timestamp_text(&settings.settings.timezone);
     match t {
         Ok(DateTimeResType::Datetime(t)) => {
             if !buffer_readr.eof() {
@@ -80,7 +80,7 @@ pub(crate) fn read_timestamp(
                 );
                 return Err(ErrorCode::BadBytes(msg));
             }
-            let mut ts = t.timestamp().as_microsecond();
+            let mut ts = t;
             clamp_timestamp(&mut ts);
             column.push(ts);
             Ok(())
@@ -94,7 +94,7 @@ pub(crate) fn read_timestamp(
                     column.push(micros);
                     return Ok(());
                 }
-                if let Some(micros) = auto_detect_timestamp(s, &settings.settings.jiff_timezone) {
+                if let Some(micros) = auto_detect_timestamp(s, &settings.settings.timezone) {
                     column.push(micros);
                     return Ok(());
                 }
@@ -112,7 +112,7 @@ pub(crate) fn read_timestamp_tz(
     let s = std::str::from_utf8(data).map_err(|e| ErrorCode::BadBytes(format!("{e}")))?;
     let ts_tz = parse_timestamp_tz_with_auto(
         s,
-        &settings.settings.jiff_timezone,
+        &settings.settings.timezone,
         settings.settings.enable_auto_detect_datetime_format,
     )?;
     column.push(ts_tz);

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Datelike;
+use chrono::NaiveDate as Date;
+use chrono::Weekday;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
@@ -20,19 +23,14 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::timestamp::timestamp_from_micros;
-use databend_common_expression::vectorize_1_arg;
-use databend_common_expression::vectorize_2_arg;
-use jiff::Unit;
-use jiff::civil::Date;
-use jiff::civil::Weekday;
-use jiff::civil::date;
-use jiff::civil::datetime;
-use jiff::tz::TimeZone;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_timezone::Tz;
+use databend_common_timezone::components_from_timestamp;
+use databend_common_timezone::fast_utc_from_local;
 
 use crate::date_arithmetic::last_day_of_year_month;
 use crate::date_extract::calendar_monotonicity;
-use crate::date_extract::tz_wall_clock_single_segment;
 
 #[derive(Clone, Copy)]
 enum Round {
@@ -46,91 +44,30 @@ enum Round {
     Day,
 }
 
-fn round_timestamp(ts: i64, tz: &TimeZone, round: Round) -> i64 {
-    let dtz = timestamp_from_micros(ts, tz);
-    let res = match round {
-        Round::Second => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                dtz.minute(),
-                dtz.second(),
-                0,
-            ))
-            .unwrap(),
-        Round::Minute => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                dtz.minute(),
-                0,
-                0,
-            ))
-            .unwrap(),
-        Round::FiveMinutes => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                dtz.minute() / 5 * 5,
-                0,
-                0,
-            ))
-            .unwrap(),
-        Round::TenMinutes => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                dtz.minute() / 10 * 10,
-                0,
-                0,
-            ))
-            .unwrap(),
-        Round::FifteenMinutes => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                dtz.minute() / 15 * 15,
-                0,
-                0,
-            ))
-            .unwrap(),
-        Round::TimeSlot => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                dtz.minute() / 30 * 30,
-                0,
-                0,
-            ))
-            .unwrap(),
-        Round::Hour => tz
-            .to_zoned(datetime(
-                dtz.year(),
-                dtz.month(),
-                dtz.day(),
-                dtz.hour(),
-                0,
-                0,
-                0,
-            ))
-            .unwrap(),
-        Round::Day => tz
-            .to_zoned(datetime(dtz.year(), dtz.month(), dtz.day(), 0, 0, 0, 0))
-            .unwrap(),
+fn round_timestamp(ts: i64, tz: &Tz, round: Round) -> Result<i64, String> {
+    let components = components_from_timestamp(ts, tz);
+    let (hour, minute, second) = match round {
+        Round::Second => (components.hour, components.minute, components.second),
+        Round::Minute => (components.hour, components.minute, 0),
+        Round::FiveMinutes => (components.hour, components.minute / 5 * 5, 0),
+        Round::TenMinutes => (components.hour, components.minute / 10 * 10, 0),
+        Round::FifteenMinutes => (components.hour, components.minute / 15 * 15, 0),
+        Round::TimeSlot => (components.hour, components.minute / 30 * 30, 0),
+        Round::Hour => (components.hour, 0, 0),
+        Round::Day => (0, 0, 0),
     };
-    res.timestamp().as_microsecond()
+    let timestamp = fast_utc_from_local(
+        tz,
+        components.year,
+        components.month,
+        components.day,
+        hour,
+        minute,
+        second,
+        0,
+    )
+    .ok_or_else(|| "Invalid date: rounded timestamp is out of range".to_string())?;
+    Ok(timestamp)
 }
 
 trait RoundDate {
@@ -140,20 +77,28 @@ trait RoundDate {
 struct DateRounder;
 
 impl DateRounder {
-    fn eval_timestamp<T: RoundDate>(us: i64, tz: &TimeZone) -> i32 {
-        T::round(&timestamp_from_micros(us, tz).date())
+    fn eval_timestamp<T>(us: i64, tz: &Tz) -> Result<i32, String>
+    where T: RoundDate {
+        let components = components_from_timestamp(us, tz);
+        let date = Date::from_ymd_opt(
+            components.year,
+            components.month as u32,
+            components.day as u32,
+        )
+        .ok_or_else(|| "Invalid date: timestamp is out of range".to_string())?;
+        Ok(T::round(&date))
     }
 
-    fn eval_date<T: RoundDate>(date: i32) -> i32 {
-        T::round(&date_from_days(date))
+    fn eval_date<T>(date: i32) -> Result<i32, String>
+    where T: RoundDate {
+        Ok(T::round(&date_from_days(date)))
     }
 }
 
 #[inline]
 fn date_to_inner_number(date: &Date) -> i32 {
-    date.since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-        .unwrap()
-        .get_days()
+    date.signed_duration_since(Date::from_ymd_opt(1970, 1, 1).unwrap())
+        .num_days() as i32
 }
 
 struct ToLastMonday;
@@ -184,41 +129,41 @@ struct ToNextSunday;
 
 impl RoundDate for ToLastMonday {
     fn round(date: &Date) -> i32 {
-        date_to_inner_number(date) - date.weekday().to_monday_zero_offset() as i32
+        date_to_inner_number(date) - date.weekday().num_days_from_monday() as i32
     }
 }
 
 impl RoundDate for ToLastSunday {
     fn round(date: &Date) -> i32 {
-        date_to_inner_number(date) - date.weekday().to_sunday_zero_offset() as i32
+        date_to_inner_number(date) - date.weekday().num_days_from_sunday() as i32
     }
 }
 
 impl RoundDate for ToStartOfMonth {
     fn round(date: &Date) -> i32 {
-        date_to_inner_number(&date.first_of_month())
+        date_to_inner_number(&Date::from_ymd_opt(date.year(), date.month(), 1).unwrap())
     }
 }
 
 impl RoundDate for ToStartOfQuarter {
     fn round(input: &Date) -> i32 {
         let new_month = (input.month() - 1) / 3 * 3 + 1;
-        date_to_inner_number(&date(input.year(), new_month, 1))
+        date_to_inner_number(&Date::from_ymd_opt(input.year(), new_month, 1).unwrap())
     }
 }
 
 impl RoundDate for ToStartOfYear {
     fn round(date: &Date) -> i32 {
-        date_to_inner_number(&date.first_of_year())
+        date_to_inner_number(&Date::from_ymd_opt(date.year(), 1, 1).unwrap())
     }
 }
 
 impl RoundDate for ToStartOfISOYear {
     fn round(input: &Date) -> i32 {
-        let iso_year = input.iso_week_date().year();
-        for i in 1..=7 {
-            let new_date = date(iso_year, 1, i);
-            if new_date.iso_week_date().weekday() == Weekday::Monday {
+        let iso_year = input.iso_week().year();
+        for day in 1..=7 {
+            let new_date = Date::from_ymd_opt(iso_year, 1, day).unwrap();
+            if new_date.weekday() == Weekday::Mon {
                 return date_to_inner_number(&new_date);
             }
         }
@@ -228,14 +173,14 @@ impl RoundDate for ToStartOfISOYear {
 
 impl RoundDate for ToLastOfWeek {
     fn round(date: &Date) -> i32 {
-        date_to_inner_number(date) - date.weekday().to_monday_zero_offset() as i32 + 6
+        date_to_inner_number(date) - date.weekday().num_days_from_monday() as i32 + 6
     }
 }
 
 impl RoundDate for ToLastOfMonth {
     fn round(input: &Date) -> i32 {
         let day = last_day_of_year_month(input.year(), input.month());
-        date_to_inner_number(&date(input.year(), input.month(), day))
+        date_to_inner_number(&Date::from_ymd_opt(input.year(), input.month(), day).unwrap())
     }
 }
 
@@ -243,14 +188,14 @@ impl RoundDate for ToLastOfQuarter {
     fn round(input: &Date) -> i32 {
         let new_month = (input.month() - 1) / 3 * 3 + 3;
         let day = last_day_of_year_month(input.year(), new_month);
-        date_to_inner_number(&date(input.year(), new_month, day))
+        date_to_inner_number(&Date::from_ymd_opt(input.year(), new_month, day).unwrap())
     }
 }
 
 impl RoundDate for ToLastOfYear {
     fn round(input: &Date) -> i32 {
         let day = last_day_of_year_month(input.year(), 12);
-        date_to_inner_number(&date(input.year(), 12, day))
+        date_to_inner_number(&Date::from_ymd_opt(input.year(), 12, day).unwrap())
     }
 }
 
@@ -264,31 +209,31 @@ macro_rules! impl_round_to_weekday {
     };
 }
 
-impl_round_to_weekday!(ToPreviousMonday, Monday, true);
-impl_round_to_weekday!(ToPreviousTuesday, Tuesday, true);
-impl_round_to_weekday!(ToPreviousWednesday, Wednesday, true);
-impl_round_to_weekday!(ToPreviousThursday, Thursday, true);
-impl_round_to_weekday!(ToPreviousFriday, Friday, true);
-impl_round_to_weekday!(ToPreviousSaturday, Saturday, true);
-impl_round_to_weekday!(ToPreviousSunday, Sunday, true);
-impl_round_to_weekday!(ToNextMonday, Monday, false);
-impl_round_to_weekday!(ToNextTuesday, Tuesday, false);
-impl_round_to_weekday!(ToNextWednesday, Wednesday, false);
-impl_round_to_weekday!(ToNextThursday, Thursday, false);
-impl_round_to_weekday!(ToNextFriday, Friday, false);
-impl_round_to_weekday!(ToNextSaturday, Saturday, false);
-impl_round_to_weekday!(ToNextSunday, Sunday, false);
+impl_round_to_weekday!(ToPreviousMonday, Mon, true);
+impl_round_to_weekday!(ToPreviousTuesday, Tue, true);
+impl_round_to_weekday!(ToPreviousWednesday, Wed, true);
+impl_round_to_weekday!(ToPreviousThursday, Thu, true);
+impl_round_to_weekday!(ToPreviousFriday, Fri, true);
+impl_round_to_weekday!(ToPreviousSaturday, Sat, true);
+impl_round_to_weekday!(ToPreviousSunday, Sun, true);
+impl_round_to_weekday!(ToNextMonday, Mon, false);
+impl_round_to_weekday!(ToNextTuesday, Tue, false);
+impl_round_to_weekday!(ToNextWednesday, Wed, false);
+impl_round_to_weekday!(ToNextThursday, Thu, false);
+impl_round_to_weekday!(ToNextFriday, Fri, false);
+impl_round_to_weekday!(ToNextSaturday, Sat, false);
+impl_round_to_weekday!(ToNextSunday, Sun, false);
 
 fn previous_or_next_date_day(date: &Date, target: Weekday, is_previous: bool) -> i32 {
     let dir = if is_previous { -1 } else { 1 };
     let mut days_diff = (dir
-        * (target.to_monday_zero_offset() as i32 - date.weekday().to_monday_zero_offset() as i32)
+        * (target.num_days_from_monday() as i32 - date.weekday().num_days_from_monday() as i32)
         + 7)
         % 7;
 
     days_diff = if days_diff == 0 { 7 } else { days_diff };
 
-    clamp_date(date_to_inner_number(date) as i64 + (dir * days_diff) as i64)
+    clamp_date(i64::from(date_to_inner_number(date) + dir * days_diff))
 }
 
 pub(super) fn register(registry: &mut FunctionRegistry) {
@@ -310,56 +255,18 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
     }
 
     // timestamp -> timestamp
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "to_start_of_second",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::Second),
-    );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "to_start_of_minute",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::Minute),
-    );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "to_start_of_five_minutes",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::FiveMinutes),
-    );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "to_start_of_ten_minutes",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::TenMinutes),
-    );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
+    register_timestamp_round(registry, "to_start_of_second", Round::Second);
+    register_timestamp_round(registry, "to_start_of_minute", Round::Minute);
+    register_timestamp_round(registry, "to_start_of_five_minutes", Round::FiveMinutes);
+    register_timestamp_round(registry, "to_start_of_ten_minutes", Round::TenMinutes);
+    register_timestamp_round(
+        registry,
         "to_start_of_fifteen_minutes",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::FifteenMinutes),
+        Round::FifteenMinutes,
     );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "to_start_of_hour",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::Hour),
-    );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "to_start_of_day",
-        |ctx, domain| {
-            // End-point rounding is an under-approximation when a fallback inside the
-            // range rewinds the wall clock across midnight.
-            if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
-                return FunctionDomain::Full;
-            }
-            FunctionDomain::Domain(databend_common_expression::types::number::SimpleDomain {
-                min: round_timestamp(domain.min, &ctx.tz, Round::Day),
-                max: round_timestamp(domain.max, &ctx.tz, Round::Day),
-            })
-        },
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::Day),
-    );
-    registry.register_1_arg::<TimestampType, TimestampType, _>(
-        "time_slot",
-        |_, _| FunctionDomain::Full,
-        |val, ctx| round_timestamp(val, &ctx.func_ctx.tz, Round::TimeSlot),
-    );
+    register_timestamp_round(registry, "to_start_of_hour", Round::Hour);
+    register_timestamp_round(registry, "to_start_of_day", Round::Day);
+    register_timestamp_round(registry, "time_slot", Round::TimeSlot);
     crate::date_time_slice::register(registry);
 
     // date | timestamp -> date
@@ -392,22 +299,54 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "to_start_of_week",
         |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<DateType, Int64Type, DateType>(|val, mode, _| {
-            if mode == 0 {
+        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|val, mode, output, ctx| {
+            let result = if mode == 0 {
                 DateRounder::eval_date::<ToLastSunday>(val)
             } else {
                 DateRounder::eval_date::<ToLastMonday>(val)
+            };
+            match result {
+                Ok(value) => output.push(value),
+                Err(error) => {
+                    ctx.set_error(output.len(), error);
+                    output.push(0);
+                }
             }
         }),
     );
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, DateType, _, _>(
         "to_start_of_week",
         |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<TimestampType, Int64Type, DateType>(|val, mode, ctx| {
-            if mode == 0 {
-                DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.func_ctx.tz)
-            } else {
-                DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.func_ctx.tz)
+        vectorize_with_builder_2_arg::<TimestampType, Int64Type, DateType>(
+            |val, mode, output, ctx| {
+                let result = if mode == 0 {
+                    DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.func_ctx.tz)
+                } else {
+                    DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.func_ctx.tz)
+                };
+                match result {
+                    Ok(value) => output.push(value),
+                    Err(error) => {
+                        ctx.set_error(output.len(), error);
+                        output.push(0);
+                    }
+                }
+            },
+        ),
+    );
+}
+
+fn register_timestamp_round(registry: &mut FunctionRegistry, name: &'static str, round: Round) {
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _>(
+        name,
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<TimestampType, TimestampType>(move |value, output, ctx| {
+            match round_timestamp(value, &ctx.func_ctx.tz, round) {
+                Ok(value) => output.push(value),
+                Err(error) => {
+                    ctx.set_error(output.len(), error);
+                    output.push(0);
+                }
             }
         }),
     );
@@ -418,11 +357,27 @@ where T: RoundDate {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _>(
         name,
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, _| DateRounder::eval_date::<T>(val)),
+        vectorize_with_builder_1_arg::<DateType, DateType>(|value, output, ctx| {
+            match DateRounder::eval_date::<T>(value) {
+                Ok(value) => output.push(value),
+                Err(error) => {
+                    ctx.set_error(output.len(), error);
+                    output.push(0);
+                }
+            }
+        }),
     );
-    registry.register_1_arg::<TimestampType, DateType, _>(
+    registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _>(
         name,
         |_, _| FunctionDomain::Full,
-        |val, ctx| DateRounder::eval_timestamp::<T>(val, &ctx.func_ctx.tz),
+        vectorize_with_builder_1_arg::<TimestampType, DateType>(|value, output, ctx| {
+            match DateRounder::eval_timestamp::<T>(value, &ctx.func_ctx.tz) {
+                Ok(value) => output.push(value),
+                Err(error) => {
+                    ctx.set_error(output.len(), error);
+                    output.push(0);
+                }
+            }
+        }),
     );
 }

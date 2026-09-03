@@ -18,9 +18,9 @@ use std::ops::Range;
 
 use databend_common_exception::Result;
 use databend_common_io::deserialize_bitmap;
+use databend_common_timezone::Tz;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
-use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 use jsonb::Value;
@@ -232,7 +232,7 @@ impl VariantType {
 
 pub fn cast_scalar_to_variant(
     scalar: ScalarRef,
-    tz: &TimeZone,
+    tz: &Tz,
     buf: &mut Vec<u8>,
     table_data_type: Option<&TableDataType>,
 ) {
@@ -325,7 +325,7 @@ pub fn cast_scalar_to_variant(
                     ScalarRef::Decimal(v) => v.to_string(),
                     ScalarRef::Boolean(v) => v.to_string(),
                     ScalarRef::Timestamp(v) => timestamp_to_string(v, tz).to_string(),
-                    ScalarRef::Date(v) => date_to_string(v),
+                    ScalarRef::Date(v) => date_to_string(v).to_string(),
                     _ => unreachable!(),
                 };
                 let mut val = vec![];
@@ -427,7 +427,7 @@ pub fn cast_scalar_to_variant(
 
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
-    tz: &TimeZone,
+    tz: &Tz,
     table_data_type: Option<&TableDataType>,
 ) -> BinaryColumn {
     let iter = scalars.into_iter();

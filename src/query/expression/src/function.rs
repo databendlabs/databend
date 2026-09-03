@@ -22,6 +22,8 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -29,10 +31,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_timezone::Tz;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
 use smallvec::SmallVec;
@@ -135,8 +136,9 @@ pub enum FunctionEval {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionContext {
-    pub tz: TimeZone,
-    pub now: Zoned,
+    pub tz: Tz,
+    /// Instant the query started, used by `now()`, `today()` and friends.
+    pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
     pub enable_selector_executor: bool,
@@ -155,8 +157,8 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: TimeZone::UTC,
-            now: Default::default(),
+            tz: Tz::UTC,
+            now: DateTime::UNIX_EPOCH,
             rounding_mode: false,
             disable_variant_check: false,
             enable_selector_executor: true,
