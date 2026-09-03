@@ -250,6 +250,8 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_info,
             memory_threshold,
+            ctx.get_settings()
+                .get_enable_recluster_task_selection_v2()?,
         )?;
 
         Ok(Self {
@@ -275,6 +277,7 @@ impl ReclusterMutator {
         partition_key_count: usize,
         max_tasks: usize,
         mode: ReclusterMode,
+        enable_task_selection_v2: bool,
         vector_cluster_info: Option<VectorClusterInfo>,
     ) -> Self {
         let memory_threshold = ctx
@@ -291,6 +294,7 @@ impl ReclusterMutator {
             cluster_key_info,
             partition_key_count,
             memory_threshold,
+            enable_task_selection_v2,
             vector_cluster_info,
         );
         Self {
@@ -380,8 +384,13 @@ impl ReclusterMutator {
                 candidate_window.tasks.push(ReclusterTaskCandidate {
                     score: CandidateScore {
                         selected_total_bytes: 0,
+                        selected_block_count: 0,
                         max_depth: 0,
                         average_depth: 0.0,
+                        estimated_depth_gain: 0,
+                        task_threshold_bytes: self.properties.memory_threshold,
+                        // Repack-only candidate rewrites no blocks.
+                        touched_segment_count: 0,
                     },
                     selected_blocks: Vec::new(),
                     output_level: 0,
@@ -451,52 +460,75 @@ impl ReclusterMutator {
                 .push(idx);
         }
 
-        let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
-        let mut deferred_candidates = Vec::new();
-        let large_task_bytes_threshold = self.large_task_bytes_threshold();
-        for ((group, _), indices) in blocks_map {
-            if tasks.len() >= task_budget {
-                break;
-            }
-            let remaining_task_budget = task_budget - tasks.len();
-            let candidates = self.build_recluster_task_candidates_for_indices(
-                group,
-                indices,
-                blocks,
-                remaining_task_budget,
-            )?;
+        if !self.properties.enable_task_selection_v2 {
+            let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
+            let mut deferred_candidates = Vec::new();
+            let large_task_bytes_threshold = self.large_task_bytes_threshold();
+            for ((group, _), indices) in blocks_map {
+                if tasks.len() >= task_budget {
+                    break;
+                }
+                let remaining_task_budget = task_budget - tasks.len();
+                let candidates = self.build_recluster_task_candidates_for_indices(
+                    group,
+                    indices,
+                    blocks,
+                    remaining_task_budget,
+                )?;
 
-            for candidate in candidates {
-                let defer = candidate.score.selected_total_bytes < large_task_bytes_threshold
-                    && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
-                if defer {
-                    debug!(
-                        "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
-                        group,
-                        candidate.score.selected_total_bytes,
-                        candidate.score.max_depth,
-                        self.properties.depth_threshold,
-                    );
-                    deferred_candidates.push(candidate);
-                } else {
-                    tasks.push(candidate);
-                    if tasks.len() >= task_budget {
-                        break;
+                for candidate in candidates {
+                    let defer = candidate.score.selected_total_bytes < large_task_bytes_threshold
+                        && (candidate.score.max_depth as f64)
+                            < 4.0 * self.properties.depth_threshold;
+                    if defer {
+                        debug!(
+                            "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
+                            group,
+                            candidate.score.selected_total_bytes,
+                            candidate.score.max_depth,
+                            self.properties.depth_threshold,
+                        );
+                        deferred_candidates.push(candidate);
+                    } else {
+                        tasks.push(candidate);
+                        if tasks.len() >= task_budget {
+                            break;
+                        }
                     }
                 }
             }
-        }
 
-        if tasks.len() < task_budget {
-            deferred_candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
-            let remaining_task_budget = task_budget - tasks.len();
-            for candidate in deferred_candidates.into_iter().take(remaining_task_budget) {
-                debug!("recluster: backfill deferred candidate {}", candidate);
-                tasks.push(candidate);
+            if tasks.len() < task_budget {
+                deferred_candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
+                let remaining_task_budget = task_budget - tasks.len();
+                for candidate in deferred_candidates.into_iter().take(remaining_task_budget) {
+                    debug!("recluster: backfill deferred candidate {}", candidate);
+                    tasks.push(candidate);
+                }
             }
+
+            return Ok(tasks);
         }
 
-        Ok(tasks)
+        let mut candidates = Vec::new();
+        for ((group, _), indices) in blocks_map {
+            candidates.extend(self.build_recluster_task_candidates_for_indices(
+                group,
+                indices,
+                blocks,
+                task_budget,
+            )?);
+        }
+
+        candidates.sort_by(|left, right| {
+            right
+                .score
+                .cmp_desc_v2(&left.score)
+                .then_with(|| left.output_level.cmp(&right.output_level))
+        });
+        candidates.truncate(task_budget);
+
+        Ok(candidates)
     }
 
     /// Convert selected in-memory candidates into physical recluster parts.
@@ -685,8 +717,13 @@ impl ReclusterMutator {
         {
             let score = CandidateScore {
                 selected_total_bytes: total_bytes as usize,
+                selected_block_count: block_count,
                 max_depth: block_count,
                 average_depth: block_count as f64,
+                estimated_depth_gain: block_count.saturating_sub(1) as u64,
+                task_threshold_bytes: self.properties.memory_threshold,
+                // Filled in by `task_candidate`, which groups by segment.
+                touched_segment_count: 0,
             };
             return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }

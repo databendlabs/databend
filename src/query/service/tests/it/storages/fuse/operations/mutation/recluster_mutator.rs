@@ -112,6 +112,7 @@ fn new_test_mutator(
         0,
         max_tasks,
         mode,
+        true,
         None,
     )
 }
@@ -283,6 +284,44 @@ async fn gen_recluster_segments_by_ranges(
         let blocks = ranges
             .iter()
             .map(|&(min, max)| {
+                make_recluster_block(
+                    cluster_key_id,
+                    min,
+                    max,
+                    0,
+                    row_count,
+                    block_size,
+                    file_size,
+                )
+            })
+            .collect::<Vec<_>>();
+        segment_locations.push(
+            write_recluster_segment(
+                data_accessor,
+                location_generator,
+                blocks,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+    Ok(segment_locations)
+}
+
+async fn gen_recluster_segments_by_block_specs(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    specs_by_segment: &[Vec<(i32, i32, u64, u64)>],
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let mut segment_locations = Vec::with_capacity(specs_by_segment.len());
+    for specs in specs_by_segment {
+        let blocks = specs
+            .iter()
+            .map(|&(min, max, row_count, block_size)| {
                 make_recluster_block(
                     cluster_key_id,
                     min,
@@ -601,7 +640,7 @@ fn assert_partition_isolated(windows: &[Vec<SelectedReclusterSegment>], expected
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
+async fn test_recluster_limit_skips_empty_range_with_selection_versions() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -651,26 +690,39 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
         filters: Some(parse_to_filters(ctx.clone(), table.clone(), "id > 90")?),
         ..Default::default()
     };
-    let mut carry = ReclusterFinalCarry::default();
-    let (parts, _) = fuse_table
-        .do_recluster(
-            ctx.clone(),
-            Some(push_downs),
-            Some(2),
-            ReclusterMode::Conservative,
-            &mut carry,
-        )
-        .await?
-        .expect("recluster should read the later matching scan range");
+    for enable_v2 in [0, 1] {
+        ctx.get_settings().set_setting(
+            "enable_recluster_task_selection_v2".to_string(),
+            enable_v2.to_string(),
+        )?;
+        assert_eq!(
+            ctx.get_settings()
+                .get_enable_recluster_task_selection_v2()?,
+            enable_v2 != 0
+        );
 
-    assert!(!parts.is_empty());
-    assert!(!parts.tasks.is_empty());
-    assert!(
-        parts
-            .removed_segment_indexes
-            .iter()
-            .all(|segment_idx| *segment_idx >= 32)
-    );
+        let mut carry = ReclusterFinalCarry::default();
+        let (parts, _) = fuse_table
+            .do_recluster(
+                ctx.clone(),
+                Some(push_downs.clone()),
+                Some(2),
+                ReclusterMode::Conservative,
+                &mut carry,
+            )
+            .await?
+            .expect("recluster should read the later matching scan range");
+
+        assert!(!parts.is_empty(), "v2={enable_v2}");
+        assert!(!parts.tasks.is_empty(), "v2={enable_v2}");
+        assert!(
+            parts
+                .removed_segment_indexes
+                .iter()
+                .all(|segment_idx| *segment_idx >= 32),
+            "v2={enable_v2}",
+        );
+    }
 
     Ok(())
 }
@@ -721,6 +773,83 @@ async fn test_removed_segments_match_selected_blocks() -> anyhow::Result<()> {
     assert_eq!(task_part_counts(&parts), vec![2]);
     assert_eq!(parts.removed_segment_indexes, vec![0]);
     assert_eq!(parts.remained_blocks.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_density_selection_prefers_well_filled_task() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 12);
+
+    // Both regions fit one memory budget, but only one task slot is available.
+    // The tiny region has a better raw bytes/gain ratio, while the large region
+    // removes much more depth in one distributed task. Ranking discounts a
+    // candidate by how poorly it fills the task budget, so the high-total-gain
+    // task runs first instead of spending the slot on a small local cleanup.
+    let segment_locations = gen_recluster_segments_by_block_specs(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(1, 10, 100, 100)],
+            vec![(3, 9, 1000, 1000)],
+            vec![(11, 12, 10, 10)],
+            vec![(11, 12, 10, 10)],
+            vec![(11, 12, 10, 10)],
+        ],
+        10,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = test_cluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+    let mutator = new_test_mutator(
+        ctx.clone(),
+        data_accessor,
+        schema,
+        thresholds,
+        cluster_key_id,
+        1,
+        ReclusterMode::Aggressive,
+    );
+    let selected_segs = mutator
+        .select_segments(&compact_segments, 16)?
+        .into_iter()
+        .next()
+        .expect("single window should be selected");
+
+    let (block_num, parts) = materialize_candidate_window(&mutator, selected_segs, 1).await?;
+
+    assert_eq!(block_num, 6);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].total_bytes, 600);
+    assert_eq!(task_part_counts(&parts), vec![6]);
+    let small_task_output_blocks = thresholds.calc_compact_block_num(30, 30);
+    let selected_output_blocks =
+        thresholds.calc_compact_block_num(parts.tasks[0].total_rows, parts.tasks[0].total_bytes);
+    assert_eq!(small_task_output_blocks, 1);
+    assert_eq!(selected_output_blocks, 6);
+    assert!(parts.tasks[0].total_bytes > 30);
 
     Ok(())
 }
@@ -1189,6 +1318,7 @@ async fn test_scalar_segment_selection_does_not_cross_partitions() -> anyhow::Re
         1,
         1,
         ReclusterMode::Aggressive,
+        true,
         None,
     );
 
@@ -1367,6 +1497,7 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
         0,
         1,
         ReclusterMode::Conservative,
+        true,
         Some(vector_cluster_info),
     );
 
@@ -1447,6 +1578,7 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
         0,
         1,
         ReclusterMode::Conservative,
+        true,
         Some(vector_cluster_info),
     );
 
@@ -1528,6 +1660,7 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
         1,
         1,
         ReclusterMode::Aggressive,
+        true,
         Some(vector_cluster_info),
     );
 

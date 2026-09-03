@@ -356,6 +356,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
             if selected.len() < 2 {
                 continue;
             }
+            let estimated_depth_gain = selector.estimate_depth_gain(&selected);
             for &local_idx in &selected {
                 used[local_idx] = true;
             }
@@ -368,8 +369,13 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 group,
                 CandidateScore {
                     selected_total_bytes: task_bytes,
+                    selected_block_count: task_indices.len(),
                     max_depth: task_depth,
                     average_depth,
+                    estimated_depth_gain,
+                    task_threshold_bytes: properties.memory_threshold,
+                    // Filled in by `task_candidate`, which groups by segment.
+                    touched_segment_count: 0,
                 },
                 &task_indices,
                 blocks,
@@ -459,6 +465,18 @@ impl VectorOverlapSelector {
                 .then_with(|| left.cmp(right))
         });
         members
+    }
+
+    fn estimate_depth_gain(&self, selected: &[usize]) -> u64 {
+        let mut gain = 0u64;
+        for (pos, &left) in selected.iter().enumerate() {
+            for &right in &selected[pos + 1..] {
+                if self.overlaps[left].contains(&right) {
+                    gain += 1;
+                }
+            }
+        }
+        gain
     }
 
     fn next_window(
