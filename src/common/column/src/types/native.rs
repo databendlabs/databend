@@ -29,10 +29,10 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use chrono::DateTime;
+use chrono::FixedOffset;
+use chrono::Utc;
 use databend_common_base::base::OrderedFloat;
-use jiff::Timestamp;
-use jiff::fmt::strtime;
-use jiff::tz;
 use log::error;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -519,15 +519,28 @@ impl timestamp_tz {
 
 impl Display for timestamp_tz {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let timestamp = Timestamp::from_microsecond(self.timestamp()).unwrap();
+        // A positive offset can move the maximum timestamp into local year 10000.
+        let micros = self.timestamp();
+        let seconds = micros.div_euclid(Self::MICROS_PER_SECOND);
+        let subsec = micros.rem_euclid(Self::MICROS_PER_SECOND) as u32;
 
-        let offset = tz::Offset::from_seconds(self.seconds_offset()).unwrap();
-        let string = strtime::format(
-            TIMESTAMP_TIMEZONE_FORMAT,
-            &timestamp.to_zoned(offset.to_time_zone()),
+        let Some(utc) = DateTime::<Utc>::from_timestamp(seconds, subsec * 1_000) else {
+            error!("timestamp_tz out of range: {micros}");
+            return Err(std::fmt::Error);
+        };
+        let Some(offset) = FixedOffset::east_opt(self.seconds_offset()) else {
+            error!(
+                "timestamp_tz offset out of range: {}",
+                self.seconds_offset()
+            );
+            return Err(std::fmt::Error);
+        };
+
+        write!(
+            f,
+            "{}",
+            utc.with_timezone(&offset).format(TIMESTAMP_TIMEZONE_FORMAT)
         )
-        .unwrap();
-        write!(f, "{}", string)
     }
 }
 
@@ -844,6 +857,7 @@ impl NativeType for i256 {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn test_f16_to_f32() {
         let f = f16::from_f32(7.0);

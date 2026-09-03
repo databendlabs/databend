@@ -214,7 +214,7 @@ skipif mysql
 query ?
 select plus('2022-02-02'::date, interval '1 day');
 ----
-2022-02-03
+2022-02-03 00:00:00.000000
 
 skipif mysql
 query I

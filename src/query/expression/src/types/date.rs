@@ -13,17 +13,15 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::fmt::Display;
 use std::io::Cursor;
 
+use chrono::NaiveDate;
+use chrono::TimeDelta;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
-use jiff::SignedDuration;
-use jiff::civil::Date;
-use jiff::fmt::strtime;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
 use num_traits::AsPrimitive;
 
 use super::ArgType;
@@ -45,9 +43,12 @@ pub const DATE_MIN: i32 = -719162;
 /// 9999-12-31
 pub const DATE_MAX: i32 = 2932896;
 
-pub fn date_from_days(days: impl AsPrimitive<i64>) -> Date {
-    let duration = SignedDuration::from_hours(days.as_() * 24);
-    Date::constant(1970, 1, 1).checked_add(duration).unwrap()
+/// Converts raw epoch days without applying the SQL range clamp.
+pub fn date_from_days(days: impl AsPrimitive<i64>) -> NaiveDate {
+    NaiveDate::from_ymd_opt(1970, 1, 1)
+        .expect("epoch date is valid")
+        .checked_add_signed(TimeDelta::days(days.as_()))
+        .expect("date day count is inside the chrono civil range")
 }
 
 /// Check if date is within range.
@@ -147,16 +148,16 @@ impl ArgType for DateType {
 #[inline]
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
-    tz: &TimeZone,
-) -> databend_common_exception::Result<Date> {
+    tz: &Tz,
+) -> databend_common_exception::Result<i32> {
     let raw = std::str::from_utf8(date_str.as_ref()).unwrap();
     let mut reader = Cursor::new(raw.as_bytes());
     match reader.read_date_text(tz) {
-        Ok(d) => {
+        Ok(days) => {
             if reader.must_eof().is_err() {
                 return Err(ErrorCode::BadArguments("unexpected argument"));
             }
-            Ok(d)
+            Ok(days)
         }
         Err(e) => match e.code() {
             ErrorCode::BAD_BYTES => Err(e),
@@ -167,5 +168,5 @@ pub fn string_to_date(
 
 #[inline]
 pub fn date_to_string(date: impl AsPrimitive<i64>) -> String {
-    strtime::format(DATE_FORMAT, date_from_days(date)).unwrap()
+    date_from_days(date).format(DATE_FORMAT).to_string()
 }
