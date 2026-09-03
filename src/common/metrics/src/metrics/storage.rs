@@ -365,14 +365,6 @@ static REPLACE_INTO_DELETED_BLOCKS_ROWS: LazyLock<Counter> =
 static REPLACE_INTO_APPEND_BLOCKS_ROWS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_replace_into_append_blocks_rows"));
 
-// Aggregate index metrics.
-static AGG_INDEX_WRITE_NUMS: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_aggregate_index_write_nums"));
-static AGG_INDEX_WRITE_BYTES: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("fuse_aggregate_index_write_bytes"));
-static AGG_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
-    LazyLock::new(|| register_histogram_in_milliseconds("fuse_aggregate_index_write_milliseconds"));
-
 // Virtual column metrics.
 static BLOCK_VIRTUAL_COLUMN_WRITE_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_virtual_column_write_nums"));
@@ -1009,19 +1001,6 @@ pub fn metrics_observe_maintenance_commit_gate_wait_milliseconds(c: u64) {
 
 pub fn metrics_inc_maintenance_occ_retries() {
     MAINTENANCE_OCC_RETRIES.inc();
-}
-
-/// Aggregate index metrics.
-pub fn metrics_inc_agg_index_write_nums(c: u64) {
-    AGG_INDEX_WRITE_NUMS.inc_by(c);
-}
-
-pub fn metrics_inc_agg_index_write_bytes(c: u64) {
-    AGG_INDEX_WRITE_BYTES.inc_by(c);
-}
-
-pub fn metrics_inc_agg_index_write_milliseconds(c: u64) {
-    AGG_INDEX_WRITE_MILLISECONDS.observe(c as f64);
 }
 
 /// Virtual column metrics.

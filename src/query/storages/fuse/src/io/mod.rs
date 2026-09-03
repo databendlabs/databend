@@ -19,7 +19,6 @@ mod snapshots;
 mod write;
 
 pub use locations::TableMetaLocationGenerator;
-pub use read::AggIndexReader;
 pub use read::BlockReadContext;
 pub use read::BlockReadResult;
 pub use read::BlockReader;

@@ -7,7 +7,7 @@ DB="ee_flashback_metadata"
 RUN_ID=$$
 ROW_POLICY="row_filter_${RUN_ID}"
 MASK_POLICY="mask_c_${RUN_ID}"
-AGG_INDEX="testi_${RUN_ID}"
+INV_INDEX="testi_${RUN_ID}"
 
 snapshot_id() {
     echo "select snapshot_id from fuse_snapshot('$1', '$2') where row_count=$3 limit 1" | bendsql_connect_root
@@ -66,12 +66,11 @@ echo "<<<< expected failure happened"
 stmt "CREATE TABLE ${DB}.t_idx(a INT, c INT) STORAGE_FORMAT = 'parquet'"
 stmt "INSERT INTO ${DB}.t_idx VALUES (1, 1), (2, 2)"
 IDX_SNAPSHOT_ID=$(snapshot_id "${DB}" "t_idx" 2)
-stmt "ALTER TABLE ${DB}.t_idx ADD COLUMN b INT"
-stmt "INSERT INTO ${DB}.t_idx VALUES (1, 1, 4), (1, 2, 1), (1, 2, 4), (2, 2, 5)"
-comment "create and refresh aggregating index"
-quiet_stmt "CREATE AGGREGATING INDEX ${AGG_INDEX} AS SELECT a, b FROM ${DB}.t_idx WHERE b > 1"
-quiet_stmt "REFRESH AGGREGATING INDEX ${AGG_INDEX}"
-comment "flashback should reject aggregating indexes bound to dropped columns"
+stmt "ALTER TABLE ${DB}.t_idx ADD COLUMN b STRING"
+stmt "INSERT INTO ${DB}.t_idx VALUES (1, 1, 'x'), (1, 2, 'y'), (1, 2, 'z'), (2, 2, 'w')"
+comment "create inverted index"
+quiet_stmt "CREATE INVERTED INDEX ${INV_INDEX} ON ${DB}.t_idx(b)"
+comment "flashback should reject inverted indexes bound to dropped columns"
 comment "flashback indexed table to saved snapshot should fail"
 echo ">>>> ALTER TABLE ${DB}.t_idx FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')"
 echo "ALTER TABLE ${DB}.t_idx FLASHBACK TO (SNAPSHOT => '$IDX_SNAPSHOT_ID')" | bendsql_connect_root > /dev/null 2>&1
@@ -87,5 +86,5 @@ stmt "DROP TABLE IF EXISTS ${DB}.t_row"
 stmt "DROP DATABASE IF EXISTS ${DB}"
 quiet_stmt "DROP MASKING POLICY IF EXISTS ${MASK_POLICY}"
 quiet_stmt "DROP ROW ACCESS POLICY IF EXISTS ${ROW_POLICY}"
-quiet_stmt "DROP AGGREGATING INDEX ${AGG_INDEX}"
+quiet_stmt "DROP INVERTED INDEX IF EXISTS ${INV_INDEX} ON ${DB}.t_idx"
 stmt "SET GLOBAL enable_experimental_row_access_policy = 0"

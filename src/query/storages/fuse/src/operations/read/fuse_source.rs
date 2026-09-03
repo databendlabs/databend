@@ -34,7 +34,6 @@ use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::DeserializeDataTransform;
@@ -53,7 +52,6 @@ pub fn build_fuse_source_pipeline(
     mut max_threads: usize,
     plan: &DataSourcePlan,
     mut max_io_requests: usize,
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
     receiver: Option<Receiver<Result<PartInfoPtr>>>,
 ) -> Result<()> {
@@ -100,7 +98,6 @@ pub fn build_fuse_source_pipeline(
         storage_format,
         block_reader.read_context(),
         block_format,
-        index_reader.clone(),
         virtual_reader.clone(),
     )?;
 
@@ -138,7 +135,6 @@ pub fn build_fuse_source_pipeline(
                     plan,
                     transform_input,
                     transform_output,
-                    index_reader.clone(),
                     virtual_reader.clone(),
                 )
             })?;

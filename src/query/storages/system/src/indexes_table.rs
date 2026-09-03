@@ -26,7 +26,6 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -80,12 +79,6 @@ impl AsyncSystemTable for IndexesTable {
             Some(filtered_table_names)
         };
 
-        let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-        let indexes = catalog
-            .list_indexes(ListIndexesReq::new(&tenant, None))
-            .await?;
-
         let table_index_tables = self
             .list_table_index_tables(
                 ctx.clone(),
@@ -94,7 +87,7 @@ impl AsyncSystemTable for IndexesTable {
             )
             .await?;
 
-        let len = indexes.len() + table_index_tables.len();
+        let len = table_index_tables.len();
         let mut names = Vec::with_capacity(len);
         let mut types = Vec::with_capacity(len);
         let mut databases = Vec::with_capacity(len);
@@ -103,17 +96,6 @@ impl AsyncSystemTable for IndexesTable {
         let mut defs = Vec::with_capacity(len);
         let mut created_on = Vec::with_capacity(len);
         let mut updated_on = Vec::with_capacity(len);
-
-        for (_, name, index) in indexes {
-            names.push(name.clone());
-            types.push(index.index_type.to_string());
-            databases.push(ctx.get_current_database());
-            tables.push(catalog.get_table_name_by_id(index.table_id).await?);
-            originals.push(index.original_query.clone());
-            defs.push(index.query.clone());
-            created_on.push(index.created_on.timestamp_micros());
-            updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
-        }
 
         for table in table_index_tables {
             for (name, index) in &table.meta.indexes {

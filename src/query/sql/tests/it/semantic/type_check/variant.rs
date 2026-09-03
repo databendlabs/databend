@@ -162,7 +162,6 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
         None,
         false,
         false,
-        false,
         None,
     );
 

@@ -40,7 +40,6 @@ pub struct OptimizerContext {
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
     enable_top_n: RwLock<bool>,
-    planning_agg_index: RwLock<bool>,
     skip_list: HashSet<String>,
     skip_list_str: String,
     grouping_sets_to_union: bool,
@@ -84,7 +83,6 @@ impl OptimizerContext {
             max_push_down_limit: RwLock::new(10000),
             enable_top_n: RwLock::new(false),
             sample_executor: RwLock::new(None),
-            planning_agg_index: RwLock::new(false),
             skip_list,
             skip_list_str,
             grouping_sets_to_union,
@@ -153,15 +151,6 @@ impl OptimizerContext {
 
     pub fn get_sample_executor(&self) -> Option<Arc<dyn QueryExecutor>> {
         self.sample_executor.read().clone()
-    }
-
-    pub fn set_planning_agg_index(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
-        *self.planning_agg_index.write() = enable;
-        self
-    }
-
-    pub fn get_planning_agg_index(&self) -> bool {
-        *self.planning_agg_index.read()
     }
 
     pub fn get_max_push_down_limit(&self) -> usize {
