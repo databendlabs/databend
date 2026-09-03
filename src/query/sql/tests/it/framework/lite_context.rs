@@ -122,6 +122,8 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 const LITE_COMMERCIAL_LICENSE_KEY: &str = "lite-test-commercial";
+const LITE_VIEW_ENGINE: &str = "VIEW";
+const LITE_VIEW_QUERY_KEY: &str = "query";
 
 static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     semantic: Version::new(0, 0, 0),
@@ -138,14 +140,17 @@ thread_local! {
 }
 
 pub(crate) fn init_testing_globals() {
+    init_testing_globals_with_config(InnerConfig::default());
+}
+
+pub(crate) fn init_testing_globals_with_config(config: InnerConfig) {
     #[cfg(debug_assertions)]
     {
         INIT_TESTING_GLOBALS.with(|init| {
             init.call_once(|| {
                 let thread_name = std::thread::current().name().unwrap().to_string();
                 GlobalInstance::init_testing(&thread_name);
-                GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                    .expect("init global config");
+                GlobalConfig::init(&config, &TEST_BUILD_INFO).expect("init global config");
                 LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
                 SecurityPolicyCacheManager::init().unwrap();
             });
@@ -157,8 +162,7 @@ pub(crate) fn init_testing_globals() {
         static INIT_GLOBALS: std::sync::Once = std::sync::Once::new();
         INIT_GLOBALS.call_once(|| {
             GlobalInstance::init_production();
-            GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                .expect("init global config");
+            GlobalConfig::init(&config, &TEST_BUILD_INFO).expect("init global config");
             LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
         });
     }
@@ -247,6 +251,7 @@ impl DummyCatalog {
 #[derive(Debug, Clone)]
 struct FakeTable {
     table_info: TableInfo,
+    stream_source_table_info: Option<TableInfo>,
     warehouse_distribution: bool,
     table_stats: Option<TableStatistics>,
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
@@ -304,6 +309,10 @@ impl Table for FakeTable {
         &self.table_info
     }
 
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        self.stream_source_table_info.as_ref()
+    }
+
     fn distribution_level(&self) -> DistributionLevel {
         if self.warehouse_distribution {
             DistributionLevel::Cluster
@@ -323,6 +332,25 @@ impl Table for FakeTable {
 
     fn has_exact_total_row_count(&self) -> bool {
         true
+    }
+
+    async fn generate_changes_query(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+        _with_options: &str,
+    ) -> Result<String> {
+        if self.stream_source_table_info.is_none() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "change query is not supported for test table {database_name}.{table_name}"
+            )));
+        }
+
+        let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
+        Ok(format!(
+            "SELECT * FROM {quote}{database_name}{quote}.{quote}{table_name}{quote} AS _change_append$ffffffff"
+        ))
     }
 
     async fn table_statistics(
@@ -799,6 +827,7 @@ impl LiteTableContext {
                 catalog_info: self.default_catalog.info(),
                 db_type: DatabaseType::NormalDB,
             },
+            stream_source_table_info: None,
             warehouse_distribution,
             table_stats,
             column_stats,
@@ -991,6 +1020,82 @@ impl LiteTableContext {
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
         self.register_table_sql_with_stats(sql, None, HashMap::new(), HashMap::new())
             .await
+    }
+
+    pub async fn register_view_sql(
+        self: &Arc<Self>,
+        database: &str,
+        view_name: &str,
+        query: &str,
+    ) -> Result<()> {
+        let plan = self.bind_sql(query).await?;
+        let Plan::Query { bind_context, .. } = plan else {
+            return unsupported("lite sql harness view registration from non-query SQL");
+        };
+        if bind_context.columns.is_empty() {
+            return unsupported("lite sql harness view registration from empty query output");
+        }
+
+        let mut options = BTreeMap::new();
+        options.insert(LITE_VIEW_QUERY_KEY.to_string(), query.to_string());
+        let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
+        let table = Arc::new(FakeTable {
+            table_info: TableInfo {
+                ident: TableIdent::new(table_id, 0),
+                desc: format!("'{database}'.'{view_name}'"),
+                name: view_name.to_string(),
+                meta: TableMeta {
+                    schema: Arc::new(TableSchema::default()),
+                    engine: LITE_VIEW_ENGINE.to_string(),
+                    options,
+                    ..Default::default()
+                },
+                catalog_info: self.default_catalog.info(),
+                db_type: DatabaseType::NormalDB,
+            },
+            stream_source_table_info: None,
+            warehouse_distribution: false,
+            table_stats: None,
+            column_stats: HashMap::new(),
+            histograms: HashMap::new(),
+            top_n: HashMap::new(),
+        });
+        self.default_catalog.insert_table(database, table);
+        Ok(())
+    }
+
+    pub async fn register_lineage_stream(
+        self: &Arc<Self>,
+        database: &str,
+        stream_name: &str,
+        source_table_name: &str,
+    ) -> Result<()> {
+        let source = self
+            .get_table(&self.current_catalog, database, source_table_name)
+            .await?;
+        let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
+        let table = Arc::new(FakeTable {
+            table_info: TableInfo {
+                ident: TableIdent::new(table_id, 0),
+                desc: format!("'{database}'.'{stream_name}'"),
+                name: stream_name.to_string(),
+                meta: TableMeta {
+                    schema: source.schema(),
+                    engine: "STREAM".to_string(),
+                    ..Default::default()
+                },
+                catalog_info: self.default_catalog.info(),
+                db_type: DatabaseType::NormalDB,
+            },
+            stream_source_table_info: Some(source.get_table_info().clone()),
+            warehouse_distribution: false,
+            table_stats: None,
+            column_stats: HashMap::new(),
+            histograms: HashMap::new(),
+            top_n: HashMap::new(),
+        });
+        self.default_catalog.insert_table(database, table);
+        Ok(())
     }
 
     pub async fn register_setup_sql(self: &Arc<Self>, sql: &str) -> Result<()> {

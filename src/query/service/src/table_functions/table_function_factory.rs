@@ -63,6 +63,8 @@ use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
+use crate::table_functions::get_lineage::GetLineageNeighborsTable;
+use crate::table_functions::get_lineage::GetLineageTable;
 #[cfg(feature = "storage-stage")]
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
@@ -441,6 +443,14 @@ impl TableFunctionFactory {
         creators.insert(
             "copy_history".to_string(),
             (next_id(), Arc::new(CopyHistoryTable::create)),
+        );
+        creators.insert(
+            "get_lineage".to_string(),
+            (next_id(), Arc::new(GetLineageTable::create)),
+        );
+        creators.insert(
+            "get_lineage_neighbors".to_string(),
+            (next_id(), Arc::new(GetLineageNeighborsTable::create)),
         );
 
         TableFunctionFactory {

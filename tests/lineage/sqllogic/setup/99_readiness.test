@@ -1,0 +1,16 @@
+# Keep these fixed sentinel objects in the final setup file. The shell emits one current-run DML
+# edge after this suite and synchronizes on its query ID.
+statement ok
+DROP DATABASE IF EXISTS lineage_history_readiness
+
+statement ok
+CREATE DATABASE lineage_history_readiness
+
+statement ok
+CREATE TABLE lineage_history_readiness.src(a INT)
+
+statement ok
+INSERT INTO lineage_history_readiness.src VALUES (1)
+
+statement ok
+CREATE TABLE lineage_history_readiness.dst(a INT)

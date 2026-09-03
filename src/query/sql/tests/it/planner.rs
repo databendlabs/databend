@@ -26,6 +26,8 @@ use databend_common_sql_test_support::run_test_case_core;
 
 use crate::framework::LiteTableContext;
 
+mod lineage;
+
 struct LiteRunner(Arc<LiteTableContext>);
 
 struct LiteReplayCaseSpec {

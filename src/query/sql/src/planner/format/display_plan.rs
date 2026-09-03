@@ -120,6 +120,7 @@ impl Plan {
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
             Plan::DescribeView(_) => Ok("DescribeView".to_string()),
+            Plan::RefreshLineage(_) => Ok("RefreshLineage".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),

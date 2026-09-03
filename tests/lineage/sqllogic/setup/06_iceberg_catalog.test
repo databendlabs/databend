@@ -1,0 +1,43 @@
+# Iceberg catalog tables have catalog-local runtime ids, so lineage must use object and column names.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_iceberg
+
+statement ok
+DROP CATALOG IF EXISTS lineage_history_iceberg_catalog
+
+statement ok
+CREATE CATALOG lineage_history_iceberg_catalog
+TYPE = ICEBERG
+CONNECTION = (
+    TYPE = 'rest'
+    ADDRESS = 'http://127.0.0.1:8181'
+    WAREHOUSE = 's3://iceberg-tpch/'
+    "s3.region" = 'us-east-1'
+    "s3.endpoint" = 'http://127.0.0.1:9002'
+    "s3.access-key-id" = 'admin'
+    "s3.secret-access-key" = 'password'
+)
+
+statement ok
+USE CATALOG lineage_history_iceberg_catalog
+
+statement ok
+DROP DATABASE IF EXISTS lineage_db
+
+statement ok
+CREATE DATABASE lineage_db
+
+statement ok
+CREATE TABLE lineage_db.src(a INT)
+
+statement ok
+USE CATALOG default
+
+statement ok
+CREATE DATABASE lineage_history_iceberg
+
+# The source is intentionally empty; successful planning and execution must still emit lineage.
+statement ok
+CREATE TABLE lineage_history_iceberg.dst AS
+SELECT a FROM lineage_history_iceberg_catalog.lineage_db.src
