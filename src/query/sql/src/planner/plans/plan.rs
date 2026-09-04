@@ -534,6 +534,7 @@ pub enum RewriteKind {
     ShowDatabases,
     ShowDropDatabases,
     ShowTables(String, String),
+    ShowMaterializedViews,
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,

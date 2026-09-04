@@ -81,10 +81,12 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -360,6 +362,14 @@ impl Catalog for SessionCatalog {
         self.inner
             .get_mv_source_binding_snapshot(tenant, source_table_id)
             .await
+    }
+
+    async fn list_materialized_views(
+        &self,
+        tenant: &Tenant,
+        filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        self.inner.list_materialized_views(tenant, filter).await
     }
 
     async fn mget_table_names_by_ids(

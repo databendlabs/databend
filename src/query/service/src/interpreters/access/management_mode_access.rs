@@ -47,6 +47,7 @@ impl AccessChecker for ManagementModeAccess {
                             RewriteKind::ShowDatabases
                             | RewriteKind::ShowDropDatabases
                             | RewriteKind::ShowTables(_, _)
+                            | RewriteKind::ShowMaterializedViews
                             | RewriteKind::ShowColumns(_, _, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
