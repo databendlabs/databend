@@ -111,7 +111,7 @@ TopN(Final)
             │       │       │                                       ├── read size: 0
             │       │       │                                       ├── partitions total: 0
             │       │       │                                       ├── partitions scanned: 0
-            │       │       │                                       ├── push downs: [filters: [], limit: NONE]
+            │       │       │                                       ├── push downs: [filters: [is_true(store_returns.sr_store_sk (#103) = store_returns.sr_store_sk (#103))], limit: NONE]
             │       │       │                                       ├── apply join filters: [#1]
             │       │       │                                       └── estimated rows: 0.00
             │       │       └── TableScan(Probe)

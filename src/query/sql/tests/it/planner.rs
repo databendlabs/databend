@@ -138,6 +138,12 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         default_node_num: 1,
     },
     LiteReplayCaseSpec {
+        name: "20379_non_nullable_reflexive_equality",
+        warehouse_distribution: false,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
         name: "q17_histogram_join_order",
         warehouse_distribution: true,
         optimizer_skip_list: &[],

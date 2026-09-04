@@ -1,0 +1,7 @@
+name: "20379_non_nullable_reflexive_equality"
+description: "Non-nullable reflexive equality should still be eliminated during filter inference"
+
+sql: |
+  SELECT value
+  FROM (VALUES (1), (2)) AS t(value)
+  WHERE value = value;
