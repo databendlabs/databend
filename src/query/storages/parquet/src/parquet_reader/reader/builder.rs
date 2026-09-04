@@ -330,6 +330,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             op_registry: self.op_registry.clone(),
             batch_size,
             schema_desc: self.schema_desc.clone(),
+            schema_desc_from: self.schema_desc_from.clone(),
             arrow_schema: self.arrow_schema.clone(),
             policy_builders,
             default_policy,

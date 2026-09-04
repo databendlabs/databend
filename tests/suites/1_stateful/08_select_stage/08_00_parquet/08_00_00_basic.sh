@@ -62,6 +62,15 @@ echo 'drop stage empty_parquet;' | bendsql_connect_root
 rm -rf "$EMPTY_PARQUET_DIR"
 echo 'drop table small_parquet_streaming;' | bendsql_connect_root
 
+echo '--- legacy Decimal schema annotation should survive plan serialization'
+echo 'drop stage if exists legacy_decimal;' | bendsql_connect_root
+echo "create stage legacy_decimal url = 'fs://$TESTS_DATA_DIR/' file_format = (type = parquet);" | bendsql_connect_root
+# The fixture stores DECIMAL only as a legacy converted type, without a logical type.
+# Disabling fast read forces the row-group path. Cluster CI covers plan serialization;
+# the standalone run is smoke coverage for reading the fixture.
+echo "select /*+ set_var(parquet_fast_read_bytes=0) */ deal from @legacy_decimal (files => ('parquet/legacy_decimal_no_logical_type.parquet'));" | bendsql_connect_root
+echo 'drop stage legacy_decimal;' | bendsql_connect_root
+
 ## generate large parquet files will cause timeout, we comment it now
 echo '--- large parquet file should be worked on parallel by rowgroups'
 echo 'remove @s4;' | bendsql_connect_root
