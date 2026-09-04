@@ -21,11 +21,14 @@ use databend_common_expression::FromData;
 use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::types::Int32Type;
 use databend_common_pipeline_transforms::sorts::core::AsyncSortedStream;
+use databend_common_pipeline_transforms::sorts::core::MergeAlgorithm;
 use databend_common_pipeline_transforms::sorts::core::Merger;
+use databend_common_pipeline_transforms::sorts::core::SelectedMerger;
 use databend_common_pipeline_transforms::sorts::core::SimpleRowsAsc;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
 use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
 use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeTop2Sort;
 use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use itertools::Itertools;
 use rand::Rng;
@@ -74,7 +77,9 @@ impl AsyncSortedStream for TestStream {
 
 type TestMerger<A> = Merger<A, TestStream>;
 type TestHeapSort = HeapSort<SimpleRowsAsc<Int32Type>>;
+type TestLoserTreeTop2Sort = LoserTreeTop2Sort<SimpleRowsAsc<Int32Type>>;
 type TestLoserTreeSort = LoserTreeSort<SimpleRowsAsc<Int32Type>>;
+type TestSelectedMerger = SelectedMerger<SimpleRowsAsc<Int32Type>, TestStream>;
 
 fn prepare_input_and_result(
     data: Vec<Vec<Vec<i32>>>,
@@ -151,6 +156,19 @@ fn create_test_merger<A: SortAlgorithm>(
     TestMerger::<A>::new(streams, 4, limit)
 }
 
+fn create_selected_test_merger(
+    algorithm: MergeAlgorithm,
+    input: Vec<Vec<DataBlock>>,
+    limit: Option<usize>,
+) -> TestSelectedMerger {
+    let streams = input
+        .into_iter()
+        .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
+        .collect::<Vec<_>>();
+
+    TestSelectedMerger::new(algorithm, streams, 4, limit)
+}
+
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
     if expected.is_empty() {
         if !result.is_empty() && !DataBlock::concat(&result).unwrap().is_empty() {
@@ -203,13 +221,55 @@ async fn async_test<A: SortAlgorithm>(
     Ok(())
 }
 
+fn test_selected(mut merger: TestSelectedMerger, expected: DataBlock) -> Result<()> {
+    let mut result = Vec::new();
+    while !merger.is_finished() {
+        if let Some(block) = merger.next_block()? {
+            result.push(block);
+        }
+    }
+    check_result(result, expected);
+    Ok(())
+}
+
+async fn async_test_selected(mut merger: TestSelectedMerger, expected: DataBlock) -> Result<()> {
+    let mut result = Vec::new();
+    while !merger.is_finished() {
+        if let Some(block) = merger.async_next_block().await? {
+            result.push(block);
+        }
+    }
+    check_result(result, expected);
+    Ok(())
+}
+
+fn test_move_after_initial_poll<A: SortAlgorithm>(
+    mut merger: TestMerger<A>,
+    expected: DataBlock,
+) -> Result<()> {
+    while merger.has_pending_stream() {
+        merger.poll_pending_stream()?;
+    }
+
+    // Move the Merger after its cursors have borrowed rows from CursorStorage.
+    let mut merger = Box::new(merger);
+    let mut result = Vec::new();
+    while !merger.is_finished() {
+        if let Some(block) = merger.next_block()? {
+            result.push(block);
+        }
+    }
+    check_result(result, expected);
+    Ok(())
+}
+
 fn test_basic(limit: Option<usize>) -> Result<()> {
     let (input, expected) = basic_test_data(limit);
     let merger = create_test_merger::<TestHeapSort>(input, limit);
     test(merger, expected)?;
 
     let (input, expected) = basic_test_data(limit);
-    let merger = create_test_merger::<TestLoserTreeSort>(input, limit);
+    let merger = create_test_merger::<TestLoserTreeTop2Sort>(input, limit);
     test(merger, expected)
 }
 
@@ -219,7 +279,7 @@ async fn async_test_basic(limit: Option<usize>) -> Result<()> {
     async_test(merger, expected).await?;
 
     let (input, expected) = basic_test_data(limit);
-    let merger = create_test_merger::<LoserTreeSort<SimpleRowsAsc<Int32Type>>>(input, limit);
+    let merger = create_test_merger::<LoserTreeTop2Sort<SimpleRowsAsc<Int32Type>>>(input, limit);
     async_test(merger, expected).await
 }
 
@@ -232,6 +292,51 @@ fn test_basic_with_limit() -> anyhow::Result<()> {
     test_basic(Some(20))?;
     test_basic(Some(21))?;
     test_basic(Some(1000000))?;
+    Ok(())
+}
+
+#[test]
+fn test_selected_merger() -> anyhow::Result<()> {
+    for algorithm in [
+        MergeAlgorithm::Heap,
+        MergeAlgorithm::LoserTreeTop2,
+        MergeAlgorithm::LoserTree,
+    ] {
+        let (input, expected) = basic_test_data(None);
+        test_selected(
+            create_selected_test_merger(algorithm, input, None),
+            expected,
+        )?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_selected_merger_async() -> anyhow::Result<()> {
+    for algorithm in [
+        MergeAlgorithm::Heap,
+        MergeAlgorithm::LoserTreeTop2,
+        MergeAlgorithm::LoserTree,
+    ] {
+        let (input, expected) = basic_test_data(None);
+        async_test_selected(
+            create_selected_test_merger(algorithm, input, None),
+            expected,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[test]
+fn test_move_merger_with_active_cursors() -> anyhow::Result<()> {
+    let (input, expected) = basic_test_data(None);
+    let merger = create_test_merger::<TestHeapSort>(input, None);
+    test_move_after_initial_poll(merger, expected)?;
+
+    let (input, expected) = basic_test_data(None);
+    let merger = create_test_merger::<TestLoserTreeTop2Sort>(input, None);
+    test_move_after_initial_poll(merger, expected)?;
     Ok(())
 }
 
@@ -259,6 +364,12 @@ fn test_fuzz() -> anyhow::Result<()> {
 
     for _ in 0..10 {
         let (input, expected, limit) = random_test_data(&mut rng);
+        let merger = create_test_merger::<TestLoserTreeTop2Sort>(input, limit);
+        test(merger, expected)?;
+    }
+
+    for _ in 0..10 {
+        let (input, expected, limit) = random_test_data(&mut rng);
         let merger = create_test_merger::<TestLoserTreeSort>(input, limit);
         test(merger, expected)?;
     }
@@ -278,7 +389,7 @@ async fn test_fuzz_async() -> anyhow::Result<()> {
 
     for _ in 0..10 {
         let (input, expected, limit) = random_test_data(&mut rng);
-        let merger = create_test_merger::<TestLoserTreeSort>(input, limit);
+        let merger = create_test_merger::<TestLoserTreeTop2Sort>(input, limit);
         async_test(merger, expected).await?;
     }
 
