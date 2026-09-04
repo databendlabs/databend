@@ -414,6 +414,11 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
     // cannot be chosen until that session context is available.
     assert!(fold("to_int64(1.5)").as_constant().is_none());
     assert!(
+        fold("cast(cast(1.5 as float64 null) as decimal(10, 1) null)")
+            .as_constant()
+            .is_none()
+    );
+    assert!(
         fold("cast(cast(2.25 as decimal(10, 2)) as decimal(10, 1))")
             .as_constant()
             .is_none()

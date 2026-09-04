@@ -1177,6 +1177,37 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return true;
         }
 
+        // Composite casts are evaluated recursively. Check their inner casts before resolving a
+        // nullable function overload so type-specific context-independent rules still apply.
+        match (src_type, simple_dest_type) {
+            (DataType::Nullable(inner_src), DataType::Nullable(inner_dest)) if !is_try => {
+                return self.context_independent_cast(false, inner_src, inner_dest);
+            }
+            (DataType::Nullable(inner_src), inner_dest) if is_try => {
+                return self.context_independent_cast(
+                    true,
+                    inner_src,
+                    &inner_dest.clone().wrap_nullable(),
+                );
+            }
+            (src, DataType::Nullable(inner_dest)) if !is_try => {
+                return self.context_independent_cast(false, src, inner_dest);
+            }
+            (DataType::EmptyArray, DataType::Array(_)) => return true,
+            (DataType::Array(inner_src), DataType::Array(inner_dest)) => {
+                return self.context_independent_cast(false, inner_src, inner_dest);
+            }
+            (DataType::Tuple(src_fields), DataType::Tuple(dest_fields))
+                if src_fields.len() == dest_fields.len() =>
+            {
+                return src_fields
+                    .iter()
+                    .zip(dest_fields)
+                    .all(|(src, dest)| self.context_independent_cast(false, src, dest));
+            }
+            _ => {}
+        }
+
         if let (DataType::Decimal(src_size), DataType::Decimal(dest_size)) =
             (src_type, simple_dest_type)
         {
@@ -1193,53 +1224,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return true;
         }
 
-        if let Some(cast_fn) = get_simple_cast_function(is_try, src_type, simple_dest_type) {
-            let input = Expr::ColumnRef(ColumnRef {
-                span: None,
-                id: 0,
-                data_type: src_type.clone(),
-                display_name: String::new(),
-            });
-            let params = if let DataType::Decimal(ty) = simple_dest_type {
-                vec![
-                    Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                    Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
-                ]
-            } else {
-                vec![]
-            };
-            let Ok(Expr::FunctionCall(call)) =
-                check_function(None, &cast_fn, &params, &[input], self.fn_registry)
-            else {
-                return false;
-            };
+        if let Some(call) =
+            resolve_cast_function(None, is_try, src_type, dest_type, self.fn_registry)
+        {
             return self.can_evaluate_function(&call.id);
         }
 
-        match (src_type, simple_dest_type) {
-            (DataType::Nullable(inner_src), DataType::Nullable(inner_dest)) if !is_try => {
-                self.context_independent_cast(false, inner_src, inner_dest)
-            }
-            (DataType::Nullable(inner_src), inner_dest) if is_try => {
-                self.context_independent_cast(true, inner_src, &inner_dest.clone().wrap_nullable())
-            }
-            (src, DataType::Nullable(inner_dest)) if !is_try => {
-                self.context_independent_cast(false, src, inner_dest)
-            }
-            (DataType::EmptyArray, DataType::Array(_)) => true,
-            (DataType::Array(inner_src), DataType::Array(inner_dest)) => {
-                self.context_independent_cast(false, inner_src, inner_dest)
-            }
-            (DataType::Tuple(src_fields), DataType::Tuple(dest_fields))
-                if src_fields.len() == dest_fields.len() =>
-            {
-                src_fields
-                    .iter()
-                    .zip(dest_fields)
-                    .all(|(src, dest)| self.context_independent_cast(false, src, dest))
-            }
-            (src, dest) => src == dest,
-        }
+        false
     }
 
     fn calculate_cast(
