@@ -1,0 +1,110 @@
+statement ok
+drop database if exists test_ngram_rolling_hash
+
+statement ok
+create database test_ngram_rolling_hash
+
+statement ok
+use test_ngram_rolling_hash
+
+# Two rows per block produce six independently indexed blocks. The index is
+# created before insertion so every block is written with RollingV1 digests.
+statement ok
+create table t (
+    id int,
+    content string null
+) row_per_block = 2 block_per_segment = 1000 storage_format = 'parquet'
+
+statement ok
+create ngram index idx_content on t(content)
+    gram_size = 3
+    bloom_size = 1048576
+    false_positive_rate = 0.01
+    hash_algorithm = 'rolling_v1'
+
+query T
+select definition from system.indexes
+where database = 'test_ngram_rolling_hash' and name = 'idx_content'
+----
+t(content)bloom_size='1048576' false_positive_rate='0.01' gram_size='3' hash_algorithm='rolling_v1'
+
+query I
+insert into t values
+    (1, 'ERROR AlphaBeta request failed'),
+    (2, NULL),
+    (3, 'prefix AİB suffix'),
+    (4, 'ΟΣ failure'),
+    (5, '中文错误日志'),
+    (6, ''),
+    (7, 'rowend'),
+    (8, 'startrow'),
+    (9, 'AbCdEfGh'),
+    (10, 'xy'),
+    (11, 'unique rolling hash sentinel omega'),
+    (12, 'final block payload')
+----
+12
+
+# All six physical blocks must contain an NGRAM index before correctness queries run.
+query II
+select count(), count_if(ngram_index_size is not null)
+from fuse_block('test_ngram_rolling_hash', 't')
+----
+6 6
+
+# ASCII and mixed-case source patterns.
+query IT
+select id, content from t where content like '%AlphaBeta%'
+----
+1 ERROR AlphaBeta request failed
+
+# The RollingV1 index is actually used: only the matching block is scanned.
+query T
+explain select id, content from t where content like '%AlphaBeta%'
+----
+<slt:ignore>partitions total: 6<slt:ignore>partitions scanned: 1<slt:ignore>bloom pruning: 6 to 1<slt:ignore>
+
+query IT
+select id, content from t where content like '%AbCdEf%'
+----
+9 AbCdEfGh
+
+# Unicode lowercase expansion (İ -> i + combining dot), Greek, and CJK.
+query IT
+select id, content from t where content like '%AİB%'
+----
+3 prefix AİB suffix
+
+query IT
+select id, content from t where content like '%ΟΣ failure%'
+----
+4 ΟΣ failure
+
+query IT
+select id, content from t where content like '%中文错误%'
+----
+5 中文错误日志
+
+query T
+explain select id, content from t where content like '%中文错误%'
+----
+<slt:ignore>partitions total: 6<slt:ignore>partitions scanned: 1<slt:ignore>bloom pruning: 6 to 1<slt:ignore>
+
+# A long selective pattern exercises several rolling updates on the query side.
+query IT
+select id, content from t where content like '%rolling hash sentinel%'
+----
+11 unique rolling hash sentinel omega
+
+# Short patterns do not provide a full gram and must safely fall back without
+# dropping matching rows. NULL rows remain non-matches.
+query I rowsort
+select id from t where content like '%xy%'
+----
+10
+
+statement ok
+use default
+
+statement ok
+drop database test_ngram_rolling_hash
