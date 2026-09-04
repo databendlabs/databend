@@ -115,11 +115,11 @@ impl AsyncSystemTable for IndexesTable {
             updated_on.push(index.updated_on.map(|u| u.timestamp_micros()));
         }
 
-        for table in table_index_tables {
+        for (database_name, table) in table_index_tables {
             for (name, index) in &table.meta.indexes {
                 names.push(name.clone());
                 types.push(index.index_type.to_string());
-                databases.push(table.database_name()?.to_string());
+                databases.push(database_name.clone());
                 tables.push(Some(table.name.to_string()));
                 originals.push("".to_string());
 
@@ -201,7 +201,7 @@ impl IndexesTable {
         ctx: Arc<dyn TableContext>,
         database_names: Option<&[String]>,
         table_names: Option<&[String]>,
-    ) -> Result<Vec<TableInfo>> {
+    ) -> Result<Vec<(String, TableInfo)>> {
         let tenant = ctx.get_tenant();
         let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
@@ -289,7 +289,7 @@ impl IndexesTable {
                     db_id,
                     table.get_id(),
                 ) {
-                    index_tables.push(table_info.clone());
+                    index_tables.push((db_name.to_string(), table_info.clone()));
                 }
             }
         }

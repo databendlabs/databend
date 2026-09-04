@@ -47,8 +47,11 @@ use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -66,6 +69,8 @@ use crate::binder::Binder;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
+use crate::parse_materialized_view_query;
+use crate::planner::semantic::MaterializedViewChecker;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropIndexPlan;
@@ -454,8 +459,17 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        let is_materialized_view = is_materialized_view_engine(table.engine());
+        if is_materialized_view {
+            self.check_materialized_view_license()?;
+            if !*sync_creation {
+                return Err(ErrorCode::UnsupportedIndex(
+                    "ASYNC indexes on materialized views are not supported".to_string(),
+                ));
+            }
+        }
 
-        if table.is_read_only() {
+        if table.is_read_only() && !is_materialized_view {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table {} is read-only, creating index not allowed",
                 table.name()
@@ -472,6 +486,43 @@ impl Binder {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table {} is temporary table, creating index not allowed",
                 table.name()
+            )));
+        }
+        if is_materialized_view {
+            let catalog_impl = self.ctx.get_catalog(&catalog).await?;
+            let definition = get_materialized_view_handler()
+                .get_mv_definition(
+                    catalog_impl.as_ref(),
+                    &self.ctx.get_tenant(),
+                    table.get_id(),
+                )
+                .await?
+                .ok_or_else(|| {
+                    ErrorCode::InvalidMaterializedView(format!(
+                        "materialized view {} has no definition",
+                        table.name()
+                    ))
+                })?;
+            let query = parse_materialized_view_query(
+                &definition.data.original_query,
+                "invalid materialized view logical query",
+            )?;
+            if MaterializedViewChecker::check_query(&query).is_aggregating() {
+                return Err(ErrorCode::UnsupportedIndex(
+                    "Indexes on aggregating materialized views are not supported".to_string(),
+                ));
+            }
+        }
+        if is_materialized_view
+            && columns.iter().any(|column| {
+                column
+                    .name
+                    .eq_ignore_ascii_case(MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN)
+            })
+        {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Materialized view internal column {} cannot be indexed",
+                MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN
             )));
         }
         let table_schema = table.schema();
@@ -931,6 +982,9 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if is_materialized_view_engine(table.engine()) {
+            self.check_materialized_view_license()?;
+        }
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create index",
