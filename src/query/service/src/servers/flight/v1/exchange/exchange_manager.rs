@@ -40,6 +40,8 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::basic_callback;
 use databend_common_settings::FlightKeepAliveParams;
 use fastrace::prelude::*;
+use futures::StreamExt;
+use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -81,8 +83,14 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::DoExchangeConnector;
+use crate::servers::flight::v1::network::DoExchangeTransport;
+use crate::servers::flight::v1::network::FlightTransportMode;
 use crate::servers::flight::v1::network::NetworkInboundChannelSet;
+use crate::servers::flight::v1::network::NetworkInboundConnection;
 use crate::servers::flight::v1::network::NetworkInboundSender;
+use crate::servers::flight::v1::network::NetworkInboundSource;
+use crate::servers::flight::v1::network::PendingNetworkOutbound;
 use crate::servers::flight::v1::network::PingPongExchange;
 use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -103,11 +111,44 @@ enum QueryExchange {
         source: String,
         exchange: FlightExchange,
     },
+    StatisticsSender {
+        target: String,
+        sender: FlightSender,
+    },
+    BlockOutbound {
+        exchange_id: String,
+        target_id: String,
+        outbound: PendingNetworkOutbound,
+    },
     PingPong {
         exchange_id: String,
         target_id: String,
         exchange: PingPongExchange,
     },
+}
+
+fn create_do_exchange_connector(
+    target_id: String,
+    address: String,
+    use_current_rt: bool,
+    keep_alive: FlightKeepAliveParams,
+    params: DoExchangeParams,
+) -> DoExchangeConnector {
+    Arc::new(move || {
+        let target_id = target_id.clone();
+        let address = address.clone();
+        let params = params.clone();
+        Box::pin(async move {
+            let mut client =
+                create_flight_client(target_id, address, use_current_rt, keep_alive).await?;
+            let (send_tx, send_rx) = async_channel::bounded(1);
+            let response_stream = client.do_exchange(send_rx, params).await?;
+            Ok(DoExchangeTransport {
+                send_tx,
+                response_stream: response_stream.boxed(),
+            })
+        })
+    })
 }
 
 async fn create_flight_client(
@@ -299,6 +340,12 @@ impl DataExchangeManager {
             None => env.settings.clone(),
         };
         let keep_alive = settings.get_flight_keep_alive_params()?;
+        let transport = FlightTransportMode::from_settings(&settings)?;
+        info!(
+            "Flight transport selected: query_id={}, mode={}",
+            env.query_id,
+            transport.name()
+        );
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
@@ -311,7 +358,8 @@ impl DataExchangeManager {
                     >,
                 > = vec![];
 
-                // Process incoming edges: do_get for Fragment, skip ExchangeFragment
+                // Legacy Fragment edges are pulled with do_get. With the new Flight path the
+                // sender opens a reconnectable do_exchange connection instead.
                 let incoming_edges = env
                     .dataflow_diagram
                     .edges_directed(index, Direction::Incoming);
@@ -326,8 +374,8 @@ impl DataExchangeManager {
                     let source_id = source.id.clone();
 
                     let keep_alive_params = keep_alive;
-                    match edge {
-                        Edge::Fragment(channel) => {
+                    match (transport, edge) {
+                        (FlightTransportMode::Legacy, Edge::Fragment(channel)) => {
                             flight_exchanges.push(Box::pin(async move {
                                 let mut flight_client = Self::create_client(
                                     &source_id,
@@ -342,7 +390,7 @@ impl DataExchangeManager {
                                 })
                             }));
                         }
-                        Edge::Statistics => {
+                        (FlightTransportMode::Legacy, Edge::Statistics) => {
                             flight_exchanges.push(Box::pin(async move {
                                 let mut flight_client = Self::create_client(
                                     &source_id,
@@ -359,14 +407,15 @@ impl DataExchangeManager {
                                 })
                             }));
                         }
-                        Edge::ExchangeFragment { .. } => {
-                            // Skip: remote sender will call do_exchange on us,
-                            // handled by handle_do_exchange → NetworkInboundSender
+                        _ => {
+                            // Reconnectable incoming streams are opened by their remote sender.
                         }
                     }
                 }
 
-                // Process outgoing edges: do_exchange for ExchangeFragment
+                // Process outgoing data edges. Fragment remains do_get-based when the
+                // experiment is disabled; when enabled it is migrated to the same
+                // reconnectable do_exchange transport as ExchangeFragment.
                 let outgoing_edges = env
                     .dataflow_diagram
                     .edges_directed(index, Direction::Outgoing);
@@ -375,24 +424,69 @@ impl DataExchangeManager {
                     let target = env.dataflow_diagram[edge.target()].clone();
                     let edge = edge.weight().clone();
 
-                    if let Edge::ExchangeFragment {
-                        exchange_id,
-                        channels,
-                    } = edge
+                    if let (FlightTransportMode::Reconnectable(reconnect), Edge::Statistics) =
+                        (transport, &edge)
                     {
                         let target_id = target.id.clone();
-                        let local_node_id = config.query.node_id.clone();
                         let query_id = env.query_id.clone();
+                        let source_id = config.query.node_id.clone();
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
-                        let num_threads = channels.len();
-                        warn!(
-                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
-                            config.query.node_id, target_id, exchange_id, num_threads
-                        );
-
                         flight_exchanges.push(Box::pin(async move {
-                            let (send_tx, response_stream) = {
+                            let params = DoExchangeParams::reconnectable_statistics(
+                                query_id,
+                                source_id.clone(),
+                                reconnect.receiver_lease().as_secs(),
+                            );
+                            let connector = create_do_exchange_connector(
+                                target_id.clone(),
+                                address,
+                                with_cur_rt,
+                                keep_alive_params,
+                                params,
+                            );
+                            let outbound = PendingNetworkOutbound::connect(
+                                1,
+                                connector,
+                                reconnect,
+                                source_id,
+                                target_id.clone(),
+                            )
+                            .await?;
+                            Ok::<QueryExchange, ErrorCode>(QueryExchange::StatisticsSender {
+                                target: target_id,
+                                sender: FlightSender::from_pending_outbound(
+                                    outbound,
+                                    &GlobalIORuntime::instance(),
+                                ),
+                            })
+                        }));
+                        continue;
+                    }
+
+                    let (exchange_id, channels) = match (transport, edge) {
+                        (FlightTransportMode::Reconnectable(_), Edge::Fragment(channel)) => {
+                            (channel.clone(), vec![channel])
+                        }
+                        (
+                            _,
+                            Edge::ExchangeFragment {
+                                exchange_id,
+                                channels,
+                            },
+                        ) => (exchange_id, channels),
+                        _ => continue,
+                    };
+
+                    let target_id = target.id.clone();
+                    let local_node_id = config.query.node_id.clone();
+                    let query_id = env.query_id.clone();
+                    let address = target.flight_address.clone();
+                    let keep_alive_params = keep_alive;
+                    let num_threads = channels.len();
+                    flight_exchanges.push(Box::pin(async move {
+                        match transport {
+                            FlightTransportMode::Legacy => {
                                 let mut flight_client = create_flight_client(
                                     target_id.clone(),
                                     address,
@@ -400,37 +494,71 @@ impl DataExchangeManager {
                                     keep_alive_params,
                                 )
                                 .await?;
-
                                 let (send_tx, send_rx) = async_channel::bounded(1);
                                 let response_stream = flight_client
-                                    .do_exchange(send_rx, DoExchangeParams {
-                                        query_id,
-                                        num_threads,
-                                        exchange_id: exchange_id.clone(),
-                                    })
+                                    .do_exchange(
+                                        send_rx,
+                                        DoExchangeParams::legacy(
+                                            query_id,
+                                            exchange_id.clone(),
+                                            num_threads,
+                                        ),
+                                    )
                                     .await?;
-                                Ok::<_, ErrorCode>((send_tx, response_stream))
-                            }?;
 
-                            Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
-                                target_id: target_id.clone(),
-                                exchange_id,
-                                exchange: PingPongExchange::from_parts(
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
+                                    target_id: target_id.clone(),
+                                    exchange_id,
+                                    exchange: PingPongExchange::from_parts(
+                                        num_threads,
+                                        send_tx,
+                                        response_stream,
+                                        local_node_id,
+                                        target_id,
+                                    ),
+                                })
+                            }
+                            FlightTransportMode::Reconnectable(reconnect) => {
+                                let params = DoExchangeParams::reconnectable(
+                                    query_id,
+                                    exchange_id.clone(),
+                                    local_node_id.clone(),
                                     num_threads,
-                                    send_tx,
-                                    response_stream,
+                                    reconnect.receiver_lease().as_secs(),
+                                );
+                                let connector = create_do_exchange_connector(
+                                    target_id.clone(),
+                                    address,
+                                    with_cur_rt,
+                                    keep_alive_params,
+                                    params,
+                                );
+                                let outbound = PendingNetworkOutbound::connect(
+                                    num_threads,
+                                    connector,
+                                    reconnect,
                                     local_node_id,
                                     target_id.clone(),
-                                ),
-                            })
-                        }));
-                    }
+                                )
+                                .await?;
+
+                                Ok::<QueryExchange, ErrorCode>(QueryExchange::BlockOutbound {
+                                    target_id: target_id.clone(),
+                                    exchange_id,
+                                    outbound,
+                                })
+                            }
+                        }
+                    }));
                 }
 
                 let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
 
+                let mut block_outbounds =
+                    HashMap::<String, HashMap<String, PendingNetworkOutbound>>::new();
                 let mut ping_pong_exchanges =
                     HashMap::<String, HashMap<String, PingPongExchange>>::new();
+                let mut statistics_senders = HashMap::<String, FlightSender>::new();
 
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
@@ -445,20 +573,35 @@ impl DataExchangeManager {
                         QueryExchange::Statistics { source, exchange } => {
                             request_exchanges.insert(source, exchange);
                         }
+                        QueryExchange::StatisticsSender { target, sender } => {
+                            statistics_senders.insert(target, sender);
+                        }
+                        QueryExchange::BlockOutbound {
+                            exchange_id,
+                            outbound,
+                            target_id,
+                        } => {
+                            match block_outbounds.entry(exchange_id) {
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().insert(target_id, outbound);
+                                }
+                                Entry::Vacant(v) => {
+                                    v.insert(HashMap::from([(target_id, outbound)]));
+                                }
+                            };
+                        }
                         QueryExchange::PingPong {
                             exchange_id,
                             exchange,
                             target_id,
-                        } => {
-                            match ping_pong_exchanges.entry(exchange_id) {
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().insert(target_id, exchange);
-                                }
-                                Entry::Vacant(v) => {
-                                    v.insert(HashMap::from([(target_id, exchange)]));
-                                }
-                            };
-                        }
+                        } => match ping_pong_exchanges.entry(exchange_id) {
+                            Entry::Occupied(mut v) => {
+                                v.get_mut().insert(target_id, exchange);
+                            }
+                            Entry::Vacant(v) => {
+                                v.insert(HashMap::from([(target_id, exchange)]));
+                            }
+                        },
                     };
                 }
 
@@ -483,8 +626,10 @@ impl DataExchangeManager {
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
+                        query_coordinator.register_block_outbounds(block_outbounds);
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
+                        query_coordinator.add_statistics_senders(statistics_senders)?;
                     }
                     Entry::Vacant(v) => {
                         let query_coordinator = v.insert(QueryCoordinator::create());
@@ -492,8 +637,10 @@ impl DataExchangeManager {
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
+                        query_coordinator.register_block_outbounds(block_outbounds);
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
+                        query_coordinator.add_statistics_senders(statistics_senders)?;
                     }
                 };
 
@@ -697,20 +844,64 @@ impl DataExchangeManager {
         }
     }
 
-    /// Handle a do_exchange request from a remote node.
-    ///
-    /// Creates a `NetworkInboundSender` for this connection, bound to the
-    /// `NetworkInboundChannelSet` for the given channel_id. The caller (flight_service)
-    /// uses the sender to push incoming FlightData into per-tid queues.
     #[fastrace::trace]
     pub fn handle_do_exchange(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+        source_id: &str,
+        num_threads: usize,
+        receiver_lease: Duration,
+    ) -> Result<NetworkInboundConnection> {
+        warn!(
+            "handle_do_exchange: query_id={}, channel_id={}, source_id={}, num_threads={}",
+            query_id, channel_id, source_id, num_threads
+        );
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(query_id.to_string()) {
+            Entry::Occupied(mut v) => v.get_mut().open_inbound_connection(
+                channel_id,
+                source_id,
+                num_threads,
+                receiver_lease,
+            ),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .open_inbound_connection(channel_id, source_id, num_threads, receiver_lease),
+        }
+    }
+
+    #[fastrace::trace]
+    pub fn handle_statistics_do_exchange(
+        &self,
+        query_id: &str,
+        source_id: &str,
+        receiver_lease: Duration,
+    ) -> Result<NetworkInboundConnection> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(query_id.to_string()) {
+            Entry::Occupied(mut entry) => entry
+                .get_mut()
+                .open_statistics_inbound_connection(source_id, receiver_lease),
+            Entry::Vacant(entry) => entry
+                .insert(QueryCoordinator::create())
+                .open_statistics_inbound_connection(source_id, receiver_lease),
+        }
+    }
+
+    #[fastrace::trace]
+    pub fn handle_legacy_do_exchange(
         &self,
         query_id: &str,
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
         warn!(
-            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
+            "handle_legacy_do_exchange: query_id={}, channel_id={}, num_threads={}",
             query_id, channel_id, num_threads
         );
         let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -751,7 +942,7 @@ impl DataExchangeManager {
         }
     }
 
-    /// Return the inbound channels for a ping-pong exchange, creating them when
+    /// Return the inbound channels for a block exchange, creating them when
     /// the exchange has only local edges and therefore no do_exchange request.
     pub fn get_or_create_exchange_channel_set(
         &self,
@@ -773,10 +964,26 @@ impl DataExchangeManager {
         }
     }
 
-    /// Take the PingPongExchanges for a given query and channel.
-    ///
-    /// Returns the exchanges that were created during init_query_env.
-    /// The exchanges are removed from the coordinator (taken, not borrowed).
+    pub(crate) fn take_block_outbounds(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+    ) -> Result<HashMap<String, PendingNetworkOutbound>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.get_mut(query_id) {
+            None => Err(ErrorCode::Internal(format!(
+                "Query {} not found in cluster.",
+                query_id
+            ))),
+            Some(coordinator) => Ok(coordinator
+                .block_outbounds
+                .remove(channel_id)
+                .unwrap_or_default()),
+        }
+    }
+
     pub fn take_ping_pong_exchanges(
         &self,
         query_id: &str,
@@ -932,8 +1139,8 @@ impl DataExchangeManager {
                         .extend(sub_build_res.sources_pipelines);
                 }
 
-                let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
-                let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
+                let receivers = std::mem::take(&mut query_coordinator.statistics_receivers);
+                let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, receivers)?;
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
                     Mutex::new(statistics_receiver);
@@ -945,9 +1152,10 @@ impl DataExchangeManager {
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
+                        let shutdown_result = statistics_receiver.wait_shutdown();
                         ctx.get_exchange_manager()
                             .on_finished_query(&query_id, info.res.clone().err());
-                        statistics_receiver.wait_shutdown()
+                        shutdown_result
                     },
                 ));
 
@@ -1031,10 +1239,13 @@ pub(crate) struct QueryCoordinator {
     /// so execute_pipeline() must not start a second one.
     is_request_server: bool,
 
-    statistics_exchanges: HashMap<String, FlightExchange>,
+    statistics_senders: HashMap<String, FlightSender>,
+    statistics_receivers: HashMap<String, FlightReceiver>,
     flight_data_senders: HashMap<String, Vec<FlightSender>>,
     flight_data_receivers: HashMap<String, Vec<FlightReceiver>>,
     inbound_channel_sets: HashMap<String, Arc<NetworkInboundChannelSet>>,
+    inbound_sources: HashMap<(String, String), Arc<NetworkInboundSource>>,
+    block_outbounds: HashMap<String, HashMap<String, PendingNetworkOutbound>>,
     ping_pong_exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
 }
 
@@ -1045,9 +1256,12 @@ impl QueryCoordinator {
             is_request_server: false,
             flight_data_senders: HashMap::new(),
             flight_data_receivers: HashMap::new(),
-            statistics_exchanges: HashMap::new(),
+            statistics_senders: HashMap::new(),
+            statistics_receivers: HashMap::new(),
             fragments_coordinator: HashMap::new(),
             inbound_channel_sets: HashMap::new(),
+            inbound_sources: HashMap::new(),
+            block_outbounds: HashMap::new(),
             ping_pong_exchanges: HashMap::new(),
         }
     }
@@ -1058,8 +1272,8 @@ impl QueryCoordinator {
     ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         match self
-            .statistics_exchanges
-            .insert(target, FlightExchange::create_sender(tx))
+            .statistics_senders
+            .insert(target, FlightSender::create(tx))
         {
             None => Ok(rx),
             Some(_) => Err(ErrorCode::Internal(
@@ -1073,13 +1287,28 @@ impl QueryCoordinator {
         exchanges: HashMap<String, FlightExchange>,
     ) -> Result<()> {
         for (source, exchange) in exchanges.into_iter() {
-            if self.statistics_exchanges.insert(source, exchange).is_some() {
+            if self
+                .statistics_receivers
+                .insert(source, exchange.convert_to_receiver())
+                .is_some()
+            {
                 return Err(ErrorCode::Internal(
                     "Internal error, statistics exchange can only have one.",
                 ));
             }
         }
 
+        Ok(())
+    }
+
+    pub fn add_statistics_senders(&mut self, senders: HashMap<String, FlightSender>) -> Result<()> {
+        for (target, sender) in senders {
+            if self.statistics_senders.insert(target, sender).is_some() {
+                return Err(ErrorCode::Internal(
+                    "Internal error, statistics exchange can only have one.",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -1128,12 +1357,12 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn register_ping_pong_exchanges(
+    pub fn register_block_outbounds(
         &mut self,
-        exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+        exchanges: HashMap<String, HashMap<String, PendingNetworkOutbound>>,
     ) {
         for (channel, pps) in exchanges {
-            match self.ping_pong_exchanges.entry(channel) {
+            match self.block_outbounds.entry(channel) {
                 Entry::Occupied(mut v) => {
                     v.get_mut().extend(pps);
                 }
@@ -1144,22 +1373,96 @@ impl QueryCoordinator {
         }
     }
 
-    /// Create a NetworkInboundSender for a new do_exchange connection.
-    ///
-    /// The `num_threads` value is provided by the coordinator via DoExchangeParams.
+    pub fn register_ping_pong_exchanges(
+        &mut self,
+        exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+    ) {
+        for (channel, ping_pongs) in exchanges {
+            match self.ping_pong_exchanges.entry(channel) {
+                Entry::Occupied(mut v) => {
+                    v.get_mut().extend(ping_pongs);
+                }
+                Entry::Vacant(v) => {
+                    v.insert(ping_pongs);
+                }
+            }
+        }
+    }
+
     fn create_inbound_sender(
         &mut self,
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
         let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
+        Ok(NetworkInboundSender::new(&channel_set, 20 * 1024 * 1024))
+    }
 
-        // TODO: get max_bytes_per_connection from query settings
-        let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
+    fn open_inbound_connection(
+        &mut self,
+        channel_id: &str,
+        source_id: &str,
+        num_threads: usize,
+        receiver_lease: Duration,
+    ) -> Result<NetworkInboundConnection> {
+        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
+        let key = (channel_id.to_string(), source_id.to_string());
+        let source = self
+            .inbound_sources
+            .entry(key)
+            .or_insert_with(|| {
+                Arc::new(NetworkInboundSource::new(
+                    &channel_set,
+                    20 * 1024 * 1024,
+                    receiver_lease,
+                    format!("channel_id={}, source_id={}", channel_id, source_id),
+                ))
+            })
+            .clone();
+        Ok(source.connect(
+            GlobalIORuntime::instance(),
+            ErrorCode::CannotConnectNode(format!(
+                "do_exchange source {} for channel {} did not reconnect before its lease expired",
+                source_id, channel_id
+            )),
+        ))
+    }
 
-        Ok(NetworkInboundSender::new(
-            &channel_set,
-            max_bytes_per_connection,
+    fn open_statistics_inbound_connection(
+        &mut self,
+        source_id: &str,
+        receiver_lease: Duration,
+    ) -> Result<NetworkInboundConnection> {
+        const STATISTICS_CHANNEL: &str = "__statistics";
+
+        let key = (STATISTICS_CHANNEL.to_string(), source_id.to_string());
+        let source = match self.inbound_sources.entry(key) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                let (source, receiver) = NetworkInboundSource::new_packets(
+                    8,
+                    receiver_lease,
+                    format!("statistics source_id={}", source_id),
+                );
+                if self
+                    .statistics_receivers
+                    .insert(source_id.to_string(), FlightReceiver::create(receiver))
+                    .is_some()
+                {
+                    return Err(ErrorCode::Internal(
+                        "statistics exchange source was admitted twice",
+                    ));
+                }
+                entry.insert(Arc::new(source)).clone()
+            }
+        };
+
+        Ok(source.connect(
+            GlobalIORuntime::instance(),
+            ErrorCode::CannotConnectNode(format!(
+                "statistics source {} did not reconnect before its lease expired",
+                source_id
+            )),
         ))
     }
 
@@ -1257,6 +1560,11 @@ impl QueryCoordinator {
     }
 
     pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
+        if let Some(cause) = &cause {
+            for source in self.inbound_sources.values() {
+                source.fail(cause.clone());
+            }
+        }
         if let Some(query_info) = &mut self.info {
             if let Some(query_executor) = &query_info.query_executor {
                 query_executor.finish(cause);
@@ -1360,20 +1668,20 @@ impl QueryCoordinator {
         let query_id = info_mut.query_id.clone();
         let query_ctx = info_mut.query_ctx.clone();
         query_ctx.set_executor(executor.get_inner())?;
-        let request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
+        let request_server_senders = std::mem::take(&mut self.statistics_senders);
 
-        if request_server_exchanges.len() != 1 {
+        if request_server_senders.len() != 1 {
             return Err(ErrorCode::Internal(
                 "Request server must less than 1 if is not request server.",
             ));
         }
 
         let ctx = query_ctx.clone();
-        let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
+        let (_, request_server_sender) = request_server_senders.into_iter().next().unwrap();
         let mut statistics_sender = StatisticsSender::spawn(
             &query_id,
             ctx,
-            request_server_exchange,
+            request_server_sender,
             executor.get_inner(),
             perf_guard,
             finished_profiling_rx,

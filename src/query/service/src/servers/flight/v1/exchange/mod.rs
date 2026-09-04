@@ -17,6 +17,8 @@ mod broadcast_send_transform;
 mod data_exchange;
 mod exchange_injector;
 mod exchange_manager;
+mod exchange_packet_sink;
+mod exchange_packet_source;
 mod exchange_params;
 mod exchange_sink;
 mod exchange_sink_writer;

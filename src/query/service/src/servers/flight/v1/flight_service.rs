@@ -154,32 +154,67 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
-            &params.query_id,
-            &params.exchange_id,
-            params.num_threads,
-        )?;
-
-        let mut stream = req.into_inner();
+        let stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);
 
-        GlobalIORuntime::instance().spawn(async move {
-            while let Some(result) = stream.next().await {
-                let Ok(flight_data) = result else {
-                    break;
-                };
-
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
-                }
-
-                // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
-                    break;
-                }
+        match (
+            params.source_id.as_deref(),
+            params.receiver_lease_secs,
+            params.stream,
+        ) {
+            (
+                Some(source_id),
+                Some(receiver_lease_secs),
+                Some(crate::servers::flight::DoExchangeStream::Statistics),
+            ) => {
+                let attachment = DataExchangeManager::instance().handle_statistics_do_exchange(
+                    &params.query_id,
+                    source_id,
+                    std::time::Duration::from_secs(receiver_lease_secs),
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    attachment.serve(stream, tx).await;
+                });
             }
-            // sender is dropped here → closes sub-queues, notifies processors
-        });
+            (Some(source_id), Some(receiver_lease_secs), None) => {
+                let attachment = DataExchangeManager::instance().handle_do_exchange(
+                    &params.query_id,
+                    &params.exchange_id,
+                    source_id,
+                    params.num_threads,
+                    std::time::Duration::from_secs(receiver_lease_secs),
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    attachment.serve(stream, tx).await;
+                });
+            }
+            (None, None, None) => {
+                let sender = DataExchangeManager::instance().handle_legacy_do_exchange(
+                    &params.query_id,
+                    &params.exchange_id,
+                    params.num_threads,
+                )?;
+                GlobalIORuntime::instance().spawn(async move {
+                    let mut stream = stream;
+                    while let Some(result) = stream.next().await {
+                        let Ok(flight_data) = result else {
+                            break;
+                        };
+                        if sender.add_data(flight_data).await.is_err() {
+                            break;
+                        }
+                        if tx.try_send(Ok(FlightData::default())).is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+            _ => {
+                return Err(Status::invalid_argument(
+                    "source_id, receiver_lease_secs, and stream must describe a supported exchange",
+                ));
+            }
+        }
 
         Ok(RawResponse::new(Box::pin(rx)))
     }
