@@ -1,0 +1,134 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/en_US/002-load-data.sql
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE STAGE citydrive_stage_csv
+
+query III
+COPY INTO @citydrive_stage_csv/videos.csv FROM (
+    SELECT 'VID-001','VEH-21','2025-01-01','Downtown Loop','Rain',3580
+    UNION ALL SELECT 'VID-002','VEH-05','2025-01-01','Port Perimeter','Overcast',4020
+    UNION ALL SELECT 'VID-003','VEH-11','2025-01-02','Airport Connector','Clear',3655
+    )
+    FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 0)
+----
+3 190 190
+
+statement ok
+LIST @citydrive_stage_csv
+
+query III
+COPY INTO @citydrive_stage_csv/frame_events.csv FROM (
+    SELECT 'FRAME-0101','VID-001',125,'hard_brake',0.81,32.4
+    UNION ALL SELECT 'FRAME-0102','VID-001',416,'pedestrian',0.67,24.8
+    UNION ALL SELECT 'FRAME-0201','VID-002',298,'lane_merge',0.74,48.1
+    )
+    FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 0)
+----
+3 150 150
+
+statement ok
+LIST @citydrive_stage_csv
+
+statement ok
+CREATE OR REPLACE TABLE citydrive_videos (
+    video_id     STRING,
+    vehicle_id   STRING,
+    capture_date DATE,
+    route_name   STRING,
+    weather      STRING,
+    duration_sec INT
+)
+
+statement ok
+CREATE OR REPLACE TABLE frame_events (
+    frame_id    STRING,
+    video_id    STRING,
+    frame_index INT,
+    event_tag   STRING,
+    risk_score  DOUBLE,
+    speed_kmh   DOUBLE
+)
+
+statement ok
+COPY INTO citydrive_videos
+    FROM @citydrive_stage_csv/videos.csv
+    FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 0)
+
+statement ok
+COPY INTO frame_events
+    FROM @citydrive_stage_csv/frame_events.csv
+    FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 0)
+
+query TTI
+SELECT route_name, weather, duration_sec
+FROM citydrive_videos
+ORDER BY capture_date, video_id
+----
+Downtown Loop Rain 3580
+Port Perimeter Overcast 4020
+Airport Connector Clear 3655
+
+statement ok
+CREATE OR REPLACE STAGE citydrive_ndjson_stage
+
+query III
+COPY INTO @citydrive_ndjson_stage
+    FROM (
+    SELECT
+    'FRAME-0101' AS doc_id,
+    ARRAY('hard_brake','rain') AS labels,
+    'rain'       AS weather,
+    32.4         AS speed
+    UNION ALL
+    SELECT 'FRAME-0102', ARRAY('pedestrian'), 'rain', 24.8
+    UNION ALL
+    SELECT 'FRAME-0201', ARRAY('lane_merge'), 'overcast', 48.1
+    )
+    FILE_FORMAT = (TYPE = NDJSON)
+----
+3 245 245
+
+statement ok
+LIST @citydrive_ndjson_stage
+
+statement ok
+CREATE OR REPLACE TABLE frame_metadata_catalog (
+    doc_id    STRING,
+    meta_json VARIANT
+)
+
+statement ok
+COPY INTO frame_metadata_catalog (doc_id, meta_json)
+    FROM (
+    SELECT $1:doc_id::STRING AS doc_id,
+    $1                 AS meta_json
+    FROM @citydrive_ndjson_stage
+    )
+    PATTERN = '.*[.]ndjson'
+    FILE_FORMAT = (TYPE = NDJSON)
+
+query TTT
+SELECT doc_id,
+       meta_json['labels']  AS labels,
+       meta_json['weather'] AS weather
+FROM frame_metadata_catalog
+ORDER BY doc_id
+----
+FRAME-0101 ["hard_brake","rain"] "rain"
+FRAME-0102 ["pedestrian"] "rain"
+FRAME-0201 ["lane_merge"] "overcast"
+
+statement ok
+DROP STAGE IF EXISTS citydrive_stage_csv
+
+statement ok
+DROP STAGE IF EXISTS citydrive_ndjson_stage
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo
