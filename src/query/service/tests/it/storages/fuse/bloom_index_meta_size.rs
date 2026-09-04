@@ -331,6 +331,7 @@ fn build_test_segment_info(
         file_size: 0,
         col_stats: col_stats.clone(),
         col_metas,
+        column_groups: vec![],
         cluster_stats: None,
         partition_stats: None,
         location: block_location,
