@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt::Display;
 use std::hash::DefaultHasher;
 use std::hash::Hasher;
@@ -290,6 +291,38 @@ pub struct BloomIndexResult {
     pub ngram_scalars: Vec<(usize, Scalar)>,
 }
 
+/// A lowercase Unicode ngram window bounded by `gram_size` characters.
+struct UnicodeNgramWindow {
+    char_widths: VecDeque<u8>,
+    text: String,
+}
+
+impl UnicodeNgramWindow {
+    fn new() -> Self {
+        Self {
+            char_widths: VecDeque::new(),
+            text: String::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.char_widths.clear();
+        self.text.clear();
+    }
+
+    fn push(&mut self, c: char, gram_size: usize) -> Option<&str> {
+        if self.char_widths.len() == gram_size {
+            let width = self.char_widths.pop_front().unwrap() as usize;
+            self.text.drain(..width);
+        }
+
+        self.char_widths.push_back(c.len_utf8() as u8);
+        self.text.push(c);
+
+        (self.char_widths.len() == gram_size).then_some(self.text.as_str())
+    }
+}
+
 impl BloomIndex {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[fastrace::trace]
@@ -526,8 +559,8 @@ impl BloomIndex {
     /// Visits all ngrams while keeping row extraction and iteration inside one tight loop.
     pub fn calculate_ngram_nullable_column<F>(arg: Value<AnyType>, gram_size: usize, mut visit: F)
     where F: FnMut(&str) {
-        let mut lowercase = String::new();
-        let mut char_offsets = Vec::new();
+        let mut lowercase_ascii = String::new();
+        let mut unicode_window = UnicodeNgramWindow::new();
 
         for row_index in 0..arg.len() {
             let Some(scalar) = arg.index(row_index) else {
@@ -539,9 +572,9 @@ impl BloomIndex {
 
             if text.is_ascii() {
                 let bytes = if text.as_bytes().iter().any(u8::is_ascii_uppercase) {
-                    lowercase.clear();
-                    lowercase.extend(text.chars().map(|c| c.to_ascii_lowercase()));
-                    lowercase.as_bytes()
+                    lowercase_ascii.clear();
+                    lowercase_ascii.extend(text.chars().map(|c| c.to_ascii_lowercase()));
+                    lowercase_ascii.as_bytes()
                 } else {
                     text.as_bytes()
                 };
@@ -553,21 +586,11 @@ impl BloomIndex {
                 continue;
             }
 
-            lowercase.clear();
-            lowercase.extend(text.chars().flat_map(char::to_lowercase));
-            char_offsets.clear();
-            char_offsets.extend(lowercase.char_indices().map(|(offset, _)| offset));
-            if char_offsets.len() < gram_size {
-                continue;
-            }
-
-            for start_index in 0..=char_offsets.len() - gram_size {
-                let start = char_offsets[start_index];
-                let end = char_offsets
-                    .get(start_index + gram_size)
-                    .copied()
-                    .unwrap_or(lowercase.len());
-                visit(&lowercase[start..end]);
+            unicode_window.clear();
+            for c in text.chars().flat_map(char::to_lowercase) {
+                if let Some(ngram) = unicode_window.push(c, gram_size) {
+                    visit(ngram);
+                }
             }
         }
     }
@@ -1737,6 +1760,50 @@ mod tests {
         assert_eq!(calculate_ngrams("ΟΣ", 2), ["οσ"]);
         assert!(calculate_ngrams("a", 2).is_empty());
         assert!(calculate_ngrams("", 2).is_empty());
+    }
+
+    #[test]
+    fn test_unicode_ngram_window_capacity_is_bounded() {
+        const GRAM_SIZE: usize = 10;
+        let mut window = UnicodeNgramWindow::new();
+
+        for c in "İ界𐐀".chars().cycle().take(GRAM_SIZE * 4) {
+            for c in c.to_lowercase() {
+                window.push(c, GRAM_SIZE);
+            }
+        }
+        let char_capacity = window.char_widths.capacity();
+        let text_capacity = window.text.capacity();
+
+        for c in "İ界𐐀".chars().cycle().take(100_000) {
+            for c in c.to_lowercase() {
+                window.push(c, GRAM_SIZE);
+            }
+            assert!(window.char_widths.len() <= GRAM_SIZE);
+            assert!(window.text.len() <= GRAM_SIZE * 4);
+        }
+
+        assert_eq!(window.char_widths.capacity(), char_capacity);
+        assert_eq!(window.text.capacity(), text_capacity);
+    }
+
+    #[test]
+    fn test_large_unicode_value_streams_ngrams() {
+        const CHARS: usize = 100_000;
+        const GRAM_SIZE: usize = 4;
+        let text = "界".repeat(CHARS);
+        let mut count = 0;
+
+        BloomIndex::calculate_ngram_nullable_column(
+            Value::Scalar(Scalar::String(text)),
+            GRAM_SIZE,
+            |ngram| {
+                assert_eq!(ngram, "界界界界");
+                count += 1;
+            },
+        );
+
+        assert_eq!(count, CHARS - GRAM_SIZE + 1);
     }
 
     #[test]
