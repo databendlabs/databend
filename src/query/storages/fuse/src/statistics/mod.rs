@@ -24,11 +24,6 @@ mod traverse;
 
 pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
-<<<<<<< HEAD
-pub use accumulator::VirtualColumnAccumulator;
-=======
-pub(crate) use cluster_statistics::BlockOverlapDepth;
->>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use cluster_statistics::ClusterStatsKey;
 pub use cluster_statistics::ClusterStatsLayout;

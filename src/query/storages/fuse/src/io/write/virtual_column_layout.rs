@@ -85,6 +85,55 @@ impl VirtualColumnLayoutPlanner {
         }
     }
 
+    /// Adds one block only when its persisted metadata completely represents all
+    /// observed paths. Returns false without mutating the planner when source
+    /// Variant data must be scanned instead.
+    pub fn add_block_if_complete(
+        &mut self,
+        virtual_schema: Option<&VirtualSegmentSchema>,
+        block: &BlockMeta,
+    ) -> bool {
+        let Some(virtual_schema) = virtual_schema else {
+            return false;
+        };
+        if !Self::has_complete_block_metadata(virtual_schema, block) {
+            return false;
+        }
+        self.add_blocks(Some(virtual_schema), std::iter::once(block));
+        true
+    }
+
+    fn has_complete_block_metadata(
+        virtual_schema: &VirtualSegmentSchema,
+        block: &BlockMeta,
+    ) -> bool {
+        let direct_ids_valid = block.virtual_block_meta.as_ref().is_some_and(|meta| {
+            meta.virtual_column_metas
+                .keys()
+                .all(|column_id| virtual_schema.field_of_column_id(*column_id).is_some())
+        });
+        let path_statistics_complete =
+            block.virtual_path_statistics.as_ref().is_some_and(|stats| {
+                !stats.is_empty()
+                    && stats.iter().all(|(source_column_id, source)| {
+                        source.path_statistics_complete
+                            && source.path_counts.iter().all(|(column_id, _)| {
+                                virtual_schema.field_of_column_id(*column_id).is_some_and(
+                                    |(path_source_column_id, _)| {
+                                        path_source_column_id == *source_column_id
+                                    },
+                                )
+                            })
+                    })
+            });
+
+        match &block.virtual_block_meta {
+            Some(meta) if meta.virtual_columns_complete => direct_ids_valid,
+            Some(_) => direct_ids_valid && path_statistics_complete,
+            None => path_statistics_complete,
+        }
+    }
+
     /// Adds blocks that share one segment-local virtual schema. Missing or
     /// truncated metadata makes planning approximate, but retained counts remain
     /// valid heavy-hitter evidence and still participate in layout selection.
@@ -198,6 +247,13 @@ impl VirtualColumnLayoutPlanner {
 
 #[cfg(test)]
 mod tests {
+    use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+    use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+    use databend_storages_common_table_meta::meta::VirtualColumnPathStatistics;
+    use databend_storages_common_table_meta::meta::VirtualSegmentColumnPath;
+    use databend_storages_common_table_meta::meta::VirtualSegmentPath;
+
     use super::*;
 
     fn path(source_column_id: u32, name: &str) -> VirtualColumnPath {
@@ -224,6 +280,140 @@ mod tests {
             total_rows,
             statistics_complete: true,
         }
+    }
+
+    fn segment_schema() -> VirtualSegmentSchema {
+        VirtualSegmentSchema {
+            column_paths: vec![VirtualSegmentColumnPath {
+                source_column_id: 1,
+                paths: vec![
+                    VirtualSegmentPath {
+                        path: "a".to_string(),
+                        column_id: 0,
+                    },
+                    VirtualSegmentPath {
+                        path: "b".to_string(),
+                        column_id: 1,
+                    },
+                ],
+            }],
+        }
+    }
+
+    fn direct_meta(complete: bool) -> VirtualBlockMeta {
+        VirtualBlockMeta {
+            virtual_column_metas: HashMap::from([(0, VirtualColumnMeta {
+                offset: 0,
+                len: 1,
+                num_values: 10,
+                data_type: 0,
+                extended_physical_type: None,
+                column_stat: None,
+            })]),
+            virtual_column_size: 1,
+            virtual_location: ("virtual.parquet".to_string(), 0),
+            virtual_columns_complete: complete,
+        }
+    }
+
+    fn block(
+        virtual_block_meta: Option<VirtualBlockMeta>,
+        virtual_path_statistics: Option<HashMap<ColumnId, VirtualColumnPathStatistics>>,
+    ) -> BlockMeta {
+        let mut block = BlockMeta::new(
+            10,
+            1,
+            1,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            ("block.parquet".to_string(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            virtual_block_meta,
+            Compression::Lz4,
+            None,
+        );
+        block.virtual_path_statistics = virtual_path_statistics;
+        block
+    }
+
+    fn path_statistics(complete: bool) -> HashMap<ColumnId, VirtualColumnPathStatistics> {
+        HashMap::from([(1, VirtualColumnPathStatistics {
+            path_counts: vec![(1, 5)],
+            path_statistics_complete: complete,
+        })])
+    }
+
+    #[test]
+    fn complete_block_metadata_skips_source_scan() {
+        let schema = segment_schema();
+
+        let mut direct_planner = VirtualColumnLayoutPlanner::create(Default::default());
+        assert!(
+            direct_planner
+                .add_block_if_complete(Some(&schema), &block(Some(direct_meta(true)), None),)
+        );
+        let direct_layout = direct_planner.build().unwrap();
+        assert!(direct_layout.contains(1, "a"));
+
+        let mut shared_planner = VirtualColumnLayoutPlanner::create(Default::default());
+        assert!(shared_planner.add_block_if_complete(
+            Some(&schema),
+            &block(Some(direct_meta(false)), Some(path_statistics(true))),
+        ));
+        let shared_layout = shared_planner.build().unwrap();
+        assert!(shared_layout.contains(1, "a"));
+        assert!(shared_layout.contains(1, "b"));
+
+        let mut stats_only_planner = VirtualColumnLayoutPlanner::create(Default::default());
+        assert!(
+            stats_only_planner
+                .add_block_if_complete(Some(&schema), &block(None, Some(path_statistics(true))),)
+        );
+        assert!(stats_only_planner.build().unwrap().contains(1, "b"));
+    }
+
+    #[test]
+    fn incomplete_block_metadata_requires_source_scan_without_mutation() {
+        let schema = segment_schema();
+        let mut wrong_direct_id = direct_meta(true);
+        wrong_direct_id.virtual_column_metas = HashMap::from([(99, VirtualColumnMeta {
+            offset: 0,
+            len: 1,
+            num_values: 10,
+            data_type: 0,
+            extended_physical_type: None,
+            column_stat: None,
+        })]);
+        let wrong_path_id = HashMap::from([(1, VirtualColumnPathStatistics {
+            path_counts: vec![(99, 5)],
+            path_statistics_complete: true,
+        })]);
+        for block in [
+            block(Some(direct_meta(false)), None),
+            block(Some(direct_meta(false)), Some(path_statistics(false))),
+            block(None, Some(path_statistics(false))),
+            block(Some(wrong_direct_id), None),
+            block(None, Some(wrong_path_id)),
+        ] {
+            let mut planner = VirtualColumnLayoutPlanner::create(Default::default());
+            assert!(!planner.add_block_if_complete(Some(&schema), &block));
+            assert_eq!(planner.total_rows, 0);
+            assert!(planner.counts.is_empty());
+        }
+
+        let mut planner = VirtualColumnLayoutPlanner::create(Default::default());
+        assert!(!planner.add_block_if_complete(None, &block(Some(direct_meta(true)), None),));
+        assert_eq!(planner.total_rows, 0);
+        assert!(planner.counts.is_empty());
     }
 
     #[test]

@@ -29,6 +29,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::VirtualColumnBuilder;
 use databend_common_storages_fuse::io::VirtualColumnLayoutPolicy;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
 use jsonb::OwnedJsonb;
@@ -520,6 +521,70 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
         assert!(column_meta.is_some());
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_rebuild_uses_new_virtual_column_location() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let schema = table.get_table_info().meta.schema.clone();
+    let source_column_id = schema.column_id_of("v")?;
+    let write_settings = FuseTable::try_from_table(table.as_ref())?.get_write_settings();
+    let block_location = ("_b/virtual_column_rebuild.parquet".to_string(), 0);
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![1, 2]).into(),
+            VariantType::from_opt_data(vec![
+                Some(OwnedJsonb::from_str(r#"{"a":"x","b":"y"}"#)?.to_vec()),
+                Some(OwnedJsonb::from_str(r#"{"a":"m","b":"n"}"#)?.to_vec()),
+            ])
+            .into(),
+        ],
+        2,
+    );
+
+    let build = |direct_paths: Vec<&str>| -> anyhow::Result<DraftVirtualBlockMeta> {
+        let layout = Arc::new(VirtualColumnLayout {
+            direct_paths: direct_paths
+                .into_iter()
+                .map(|path| VirtualColumnPath {
+                    source_column_id,
+                    path: path.to_string(),
+                })
+                .collect(),
+        });
+        let mut builder =
+            VirtualColumnBuilder::try_create(schema.clone(), VirtualColumnLayoutPolicy::default())?
+                .with_adaptive_layout(layout);
+        builder.add_block(&block)?;
+        Ok(builder
+            .finalize(&write_settings, &block_location)?
+            .draft_virtual_block_meta)
+    };
+
+    let first = build(vec!["a", "b"])?;
+    let second = build(vec!["a"])?;
+    let first_meta = first.virtual_columns.as_ref().unwrap();
+    let second_meta = second.virtual_columns.as_ref().unwrap();
+
+    assert_ne!(first_meta.virtual_location, second_meta.virtual_location);
+    assert!(
+        first_meta
+            .virtual_column_metas
+            .iter()
+            .any(|meta| meta.name == "b")
+    );
+    assert!(
+        !second_meta
+            .virtual_column_metas
+            .iter()
+            .any(|meta| meta.name == "b")
+    );
+    assert!(!second_meta.virtual_columns_complete);
     Ok(())
 }
 

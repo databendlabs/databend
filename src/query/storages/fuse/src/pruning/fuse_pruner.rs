@@ -44,6 +44,8 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
+use databend_storages_common_pruner::ProjectedVirtualPath;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
@@ -52,6 +54,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -97,6 +100,11 @@ pub struct PruningContext {
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
     pub spatial_index_pruner: Option<Arc<SpatialIndexPruner>>,
 
+    /// All virtual paths requested by the query, including precomputed lookup
+    /// prefixes. Used to project each segment's virtual schema once before
+    /// pruning its blocks.
+    pub virtual_column_paths: Option<Arc<[(ColumnId, ProjectedVirtualPath)]>>,
+
     /// Virtual columns referenced by the pushed-down filter. Used to build
     /// block-local range statistics for virtual column range pruning.
     pub virtual_predicate_refs: Option<Arc<[VirtualPredicateRef]>>,
@@ -106,6 +114,18 @@ pub struct PruningContext {
 }
 
 impl PruningContext {
+    pub fn project_virtual_segment_schema(
+        &self,
+        schema: Option<&VirtualSegmentSchema>,
+    ) -> Option<Arc<ProjectedVirtualSegmentSchema>> {
+        let schema = schema?;
+        let requested_paths = self.virtual_column_paths.as_deref()?;
+        Some(Arc::new(ProjectedVirtualSegmentSchema::project(
+            schema,
+            requested_paths,
+        )))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: &Arc<dyn TableContext>,
@@ -210,6 +230,25 @@ impl PruningContext {
             VirtualColumnPruner::try_create(dal.clone(), push_down)?
         };
 
+        let virtual_column_paths: Option<Arc<[(ColumnId, ProjectedVirtualPath)]>> = push_down
+            .as_ref()
+            .and_then(|push_down| push_down.virtual_column.as_ref())
+            .map(|virtual_column| {
+                let mut seen = HashSet::with_capacity(virtual_column.virtual_column_fields.len());
+                let mut paths = Vec::with_capacity(virtual_column.virtual_column_fields.len());
+                for field in &virtual_column.virtual_column_fields {
+                    if !seen.insert((field.source_column_id, &field.key_paths)) {
+                        continue;
+                    }
+                    paths.push((
+                        field.source_column_id,
+                        ProjectedVirtualPath::new(&field.key_paths),
+                    ));
+                }
+                paths
+            })
+            .filter(|paths| !paths.is_empty())
+            .map(Arc::from);
         let virtual_predicate_refs = push_down
             .as_ref()
             .map(|push_down| push_down.virtual_predicate_refs(filter_expr.as_ref()))
@@ -256,6 +295,7 @@ impl PruningContext {
             inverted_index_pruner,
             virtual_column_pruner,
             spatial_index_pruner,
+            virtual_column_paths,
             virtual_predicate_refs,
             pruning_stats,
             pruning_cost,
@@ -445,12 +485,16 @@ impl FusePruner {
                                 populate_block_meta_cache,
                                 &pruning_cost,
                             )?;
+                            let projected_virtual_schema = pruning_ctx
+                                .project_virtual_segment_schema(
+                                    compact_segment_info.summary.virtual_segment_schema.as_ref(),
+                                );
                             res.extend(
                                 block_pruner
                                     .pruning(
                                         segment_location.clone(),
                                         block_metas,
-                                        compact_segment_info.summary.virtual_segment_schema.clone(),
+                                        projected_virtual_schema,
                                     )
                                     .await?,
                             );
@@ -499,12 +543,16 @@ impl FusePruner {
                                     block_metas = Arc::new(sample_block_metas);
                                 }
                             }
+                            let projected_virtual_schema = pruning_ctx
+                                .project_virtual_segment_schema(
+                                    info.summary.virtual_segment_schema.as_ref(),
+                                );
                             res.extend(
                                 block_pruner
                                     .pruning(
                                         location.clone(),
                                         block_metas,
-                                        info.summary.virtual_segment_schema.clone(),
+                                        projected_virtual_schema,
                                     )
                                     .await?,
                             );
@@ -590,6 +638,10 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             Arc::new(batch),
+                            // Change-tracking stream pruning receives detached block metadata
+                            // without its segment summary, so no segment projection is available.
+                            // Virtual-column pruning remains conservative and uses footer/source
+                            // fallback instead of assuming segment-local IDs.
                             None,
                         )
                         .await?;

@@ -87,9 +87,12 @@ pub struct RangeIndex {
 struct ColumnDomainSlot {
     name: String,
     data_type: DataType,
-    /// Leaf column ids resolved from the table schema. `None` when the domain
-    /// is always full: internal/stream columns and virtual columns.
+    /// Leaf column ids resolved from the table schema. `None` for
+    /// internal/stream columns and virtual columns.
     leaf_column_ids: Option<Vec<ColumnId>>,
+    /// Whether a slot without leaf IDs may consume block-local virtual-column
+    /// statistics. Internal and stream columns must always use full domains.
+    virtual_stats_eligible: bool,
 }
 
 impl RangeIndex {
@@ -142,16 +145,18 @@ impl RangeIndex {
         let mut column_slots = Vec::new();
         for (name, data_type) in expr.column_refs() {
             // Internal/stream columns are not stored; virtual columns have no leaf IDs.
-            let leaf_column_ids = if is_internal_column(&name) || is_stream_column(&name) {
-                None
-            } else {
+            let virtual_stats_eligible = !is_internal_column(&name) && !is_stream_column(&name);
+            let leaf_column_ids = if virtual_stats_eligible {
                 let column_ids = schema.leaf_columns_of(&name);
                 (!column_ids.is_empty()).then_some(column_ids)
+            } else {
+                None
             };
             column_slots.push(ColumnDomainSlot {
                 name,
                 data_type,
                 leaf_column_ids,
+                virtual_stats_eligible,
             });
         }
         let has_rewrite_candidates = has_rewrite_candidates(&func_ctx, &expr);
@@ -187,12 +192,38 @@ impl RangeIndex {
     where
         F: Fn(&ColumnId) -> bool,
     {
-<<<<<<< HEAD
         let mut input_domains: HashMap<String, Domain> =
             HashMap::with_capacity(self.column_slots.len());
+        let mut virtual_column_types = HashMap::new();
+        let cast_input_columns = cast_input_columns(&self.expr);
         for slot in &self.column_slots {
             let domain = match &slot.leaf_column_ids {
-                None => Domain::full(&slot.data_type),
+                None => {
+                    // The name may refer to a virtual column (e.g. `v['a']`). Use the
+                    // block-local virtual column statistics only when their physical
+                    // type is compatible with the expression or can be made compatible
+                    // by rewriting a direct Cast/TryCast input.
+                    let virtual_stat = if slot.virtual_stats_eligible {
+                        virtual_col_stats.and_then(|stats| stats.get(&slot.name))
+                    } else {
+                        None
+                    };
+                    if let Some(stat) = virtual_stat {
+                        let column_stat = stat.to_column_statistics();
+                        let data_type = DataType::from(&stat.data_type);
+                        if slot.data_type == data_type {
+                            statistics_to_domain(vec![&column_stat], &data_type)
+                        } else if cast_input_columns.contains(&slot.name) {
+                            let domain = statistics_to_domain(vec![&column_stat], &data_type);
+                            virtual_column_types.insert(slot.name.clone(), data_type);
+                            domain
+                        } else {
+                            Domain::full(&slot.data_type)
+                        }
+                    } else {
+                        Domain::full(&slot.data_type)
+                    }
+                }
                 Some(column_ids) => {
                     let mut column_stats = Vec::with_capacity(column_ids.len());
                     for column_id in column_ids {
@@ -208,72 +239,24 @@ impl RangeIndex {
                 }
             };
             input_domains.insert(slot.name.clone(), domain);
-=======
-        let mut input_domains = HashMap::new();
-        let mut virtual_column_types = HashMap::new();
-        for (name, ty) in self.expr.column_refs() {
-            // internal column and stream column are not actual stored columns
-            if is_internal_column(&name) || is_stream_column(&name) {
-                input_domains.insert(name, Domain::full(&ty));
-                continue;
-            }
-
-            let column_ids = self.schema.leaf_columns_of(&name);
-            if column_ids.is_empty() {
-                // The name may refer to a virtual column (e.g. `v['a']`). Use the
-                // block-local virtual column statistics to build the domain.
-                // Only typed statistics are injected; everything else falls back
-                // to a full domain to avoid wrong pruning.
-                if let Some(stat) = virtual_col_stats.and_then(|stats| stats.get(&name)) {
-                    let column_stat = stat.to_column_statistics();
-                    let data_type = DataType::from(&stat.data_type);
-                    let domain = statistics_to_domain(vec![&column_stat], &data_type);
-                    virtual_column_types.insert(name.clone(), data_type);
-                    input_domains.insert(name, domain);
-                } else {
-                    input_domains.insert(name, Domain::full(&ty));
-                }
-                continue;
-            }
-
-            let stats = column_ids
-                .iter()
-                .filter_map(|column_id| match stats.get(column_id) {
-                    None => {
-                        if column_is_default(column_id)
-                            && self.default_stats.contains_key(column_id)
-                        {
-                            Some(&self.default_stats[column_id])
-                        } else {
-                            None
-                        }
-                    }
-                    other => other,
-                })
-                .collect();
-            input_domains.insert(name, statistics_to_domain(stats, &ty));
->>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
         }
 
         for (name, domain) in self.spatial_predicate_domains(spatial_stats) {
             input_domains.insert(name, domain);
         }
 
-<<<<<<< HEAD
-        let (expr, input_domains) = if self.has_rewrite_candidates {
+        // Besides ordinary cast-elimination candidates, a typed virtual column
+        // whose physical type differs from its logical type needs the visitor to
+        // rewrite its direct Cast/TryCast input before domain folding.
+        let needs_rewrite = self.has_rewrite_candidates || !virtual_column_types.is_empty();
+        let (expr, input_domains) = if needs_rewrite {
             let mut visitor = RewriteVisitor {
                 input_domains,
+                virtual_column_types: (!virtual_column_types.is_empty())
+                    .then_some(&virtual_column_types),
                 func_ctx: &self.func_ctx,
                 fn_registry: &BUILTIN_FUNCTIONS,
             };
-=======
-        let mut visitor = RewriteVisitor {
-            input_domains,
-            column_types: (!virtual_column_types.is_empty()).then_some(&virtual_column_types),
-            func_ctx: &self.func_ctx,
-            fn_registry: &BUILTIN_FUNCTIONS,
-        };
->>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
 
             let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
                 Some(expr) => Cow::Owned(expr),
@@ -310,21 +293,12 @@ impl RangeIndex {
         let expr = self.expr.fill_const_column(partition_columns);
         Self::create_from_parts(
             expr,
-<<<<<<< HEAD
             self.func_ctx.clone(),
             self.schema.clone(),
             self.default_stats.clone(),
             self.predicates.clone(),
         )
-        .apply(stats, None, |_| false)
-=======
-            func_ctx: self.func_ctx.clone(),
-            schema: self.schema.clone(),
-            default_stats: self.default_stats.clone(),
-            predicates: self.predicates.clone(),
-        }
         .apply(stats, None, None, |_| false)
->>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {

@@ -319,24 +319,6 @@ impl VirtualSegmentSchema {
         paths.get(index)
     }
 
-    /// Returns whether `prefix` has a canonical descendant path for the source.
-    /// Descendants continue with `.` or `[`, so a sibling such as `geox` does
-    /// not match the prefix `geo`.
-    pub fn has_descendant_paths(&self, source_column_id: ColumnId, prefix: &str) -> bool {
-        let Some(column) = self
-            .column_paths
-            .iter()
-            .find(|column| column.source_column_id == source_column_id)
-        else {
-            return false;
-        };
-        column.paths.iter().any(|item| {
-            item.path
-                .strip_prefix(prefix)
-                .is_some_and(|suffix| suffix.starts_with('.') || suffix.starts_with('['))
-        })
-    }
-
     pub fn field_of_column_id(
         &self,
         column_id: ColumnId,

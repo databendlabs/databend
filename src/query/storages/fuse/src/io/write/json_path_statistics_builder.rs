@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -22,9 +23,12 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
+use databend_common_hashtable::StackHashMap;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
 use jsonb::RawJsonb;
 use jsonb::keypath::KeyPath;
+use siphasher::sip128::Hasher128;
+use siphasher::sip128::SipHasher24;
 
 use crate::MAX_VIRTUAL_COLUMN_PATH_STATISTICS;
 use crate::io::VirtualColumnLayoutPolicy;
@@ -33,12 +37,44 @@ use crate::io::VirtualColumnLayoutPolicy;
 /// materialization. Used by insert/update/delete writers that do not generate
 /// virtual columns. Recluster/compact/refresh reuse the statistics already
 /// collected by `VirtualColumnBuilder`.
-#[derive(Clone)]
 pub struct JsonPathStatisticsBuilder {
     variant_fields: Vec<TableField>,
     variant_offsets: Vec<usize>,
-    source_paths: Vec<HashMap<String, u64>>,
+    /// Canonical paths and counts, indexed by `source_path_indices`.
+    source_paths: Vec<Vec<(String, u64)>>,
+    /// Hash-first lookup avoids allocating an owned path for repeated observations.
+    source_path_indices: Vec<StackHashMap<u128, usize, 16>>,
+    /// False when a new path was discarded after reaching the per-source limit.
+    source_paths_complete: Vec<bool>,
     max_path_statistics: usize,
+}
+
+impl Clone for JsonPathStatisticsBuilder {
+    fn clone(&self) -> Self {
+        let source_path_indices = self
+            .source_path_indices
+            .iter()
+            .map(|indices| {
+                let mut cloned = StackHashMap::with_capacity(indices.len());
+                for entry in indices.iter() {
+                    // SAFETY: every newly inserted entry is initialized immediately.
+                    match unsafe { cloned.insert_and_entry(*entry.key()) } {
+                        Ok(cloned_entry) => cloned_entry.write(*entry.get()),
+                        Err(cloned_entry) => *cloned_entry.get_mut() = *entry.get(),
+                    }
+                }
+                cloned
+            })
+            .collect();
+        Self {
+            variant_fields: self.variant_fields.clone(),
+            variant_offsets: self.variant_offsets.clone(),
+            source_paths: self.source_paths.clone(),
+            source_path_indices,
+            source_paths_complete: self.source_paths_complete.clone(),
+            max_path_statistics: self.max_path_statistics,
+        }
+    }
 }
 
 impl JsonPathStatisticsBuilder {
@@ -56,11 +92,17 @@ impl JsonPathStatisticsBuilder {
                 "JSON path statistics require at least one variant field",
             ));
         }
-        let source_paths = (0..variant_fields.len()).map(|_| HashMap::new()).collect();
+        let source_paths = (0..variant_fields.len()).map(|_| Vec::new()).collect();
+        let source_path_indices = (0..variant_fields.len())
+            .map(|_| StackHashMap::with_capacity(0))
+            .collect();
+        let source_paths_complete = vec![true; variant_fields.len()];
         Ok(Self {
             variant_fields,
             variant_offsets,
             source_paths,
+            source_path_indices,
+            source_paths_complete,
             max_path_statistics: if policy.max_path_statistics == 0 {
                 MAX_VIRTUAL_COLUMN_PATH_STATISTICS
             } else {
@@ -79,12 +121,31 @@ impl JsonPathStatisticsBuilder {
         else {
             return;
         };
+        let mut hasher = SipHasher24::new();
+        key_paths.hash(&mut hasher);
+        let hash_value = hasher.finish128().into();
+        if let Some(index) = self.source_path_indices[source_index].get(&hash_value) {
+            self.source_paths[source_index][*index].1 += 1;
+            return;
+        }
+
+        if self.source_paths[source_index].len() >= self.max_path_statistics {
+            self.source_paths_complete[source_index] = false;
+            return;
+        }
+
         let path = jsonb::keypath::KeyPaths {
             paths: key_paths.to_vec(),
         }
         .to_owned()
         .to_canonical_path();
-        *self.source_paths[source_index].entry(path).or_default() += 1;
+        let index = self.source_paths[source_index].len();
+        self.source_paths[source_index].push((path, 1));
+        unsafe {
+            match self.source_path_indices[source_index].insert_and_entry(hash_value) {
+                Ok(entry) | Err(entry) => *entry.get_mut() = index,
+            }
+        }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -115,23 +176,30 @@ impl JsonPathStatisticsBuilder {
     pub fn finalize(&mut self) -> HashMap<ColumnId, DraftVirtualColumnPathStatistics> {
         let source_paths = std::mem::replace(
             &mut self.source_paths,
-            (0..self.variant_fields.len())
-                .map(|_| HashMap::new())
-                .collect(),
+            (0..self.variant_fields.len()).map(|_| Vec::new()).collect(),
         );
+        self.source_path_indices = (0..self.variant_fields.len())
+            .map(|_| StackHashMap::with_capacity(0))
+            .collect();
+        let source_paths_complete = std::mem::replace(&mut self.source_paths_complete, vec![
+                true;
+                self.variant_fields
+                    .len()
+            ]);
         let mut statistics = HashMap::new();
-        for (source_field, paths) in self.variant_fields.iter().zip(source_paths) {
-            if paths.is_empty() {
+        for ((source_field, paths), complete) in self
+            .variant_fields
+            .iter()
+            .zip(source_paths)
+            .zip(source_paths_complete)
+        {
+            if paths.is_empty() && complete {
                 continue;
             }
             let mut path_counts = paths
                 .into_iter()
                 .map(|(path, value_count)| (path, value_count.min(u32::MAX as u64) as u32))
                 .collect::<Vec<_>>();
-            let complete = path_counts.len() <= self.max_path_statistics;
-            path_counts
-                .sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
-            path_counts.truncate(self.max_path_statistics);
             path_counts.sort_by(|left, right| left.0.cmp(&right.0));
             statistics.insert(source_field.column_id, DraftVirtualColumnPathStatistics {
                 path_statistics_complete: complete,
@@ -139,5 +207,49 @@ impl JsonPathStatisticsBuilder {
             });
         }
         statistics
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+    use std::sync::Arc;
+
+    use databend_common_expression::TableSchema;
+
+    use super::*;
+
+    #[test]
+    fn test_clone_rebuilds_path_indices() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "v",
+            TableDataType::Variant,
+        )]));
+        let source_column_id = schema.fields[0].column_id;
+        let mut builder =
+            JsonPathStatisticsBuilder::try_create(schema, VirtualColumnLayoutPolicy {
+                max_path_statistics: 1,
+                ..Default::default()
+            })
+            .unwrap();
+        let retained_path = [KeyPath::Name(Cow::Borrowed("a"))];
+        let discarded_path = [KeyPath::Name(Cow::Borrowed("b"))];
+        builder.observe_path(source_column_id, &retained_path);
+        builder.observe_path(source_column_id, &discarded_path);
+
+        let mut cloned = builder.clone();
+        assert_eq!(cloned.max_path_statistics, builder.max_path_statistics);
+        assert_eq!(cloned.source_paths_complete, builder.source_paths_complete);
+        cloned.observe_path(source_column_id, &retained_path);
+
+        let original_statistics = builder.finalize();
+        let original = &original_statistics[&source_column_id];
+        assert!(!original.path_statistics_complete);
+        assert_eq!(original.path_counts, vec![("a".to_string(), 1)]);
+
+        let cloned_statistics = cloned.finalize();
+        let cloned = &cloned_statistics[&source_column_id];
+        assert!(!cloned.path_statistics_complete);
+        assert_eq!(cloned.path_counts, vec![("a".to_string(), 2)]);
     }
 }

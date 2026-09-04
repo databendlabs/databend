@@ -166,6 +166,27 @@ Filter
     ├── virtual columns: [v['a'][0], v['b']['c']]
     └── estimated rows: 1.00
 
+# Variant-only functions must keep the logical Variant domain when the virtual
+# column sidecar has a typed physical domain. This should not panic or prune.
+query T
+explain select a from t2 where json_typeof(v['b']['c']) = 'INTEGER'
+----
+Filter
+├── output columns: [t2.a (#0)]
+├── filters: [is_true(json_typeof(t2.v['b']['c'] (#2)) = 'INTEGER')]
+├── estimated rows: 0.20
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
+    ├── output columns: [a (#0), v['b']['c'] (#2)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(json_typeof(t2.v['b']['c'] (#2)) = 'INTEGER')], limit: NONE]
+    ├── virtual columns: [v['b']['c']]
+    └── estimated rows: 1.00
 
 query T
 explain select a, get_by_keypath_string(v, '{"a",0}') from t2 where get_by_keypath_string(v, '{"b","c"}') like '%10%'

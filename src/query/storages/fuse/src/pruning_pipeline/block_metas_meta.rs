@@ -19,27 +19,27 @@ use std::sync::Arc;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::local_block_meta_serde;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 
 use crate::SegmentLocation;
 
 pub struct BlockMetasMeta {
     pub block_metas: Arc<Vec<Arc<BlockMeta>>>,
     pub segment_location: SegmentLocation,
-    pub virtual_segment_schema: Option<VirtualSegmentSchema>,
+    pub projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
 }
 
 impl BlockMetasMeta {
     pub fn create(
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         segment_location: SegmentLocation,
-        virtual_segment_schema: Option<VirtualSegmentSchema>,
+        projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
     ) -> BlockMetaInfoPtr {
         Box::new(BlockMetasMeta {
             block_metas,
             segment_location,
-            virtual_segment_schema,
+            projected_virtual_schema,
         })
     }
 }

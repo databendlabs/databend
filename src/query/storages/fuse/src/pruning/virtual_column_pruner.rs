@@ -29,12 +29,12 @@ use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnMetaMap;
 use databend_storages_common_index::VirtualColumnSharedDataType;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
-use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use opendal::Operator;
@@ -85,7 +85,7 @@ impl VirtualColumnPruner {
     pub async fn prune_virtual_columns(
         &self,
         virtual_block_meta: &Option<VirtualBlockMeta>,
-        virtual_segment_schema: Option<&VirtualSegmentSchema>,
+        projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     ) -> Result<Option<VirtualBlockMetaIndex>> {
         let Some(virtual_block_meta) = virtual_block_meta else {
             return Ok(None);
@@ -101,11 +101,11 @@ impl VirtualColumnPruner {
 
         let virtual_column_stats = build_runtime_virtual_column_stats(
             virtual_block_meta,
-            virtual_segment_schema,
+            projected_virtual_schema,
             &self.virtual_column_fields,
         );
         if let Some(mut index) =
-            self.try_prune_from_block_meta(virtual_block_meta, virtual_segment_schema)
+            self.try_prune_from_block_meta(virtual_block_meta, projected_virtual_schema)
         {
             index.virtual_column_stats = virtual_column_stats;
             return Ok(Some(index));
@@ -187,7 +187,7 @@ impl VirtualColumnPruner {
                         segments,
                         &virtual_meta,
                         virtual_block_meta,
-                        virtual_segment_schema,
+                        projected_virtual_schema,
                         &mut virtual_column_metas,
                         &mut shared_virtual_column_ids,
                     )?;
@@ -207,7 +207,7 @@ impl VirtualColumnPruner {
                         parent_segments,
                         &virtual_meta,
                         virtual_block_meta,
-                        virtual_segment_schema,
+                        projected_virtual_schema,
                         &mut virtual_column_metas,
                         &mut shared_virtual_column_ids,
                     )?;
@@ -281,9 +281,9 @@ impl VirtualColumnPruner {
     fn try_prune_from_block_meta(
         &self,
         virtual_block_meta: &VirtualBlockMeta,
-        virtual_segment_schema: Option<&VirtualSegmentSchema>,
+        projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     ) -> Option<VirtualBlockMetaIndex> {
-        let schema = virtual_segment_schema?;
+        let schema = projected_virtual_schema?;
 
         let mut virtual_column_metas = BTreeMap::new();
         let mut virtual_column_read_plan = BTreeMap::new();
@@ -293,19 +293,18 @@ impl VirtualColumnPruner {
             if virtual_column_field.match_info.has_index {
                 return None;
             }
-            let Some(path) =
-                schema.find_path_ref(field.source_column_id, &virtual_column_field.encoded_path)
-            else {
-                // The parent itself may have no leaf while descendant paths are
-                // materialized (for example only `geo.lat` exists in this block).
-                // BlockMeta cannot reconstruct that object, so inspect the
-                // sidecar trie instead of incorrectly declaring the parent missing.
-                if schema.has_descendant_paths(
-                    field.source_column_id,
-                    &virtual_column_field.encoded_path,
-                ) {
-                    return None;
-                }
+            let source_column_id = field.source_column_id;
+            let encoded_path = &virtual_column_field.encoded_path;
+            let projected_field = schema.get(source_column_id, encoded_path)?;
+            // Related segment-observed paths require plans derived from the sidecar trie:
+            // descendants may reconstruct a requested parent object, while ancestors may
+            // provide a JSONB parent from which the requested suffix is extracted.
+            // This also covers heterogeneous shapes where an exact path coexists with
+            // parent or child representations in the segment.
+            if projected_field.has_related_paths() {
+                return None;
+            }
+            let Some(column_id) = projected_field.column_id else {
                 if virtual_block_meta.virtual_columns_complete {
                     virtual_column_read_plan
                         .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
@@ -313,16 +312,6 @@ impl VirtualColumnPruner {
                 }
                 return None;
             };
-            // A parent path may coexist with materialized descendant paths, for example
-            // `geo` and `geo.lat` when some rows store a scalar and others an object.
-            // Reading such paths correctly needs Object/Coalesce read plans derived from
-            // the sidecar trie, which BlockMeta-only pruning cannot build yet.
-            if schema
-                .has_descendant_paths(field.source_column_id, &virtual_column_field.encoded_path)
-            {
-                return None;
-            }
-            let column_id = path.column_id;
             match virtual_block_meta.virtual_column_metas.get(&column_id) {
                 Some(column_meta) => {
                     virtual_column_metas.insert(column_id, column_meta.clone());
@@ -372,19 +361,23 @@ fn node_has_jsonb_parent_plan(
 
 fn build_runtime_virtual_column_stats(
     block_meta: &VirtualBlockMeta,
-    segment_schema: Option<&VirtualSegmentSchema>,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     fields: &[VirtualColumnFieldMatch],
 ) -> HashMap<ColumnId, ColumnStatistics> {
-    let Some(schema) = segment_schema else {
+    let Some(schema) = projected_virtual_schema else {
         return HashMap::new();
     };
     fields
         .iter()
         .filter_map(|field| {
-            let path = schema.find_path_ref(field.field.source_column_id, &field.encoded_path)?;
+            let projected_field = schema.get(field.field.source_column_id, &field.encoded_path)?;
+            if projected_field.has_related_paths() {
+                return None;
+            }
+            let column_id = projected_field.column_id?;
             let stat = block_meta
                 .virtual_column_metas
-                .get(&path.column_id)?
+                .get(&column_id)?
                 .column_stat
                 .clone()?;
             Some((field.field.query_column_id, stat))
@@ -397,11 +390,14 @@ fn direct_virtual_column_meta(
     canonical_path: &str,
     footer_meta: &VirtualColumnIdWithMeta,
     block_meta: &VirtualBlockMeta,
-    segment_schema: Option<&VirtualSegmentSchema>,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
 ) -> Result<VirtualColumnMeta> {
-    let block_column_meta = segment_schema
-        .and_then(|schema| schema.find_path_ref(source_column_id, canonical_path))
-        .map(|path| path.column_id)
+    // Requested paths can reuse compact block metadata through their segment-local ID.
+    // Recursive object/parent plans may visit non-requested paths omitted from the
+    // projection; for those paths the Parquet footer remains authoritative and supplies
+    // the actual ordinal, byte range, and physical type.
+    let block_column_meta = projected_virtual_schema
+        .and_then(|schema| schema.find_column_id(source_column_id, canonical_path))
         .and_then(|column_id| block_meta.virtual_column_metas.get(&column_id));
     match block_column_meta {
         Some(meta) => Ok(meta.clone()),
@@ -469,7 +465,7 @@ fn build_plans_for_node(
     segments: &[String],
     virtual_meta: &VirtualColumnFileMeta,
     block_meta: &VirtualBlockMeta,
-    segment_schema: Option<&VirtualSegmentSchema>,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
     shared_virtual_column_ids: &mut BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
 ) -> Result<Vec<VirtualColumnReadPlan>> {
@@ -496,7 +492,7 @@ fn build_plans_for_node(
                     &canonical_path,
                     meta,
                     block_meta,
-                    segment_schema,
+                    projected_virtual_schema,
                 )?;
                 ensure_virtual_column_id(virtual_column_metas, meta, column_meta);
                 // Direct: read the materialized virtual column by parquet ordinal.
@@ -560,7 +556,7 @@ fn build_plans_for_node(
             &child_segments,
             virtual_meta,
             block_meta,
-            segment_schema,
+            projected_virtual_schema,
             virtual_column_metas,
             shared_virtual_column_ids,
         )?;
