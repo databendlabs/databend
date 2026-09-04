@@ -30,8 +30,9 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
-use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::warn;
+
+use crate::ProjectedVirtualSegmentSchema;
 
 pub struct RangeIndexInput<'a> {
     pub col_stats: &'a StatisticsOfColumns,
@@ -62,7 +63,7 @@ impl<'a> RangeIndexInput<'a> {
 
     pub fn from_block_meta(
         block_meta: &'a BlockMeta,
-        virtual_segment_schema: Option<&VirtualSegmentSchema>,
+        projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
         virtual_predicate_refs: Option<&[VirtualPredicateRef]>,
     ) -> Self {
         Self {
@@ -70,7 +71,7 @@ impl<'a> RangeIndexInput<'a> {
             spatial_stats: block_meta.spatial_stats.as_ref(),
             virtual_col_stats: build_virtual_col_stats(
                 block_meta,
-                virtual_segment_schema,
+                projected_virtual_schema,
                 virtual_predicate_refs,
             ),
         }
@@ -88,21 +89,30 @@ impl<'a> RangeIndexInput<'a> {
 
 fn build_virtual_col_stats(
     block_meta: &BlockMeta,
-    virtual_schema: Option<&VirtualSegmentSchema>,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     virtual_refs: Option<&[VirtualPredicateRef]>,
 ) -> Option<VirtualColumnStatsOfNames> {
     let virtual_refs = virtual_refs.filter(|refs| !refs.is_empty())?;
     let virtual_meta = block_meta.virtual_block_meta.as_ref()?;
-    let schema = virtual_schema?;
+    let schema = projected_virtual_schema?;
 
     let mut stats = HashMap::with_capacity(virtual_refs.len());
     for virtual_ref in virtual_refs {
-        let Some(path) =
-            schema.find_path_ref(virtual_ref.source_column_id, &virtual_ref.encoded_path)
+        let Some(projected_field) =
+            schema.get(virtual_ref.source_column_id, &virtual_ref.encoded_path)
         else {
             continue;
         };
-        let Some(column) = virtual_meta.virtual_column_metas.get(&path.column_id) else {
+        // Exact-column statistics do not cover values that may be reconstructed
+        // from a parent or descendants observed elsewhere in the segment, so using
+        // those statistics alone would be unsafe.
+        if projected_field.has_related_paths() {
+            continue;
+        }
+        let Some(column_id) = projected_field.column_id else {
+            continue;
+        };
+        let Some(column) = virtual_meta.virtual_column_metas.get(&column_id) else {
             continue;
         };
         let Some(column_stat) = column.column_stat.as_ref() else {

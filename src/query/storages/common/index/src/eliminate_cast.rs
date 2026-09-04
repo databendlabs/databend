@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use databend_common_ast::Span;
 use databend_common_expression::ConstantFolder;
@@ -34,17 +35,76 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 pub(super) struct RewriteVisitor<'a> {
     pub input_domains: HashMap<String, Domain>,
     /// Optional block-local physical types for virtual column references.
-    pub column_types: Option<&'a HashMap<String, DataType>>,
+    pub virtual_column_types: Option<&'a HashMap<String, DataType>>,
     pub func_ctx: &'a FunctionContext,
     pub fn_registry: &'a FunctionRegistry,
 }
 
 type RewriteResult = std::result::Result<Option<Expr<String>>, !>;
 
+/// Return virtual column references whose every occurrence is the direct input
+/// of a Cast/TryCast. Only these references can safely use a physical typed
+/// domain while the expression is rewritten for range pruning.
+pub(super) fn cast_input_columns(expr: &Expr<String>) -> HashSet<String> {
+    fn visit(
+        expr: &Expr<String>,
+        direct_cast_input: bool,
+        cast_inputs: &mut HashSet<String>,
+        other_inputs: &mut HashSet<String>,
+    ) {
+        match expr {
+            Expr::ColumnRef(column) => {
+                if direct_cast_input {
+                    cast_inputs.insert(column.id.clone());
+                } else {
+                    other_inputs.insert(column.id.clone());
+                }
+            }
+            Expr::Cast(cast) => {
+                visit(
+                    &cast.expr,
+                    matches!(cast.expr.as_ref(), Expr::ColumnRef(_)),
+                    cast_inputs,
+                    other_inputs,
+                );
+            }
+            Expr::FunctionCall(call) => {
+                for arg in &call.args {
+                    visit(arg, false, cast_inputs, other_inputs);
+                }
+            }
+            Expr::LambdaFunctionCall(call) => {
+                for arg in &call.args {
+                    visit(arg, false, cast_inputs, other_inputs);
+                }
+            }
+            Expr::Constant(_) => {}
+        }
+    }
+
+    let mut cast_inputs = HashSet::new();
+    let mut other_inputs = HashSet::new();
+    visit(expr, false, &mut cast_inputs, &mut other_inputs);
+    cast_inputs.retain(|name| !other_inputs.contains(name));
+    cast_inputs
+}
+
 impl ExprVisitor<String> for RewriteVisitor<'_> {
-    fn enter_column_ref(&mut self, column: &ColumnRef<String>) -> RewriteResult {
+    fn enter_column_ref(&mut self, _column: &ColumnRef<String>) -> RewriteResult {
+        // A virtual column's physical type may differ from its logical Variant type.
+        // Rewriting an arbitrary column reference can make its parent function invalid;
+        // if re-type-checking that parent then fails, the original expression is kept
+        // while the physical domain remains in `input_domains`. Restrict the rewrite
+        // to direct Cast/TryCast inputs, where the physical type is needed for pruning.
+        Ok(None)
+    }
+
+    fn enter_cast(&mut self, cast: &Cast<String>) -> RewriteResult {
+        let Expr::ColumnRef(column) = cast.expr.as_ref() else {
+            return Self::visit_cast(cast, self);
+        };
         let Some(data_type) = self
-            .column_types
+            .virtual_column_types
             .and_then(|column_types| column_types.get(&column.id))
         else {
             return Ok(None);
@@ -55,7 +115,15 @@ impl ExprVisitor<String> for RewriteVisitor<'_> {
 
         let mut column = column.clone();
         column.data_type = data_type.clone();
-        Ok(Some(column.into()))
+        Ok(Some(
+            Cast {
+                span: cast.span,
+                is_try: cast.is_try,
+                expr: Box::new(column.into()),
+                dest_type: cast.dest_type.clone(),
+            }
+            .into(),
+        ))
     }
 
     fn enter_function_call(&mut self, call: &FunctionCall<String>) -> RewriteResult {
@@ -349,12 +417,8 @@ pub fn eliminate_cast(
 ) -> Option<Expr<String>> {
     let mut visitor = RewriteVisitor {
         input_domains,
-<<<<<<< HEAD
+        virtual_column_types: None,
         func_ctx,
-=======
-        column_types: None,
-        func_ctx: &FunctionContext::default(),
->>>>>>> 7103cb5322 (chore: Improve Virtual Column Block Meta Generation)
         fn_registry: &BUILTIN_FUNCTIONS,
     };
 

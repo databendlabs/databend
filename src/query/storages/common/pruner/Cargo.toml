@@ -13,6 +13,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-storages-common-index = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+jsonb = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }

@@ -6761,6 +6761,7 @@ dependencies = [
  "databend-common-functions",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "jsonb",
  "log",
  "serde",
  "typetag",

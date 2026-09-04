@@ -66,6 +66,7 @@ impl TableMetaFunc for FuseVirtualColumnParquetMeta {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
+            TableField::new("block_location", TableDataType::String),
             TableField::new("virtual_location", TableDataType::String),
             TableField::new(
                 "virtual_column_size",
@@ -106,6 +107,7 @@ impl FuseVirtualColumnParquetMeta {
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
+        let mut block_locations = Vec::with_capacity(len);
         let mut virtual_locations = Vec::with_capacity(len);
         let mut virtual_column_sizes = Vec::with_capacity(len);
         let mut row_counts = Vec::with_capacity(len);
@@ -127,14 +129,14 @@ impl FuseVirtualColumnParquetMeta {
                 .await?;
             for segment in segments {
                 let segment = segment?;
-                for block in segment.block_metas()? {
-                    let Some(block_meta) = block.virtual_block_meta() else {
+                for block_meta in segment.block_metas()? {
+                    let Some(virtual_block_meta) = block_meta.virtual_block_meta() else {
                         continue;
                     };
-                    let location = block_meta.virtual_location.0;
+                    let virtual_location = virtual_block_meta.virtual_location.0;
                     let virtual_meta = match load_virtual_column_file_meta(
                         tbl.operator.clone(),
-                        &location,
+                        &virtual_location,
                     )
                     .await
                     {
@@ -142,7 +144,7 @@ impl FuseVirtualColumnParquetMeta {
                         Err(error) => {
                             warn!(
                                 "Failed to load virtual column metadata from {}: {}",
-                                location, error
+                                virtual_location, error
                             );
                             continue;
                         }
@@ -152,9 +154,10 @@ impl FuseVirtualColumnParquetMeta {
                         &source_column_names,
                         &func_ctx,
                     );
-                    virtual_locations.push(location);
-                    virtual_column_sizes.push(block_meta.virtual_column_size);
-                    row_counts.push(block.row_count());
+                    block_locations.push(block_meta.location_path());
+                    virtual_locations.push(virtual_location);
+                    virtual_column_sizes.push(virtual_block_meta.virtual_column_size);
+                    row_counts.push(block_meta.row_count());
                     direct_columns.push(direct);
                     shared_columns.push(shared);
                     num_rows += 1;

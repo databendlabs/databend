@@ -168,8 +168,10 @@ pub async fn prepare_refresh_virtual_column(
     let mut reached_limit = false;
     let mut skipped_has_sidecar = 0usize;
     let mut selected_blocks = 0usize;
-    // Refresh plans and materializes one complete segment at a time. All blocks
-    // rebuilt in a segment share one adaptive direct/shared layout.
+    let settings = ReadSettings::from_ctx(&ctx)?;
+    // Refresh plans one complete segment at a time. All blocks rebuilt in a
+    // segment share one adaptive direct/shared layout, while materialization is
+    // deferred to bounded workers without retaining decoded source blocks.
     let mut virtual_column_tasks = Vec::new();
     for (location, ver) in snapshot.segments.iter() {
         if reached_limit {
@@ -240,36 +242,54 @@ pub async fn prepare_refresh_virtual_column(
             break;
         }
 
-        // Read all selected blocks once to collect bounded path frequencies for
-        // the segment. Existing non-refreshed blocks contribute their retained
-        // metadata statistics to the same planner.
-        let mut path_builder = JsonPathStatisticsBuilder::try_create(
-            source_schema.clone(),
-            fuse_table.virtual_column_layout_policy(),
-        )?;
-        let settings = ReadSettings::from_ctx(&ctx)?;
-        let mut loaded_blocks = Vec::with_capacity(segment_blocks.len());
-        for (block_meta, column_hlls) in segment_blocks {
-            let block = block_reader
-                .read_by_meta(&settings, &block_meta, &storage_format)
-                .await?;
-            path_builder.add_block(&block)?;
-            loaded_blocks.push((block_meta, column_hlls, block));
-        }
-        let draft_statistics = path_builder.finalize();
+        // Reuse complete segment-local path metadata when available. Otherwise
+        // scan one source block at a time, collect bounded statistics, and release
+        // the decoded Variant data before continuing.
         let mut planner =
             VirtualColumnLayoutPlanner::create(fuse_table.virtual_column_layout_policy());
-        planner.add_draft_statistics(
-            &draft_statistics,
-            loaded_blocks
-                .iter()
-                .map(|(_, _, block)| block.num_rows() as u64)
-                .sum(),
-        );
-        let selected_locations = loaded_blocks
+        let mut scanned_path_builder = None;
+        let mut scanned_rows = 0u64;
+        let mut metadata_reused_blocks = 0usize;
+        let mut scanned_blocks = 0usize;
+        let selected_locations = segment_blocks
             .iter()
-            .map(|(meta, _, _)| meta.location.0.as_str())
+            .map(|(meta, _)| meta.location.0.clone())
             .collect::<HashSet<_>>();
+        let mut build_tasks = Vec::with_capacity(segment_blocks.len());
+        for (block_meta, column_hlls) in segment_blocks {
+            if !planner.add_block_if_complete(
+                segment_info.summary.virtual_segment_schema.as_ref(),
+                &block_meta,
+            ) {
+                let block = block_reader
+                    .read_by_meta(&settings, &block_meta, &storage_format)
+                    .await?;
+                if scanned_path_builder.is_none() {
+                    scanned_path_builder = Some(JsonPathStatisticsBuilder::try_create(
+                        source_schema.clone(),
+                        fuse_table.virtual_column_layout_policy(),
+                    )?);
+                }
+                scanned_path_builder.as_mut().unwrap().add_block(&block)?;
+                scanned_rows += block.num_rows() as u64;
+                scanned_blocks += 1;
+            } else {
+                metadata_reused_blocks += 1;
+            }
+            build_tasks.push(VirtualColumnBuildTask {
+                block_location: block_meta.location.0.clone(),
+                block_meta,
+                column_hlls,
+            });
+        }
+        if let Some(mut scanned_path_builder) = scanned_path_builder {
+            let scanned_statistics = scanned_path_builder.finalize();
+            planner.add_draft_statistics(&scanned_statistics, scanned_rows);
+        }
+        debug!(
+            "Virtual column refresh planning reused metadata for {} blocks and scanned {} blocks",
+            metadata_reused_blocks, scanned_blocks
+        );
         planner.add_blocks(
             segment_info.summary.virtual_segment_schema.as_ref(),
             block_metas
@@ -280,18 +300,10 @@ pub async fn prepare_refresh_virtual_column(
         let Some(layout) = planner.build() else {
             continue;
         };
-        selected_blocks += loaded_blocks.len();
+        selected_blocks += build_tasks.len();
         virtual_column_tasks.push(VirtualColumnSegmentBuildTask {
             layout: Arc::new(layout),
-            blocks: loaded_blocks
-                .into_iter()
-                .map(|(block_meta, column_hlls, block)| VirtualColumnBuildTask {
-                    block_location: block_meta.location.0.clone(),
-                    block_meta,
-                    column_hlls,
-                    block: Some(block),
-                })
-                .collect(),
+            blocks: build_tasks,
         });
         if limit > 0 && selected_blocks >= limit || block_filter.is_some() {
             reached_limit = true;
@@ -735,7 +747,6 @@ struct VirtualColumnBuildTask {
     block_location: String,
     block_meta: Arc<BlockMeta>,
     column_hlls: Option<RawBlockHLL>,
-    block: Option<DataBlock>,
 }
 
 #[async_backtrace::framed]
@@ -763,7 +774,7 @@ async fn build_virtual_columns(
             segment_task.blocks.into_iter().map(move |task| {
                 (task, segment_task.layout.clone())
             })
-        }).map(move |(mut task, layout)| {
+        }).map(move |(task, layout)| {
             let block_reader = block_reader.clone();
             let operator = operator.clone();
             let write_settings = write_settings.clone();
@@ -774,14 +785,9 @@ async fn build_virtual_columns(
             let storage_format = storage_format;
             let settings = settings;
             async move {
-                let block = match task.block.take() {
-                    Some(block) => block,
-                    None => {
-                        block_reader
-                            .read_by_meta(&settings, &task.block_meta, &storage_format)
-                            .await?
-                    }
-                };
+                let block = block_reader
+                    .read_by_meta(&settings, &task.block_meta, &storage_format)
+                    .await?;
                 virtual_column_builder.add_block(&block)?;
                 let virtual_column_state =
                     virtual_column_builder.finalize(&write_settings, &task.block_meta.location)?;

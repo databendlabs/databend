@@ -213,6 +213,78 @@ fn test_range_index_prunes_try_cast_virtual_column_by_physical_type() {
 }
 
 #[test]
+fn test_range_index_keeps_variant_function_with_typed_virtual_column_statistics() {
+    fn n(value: u64) -> Scalar {
+        Scalar::Number(value.into())
+    }
+
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(r#"json_typeof("v.a") = 'string'"#, &[(
+        "v.a",
+        DataType::Variant.wrap_nullable(),
+    )]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: n(1),
+        max: n(8),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_range_index_keeps_mixed_cast_and_variant_function_virtual_column_references() {
+    fn n(value: u64) -> Scalar {
+        Scalar::Number(value.into())
+    }
+
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(
+        r#"is_true(try_cast("v.a" as uint8) = 100) AND json_typeof("v.a") = 'string'"#,
+        &[("v.a", DataType::Variant.wrap_nullable())],
+    );
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: n(1),
+        max: n(8),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
 fn test_range_index_keeps_without_virtual_column_statistics() {
     let schema = Arc::new(TableSchema::new(vec![TableField::new(
         "v",

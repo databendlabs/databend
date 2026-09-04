@@ -36,6 +36,8 @@ use databend_common_storages_fuse::io::VirtualColumnReader;
 use databend_common_storages_fuse::pruning::VirtualColumnPruner;
 use databend_query::test_kits::*;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_pruner::ProjectedVirtualPath;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_pruner::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
@@ -410,12 +412,16 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         }),
         ..Default::default()
     };
+    let projected_segment_schema = ProjectedVirtualSegmentSchema::project(&segment_schema, &[(
+        field.source_column_id,
+        ProjectedVirtualPath::new(&field.key_paths),
+    )]);
     let dal = fuse_table.get_operator();
     dal.write(&draft_columns.virtual_location.0, state.data)
         .await?;
     let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down))?.unwrap();
     let index = pruner
-        .prune_virtual_columns(&Some(virtual_block_meta), Some(&segment_schema))
+        .prune_virtual_columns(&Some(virtual_block_meta), Some(&projected_segment_schema))
         .await?
         .unwrap();
     assert!(matches!(
