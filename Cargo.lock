@@ -370,24 +370,24 @@ dependencies = [
 
 [[package]]
 name = "arrow"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d441fdda254b65f3e9025910eb2c2066b6295d9c8ed409522b8d2ace1ff8574c"
+checksum = "6cfdd0833e32a9874d2b55089333ad310c0be208aafa277385ce2461dec90be3"
 dependencies = [
- "arrow-arith 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-csv 58.1.0",
- "arrow-data 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-json 58.1.0",
- "arrow-ord 58.1.0",
+ "arrow-arith 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-csv 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-json 58.4.0",
+ "arrow-ord 58.4.0",
  "arrow-pyarrow",
- "arrow-row 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
- "arrow-string 58.1.0",
+ "arrow-row 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
+ "arrow-string 58.4.0",
 ]
 
 [[package]]
@@ -434,14 +434,14 @@ dependencies = [
 
 [[package]]
 name = "arrow-arith"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced5406f8b720cc0bc3aa9cf5758f93e8593cda5490677aa194e4b4b383f9a59"
+checksum = "0a41203398f0eaa6f7ec8e62c0da742a21abf282c148fc157f6c35c90e29981a"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
  "chrono",
  "num-traits",
 ]
@@ -500,18 +500,18 @@ dependencies = [
 
 [[package]]
 name = "arrow-array"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "772bd34cacdda8baec9418d80d23d0fb4d50ef0735685bd45158b83dfeb6e62d"
+checksum = "ae33dad492b7df00a217563a7b0ef2874df68a0deea1b1a3acf628152f7f7a69"
 dependencies = [
  "ahash 0.8.12",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
  "chrono",
  "chrono-tz 0.10.3",
  "half",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
  "num-complex",
  "num-integer",
  "num-traits",
@@ -553,9 +553,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-buffer"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "898f4cf1e9598fdb77f356fdf2134feedfd0ee8d5a4e0a5f573e7d0aec16baa4"
+checksum = "b9552f96391c005e6ab449fa941420935e7e062489b12b8b1b08879b2163f5b5"
 dependencies = [
  "bytes",
  "half",
@@ -628,16 +628,16 @@ dependencies = [
 
 [[package]]
 name = "arrow-cast"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0127816c96533d20fc938729f48c52d3e48f99717e7a0b5ade77d742510736d"
+checksum = "3a8a327c9649f30d8406995f27642b68df354713cca3baaaf100f076f18d5f34"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-ord 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "atoi",
  "base64 0.22.1",
  "chrono",
@@ -681,13 +681,13 @@ dependencies = [
 
 [[package]]
 name = "arrow-csv"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca025bd0f38eeecb57c2153c0123b960494138e6a957bbda10da2b25415209fe"
+checksum = "af0dd6d90d1955e9f9a014c1e563ee8aeffc21909085d25623e1da44d96eca26"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-schema 58.4.0",
  "chrono",
  "csv",
  "csv-core",
@@ -733,12 +733,12 @@ dependencies = [
 
 [[package]]
 name = "arrow-data"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42d10beeab2b1c3bb0b53a00f7c944a178b622173a5c7bcabc3cb45d90238df4"
+checksum = "2b24852db04738907e06c04ea61e42fe7fda962a34513022dc0d0e754fb7976b"
 dependencies = [
- "arrow-buffer 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-buffer 58.4.0",
+ "arrow-schema 58.4.0",
  "half",
  "num-integer",
  "num-traits",
@@ -773,21 +773,21 @@ dependencies = [
 
 [[package]]
 name = "arrow-flight"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "302b2e036335f3f04d65dad3f74ff1f2aae6dc671d6aa04dc6b61193761e16fb"
+checksum = "b2dbe34824c639e43136af8f106992792ab456540d54b880bc320a3192502d2e"
 dependencies = [
- "arrow-arith 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-data 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-ord 58.1.0",
- "arrow-row 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
- "arrow-string 58.1.0",
+ "arrow-arith 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-row 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
+ "arrow-string 58.4.0",
  "base64 0.22.1",
  "bytes",
  "futures",
@@ -843,15 +843,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-ipc"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "609a441080e338147a84e8e6904b6da482cefb957c5cdc0f3398872f69a315d0"
+checksum = "29a908a11fcfb3fb2f6730f4ac15e367bc644e419155e96238f68cf3adde572b"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "flatbuffers",
  "lz4_flex 0.13.0",
  "zstd 0.13.3",
@@ -905,15 +905,16 @@ dependencies = [
 
 [[package]]
 name = "arrow-json"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ead0914e4861a531be48fe05858265cf854a4880b9ed12618b1d08cba9bebc8"
+checksum = "b8a96aed3931c076adee39ec2a40d8219fc7f09e79bcdaca1df16272993e1e14"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "chrono",
  "half",
  "indexmap 2.14.0",
@@ -968,26 +969,26 @@ dependencies = [
 
 [[package]]
 name = "arrow-ord"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "763a7ba279b20b52dad300e68cfc37c17efa65e68623169076855b3a9e941ca5"
+checksum = "63a083ec750f5c043f02946b4baf05fcdbb55f4560a3277055caca5cc99f3eb0"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
 ]
 
 [[package]]
 name = "arrow-pyarrow"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e63351dc11981a316c828a6032a5021345bba882f68bc4a36c36825a50725089"
+checksum = "3ffb9be5a873590f825aef50df20e0f8dff5fd42a77058e28bbe7bd44bb53dec"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
  "pyo3",
 ]
 
@@ -1032,14 +1033,14 @@ dependencies = [
 
 [[package]]
 name = "arrow-row"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e14fe367802f16d7668163ff647830258e6e0aeea9a4d79aaedf273af3bdcd3e"
+checksum = "514ba0ef0d4c5896202dae736251ce415abb43a950bed570fb7981b8716c0e4c"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
  "half",
 ]
 
@@ -1067,9 +1068,9 @@ checksum = "8c872d36b7bf2a6a6a2b40de9156265f0242910791db366a2c17476ba8330d68"
 
 [[package]]
 name = "arrow-schema"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c30a1365d7a7dc50cc847e54154e6af49e4c4b0fddc9f607b687f29212082743"
+checksum = "21ca356ad6425cecb6eb7b28e4f659f1ee7880fbb1a16127de7dd62901efee9e"
 dependencies = [
  "bitflags 2.9.0",
  "serde",
@@ -1120,15 +1121,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-select"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78694888660a9e8ac949853db393af2a8b8fc82c19ce333132dfa2e72cc1a7fe"
+checksum = "c58da39eb3d8350ad4a549e5c2bc49284dac554016c69829310350f1731b0aad"
 dependencies = [
  "ahash 0.8.12",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
  "num-traits",
 ]
 
@@ -1185,15 +1186,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-string"
-version = "58.1.0"
+version = "58.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61e04a01f8bb73ce54437514c5fd3ee2aa3e8abe4c777ee5cc55853b1652f79e"
+checksum = "b6789b388467525e3271326b6b4915666ecfdf5142aef09779445c954b67543c"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "memchr",
  "num-traits",
  "regex",
@@ -1206,11 +1207,11 @@ version = "0.8.0"
 source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=c1de708add62ecd1afa2721b2e5c639f29be1f9d#c1de708add62ecd1afa2721b2e5c639f29be1f9d"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "async-trait",
  "atomic-time",
  "base64 0.22.1",
@@ -2063,8 +2064,8 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 name = "bendpy"
 version = "0.1.0"
 dependencies = [
- "arrow 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow 58.4.0",
+ "arrow-schema 58.4.0",
  "ctor",
  "databend-common-base",
  "databend-common-catalog",
@@ -3826,7 +3827,7 @@ dependencies = [
  "http 1.3.1",
  "log",
  "logforth",
- "opendal 0.54.1",
+ "opendal",
  "tokio",
  "toml 0.8.22",
 ]
@@ -3850,7 +3851,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal 0.54.1",
+ "opendal",
  "serde",
  "serde_json",
  "serfig",
@@ -3984,7 +3985,7 @@ name = "databend-common-catalog"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-schema 58.1.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -4014,7 +4015,7 @@ dependencies = [
  "log",
  "maplit",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "rand 0.8.5",
  "roaring 0.10.12",
  "serde",
@@ -4051,9 +4052,9 @@ dependencies = [
 name = "databend-common-column"
 version = "0.1.0"
 dependencies = [
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
  "borsh",
  "bytemuck",
  "databend-common-base",
@@ -4143,8 +4144,8 @@ name = "databend-common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-flight 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-flight 58.4.0",
+ "arrow-schema 58.4.0",
  "backtrace",
  "bincode 2.0.1",
  "cidr",
@@ -4157,8 +4158,8 @@ dependencies = [
  "libc",
  "object",
  "once_cell",
- "opendal 0.54.1",
- "parquet 58.1.0",
+ "opendal",
+ "parquet 58.4.0",
  "paste",
  "prost 0.14.3",
  "redis",
@@ -4178,14 +4179,14 @@ name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-data 58.1.0",
- "arrow-flight 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-flight 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "async-backtrace",
  "base64 0.22.1",
  "borsh",
@@ -4567,7 +4568,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-exception",
  "log",
- "opendal 0.54.1",
+ "opendal",
  "parking_lot 0.12.3",
  "serde",
  "tokio",
@@ -4711,9 +4712,9 @@ name = "databend-common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-ord 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-channel",
  "async-trait",
@@ -4887,7 +4888,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal 0.54.1",
+ "opendal",
  "parking_lot 0.12.3",
  "proptest",
  "prqlc",
@@ -4960,7 +4961,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",
- "arrow-schema 58.1.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "base64 0.22.1",
  "borsh",
@@ -4978,8 +4979,8 @@ dependencies = [
  "iceberg",
  "log",
  "lru 0.12.5",
- "opendal 0.54.1",
- "parquet 58.1.0",
+ "opendal",
+ "parquet 58.4.0",
  "prometheus-client 0.22.3",
  "regex",
  "reqwest",
@@ -4994,7 +4995,7 @@ dependencies = [
 name = "databend-common-storages-basic"
 version = "0.1.0"
 dependencies = [
- "arrow 58.1.0",
+ "arrow 58.4.0",
  "async-backtrace",
  "async-trait",
  "databend-common-ast",
@@ -5011,9 +5012,9 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "log",
- "opendal 0.54.1",
+ "opendal",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "serde",
  "serde_json",
  "sha2",
@@ -5026,7 +5027,7 @@ dependencies = [
 name = "databend-common-storages-delta"
 version = "0.1.0"
 dependencies = [
- "arrow-schema 58.1.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "databend-common-base",
@@ -5044,7 +5045,7 @@ dependencies = [
  "fastrace",
  "itertools 0.13.0",
  "object_store_opendal",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "serde",
  "serde_json",
  "tokio",
@@ -5075,10 +5076,10 @@ name = "databend-common-storages-fuse"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.12",
- "arrow 58.1.0",
- "arrow-array 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-channel",
  "async-trait",
@@ -5132,11 +5133,12 @@ dependencies = [
  "lindera-tantivy",
  "log",
  "match-template",
- "opendal 0.54.1",
+ "opendal",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "paste",
  "rand 0.8.5",
+ "rayon",
  "roaring 0.10.12",
  "serde",
  "serde_json",
@@ -5153,48 +5155,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-storages-hive"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-recursion",
- "async-trait",
- "chrono",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-functions",
- "databend-common-meta-app",
- "databend-common-pipeline",
- "databend-common-sql",
- "databend-common-storage",
- "databend-common-storages-parquet",
- "databend-common-users",
- "databend-meta-client 260205.13.2",
- "databend-storages-common-pruner",
- "databend-storages-common-table-meta",
- "fastrace",
- "faststr",
- "futures",
- "hive_metastore",
- "log",
- "opendal 0.54.1",
- "parquet 58.1.0",
- "recursive",
- "serde",
- "tokio",
- "typetag",
- "volo-thrift",
-]
-
-[[package]]
 name = "databend-common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -5223,7 +5189,7 @@ dependencies = [
  "iceberg-catalog-rest",
  "iceberg-catalog-s3tables",
  "log",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "reqwest",
  "serde",
  "serde_json",
@@ -5247,8 +5213,8 @@ dependencies = [
 name = "databend-common-storages-orc"
 version = "0.1.0"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "bytes",
@@ -5268,7 +5234,7 @@ dependencies = [
  "futures-util",
  "jiff",
  "log",
- "opendal 0.54.1",
+ "opendal",
  "orc-rust 0.6.0",
  "serde",
  "serde_json",
@@ -5279,9 +5245,9 @@ dependencies = [
 name = "databend-common-storages-paimon"
 version = "0.1.0"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -5311,10 +5277,10 @@ dependencies = [
 name = "databend-common-storages-parquet"
 version = "0.1.0"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "bytes",
@@ -5337,8 +5303,8 @@ dependencies = [
  "futures",
  "jiff",
  "log",
- "opendal 0.54.1",
- "parquet 58.1.0",
+ "opendal",
+ "parquet 58.4.0",
  "rand 0.8.5",
  "serde",
  "tokio",
@@ -5350,9 +5316,9 @@ name = "databend-common-storages-stage"
 version = "0.1.0"
 dependencies = [
  "apache-avro 0.17.0",
- "arrow-array 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-trait",
  "bstr",
@@ -5394,10 +5360,10 @@ dependencies = [
  "num-traits",
  "object_store",
  "object_store_opendal",
- "opendal 0.54.1",
+ "opendal",
  "orc-rust 0.6.0",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "serde",
  "serde_json",
  "simdutf8",
@@ -5461,7 +5427,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal 0.54.1",
+ "opendal",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -5494,8 +5460,8 @@ name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-schema 58.4.0",
  "async-channel",
  "backtrace",
  "concurrent-queue",
@@ -5511,11 +5477,11 @@ dependencies = [
  "libc",
  "log",
  "logforth",
- "opendal 0.54.1",
+ "opendal",
  "opentelemetry 0.29.1",
  "opentelemetry-otlp 0.29.0",
  "opentelemetry_sdk 0.29.0",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "serde",
  "serde_json",
  "tokio",
@@ -5688,7 +5654,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
- "opendal 0.54.1",
+ "opendal",
  "serde",
  "tempfile",
  "tokio",
@@ -6576,13 +6542,13 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-flight 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-json 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-flight 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-json 58.4.0",
+ "arrow-schema 58.4.0",
  "async-backtrace",
  "async-channel",
  "async-compat",
@@ -6640,7 +6606,6 @@ dependencies = [
  "databend-common-storages-delta",
  "databend-common-storages-factory",
  "databend-common-storages-fuse",
- "databend-common-storages-hive",
  "databend-common-storages-iceberg",
  "databend-common-storages-information-schema",
  "databend-common-storages-orc",
@@ -6700,14 +6665,14 @@ dependencies = [
  "md-5",
  "mysql_async",
  "num_cpus",
- "opendal 0.54.1",
+ "opendal",
  "opensrv-mysql",
  "opentelemetry 0.29.1",
  "opentelemetry_sdk 0.29.0",
  "p256",
  "paimon",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "petgraph 0.6.5",
  "pin-project-lite",
  "poem",
@@ -6751,10 +6716,10 @@ name = "databend-query-script-udf-support"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "arrow-udf-runtime",
  "databend-common-base",
  "databend-common-cache",
@@ -6846,14 +6811,14 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-schema 58.4.0",
  "bytes",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "tokio",
 ]
 
@@ -6861,7 +6826,7 @@ dependencies = [
 name = "databend-storages-common-cache"
 version = "0.1.0"
 dependencies = [
- "arrow 58.1.0",
+ "arrow 58.4.0",
  "async-backtrace",
  "async-trait",
  "bytes",
@@ -6882,7 +6847,7 @@ dependencies = [
  "log",
  "mockall",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "rayon",
  "rustix 0.38.44",
  "siphasher 0.3.11",
@@ -6895,8 +6860,8 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
  "base64 0.22.1",
  "bincode 2.0.1",
  "bitvec",
@@ -6928,7 +6893,7 @@ dependencies = [
  "num_cpus",
  "ordered-float 5.1.0",
  "parking_lot 0.12.3",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "rand 0.8.5",
  "rayon",
  "roaring 0.10.12",
@@ -6959,8 +6924,8 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opendal 0.54.1",
- "parquet 58.1.0",
+ "opendal",
+ "parquet 58.4.0",
 ]
 
 [[package]]
@@ -6989,7 +6954,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "log",
- "opendal 0.54.1",
+ "opendal",
  "parking_lot 0.12.3",
  "serde",
  "uuid",
@@ -6999,7 +6964,7 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
- "arrow-array 58.1.0",
+ "arrow-array 58.4.0",
  "chrono",
  "databend-common-ast",
  "databend-common-catalog",
@@ -7016,7 +6981,7 @@ dependencies = [
 name = "databend-storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
- "arrow 58.1.0",
+ "arrow 58.4.0",
  "bincode 1.3.3",
  "bytes",
  "chrono",
@@ -7034,7 +6999,7 @@ dependencies = [
  "databend-common-vector",
  "enum-as-inner",
  "log",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -8379,7 +8344,7 @@ name = "fsst"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow-array 58.1.0",
+ "arrow-array 58.4.0",
  "rand 0.9.2",
 ]
 
@@ -10612,14 +10577,14 @@ dependencies = [
  "anyhow",
  "apache-avro 0.21.0",
  "array-init",
- "arrow-arith 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-ord 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
- "arrow-string 58.1.0",
+ "arrow-arith 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
+ "arrow-string 58.4.0",
  "as-any",
  "async-trait",
  "backon",
@@ -10637,9 +10602,9 @@ dependencies = [
  "murmur3",
  "num-bigint",
  "once_cell",
- "opendal 0.55.0",
+ "opendal",
  "ordered-float 4.6.0",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "rand 0.8.5",
  "reqsign",
  "reqwest",
@@ -11455,14 +11420,14 @@ name = "lance-arrow"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-data 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-ord 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "bytes",
  "futures",
  "getrandom 0.2.16",
@@ -11487,9 +11452,9 @@ name = "lance-core"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-schema 58.4.0",
  "async-trait",
  "byteorder",
  "bytes",
@@ -11523,13 +11488,13 @@ name = "lance-encoding"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow-arith 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-arith 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "bytemuck",
  "byteorder",
  "bytes",
@@ -11562,12 +11527,12 @@ name = "lance-file"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow-arith 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-arith 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "async-recursion",
  "async-trait",
  "byteorder",
@@ -11596,14 +11561,14 @@ name = "lance-io"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow 58.1.0",
- "arrow-arith 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-data 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow 58.4.0",
+ "arrow-arith 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "async-recursion",
  "async-trait",
  "byteorder",
@@ -11637,7 +11602,7 @@ name = "lance-namespace"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow 58.1.0",
+ "arrow 58.4.0",
  "async-trait",
  "bytes",
  "lance-core",
@@ -11664,11 +11629,11 @@ name = "lance-table"
 version = "5.1.0-beta.3"
 source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
- "arrow 58.1.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
+ "arrow 58.4.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
  "async-trait",
  "byteorder",
  "bytes",
@@ -13183,15 +13148,16 @@ dependencies = [
 
 [[package]]
 name = "object_store_opendal"
-version = "0.54.1"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0b88fc0e0c4890c1d99e2b8c519c5db40f7d9b69a0f562ff1ad4967a4c8bbc6"
+checksum = "113ab0769e972eee585e57407b98de08bda5354fa28e8ba4d89038d6cb6a8991"
 dependencies = [
  "async-trait",
  "bytes",
+ "chrono",
  "futures",
  "object_store",
- "opendal 0.54.1",
+ "opendal",
  "pin-project",
  "tokio",
 ]
@@ -13220,27 +13186,28 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "opendal"
-version = "0.54.1"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42afda58fa2cf50914402d132cc1caacff116a85d10c72ab2082bb7c50021754"
+checksum = "d075ab8a203a6ab4bc1bce0a4b9fe486a72bf8b939037f4b78d95386384bc80a"
 dependencies = [
  "anyhow",
  "async-backtrace",
  "backon",
  "base64 0.22.1",
  "bytes",
- "chrono",
  "crc32c",
  "fastrace",
  "futures",
  "getrandom 0.2.16",
+ "hdfs-native",
  "hdrs",
  "http 1.3.1",
  "http-body 1.0.1",
+ "jiff",
  "log",
  "md-5",
  "percent-encoding",
- "prometheus-client 0.23.1",
+ "prometheus-client 0.24.1",
  "prost 0.13.5",
  "quick-xml 0.38.4",
  "reqsign",
@@ -13248,35 +13215,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "opendal"
-version = "0.55.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d075ab8a203a6ab4bc1bce0a4b9fe486a72bf8b939037f4b78d95386384bc80a"
-dependencies = [
- "anyhow",
- "backon",
- "base64 0.22.1",
- "bytes",
- "crc32c",
- "futures",
- "getrandom 0.2.16",
- "hdfs-native",
- "http 1.3.1",
- "http-body 1.0.1",
- "jiff",
- "log",
- "md-5",
- "percent-encoding",
- "quick-xml 0.38.4",
- "reqsign",
- "reqwest",
- "serde",
- "serde_json",
  "tokio",
  "url",
  "uuid",
@@ -13590,7 +13528,7 @@ name = "orc-rust"
 version = "0.6.0"
 source = "git+https://github.com/datafuse-extras/orc-rust?rev=fc17101f1c96e1ea7c7a19e931110471a4bd7e21#fc17101f1c96e1ea7c7a19e931110471a4bd7e21"
 dependencies = [
- "arrow 58.1.0",
+ "arrow 58.4.0",
  "async-trait",
  "bytemuck",
  "bytes",
@@ -13616,7 +13554,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32b9867c4e7343218682ba11aceae1310c80735ec2beaf6124a0f8f848dad197"
 dependencies = [
- "arrow 58.1.0",
+ "arrow 58.4.0",
  "async-trait",
  "bytemuck",
  "bytes",
@@ -13727,13 +13665,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a221c1e3161dbc05d146293d1cf28749519a21ec282833d7804c5be80b736fa4"
 dependencies = [
  "apache-avro 0.21.0",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-cast 58.1.0",
- "arrow-ord 58.1.0",
- "arrow-row 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-ord 58.4.0",
+ "arrow-row 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "async-stream",
  "async-trait",
  "base64 0.22.1",
@@ -13747,9 +13685,9 @@ dependencies = [
  "indexmap 2.14.0",
  "libloading 0.8.7",
  "md-5",
- "opendal 0.55.0",
+ "opendal",
  "orc-rust 0.8.0",
- "parquet 58.1.0",
+ "parquet 58.4.0",
  "pretty_assertions",
  "regex",
  "reqwest",
@@ -13875,16 +13813,16 @@ dependencies = [
 
 [[package]]
 name = "parquet"
-version = "58.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=bbbe79543#bbbe7954373500bffc51de3af33ae761266f898a"
+version = "58.4.0"
+source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=221c744#221c74437cbf8064a8b94c733f4815e2633e098c"
 dependencies = [
  "ahash 0.8.12",
- "arrow-array 58.1.0",
- "arrow-buffer 58.1.0",
- "arrow-data 58.1.0",
- "arrow-ipc 58.1.0",
- "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-data 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
+ "arrow-select 58.4.0",
  "base64 0.22.1",
  "brotli 8.0.1",
  "bytes",
@@ -13892,7 +13830,7 @@ dependencies = [
  "flate2",
  "futures",
  "half",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
  "lz4_flex 0.13.0",
  "num-bigint",
  "num-integer",
@@ -14645,7 +14583,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "parking_lot 0.12.3",
- "prometheus-client-derive-encode",
+ "prometheus-client-derive-encode 0.4.2",
  "prost 0.11.9",
  "prost-build 0.11.9",
  "prost-types 0.11.9",
@@ -14653,14 +14591,14 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client"
-version = "0.23.1"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf41c1a7c32ed72abe5082fb19505b969095c12da9f5732a4bc9878757fd087c"
+checksum = "cca3d75b4566b9a29fe1ed623587fb058e826eb329a0be4b7c4da1ebb2d7a6ca"
 dependencies = [
  "dtoa",
  "itoa",
  "parking_lot 0.12.3",
- "prometheus-client-derive-encode",
+ "prometheus-client-derive-encode 0.5.1",
 ]
 
 [[package]]
@@ -14672,6 +14610,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
+]
+
+[[package]]
+name = "prometheus-client-derive-encode"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01e34894696ff94f64a20c2c373a6440903e9c2789a303d68ec6e6f953f890e4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.4",
 ]
 
 [[package]]

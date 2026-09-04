@@ -117,7 +117,9 @@ impl HookOperator {
                 table_id: Some(table_id),
             },
             hook_settings: TableHookTaskSettings::create(&self.ctx),
-            lock_opt: self.lock_opt.clone(),
+            // The async hook may start from on_finished before the parent lock guard
+            // has been released, so it must acquire its own lock with retry.
+            lock_opt: LockTableOption::LockWithRetry,
             operation_name: self.mutation_kind.to_string(),
             main_operation_start: Instant::now(),
         };

@@ -38,7 +38,6 @@ use databend_storages_common_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
-use opendal::Scheme;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
@@ -315,7 +314,7 @@ async fn purge_blocks_before_gc_root(
     info!("Listing block files until prefix: {}", block_gc.until);
 
     match block_gc.dal.info().scheme() {
-        Scheme::Fs => purge_blocks_before_gc_root_fs(block_gc, removed_files).await,
+        "fs" => purge_blocks_before_gc_root_fs(block_gc, removed_files).await,
         _ => purge_blocks_before_gc_root_object_store_streaming(block_gc, removed_files).await,
     }
 }
@@ -661,6 +660,8 @@ mod tests {
     }
 
     mod memory {
+        use opendal::Scheme;
+
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
@@ -711,7 +712,7 @@ mod tests {
                 inverted_indexes: &inverted_indexes,
                 start: std::time::Instant::now(),
             };
-            assert_ne!(dal.info().scheme(), Scheme::Fs);
+            assert_ne!(dal.info().scheme(), Scheme::Fs.into_static());
 
             let mut removed_files = Vec::new();
             let stats = purge_blocks_before_gc_root(&block_gc, &mut removed_files).await?;
@@ -731,6 +732,7 @@ mod tests {
     }
 
     mod real_s3 {
+        use opendal::Scheme;
         use opendal::services::S3;
 
         use super::*;
@@ -818,7 +820,10 @@ mod tests {
                     inverted_indexes: &inverted_indexes,
                     start: std::time::Instant::now(),
                 };
-                anyhow::ensure!(dal.info().scheme() == Scheme::S3, "expected an S3 operator");
+                anyhow::ensure!(
+                    dal.info().scheme() == Scheme::S3.into_static(),
+                    "expected an S3 operator"
+                );
 
                 let mut removed_files = Vec::new();
                 let stats = purge_blocks_before_gc_root(&block_gc, &mut removed_files).await?;

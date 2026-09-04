@@ -36,7 +36,6 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
-use databend_common_storages_hive::HiveCreator;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -56,7 +55,7 @@ use crate::catalogs::PaimonCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
 use crate::interpreters::TableHookScheduler;
-use crate::locks::LockManager;
+use crate::locks::CoordinationManager;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::ClientSessionManager;
@@ -133,7 +132,6 @@ impl GlobalServices {
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
-                (CatalogType::Hive, Arc::new(HiveCreator)),
                 (CatalogType::Paimon, Arc::new(PaimonCreator)),
             ];
 
@@ -146,7 +144,7 @@ impl GlobalServices {
         ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
-        LockManager::init()?;
+        CoordinationManager::init()?;
         TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
         AuthMgr::init(config, version)?;
 

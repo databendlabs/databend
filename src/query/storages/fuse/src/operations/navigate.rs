@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -587,7 +588,8 @@ impl FuseTable {
 
                     let location = de.path().to_string();
                     if let Some(modified) = modified {
-                        if f(location.clone(), modified) {
+                        let modified_time = DateTime::<Utc>::from(SystemTime::from(modified));
+                        if f(location.clone(), modified_time) {
                             file_list.push((location, modified));
                         }
                     }

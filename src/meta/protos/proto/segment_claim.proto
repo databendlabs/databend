@@ -12,23 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::schema::DatabaseInfo;
+syntax = "proto3";
 
-pub const HIVE_DATABASE_ENGINE: &str = "hive";
-use databend_common_catalog::database::Database;
+package databend_proto;
 
-#[derive(Clone)]
-pub struct HiveDatabase {
-    pub database_info: DatabaseInfo,
-}
+message SegmentClaimMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
 
-#[async_trait::async_trait]
-impl Database for HiveDatabase {
-    fn name(&self) -> &str {
-        self.database_info.name_ident.database_name()
-    }
-
-    fn get_db_info(&self) -> &DatabaseInfo {
-        &self.database_info
-    }
+  string user = 1;
+  string node = 2;
+  string query_id = 3;
+  string created_on = 4;
+  map<string, bool> segment_locations = 5;
 }

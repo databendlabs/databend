@@ -94,7 +94,7 @@ pub fn is_temp_error(e: &ErrorCode) -> bool {
     let meta = code == ErrorCode::META_SERVICE_ERROR
         || code == ErrorCode::DUPLICATED_UPSERT_FILES
         || code == ErrorCode::TABLE_VERSION_MISMATCHED
-        || code == ErrorCode::TABLE_LOCK_EXPIRED
+        || code == ErrorCode::LEASE_EXPIRED
         || code == ErrorCode::TABLE_ALREADY_LOCKED;
 
     let transaction = code == ErrorCode::UNRESOLVABLE_CONFLICT;

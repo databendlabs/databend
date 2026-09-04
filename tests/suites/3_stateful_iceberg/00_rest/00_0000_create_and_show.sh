@@ -16,13 +16,6 @@ CREATE CATALOG iceberg_rest TYPE = ICEBERG CONNECTION = (
 );
 EOF
 
-## disable hms tests cause ci failed
-# cat <<EOF | bendsql_connect_root
-# CREATE CATALOG iceberg_hms TYPE = ICEBERG CONNECTION = (
-#     TYPE = 'hive' ADDRESS = '${hms_ip}:9083' warehouse = 's3a://warehouse/hive/' "s3.endpoint" = 'http://localhost:9000' "s3.access-key-id" = 'admin' "s3.secret-access-key" = 'password' "s3.region" = 'us-east-1'
-# );
-# EOF
-
 cat <<EOF | bendsql_connect_root
 CREATE CATALOG iceberg_glue TYPE = ICEBERG CONNECTION = (
     TYPE = 'glue' ADDRESS = 'http://localhost:5000'  warehouse = 's3a://warehouse/glue/' "aws_access_key_id" = 'my_access_id'  "aws_secret_access_key" = 'my_secret_key' "aws_session_token" = 'glue_token' "region_name" = 'us-east-1'  "s3.endpoint" = 'http://localhost:9000' "s3.access-key-id" = 'admin' "s3.secret-access-key" = 'password' "s3.region" = 'us-east-1'

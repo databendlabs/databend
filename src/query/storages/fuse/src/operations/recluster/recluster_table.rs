@@ -22,8 +22,10 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
@@ -37,6 +39,8 @@ use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
+use crate::operations::recluster::CandidateScore;
+use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
@@ -45,6 +49,64 @@ use crate::pruning::SegmentPruner;
 
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
+
+type RankedTaskCandidate = (usize, usize, CandidateScore, bool);
+
+fn sort_task_candidates(tasks: &mut [RankedTaskCandidate]) {
+    tasks.sort_by(|left, right| right.3.cmp(&left.3).then_with(|| right.2.cmp_desc(&left.2)));
+}
+
+fn select_task_candidates(
+    pending_windows: &[ReclusterCandidateWindow],
+    sorted_tasks: &[RankedTaskCandidate],
+    max_tasks: usize,
+) -> Vec<Vec<usize>> {
+    let mut selected_task_indices = vec![Vec::new(); pending_windows.len()];
+    let mut selected_segment_locations = HashSet::new();
+    let mut selected_count = 0;
+    let mut selected_repack_only = false;
+
+    for &(window_idx, task_idx, _, _) in sorted_tasks {
+        if selected_count >= max_tasks {
+            break;
+        }
+        let window = &pending_windows[window_idx];
+        let task = &window.tasks[task_idx];
+        // Repack-only candidates rewrite no blocks, but each one consumes a
+        // whole window. Keep one per round so max_tasks does not repack
+        // multiple disjoint windows at once.
+        if task.is_repack_only() && selected_repack_only {
+            continue;
+        }
+
+        let task_segment_locations = window.task_segment_locations(task_idx);
+        let additional_segment_count = task_segment_locations
+            .difference(&selected_segment_locations)
+            .count();
+        if selected_segment_locations.len() + additional_segment_count
+            > MAX_SEGMENT_LOCATIONS_PER_CLAIM
+        {
+            debug!(
+                "recluster: skip task candidate window_idx={} task_idx={} task_segments={} selected_segments={} max_claim_segments={}",
+                window_idx,
+                task_idx,
+                task_segment_locations.len(),
+                selected_segment_locations.len(),
+                MAX_SEGMENT_LOCATIONS_PER_CLAIM,
+            );
+            continue;
+        }
+
+        if task.is_repack_only() {
+            selected_repack_only = true;
+        }
+        selected_segment_locations.extend(task_segment_locations);
+        selected_task_indices[window_idx].push(task_idx);
+        selected_count += 1;
+    }
+
+    selected_task_indices
+}
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -55,6 +117,7 @@ impl FuseTable {
         limit: Option<usize>,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
+        claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
 
@@ -125,10 +188,10 @@ impl FuseTable {
             let valid_carry = std::mem::take(&mut carry.pending)
                 .into_iter()
                 .filter(|window| {
-                    let valid = window
-                        .segments
-                        .iter()
-                        .all(|(location, _)| live_segments.contains_key(location));
+                    let valid = window.segments.iter().all(|(location, _)| {
+                        live_segments.contains_key(location)
+                            && !claimed_segments.contains(location.0.as_str())
+                    });
                     if !valid {
                         debug!(
                             "recluster: carried window invalidated locations={} skip_reason=carried_location_missing",
@@ -179,9 +242,14 @@ impl FuseTable {
                 });
                 let mut scan_locations = Vec::with_capacity(scan_range.len());
                 for (offset, location) in scan_range.iter().enumerate() {
-                    if carry_locations
-                        .as_ref()
-                        .is_some_and(|locations| locations.contains(location))
+                    // Intentional FINAL semantics: claimed segments are treated as work delegated
+                    // to concurrent recluster tasks. This statement does not wait for claim owners;
+                    // if every remaining candidate is claimed, it may return success even if an
+                    // owner later fails. A subsequent RECLUSTER statement can pick that work up.
+                    if claimed_segments.contains(location.0.as_str())
+                        || carry_locations
+                            .as_ref()
+                            .is_some_and(|locations| locations.contains(location))
                     {
                         continue;
                     }
@@ -330,39 +398,26 @@ impl FuseTable {
             let (block_count, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
-                // Step 3: choose task candidates. If early accept fills the budget,
-                // only early-accept tasks compete; otherwise rank all pending tasks.
-                let early_accept_only = early_accept_count >= mutator.max_tasks;
+                // Step 3: choose task candidates. Preserve score-only ranking unless
+                // early accepts fill the task budget. In that case early candidates
+                // rank first, while other probed tasks remain available to fill budget
+                // left by candidates skipped due to the segment-claim limit.
+                let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
-                        if !early_accept_only || mutator.passes_early_accept(task) {
-                            sorted_tasks.push((window_idx, task_idx, task.score));
-                        }
+                        sorted_tasks.push((
+                            window_idx,
+                            task_idx,
+                            task.score,
+                            prioritize_early_accept && mutator.passes_early_accept(task),
+                        ));
                     }
                 }
-                sorted_tasks.sort_by(|left, right| right.2.cmp_desc(&left.2));
+                sort_task_candidates(&mut sorted_tasks);
 
-                let mut selected_task_indices = vec![Vec::new(); pending_windows.len()];
-                let mut selected_count = 0;
-                let mut selected_repack_only = false;
-                for (window_idx, task_idx, _) in sorted_tasks {
-                    if selected_count >= mutator.max_tasks {
-                        break;
-                    }
-                    let task = &pending_windows[window_idx].tasks[task_idx];
-                    // Repack-only candidates rewrite no blocks, but each one
-                    // consumes a whole window. Keep one per round so max_tasks
-                    // does not repack multiple disjoint windows at once.
-                    if task.is_repack_only() {
-                        if selected_repack_only {
-                            continue;
-                        }
-                        selected_repack_only = true;
-                    }
-                    selected_task_indices[window_idx].push(task_idx);
-                    selected_count += 1;
-                }
+                let mut selected_task_indices =
+                    select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks);
 
                 let mut selected = Vec::new();
                 let mut remaining_windows = Vec::with_capacity(pending_windows.len());
@@ -390,6 +445,13 @@ impl FuseTable {
                     .await?
             };
 
+            if parts.removed_segment_indexes.len() > MAX_SEGMENT_LOCATIONS_PER_CLAIM {
+                return Err(ErrorCode::Internal(format!(
+                    "recluster selected {} segments, exceeding the maximum claim size of {}",
+                    parts.removed_segment_indexes.len(),
+                    MAX_SEGMENT_LOCATIONS_PER_CLAIM,
+                )));
+            }
             recluster_blocks_count += block_count;
 
             if !parts.is_empty() {
@@ -518,5 +580,131 @@ impl FuseTable {
         }
 
         Ok(metas)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_storages_common_table_meta::meta::SegmentInfo;
+    use databend_storages_common_table_meta::meta::Statistics;
+
+    use super::*;
+    use crate::operations::recluster::ReclusterTaskCandidate;
+
+    fn score(priority: usize) -> CandidateScore {
+        CandidateScore {
+            selected_total_bytes: priority,
+            max_depth: priority,
+            average_depth: priority as f64,
+        }
+    }
+
+    fn candidate(selected_positions: impl IntoIterator<Item = usize>) -> ReclusterTaskCandidate {
+        ReclusterTaskCandidate {
+            score: score(1),
+            selected_blocks: selected_positions
+                .into_iter()
+                .map(|position| (position, vec![0]))
+                .collect(),
+            output_level: 0,
+            all_ordered: false,
+        }
+    }
+
+    fn window(prefix: &str, segment_count: usize) -> ReclusterCandidateWindow {
+        ReclusterCandidateWindow {
+            segments: (0..segment_count)
+                .map(|index| ((format!("{}-{}", prefix, index), 0), None))
+                .collect(),
+            tasks: vec![candidate(0..segment_count)],
+        }
+    }
+
+    fn repack_window(prefix: &str, segment_count: usize) -> ReclusterCandidateWindow {
+        let mut window = window(prefix, segment_count);
+        let segment_info = Arc::new(SegmentInfo::new(vec![], Statistics::default()));
+        for (_, info) in &mut window.segments {
+            *info = Some(segment_info.clone());
+        }
+        window.tasks = vec![candidate(std::iter::empty())];
+        window
+    }
+
+    #[test]
+    fn test_task_ranking_uses_score_without_early_priority() {
+        let mut ranked = vec![
+            (0, 0, score(1), false),
+            (1, 0, score(3), false),
+            (2, 0, score(2), false),
+        ];
+
+        sort_task_candidates(&mut ranked);
+
+        assert_eq!(
+            ranked
+                .into_iter()
+                .map(|(window_idx, _, _, _)| window_idx)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 0]
+        );
+    }
+
+    #[test]
+    fn test_task_selection_skips_claim_overflow_and_uses_remaining_budget() {
+        let windows = vec![
+            window("first", 10),
+            window("oversized", 120),
+            window("last", 5),
+        ];
+        let mut ranked = vec![
+            (2, 0, score(100), false),
+            (1, 0, score(2), true),
+            (0, 0, score(3), true),
+        ];
+        sort_task_candidates(&mut ranked);
+
+        let selected = select_task_candidates(&windows, &ranked, 3);
+
+        assert_eq!(selected, vec![vec![0], vec![], vec![0]]);
+    }
+
+    #[test]
+    fn test_task_selection_accepts_exact_claim_limit() {
+        let windows = vec![window("first", 10), window("second", 118)];
+        let ranked = vec![(0, 0, score(2), false), (1, 0, score(1), false)];
+
+        let selected = select_task_candidates(&windows, &ranked, 2);
+
+        assert_eq!(selected, vec![vec![0], vec![0]]);
+    }
+
+    #[test]
+    fn test_task_selection_counts_repack_window_segments() {
+        let windows = vec![
+            window("first", 10),
+            repack_window("repack", 120),
+            window("last", 5),
+        ];
+        let ranked = vec![
+            (0, 0, score(3), false),
+            (1, 0, score(2), false),
+            (2, 0, score(1), false),
+        ];
+
+        let selected = select_task_candidates(&windows, &ranked, 3);
+
+        assert_eq!(selected, vec![vec![0], vec![], vec![0]]);
+    }
+
+    #[test]
+    fn test_task_selection_counts_segment_union() {
+        let mut shared_window = window("shared", MAX_SEGMENT_LOCATIONS_PER_CLAIM);
+        shared_window.tasks = vec![candidate(0..120), candidate(110..128)];
+        let windows = vec![shared_window];
+        let ranked = vec![(0, 0, score(2), false), (0, 1, score(1), false)];
+
+        let selected = select_task_candidates(&windows, &ranked, 2);
+
+        assert_eq!(selected, vec![vec![0, 1]]);
     }
 }

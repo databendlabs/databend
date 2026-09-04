@@ -32,6 +32,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -84,7 +85,7 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// Blocks that reach this level have already been rewritten many times, so
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
-const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
+const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 /// Hilbert MBR overlap is conservative, so execution never uses a threshold below 8.
 const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
 /// Maximum block count for applying the Linear small-table depth threshold.
@@ -112,6 +113,23 @@ impl ReclusterCandidateWindow {
     /// Score of one task candidate by index.
     pub fn task_score(&self, task_idx: usize) -> CandidateScore {
         self.tasks[task_idx].score
+    }
+
+    /// Unique segment paths removed when the task is materialized.
+    pub(crate) fn task_segment_locations(&self, task_idx: usize) -> HashSet<&str> {
+        let task = &self.tasks[task_idx];
+        if task.is_repack_only() {
+            self.segments
+                .iter()
+                .filter(|(_, segment_info)| segment_info.is_some())
+                .map(|(location, _)| location.0.as_str())
+                .collect()
+        } else {
+            task.selected_blocks
+                .iter()
+                .map(|(window_pos, _)| self.segments[*window_pos].0.0.as_str())
+                .collect()
+        }
     }
 }
 
