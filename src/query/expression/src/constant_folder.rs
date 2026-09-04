@@ -18,9 +18,7 @@ use std::collections::HashMap;
 use databend_common_ast::Span;
 use log::error;
 
-use crate::ColumnBuilder;
 use crate::ColumnIndex;
-use crate::EvalContext;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
@@ -37,13 +35,17 @@ use crate::expression::FunctionCall;
 use crate::expression::LambdaFunctionCall;
 use crate::property::Domain;
 use crate::type_check::check_function;
-use crate::type_check::get_simple_cast_function;
+use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
-use crate::types::number::NumberScalar;
 
 const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
+
+mod monotonicity;
+mod range_constraint;
+
+pub use range_constraint::RangeConstraint;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum FoldMode {
@@ -845,24 +847,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let all_args_is_scalar = args_expr
                     .iter()
                     .all(|arg| arg.as_ref().as_constant().is_some());
-                let is_monotonicity = self
-                    .fn_registry
-                    .properties
-                    .get(&call.function.signature.name)
-                    .map(|p| {
-                        args_expr.len() == 1
-                            && (p.monotonicity
-                                || p.monotonicity_by_type
-                                    .contains(args_expr[0].as_ref().data_type()))
-                    })
-                    .unwrap_or_default();
-                let monotonicity_check = self
-                    .fn_registry
-                    .properties
-                    .get(&call.function.signature.name)
-                    .and_then(|p| p.monotonicity_check)
-                    .filter(|_| args_expr.len() == 1);
-
                 // Check for mutually exclusive ranges in AND function
                 if call.function.signature.name == "and"
                     && args_expr.len() >= 2
@@ -903,77 +887,21 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
                     let res = calc_domain.domain_eval(self.func_ctx, &domains);
-                    // Range-sensitive checks complement the static flags: they may prove
-                    // monotonicity for this specific argument range and context only.
-                    let is_monotonic = is_monotonicity
-                        || monotonicity_check
-                            .is_some_and(|check| check(self.func_ctx, &domains) == Some(0));
+                    let is_monotonic = self.is_monotonic(
+                        &call.function.signature.name,
+                        args_expr.len(),
+                        args_expr.first().map(|arg| arg.as_ref().data_type()),
+                        &domains,
+                    );
                     match (res, is_monotonic) {
-                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
-                            let domain = domains.first().unwrap();
-                            if args_expr[0].as_ref().data_type().is_nullable_or_null() {
-                                return None;
-                            }
-
-                            let (min, max) = domain.to_minmax();
-                            if min.is_null() || max.is_null() {
-                                return None;
-                            }
-
-                            {
-                                let mut ctx = EvalContext {
-                                    generics: &call.generics,
-                                    num_rows: 2,
-                                    validity: None,
-                                    errors: None,
-                                    func_ctx: self.func_ctx,
-                                    suppress_error: false,
-                                    strict_eval: true,
-                                };
-                                let mut builder = ColumnBuilder::with_capacity(
-                                    args_expr[0].as_ref().data_type(),
-                                    2,
-                                );
-                                builder.push(min.as_ref());
-                                builder.push(max.as_ref());
-
-                                let input = Value::Column(builder.build());
-                                let result = eval.eval(&[input], &mut ctx);
-
-                                if result.is_scalar() {
-                                    None
-                                } else {
-                                    // if error happens, domain maybe incorrect
-                                    // min, max: String("2024-09-02 00:00") String("2024-09-02 00:0�")
-                                    // to_date(s) > to_date('2024-01-1')
-                                    let col = result.as_column().unwrap();
-                                    let d = if ctx.has_error(0) || ctx.has_error(1) {
-                                        let (full_min, full_max) =
-                                            Domain::full(&call.return_type).to_minmax();
-                                        if full_min.is_null() || full_max.is_null() {
-                                            return None;
-                                        }
-
-                                        let mut builder =
-                                            ColumnBuilder::with_capacity(&call.return_type, 2);
-
-                                        for (i, (v, f)) in
-                                            col.iter().zip([full_min, full_max].iter()).enumerate()
-                                        {
-                                            if ctx.has_error(i) {
-                                                builder.push(f.as_ref());
-                                            } else {
-                                                builder.push(v);
-                                            }
-                                        }
-                                        builder.build().domain()
-                                    } else {
-                                        result.as_column().unwrap().domain()
-                                    };
-                                    Some(d)
-                                }
-                            }
-                        }
+                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => self
+                            .calculate_monotonicity_domain(
+                                &call.return_type,
+                                args_expr[0].as_ref().data_type(),
+                                domains.first().unwrap(),
+                                &call.generics,
+                                eval.as_ref(),
+                            ),
                         (FunctionDomain::MayThrow, _) => None,
                         (FunctionDomain::Full, _) => Some(Domain::full(&call.return_type)),
                         (FunctionDomain::Domain(domain), _) => Some(domain),
@@ -1146,6 +1074,37 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return true;
         }
 
+        // Composite casts are evaluated recursively. Check their inner casts before resolving a
+        // nullable function overload so type-specific context-independent rules still apply.
+        match (src_type, simple_dest_type) {
+            (DataType::Nullable(inner_src), DataType::Nullable(inner_dest)) if !is_try => {
+                return self.context_independent_cast(false, inner_src, inner_dest);
+            }
+            (DataType::Nullable(inner_src), inner_dest) if is_try => {
+                return self.context_independent_cast(
+                    true,
+                    inner_src,
+                    &inner_dest.clone().wrap_nullable(),
+                );
+            }
+            (src, DataType::Nullable(inner_dest)) if !is_try => {
+                return self.context_independent_cast(false, src, inner_dest);
+            }
+            (DataType::EmptyArray, DataType::Array(_)) => return true,
+            (DataType::Array(inner_src), DataType::Array(inner_dest)) => {
+                return self.context_independent_cast(false, inner_src, inner_dest);
+            }
+            (DataType::Tuple(src_fields), DataType::Tuple(dest_fields))
+                if src_fields.len() == dest_fields.len() =>
+            {
+                return src_fields
+                    .iter()
+                    .zip(dest_fields)
+                    .all(|(src, dest)| self.context_independent_cast(false, src, dest));
+            }
+            _ => {}
+        }
+
         if let (DataType::Decimal(src_size), DataType::Decimal(dest_size)) =
             (src_type, simple_dest_type)
         {
@@ -1162,53 +1121,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return true;
         }
 
-        if let Some(cast_fn) = get_simple_cast_function(is_try, src_type, simple_dest_type) {
-            let input = Expr::ColumnRef(ColumnRef {
-                span: None,
-                id: 0,
-                data_type: src_type.clone(),
-                display_name: String::new(),
-            });
-            let params = if let DataType::Decimal(ty) = simple_dest_type {
-                vec![
-                    Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                    Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
-                ]
-            } else {
-                vec![]
-            };
-            let Ok(Expr::FunctionCall(call)) =
-                check_function(None, &cast_fn, &params, &[input], self.fn_registry)
-            else {
-                return false;
-            };
+        if let Some(call) =
+            resolve_cast_function(None, is_try, src_type, dest_type, self.fn_registry)
+        {
             return self.can_evaluate_function(&call.id);
         }
 
-        match (src_type, simple_dest_type) {
-            (DataType::Nullable(inner_src), DataType::Nullable(inner_dest)) if !is_try => {
-                self.context_independent_cast(false, inner_src, inner_dest)
-            }
-            (DataType::Nullable(inner_src), inner_dest) if is_try => {
-                self.context_independent_cast(true, inner_src, &inner_dest.clone().wrap_nullable())
-            }
-            (src, DataType::Nullable(inner_dest)) if !is_try => {
-                self.context_independent_cast(false, src, inner_dest)
-            }
-            (DataType::EmptyArray, DataType::Array(_)) => true,
-            (DataType::Array(inner_src), DataType::Array(inner_dest)) => {
-                self.context_independent_cast(false, inner_src, inner_dest)
-            }
-            (DataType::Tuple(src_fields), DataType::Tuple(dest_fields))
-                if src_fields.len() == dest_fields.len() =>
-            {
-                src_fields
-                    .iter()
-                    .zip(dest_fields)
-                    .all(|(src, dest)| self.context_independent_cast(false, src, dest))
-            }
-            (src, dest) => src == dest,
-        }
+        false
     }
 
     fn calculate_cast(
@@ -1222,12 +1141,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return Some(domain.clone());
         }
 
-        if let Some(cast_fn) = get_simple_cast_function(false, src_type, dest_type) {
-            if let Some(new_domain) =
-                self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-            {
-                return new_domain;
-            }
+        if let Some(call) =
+            resolve_cast_function(span, false, src_type, dest_type, self.fn_registry)
+            && let Some(new_domain) = self.calculate_simple_cast(call, domain)
+        {
+            return new_domain;
         }
 
         match (src_type, dest_type) {
@@ -1307,12 +1225,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
-        if let Some(cast_fn) = get_simple_cast_function(true, src_type, inner_dest_type) {
-            if let Some(new_domain) =
-                self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
-            {
-                return new_domain;
-            }
+        if let Some(call) = resolve_cast_function(span, true, src_type, dest_type, self.fn_registry)
+            && let Some(new_domain) = self.calculate_simple_cast(call, domain)
+        {
+            return new_domain;
         }
 
         match (src_type, inner_dest_type) {
@@ -1379,34 +1295,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
     }
 
-    fn calculate_simple_cast(
-        &self,
-        span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
-        domain: &Domain,
-        cast_fn: &str,
-    ) -> Option<Option<Domain>> {
-        let expr = Expr::ColumnRef(ColumnRef {
-            span,
-            id: 0,
-            data_type: src_type.clone(),
-            display_name: String::new(),
-        });
-
-        let params = if let DataType::Decimal(ty) = dest_type {
-            vec![
-                Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
-            ]
-        } else {
-            vec![]
-        };
-        let cast_expr = check_function(span, cast_fn, &params, &[expr], self.fn_registry).ok()?;
-
-        if cast_expr.data_type() != dest_type {
-            return None;
-        }
+    fn calculate_simple_cast(&self, call: FunctionCall, domain: &Domain) -> Option<Option<Domain>> {
+        let cast_expr = Expr::FunctionCall(call);
 
         let input_domains = [(0, domain.clone())].into_iter().collect();
         // The caller has already checked `can_evaluate_cast` for this source and destination type.
@@ -1422,156 +1312,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         Some(output_domain)
     }
 
-    /// Check if AND expressions contain mutually exclusive range conditions
-    /// Returns Some(true) if the expressions are mutually exclusive (should return false)
-    /// Returns Some(false) if they are not mutually exclusive
-    /// Returns None if analysis is inconclusive
-    fn check_mutually_exclusive_ranges(&self, args: &[FoldResult<'_, Index>]) -> Option<bool> {
-        // Track constraints for each column
-        let mut column_constraints: HashMap<Index, Vec<RangeConstraint<Index>>> = HashMap::new();
-
-        // Extract constraints from each expression
-        for arg in args {
-            if let Some(constraint) = RangeConstraint::try_from_expr(arg.as_ref()) {
-                column_constraints
-                    .entry(constraint.column_id.clone())
-                    .or_default()
-                    .push(constraint);
-            }
-        }
-
-        // Check for mutually exclusive constraints on each column
-        for (_column_id, constraints) in column_constraints {
-            if constraints.len() < 2 {
-                continue;
-            }
-
-            // Check all pairs of constraints for mutual exclusion
-            for i in 0..constraints.len() {
-                for j in (i + 1)..constraints.len() {
-                    if self.are_constraints_mutually_exclusive(&constraints[i], &constraints[j]) {
-                        return Some(true); // Found mutually exclusive constraints
-                    }
-                }
-            }
-
-            if self.are_combined_constraints_mutually_exclusive(&constraints) {
-                return Some(true);
-            }
-        }
-
-        None // No conclusive mutual exclusion found
-    }
-
-    /// Check if two range constraints are mutually exclusive
-    pub fn are_constraints_mutually_exclusive(
-        &self,
-        c1: &RangeConstraint<Index>,
-        c2: &RangeConstraint<Index>,
-    ) -> bool {
-        // Only check constraints on the same column with the same data type
-        if c1.column_id != c2.column_id || c1.data_type != c2.data_type {
-            return false;
-        }
-
-        // Check for patterns like: x > a AND x < b where a >= b
-        // or x >= a AND x < b where a >= b
-        // or x > a AND x <= b where a >= b
-        // or x >= a AND x <= b where a > b
-        match (c1.operator.as_str(), c2.operator.as_str()) {
-            ("gt", "lt") => c1.constant >= c2.constant,
-            ("lt", "gt") => c2.constant >= c1.constant,
-            ("gt", "lte") => c1.constant >= c2.constant,
-            ("lte", "gt") => c2.constant >= c1.constant,
-            ("gte", "lt") => c1.constant >= c2.constant,
-            ("lt", "gte") => c2.constant >= c1.constant,
-            ("gte", "lte") => c1.constant > c2.constant,
-            ("lte", "gte") => c2.constant > c1.constant,
-            ("eq", "gt") => {
-                // x = a AND x > b where a <= b
-                c1.constant <= c2.constant
-            }
-            ("gt", "eq") => {
-                // x > a AND x = b where b <= a
-                c2.constant <= c1.constant
-            }
-            ("eq", "gte") => {
-                // x = a AND x >= b where a < b
-                c1.constant < c2.constant
-            }
-            ("gte", "eq") => {
-                // x >= a AND x = b where b < a
-                c2.constant < c1.constant
-            }
-            ("eq", "lt") => {
-                // x = a AND x < b where a >= b
-                c1.constant >= c2.constant
-            }
-            ("lt", "eq") => {
-                // x < a AND x = b where b >= a
-                c2.constant >= c1.constant
-            }
-            ("eq", "lte") => {
-                // x = a AND x <= b where a > b
-                c1.constant > c2.constant
-            }
-            ("lte", "eq") => {
-                // x <= a AND x = b where b > a
-                c2.constant > c1.constant
-            }
-            ("eq", "eq") => {
-                // x = a AND x = b where a != b
-                c1.constant != c2.constant
-            }
-            ("eq", "noteq") => {
-                // x = a AND x != b where a == b
-                c1.constant == c2.constant
-            }
-            ("noteq", "eq") => {
-                // x != a AND x = b where a == b
-                c1.constant == c2.constant
-            }
-            _ => false,
-        }
-    }
-
-    fn are_combined_constraints_mutually_exclusive(
-        &self,
-        constraints: &[RangeConstraint<Index>],
-    ) -> bool {
-        let mut lower = None;
-        let mut upper = None;
-        let mut not_eq_constants = Vec::new();
-
-        for constraint in constraints {
-            match constraint.operator.as_str() {
-                "gt" => tighten_lower_bound(&mut lower, &constraint.constant, false),
-                "gte" => tighten_lower_bound(&mut lower, &constraint.constant, true),
-                "lt" => tighten_upper_bound(&mut upper, &constraint.constant, false),
-                "lte" => tighten_upper_bound(&mut upper, &constraint.constant, true),
-                "noteq" => not_eq_constants.push(&constraint.constant),
-                _ => {}
-            }
-        }
-
-        let (Some((lower, lower_inclusive)), Some((upper, upper_inclusive))) = (&lower, &upper)
-        else {
-            return false;
-        };
-
-        if lower > upper {
-            return true;
-        }
-        if lower != upper {
-            return false;
-        }
-        if !lower_inclusive || !upper_inclusive {
-            return true;
-        }
-
-        not_eq_constants.contains(&lower)
-    }
-
     #[cfg(test)]
     pub fn new_for_test(
         input_domains: &'a HashMap<Index, Domain>,
@@ -1584,117 +1324,5 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             fn_registry,
             mode: FoldMode::Full,
         }
-    }
-}
-
-fn tighten_lower_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
-    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
-        constant > current || (constant == current && !inclusive && *current_inclusive)
-    });
-    if should_update {
-        *bound = Some((constant.clone(), inclusive));
-    }
-}
-
-fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
-    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
-        constant < current || (constant == current && !inclusive && *current_inclusive)
-    });
-    if should_update {
-        *bound = Some((constant.clone(), inclusive));
-    }
-}
-
-fn constant_behind_nullable_cast<Index: ColumnIndex>(expr: &Expr<Index>) -> Option<&Constant> {
-    if let Expr::Constant(constant) = expr {
-        return Some(constant);
-    }
-
-    let Expr::Cast(Cast {
-        is_try: false,
-        expr,
-        dest_type,
-        ..
-    }) = expr
-    else {
-        return None;
-    };
-
-    let Expr::Constant(constant) = expr.as_ref() else {
-        return None;
-    };
-
-    (dest_type.is_nullable()
-        && !constant.data_type.is_nullable()
-        && dest_type.remove_nullable() == constant.data_type)
-        .then_some(constant)
-}
-
-/// Represents a range constraint extracted from a comparison expression
-#[derive(Debug, Clone)]
-pub struct RangeConstraint<Index> {
-    pub column_id: Index,
-    pub data_type: DataType,
-    pub operator: String, // "gt", "gte", "lt", "lte", "eq"
-    pub constant: Scalar,
-    pub is_flipped: bool, // true if original was constant op column
-}
-
-impl<Index: ColumnIndex> RangeConstraint<Index> {
-    /// Extracts a normalized column-to-constant comparison. Comparisons with
-    /// the constant on the left are flipped so the column is always the lhs.
-    pub fn try_from_expr(expr: &Expr<Index>) -> Option<Self> {
-        let Expr::FunctionCall(call) = expr else {
-            return None;
-        };
-        Self::try_from_function_call(call)
-    }
-
-    pub fn try_from_function_call(call: &FunctionCall<Index>) -> Option<Self> {
-        let FunctionCall { function, args, .. } = call;
-        if args.len() != 2 {
-            return None;
-        }
-
-        let op = function.signature.name.as_str();
-        if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
-            return None;
-        }
-
-        if let (Some(column_ref), Some(constant)) = (
-            args[0].as_column_ref(),
-            constant_behind_nullable_cast(&args[1]),
-        ) {
-            return Some(Self {
-                column_id: column_ref.id.clone(),
-                data_type: column_ref.data_type.clone(),
-                operator: op.to_string(),
-                constant: constant.scalar.clone(),
-                is_flipped: false,
-            });
-        }
-
-        let (Some(constant), Some(column_ref)) = (
-            constant_behind_nullable_cast(&args[0]),
-            args[1].as_column_ref(),
-        ) else {
-            return None;
-        };
-        let operator = match op {
-            "gt" => "lt",
-            "gte" => "lte",
-            "lt" => "gt",
-            "lte" => "gte",
-            "eq" => "eq",
-            "noteq" => "noteq",
-            _ => unreachable!(),
-        };
-        Some(Self {
-            column_id: column_ref.id.clone(),
-            data_type: column_ref.data_type.clone(),
-            operator: operator.to_string(),
-            constant: constant.scalar.clone(),
-            is_flipped: true,
-        })
     }
 }

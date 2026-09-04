@@ -1,6 +1,6 @@
 ast            : parse_json(NULL)
 raw expr       : parse_json(NULL)
-checked expr   : CAST<Variant NULL>(CAST<NULL>(NULL AS Variant NULL) AS Variant NULL)
+checked expr   : parse_json<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -257,7 +257,7 @@ output         : NULL
 
 ast            : try_parse_json('nuLL')
 raw expr       : try_parse_json('nuLL')
-checked expr   : try_parse_json<String>("nuLL")
+checked expr   : TRY_CAST<String>("nuLL" AS Variant NULL)
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -266,7 +266,7 @@ output         : 'null'
 
 ast            : try_parse_json('null')
 raw expr       : try_parse_json('null')
-checked expr   : try_parse_json<String>("null")
+checked expr   : TRY_CAST<String>("null" AS Variant NULL)
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -275,7 +275,7 @@ output         : 'null'
 
 ast            : try_parse_json('true')
 raw expr       : try_parse_json('true')
-checked expr   : try_parse_json<String>("true")
+checked expr   : TRY_CAST<String>("true" AS Variant NULL)
 optimized expr : 0x2000000040000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -284,7 +284,7 @@ output         : 'true'
 
 ast            : try_parse_json('false')
 raw expr       : try_parse_json('false')
-checked expr   : try_parse_json<String>("false")
+checked expr   : TRY_CAST<String>("false" AS Variant NULL)
 optimized expr : 0x2000000030000000
 output type    : Variant NULL
 output domain  : Undefined
@@ -293,7 +293,7 @@ output         : 'false'
 
 ast            : try_parse_json('"测试"')
 raw expr       : try_parse_json('"测试"')
-checked expr   : try_parse_json<String>("\"测试\"")
+checked expr   : TRY_CAST<String>("\"测试\"" AS Variant NULL)
 optimized expr : 0x2000000010000006e6b58be8af95
 output type    : Variant NULL
 output domain  : Undefined
@@ -302,7 +302,7 @@ output         : '"测试"'
 
 ast            : try_parse_json('1234')
 raw expr       : try_parse_json('1234')
-checked expr   : try_parse_json<String>("1234")
+checked expr   : TRY_CAST<String>("1234" AS Variant NULL)
 optimized expr : 0x20000000200000035004d2
 output type    : Variant NULL
 output domain  : Undefined
@@ -311,7 +311,7 @@ output         : '1234'
 
 ast            : try_parse_json('[1,2,3,4]')
 raw expr       : try_parse_json('[1,2,3,4]')
-checked expr   : try_parse_json<String>("[1,2,3,4]")
+checked expr   : TRY_CAST<String>("[1,2,3,4]" AS Variant NULL)
 optimized expr : 0x80000004200000022000000220000002200000025001500250035004
 output type    : Variant NULL
 output domain  : Undefined
@@ -320,7 +320,7 @@ output         : '[1,2,3,4]'
 
 ast            : try_parse_json('{"a":"b","c":"d"}')
 raw expr       : try_parse_json('{"a":"b","c":"d"}')
-checked expr   : try_parse_json<String>("{\"a\":\"b\",\"c\":\"d\"}")
+checked expr   : TRY_CAST<String>("{\"a\":\"b\",\"c\":\"d\"}" AS Variant NULL)
 optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant NULL
 output domain  : Undefined
@@ -329,7 +329,7 @@ output         : '{"a":"b","c":"d"}'
 
 ast            : try_parse_json('{"k":"v","k":"v2"}')
 raw expr       : try_parse_json('{"k":"v","k":"v2"}')
-checked expr   : try_parse_json<String>("{\"k\":\"v\",\"k\":\"v2\"}")
+checked expr   : TRY_CAST<String>("{\"k\":\"v\",\"k\":\"v2\"}" AS Variant NULL)
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -338,7 +338,7 @@ output         : NULL
 
 ast            : try_parse_json(s)
 raw expr       : try_parse_json(s::String)
-checked expr   : try_parse_json<String>(s)
+checked expr   : TRY_CAST<String>(s AS Variant NULL)
 evaluation:
 +--------+-----------------------------------------------------------+-------------------------+
 |        | s                                                         | Output                  |
@@ -367,7 +367,7 @@ evaluation (internal):
 
 ast            : try_parse_json(s)
 raw expr       : try_parse_json(s::String NULL)
-checked expr   : try_parse_json<String NULL>(s)
+checked expr   : TRY_CAST<String NULL>(s AS Variant NULL)
 evaluation:
 +--------+---------------------------+--------------------+
 |        | s                         | Output             |
@@ -2052,7 +2052,7 @@ output         : 'abc'
 
 ast            : to_decimal(3, 2)(to_variant(1.23))
 raw expr       : to_decimal(3, 2)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(3, 2)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
+checked expr   : to_decimal<Variant>(3, 2)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
 optimized expr : 1.23_d64(3,2)
 output type    : Decimal(3, 2) NULL
 output domain  : {1.23..=1.23}
@@ -2061,7 +2061,7 @@ output         : 1.23
 
 ast            : to_decimal(2, 1)(to_variant(1.23))
 raw expr       : to_decimal(2, 1)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(2, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
+checked expr   : to_decimal<Variant>(2, 1)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
 optimized expr : 1.2_d64(2,1)
 output type    : Decimal(2, 1) NULL
 output domain  : {1.2..=1.2}
@@ -2072,13 +2072,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(1, 1)(to_variant(1.23))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(to_variant(1.23))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(CAST(1.23 AS Variant))`
 
 
 
 ast            : to_decimal(76, 1)(to_variant(1.23))
 raw expr       : to_decimal(76, 1)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(76, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
+checked expr   : to_decimal<Variant>(76, 1)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
 optimized expr : 1.2_d256(76,1)
 output type    : Decimal(76, 1) NULL
 output domain  : {1.2..=1.2}
@@ -2087,7 +2087,7 @@ output         : 1.2
 
 ast            : to_decimal(4, 3)(to_variant(1.23))
 raw expr       : to_decimal(4, 3)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(4, 3)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
+checked expr   : to_decimal<Variant>(4, 3)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
 optimized expr : 1.230_d64(4,3)
 output type    : Decimal(4, 3) NULL
 output domain  : {1.230..=1.230}
@@ -2098,13 +2098,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(3, 3)(to_variant(1.23))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(to_variant(1.23))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(CAST(1.23 AS Variant))`
 
 
 
 ast            : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
 raw expr       : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(38, 2)(to_variant<T0=Decimal(38, 2)><T0>(100000000000000000000000000000000000.01_d128(38,2)))
+checked expr   : to_decimal<Variant>(38, 2)(CAST<Decimal(38, 2)>(100000000000000000000000000000000000.01_d128(38,2) AS Variant))
 optimized expr : 100000000000000000000000000000000000.01_d128(38,2)
 output type    : Decimal(38, 2) NULL
 output domain  : {100000000000000000000000000000000000.01..=100000000000000000000000000000000000.01}
@@ -2113,7 +2113,7 @@ output         : 100000000000000000000000000000000000.01
 
 ast            : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
 raw expr       : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(39, 2)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+checked expr   : to_decimal<Variant>(39, 2)(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant))
 optimized expr : 1000000000000000000000000000000000000.01_d256(39,2)
 output type    : Decimal(39, 2) NULL
 output domain  : {1000000000000000000000000000000000000.01..=1000000000000000000000000000000000000.01}
@@ -2122,7 +2122,7 @@ output         : 1000000000000000000000000000000000000.01
 
 ast            : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
 raw expr       : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(38, 1)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+checked expr   : to_decimal<Variant>(38, 1)(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant))
 optimized expr : 1000000000000000000000000000000000000.0_d128(38,1)
 output type    : Decimal(38, 1) NULL
 output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
@@ -2133,13 +2133,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(38, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(38, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(38, 3)(CAST(1000000000000000000000000000000000000.01 AS Variant))`
 
 
 
 ast            : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
 raw expr       : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(39, 1)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+checked expr   : to_decimal<Variant>(39, 1)(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant))
 optimized expr : 1000000000000000000000000000000000000.0_d256(39,1)
 output type    : Decimal(39, 1) NULL
 output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
@@ -2150,7 +2150,7 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(39, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(39, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(39, 3)(CAST(1000000000000000000000000000000000000.01 AS Variant))`
 
 
 
@@ -2548,7 +2548,7 @@ output         : NULL
 
 ast            : try_to_timestamp_tz(parse_json('null'))
 raw expr       : try_to_timestamp_tz(parse_json('null'))
-checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("null" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS TimestampTz NULL)
 optimized expr : NULL
 output type    : TimestampTz NULL
 output domain  : {NULL}
@@ -2557,7 +2557,7 @@ output         : NULL
 
 ast            : try_to_timestamp_tz(parse_json('"2023-01-01 00:00:00 +0000"'))
 raw expr       : try_to_timestamp_tz(parse_json('"2023-01-01 00:00:00 +0000"'))
-checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("\"2023-01-01 00:00:00 +0000\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"2023-01-01 00:00:00 +0000\"" AS Variant) AS TimestampTz NULL)
 optimized expr : timestamp_tz(1672531200000000)
 output type    : TimestampTz NULL
 output domain  : {2023-01-01 00:00:00.000000 +0000..=2023-01-01 00:00:00.000000 +0000}
@@ -2566,7 +2566,7 @@ output         : '2023-01-01 00:00:00.000000 +0000'
 
 ast            : try_to_timestamp_tz(parse_json('"2023-01-01 08:00:00 +0800"'))
 raw expr       : try_to_timestamp_tz(parse_json('"2023-01-01 08:00:00 +0800"'))
-checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("\"2023-01-01 08:00:00 +0800\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"2023-01-01 08:00:00 +0800\"" AS Variant) AS TimestampTz NULL)
 optimized expr : timestamp_tz(531266230995366286540800)
 output type    : TimestampTz NULL
 output domain  : {2023-01-01 08:00:00.000000 +0800..=2023-01-01 08:00:00.000000 +0800}
@@ -2575,7 +2575,7 @@ output         : '2023-01-01 08:00:00.000000 +0800'
 
 ast            : try_to_timestamp_tz(parse_json('"abc"'))
 raw expr       : try_to_timestamp_tz(parse_json('"abc"'))
-checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("\"abc\"" AS Variant))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS TimestampTz NULL)
 optimized expr : NULL
 output type    : TimestampTz NULL
 output domain  : {NULL}
@@ -2773,7 +2773,7 @@ evaluation (internal):
 
 ast            : try_to_timestamp_tz(parse_json(s))
 raw expr       : try_to_timestamp_tz(parse_json(s::String NULL))
-checked expr   : try_to_timestamp_tz<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+checked expr   : TRY_CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS TimestampTz NULL)
 evaluation:
 +--------+--------------------------------------+------------------------------------+
 |        | s                                    | Output                             |

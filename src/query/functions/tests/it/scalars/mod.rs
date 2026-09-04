@@ -135,7 +135,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         );
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        let expr = type_check::rewrite_function_to_cast(expr);
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
 
         let input_domains = ctx.input_domains();
 
@@ -369,7 +369,7 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
     fn fold(text: &str) -> databend_common_expression::Expr<usize> {
         let raw_expr = parser::parse_raw_expr(text, &[], &BUILTIN_FUNCTIONS);
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-        let expr = type_check::rewrite_function_to_cast(expr);
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
         ConstantFolder::fold_context_independent(Cow::Owned(expr), &BUILTIN_FUNCTIONS)
             .0
             .into_owned()
@@ -413,6 +413,11 @@ fn context_independent_folding_respects_function_overloads() -> anyhow::Result<(
     // Numeric and Decimal scale-reducing casts read the session rounding mode. Their constants
     // cannot be chosen until that session context is available.
     assert!(fold("to_int64(1.5)").as_constant().is_none());
+    assert!(
+        fold("cast(cast(1.5 as float64 null) as decimal(10, 1) null)")
+            .as_constant()
+            .is_none()
+    );
     assert!(
         fold("cast(cast(2.25 as decimal(10, 2)) as decimal(10, 1))")
             .as_constant()

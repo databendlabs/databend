@@ -114,6 +114,9 @@ impl PartialEq for ScalarExpr {
                 l.column.index == r.column.index && l.column.table_index == r.column.table_index
             }
             (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
+            (ScalarExpr::TypedConstantExpr(l, lt), ScalarExpr::TypedConstantExpr(r, rt)) => {
+                l.eq(r) && lt.eq(rt)
+            }
             (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
             (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
             (ScalarExpr::LambdaFunction(l), ScalarExpr::LambdaFunction(r)) => l.eq(r),
@@ -138,7 +141,10 @@ impl Hash for ScalarExpr {
                 v.column.table_index.hash(state);
             }
             ScalarExpr::ConstantExpr(v) => v.hash(state),
-            ScalarExpr::TypedConstantExpr(v, _) => v.hash(state),
+            ScalarExpr::TypedConstantExpr(v, dt) => {
+                v.hash(state);
+                dt.hash(state);
+            }
             ScalarExpr::WindowFunction(v) => v.hash(state),
             ScalarExpr::AggregateFunction(v) => v.hash(state),
             ScalarExpr::LambdaFunction(v) => v.hash(state),

@@ -30,7 +30,7 @@ pub fn parse_expr(text: &str, columns: &[(&str, DataType)]) -> Expr<String> {
     let raw_expr = parse_raw_expr(text, columns, &BUILTIN_FUNCTIONS);
     let raw_expr = raw_expr.project_column_ref(|i| columns[*i].0.to_string());
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-    type_check::rewrite_function_to_cast(expr)
+    type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS)
 }
 
 #[test]

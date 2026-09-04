@@ -665,7 +665,7 @@ fn eval_text(
 
     let raw_expr = parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS);
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-    let expr = type_check::rewrite_function_to_cast(expr);
+    let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
     let expr = expr
         .project_column_ref(|i| Ok(columns[*i].0.to_string()))
         .unwrap();
