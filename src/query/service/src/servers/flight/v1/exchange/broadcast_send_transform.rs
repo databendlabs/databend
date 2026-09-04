@@ -25,12 +25,12 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::SyncTaskSet;
 use petgraph::prelude::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskSet;
+use super::outbound_send_channels::SharedOutboundChannels;
 
 pub struct BroadcastSendTransform {
     id: NodeIndex,
@@ -47,7 +47,7 @@ impl BroadcastSendTransform {
     pub fn create_item(
         worker_id: usize,
         local_pos: usize,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: SharedOutboundChannels,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
         let input = InputPort::create();
@@ -70,6 +70,12 @@ impl BroadcastSendTransform {
     fn no_active_downstream(&self) -> bool {
         self.output.is_finished() && self.channels.all_closed_except(self.local_pos)
     }
+
+    fn finish_processor(&mut self) -> Result<Event> {
+        self.input.finish();
+        self.output.finish();
+        self.channels.poll_complete_event(&self.tasks, self.id)
+    }
 }
 
 impl Processor for BroadcastSendTransform {
@@ -88,8 +94,7 @@ impl Processor for BroadcastSendTransform {
                 Poll::Ready(results) => {
                     self.channels.handle_send_results(results)?;
                     if self.no_active_downstream() {
-                        self.input.finish();
-                        return Ok(Event::Finished);
+                        return self.finish_processor();
                     }
                 }
                 Poll::Pending => {
@@ -100,8 +105,7 @@ impl Processor for BroadcastSendTransform {
         }
 
         if self.no_active_downstream() {
-            self.input.finish();
-            return Ok(Event::Finished);
+            return self.finish_processor();
         }
 
         if self.input.has_data() {
@@ -140,8 +144,7 @@ impl Processor for BroadcastSendTransform {
                     Poll::Ready(results) => {
                         self.channels.handle_send_results(results)?;
                         if self.no_active_downstream() {
-                            self.input.finish();
-                            return Ok(Event::Finished);
+                            return self.finish_processor();
                         }
                     }
                     Poll::Pending => {
@@ -156,12 +159,8 @@ impl Processor for BroadcastSendTransform {
             }
         }
 
-        // Input finished → close channels
         if self.input.is_finished() {
-            self.output.finish();
-
-            self.channels.close_all();
-            return Ok(Event::Finished);
+            return self.finish_processor();
         }
 
         self.input.set_need_data();
@@ -170,12 +169,10 @@ impl Processor for BroadcastSendTransform {
 
     fn details_status(&self) -> Option<String> {
         Some(format!(
-            "handle_pending={}, local_pos={}, closed_channels={}/{}, closed={:?}",
+            "handle_pending={}, local_pos={}, closed_channels={}",
             self.handle.is_some(),
             self.local_pos,
-            self.channels.closed_count(),
-            self.channels.len(),
-            self.channels.closed_status(),
+            self.channels.closed_summary(),
         ))
     }
 

@@ -12,5 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_service;
-mod reliable_transport;
+pub mod batch;
+pub mod legacy;
+pub mod reliable;
+mod stream;
+
+pub use stream::DeliveryOutcome;
+pub use stream::InboundDelivery;
+pub use stream::OutboundStream;
+pub use stream::OutboundStreamRef;
+pub use stream::StreamSendOutcome;
+pub(crate) use stream::frame_lane;
+pub(crate) use stream::take_lane;

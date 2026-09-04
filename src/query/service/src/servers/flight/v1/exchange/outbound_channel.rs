@@ -29,13 +29,15 @@ use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
-use super::outbound_buffer::ExchangeSinkBuffer;
+use crate::servers::flight::v1::transport::OutboundStream;
+use crate::servers::flight::v1::transport::StreamSendOutcome;
 
 /// Outbound channel trait for sending data blocks.
 /// Supports both local (zero-copy) and remote (serialized) channels.
@@ -45,7 +47,7 @@ pub trait OutboundChannel: Send + Sync {
 
     fn is_closed(&self) -> bool;
 
-    async fn add_block(&self, block: DataBlock) -> Result<()>;
+    async fn add_block(&self, block: DataBlock) -> Result<StreamSendOutcome>;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,69 +152,62 @@ pub fn serialize_block(
 }
 
 // ---------------------------------------------------------------------------
-// RemoteChannel — sends via ExchangeSinkBuffer + PingPongExchange
+// RemoteOutboundChannel
 // ---------------------------------------------------------------------------
 
-/// Remote exchange channel that serializes DataBlock to FlightData
-/// and sends through ExchangeSinkBuffer.
-pub struct RemoteChannel {
-    dest_idx: usize,
+/// Remote exchange channel that serializes `DataBlock` into opaque transport payloads.
+pub struct RemoteOutboundChannel {
     channel_id: usize,
-    buffer: Arc<ExchangeSinkBuffer>,
+    stream: Arc<dyn OutboundStream>,
     ipc_options: IpcWriteOptions,
 }
 
-impl RemoteChannel {
+impl RemoteOutboundChannel {
     pub fn create(
-        dest_idx: usize,
         channel_id: usize,
-        buffer: Arc<ExchangeSinkBuffer>,
+        stream: Arc<dyn OutboundStream>,
         compression: Option<FlightCompression>,
     ) -> Result<Arc<dyn OutboundChannel>> {
         Ok(Arc::new(Self {
-            dest_idx,
             channel_id,
-            buffer,
+            stream,
             ipc_options: make_ipc_options(compression)?,
         }))
     }
 }
 
 #[async_trait::async_trait]
-impl OutboundChannel for RemoteChannel {
+impl OutboundChannel for RemoteOutboundChannel {
     fn close(&self) {}
 
     fn is_closed(&self) -> bool {
-        self.buffer.is_closed(self.dest_idx)
+        self.stream.is_closed()
     }
 
-    async fn add_block(&self, block: DataBlock) -> Result<()> {
+    async fn add_block(&self, block: DataBlock) -> Result<StreamSendOutcome> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
 
         let flight_data_list = serialize_block(block, &self.ipc_options, None)?;
 
-        let tid_prefix = (self.channel_id as u16).to_le_bytes();
-
         for flight_data in flight_data_list {
-            let mut metadata = tid_prefix.to_vec();
-            metadata.extend_from_slice(&flight_data.app_metadata);
-            let flight_data = FlightData {
-                app_metadata: metadata.into(),
-                ..flight_data
+            let outcome = match self.stream.send(self.channel_id, flight_data).await {
+                Err(cause) if cause.code() == ErrorCode::ABORTED_QUERY => {
+                    StreamSendOutcome::ConsumerClosed
+                }
+                result => result?,
             };
-
-            self.buffer
-                .add_data(self.channel_id, self.dest_idx, flight_data)
-                .await?;
+            if outcome == StreamSendOutcome::ConsumerClosed {
+                return Ok(outcome);
+            }
         }
 
-        Ok(())
+        Ok(StreamSendOutcome::Accepted)
     }
 }
 
 // ---------------------------------------------------------------------------
-// RoundRobinChannel — round-robin across multiple RemoteChannels for one node
+// RoundRobinChannel — round-robin across multiple OutboundChannels for one node
 // ---------------------------------------------------------------------------
 
 /// Wraps multiple OutboundChannels (one per thread on a remote node)
@@ -243,9 +238,9 @@ impl OutboundChannel for RoundRobinChannel {
         self.channels.iter().all(|ch| ch.is_closed())
     }
 
-    async fn add_block(&self, block: DataBlock) -> Result<()> {
+    async fn add_block(&self, block: DataBlock) -> Result<StreamSendOutcome> {
         if self.channels.is_empty() {
-            return Ok(());
+            return Ok(StreamSendOutcome::Accepted);
         }
 
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
@@ -269,8 +264,8 @@ impl OutboundChannel for DummyOutboundChannel {
         true
     }
 
-    async fn add_block(&self, _block: DataBlock) -> Result<()> {
-        Ok(())
+    async fn add_block(&self, _block: DataBlock) -> Result<StreamSendOutcome> {
+        Ok(StreamSendOutcome::ConsumerClosed)
     }
 }
 
@@ -290,11 +285,11 @@ mod tests {
     use tonic::Status;
 
     use super::*;
-    use crate::servers::flight::v1::network::inbound_channel::deserialize_flight_data;
-    use crate::servers::flight::v1::network::inbound_channel::strip_tid;
-    use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
-    use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
-    use crate::servers::flight::v1::network::outbound_transport::PingPongExchange;
+    use crate::servers::flight::v1::exchange::exchange_packet_receiver::deserialize_flight_data;
+    use crate::servers::flight::v1::transport::legacy::ExchangeBufferConfig;
+    use crate::servers::flight::v1::transport::legacy::ExchangeSinkBuffer;
+    use crate::servers::flight::v1::transport::legacy::PingPongExchange;
+    use crate::servers::flight::v1::transport::take_lane;
 
     fn test_runtime() -> Arc<Runtime> {
         Arc::new(Runtime::with_worker_threads(2, None).unwrap())
@@ -332,7 +327,7 @@ mod tests {
             ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
                 .unwrap(),
         );
-        let channel = RemoteChannel::create(0, 0, buffer, None).unwrap();
+        let channel = RemoteOutboundChannel::create(0, buffer.destination(0), None).unwrap();
 
         channel.add_block(make_block(10)).await.unwrap();
 
@@ -356,7 +351,7 @@ mod tests {
             ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
                 .unwrap(),
         );
-        let channel = RemoteChannel::create(0, 0, buffer, None).unwrap();
+        let channel = RemoteOutboundChannel::create(0, buffer.destination(0), None).unwrap();
 
         // Empty block with no meta should produce no flight data
         channel.add_block(DataBlock::empty()).await.unwrap();
@@ -372,7 +367,7 @@ mod tests {
                 .unwrap(),
         );
         // tid=5
-        let channel = RemoteChannel::create(0, 5, buffer, None).unwrap();
+        let channel = RemoteOutboundChannel::create(5, buffer.destination(0), None).unwrap();
 
         channel.add_block(make_block(1)).await.unwrap();
 
@@ -410,9 +405,9 @@ mod tests {
         fn is_closed(&self) -> bool {
             false
         }
-        async fn add_block(&self, _block: DataBlock) -> Result<()> {
+        async fn add_block(&self, _block: DataBlock) -> Result<StreamSendOutcome> {
             self.count.fetch_add(1, Ordering::SeqCst);
-            Ok(())
+            Ok(StreamSendOutcome::Accepted)
         }
     }
 
@@ -442,16 +437,17 @@ mod tests {
             ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
                 .unwrap(),
         );
-        let channel = RemoteChannel::create(0, 3, buffer, None).unwrap();
+        let channel = RemoteOutboundChannel::create(3, buffer.destination(0), None).unwrap();
 
         // Send a block with known data
         let col = Int32Type::from_data(vec![10i32, 20, 30, 40, 50]);
         let original = DataBlock::new_from_columns(vec![col]);
         channel.add_block(original.clone()).await.unwrap();
 
-        // Receive, strip tid, deserialize
+        // Receive, remove transport framing, deserialize
         let flight_data = send_rx.recv().await.unwrap();
-        let stripped = strip_tid(flight_data);
+        let (lane, stripped) = take_lane(flight_data).unwrap();
+        assert_eq!(lane, 3);
         let schema = Arc::new(original.infer_schema());
         let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
         let decoded = deserialize_flight_data(stripped, &schema, &arrow_schema).unwrap();

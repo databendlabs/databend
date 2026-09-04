@@ -26,12 +26,12 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::SyncTaskSet;
 use petgraph::graph::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskSet;
+use super::outbound_send_channels::SharedOutboundChannels;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 pub struct HashSendTransform {
@@ -51,7 +51,7 @@ impl HashSendTransform {
         worker_id: usize,
         local_pos: usize,
         scatter: Arc<Box<dyn FlightScatter>>,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: SharedOutboundChannels,
         waker: Arc<ExecutorWaker>,
         rows_threshold: usize,
         bytes_threshold: usize,
@@ -82,6 +82,12 @@ impl HashSendTransform {
     fn no_active_downstream(&self) -> bool {
         self.output.is_finished() && self.channels.all_closed_except(self.local_pos)
     }
+
+    fn finish_processor(&mut self) -> Result<Event> {
+        self.input.finish();
+        self.output.finish();
+        self.channels.poll_complete_event(&self.tasks, self.id)
+    }
 }
 
 impl Processor for HashSendTransform {
@@ -100,8 +106,7 @@ impl Processor for HashSendTransform {
                 Poll::Ready(results) => {
                     self.channels.handle_send_results(results)?;
                     if self.no_active_downstream() {
-                        self.input.finish();
-                        return Ok(Event::Finished);
+                        return self.finish_processor();
                     }
                 }
                 Poll::Pending => {
@@ -112,8 +117,7 @@ impl Processor for HashSendTransform {
         }
 
         if self.no_active_downstream() {
-            self.input.finish();
-            return Ok(Event::Finished);
+            return self.finish_processor();
         }
 
         if self.input.has_data() {
@@ -160,8 +164,7 @@ impl Processor for HashSendTransform {
                         Poll::Ready(results) => {
                             self.channels.handle_send_results(results)?;
                             if self.no_active_downstream() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
+                                return self.finish_processor();
                             }
                         }
                         Poll::Pending => {
@@ -178,8 +181,6 @@ impl Processor for HashSendTransform {
         }
 
         if self.input.is_finished() {
-            self.output.finish();
-
             let mut futures = Vec::new();
 
             for partition_id in 0..self.channels.len() {
@@ -200,8 +201,7 @@ impl Processor for HashSendTransform {
             }
 
             if futures.is_empty() {
-                self.channels.close_all();
-                return Ok(Event::Finished);
+                return self.finish_processor();
             }
 
             let joined = Box::pin(futures::future::join_all(futures));
@@ -215,8 +215,7 @@ impl Processor for HashSendTransform {
                 }
             }
 
-            self.channels.close_all();
-            return Ok(Event::Finished);
+            return self.finish_processor();
         }
 
         self.input.set_need_data();
@@ -225,12 +224,10 @@ impl Processor for HashSendTransform {
 
     fn details_status(&self) -> Option<String> {
         Some(format!(
-            "handle_pending={}, local_pos={}, closed_channels={}/{}, closed={:?}, buffered_partitions={:?}",
+            "handle_pending={}, local_pos={}, closed_channels={}, buffered_partitions={:?}",
             self.handle.is_some(),
             self.local_pos,
-            self.channels.closed_count(),
-            self.channels.len(),
-            self.channels.closed_status(),
+            self.channels.closed_summary(),
             self.partition_stream.partition_ids(),
         ))
     }

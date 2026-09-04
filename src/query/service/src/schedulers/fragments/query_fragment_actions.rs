@@ -230,6 +230,8 @@ impl QueryFragmentsActions {
 
     /// unique map(target, map(source, vec(fragment_id)))
     fn fragments_connections(&self, builder: &mut DataflowDiagramBuilder) -> Result<()> {
+        let new_flight = self.ctx.get_settings().get_enable_experiment_new_flight()?;
+
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let destinations = exchange.get_destinations();
@@ -249,7 +251,11 @@ impl QueryFragmentsActions {
                             )?;
                         } else {
                             for channel in exchange.get_channels(destination) {
-                                builder.add_data_edge(&source, destination, &channel)?;
+                                if new_flight && matches!(exchange, DataExchange::Merge(_)) {
+                                    builder.add_merge_edge(&source, destination, &channel)?;
+                                } else {
+                                    builder.add_data_edge(&source, destination, &channel)?;
+                                }
                             }
                         }
                     }
