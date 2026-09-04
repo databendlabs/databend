@@ -93,7 +93,7 @@ impl SyncSystemTable for CachesTable {
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
         let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
         let column_data_cache = cache_manager.get_column_data_cache();
-        let table_column_array_cache = cache_manager.get_table_data_array_cache();
+        let table_data_cache = cache_manager.get_table_data_cache();
         let iceberg_table_cache = cache_manager.get_iceberg_table_cache();
 
         let mut columns = CachesTableColumns::default();
@@ -189,8 +189,8 @@ impl SyncSystemTable for CachesTable {
             Self::append_row(&parquet_meta_data_cache, &local_node, &mut columns);
         }
 
-        if let Some(table_column_array_cache) = table_column_array_cache {
-            Self::append_row(&table_column_array_cache, &local_node, &mut columns);
+        if let Some(table_data_cache) = table_data_cache {
+            Self::append_row(&table_data_cache, &local_node, &mut columns);
         }
 
         if let Some(iceberg_table_cache) = iceberg_table_cache {
