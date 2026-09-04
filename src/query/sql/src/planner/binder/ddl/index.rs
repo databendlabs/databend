@@ -664,6 +664,14 @@ impl Binder {
                     }
                     options.insert("false_positive_rate".to_string(), value);
                 }
+                "hash_algorithm" => {
+                    if !matches!(value.as_str(), "city64_v0" | "rolling_v1") {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "invalid NGRAM hash algorithm `{value}`, must be one of: city64_v0, rolling_v1"
+                        )));
+                    }
+                    options.insert("hash_algorithm".to_string(), value);
+                }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
                         "index option `{key}` is invalid key for create ngram index statement",
