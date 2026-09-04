@@ -1,20 +1,90 @@
+expression: and_filters(noteq(a, 5), gte(a, 5), lte(a, 5))
+inputs:     a: {0..=255}
+checked:    a <> 5 and a >= 5 and a <= 5
+folded:     false
+domain:     {FALSE}
+
+expression: if(true, then_expr, else_expr)
+inputs:     then_expr: {FALSE, TRUE}, else_expr: {FALSE, TRUE}
+checked:    if(CAST(true AS Boolean NULL), then_expr, else_expr)
+folded:     then_expr
+domain:     {FALSE, TRUE}
+
+expression: if(false, then_expr, else_expr)
+inputs:     then_expr: {FALSE, TRUE}, else_expr: {FALSE, TRUE}
+checked:    if(CAST(false AS Boolean NULL), then_expr, else_expr)
+folded:     else_expr
+domain:     {FALSE, TRUE}
+
+expression: if(null, then_expr, else_expr)
+inputs:     then_expr: {FALSE, TRUE}, else_expr: {FALSE, TRUE}
+checked:    if(CAST(NULL AS Boolean NULL), then_expr, else_expr)
+folded:     else_expr
+domain:     {FALSE, TRUE}
+
+expression: if(dynamic_cond, dynamic_then, false, false_then, true, true_then, unreachable_else)
+inputs:     dynamic_cond: {FALSE, TRUE} ∪ {NULL}, dynamic_then: {FALSE, TRUE}, false_then: {FALSE, TRUE}, true_then: {FALSE, TRUE}, unreachable_else: {FALSE, TRUE}
+checked:    if(dynamic_cond, dynamic_then, CAST(false AS Boolean NULL), false_then, CAST(true AS Boolean NULL), true_then, unreachable_else)
+folded:     if(dynamic_cond, dynamic_then, true_then)
+domain:     {FALSE, TRUE}
+
+expression: if(cond, then_expr, else_expr)
+inputs:     then_expr: {FALSE, TRUE}, else_expr: {FALSE, TRUE}, cond: {FALSE, TRUE} ∪ {NULL}
+checked:    if(cond, then_expr, else_expr)
+folded:     if(cond, then_expr, else_expr)
+domain:     {FALSE, TRUE}
+
+expression: if(null, dead, if(true, selected, dead))
+inputs:     selected: {FALSE, TRUE}, dead: {FALSE, TRUE}
+checked:    if(CAST(NULL AS Boolean NULL), dead, if(CAST(true AS Boolean NULL), selected, dead))
+folded:     selected
+domain:     {FALSE, TRUE}
+
 expression: to_timestamp(value)
+inputs:     value: {"2007-01-01"..="2007-01-02"}
 checked:    to_timestamp(value)
 folded:     to_timestamp(value)
 domain:     {1167609600000000..=1167696000000000}
 
 expression: CAST(value AS TIMESTAMP NULL)
+inputs:     value: {"2007-01-01"..="2007-01-02"}
 checked:    CAST(value AS Timestamp NULL)
 folded:     CAST(value AS Timestamp NULL)
 domain:     {1167609600000000..=1167696000000000}
 
 expression: to_timestamp(value)
+inputs:     value: {"2007-01-01"..="2007-01-02"} ∪ {NULL}
 checked:    to_timestamp(value)
 folded:     to_timestamp(value)
 domain:     {1167609600000000..=1167696000000000} ∪ {NULL}
 
 expression: CAST(value AS TIMESTAMP NULL)
+inputs:     value: {"2007-01-01"..="2007-01-02"} ∪ {NULL}
 checked:    CAST(value AS Timestamp NULL)
 folded:     CAST(value AS Timestamp NULL)
 domain:     {1167609600000000..=1167696000000000} ∪ {NULL}
+
+expression: identity(value)
+inputs:     value: {10..=20} ∪ {NULL}
+checked:    identity(value)
+folded:     identity(value)
+domain:     {10..=20} ∪ {NULL}
+
+expression: fallible_identity(value)
+inputs:     value: {10..=20}
+checked:    fallible_identity(value)
+folded:     fallible_identity(value)
+domain:     {0..=20}
+
+expression: range_identity(value)
+inputs:     value: {10..=20}
+checked:    range_identity(value)
+folded:     range_identity(value)
+domain:     {10..=20}
+
+expression: range_identity(value)
+inputs:     value: {10..=200}
+checked:    range_identity(value)
+folded:     range_identity(value)
+domain:     {0..=18446744073709551615}
 
