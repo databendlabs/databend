@@ -11,6 +11,19 @@ join          : INNER cardinality=2.000
 stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
 stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
 
+=== inner_canonical_integer_to_string_key ===
+description: An integer compared with a string cast of another integer uses the equality-preserving integer source for join statistics.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = CAST(r.k AS STRING)
+left ddl      : CREATE TABLE l(k INT64 NOT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=4, ndv=Some(4), null=0
+right ddl      : CREATE TABLE r(k INT32 NOT NULL)
+right rows     : 3
+input stat    : right.k min=0, max=1, ndv=Some(2), null=0
+join          : INNER cardinality=1.500
+stat          : l.k (#0) min=1, max=1, ndv=1.000, null=0.000, histogram=rows=1.500, ndv=1.000, buckets=[1..1:1.500/1.000]
+stat          : r.k (#1) min=1, max=1, ndv=1.000, null=0.000, histogram=rows=1.500, ndv=1.000, buckets=[1..1:1.500/1.000]
+
 === correlated_exists_projection_nullable_key ===
 description: A nullable correlated EXISTS projection is decorrelated into RIGHT MARK with a null-safe correlation equality key.
 sql           : SELECT EXISTS (SELECT 1 FROM r WHERE r.k = l.k) FROM l
@@ -24,6 +37,72 @@ join          : RIGHT MARK cardinality=4.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=none
 stat          : r.k (#1) min=1, max=2, ndv=0.400, null=0.200, histogram=none
 stat          : 1 (#2) min=1, max=1, ndv=1.000, null=0.000, histogram=none
+
+=== intersect_all_null_key_uses_null_safe_equality ===
+description: INTERSECT supplies a real null-safe equality key, so an all-NULL left input is matched by NULL rows on the right.
+sql           : SELECT k FROM l INTERSECT SELECT k FROM r
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k all_null=true, ndv=Some(0), null=4
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 10
+input stat    : right.k min=1, max=3, ndv=Some(3), null=2
+join          : RIGHT SEMI cardinality=4.000
+stat          : l.k (#0) all_null=true, null=4.000, histogram=none
+stat          : r.k (#1) all_null=true, null=4.000, histogram=none
+
+=== intersect_nullable_key_combines_value_and_null_matches ===
+description: A null-safe equality from INTERSECT combines ordinary value matches with NULL-to-NULL matches when estimating matched rows.
+sql           : SELECT k FROM l INTERSECT SELECT k FROM r
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 3
+input stat    : left.k min=1, max=1, ndv=Some(1), null=2
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 4
+input stat    : right.k min=1, max=1, ndv=Some(1), null=3
+join          : RIGHT SEMI cardinality=3.000
+stat          : l.k (#0) min=1, max=1, ndv=0.000, null=3.000, histogram=rows=0.000, ndv=0.000, buckets=[1..1:0.000/1.000]
+stat          : r.k (#1) min=1, max=1, ndv=1.000, null=3.000, histogram=none
+
+=== intersect_null_only_match_drops_value_histogram ===
+description: When INTERSECT matches only NULL, the preserved key becomes AllNull and does not retain its input value histogram.
+sql           : SELECT k FROM l INTERSECT SELECT k FROM r
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 2
+input stat    : left.k min=1, max=1, ndv=Some(1), null=1
+input hist    : left.k present
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 2
+input stat    : right.k min=2, max=2, ndv=Some(1), null=1
+join          : LEFT SEMI cardinality=1.000
+stat          : l.k (#0) all_null=true, null=1.000, histogram=none
+stat          : r.k (#1) all_null=true, null=1.000, histogram=none
+
+=== intersect_multi_key_null_only_match_preserves_all_null ===
+description: A null-only match on one null-safe INTERSECT key keeps the shared key AllNull even when another key has ordinary value bounds.
+sql           : SELECT k, k FROM l INTERSECT SELECT a, b FROM r
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 2
+input stat    : left.k min=1, max=1, ndv=Some(1), null=1
+right ddl      : CREATE TABLE r(a INT NULL, b INT NULL)
+right rows     : 2
+input stat    : right.a all_null=true, ndv=Some(0), null=2
+input stat    : right.b min=1, max=1, ndv=Some(1), null=1
+join          : LEFT SEMI cardinality=1.000
+stat          : l.k (#0) all_null=true, null=1.000, histogram=none
+stat          : r.a (#1) all_null=true, null=1.000, histogram=none
+stat          : r.b (#2) min=1, max=1, ndv=1.000, null=1.000, histogram=none
+
+=== intersect_missing_peer_statistics_uses_null_safe_fallback ===
+description: An incomplete null-safe equality keeps the preserved-side INTERSECT cardinality without inventing a matched value distribution.
+sql           : SELECT k FROM l INTERSECT SELECT k FROM r
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 4
+input stat    : left.k min=1, max=3, ndv=Some(3), null=1
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 20
+join          : RIGHT SEMI cardinality=4.000
+stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=none
 
 === inner_derived_boolean_equality ===
 description: Boolean join-key statistics are derived by EvalScalar from numeric input statistics rather than injected at the scan boundary.
@@ -182,8 +261,8 @@ input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
 input stat    : right.k2 min=20, max=21, ndv=Some(2), null=0
 join          : INNER cardinality=0.000
 
-=== inner_three_key_strictest_nonzero ===
-description: Three non-zero equality estimates select the strictest key while a later looser key does not replace the winner histogram.
+=== inner_three_key_combined_decay ===
+description: Three non-zero equality estimates use exponential backoff, then retain and scale every estimated equality-key histogram to the combined cardinality.
 sql           : SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2 AND l.k3 = r.k3
 left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL, k3 INT NOT NULL)
 left rows     : 10
@@ -195,13 +274,369 @@ right rows     : 10
 input stat    : right.k1 min=1, max=4, ndv=Some(4), null=0
 input stat    : right.k2 min=1, max=10, ndv=Some(10), null=0
 input stat    : right.k3 min=1, max=2, ndv=Some(2), null=0
+join          : INNER cardinality=4.204
+stat          : l.k1 (#0) min=1, max=4, ndv=2.735 (upper=4.000), null=0.000, histogram=rows=4.204, ndv=2.735, buckets=[1..1:1.051/1.000, 2..2:1.051/1.000, 3..3:1.051/1.000, 4..4:1.051/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=4.204, null=0.000, histogram=rows=4.204, ndv=4.204, buckets=[1..1:0.420/1.000, 2..2:0.420/1.000, 3..3:0.420/1.000, 4..4:0.420/1.000, 5..5:0.420/1.000, 6..6:0.420/1.000, 7..7:0.420/1.000, 8..8:0.420/1.000, 9..9:0.420/1.000, 10..10:0.420/1.000]
+stat          : l.k3 (#2) min=1, max=2, ndv=1.777 (upper=2.000), null=0.000, histogram=rows=4.204, ndv=1.777, buckets=[1..1:2.102/1.000, 2..2:2.102/1.000]
+stat          : r.k1 (#3) min=1, max=4, ndv=2.735 (upper=4.000), null=0.000, histogram=rows=4.204, ndv=2.735, buckets=[1..1:1.051/1.000, 2..2:1.051/1.000, 3..3:1.051/1.000, 4..4:1.051/1.000]
+stat          : r.k2 (#4) min=1, max=10, ndv=4.204, null=0.000, histogram=rows=4.204, ndv=4.204, buckets=[1..1:0.420/1.000, 2..2:0.420/1.000, 3..3:0.420/1.000, 4..4:0.420/1.000, 5..5:0.420/1.000, 6..6:0.420/1.000, 7..7:0.420/1.000, 8..8:0.420/1.000, 9..9:0.420/1.000, 10..10:0.420/1.000]
+stat          : r.k3 (#5) min=1, max=2, ndv=1.777 (upper=2.000), null=0.000, histogram=rows=4.204, ndv=1.777, buckets=[1..1:2.102/1.000, 2..2:2.102/1.000]
+
+=== inner_three_key_combined_decay_reordered ===
+description: Reordering the same three equality conditions leaves the combined cardinality and propagated column distributions unchanged.
+sql           : SELECT * FROM l INNER JOIN r ON l.k3 = r.k3 AND l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL, k3 INT NOT NULL)
+left rows     : 10
+input stat    : left.k1 min=1, max=4, ndv=Some(4), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+input stat    : left.k3 min=1, max=2, ndv=Some(2), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL, k3 INT NOT NULL)
+right rows     : 10
+input stat    : right.k1 min=1, max=4, ndv=Some(4), null=0
+input stat    : right.k2 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k3 min=1, max=2, ndv=Some(2), null=0
+join          : INNER cardinality=4.204
+stat          : l.k1 (#0) min=1, max=4, ndv=2.735 (upper=4.000), null=0.000, histogram=rows=4.204, ndv=2.735, buckets=[1..1:1.051/1.000, 2..2:1.051/1.000, 3..3:1.051/1.000, 4..4:1.051/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=4.204, null=0.000, histogram=rows=4.204, ndv=4.204, buckets=[1..1:0.420/1.000, 2..2:0.420/1.000, 3..3:0.420/1.000, 4..4:0.420/1.000, 5..5:0.420/1.000, 6..6:0.420/1.000, 7..7:0.420/1.000, 8..8:0.420/1.000, 9..9:0.420/1.000, 10..10:0.420/1.000]
+stat          : l.k3 (#2) min=1, max=2, ndv=1.777 (upper=2.000), null=0.000, histogram=rows=4.204, ndv=1.777, buckets=[1..1:2.102/1.000, 2..2:2.102/1.000]
+stat          : r.k1 (#3) min=1, max=4, ndv=2.735 (upper=4.000), null=0.000, histogram=rows=4.204, ndv=2.735, buckets=[1..1:1.051/1.000, 2..2:1.051/1.000, 3..3:1.051/1.000, 4..4:1.051/1.000]
+stat          : r.k2 (#4) min=1, max=10, ndv=4.204, null=0.000, histogram=rows=4.204, ndv=4.204, buckets=[1..1:0.420/1.000, 2..2:0.420/1.000, 3..3:0.420/1.000, 4..4:0.420/1.000, 5..5:0.420/1.000, 6..6:0.420/1.000, 7..7:0.420/1.000, 8..8:0.420/1.000, 9..9:0.420/1.000, 10..10:0.420/1.000]
+stat          : r.k3 (#5) min=1, max=2, ndv=1.777 (upper=2.000), null=0.000, histogram=rows=4.204, ndv=1.777, buckets=[1..1:2.102/1.000, 2..2:2.102/1.000]
+
+=== inner_repeated_column_uses_most_selective_histogram ===
+description: When one column participates in multiple equality expressions, its most selective local expression supplies the histogram and the combined selectivity scales every propagated equality-key histogram.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k1 AND CAST(l.k AS INT) = r.k2
+left ddl      : CREATE TABLE l(k SMALLINT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 SMALLINT NOT NULL, k2 INT NOT NULL)
+right rows     : 1000
+input stat    : right.k1 min=5, max=104, ndv=Some(100), null=0
+input stat    : right.k2 min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=189.737
+stat          : l.k (#0) min=5, max=10, ndv=6.000, null=0.000, histogram=rows=189.737, ndv=6.000, buckets=[5..5:31.623/1.000, 6..6:31.623/1.000, 7..7:31.623/1.000, 8..8:31.623/1.000, 9..9:31.623/1.000, 10..10:31.623/1.000]
+stat          : r.k1 (#1) min=5, max=10, ndv=6.000, null=0.000, histogram=rows=189.737, ndv=6.000, buckets=[5..5:31.623/1.000, 6..6:31.623/1.000, 7..7:31.623/1.000, 8..8:31.623/1.000, 9..9:31.623/1.000, 10..10:31.623/1.000]
+stat          : r.k2 (#2) min=1, max=10, ndv=10.000 (upper=10.000), null=0.000, histogram=rows=189.737, ndv=10.000, buckets=[1..1:18.974/1.000, 2..2:18.974/1.000, 3..3:18.974/1.000, 4..4:18.974/1.000, 5..5:18.974/1.000, 6..6:18.974/1.000, 7..7:18.974/1.000, 8..8:18.974/1.000, 9..9:18.974/1.000, 10..10:18.974/1.000]
+
+=== inner_repeated_identity_column_combines_distributions ===
+description: When one identity column participates in multiple direct equalities, all matched distributions narrow its bounds while the most selective equality supplies its histogram shape.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k1 AND l.k = r.k2
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 1000
+input stat    : right.k1 min=10, max=80, ndv=Some(71), null=0
+input stat    : right.k2 min=30, max=1000, ndv=Some(971), null=0
+join          : INNER cardinality=1.462
+stat          : l.k (#0) min=30, max=80, ndv=1.462 (upper=1.462), null=0.000, histogram=rows=1.462, ndv=1.462, bucket_count=51, buckets=[30..30:0.029/0.205, 31..31:0.029/0.205, 32..32:0.029/0.205, ..., 78..78:0.029/0.205, 79..79:0.029/0.205, 80..80:0.029/0.205]
+stat          : r.k1 (#1) min=10, max=80, ndv=1.453 (upper=1.462), null=0.000, histogram=rows=1.462, ndv=1.453, bucket_count=71, buckets=[10..10:0.021/1.000, 11..11:0.021/1.000, 12..12:0.021/1.000, ..., 78..78:0.021/1.000, 79..79:0.021/1.000, 80..80:0.021/1.000]
+stat          : r.k2 (#2) min=30, max=100, ndv=1.462 (upper=1.462), null=0.000, histogram=rows=1.462, ndv=1.462, bucket_count=71, buckets=[30..30:0.021/0.205, 31..31:0.021/0.205, 32..32:0.021/0.205, ..., 98..98:0.021/0.205, 99..99:0.021/0.205, 100..100:0.021/0.205]
+
+=== inner_repeated_column_complex_winner_blocks_source_histogram ===
+description: When a complex equality expression is more selective than a direct equality using the same source column, it affects cardinality but cannot supply that source column's histogram.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k1 AND CAST(l.k AS INT) = r.k2
+left ddl      : CREATE TABLE l(k SMALLINT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(k1 SMALLINT NOT NULL, k2 INT NOT NULL)
+right rows     : 1000
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=1000, ndv=Some(1000), null=0
 join          : INNER cardinality=10.000
-stat          : l.k1 (#0) min=1, max=4, ndv=4.000, null=0.000, histogram=none
-stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
-stat          : l.k3 (#2) min=1, max=2, ndv=2.000, null=0.000, histogram=none
-stat          : r.k1 (#3) min=1, max=4, ndv=4.000, null=0.000, histogram=none
-stat          : r.k2 (#4) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
-stat          : r.k3 (#5) min=1, max=2, ndv=2.000, null=0.000, histogram=none
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#1) min=1, max=10, ndv=6.340 (upper=10.000), null=0.000, histogram=rows=10.000, ndv=6.340, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : r.k2 (#2) min=1, max=100, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..10:1.000/10.000, 11..20:1.000/10.000, 21..30:1.000/10.000, 31..40:1.000/10.000, 41..50:1.000/10.000, 51..60:1.000/10.000, 61..70:1.000/10.000, 71..80:1.000/10.000, 81..90:1.000/10.000, 91..100:1.000/10.000]
+
+=== inner_unknown_non_equi_uses_default_decay ===
+description: A residual comparison between varying columns uses the default 0.5 selectivity in exponential-backoff cardinality and NDV scaling while leaving equality histogram propagation intact.
+sql           : SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2 AND l.k1 > r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=26.591
+stat          : l.k1 (#0) min=1, max=10, ndv=7.071, null=0.000, histogram=rows=26.591, ndv=9.546, buckets=[1..1:2.659/1.000, 2..2:2.659/1.000, 3..3:2.659/1.000, 4..4:2.659/1.000, 5..5:2.659/1.000, 6..6:2.659/1.000, 7..7:2.659/1.000, 8..8:2.659/1.000, 9..9:2.659/1.000, 10..10:2.659/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=7.071, null=0.000, histogram=rows=26.591, ndv=9.325, buckets=[1..1:2.659/1.000, 2..2:2.659/1.000, 3..3:2.659/1.000, 4..4:2.659/1.000, 5..5:2.659/1.000, 6..6:2.659/1.000, 7..7:2.659/1.000, 8..8:2.659/1.000, 9..9:2.659/1.000, 10..10:2.659/1.000]
+stat          : r.k1 (#2) min=1, max=10, ndv=9.546 (upper=10.000), null=0.000, histogram=rows=26.591, ndv=9.546, buckets=[1..1:2.659/1.000, 2..2:2.659/1.000, 3..3:2.659/1.000, 4..4:2.659/1.000, 5..5:2.659/1.000, 6..6:2.659/1.000, 7..7:2.659/1.000, 8..8:2.659/1.000, 9..9:2.659/1.000, 10..10:2.659/1.000]
+stat          : r.k2 (#3) min=1, max=10, ndv=9.325 (upper=10.000), null=0.000, histogram=rows=26.591, ndv=9.325, buckets=[1..1:2.659/1.000, 2..2:2.659/1.000, 3..3:2.659/1.000, 4..4:2.659/1.000, 5..5:2.659/1.000, 6..6:2.659/1.000, 7..7:2.659/1.000, 8..8:2.659/1.000, 9..9:2.659/1.000, 10..10:2.659/1.000]
+
+=== inner_modeled_non_equi_joins_combined_decay ===
+description: A cross-side residual comparison with a singleton operand has numeric selectivity, so it joins the equality estimate in exponential-backoff cardinality and NDV scaling while leaving equality histogram propagation intact.
+sql           : SELECT * FROM l INNER JOIN r ON l.id = r.id AND l.k > r.c
+left ddl      : CREATE TABLE l(id INT NOT NULL, k INT NOT NULL)
+left rows     : 100
+input stat    : left.id min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(id INT NOT NULL, c INT NOT NULL)
+right rows     : 100
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+input stat    : right.id min=1, max=100, ndv=Some(100), null=0
+join          : INNER cardinality=97.468
+stat          : l.id (#0) min=1, max=100, ndv=95.000, null=0.000, histogram=rows=97.468, ndv=97.468, bucket_count=100, buckets=[1..1:0.975/1.000, 2..2:0.975/1.000, 3..3:0.975/1.000, ..., 98..98:0.975/1.000, 99..99:0.975/1.000, 100..100:0.975/1.000]
+stat          : l.k (#1) min=1, max=100, ndv=95.000, null=0.000, histogram=none
+stat          : r.id (#2) min=1, max=100, ndv=95.000, null=0.000, histogram=rows=97.468, ndv=97.468, bucket_count=100, buckets=[1..1:0.975/1.000, 2..2:0.975/1.000, 3..3:0.975/1.000, ..., 98..98:0.975/1.000, 99..99:0.975/1.000, 100..100:0.975/1.000]
+stat          : r.c (#3) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== inner_only_modeled_non_equi ===
+description: A cross-side comparison normalizes both side-local distributions to pair-row mass before applying its selectivity to the Cartesian input.
+sql           : SELECT * FROM l INNER JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : INNER cardinality=950.000
+stat          : l.k (#0) min=1, max=100, ndv=95.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== inner_domain_true_non_equi ===
+description: Domain folding proves a cross-side predicate true for every pair and bypasses probabilistic residual estimation.
+sql           : SELECT * FROM l INNER JOIN r ON l.k < r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 10
+input stat    : left.k min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 20
+input stat    : right.c min=100, max=200, ndv=Some(20), null=0
+join          : INNER cardinality=200.000
+stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.c (#1) min=100, max=200, ndv=20.000, null=0.000, histogram=none
+
+=== inner_only_unknown_non_equi ===
+description: A Join containing only a comparison between two varying columns uses the conservative unknown-selectivity fallback.
+sql           : SELECT * FROM l INNER JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 100
+input stat    : right.c min=1, max=100, ndv=Some(100), null=0
+join          : INNER cardinality=5000.000
+stat          : l.k (#0) min=1, max=100, ndv=50.000, null=0.000, histogram=none
+stat          : r.c (#1) min=1, max=100, ndv=50.000, null=0.000, histogram=none
+
+=== inner_non_equi_missing_column_statistics ===
+description: A cross-side comparison with missing statistics reaches the selectivity estimator fallback without bypassing Join evaluation.
+sql           : SELECT * FROM l INNER JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 100
+join          : INNER cardinality=5000.000
+stat          : l.k (#0) min=1, max=100, ndv=50.000, null=0.000, histogram=none
+
+=== left_outer_only_modeled_non_equi ===
+description: A non-equi LEFT join estimates rows matching at least one peer and never falls below the preserved left input.
+sql           : SELECT * FROM l LEFT JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : LEFT OUTER cardinality=950.000
+stat          : l.k (#0) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+stat          : c (#2) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== right_outer_only_modeled_non_equi ===
+description: With one row on the non-preserved side, a non-equi RIGHT join returns exactly the fifteen preserved matched-or-unmatched rows.
+sql           : SELECT * FROM l RIGHT JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 1
+input stat    : left.k min=10, max=10, ndv=Some(1), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 15
+input stat    : right.c min=1, max=15, ndv=Some(15), null=0
+join          : LEFT OUTER cardinality=15.000
+stat          : l.k (#0) min=10, max=10, ndv=1.000, null=6.000, histogram=none
+stat          : r.c (#1) min=1, max=15, ndv=15.000, null=0.000, histogram=none
+stat          : k (#2) min=10, max=10, ndv=1.000, null=6.000, histogram=none
+
+=== full_outer_only_modeled_non_equi ===
+description: A non-equi FULL join includes unmatched rows from both inputs and never falls below either input cardinality.
+sql           : SELECT * FROM l FULL JOIN r ON l.k < r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : FULL OUTER cardinality=106.652
+stat          : l.k (#0) min=1, max=100, ndv=100.000, null=0.169, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=66.483, histogram=none
+stat          : k (#2) min=1, max=100, ndv=100.000, null=0.169, histogram=none
+stat          : c (#3) min=5, max=5, ndv=1.000, null=66.483, histogram=none
+
+=== left_outer_mixed_equi_and_non_equi ===
+description: A mixed-condition LEFT join caps matched left rows by the final matched-pair estimate before adding unmatched rows.
+sql           : SELECT * FROM l LEFT JOIN r ON l.id = r.id AND l.k > r.c
+left ddl      : CREATE TABLE l(id INT NOT NULL, k INT NOT NULL)
+left rows     : 100
+input stat    : left.id min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(id INT NOT NULL, c INT NOT NULL)
+right rows     : 100
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+input stat    : right.id min=1, max=100, ndv=Some(100), null=0
+join          : LEFT OUTER cardinality=100.000
+stat          : l.id (#0) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : l.k (#1) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : r.id (#2) min=1, max=100, ndv=97.468, null=2.532, histogram=none
+stat          : r.c (#3) min=5, max=5, ndv=1.000, null=2.532, histogram=none
+stat          : id (#4) min=1, max=100, ndv=100.000, null=2.532, histogram=none
+stat          : c (#5) min=5, max=5, ndv=1.000, null=2.532, histogram=none
+
+=== left_semi_only_modeled_non_equi ===
+description: A non-equi LEFT SEMI join estimates left rows matching at least one right peer instead of preserving the full left input.
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : LEFT SEMI cardinality=100.000
+stat          : l.k (#0) min=1, max=100, ndv=95.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== right_semi_only_modeled_non_equi ===
+description: A non-equi RIGHT SEMI join estimates right rows matching at least one left peer instead of preserving the full right input.
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : RIGHT SEMI cardinality=10.000
+stat          : l.k (#0) min=1, max=100, ndv=10.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== left_anti_only_modeled_non_equi ===
+description: A non-equi LEFT ANTI join subtracts modeled left matches while retaining the conservative reserve for uncertain overlap.
+sql           : SELECT * FROM l LEFT ANTI JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : LEFT ANTI cardinality=10.000
+stat          : l.k (#0) min=1, max=100, ndv=10.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=1.000, null=0.000, histogram=none
+
+=== right_anti_only_modeled_non_equi ===
+description: A non-equi RIGHT ANTI join subtracts modeled right matches while retaining the conservative reserve for uncertain overlap.
+sql           : SELECT * FROM l RIGHT ANTI JOIN r ON l.k > r.c
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=100, ndv=Some(100), null=0
+right ddl      : CREATE TABLE r(c INT NOT NULL)
+right rows     : 10
+input stat    : right.c min=5, max=5, ndv=Some(1), null=0
+join          : RIGHT ANTI cardinality=1.000
+stat          : l.k (#0) min=1, max=100, ndv=1.000, null=0.000, histogram=none
+stat          : r.c (#1) min=5, max=5, ndv=0.651 (upper=1.000), null=0.000, histogram=none
+
+=== asof_residual_uses_matched_pair_upper_bound ===
+description: ASOF avoids an independent peer-match model and only caps equality-derived side matches by the combined matched-pair estimate.
+sql           : SELECT * FROM l ASOF JOIN r ON l.id = r.id AND l.t >= r.t
+left ddl      : CREATE TABLE l(id INT NOT NULL, t INT NOT NULL)
+left rows     : 100
+input stat    : left.id min=1, max=100, ndv=Some(100), null=0
+input stat    : left.t min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(id INT NOT NULL, t INT NOT NULL)
+right rows     : 100
+input stat    : right.id min=1, max=100, ndv=Some(100), null=0
+input stat    : right.t min=100, max=200, ndv=Some(100), null=0
+join          : ASOF cardinality=0.000
+
+=== inner_unsupported_multicolumn_expression_uses_partial_stats ===
+description: When a two-column arithmetic key has no derived distribution, the direct peer's available statistics still participate in NULL-aware fallback and output propagation.
+sql           : SELECT * FROM l INNER JOIN r ON l.a + l.b = r.k
+left ddl      : CREATE TABLE l(a INT NULL, b INT NULL)
+left rows     : 100
+input stat    : left.a min=1, max=50, ndv=Some(50), null=2
+input stat    : left.b min=1, max=30, ndv=Some(30), null=3
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 100
+input stat    : right.k min=1, max=80, ndv=Some(80), null=10
+join          : INNER cardinality=9000.000
+stat          : l.a (#0) min=1, max=50, ndv=50.000, null=180.000, histogram=none
+stat          : l.b (#1) min=1, max=30, ndv=30.000, null=270.000, histogram=none
+stat          : r.k (#2) min=1, max=80, ndv=80.000, null=0.000, histogram=none
+
+=== inner_derived_expression_with_missing_peer_stats ===
+description: A derivable arithmetic key remains local when its direct peer lacks statistics, exercising the one-sided equality-result path without source value writeback.
+sql           : SELECT * FROM l INNER JOIN r ON l.k + 1 = r.k
+left ddl      : CREATE TABLE l(k INT NULL)
+left rows     : 100
+input stat    : left.k min=1, max=50, ndv=Some(50), null=5
+right ddl      : CREATE TABLE r(k INT NULL)
+right rows     : 100
+join          : INNER cardinality=9500.000
+stat          : l.k (#0) min=1, max=50, ndv=49.831 (upper=50.000), null=475.000, histogram=none
+
+=== inner_missing_second_key_stats_preserves_first_key_histogram ===
+description: An equality condition with incomplete statistics contributes its conservative fallback without erasing the propagated histogram from another modeled key.
+sql           : SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 10
+input stat    : left.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+input hist    : left.k1 present
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 10
+input stat    : right.k1 min=1, max=5, ndv=Some(5), null=0
+input hist    : right.k1 present
+join          : INNER cardinality=8.889
+stat          : l.k1 (#0) min=1, max=5, ndv=4.444, null=0.000, histogram=rows=8.889, ndv=4.444, buckets=[1..5:8.889/4.444]
+stat          : l.k2 (#1) min=1, max=10, ndv=8.889, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=5, ndv=4.444, null=0.000, histogram=rows=8.889, ndv=4.444, buckets=[1..5:8.889/4.444]
+
+=== left_semi_two_key_combined_decay ===
+description: Multiple equality keys apply exponential backoff to preserved-side matched rows, then retain and scale every estimated equality-key histogram on that side.
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 10
+input stat    : left.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 10
+input stat    : right.k1 min=1, max=4, ndv=Some(4), null=0
+input stat    : right.k2 min=1, max=2, ndv=Some(2), null=0
+join          : LEFT SEMI cardinality=1.265
+stat          : l.k1 (#0) min=1, max=4, ndv=1.265, null=0.000, histogram=rows=1.265, ndv=1.265, buckets=[1..1:0.316/1.000, 2..2:0.316/1.000, 3..3:0.316/1.000, 4..4:0.316/1.000]
+stat          : l.k2 (#1) min=1, max=2, ndv=1.265, null=0.000, histogram=rows=1.265, ndv=1.265, buckets=[1..1:0.632/1.000, 2..2:0.632/1.000]
+stat          : r.k1 (#2) min=1, max=4, ndv=1.265, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=2, ndv=1.265, null=0.000, histogram=none
+
+=== left_anti_two_key_combines_histogram_uncertainty ===
+description: ANTI combines matched rows and histogram uncertainty from every equality key before applying its conservative overlap reserve.
+sql           : SELECT * FROM l LEFT ANTI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 VARCHAR NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=a, max=z, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+input hist    : left.k1 present
+right ddl      : CREATE TABLE r(k1 VARCHAR NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=a, max=z, ndv=Some(95), null=0
+input stat    : right.k2 min=1, max=10, ndv=Some(10), null=0
+input hist    : right.k1 present
+join          : LEFT ANTI cardinality=68.377
+stat          : l.k1 (#0) min=a, max=z, ndv=68.377, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=a, max=z, ndv=68.377, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=none
 
 === left_outer_nullable_key ===
 description: A left outer join excludes key NULLs from its inner estimate but preserves the outer-side NULL statistics.
@@ -227,7 +662,7 @@ right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
 join          : INNER cardinality=2.000
 stat          : l.k (#0) min=1, max=3, ndv=1.809 (upper=2.000), null=0.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
 
 === inner_mixed_numeric_equality ===
 description: Different integer SQL types reach the numeric comparison boundary through the normal binder and optimizer path.
@@ -307,7 +742,7 @@ right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
 join          : INNER cardinality=8.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=none
 
 === inner_lossy_cast_key ===
 description: A narrowing cast is outside the reverse-propagation whitelist, so the golden captures its fallback cardinality and per-side output statistics.
@@ -320,7 +755,7 @@ right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
 join          : INNER cardinality=8.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=none
 
 === inner_function_join_key ===
 description: A function join key is not reverse-propagated to its source, while the complete plan still shows any statistics derivable for the expression.
@@ -333,7 +768,7 @@ right rows     : 3
 input stat    : right.k min=1, max=2, ndv=Some(2), null=1
 join          : INNER cardinality=8.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=2.000, histogram=none
-stat          : r.k (#1) min=1, max=2, ndv=1.615 (upper=2.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=none
 
 === inner_string_equality ===
 description: String bounds pass through the byte-statistics path and narrow both join keys to their shared range.
@@ -388,6 +823,29 @@ input stat    : right.k min=1, max=2, ndv=Some(2), null=0
 join          : INNER cardinality=4.000
 stat          : l.k (#0) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
 stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=4.000, ndv=2.000, buckets=[1..1:2.000/1.000, 2..2:2.000/1.000]
+
+=== inner_date_timestamp_equality ===
+description: DATE and TIMESTAMP keys use comparison cardinality without treating their shared integer-backed statistics representation as the same semantic distribution.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k DATE NOT NULL)
+left rows     : 10
+input stat    : left.k min=0, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k TIMESTAMP NOT NULL)
+right rows     : 10
+input stat    : right.k min=0, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=10.000
+stat          : l.k (#0) min=0, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k (#1) min=0, max=10, ndv=10.000, null=0.000, histogram=none
+
+=== inner_empty_left_input ===
+description: An exact-empty input produces no join pairs and does not fall back to treating either side as fully matched.
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+left ddl      : CREATE TABLE l(k INT NOT NULL)
+left rows     : 0
+right ddl      : CREATE TABLE r(k INT NOT NULL)
+right rows     : 10
+input stat    : right.k min=1, max=10, ndv=Some(10), null=0
+join          : INNER cardinality=0.000
 
 === inner_missing_right_column_statistics ===
 description: Missing statistics on one join input exercise the cardinality fallback without manufacturing bounds for that column.
