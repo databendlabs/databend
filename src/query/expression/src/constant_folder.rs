@@ -18,9 +18,7 @@ use std::collections::HashMap;
 use databend_common_ast::Span;
 use log::error;
 
-use crate::ColumnBuilder;
 use crate::ColumnIndex;
-use crate::EvalContext;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
@@ -43,6 +41,8 @@ use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
 
 const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
+
+mod monotonicity;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum FoldMode {
@@ -844,24 +844,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let all_args_is_scalar = args_expr
                     .iter()
                     .all(|arg| arg.as_ref().as_constant().is_some());
-                let is_monotonicity = self
-                    .fn_registry
-                    .properties
-                    .get(&call.function.signature.name)
-                    .map(|p| {
-                        args_expr.len() == 1
-                            && (p.monotonicity
-                                || p.monotonicity_by_type
-                                    .contains(args_expr[0].as_ref().data_type()))
-                    })
-                    .unwrap_or_default();
-                let monotonicity_check = self
-                    .fn_registry
-                    .properties
-                    .get(&call.function.signature.name)
-                    .and_then(|p| p.monotonicity_check)
-                    .filter(|_| args_expr.len() == 1);
-
                 // Check for mutually exclusive ranges in AND function
                 if call.function.signature.name == "and"
                     && args_expr.len() >= 2
@@ -902,109 +884,21 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
                     let res = calc_domain.domain_eval(self.func_ctx, &domains);
-                    // Range-sensitive checks complement the static flags: they may prove
-                    // monotonicity for this specific argument range and context only.
-                    let is_monotonic = is_monotonicity
-                        || monotonicity_check
-                            .is_some_and(|check| check(self.func_ctx, &domains) == Some(0));
+                    let is_monotonic = self.is_monotonic(
+                        &call.function.signature.name,
+                        args_expr.len(),
+                        args_expr.first().map(|arg| arg.as_ref().data_type()),
+                        &domains,
+                    );
                     match (res, is_monotonic) {
-                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
-                            let domain = domains.first().unwrap();
-                            let (value_domain, has_null) = match domain {
-                                Domain::Nullable(NullableDomain { has_null, value }) => {
-                                    (value.as_deref(), *has_null)
-                                }
-                                domain => (Some(domain), false),
-                            };
-
-                            let mut boundaries = Vec::with_capacity(3);
-                            if let Some(value_domain) = value_domain {
-                                let (min, max) = value_domain.to_minmax();
-                                if min.is_null() || max.is_null() {
-                                    return None;
-                                }
-                                boundaries.extend([min, max]);
-                            }
-                            if has_null {
-                                boundaries.push(Scalar::Null);
-                            }
-                            if boundaries.is_empty() {
-                                return None;
-                            }
-
-                            {
-                                let mut ctx = EvalContext {
-                                    generics: &call.generics,
-                                    num_rows: boundaries.len(),
-                                    validity: None,
-                                    errors: None,
-                                    func_ctx: self.func_ctx,
-                                    suppress_error: false,
-                                    strict_eval: true,
-                                };
-                                let mut builder = ColumnBuilder::with_capacity(
-                                    args_expr[0].as_ref().data_type(),
-                                    boundaries.len(),
-                                );
-                                for boundary in &boundaries {
-                                    builder.push(boundary.as_ref());
-                                }
-
-                                let input = Value::Column(builder.build());
-                                let result = eval.eval(&[input], &mut ctx);
-
-                                if result.is_scalar() {
-                                    None
-                                } else {
-                                    // if error happens, domain maybe incorrect
-                                    // min, max: String("2024-09-02 00:00") String("2024-09-02 00:0�")
-                                    // to_date(s) > to_date('2024-01-1')
-                                    let col = result.as_column().unwrap();
-                                    let d = if boundaries
-                                        .iter()
-                                        .enumerate()
-                                        .any(|(index, _)| ctx.has_error(index))
-                                    {
-                                        // NULL is not an ordered boundary. If evaluating it fails,
-                                        // the function's domain is not known.
-                                        if has_null && ctx.has_error(boundaries.len() - 1) {
-                                            return None;
-                                        }
-
-                                        let full_domain = Domain::full(&call.return_type);
-                                        let full_value_domain = match &full_domain {
-                                            Domain::Nullable(NullableDomain { value, .. }) => {
-                                                value.as_deref()?
-                                            }
-                                            domain => domain,
-                                        };
-                                        let (full_min, full_max) = full_value_domain.to_minmax();
-                                        if full_min.is_null() || full_max.is_null() {
-                                            return None;
-                                        }
-
-                                        let mut builder = ColumnBuilder::with_capacity(
-                                            &call.return_type,
-                                            boundaries.len(),
-                                        );
-
-                                        for (index, value) in col.iter().enumerate() {
-                                            if ctx.has_error(index) {
-                                                let fallback =
-                                                    if index == 0 { &full_min } else { &full_max };
-                                                builder.push(fallback.as_ref());
-                                            } else {
-                                                builder.push(value);
-                                            }
-                                        }
-                                        builder.build().domain()
-                                    } else {
-                                        result.as_column().unwrap().domain()
-                                    };
-                                    Some(d)
-                                }
-                            }
-                        }
+                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => self
+                            .calculate_monotonicity_domain(
+                                &call.return_type,
+                                args_expr[0].as_ref().data_type(),
+                                domains.first().unwrap(),
+                                &call.generics,
+                                eval.as_ref(),
+                            ),
                         (FunctionDomain::MayThrow, _) => None,
                         (FunctionDomain::Full, _) => Some(Domain::full(&call.return_type)),
                         (FunctionDomain::Domain(domain), _) => Some(domain),
