@@ -294,32 +294,42 @@ pub struct BloomIndexResult {
 /// A lowercase Unicode ngram window bounded by `gram_size` characters.
 struct UnicodeNgramWindow {
     char_widths: VecDeque<u8>,
-    text: String,
+    bytes: VecDeque<u8>,
 }
 
 impl UnicodeNgramWindow {
     fn new() -> Self {
         Self {
             char_widths: VecDeque::new(),
-            text: String::new(),
+            bytes: VecDeque::new(),
         }
     }
 
     fn clear(&mut self) {
         self.char_widths.clear();
-        self.text.clear();
+        self.bytes.clear();
     }
 
     fn push(&mut self, c: char, gram_size: usize) -> Option<&str> {
         if self.char_widths.len() == gram_size {
-            let width = self.char_widths.pop_front().unwrap() as usize;
-            self.text.drain(..width);
+            let width = self.char_widths.pop_front().unwrap();
+            for _ in 0..width {
+                self.bytes.pop_front();
+            }
         }
 
-        self.char_widths.push_back(c.len_utf8() as u8);
-        self.text.push(c);
+        let mut encoded = [0; 4];
+        let encoded = c.encode_utf8(&mut encoded).as_bytes();
+        self.char_widths.push_back(encoded.len() as u8);
+        self.bytes.extend(encoded);
 
-        (self.char_widths.len() == gram_size).then_some(self.text.as_str())
+        if self.char_widths.len() < gram_size {
+            return None;
+        }
+
+        let bytes = self.bytes.make_contiguous();
+        // The window contains only complete UTF-8 encodings.
+        Some(unsafe { std::str::from_utf8_unchecked(bytes) })
     }
 }
 
@@ -1773,18 +1783,18 @@ mod tests {
             }
         }
         let char_capacity = window.char_widths.capacity();
-        let text_capacity = window.text.capacity();
+        let byte_capacity = window.bytes.capacity();
 
         for c in "İ界𐐀".chars().cycle().take(100_000) {
             for c in c.to_lowercase() {
                 window.push(c, GRAM_SIZE);
             }
             assert!(window.char_widths.len() <= GRAM_SIZE);
-            assert!(window.text.len() <= GRAM_SIZE * 4);
+            assert!(window.bytes.len() <= GRAM_SIZE * 4);
         }
 
         assert_eq!(window.char_widths.capacity(), char_capacity);
-        assert_eq!(window.text.capacity(), text_capacity);
+        assert_eq!(window.bytes.capacity(), byte_capacity);
     }
 
     #[test]
