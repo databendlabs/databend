@@ -63,10 +63,10 @@ impl SharedTable {
         table_context: &ShareTableContext,
         provider_info: TableInfo,
     ) -> Result<Arc<dyn Table>> {
-        let provider_storage = provider_info
-            .meta
+        let provider_storage = table_context
             .storage_params
             .clone()
+            .or_else(|| provider_info.meta.storage_params.clone())
             .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
         let execution_storage = resolve_share_storage_params(
             &Tenant::new_literal(&table_context.binding.provider_tenant),
@@ -147,10 +147,10 @@ impl SharedTable {
             ));
         }
 
-        let provider_storage = current_meta
-            .data
+        let provider_storage = current
             .storage_params
             .clone()
+            .or_else(|| current_meta.data.storage_params.clone())
             .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
         let current_storage = resolve_share_storage_params(
             &Tenant::new_literal(&self.share_context.binding.provider_tenant),

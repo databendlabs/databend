@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
@@ -152,6 +153,11 @@ pub struct ShareTableContext {
     pub provider_table: String,
     pub provider_table_id: u64,
     pub connection: String,
+    /// Provider storage location without credentials.
+    ///
+    /// `None` indicates a grant written before provider locations were
+    /// persisted and retains the legacy local-config fallback.
+    pub storage_params: Option<StorageParams>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -169,6 +175,9 @@ pub struct ShareGrantTable {
     pub table: String,
     pub table_id: u64,
     pub table_meta_seq: u64,
+    /// Provider storage location. The manager removes credentials before
+    /// persisting it in the share grant.
+    pub storage_params: StorageParams,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -672,6 +681,7 @@ impl ShareMgr {
                 }
                 meta.tables.insert(grant.table_id, DataShareTableGrant {
                     shared_on: Utc::now(),
+                    storage_params: Some(grant.storage_params.without_credentials()),
                 });
                 Ok(())
             })
@@ -1008,6 +1018,10 @@ impl ShareMgr {
             provider_table: table_name.into(),
             provider_table_id: table_id,
             connection,
+            storage_params: meta
+                .tables
+                .get(&table_id)
+                .and_then(|grant| grant.storage_params.clone()),
         })
     }
 
@@ -1255,6 +1269,7 @@ mod tests {
     use databend_common_meta_app::schema::TableIdToName;
     use databend_common_meta_app::schema::TableMeta;
     use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+    use databend_common_meta_app::storage::StorageS3Config;
     use databend_common_meta_store::MetaStore;
     use databend_meta_runtime::DatabendRuntime;
 
@@ -1324,6 +1339,7 @@ mod tests {
             table: table.to_string(),
             table_id,
             table_meta_seq: seq(&table_meta),
+            storage_params: StorageParams::default(),
         }
     }
 
@@ -1714,17 +1730,49 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn meta_share_is_visible_from_another_manager() {
+    async fn provider_storage_location_is_visible_without_credentials_from_another_manager() {
         let (store, first) = manager().await;
         let binding = create_granted_share(&first).await;
-        let second = ShareMgr::create(Arc::new(store));
+        let provider = tenant("provider");
+        let provider_storage = StorageParams::S3(StorageS3Config {
+            endpoint_url: "http://192.168.1.100:9001".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "v-wubx".to_string(),
+            root: "t0807".to_string(),
+            access_key_id: "provider-key".to_string(),
+            secret_access_key: "provider-secret".to_string(),
+            ..Default::default()
+        });
+        first
+            .grant_table(
+                &provider,
+                "sales",
+                ShareGrantTable {
+                    storage_params: provider_storage,
+                    ..table_grant(&first, "db", 11, "orders", 101).await
+                },
+                "share_conn".to_string(),
+            )
+            .await
+            .unwrap();
 
+        let second = ShareMgr::create(Arc::new(store));
         let table = second
             .resolve_shared_table(&tenant("consumer"), &binding, "orders")
             .await
             .unwrap();
         assert_eq!(101, table.provider_table_id);
         assert_eq!("share_conn", table.connection);
+
+        let StorageParams::S3(storage) = table.storage_params.unwrap() else {
+            unreachable!("provider S3 location must remain S3");
+        };
+        assert_eq!("http://192.168.1.100:9001", storage.endpoint_url);
+        assert_eq!("us-east-1", storage.region);
+        assert_eq!("v-wubx", storage.bucket);
+        assert_eq!("t0807", storage.root);
+        assert!(storage.access_key_id.is_empty());
+        assert!(storage.secret_access_key.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]

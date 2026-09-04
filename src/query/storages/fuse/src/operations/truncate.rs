@@ -95,6 +95,7 @@ impl FuseTable {
                 prev_snapshot_id,
                 None,
                 table_meta_timestamps,
+                false,
             )
         })
     }
