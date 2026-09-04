@@ -306,6 +306,9 @@ pub struct CandidateScore {
     /// Distinct segments the selected blocks come from. Each extra segment adds
     /// metadata read and commit work that raw rewrite bytes do not capture.
     pub touched_segment_count: usize,
+    /// Depth gate this candidate was probed against. Ranking uses it to tier
+    /// candidates by how far above the gate their worst hotspot sits.
+    pub depth_threshold: f64,
 }
 
 impl CandidateScore {
@@ -321,6 +324,31 @@ impl CandidateScore {
     /// rewrite bytes alone do not express. Kept well below a typical block so
     /// it only breaks ties between otherwise comparable candidates.
     const SEGMENT_COST_BYTES: usize = 4 * 1024 * 1024;
+    /// Multiple of `depth_threshold` at or above which a hotspot is treated as
+    /// tail work that must be drained before shallower rewrites, regardless of
+    /// how good their benefit density looks. Matches the mature gate used by
+    /// `passes_depth_gate`, so tiering agrees with admission.
+    const TAIL_DEPTH_GATE_FACTOR: f64 = 2.0;
+
+    /// Rank tier for tail protection. Lower sorts first.
+    ///
+    /// Benefit density alone leaves the deepest hotspots behind: a mid-depth
+    /// candidate that rewrites fewer bytes per removed depth keeps outranking
+    /// them, so a full FINAL can end with a worse p95/p99 than v1 even while
+    /// average depth improves. Tiering by how far the worst hotspot sits above
+    /// the depth gate drains the tail first and only then optimizes density.
+    pub fn depth_tier(&self) -> u8 {
+        if self.depth_threshold <= 0.0 {
+            return 1;
+        }
+        let tail_gate =
+            (Self::TAIL_DEPTH_GATE_FACTOR * self.depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
+        if (self.max_depth as f64) >= tail_gate {
+            0
+        } else {
+            1
+        }
+    }
 
     pub fn bytes_per_depth_gain(&self) -> f64 {
         if self.estimated_depth_gain == 0 {
@@ -386,15 +414,22 @@ impl CandidateScore {
     /// Compare scores by the experimental benefit-density order.
     ///
     /// Ordering, highest priority first:
-    /// 1. candidates filling at least `MIN_FILL_RATIO` of a task slot,
-    /// 2. fill-adjusted gain density,
-    /// 3. total estimated depth gain,
-    /// 4. less fragmented rewrites,
-    /// 5. larger rewrites.
+    /// 1. deeper-than-gate hotspots, so the tail drains before shallow work,
+    /// 2. candidates filling at least `MIN_FILL_RATIO` of a task slot,
+    /// 3. fill-adjusted gain density,
+    /// 4. total estimated depth gain,
+    /// 5. less fragmented rewrites,
+    /// 6. larger rewrites.
+    ///
+    /// Tiering by depth comes first because density is a ratio: a mid-depth
+    /// candidate with a good bytes-per-gain ratio otherwise keeps outranking the
+    /// worst hotspots, which leaves p95/p99 worse at the end of a full FINAL
+    /// even when average depth improves.
     pub fn cmp_desc_v2(&self, other: &Self) -> cmp::Ordering {
         other
-            .is_underfilled()
-            .cmp(&self.is_underfilled())
+            .depth_tier()
+            .cmp(&self.depth_tier())
+            .then_with(|| other.is_underfilled().cmp(&self.is_underfilled()))
             .then_with(|| {
                 self.fill_adjusted_gain_density()
                     .partial_cmp(&other.fill_adjusted_gain_density())
@@ -544,6 +579,8 @@ mod tests {
         segment_score(bytes, threshold, gain, blocks, 1)
     }
 
+    /// Score with depth tiering disabled, so a test exercises only the fill and
+    /// density order. `depth_threshold = 0` puts every candidate in one tier.
     fn segment_score(
         bytes: usize,
         threshold: usize,
@@ -559,6 +596,27 @@ mod tests {
             estimated_depth_gain: gain,
             task_threshold_bytes: threshold,
             touched_segment_count: segments,
+            depth_threshold: 0.0,
+        }
+    }
+
+    /// Score carrying a real depth gate, for the tail-protection order.
+    fn tiered_score(
+        bytes: usize,
+        threshold: usize,
+        gain: u64,
+        max_depth: usize,
+        depth_threshold: f64,
+    ) -> CandidateScore {
+        CandidateScore {
+            selected_total_bytes: bytes,
+            selected_block_count: max_depth,
+            max_depth,
+            average_depth: max_depth as f64,
+            estimated_depth_gain: gain,
+            task_threshold_bytes: threshold,
+            touched_segment_count: 1,
+            depth_threshold,
         }
     }
 
@@ -609,6 +667,41 @@ mod tests {
 
         assert!(compact.effective_cost_bytes() < scattered.effective_cost_bytes());
         assert_eq!(compact.cmp_desc_v2(&scattered), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_v2_drains_deep_tail_before_better_density() {
+        // The shallow candidate has strictly better density and fills the slot,
+        // so without tiering it wins. The deep one sits at the mature gate and
+        // is the tail work that leaves p95/p99 worse if it keeps losing.
+        let deep = tiered_score(400 * MIB, 1024 * MIB, 100, 32, 16.0);
+        let shallow = tiered_score(1000 * MIB, 1024 * MIB, 900, 8, 16.0);
+
+        assert_eq!(deep.depth_tier(), 0);
+        assert_eq!(shallow.depth_tier(), 1);
+        assert!(shallow.fill_adjusted_gain_density() > deep.fill_adjusted_gain_density());
+        assert_eq!(deep.cmp_desc_v2(&shallow), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_v2_ranks_by_density_inside_one_depth_tier() {
+        // Tiering must not flatten the density order it wraps: two candidates on
+        // the same side of the gate still compare by fill-adjusted density.
+        let a = tiered_score(1000 * MIB, 1024 * MIB, 900, 32, 16.0);
+        let b = tiered_score(1000 * MIB, 1024 * MIB, 300, 32, 16.0);
+
+        assert_eq!(a.depth_tier(), b.depth_tier());
+        assert_eq!(a.cmp_desc_v2(&b), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_depth_tier_gate_tracks_configured_threshold() {
+        // The gate is relative, so a table with a lower depth setting treats a
+        // shallower hotspot as tail work.
+        assert_eq!(tiered_score(MIB, MIB, 1, 8, 4.0).depth_tier(), 0);
+        assert_eq!(tiered_score(MIB, MIB, 1, 7, 4.0).depth_tier(), 1);
+        // Capped at MAX_RECLUSTER_DEPTH so a high setting cannot disable tiering.
+        assert_eq!(tiered_score(MIB, MIB, 1, 32, 64.0).depth_tier(), 0);
     }
 
     #[test]

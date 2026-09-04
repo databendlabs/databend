@@ -210,6 +210,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 task_threshold_bytes: properties.memory_threshold,
                 // Filled in by `task_candidate`, which groups blocks by segment.
                 touched_segment_count: 0,
+                depth_threshold: properties.depth_threshold,
             };
             candidates.push(task_candidate(group, score, &task_indices, blocks));
         };
@@ -240,6 +241,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 estimated_depth_gain,
                 task_threshold_bytes: properties.memory_threshold,
                 touched_segment_count,
+                depth_threshold: properties.depth_threshold,
             };
             plans.push(CandidatePlan {
                 peak_pos,
