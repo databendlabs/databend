@@ -1,0 +1,67 @@
+statement ok
+DROP DATABASE IF EXISTS vacuum2_flashback_live_chain
+
+statement ok
+CREATE DATABASE vacuum2_flashback_live_chain
+
+# Zero time retention makes blocks use their snapshot time as the object-key cutoff. Keeping four
+# snapshots is deliberately larger than the post-flashback live chain, but smaller than the number
+# of files across both branches.
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+CREATE TABLE vacuum2_flashback_live_chain.t(c INT) DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP = 4
+
+# A owns the block that must remain live after flashback.
+statement ok
+INSERT INTO vacuum2_flashback_live_chain.t VALUES (1)
+
+statement ok
+SET VARIABLE first_snapshot_id = (
+    SELECT snapshot_id
+    FROM fuse_snapshot('vacuum2_flashback_live_chain', 't')
+    WHERE row_count = 1
+    LIMIT 1
+)
+
+# B drops A's block, and C makes B provably committed to the old list+prev optimization.
+statement ok
+TRUNCATE TABLE vacuum2_flashback_live_chain.t
+
+statement ok
+INSERT INTO vacuum2_flashback_live_chain.t VALUES (2)
+
+statement ok
+ALTER TABLE vacuum2_flashback_live_chain.t FLASHBACK TO (SNAPSHOT => $first_snapshot_id)
+
+# The live chain is A-D-E (three snapshots), while the snapshot directory is A-B-C-D-E.
+statement ok
+INSERT INTO vacuum2_flashback_live_chain.t VALUES (4)
+
+statement ok
+INSERT INTO vacuum2_flashback_live_chain.t VALUES (5)
+
+# Before the fix, keeping four directory entries selects C as the anchor and B as the GC root.
+# Since B is the truncate snapshot and does not protect A's block, Vacuum2 deletes live data.
+# With the flashback barrier, snapshot counting follows A-D-E and stops without vacuuming.
+statement ok
+SELECT * FROM fuse_vacuum2('vacuum2_flashback_live_chain', 't', false) ignore_result
+
+query I
+SELECT c FROM vacuum2_flashback_live_chain.t ORDER BY c
+----
+1
+4
+5
+
+query I
+SELECT count(*) FROM fuse_snapshot('vacuum2_flashback_live_chain', 't')
+----
+3
+
+statement ok
+UNSET data_retention_time_in_days
+
+statement ok
+DROP DATABASE vacuum2_flashback_live_chain

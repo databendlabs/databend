@@ -3729,7 +3729,7 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
-                        time: small_ts,
+                        time: Some(small_ts),
                     }),
                 };
                 let result = mt
@@ -3742,9 +3742,57 @@ impl SchemaApiTestSuite {
                 let table = util.get_table().await.unwrap();
                 assert_eq!(table.meta.comment, "lvt no set");
 
+                // A legacy snapshot has no timestamp. It is valid only while LVT is still unset.
+                let mut legacy_table_meta = table.meta.clone();
+                legacy_table_meta.comment = "legacy lvt no set".to_string();
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table.ident.seq),
+                    new_table_meta: legacy_table_meta,
+                    base_snapshot_location: None,
+                    lvt_check: Some(TableLvtCheck {
+                        tenant: tenant.clone(),
+                        time: None,
+                    }),
+                };
+                mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    ..Default::default()
+                })
+                .await?
+                .unwrap();
+
+                let table = util.get_table().await.unwrap();
+                assert_eq!(table.meta.comment, "legacy lvt no set");
+
                 let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
                 mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
                     .await?;
+
+                // Once LVT exists, a legacy snapshot without a timestamp cannot prove visibility.
+                let table = util.get_table().await.unwrap();
+                let mut legacy_table_meta = table.meta.clone();
+                legacy_table_meta.comment = "legacy lvt guard should fail".to_string();
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table.ident.seq),
+                    new_table_meta: legacy_table_meta,
+                    base_snapshot_location: None,
+                    lvt_check: Some(TableLvtCheck {
+                        tenant: tenant.clone(),
+                        time: None,
+                    }),
+                };
+                let result = mt
+                    .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await;
+                assert!(matches!(
+                    result,
+                    Err(KVAppError::AppError(AppError::TableSnapshotExpired(_)))
+                ));
 
                 // LVT is smaller.
                 let mut new_table_meta = table.meta.clone();
@@ -3756,7 +3804,7 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
-                        time: small_ts,
+                        time: Some(small_ts),
                     }),
                 };
                 let result = mt
@@ -3778,7 +3826,7 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
-                        time: big_time,
+                        time: Some(big_time),
                     }),
                 };
                 mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {

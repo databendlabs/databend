@@ -15,6 +15,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::SecondsFormat;
+use chrono::Utc;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -22,11 +25,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::table::OPT_KEY_VACUUM2_FLASHBACK_BARRIER;
 
 use crate::FuseTable;
 use crate::io::SnapshotsIO;
@@ -50,8 +55,46 @@ impl FuseTable {
             return Ok(());
         }
 
-        // 2. prepare table meta which being reverted to
-        let table_meta_to_be_committed = table_reverting_to.table_info.meta.clone();
+        // 2. prepare table meta which being reverted to. Record a monotonic barrier covering
+        // the abandoned committed branch. Vacuum2 must not infer a GC root from listed
+        // snapshots while that barrier is active.
+        let target_snapshot = table_reverting_to
+            .read_table_snapshot()
+            .await?
+            .ok_or_else(|| ErrorCode::Internal("flashback target has no snapshot"))?;
+        let target_timestamp = target_snapshot.timestamp;
+        let current_snapshot = self
+            .read_table_snapshot()
+            .await?
+            .ok_or_else(|| ErrorCode::Internal("table being flashed back has no snapshot"))?;
+        let existing_barrier = self
+            .table_info
+            .meta
+            .options
+            .get(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
+            .map(|value| {
+                DateTime::parse_from_rfc3339(value)
+                    .map(|v| v.with_timezone(&Utc))
+                    .map_err(|e| {
+                        ErrorCode::TableOptionInvalid(format!(
+                            "invalid {} value '{}': {}",
+                            OPT_KEY_VACUUM2_FLASHBACK_BARRIER, value, e
+                        ))
+                    })
+            })
+            .transpose()?;
+        let barrier = existing_barrier
+            .into_iter()
+            .chain(current_snapshot.timestamp)
+            .chain([Utc::now()])
+            .max()
+            .unwrap();
+
+        let mut table_meta_to_be_committed = table_reverting_to.table_info.meta.clone();
+        table_meta_to_be_committed.options.insert(
+            OPT_KEY_VACUUM2_FLASHBACK_BARRIER.to_owned(),
+            barrier.to_rfc3339_opts(SecondsFormat::Millis, true),
+        );
 
         // 3. prepare the request
         //  using the CURRENT version as the base table version
@@ -64,7 +107,10 @@ impl FuseTable {
             seq: MatchSeq::Exact(base_version),
             new_table_meta: table_meta_to_be_committed.clone(),
             base_snapshot_location: self.snapshot_loc(),
-            lvt_check: None,
+            lvt_check: Some(TableLvtCheck {
+                tenant: tenant.clone(),
+                time: target_timestamp,
+            }),
         };
 
         // 4. let's roll

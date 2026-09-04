@@ -774,10 +774,28 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
+    /// Advances LVT only if its KV sequence still matches the value observed
+    /// before vacuum selected a GC root.
+    async fn set_table_lvt_with_seq(
+        &self,
+        _name_ident: &LeastVisibleTimeIdent,
+        _value: &LeastVisibleTime,
+        _expected_seq: u64,
+    ) -> Result<Option<LeastVisibleTime>> {
+        unimplemented!()
+    }
+
     async fn get_table_lvt(
         &self,
         _name_ident: &LeastVisibleTimeIdent,
     ) -> Result<Option<LeastVisibleTime>> {
+        unimplemented!()
+    }
+
+    async fn get_table_lvt_with_seq(
+        &self,
+        _name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
         unimplemented!()
     }
 

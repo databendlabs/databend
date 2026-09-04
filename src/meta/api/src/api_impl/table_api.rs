@@ -1410,29 +1410,33 @@ where
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
 
-            // Add LVT check if provided
+            // Add LVT check if provided. A successful flashback also writes the
+            // current value back so the LVT KV sequence acts as its generation
+            // fence against vacuum selections that are already in progress.
             if let Some(check) = req.lvt_check.as_ref() {
                 let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
                 let res = self.get_pb(&lvt_ident).await?;
                 let (seq, current_lvt) = match res {
-                    Some(v) => (v.seq, Some(v.data)),
-                    None => (0, None),
+                    Some(v) => (v.seq, v.data),
+                    None => (0, LeastVisibleTime::default()),
                 };
-                if let Some(current_lvt) = current_lvt {
-                    if current_lvt.time > check.time {
-                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
-                            TableSnapshotExpired::new(
-                                req.table_id,
-                                format!(
-                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
-                                    check.time, current_lvt.time
-                                ),
+                let expired = match check.time {
+                    Some(snapshot_time) => current_lvt.time > snapshot_time,
+                    None => current_lvt.time > LeastVisibleTime::default().time,
+                };
+                if expired {
+                    return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                        TableSnapshotExpired::new(
+                            req.table_id,
+                            format!(
+                                "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                check.time, current_lvt.time
                             ),
-                        )));
-                    }
+                        ),
+                    )));
                 }
-                // no other one has updated LVT since we read it
                 txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
+                txn.if_then.push(txn_put_pb(&lvt_ident, &current_lvt));
             }
 
             txn.if_then.push(txn_put_pb(&tbid, &new_table_meta));
@@ -1612,6 +1616,33 @@ where
         }
 
         if mismatched_tbs.is_empty() {
+            // The table version may still match while an LVT condition caused the
+            // transaction to fail. Re-read it so flashback reports an expiration
+            // instead of an unrelated generic transaction error.
+            for (req, _) in &update_table_metas {
+                let Some(check) = req.lvt_check.as_ref() else {
+                    continue;
+                };
+                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
+                if let Some(current_lvt) = self.get_pb(&lvt_ident).await?.map(|v| v.data) {
+                    let expired = match check.time {
+                        Some(snapshot_time) => current_lvt.time > snapshot_time,
+                        None => current_lvt.time > LeastVisibleTime::default().time,
+                    };
+                    if expired {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                req.table_id,
+                                format!(
+                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                    check.time, current_lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                }
+            }
+
             if !insert_if_not_exists_table_ids.is_empty() {
                 // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files
                 Err(KVAppError::AppError(AppError::from(
@@ -2193,6 +2224,38 @@ where
         return Ok(transition.unwrap().result.into_value().unwrap_or_default());
     }
 
+    /// Advances LVT only if its KV sequence still matches the value observed
+    /// before vacuum selected a GC root.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn set_table_lvt_with_seq(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+        expected_seq: u64,
+    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
+        debug!(req :? =(&name_ident, &value, expected_seq); "TableApi: {}", func_name!());
+
+        let current = self.get_pb(name_ident).await?;
+        let current_seq = current.seq();
+        if current_seq != expected_seq {
+            return Ok(None);
+        }
+
+        let current_lvt = current.map(|v| v.data).unwrap_or_default();
+        let result = if current_lvt.time < value.time {
+            value.clone()
+        } else {
+            current_lvt
+        };
+
+        let txn = TxnRequest::new(vec![txn_cond_eq_seq(name_ident, expected_seq)], vec![
+            txn_put_pb(name_ident, &result),
+        ]);
+        let (succ, _) = send_txn(self, txn).await?;
+        Ok(succ.then_some(result))
+    }
+
     #[logcall::logcall]
     #[fastrace::trace]
     async fn get_table_lvt(
@@ -2202,6 +2265,16 @@ where
         debug!(req :? =(&name_ident); "TableApi: {}", func_name!());
         let res = self.get_pb(name_ident).await?;
         Ok(res.map(|v| v.data))
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_table_lvt_with_seq(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<SeqV<LeastVisibleTime>>, KVAppError> {
+        debug!(req :? =(&name_ident); "TableApi: {}", func_name!());
+        Ok(self.get_pb(name_ident).await?)
     }
 }
 

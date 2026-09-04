@@ -1169,11 +1169,31 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.set_table_lvt(name_ident, value).await?)
     }
 
+    async fn set_table_lvt_with_seq(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+        expected_seq: u64,
+    ) -> Result<Option<LeastVisibleTime>> {
+        Ok(self
+            .ctx
+            .meta
+            .set_table_lvt_with_seq(name_ident, value, expected_seq)
+            .await?)
+    }
+
     async fn get_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
     ) -> Result<Option<LeastVisibleTime>> {
         Ok(self.ctx.meta.get_table_lvt(name_ident).await?)
+    }
+
+    async fn get_table_lvt_with_seq(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
+        Ok(self.ctx.meta.get_table_lvt_with_seq(name_ident).await?)
     }
 
     #[async_backtrace::framed]

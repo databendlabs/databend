@@ -29,6 +29,9 @@ pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+/// Timestamp barrier that forces Vacuum2 to select its GC root from the live snapshot chain
+/// after a table has been flashed back.
+pub const OPT_KEY_VACUUM2_FLASHBACK_BARRIER: &str = "vacuum2_flashback_barrier";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
     "materialized_view_source_snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
@@ -135,6 +138,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_VACUUM2_FLASHBACK_BARRIER);
     r
 });
 
@@ -153,6 +157,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_VACUUM2_FLASHBACK_BARRIER);
     r
 });
 

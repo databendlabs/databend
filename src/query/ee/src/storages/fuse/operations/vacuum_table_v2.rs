@@ -16,6 +16,7 @@
 databend_common_tracing::register_module_tag!("[FUSE-VACUUM2]");
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -26,17 +27,21 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::table::OPT_KEY_VACUUM2_FLASHBACK_BARRIER;
 use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
 use opendal::Operator;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
@@ -98,6 +103,8 @@ struct GcRootSnapshotCtx {
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
     snapshots_to_gc: Vec<String>,
+    clear_flashback_barrier: bool,
+    table_seq: u64,
 }
 
 #[async_backtrace::framed]
@@ -123,6 +130,8 @@ pub async fn do_vacuum2(
         gc_root_meta_ts,
         protected_segments,
         snapshots_to_gc,
+        clear_flashback_barrier,
+        table_seq,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
@@ -303,6 +312,27 @@ pub async fn do_vacuum2(
         start.elapsed(),
         slice_summary(&removed_files),
     ));
+
+    if clear_flashback_barrier {
+        let mut options = HashMap::new();
+        options.insert(OPT_KEY_VACUUM2_FLASHBACK_BARRIER.to_owned(), None);
+        let req = UpsertTableOptionReq {
+            table_id: fuse_table.get_id(),
+            seq: MatchSeq::Exact(table_seq),
+            options,
+        };
+        if let Err(err) = catalog
+            .upsert_table_option(&ctx.get_tenant(), table_info.database_name()?, req)
+            .await
+        {
+            // A concurrent update, especially another flashback, must retain its newer barrier.
+            // Keeping the option merely makes a later vacuum use the conservative path again.
+            warn!(
+                "Failed to clear flashback barrier for table {} after vacuum: {}",
+                table_info.desc, err
+            );
+        }
+    }
 
     Ok(removed_files)
 }
@@ -594,6 +624,8 @@ async fn vacuum_base_snapshot_phase(
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
         snapshots_to_gc: selection.snapshots_to_gc,
+        clear_flashback_barrier: selection.clear_flashback_barrier,
+        table_seq: selection.table_seq,
     }))
 }
 
