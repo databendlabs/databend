@@ -22,6 +22,7 @@ use crate::optimizer::optimizers::operator::filter::remove_trivial_type_cast;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
 
@@ -172,5 +173,15 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
             }
         }
         func.refresh_return_type()
+    }
+
+    fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+        for argument in &mut lambda.args {
+            let mut visitor = EquivalentConstantsVisitorInner::default()
+                .eq_constants(self.eq_constants.clone())
+                .left_visit_order(self.left_visit_order);
+            visitor.visit(argument)?;
+        }
+        lambda.refresh_return_type()
     }
 }
