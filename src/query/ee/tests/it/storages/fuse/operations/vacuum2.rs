@@ -373,6 +373,73 @@ async fn test_vacuum2_rejects_transaction_whose_blocks_were_collected() -> anyho
     Ok(())
 }
 
+/// Model the critical interleaving: vacuum observes the LVT sequence, flashback commits and
+/// touches LVT, then the stale vacuum tries to publish the GC root selected before flashback.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_flashback_fences_in_progress_vacuum_with_lvt_sequence() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.create_default_database().await?;
+    let db_name = fixture.default_db_name();
+    let tbl_name = "t_flashback_vacuum_lvt_fence";
+    fixture
+        .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {db_name}.{tbl_name} values (1)"))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let table_id = fuse.get_id();
+    let target = fuse.read_table_snapshot().await?.unwrap();
+    let lvt_ident = LeastVisibleTimeIdent::new(ctx.get_tenant(), table_id);
+
+    // Vacuum starts before flashback and observes a missing LVT key (sequence 0).
+    let observed_lvt_seq = catalog
+        .get_table_lvt_with_seq(&lvt_ident)
+        .await?
+        .map(|v| v.seq)
+        .unwrap_or(0);
+    assert_eq!(observed_lvt_seq, 0);
+
+    fixture
+        .execute_command(&format!("insert into {db_name}.{tbl_name} values (2)"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {db_name}.{tbl_name} flashback to (snapshot => '{}')",
+            target.snapshot_id.simple()
+        ))
+        .await?;
+
+    // Flashback writes LVT in the same transaction as TableMeta, changing only its KV sequence.
+    let touched_lvt = catalog
+        .get_table_lvt_with_seq(&lvt_ident)
+        .await?
+        .expect("flashback must create or touch LVT");
+    assert!(touched_lvt.seq > observed_lvt_seq);
+    assert_eq!(touched_lvt.data, LeastVisibleTime::default());
+
+    let stale_gc_root_time = target.timestamp.unwrap();
+    let published = catalog
+        .set_table_lvt_with_seq(
+            &lvt_ident,
+            &LeastVisibleTime::new(stale_gc_root_time),
+            observed_lvt_seq,
+        )
+        .await?;
+    assert!(
+        published.is_none(),
+        "vacuum must not publish an LVT using the sequence observed before flashback"
+    );
+
+    Ok(())
+}
+
 /// Flashback and its LVT validation must be one metadata transaction, otherwise a concurrent
 /// vacuum can make the target snapshot unsafe between validation and commit.
 #[tokio::test(flavor = "multi_thread")]

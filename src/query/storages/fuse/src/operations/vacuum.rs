@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Location;
@@ -403,6 +404,31 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         respect_flash_back: bool,
     ) -> Result<Option<SnapshotGcSelection>> {
+        // Observe the fence before refreshing the table head. A flashback that
+        // commits before or during refresh changes this sequence, while refresh
+        // ensures selection never starts from a stale pre-flashback head.
+        let catalog = ctx.get_default_catalog()?;
+        let lvt_ident = LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id());
+        let observed_lvt = catalog.get_table_lvt_with_seq(&lvt_ident).await?;
+        let refreshed = self.refresh(ctx.as_ref()).await?;
+        let refreshed_fuse = FuseTable::try_from_table(refreshed.as_ref())?;
+        refreshed_fuse
+            .prepare_snapshot_gc_selection_with_lvt(
+                ctx,
+                respect_flash_back,
+                lvt_ident,
+                observed_lvt,
+            )
+            .await
+    }
+
+    async fn prepare_snapshot_gc_selection_with_lvt(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        respect_flash_back: bool,
+        lvt_ident: LeastVisibleTimeIdent,
+        observed_lvt: Option<SeqV<LeastVisibleTime>>,
+    ) -> Result<Option<SnapshotGcSelection>> {
         let Some(latest_snapshot) = self.read_table_snapshot().await? else {
             info!(
                 "Table {} has no snapshot, stopping vacuum",
@@ -414,9 +440,12 @@ impl FuseTable {
         let start = std::time::Instant::now();
         let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
         let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
+        let catalog = ctx.get_default_catalog()?;
+        let observed_lvt_seq = observed_lvt.as_ref().map(|v| v.seq).unwrap_or(0);
+        let observed_lvt_value = observed_lvt.map(|v| v.data).unwrap_or_default();
 
         let mut is_vacuum_all = false;
-        let mut need_update_lvt = false;
+        let mut lvt_to_publish = None;
         let mut live_chain_gc_root = None;
         let flashback_barrier = self
             .table_info
@@ -449,12 +478,20 @@ impl FuseTable {
                 // A zero retention period indicates that we should vacuum all the historical snapshots
                 is_vacuum_all = retention_period.is_zero();
 
-                let Some(lvt) = self
-                    .set_lvt(latest_snapshot, ctx.as_ref(), retention_period)
-                    .await?
-                else {
+                let Some(latest_ts) = latest_snapshot.timestamp else {
+                    info!("Latest snapshot has no timestamp, stopping vacuum");
                     return Ok(None);
                 };
+                if !is_uuid_v7(&latest_snapshot.snapshot_id) {
+                    info!(
+                        "Latest snapshot is not v7, stopping vacuum: {:?}",
+                        latest_snapshot.snapshot_id
+                    );
+                    return Ok(None);
+                }
+                let lvt_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
+                let lvt = std::cmp::max(observed_lvt_value.time, lvt_candidate);
+                lvt_to_publish = Some(LeastVisibleTime::new(lvt));
 
                 if must_follow_live_chain {
                     let latest_location = self.snapshot_loc().unwrap();
@@ -521,7 +558,6 @@ impl FuseTable {
                         .meta_location_generator()
                         .gen_snapshot_location(&root.snapshot_id, root.format_version)?;
                     live_chain_gc_root = Some(root_path.clone());
-                    need_update_lvt = true;
                     self.list_files_until_prefix(
                         snapshot_location_prefix,
                         &root_path,
@@ -549,7 +585,6 @@ impl FuseTable {
                         // as gc root, this flag will be propagated to the select_gc_root func later.
                         is_vacuum_all = true;
                     }
-                    need_update_lvt = true;
 
                     // When selecting the GC root later, the last snapshot in `snapshots` (after truncation)
                     // is the candidate, but its commit status is uncertain, so its previous snapshot is used
@@ -587,13 +622,24 @@ impl FuseTable {
                 .is_some_and(|timestamp| timestamp > barrier + ASSUMPTION_MAX_TXN_DURATION)
         });
 
-        if need_update_lvt {
-            let cat = ctx.get_default_catalog()?;
-            cat.set_table_lvt(
-                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                &LeastVisibleTime::new(selection.gc_root.timestamp.unwrap()),
+        let lvt_to_publish = lvt_to_publish.unwrap_or_else(|| {
+            LeastVisibleTime::new(
+                selection
+                    .gc_root
+                    .timestamp
+                    .expect("v7 GC root has timestamp"),
             )
-            .await?;
+        });
+        if catalog
+            .set_table_lvt_with_seq(&lvt_ident, &lvt_to_publish, observed_lvt_seq)
+            .await?
+            .is_none()
+        {
+            info!(
+                "LVT changed while selecting gc_root for table {}, stop vacuuming",
+                self.table_info.desc
+            );
+            return Ok(None);
         }
 
         ctx.set_status_info(&format!(
@@ -714,37 +760,6 @@ impl FuseTable {
                 Ok(None)
             }
         }
-    }
-
-    /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
-    ///
-    /// Return `None` means we stop vacuuming, but don't want to report error to user.
-    pub async fn set_lvt(
-        &self,
-        latest_snapshot: Arc<TableSnapshot>,
-        ctx: &dyn TableContext,
-        retention_period: TimeDelta,
-    ) -> Result<Option<DateTime<Utc>>> {
-        if !is_uuid_v7(&latest_snapshot.snapshot_id) {
-            info!(
-                "Latest snapshot is not v7, stopping vacuum: {:?}",
-                latest_snapshot.snapshot_id
-            );
-            return Ok(None);
-        }
-        let catalog = ctx.get_default_catalog()?;
-        // safe to unwrap, as we have checked the version is v4
-        let latest_ts = latest_snapshot.timestamp.unwrap();
-        let lvt_point_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
-
-        let lvt_point = catalog
-            .set_table_lvt(
-                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                &LeastVisibleTime::new(lvt_point_candidate),
-            )
-            .await?
-            .time;
-        Ok(Some(lvt_point))
     }
 }
 

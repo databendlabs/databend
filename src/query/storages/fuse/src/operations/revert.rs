@@ -62,16 +62,11 @@ impl FuseTable {
             .read_table_snapshot()
             .await?
             .ok_or_else(|| ErrorCode::Internal("flashback target has no snapshot"))?;
-        let target_timestamp = target_snapshot
-            .timestamp
-            .ok_or_else(|| ErrorCode::Internal("flashback target snapshot has no timestamp"))?;
+        let target_timestamp = target_snapshot.timestamp;
         let current_snapshot = self
             .read_table_snapshot()
             .await?
             .ok_or_else(|| ErrorCode::Internal("table being flashed back has no snapshot"))?;
-        let current_timestamp = current_snapshot
-            .timestamp
-            .ok_or_else(|| ErrorCode::Internal("current snapshot has no timestamp"))?;
         let existing_barrier = self
             .table_info
             .meta
@@ -90,7 +85,8 @@ impl FuseTable {
             .transpose()?;
         let barrier = existing_barrier
             .into_iter()
-            .chain([current_timestamp, Utc::now()])
+            .chain(current_snapshot.timestamp)
+            .chain([Utc::now()])
             .max()
             .unwrap();
 
