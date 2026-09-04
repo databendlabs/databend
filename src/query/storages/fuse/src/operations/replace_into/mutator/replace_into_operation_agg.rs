@@ -50,6 +50,7 @@ use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::try_stat_ranges_disjoint;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -625,9 +626,13 @@ impl AggregationContext {
         if let Some(stats) = column_stats {
             let max = stats.max();
             let min = stats.min();
-            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
-                || // coincide overlap
-                (max == key_max && min == key_min)
+            // A metadata-only decimal precision widening leaves persisted bounds tagged with the
+            // previous `DecimalSize`. Raw comparison would collapse mixed sizes to `Equal` and
+            // could drop a block that really does overlap, so when the ranges cannot be compared
+            // assume they overlap.
+            try_stat_ranges_disjoint(key_min, key_max, min, max)
+                .map(|disjoint| !disjoint)
+                .unwrap_or(true)
         } else {
             // if column range index does not exist, assume overlapped
             true
@@ -794,6 +799,8 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
 
@@ -1003,5 +1010,66 @@ mod tests {
         assert!(overlap);
 
         Ok(())
+    }
+    fn decimal_scalar(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    // A metadata-only decimal precision widening leaves the persisted range index tagged with the
+    // previous `DecimalSize`. Raw comparison collapses that to `Equal`, so a block that cannot
+    // hold the key still looks overlapping and gets read for nothing.
+    #[test]
+    fn test_check_overlapped_by_stats_across_widened_precision() {
+        // Persisted block range [1.00, 2.00] at the old precision.
+        let stats = ColumnStatistics::new(
+            decimal_scalar(100, 10, 2),
+            decimal_scalar(200, 10, 2),
+            0,
+            0,
+            None,
+        );
+
+        // Incoming keys [7.00, 8.00] at the current precision cannot be in that block.
+        assert!(!AggregationContext::check_overlapped_by_stats(
+            Some(&stats),
+            &decimal_scalar(700, 15, 2),
+            &decimal_scalar(800, 15, 2),
+        ));
+
+        // Keys straddling the block range must still be treated as overlapping.
+        assert!(AggregationContext::check_overlapped_by_stats(
+            Some(&stats),
+            &decimal_scalar(150, 15, 2),
+            &decimal_scalar(800, 15, 2),
+        ));
+
+        // Touching at a boundary counts as overlapping.
+        assert!(AggregationContext::check_overlapped_by_stats(
+            Some(&stats),
+            &decimal_scalar(200, 15, 2),
+            &decimal_scalar(800, 15, 2),
+        ));
+    }
+
+    // A scale change is not a widening, so the ranges cannot be compared and the block must be
+    // assumed to overlap rather than skipped.
+    #[test]
+    fn test_check_overlapped_by_stats_assumes_overlap_when_incomparable() {
+        let stats = ColumnStatistics::new(
+            decimal_scalar(100, 10, 4),
+            decimal_scalar(200, 10, 4),
+            0,
+            0,
+            None,
+        );
+
+        assert!(AggregationContext::check_overlapped_by_stats(
+            Some(&stats),
+            &decimal_scalar(700, 15, 2),
+            &decimal_scalar(800, 15, 2),
+        ));
     }
 }

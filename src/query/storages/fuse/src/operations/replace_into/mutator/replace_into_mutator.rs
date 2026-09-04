@@ -43,6 +43,7 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::try_cmp_stat_scalars;
 use log::info;
 
 use crate::operations::replace_into::meta::DeletionByColumn;
@@ -158,7 +159,15 @@ impl ReplaceIntoMutator {
                 let value = column.row_scalar(row_idx)?;
                 let stats = column_stats.get(&field.table_field.column_id);
                 if let Some(stats) = stats {
-                    should_keep = !(value < stats.min().as_ref() || value > stats.max().as_ref());
+                    // A metadata-only decimal precision widening leaves the persisted range index
+                    // tagged with the previous `DecimalSize` while incoming rows carry the current
+                    // one. Raw comparison collapses that to `Equal`, which would silently keep
+                    // every row; an inconclusive comparison must keep the row (it may conflict).
+                    let below_min =
+                        try_cmp_stat_scalars(&value, &stats.min().as_ref()) == Some(Ordering::Less);
+                    let above_max = try_cmp_stat_scalars(&value, &stats.max().as_ref())
+                        == Some(Ordering::Greater);
+                    should_keep = !(below_min || above_max);
                     if !should_keep {
                         // if one column outsides the table level range, no need to check other columns
                         break;

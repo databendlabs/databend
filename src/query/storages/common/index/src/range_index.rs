@@ -33,6 +33,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
@@ -48,6 +49,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
+use databend_storages_common_table_meta::meta::retag_stat_scalar;
 use geo::Point;
 use geo::Rect;
 
@@ -248,6 +250,16 @@ impl RangeIndex {
     }
 }
 
+/// The decimal size persisted statistics must be retagged to before use, if any.
+///
+/// Only decimal columns need this; every other type is already comparable as persisted.
+fn target_decimal_size(data_type: &DataType) -> Option<DecimalSize> {
+    match data_type.remove_nullable() {
+        DataType::Decimal(size) => Some(size),
+        _ => None,
+    }
+}
+
 pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataType) -> Domain {
     if stats.len() != data_type.num_leaf_columns() {
         return Domain::full(data_type);
@@ -299,8 +311,23 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
         DataType::Vector(_) => Domain::full(data_type),
         _ => {
             let stat = stats[0];
-            let min = stat.min();
-            let max = stat.max();
+            // A metadata-only decimal precision widening leaves persisted bounds tagged with the
+            // previous `DecimalSize`, so retag them to the current schema before building a
+            // domain. Bounds that cannot be retagged did not come from such a widening, and
+            // constructing a domain from them would be unsound, so fall back to the full domain.
+            let (min, max) = match target_decimal_size(data_type) {
+                None => (Cow::Borrowed(stat.min()), Cow::Borrowed(stat.max())),
+                Some(size) => {
+                    let Some(min) = retag_stat_scalar(stat.min(), size) else {
+                        return Domain::full(data_type);
+                    };
+                    let Some(max) = retag_stat_scalar(stat.max(), size) else {
+                        return Domain::full(data_type);
+                    };
+                    (Cow::Owned(min), Cow::Owned(max))
+                }
+            };
+            let (min, max) = (min.as_ref(), max.as_ref());
 
             with_number_mapped_type!(|NUM_TYPE| match data_type {
                 DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -322,9 +349,6 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                     max: DateType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
                 DataType::Decimal(size) => {
-                    debug_assert_eq!(*size, min.as_decimal().unwrap().size());
-                    debug_assert_eq!(*size, max.as_decimal().unwrap().size());
-
                     let domain = match min.as_decimal().unwrap() {
                         DecimalScalar::Decimal64(_, _) => {
                             let domain = SimpleDomain {

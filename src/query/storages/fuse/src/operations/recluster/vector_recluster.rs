@@ -25,6 +25,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::VectorColumnStatistics;
+use databend_storages_common_table_meta::meta::try_cmp_stat_scalars;
 use indexmap::IndexSet;
 use log::debug;
 
@@ -570,8 +571,10 @@ fn scalar_le(
     left: &databend_common_expression::Scalar,
     right: &databend_common_expression::Scalar,
 ) -> bool {
+    // An inconclusive comparison must not rule out overlap, so `None` counts as "possibly less
+    // or equal". This is the conservative direction for the overlap check above.
     matches!(
-        left.partial_cmp(right),
+        try_cmp_stat_scalars(&left.as_ref(), &right.as_ref()),
         None | Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
     )
 }

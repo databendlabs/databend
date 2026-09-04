@@ -15,6 +15,7 @@
 // Logs from this module will show up as "[FUSE-PARTITIONS] ...".
 databend_common_tracing::register_module_tag!("[FUSE-PARTITIONS]");
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -79,6 +80,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::NGRAM_FI
 use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUNT;
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
+use databend_storages_common_table_meta::meta::try_cmp_stat_scalars;
 use databend_storages_common_table_meta::table::ChangeType;
 use itertools::Itertools;
 use log::info;
@@ -1305,31 +1307,38 @@ impl FuseTable {
                 in_memory_size: 0,
                 distinct_of_values: None,
             };
-            if top_k.asc {
-                block_metas.sort_by(|a, b| {
-                    let a =
-                        a.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    let b =
-                        b.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
-                });
-            } else {
-                block_metas.sort_by(|a, b| {
-                    let a =
-                        a.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    let b =
-                        b.1.col_stats
-                            .get(&top_k.field.column_id)
-                            .unwrap_or(&default_stats);
-                    (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
-                });
-            }
+            // A metadata-only decimal precision widening leaves persisted bounds tagged with the
+            // previous `DecimalSize`. Comparing mixed sizes collapses to `Ordering::Equal`, which
+            // would silently leave the blocks unsorted, so compare through the statistics-aware
+            // helper and treat an incomparable pair as a tie.
+            let compare = |a: &ColumnStatistics, b: &ColumnStatistics| {
+                let (primary, secondary) = if top_k.asc {
+                    (
+                        try_cmp_stat_scalars(&a.min().as_ref(), &b.min().as_ref()),
+                        try_cmp_stat_scalars(&a.max().as_ref(), &b.max().as_ref()),
+                    )
+                } else {
+                    (
+                        try_cmp_stat_scalars(&b.max().as_ref(), &a.max().as_ref()),
+                        try_cmp_stat_scalars(&b.min().as_ref(), &a.min().as_ref()),
+                    )
+                };
+                match primary {
+                    Some(Ordering::Equal) | None => secondary.unwrap_or(Ordering::Equal),
+                    Some(ordering) => ordering,
+                }
+            };
+            block_metas.sort_by(|a, b| {
+                let a =
+                    a.1.col_stats
+                        .get(&top_k.field.column_id)
+                        .unwrap_or(&default_stats);
+                let b =
+                    b.1.col_stats
+                        .get(&top_k.field.column_id)
+                        .unwrap_or(&default_stats);
+                compare(a, b)
+            });
         }
 
         let (mut statistics, mut partitions) = match &push_downs {
@@ -1568,6 +1577,13 @@ impl FuseTable {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+    use databend_storages_common_table_meta::meta::Compression;
+
     use super::*;
 
     fn segment_location(segment_idx: usize, location: &str, snapshot_loc: &str) -> SegmentLocation {
@@ -1594,5 +1610,111 @@ mod tests {
         let mut changed_segment = original.clone();
         changed_segment[1].location = ("segment-c".to_string(), 1);
         assert!(!same_segment_locations(&original, &changed_segment));
+    }
+    fn decimal_size(precision: u8, scale: u8) -> DecimalSize {
+        DecimalSize::new(precision, scale).unwrap()
+    }
+
+    fn decimal_scalar(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            decimal_size(precision, scale),
+        ))
+    }
+
+    fn decimal_block(
+        column_id: ColumnId,
+        location: &str,
+        min: (i64, u8),
+        max: (i64, u8),
+    ) -> (Option<BlockMetaIndex>, Arc<BlockMeta>) {
+        let col_stats = HashMap::from([(
+            column_id,
+            ColumnStatistics::new(
+                decimal_scalar(min.0, min.1, 2),
+                decimal_scalar(max.0, max.1, 2),
+                0,
+                0,
+                None,
+            ),
+        )]);
+        let meta = BlockMeta::new(
+            1,
+            1,
+            1,
+            col_stats,
+            HashMap::new(),
+            None,
+            (location.to_string(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Lz4Raw,
+            None,
+        );
+        (None, Arc::new(meta))
+    }
+
+    fn sorted_locations(
+        top_k: TopK,
+        blocks: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+    ) -> Vec<String> {
+        let (_, partitions) = FuseTable::to_partitions(
+            None,
+            blocks,
+            &ColumnNodes {
+                column_nodes: vec![],
+            },
+            Some((top_k, Scalar::Null)),
+            None,
+        );
+        partitions
+            .partitions
+            .iter()
+            .map(|part| FuseBlockPartInfo::from_part(part).unwrap().location.clone())
+            .collect()
+    }
+
+    fn decimal_top_k(column_id: ColumnId, asc: bool) -> TopK {
+        TopK {
+            limit: 10,
+            field: TableField::new_from_column_id(
+                "c",
+                TableDataType::Decimal(DecimalDataType::from(decimal_size(15, 2))),
+                column_id,
+            ),
+            asc,
+            leaf_id: 0,
+        }
+    }
+
+    // Blocks are ordered by their statistics so the most promising ones are read first. After a
+    // metadata-only precision widening the older blocks keep the previous `DecimalSize`, and raw
+    // comparison collapses to `Ordering::Equal`, leaving the order untouched.
+    #[test]
+    fn test_to_partitions_sorts_across_widened_decimal_precision() {
+        let column_id = 7;
+        // Deliberately out of order, with the smallest value on the stale precision.
+        let blocks = vec![
+            decimal_block(column_id, "block-mid", (5000, 15), (6000, 15)),
+            decimal_block(column_id, "block-hi", (9000, 15), (9500, 15)),
+            decimal_block(column_id, "block-lo", (100, 10), (200, 10)),
+        ];
+
+        assert_eq!(
+            sorted_locations(decimal_top_k(column_id, true), &blocks),
+            vec!["block-lo", "block-mid", "block-hi"]
+        );
+        assert_eq!(
+            sorted_locations(decimal_top_k(column_id, false), &blocks),
+            vec!["block-hi", "block-mid", "block-lo"]
+        );
     }
 }
