@@ -28,7 +28,7 @@ use databend_common_expression::types::VectorColumnBuilder;
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -302,7 +302,7 @@ impl FieldJsonAstDecoder {
             }
             Value::Number(number) => match number.as_i64() {
                 Some(n) => {
-                    column.push(clamp_date(n));
+                    column.push(check_date(n).map_err(ErrorCode::BadArguments)?);
                     Ok(())
                 }
                 None => Err(ErrorCode::BadArguments("Incorrect date value")),
@@ -324,7 +324,7 @@ impl FieldJsonAstDecoder {
             }
             Value::Number(number) => match number.as_i64() {
                 Some(n) => {
-                    let n = int64_to_timestamp(n);
+                    let n = int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?;
                     column.push(n);
                     Ok(())
                 }

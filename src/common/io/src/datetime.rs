@@ -58,6 +58,19 @@ pub fn parse_four_digits(bytes: &[u8]) -> Option<i32> {
     }
 }
 
+/// Calendar text and explicit date-part constructors keep the four-digit year
+/// contract. The wider SQL value range is headroom for arithmetic and timezone
+/// conversion, not an extension of accepted calendar input.
+pub fn check_input_year(year: i32) -> Result<()> {
+    if (1..=9999).contains(&year) {
+        Ok(())
+    } else {
+        Err(ErrorCode::BadArguments(
+            "Invalid date: input year must be in [1, 9999]",
+        ))
+    }
+}
+
 /// Parse ISO-8601-like timestamps: `YYYY-MM-DD HH:MM:SS[.ffffff][Z|(+|-)hh[:mm]]`.
 /// Returning `None` indicates that the input is not in the supported format.
 #[inline(always)]

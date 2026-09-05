@@ -21,12 +21,12 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::utils::serialize::uniform_date;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_timezone::Tz;
@@ -52,9 +52,10 @@ pub fn calc_date_to_timestamp(val: i32, tz: &Tz) -> std::result::Result<i64, Str
     let month = local_date.month() as u8;
     let day = local_date.day() as u8;
 
-    fast_utc_from_local(tz, year, month, day, 0, 0, 0, 0).ok_or_else(|| {
+    let timestamp = fast_utc_from_local(tz, year, month, day, 0, 0, 0, 0).ok_or_else(|| {
         format!("Failed to convert date {local_date} to a timestamp in timezone {tz}")
-    })
+    })?;
+    check_timestamp(timestamp)
 }
 
 fn normalize_time_precision(raw: i64) -> Result<u8, String> {
@@ -118,28 +119,10 @@ pub(super) fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    // NOTE: `to_timestamp`/`to_timestamp_tz`/`to_date` keep their pre-existing global
-    // monotonicity flags; they carry the same time-zone caveat as the calendar
-    // projections and should eventually migrate to `monotonicity_check` too.
-    for name in &["to_timestamp", "to_timestamp_tz", "to_date"] {
-        registry
-            .properties
-            .insert(name.to_string(), FunctionProperty::default().monotonicity());
-    }
-
-    registry.properties.insert(
-        "to_string".to_string(),
-        FunctionProperty::default()
-            .monotonicity_type(DataType::Timestamp)
-            .monotonicity_type(DataType::Timestamp.wrap_nullable()),
-    );
-
-    registry.properties.insert(
-        "to_string".to_string(),
-        FunctionProperty::default()
-            .monotonicity_type(DataType::Date)
-            .monotonicity_type(DataType::Date.wrap_nullable()),
-    );
+    // Conversion domains are calculated by their overloads. A global monotonic
+    // flag is unsound for extended-year strings, AUTO numeric units, timezone
+    // transitions, and conversions which can fail at the SQL range boundaries.
+    // In particular, byte ordering of "+10000" and "9999" is reversed.
 
     registry.register_0_arg_core::<TimestampType, _>(
         "now",

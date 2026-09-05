@@ -199,10 +199,8 @@ select to_interval('1200000000 months');
 100000000 years
 
 skipif mysql
-query ?
+statement error 1006
 select to_interval('120000000000 months');
-----
-00:00:00
 
 skipif mysql
 query ?

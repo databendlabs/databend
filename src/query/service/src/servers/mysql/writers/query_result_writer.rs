@@ -143,8 +143,9 @@ fn compute_length(data_type: &DataType) -> u32 {
             NumberDataType::Float64 => 22,
         },
         DataType::Decimal(size) => size.precision() as u32,
-        DataType::Date => 10,
-        DataType::Timestamp => 26,
+        // Include the leading '+' and fifth year digit of extended ISO dates.
+        DataType::Date => 12,
+        DataType::Timestamp => 28,
         DataType::Interval => 64,
         DataType::Geometry | DataType::Geography => 1024,
         DataType::Vector(_) => 1024,

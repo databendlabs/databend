@@ -5106,7 +5106,7 @@ Functions overloads:
 7 try_to_timestamp(Date NULL) :: Timestamp NULL
 8 try_to_timestamp(Int64) :: Timestamp NULL
 9 try_to_timestamp(Int64 NULL) :: Timestamp NULL
-10 try_to_timestamp(Int64, UInt64) :: Timestamp
+10 try_to_timestamp(Int64, UInt64) :: Timestamp NULL
 11 try_to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
 0 try_to_timestamp_tz(Variant) :: TimestampTz NULL
 1 try_to_timestamp_tz(Variant NULL) :: TimestampTz NULL

@@ -18,17 +18,16 @@ use chrono::format::StrftimeItems;
 use chrono::format::parse_and_remainder;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
+use databend_common_io::datetime::check_input_year;
 use databend_common_timezone::Tz;
 use databend_common_timezone::fast_utc_from_local;
 use databend_common_timezone::offset_seconds_at;
 
-use crate::types::date::clamp_date;
+use crate::types::date::check_date;
 use crate::types::date::string_to_date;
 use crate::types::timestamp::MICROS_PER_MILLI;
 use crate::types::timestamp::MICROS_PER_SEC;
-use crate::types::timestamp::TIMESTAMP_MAX;
-use crate::types::timestamp::TIMESTAMP_MIN;
-use crate::types::timestamp::clamp_timestamp;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::string_to_timestamp;
 use crate::types::timestamp_tz::string_to_timestamp_tz;
 
@@ -65,34 +64,22 @@ const AUTO_TS_FORMATS: &[&str] = &[
     "%a %b %d %H:%M:%S %z %Y",
 ];
 
-/// Check if timestamp is within range, and return the timestamp in micros.
+/// Preserve numeric seconds/milliseconds/microseconds detection, but reject
+/// values outside the SQL UTC range rather than replacing them with the minimum.
 #[inline]
-pub fn int64_to_timestamp(mut n: i64) -> i64 {
-    if -31536000000 < n && n < 31536000000 {
+pub fn int64_to_timestamp(n: i64) -> Result<i64, String> {
+    let micros = if -31536000000 < n && n < 31536000000 {
         n * MICROS_PER_SEC
     } else if -31536000000000 < n && n < 31536000000000 {
         n * MICROS_PER_MILLI
     } else {
-        clamp_timestamp(&mut n);
         n
-    }
-}
-
-/// calc int64 domain to timestamp domain
-#[inline]
-pub fn calc_int64_to_timestamp_domain(n: i64) -> i64 {
-    if -31536000000 < n && n < 31536000000 {
-        n * MICROS_PER_SEC
-    } else if -31536000000000 < n && n < 31536000000000 {
-        n * MICROS_PER_MILLI
-    } else {
-        n.clamp(TIMESTAMP_MIN, TIMESTAMP_MAX)
-    }
+    };
+    check_timestamp(micros)
 }
 
 pub fn parse_epoch_str(val: &str) -> Option<i64> {
-    let n: i64 = val.parse().ok()?;
-    Some(int64_to_timestamp(n))
+    int64_to_timestamp(val.parse().ok()?).ok()
 }
 
 /// Parsed fields; omitted clock fields default to midnight and a missing offset
@@ -117,6 +104,7 @@ impl ParsedDateTime {
         }
 
         let date = parsed.to_naive_date().ok()?;
+        check_input_year(chrono::Datelike::year(&date)).ok()?;
         let hour = match (parsed.hour_div_12(), parsed.hour_mod_12()) {
             (Some(half), Some(hour)) => half * 12 + hour,
             _ => 0,
@@ -187,9 +175,8 @@ pub fn fast_timestamp_from_parsed(parsed: &ParsedDateTime, tz: &Tz) -> Option<i6
 }
 
 pub fn auto_detect_timestamp(val: &str, tz: &Tz) -> Option<i64> {
-    let (mut micros, _) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
-    clamp_timestamp(&mut micros);
-    Some(micros)
+    let (micros, _) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
+    check_timestamp(micros).ok()
 }
 
 pub fn auto_detect_date(val: &str) -> Option<i32> {
@@ -200,15 +187,14 @@ pub fn auto_detect_date(val: &str) -> Option<i32> {
         let Some(date) = parsed.naive_date() else {
             continue;
         };
-        return Some(clamp_date(crate::serialize::uniform_date(date) as i64));
+        return check_date(i64::from(crate::serialize::uniform_date(date))).ok();
     }
     None
 }
 
 pub fn auto_detect_timestamp_tz(val: &str, tz: &Tz) -> Option<timestamp_tz> {
-    let (mut micros, offset) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
-    clamp_timestamp(&mut micros);
-    Some(timestamp_tz::new(micros, offset))
+    let (micros, offset) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
+    Some(timestamp_tz::new(check_timestamp(micros).ok()?, offset))
 }
 
 /// Parse a date string with optional auto-detect fallback.
@@ -220,7 +206,7 @@ pub fn parse_date_with_auto(val: &str, tz: &Tz, enable_auto: bool) -> Result<i32
         Err(e) => {
             if enable_auto {
                 if let Ok(days) = val.parse::<i64>() {
-                    return Ok(clamp_date(days));
+                    return check_date(days).map_err(ErrorCode::BadArguments);
                 }
                 if let Some(days) = auto_detect_date(val) {
                     return Ok(days);
@@ -239,8 +225,7 @@ pub fn parse_timestamp_with_auto(val: &str, tz: &Tz, enable_auto: bool) -> Resul
         Ok(micros) => Ok(micros),
         Err(e) => {
             if enable_auto {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
+                if let Some(micros) = parse_epoch_str(val) {
                     return Ok(micros);
                 }
                 if let Some(micros) = auto_detect_timestamp(val, tz) {
@@ -264,10 +249,9 @@ pub fn parse_timestamp_tz_with_auto(
         Ok(ts_tz) => Ok(ts_tz),
         Err(e) => {
             if enable_auto {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
+                if let Some(micros) = parse_epoch_str(val) {
                     let offset = offset_seconds_at(tz, micros.div_euclid(MICROS_PER_SEC))
-                        .expect("clamped Databend timestamp has a timezone offset");
+                        .expect("validated Databend timestamp has a timezone offset");
                     return Ok(timestamp_tz::new(micros, offset));
                 }
                 if let Some(ts_tz) = auto_detect_timestamp_tz(val, tz) {
