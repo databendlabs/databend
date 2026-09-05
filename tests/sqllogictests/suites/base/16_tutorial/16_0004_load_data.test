@@ -74,7 +74,7 @@ Downtown Loop Rain 3580
 Port Perimeter Overcast 4020
 Airport Connector Clear 3655
 
-# Keep the physical internal-stage path distinct from the parallel Chinese tutorial.
+# Use a distinct internal-stage name to avoid shared storage paths across parallel tests.
 statement ok
 CREATE OR REPLACE STAGE citydrive_ndjson_stage_en
 
