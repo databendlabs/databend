@@ -11,10 +11,8 @@ DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEn
 | 'MEMORY'            | 'MEMORY Storage Engine'           |
 | 'NULL'              | 'NULL Storage Engine'             |
 | 'PAIMON'            | 'PAIMON Storage Engine'           |
-| 'PROXY'             | 'PROXY Storage Engine'            |
 | 'RANDOM'            | 'RANDOM Storage Engine'           |
 | 'STREAM'            | 'STREAM Storage Engine'           |
 | 'VIEW'              | 'VIEW Storage (LOGICAL VIEW)'     |
 +---------------------+-----------------------------------+
-
 

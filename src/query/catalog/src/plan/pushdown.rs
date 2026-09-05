@@ -197,8 +197,6 @@ pub struct PushDownInfo {
     /// Used by table sample
     pub sample: Option<SampleConfig>,
     /// Controls how much pruning work a storage should do while collecting partitions.
-    /// PROXY uses lightweight mode for route estimation and normal mode for the
-    /// selected target that will actually be scanned.
     #[serde(default)]
     pub read_partitions_pruning_mode: ReadPartitionsPruningMode,
     /// Optional secure filters from Row Access Policy, kept separate for display redaction.
