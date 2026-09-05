@@ -1,0 +1,26 @@
+# A large byte threshold must not overflow during ordinary FUSE writes/compaction.
+statement ok
+CREATE OR REPLACE DATABASE block_threshold_overflow
+
+statement ok
+USE block_threshold_overflow
+
+statement ok
+CREATE TABLE t(k INT) CLUSTER BY(k) block_size_threshold=18446744073709551615 file_size=18446744073709551615
+
+statement ok
+INSERT INTO t VALUES (1),(3)
+
+statement ok
+INSERT INTO t VALUES (2),(4)
+
+statement ok
+ALTER TABLE t RECLUSTER FINAL
+
+query II
+SELECT count(*), sum(k) FROM t
+----
+4 10
+
+statement ok
+DROP DATABASE block_threshold_overflow
