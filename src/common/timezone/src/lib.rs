@@ -15,7 +15,7 @@
 //! Timezone conversion helpers.
 //!
 //! Local-to-instant conversion shares one fold/gap policy. Instant-to-local
-//! conversion also supports local year 10000 at the timestamp upper bound.
+//! conversion also supports local years just outside the SQL calendar range.
 
 mod civil;
 mod lut;
@@ -45,7 +45,8 @@ pub fn offset_seconds_at(tz: &Tz, unix_seconds: i64) -> Option<i32> {
     )
 }
 
-/// Manual offset application keeps local year 10000 representable.
+/// Resolve local calendar fields without imposing SQL DATE/TIMESTAMP bounds.
+/// Callers validate the result at SQL type boundaries, not in timezone helpers.
 pub fn local_datetime_at(tz: &Tz, unix_seconds: i64) -> Option<(NaiveDateTime, i32)> {
     let utc = DateTime::<Utc>::from_timestamp(unix_seconds, 0)?;
     let offset = offset_seconds_at(tz, unix_seconds)?;

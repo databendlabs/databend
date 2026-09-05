@@ -32,14 +32,15 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
-use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::LocalTimeResolution;
 use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
+use databend_common_timezone::fast_utc_from_local;
 use databend_common_timezone::local_datetime_at;
 use databend_common_timezone::resolve_local_datetime;
 
@@ -106,17 +107,43 @@ fn register_interval_to_string(registry: &mut FunctionRegistry) {
         .register();
 }
 
+fn checked_interval(months: i128, days: i128, micros: i128) -> Option<months_days_micros> {
+    Some(months_days_micros::new(
+        i32::try_from(months).ok()?,
+        i32::try_from(days).ok()?,
+        i64::try_from(micros).ok()?,
+    ))
+}
+
+fn push_interval(
+    value: Option<months_days_micros>,
+    output: &mut Vec<months_days_micros>,
+    ctx: &mut EvalContext,
+) {
+    match value {
+        Some(value) => output.push(value),
+        None => {
+            ctx.set_error(output.len(), "Invalid date: interval arithmetic overflow");
+            output.push(months_days_micros::default());
+        }
+    }
+}
+
 fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<IntervalType, IntervalType, IntervalType, _, _>(
         "plus",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<IntervalType, IntervalType, IntervalType>(
-            |a, b, output, _| {
-                output.push(months_days_micros::new(
-                    a.months() + b.months(),
-                    a.days() + b.days(),
-                    a.microseconds() + b.microseconds(),
-                ))
+            |a, b, output, ctx| {
+                push_interval(
+                    checked_interval(
+                        i128::from(a.months()) + i128::from(b.months()),
+                        i128::from(a.days()) + i128::from(b.days()),
+                        i128::from(a.microseconds()) + i128::from(b.microseconds()),
+                    ),
+                    output,
+                    ctx,
+                );
             },
         ),
     );
@@ -258,12 +285,16 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
         "minus",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<IntervalType, IntervalType, IntervalType>(
-            |a, b, output, _| {
-                output.push(months_days_micros::new(
-                    a.months() - b.months(),
-                    a.days() - b.days(),
-                    a.microseconds() - b.microseconds(),
-                ));
+            |a, b, output, ctx| {
+                push_interval(
+                    checked_interval(
+                        i128::from(a.months()) - i128::from(b.months()),
+                        i128::from(a.days()) - i128::from(b.days()),
+                        i128::from(a.microseconds()) - i128::from(b.microseconds()),
+                    ),
+                    output,
+                    ctx,
+                );
             },
         ),
     );
@@ -481,26 +512,38 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<Int64Type, IntervalType, IntervalType, _, _>(
         "multiply",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<Int64Type, IntervalType, IntervalType>(|a, b, _ctx| {
-            months_days_micros::new(
-                b.months() * (a as i32),
-                b.days() * (a as i32),
-                b.microseconds() * a,
-            )
-        }),
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<Int64Type, IntervalType, IntervalType>(
+            |a, b, output, ctx| {
+                push_interval(
+                    checked_interval(
+                        i128::from(b.months()) * i128::from(a),
+                        i128::from(b.days()) * i128::from(a),
+                        i128::from(b.microseconds()) * i128::from(a),
+                    ),
+                    output,
+                    ctx,
+                );
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_2_arg::<IntervalType, Int64Type, IntervalType, _, _>(
         "multiply",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<IntervalType, Int64Type, IntervalType>(|b, a, _ctx| {
-            months_days_micros::new(
-                b.months() * (a as i32),
-                b.days() * (a as i32),
-                b.microseconds() * a,
-            )
-        }),
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<IntervalType, Int64Type, IntervalType>(
+            |b, a, output, ctx| {
+                push_interval(
+                    checked_interval(
+                        i128::from(b.months()) * i128::from(a),
+                        i128::from(b.days()) * i128::from(a),
+                        i128::from(b.microseconds()) * i128::from(a),
+                    ),
+                    output,
+                    ctx,
+                );
+            },
+        ),
     );
 }
 
@@ -631,7 +674,6 @@ fn apply_calendar_months(
         components.second,
         components.micro,
         Some(components.offset_seconds),
-        false,
         months_days_micros::new(months, 0, 0),
         timezone,
         true,
@@ -693,7 +735,6 @@ fn apply_interval_to_civil(
     second: u8,
     micro: u32,
     preferred_offset: Option<i32>,
-    _enforce_date_range: bool,
     interval: months_days_micros,
     timezone: &Tz,
     is_addition: bool,
@@ -709,9 +750,6 @@ fn apply_interval_to_civil(
     let source_year = i64::from(year);
     let source_last_day = days_in_month(source_year, month);
     let year = month_index.div_euclid(12);
-    if months != 0 && !(-9999..=9999).contains(&year) {
-        return Err("Invalid date: calendar arithmetic is out of range".to_string());
-    }
     let month = (month_index.rem_euclid(12) + 1) as u8;
     let target_last_day = days_in_month(year, month);
     let day = if keep_end_of_month && day == source_last_day {
@@ -749,7 +787,7 @@ fn apply_interval_to_civil(
     if let Some(offset_seconds) = preferred_offset {
         let candidate = civil_micros - i128::from(offset_seconds) * 1_000_000;
         if let Ok(candidate) = i64::try_from(candidate) {
-            let components = components_from_timestamp(candidate, timezone);
+            let components = checked_components_from_timestamp(candidate, timezone)?;
             if components.year == year
                 && components.month == month
                 && components.day == day
@@ -819,9 +857,10 @@ pub(crate) fn civil_date_from_days(days: i128) -> (i128, u8, u8) {
     (year, month as u8, day as u8)
 }
 
-pub(crate) fn ensure_timestamp_range(mut timestamp: i64) -> std::result::Result<i64, String> {
-    databend_common_expression::types::timestamp::clamp_timestamp(&mut timestamp);
-    Ok(timestamp)
+pub(crate) fn ensure_timestamp_range(timestamp: i64) -> std::result::Result<i64, String> {
+    // Check the resulting UTC instant, not intermediate local calendar fields.
+    // Local year 11001 can still map to a legal UTC instant in a positive offset.
+    check_timestamp(timestamp)
 }
 
 fn ensure_timestamp_tz_range(timestamp: i64) -> std::result::Result<i64, String> {
@@ -836,7 +875,11 @@ fn eval_date_interval(
     is_addition: bool,
 ) {
     let date = date_from_days(date);
-    let result = apply_interval_to_civil(
+    // DATE is midnight in the session zone. Reuse TIMESTAMP arithmetic so
+    // elapsed hours do not become wall-clock hours across a DST transition.
+    // Validate only the final instant; midnight itself can lie just outside it.
+    let timestamp = fast_utc_from_local(
+        &ctx.func_ctx.tz,
         date.year(),
         date.month() as u8,
         date.day() as u8,
@@ -844,14 +887,13 @@ fn eval_date_interval(
         0,
         0,
         0,
-        None,
-        true,
-        interval,
-        &ctx.func_ctx.tz,
-        is_addition,
-        false,
     )
-    .and_then(ensure_timestamp_range);
+    .ok_or_else(|| "Invalid date: cannot resolve local midnight".to_string());
+    let result = timestamp
+        .and_then(|timestamp| {
+            apply_interval_to_timestamp(timestamp, interval, &ctx.func_ctx.tz, is_addition, false)
+        })
+        .and_then(ensure_timestamp_range);
     match result {
         Ok(result) => output.push(result),
         Err(err) => {
@@ -863,14 +905,14 @@ fn eval_date_interval(
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {
     fn register_i64_to_interval<F>(registry: &mut FunctionRegistry, name: &'static str, func: F)
-    where F: Fn(i64, &mut EvalContext) -> months_days_micros + Send + Sync + Copy + 'static {
-        registry
-            .scalar_builder(name)
-            .function()
-            .typed_1_arg::<Int64Type, IntervalType>()
-            .passthrough_nullable()
-            .each_row(func)
-            .register();
+    where F: Fn(i128) -> Option<months_days_micros> + Send + Sync + Copy + 'static {
+        registry.register_passthrough_nullable_1_arg::<Int64Type, IntervalType, _>(
+            name,
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_1_arg::<Int64Type, IntervalType>(move |value, output, ctx| {
+                push_interval(func(i128::from(value)), output, ctx);
+            }),
+        );
     }
 
     fn register_interval_to_i64<F>(registry: &mut FunctionRegistry, name: &'static str, func: F)
@@ -899,45 +941,37 @@ fn register_number_to_interval(registry: &mut FunctionRegistry) {
             .register();
     }
 
-    register_i64_to_interval(registry, "to_centuries", |val, _| {
-        months_days_micros::new((val * 100 * 12) as i32, 0, 0)
+    register_i64_to_interval(registry, "to_centuries", |val| {
+        checked_interval(val * 1200, 0, 0)
     });
-    register_i64_to_interval(registry, "to_days", |val, _| {
-        months_days_micros::new(0, val as i32, 0)
+    register_i64_to_interval(registry, "to_days", |val| checked_interval(0, val, 0));
+    register_i64_to_interval(registry, "to_weeks", |val| checked_interval(0, val * 7, 0));
+    register_i64_to_interval(registry, "to_decades", |val| {
+        checked_interval(val * 120, 0, 0)
     });
-    register_i64_to_interval(registry, "to_weeks", |val, _| {
-        months_days_micros::new(0, (val * 7) as i32, 0)
+    register_i64_to_interval(registry, "to_hours", |val| {
+        checked_interval(0, 0, val * 3_600_000_000)
     });
-    register_i64_to_interval(registry, "to_decades", |val, _| {
-        months_days_micros::new((val * 10 * 12) as i32, 0, 0)
+    register_i64_to_interval(registry, "to_microseconds", |val| {
+        checked_interval(0, 0, val)
     });
-    register_i64_to_interval(registry, "to_hours", |val, _| {
-        months_days_micros::new(0, 0, val * 3600 * 1_000_000)
+    register_i64_to_interval(registry, "to_millennia", |val| {
+        checked_interval(val * 12000, 0, 0)
     });
-    register_i64_to_interval(registry, "to_microseconds", |val, _| {
-        months_days_micros::new(0, 0, val)
+    register_i64_to_interval(registry, "to_milliseconds", |val| {
+        checked_interval(0, 0, val * 1000)
     });
-    register_i64_to_interval(registry, "to_millennia", |val, _| {
-        months_days_micros::new((val * 1000 * 12) as i32, 0, 0)
+    register_i64_to_interval(registry, "to_minutes", |val| {
+        checked_interval(0, 0, val * 60_000_000)
     });
-    register_i64_to_interval(registry, "to_milliseconds", |val, _| {
-        months_days_micros::new(0, 0, val * 1000)
+    register_i64_to_interval(registry, "to_months", |val| checked_interval(val, 0, 0));
+    register_i64_to_interval(registry, "to_quarters", |val| {
+        checked_interval(val * 3, 0, 0)
     });
-    register_i64_to_interval(registry, "to_minutes", |val, _| {
-        months_days_micros::new(0, 0, val * 60 * 1_000_000)
+    register_i64_to_interval(registry, "to_seconds", |val| {
+        checked_interval(0, 0, val * 1_000_000)
     });
-    register_i64_to_interval(registry, "to_months", |val, _| {
-        months_days_micros::new(val as i32, 0, 0)
-    });
-    register_i64_to_interval(registry, "to_quarters", |val, _| {
-        months_days_micros::new((val * 3) as i32, 0, 0)
-    });
-    register_i64_to_interval(registry, "to_seconds", |val, _| {
-        months_days_micros::new(0, 0, val * 1_000_000)
-    });
-    register_i64_to_interval(registry, "to_years", |val, _| {
-        months_days_micros::new((val * 12) as i32, 0, 0)
-    });
+    register_i64_to_interval(registry, "to_years", |val| checked_interval(val * 12, 0, 0));
 
     register_interval_to_i64(registry, "to_year", |val, _| val.months() as i64 / 12);
     register_interval_to_i64(registry, "to_month", |val, _| val.months() as i64 % 12);

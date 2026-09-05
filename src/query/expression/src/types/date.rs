@@ -21,6 +21,7 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
+pub use databend_common_io::datetime::check_input_year;
 use databend_common_timezone::Tz;
 use num_traits::AsPrimitive;
 
@@ -36,14 +37,17 @@ use crate::values::Column;
 use crate::values::Scalar;
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
-/// Minimum valid date, represented by the day offset from 1970-01-01.
+/// Internal SQL DATE bounds, represented as days since 1970-01-01.
+/// Years through 11000 provide headroom for arithmetic and timezone conversion;
+/// calendar text and explicit date-part constructors still accept 0001..=9999.
+/// This keeps the UInt16 year extraction API. Computed extended dates can be
+/// displayed, but their text is not necessarily accepted as calendar input.
 /// 0001-01-01
-pub const DATE_MIN: i32 = -719162;
-/// Maximum valid date, represented by the day offset from 1970-01-01.
-/// 9999-12-31
-pub const DATE_MAX: i32 = 2932896;
+pub const DATE_MIN: i32 = -719_162;
+/// 11000-12-31
+pub const DATE_MAX: i32 = 3_298_504;
 
-/// Converts raw epoch days without applying the SQL range clamp.
+/// Converts internal epoch days. SQL inputs must pass `check_date` first.
 pub fn date_from_days(days: impl AsPrimitive<i64>) -> NaiveDate {
     NaiveDate::from_ymd_opt(1970, 1, 1)
         .expect("epoch date is valid")
@@ -51,14 +55,13 @@ pub fn date_from_days(days: impl AsPrimitive<i64>) -> NaiveDate {
         .expect("date day count is inside the chrono civil range")
 }
 
-/// Check if date is within range.
-/// /// If days is invalid convert to DATE_MIN.
+/// Validate the SQL DATE range without silently changing the value.
 #[inline]
-pub fn clamp_date(days: i64) -> i32 {
-    if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
-        days as i32
+pub fn check_date(days: i64) -> Result<i32, String> {
+    if (i64::from(DATE_MIN)..=i64::from(DATE_MAX)).contains(&days) {
+        Ok(days as i32)
     } else {
-        DATE_MIN
+        Err("Invalid date: date is out of range [0001-01-01, 11000-12-31]".to_string())
     }
 }
 
@@ -157,7 +160,7 @@ pub fn string_to_date(
             if reader.must_eof().is_err() {
                 return Err(ErrorCode::BadArguments("unexpected argument"));
             }
-            Ok(days)
+            check_date(i64::from(days)).map_err(ErrorCode::BadArguments)
         }
         Err(e) => match e.code() {
             ErrorCode::BAD_BYTES => Err(e),

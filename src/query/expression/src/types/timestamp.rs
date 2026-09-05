@@ -24,7 +24,6 @@ use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_timezone::Tz;
-use databend_common_timezone::offset_seconds_at;
 use num_traits::AsPrimitive;
 
 use super::ArgType;
@@ -39,44 +38,45 @@ use crate::values::Column;
 use crate::values::Scalar;
 
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
-/// Minimum valid timestamp `0001-01-01 00:00:00.000000`, represented by the microsecs offset from 1970-01-01.
-pub const TIMESTAMP_MIN: i64 = -62135596800000000;
-/// Maximum valid timestamp `9999-12-31 23:59:59.999999`, represented by the microsecs offset from 1970-01-01.
-pub const TIMESTAMP_MAX: i64 = 253402300799999999;
+/// SQL TIMESTAMP and TIMESTAMP_TZ bounds, in UTC microseconds since 1970-01-01.
+/// Internal range for computed UTC instants: 0001..=11000. Calendar text and
+/// explicit date-part constructors retain 0001..=9999; chrono's wider range is
+/// not exposed as an expanded input contract.
+/// Validate the final UTC instant after timezone resolution: a valid instant may
+/// display in local year 0 or 11001. Converting that local date to SQL DATE must
+/// separately validate DATE_MIN/MAX. Overflow is an error, never a clamp or wrap.
+/// 0001-01-01 00:00:00.000000 UTC
+pub const TIMESTAMP_MIN: i64 = -62_135_596_800_000_000;
+/// 11000-12-31 23:59:59.999999 UTC
+pub const TIMESTAMP_MAX: i64 = 284_990_831_999_999_999;
 
 pub const MICROS_PER_SEC: i64 = 1_000_000;
 pub const MICROS_PER_MILLI: i64 = 1_000;
 
-pub type ZonedTimestamp = DateTime<chrono::FixedOffset>;
+pub type ZonedTimestamp = DateTime<Tz>;
 
-/// Clamps invalid inputs before rendering; positive offsets may reach year 10000.
+/// Render an already validated instant without clamping it to a different value.
+/// Chrono has room for local year 0/11001 at the SQL timestamp boundaries.
 pub fn timestamp_from_micros(micros: impl AsPrimitive<i64>, tz: &Tz) -> ZonedTimestamp {
-    let mut micros = micros.as_();
-    clamp_timestamp(&mut micros);
-
+    let micros = micros.as_();
     let seconds = micros.div_euclid(MICROS_PER_SEC);
     let subsec = micros.rem_euclid(MICROS_PER_SEC) as u32;
-    let offset_seconds =
-        offset_seconds_at(tz, seconds).expect("Databend timestamp has a timezone offset");
-
-    let utc = DateTime::<Utc>::from_timestamp(seconds, subsec * 1_000)
-        .expect("clamped timestamp is inside the chrono range");
-    let offset =
-        chrono::FixedOffset::east_opt(offset_seconds).expect("timezone offsets are within a day");
-
-    utc.with_timezone(&offset)
+    DateTime::<Utc>::from_timestamp(seconds, subsec * 1_000)
+        .expect("validated timestamp is inside the chrono range")
+        .with_timezone(tz)
 }
 
 pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
 
-/// Check if the timestamp value is valid.
-/// If timestamp is invalid convert to TIMESTAMP_MIN.
+/// Validate the final SQL instant, not its local calendar year.
 #[inline]
-pub fn clamp_timestamp(micros: &mut i64) {
-    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
-        *micros = TIMESTAMP_MIN;
+pub fn check_timestamp(micros: i64) -> Result<i64, String> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
+        Ok(micros)
+    } else {
+        Err("Invalid date: timestamp is out of range [0001-01-01, 11000-12-31] UTC".to_string())
     }
 }
 
@@ -201,10 +201,8 @@ pub fn string_to_timestamp(
         Ok(DateTimeResType::Datetime(micros)) => {
             if reader.must_eof().is_err() {
                 Err(ErrorCode::BadArguments("unexpected argument"))
-            } else if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
-                Err(ErrorCode::BadArguments("Timestamp is out of range"))
             } else {
-                Ok(micros)
+                check_timestamp(micros).map_err(ErrorCode::BadArguments)
             }
         }
         Ok(DateTimeResType::Date(_)) => Err(ErrorCode::BadArguments("unexpected argument")),
@@ -220,7 +218,8 @@ pub fn timestamp_to_string(ts: i64, tz: &Tz) -> impl Display {
     timestamp_from_micros(ts, tz).format(TIMESTAMP_FORMAT)
 }
 
-/// Render a Databend timestamp as a microsecond-precision UTC RFC 3339 value.
+/// Render a microsecond-precision UTC timestamp. Years through 9999 use RFC 3339;
+/// extended years use ISO 8601's signed form (for example `+11000`).
 #[inline]
 pub fn timestamp_to_rfc3339_utc(ts: i64) -> String {
     timestamp_from_micros(ts, &Tz::UTC)

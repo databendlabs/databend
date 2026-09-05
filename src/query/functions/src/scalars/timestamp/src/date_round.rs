@@ -15,14 +15,21 @@
 use chrono::Datelike;
 use chrono::NaiveDate as Date;
 use chrono::Weekday;
+use databend_common_expression::Domain;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::date::DATE_MAX;
+use databend_common_expression::types::date::DATE_MIN;
+use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_timezone::Tz;
@@ -67,7 +74,7 @@ fn round_timestamp(ts: i64, tz: &Tz, round: Round) -> Result<i64, String> {
         0,
     )
     .ok_or_else(|| "Invalid date: rounded timestamp is out of range".to_string())?;
-    Ok(timestamp)
+    check_timestamp(timestamp)
 }
 
 trait RoundDate {
@@ -86,12 +93,12 @@ impl DateRounder {
             components.day as u32,
         )
         .ok_or_else(|| "Invalid date: timestamp is out of range".to_string())?;
-        Ok(T::round(&date))
+        check_date(i64::from(T::round(&date)))
     }
 
     fn eval_date<T>(date: i32) -> Result<i32, String>
     where T: RoundDate {
-        Ok(T::round(&date_from_days(date)))
+        check_date(i64::from(T::round(&date_from_days(date))))
     }
 }
 
@@ -233,7 +240,35 @@ fn previous_or_next_date_day(date: &Date, target: Weekday, is_previous: bool) ->
 
     days_diff = if days_diff == 0 { 7 } else { days_diff };
 
-    clamp_date(i64::from(date_to_inner_number(date) + dir * days_diff))
+    date_to_inner_number(date) + dir * days_diff
+}
+
+fn rounding_monotonicity(ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {
+    // Endpoint folding must not suppress an overflow from a rounder. Keep a
+    // full calendar-year margin (including ISO weeks and timezone offsets).
+    let [domain] = args else {
+        return None;
+    };
+    let domain = match domain {
+        Domain::Nullable(domain) => match domain.value.as_deref() {
+            Some(domain) => domain,
+            None => return Some(0),
+        },
+        domain => domain,
+    };
+    let safe = match domain {
+        Domain::Date(d) => d.min >= DATE_MIN + 370 && d.max <= DATE_MAX - 370,
+        Domain::Timestamp(d) => {
+            let margin = 370 * 86_400_000_000;
+            d.min >= TIMESTAMP_MIN + margin && d.max <= TIMESTAMP_MAX - margin
+        }
+        _ => false,
+    };
+    if safe {
+        calendar_monotonicity(ctx, args)
+    } else {
+        None
+    }
 }
 
 pub(super) fn register(registry: &mut FunctionRegistry) {
@@ -250,7 +285,7 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
     ] {
         registry.properties.insert(
             name.to_string(),
-            FunctionProperty::default().monotonicity_check(calendar_monotonicity),
+            FunctionProperty::default().monotonicity_check(rounding_monotonicity),
         );
     }
 
@@ -298,7 +333,7 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "to_start_of_week",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|val, mode, output, ctx| {
             let result = if mode == 0 {
                 DateRounder::eval_date::<ToLastSunday>(val)
@@ -316,7 +351,7 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
     );
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, DateType, _, _>(
         "to_start_of_week",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, DateType>(
             |val, mode, output, ctx| {
                 let result = if mode == 0 {
@@ -339,7 +374,7 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
 fn register_timestamp_round(registry: &mut FunctionRegistry, name: &'static str, round: Round) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _>(
         name,
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<TimestampType, TimestampType>(move |value, output, ctx| {
             match round_timestamp(value, &ctx.func_ctx.tz, round) {
                 Ok(value) => output.push(value),
@@ -356,7 +391,7 @@ fn rounder_functions_helper<T>(registry: &mut FunctionRegistry, name: &str)
 where T: RoundDate {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _>(
         name,
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<DateType, DateType>(|value, output, ctx| {
             match DateRounder::eval_date::<T>(value) {
                 Ok(value) => output.push(value),
@@ -369,7 +404,7 @@ where T: RoundDate {
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _>(
         name,
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|value, output, ctx| {
             match DateRounder::eval_timestamp::<T>(value, &ctx.func_ctx.tz) {
                 Ok(value) => output.push(value),

@@ -96,28 +96,32 @@ SELECT to_timestamp('253402300799', '%s')
 ----
 9999-12-31 23:59:59.000000
 
-statement error 1006
+query T
 SELECT to_timestamp('9999-12-31 23:59:59.999999 -00:01')
+----
++10000-01-01 00:00:59.999999
 
 statement error 1006
 SELECT to_timestamp('0001-01-01 00:00:00.000000 +00:01')
 
-statement error 1006
+query T
 SELECT to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z')
+----
++10000-01-01 00:00:59.999999
 
 statement error 1006
 SELECT to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z')
 
 statement error 1006
-SELECT to_timestamp('253402300800', '%s')
+SELECT to_timestamp('284990832000', '%s')
 
 query BBBBB
 SELECT
-    try_to_timestamp('9999-12-31 23:59:59.999999 -00:01') IS NULL,
+    try_to_timestamp('9999-12-31 23:59:59.999999 -00:01') IS NOT NULL,
     try_to_timestamp('0001-01-01 00:00:00.000000 +00:01') IS NULL,
-    try_to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
+    try_to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NOT NULL,
     try_to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
-    try_to_timestamp('253402300800', '%s') IS NULL
+    try_to_timestamp('284990832000', '%s') IS NULL
 ----
 1	1	1	1	1
 
@@ -126,20 +130,16 @@ SELECT typeof(DATE '9999-12-31' + to_interval('0 day')), DATE '9999-12-31' + to_
 ----
 TIMESTAMP	9999-12-31 00:00:00.000000
 
-query T
+statement error 1006
 SELECT TIMESTAMP '0001-01-01 00:00:00' - to_interval('1 minute')
-----
-0001-01-01 00:00:00.000000
 
 query T
 SELECT TIMESTAMP '9999-12-31 23:59:59.999999' + to_interval('1 microsecond')
 ----
-0001-01-01 00:00:00.000000
++10000-01-01 00:00:00.000000
 
-query T
+statement error 1006
 SELECT DATE '0001-01-01' - to_interval('1 day')
-----
-0001-01-01 00:00:00.000000
 
 statement error 1006
 SELECT TIMESTAMP '1970-01-01 00:00:00' + to_interval('100000000 day')
@@ -153,7 +153,7 @@ SET timezone = 'Asia/Shanghai'
 query TT
 SELECT to_date(to_timestamp(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000'))), try_to_date(to_timestamp(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000')))
 ----
-9999-12-31	9999-12-31
++10000-01-01	+10000-01-01
 
 statement ok
 CREATE OR REPLACE TABLE issue_20416_interval_cases(ts TIMESTAMP, delta VARCHAR, is_subtract BOOLEAN, expected BIGINT)

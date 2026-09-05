@@ -15,12 +15,14 @@
 use std::cmp::Ordering;
 
 use chrono::DateTime;
+use chrono::Datelike;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::datetime::check_input_year;
 use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestamp;
 use databend_common_timezone::LocalTimeResolution;
 use databend_common_timezone::Tz;
@@ -204,6 +206,7 @@ fn build_timestamp_tz_from_components(
         (year, month, day)
     };
 
+    check_input_year(year)?;
     let date = NaiveDate::from_ymd_opt(year, month as u32, day as u32).ok_or_else(|| {
         ErrorCode::BadBytes(format!(
             "Invalid date value {:04}-{:02}-{:02}",
@@ -231,6 +234,7 @@ fn build_timestamp_tz_from_components(
 ///
 /// DST folds and gaps follow the shared timezone policy.
 fn timestamp_tz_from_local(local: &NaiveDateTime, tz: &Tz) -> Result<timestamp_tz> {
+    check_input_year(local.year())?;
     let micro = local.and_utc().timestamp_subsec_micros();
     let resolved = resolve_local_datetime(tz, *local, LocalTimeResolution::Compatible, None)
         .ok_or_else(|| {
@@ -265,6 +269,7 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a Tz>(
 
     for format in PARSE_FORMATS_WITH_OFFSET {
         if let Ok(value) = DateTime::parse_from_str(text, format) {
+            check_input_year(value.year())?;
             let micros = i128::from(value.timestamp()) * 1_000_000
                 + i128::from(value.timestamp_subsec_micros());
             return build_timestamp_tz(micros, value.offset().local_minus_utc());

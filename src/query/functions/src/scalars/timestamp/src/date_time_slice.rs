@@ -151,7 +151,7 @@ fn month_index_to_days(month_index: i128) -> Option<i128> {
     Some(civil_date_to_days(year, month, 1))
 }
 
-// Widened intermediates keep local year 10000 range-checkable.
+// Widened intermediates keep slice boundaries range-checkable before SQL output.
 fn slice_bounds_days(days: i128, spec: SliceSpec) -> Option<(i128, i128)> {
     match spec.part {
         TimePart::Year | TimePart::Quarter | TimePart::Month => {

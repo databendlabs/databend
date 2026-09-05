@@ -506,15 +506,18 @@ fn test_date_domain_overflow(file: &mut impl Write) {
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![100]).into()),
-            ("b", Int64Type::from_data(vec![2932897]).into()),
+            (
+                "b",
+                Int64Type::from_data(vec![i64::from(DATE_MAX) + 1]).into(),
+            ),
         ],
         input_domains: Some(&[
             ("a", Domain::Date(SimpleDomain { min: 100, max: 100 })),
             (
                 "b",
                 Domain::Number(NumberDomain::Int64(SimpleDomain {
-                    min: 2932897,
-                    max: 2932897,
+                    min: i64::from(DATE_MAX) + 1,
+                    max: i64::from(DATE_MAX) + 1,
                 })),
             ),
         ]),
@@ -582,7 +585,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
         strict_eval: true,
     });
 
-    // Date plus: i64 saturating_add actually triggers (DATE_MIN + i64::MIN wraps without saturating)
+    // Date plus: domain includes integer underflow, even though the row is valid.
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![DATE_MIN]).into()),
@@ -608,7 +611,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
         strict_eval: true,
     });
 
-    // Date minus: i64 saturating_sub triggers (DATE_MIN - i64::MAX wraps without saturating)
+    // Date minus: domain includes integer underflow, even though the row is valid.
     run_ast_with_context(file, "a - b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![DATE_MIN]).into()),
@@ -1301,8 +1304,8 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
     for (name, return_type) in [
         // Exact `calc_domain`, guarded by the session time zone.
         ("to_yyyymmdd", DataType::Number(NumberDataType::UInt32)),
-        // `Full` calc_domain: exercises the fold's monotonic end-point path,
-        // which consumes `monotonicity_check`.
+        // MayThrow calc_domain: exercises the fold's safe monotonic end-point
+        // path, which consumes monotonicity_check.
         ("to_start_of_day", DataType::Timestamp),
     ] {
         let expr = check_function(
@@ -1329,7 +1332,14 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
             &st_johns,
             &BUILTIN_FUNCTIONS,
         );
-        assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
+        let expected_domain = if name == "to_start_of_day" {
+            // Rounders can now throw at SQL boundaries. Without a safe
+            // monotonic segment they must retain MayThrow, not just Full.
+            None
+        } else {
+            Some(Domain::full(&return_type))
+        };
+        assert_eq!(domain, expected_domain, "{name}");
 
         // Under a fixed offset the same range is a single segment: the
         // projection collapses to one day and folds to a constant.
