@@ -1,0 +1,274 @@
+# Regression coverage for fixed-width MERGE INTO / REPLACE INTO block mutation workers.
+# Each case is run with max_threads=1 and max_threads=4. Multiple INSERT statements
+# deliberately create multiple segments so the parallel run exercises fan-out workers.
+
+statement ok
+create or replace database mutation_worker_regression
+
+statement ok
+use mutation_worker_regression
+
+# MERGE: partial rewrite, whole-block deletion, untouched block, nullable join keys,
+# cluster statistics regeneration, deterministic logical result, and worker widths.
+
+statement ok
+set max_threads = 1
+
+statement ok
+create or replace table merge_target(id int, value int, marker string) cluster by(id)
+
+statement ok
+insert into merge_target values (1,10,'a'),(2,20,'b'),(3,30,'c')
+
+statement ok
+insert into merge_target values (4,40,'d')
+
+statement ok
+insert into merge_target values (5,50,'e'),(6,60,'f')
+
+statement ok
+insert into merge_target values (NULL,70,'null-target')
+
+statement ok
+create or replace table merge_source(id int, value int, action string)
+
+statement ok
+insert into merge_source values (2,200,'update'),(3,0,'delete'),(4,0,'delete'),(NULL,700,'update')
+
+query II
+merge into merge_target as t using merge_source as s on t.id = s.id when matched and s.action = 'delete' then delete when matched then update set t.value = s.value;
+----
+1 2
+
+query IIT
+select id, value, marker from merge_target order by id nulls last
+----
+1 10 a
+2 200 b
+5 50 e
+6 60 f
+NULL 70 null-target
+
+query TT
+select min, max from clustering_statistics('mutation_worker_regression','merge_target') order by min
+----
+[1] [1]
+[2] [2]
+[5] [6]
+[NULL] [NULL]
+
+statement ok
+set max_threads = 4
+
+statement ok
+create or replace table merge_target(id int, value int, marker string) cluster by(id)
+
+statement ok
+insert into merge_target values (1,10,'a'),(2,20,'b'),(3,30,'c')
+
+statement ok
+insert into merge_target values (4,40,'d')
+
+statement ok
+insert into merge_target values (5,50,'e'),(6,60,'f')
+
+statement ok
+insert into merge_target values (NULL,70,'null-target')
+
+query II
+merge into merge_target as t using merge_source as s on t.id = s.id when matched and s.action = 'delete' then delete when matched then update set t.value = s.value;
+----
+1 2
+
+query IIT
+select id, value, marker from merge_target order by id nulls last
+----
+1 10 a
+2 200 b
+5 50 e
+6 60 f
+NULL 70 null-target
+
+query TT
+select min, max from clustering_statistics('mutation_worker_regression','merge_target') order by min
+----
+[1] [1]
+[2] [2]
+[5] [6]
+[NULL] [NULL]
+
+# MERGE conflict validation remains global even when matching rows reside in
+# different source blocks and block workers are wider than one.
+
+statement ok
+create or replace table merge_conflict_target(id int, value int)
+
+statement ok
+insert into merge_conflict_target values (1,10)
+
+statement ok
+create or replace table merge_conflict_source(id int, value int)
+
+statement ok
+insert into merge_conflict_source values (1,100)
+
+statement ok
+insert into merge_conflict_source values (1,101)
+
+statement error 4001
+merge into merge_conflict_target as t using merge_conflict_source as s on t.id = s.id when matched then update set t.value = s.value
+
+query II
+select * from merge_conflict_target
+----
+1 10
+
+# REPLACE: partial rewrite, whole-block deletion, zero-row deletion after
+# conservative table pruning, nullable keys (NULL never conflicts), bloom
+# pruning, cluster statistics, deterministic ordering, and worker widths.
+
+statement ok
+set max_threads = 1
+
+statement ok
+create or replace table replace_target(id int, value int) cluster by(id) bloom_index_columns='id'
+
+statement ok
+insert into replace_target values (1,10),(2,20),(3,30)
+
+statement ok
+insert into replace_target values (4,40)
+
+statement ok
+insert into replace_target values (5,50),(6,60)
+
+statement ok
+insert into replace_target values (NULL,70)
+
+statement ok
+truncate table system.metrics
+
+statement ok
+replace into replace_target on(id) values (2,200),(4,400),(7,700),(NULL,800)
+
+# Each key component exists in the target block, so range and per-column Bloom
+# pruning cannot discard it, but the composite key itself matches no row.
+statement ok
+create or replace table replace_zero_target(id int, value int, payload int) bloom_index_columns='id,value'
+
+statement ok
+insert into replace_zero_target values (10,100,1),(20,200,2)
+
+statement ok
+replace into replace_zero_target on(id,value) values (10,200,3)
+
+query III
+select * from replace_zero_target order by id, value
+----
+10 100 1
+10 200 3
+20 200 2
+
+# Range pruning must retain this block because 101 is inside [100,102]; its
+# Bloom index can prove that 101 is absent.
+statement ok
+create or replace table replace_bloom_target(id int, payload int) cluster by(id) bloom_index_columns='id'
+
+statement ok
+insert into replace_bloom_target values (100,1),(102,2)
+
+statement ok
+replace into replace_bloom_target on(id) values (101,3)
+
+query II
+select * from replace_bloom_target order by id
+----
+100 1
+101 3
+102 2
+
+query II
+select id, value from replace_target order by id nulls last, value
+----
+1 10
+2 200
+3 30
+4 400
+5 50
+6 60
+7 700
+NULL 70
+NULL 800
+
+query TT
+select min, max from clustering_statistics('mutation_worker_regression','replace_target') order by min
+----
+[1] [3]
+[2] [NULL]
+[5] [6]
+[NULL] [NULL]
+
+query B
+select max(value::uint64 > 0) from system.metrics where metric = 'fuse_replace_into_block_number_write_total'
+----
+1
+
+query B
+select max(value::uint64 > 0) from system.metrics where metric = 'fuse_replace_into_block_number_whole_block_deletion_total'
+----
+1
+
+query B
+select max(value::uint64 > 0) from system.metrics where metric = 'fuse_replace_into_block_number_zero_row_deleted_total'
+----
+1
+
+query B
+select max(value::uint64 > 0) from system.metrics where metric = 'fuse_replace_into_block_number_bloom_pruned_total'
+----
+1
+
+statement ok
+set max_threads = 4
+
+statement ok
+create or replace table replace_target(id int, value int) cluster by(id) bloom_index_columns='id'
+
+statement ok
+insert into replace_target values (1,10),(2,20),(3,30)
+
+statement ok
+insert into replace_target values (4,40)
+
+statement ok
+insert into replace_target values (5,50),(6,60)
+
+statement ok
+insert into replace_target values (NULL,70)
+
+statement ok
+replace into replace_target on(id) values (2,200),(4,400),(7,700),(NULL,800)
+
+query II
+select id, value from replace_target order by id nulls last, value
+----
+1 10
+2 200
+3 30
+4 400
+5 50
+6 60
+7 700
+NULL 70
+NULL 800
+
+query TT
+select min, max from clustering_statistics('mutation_worker_regression','replace_target') order by min
+----
+[1] [3]
+[2] [NULL]
+[5] [6]
+[NULL] [NULL]
+
+statement ok
+drop database mutation_worker_regression

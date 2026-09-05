@@ -23,9 +23,9 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use tokio::sync::Semaphore;
 
 use super::merge_into::MatchedAggregator;
+use super::merge_into::MatchedAggregatorConfig;
 use super::mutation::SegmentIndex;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
@@ -83,7 +83,6 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         cluster_stats_gen: ClusterStatsGenerator,
-        io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
         table_meta_timestamps: TableMetaTimestamps,
@@ -130,14 +129,9 @@ impl FuseTable {
             table_meta_timestamps,
             serialize_hll: true,
         };
-        let aggregator = MatchedAggregator::create(
-            ctx,
-            self,
-            block_builder,
-            io_request_semaphore,
-            segment_locations,
-            target_build_optimization,
-        )?;
+        let config = MatchedAggregatorConfig::try_create(self, block_builder)?;
+        let aggregator =
+            MatchedAggregator::create(config, segment_locations, target_build_optimization);
         Ok(aggregator.into_pipe_item())
     }
 }
