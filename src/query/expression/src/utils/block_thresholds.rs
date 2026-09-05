@@ -57,7 +57,7 @@ impl BlockThresholds {
         BlockThresholds {
             max_rows_per_block,
             min_rows_per_block: Self::min_block_threshold(max_rows_per_block),
-            max_bytes_per_block: bytes_per_block * MAX_BYTES_PER_BLOCK_FACTOR,
+            max_bytes_per_block: bytes_per_block.saturating_mul(MAX_BYTES_PER_BLOCK_FACTOR),
             min_bytes_per_block: Self::min_block_threshold(bytes_per_block),
             max_compressed_per_block,
             min_compressed_per_block: Self::min_block_threshold(max_compressed_per_block),
@@ -74,14 +74,14 @@ impl BlockThresholds {
 
     #[inline]
     pub fn set_bytes_per_block(mut self, bytes_per_block: usize) -> Self {
-        self.max_bytes_per_block = bytes_per_block * MAX_BYTES_PER_BLOCK_FACTOR;
+        self.max_bytes_per_block = bytes_per_block.saturating_mul(MAX_BYTES_PER_BLOCK_FACTOR);
         self.min_bytes_per_block = Self::min_block_threshold(bytes_per_block);
         self
     }
 
     #[inline]
     pub fn min_block_threshold(value: usize) -> usize {
-        (value * 4).div_ceil(5)
+        value - value / 5
     }
 
     #[inline]
@@ -105,9 +105,18 @@ impl BlockThresholds {
         total_compressed: usize,
     ) -> bool {
         total_blocks >= self.block_per_segment
-            && (total_rows >= self.min_rows_per_block * self.block_per_segment
-                || total_bytes >= self.min_bytes_per_block * self.block_per_segment
-                || total_compressed >= self.min_compressed_per_block * self.block_per_segment)
+            && (total_rows
+                >= self
+                    .min_rows_per_block
+                    .saturating_mul(self.block_per_segment)
+                || total_bytes
+                    >= self
+                        .min_bytes_per_block
+                        .saturating_mul(self.block_per_segment)
+                || total_compressed
+                    >= self
+                        .min_compressed_per_block
+                        .saturating_mul(self.block_per_segment))
     }
 
     #[inline]
@@ -117,7 +126,8 @@ impl BlockThresholds {
 
     #[inline]
     pub fn check_for_compact(&self, row_count: usize, block_size: usize) -> bool {
-        row_count < 2 * self.min_rows_per_block && block_size < 2 * self.min_bytes_per_block
+        row_count < self.min_rows_per_block.saturating_mul(2)
+            && block_size < self.min_bytes_per_block.saturating_mul(2)
     }
 
     #[inline]
@@ -129,19 +139,20 @@ impl BlockThresholds {
 
     #[inline]
     pub fn check_too_large(&self, row_count: usize, block_size: usize) -> bool {
-        row_count > 2 * self.min_rows_per_block || block_size > self.max_bytes_per_block
+        row_count > self.min_rows_per_block.saturating_mul(2)
+            || block_size > self.max_bytes_per_block
     }
 
     #[inline]
     pub fn calc_compact_block_num(&self, total_rows: usize, total_bytes: usize) -> usize {
-        let block_num_by_rows = if total_rows >= 2 * self.min_rows_per_block {
+        let block_num_by_rows = if total_rows >= self.min_rows_per_block.saturating_mul(2) {
             (total_rows / self.max_rows_per_block).max(2)
         } else {
             1
         };
 
         let bytes_per_block = self.max_bytes_per_block / MAX_BYTES_PER_BLOCK_FACTOR;
-        let block_num_by_bytes = if total_bytes >= 2 * self.min_bytes_per_block {
+        let block_num_by_bytes = if total_bytes >= self.min_bytes_per_block.saturating_mul(2) {
             (total_bytes / bytes_per_block).max(2)
         } else {
             1
@@ -175,7 +186,7 @@ impl BlockThresholds {
             .div_ceil(MAX_BYTES_PER_BLOCK_FACTOR);
         // Check if the data is compact enough to skip further calculations.
         if self.check_for_compact(total_rows, total_bytes)
-            && total_compressed < 2 * self.min_compressed_per_block
+            && total_compressed < self.min_compressed_per_block.saturating_mul(2)
         {
             return (total_rows, default_bytes_per_block);
         }
@@ -183,8 +194,8 @@ impl BlockThresholds {
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
         let block_num_by_compressed = total_compressed.div_ceil(self.max_compressed_per_block);
 
-        let max_bytes_per_block =
-            default_bytes_per_block + default_bytes_per_block.min(DEFAULT_BLOCK_BUFFER_SIZE);
+        let max_bytes_per_block = default_bytes_per_block
+            .saturating_add(default_bytes_per_block.min(DEFAULT_BLOCK_BUFFER_SIZE));
         let min_block_num_by_bytes = total_bytes.div_ceil(max_bytes_per_block);
 
         // When rows require the most blocks, preserve the row-based sizing decision.
