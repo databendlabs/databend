@@ -20,6 +20,7 @@ use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -65,7 +66,7 @@ impl Operator for Exchange {
         })
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(0, stat_ctx)
     }
 }

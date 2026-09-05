@@ -404,7 +404,11 @@ impl MutationExpression {
             Arc::new(result.input),
         );
 
-        let opt_ctx = OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
+        let opt_ctx = OptimizerContext::new(
+            binder.ctx.clone(),
+            binder.metadata.clone(),
+            binder.ctx.get_function_context()?,
+        );
         let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
         result.input = rewriter.optimize_sync(result.input)?;
 

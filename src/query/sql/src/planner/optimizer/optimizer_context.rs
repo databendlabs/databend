@@ -14,15 +14,19 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_settings::Settings;
 use educe::Educe;
 use parking_lot::RwLock;
 
+use crate::Metadata;
 use crate::MetadataRef;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 
@@ -32,6 +36,7 @@ pub struct OptimizerContext {
     #[educe(Debug(ignore))]
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
+    stat_context: StatContext,
 
     // Optimizer configurations
     enable_distributed_optimization: RwLock<bool>,
@@ -57,7 +62,11 @@ pub struct OptimizerContext {
 }
 
 impl OptimizerContext {
-    pub fn new(table_ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Arc<Self> {
+    pub fn new(
+        table_ctx: Arc<dyn TableContext>,
+        metadata: MetadataRef,
+        function_context: FunctionContext,
+    ) -> Arc<Self> {
         let settings = table_ctx.get_settings();
         let grouping_sets_to_union = settings.get_grouping_sets_to_union().unwrap_or_default();
 
@@ -75,6 +84,7 @@ impl OptimizerContext {
         Arc::new(Self {
             table_ctx,
             metadata,
+            stat_context: StatContext::new(function_context),
 
             enable_distributed_optimization: RwLock::new(false),
             force_local_execution: RwLock::new(false),
@@ -107,6 +117,14 @@ impl OptimizerContext {
 
     pub fn get_metadata(&self) -> MetadataRef {
         self.metadata.clone()
+    }
+
+    pub fn metadata_read(&self) -> impl Deref<Target = Metadata> {
+        self.metadata.read()
+    }
+
+    pub fn get_stat_context(&self) -> &StatContext {
+        &self.stat_context
     }
 
     pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
