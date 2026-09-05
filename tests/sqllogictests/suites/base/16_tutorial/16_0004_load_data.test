@@ -74,11 +74,12 @@ Downtown Loop Rain 3580
 Port Perimeter Overcast 4020
 Airport Connector Clear 3655
 
+# Keep the physical internal-stage path distinct from the parallel Chinese tutorial.
 statement ok
-CREATE OR REPLACE STAGE citydrive_ndjson_stage
+CREATE OR REPLACE STAGE citydrive_ndjson_stage_en
 
 query III
-COPY INTO @citydrive_ndjson_stage
+COPY INTO @citydrive_ndjson_stage_en
     FROM (
     SELECT
     'FRAME-0101' AS doc_id,
@@ -95,7 +96,7 @@ COPY INTO @citydrive_ndjson_stage
 3 245 245
 
 statement ok
-LIST @citydrive_ndjson_stage
+LIST @citydrive_ndjson_stage_en
 
 statement ok
 CREATE OR REPLACE TABLE frame_metadata_catalog (
@@ -108,7 +109,7 @@ COPY INTO frame_metadata_catalog (doc_id, meta_json)
     FROM (
     SELECT $1:doc_id::STRING AS doc_id,
     $1                 AS meta_json
-    FROM @citydrive_ndjson_stage
+    FROM @citydrive_ndjson_stage_en
     )
     PATTERN = '.*[.]ndjson'
     FILE_FORMAT = (TYPE = NDJSON)
@@ -128,7 +129,7 @@ statement ok
 DROP STAGE IF EXISTS citydrive_stage_csv
 
 statement ok
-DROP STAGE IF EXISTS citydrive_ndjson_stage
+DROP STAGE IF EXISTS citydrive_ndjson_stage_en
 
 statement ok
 DROP DATABASE IF EXISTS citydrive_demo
