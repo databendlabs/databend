@@ -106,7 +106,7 @@ impl RuleFactory {
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::PushDownFilterWindowTopN => {
-                Ok(Box::new(RulePushDownFilterWindowTopN::new(metadata)))
+                Ok(Box::new(RulePushDownFilterWindowTopN::new(ctx)))
             }
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new(metadata))),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
