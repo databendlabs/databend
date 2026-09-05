@@ -4998,7 +4998,6 @@ dependencies = [
  "arrow 58.4.0",
  "async-backtrace",
  "async-trait",
- "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",

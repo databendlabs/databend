@@ -1484,8 +1484,6 @@ pub enum TokenKind {
     COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
-    #[token("PROXY", ignore(ascii_case))]
-    PROXY,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
     #[token("NULLS", ignore(ascii_case))]
