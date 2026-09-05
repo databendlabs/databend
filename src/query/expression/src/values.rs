@@ -63,6 +63,7 @@ use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::date::check_date;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
@@ -94,7 +95,7 @@ use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
-use crate::types::timestamp::clamp_timestamp;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::variant::JSONB_NULL;
 use crate::types::vector::VectorColumn;
@@ -2625,17 +2626,17 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::Timestamp(builder) => {
-                let mut value: i64 = reader.read_scalar()?;
-                clamp_timestamp(&mut value);
-                builder.push(value);
+                let value: i64 = reader.read_scalar()?;
+                builder.push(check_timestamp(value).map_err(ErrorCode::BadArguments)?);
             }
             ColumnBuilder::TimestampTz(builder) => {
                 let value = timestamp_tz(i128::de_binary(reader));
+                check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
                 builder.push(value);
             }
             ColumnBuilder::Date(builder) => {
                 let value: i32 = reader.read_scalar()?;
-                builder.push(value);
+                builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
             }
             ColumnBuilder::Interval(builder) => {
                 let value = months_days_micros(i128::de_binary(reader));
@@ -2753,22 +2754,23 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
-                    let mut value: i64 = reader.read_scalar()?;
-                    clamp_timestamp(&mut value);
-                    builder.push(value);
+                    let value: i64 = reader.read_scalar()?;
+                    builder.push(check_timestamp(value).map_err(ErrorCode::BadArguments)?);
                 }
             }
             ColumnBuilder::TimestampTz(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
-                    builder.push(timestamp_tz(i128::de_binary(&mut reader)));
+                    let value = timestamp_tz(i128::de_binary(&mut reader));
+                    check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
+                    builder.push(value);
                 }
             }
             ColumnBuilder::Date(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
                     let value: i32 = reader.read_scalar()?;
-                    builder.push(value);
+                    builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
                 }
             }
             ColumnBuilder::Interval(builder) => {

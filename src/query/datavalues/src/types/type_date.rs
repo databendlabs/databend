@@ -16,11 +16,10 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-/// date ranges from 1000-01-01 to 9999-12-31
-/// date_max and date_min means days offset from 1970-01-01
-/// any date not in the range will be invalid
-pub const DATE_MAX: i32 = 2932896;
-pub const DATE_MIN: i32 = -354285;
+// SQL DATE bounds, as days since 1970-01-01. Keep in sync with common-expression.
+// Out-of-range SQL values are errors, not silently replaced with another date.
+pub const DATE_MAX: i32 = 3_298_504; // 11000-12-31
+pub const DATE_MIN: i32 = -719_162; // 0001-01-01
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
 pub struct DateType {}

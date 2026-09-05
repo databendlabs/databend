@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::sync::LazyLock;
 
@@ -229,8 +230,13 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
                     output.builder.commit_row();
                     output.validity.push(true);
                 } else {
-                    let rendered = ts.format_with_items(items.iter()).to_string();
-                    output.builder.put_and_commit(rendered);
+                    let mut rendered = String::new();
+                    if write!(rendered, "{}", ts.format_with_items(items.iter())).is_err() {
+                        ctx.set_error(output.len(), format!("{format} is invalid time format"));
+                        output.builder.commit_row();
+                    } else {
+                        output.builder.put_and_commit(rendered);
+                    }
                     output.validity.push(true);
                 }
             },
