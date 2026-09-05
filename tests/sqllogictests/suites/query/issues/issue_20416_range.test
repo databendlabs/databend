@@ -1,0 +1,244 @@
+# Calendar text and explicit parts constructors retain years 0001..9999.
+# Internal DATE/TIMESTAMP values have headroom through year 11000. Generate
+# extended values with arithmetic, not five-digit calendar input.
+
+statement ok
+SET timezone = 'UTC'
+
+query TTTTTT
+SELECT DATE '9999-12-31' + INTERVAL 1 DAY,
+       DATE '9999-12-31' + INTERVAL 24 HOUR,
+       DATE '9999-12-31' + INTERVAL 1440 MINUTE,
+       DATE '9999-12-31' + INTERVAL 86400 SECOND,
+       DATE '9999-12-31' + INTERVAL 1 MONTH,
+       DATE '9999-12-31' + INTERVAL 1 YEAR
+----
++10000-01-01 00:00:00.000000	+10000-01-01 00:00:00.000000	+10000-01-01 00:00:00.000000	+10000-01-01 00:00:00.000000	+10000-01-31 00:00:00.000000	+10000-12-31 00:00:00.000000
+
+# Explicit constructors and calendar parsers do not expose the internal range.
+statement error
+SELECT DATE '10000-01-01'
+
+statement error
+SELECT TIMESTAMP '10000-01-01'
+
+statement error
+SELECT to_date('+11000-12-31')
+
+statement error
+SELECT to_timestamp('+11000-12-31 23:59:59.999999')
+
+statement error
+SELECT to_timestamp_tz('+11000-12-31 23:59:59.999999 +0000')
+
+statement error 1006
+SELECT date_from_parts(10000, 1, 1)
+
+statement error 1006
+SELECT timestamp_from_parts(10000, 1, 1, 0, 0, 0)
+
+statement error 1006
+SELECT timestamp_tz_from_parts(10000, 1, 1, 0, 0, 0, 'UTC')
+
+statement error 1006
+SELECT date_from_parts(9999, 13, 1)
+
+statement error 1006
+SELECT timestamp_from_parts(9999, 12, 31, 24, 0, 0)
+
+query BBBBB
+SELECT try_to_date('+10000-01-01', '%Y-%m-%d') IS NULL,
+       try_to_timestamp('+10000-01-01', '%Y-%m-%d') IS NULL,
+       try_to_timestamp_tz('+10000-01-01 00:00:00') IS NULL,
+       try_to_date('0000-12-31') IS NULL,
+       try_to_timestamp('0000-12-31') IS NULL
+----
+1	1	1	1	1
+
+statement ok
+SET enable_auto_detect_datetime_format = 1
+
+query BBB
+SELECT try_to_date('01-JAN-+10000') IS NULL,
+       try_to_timestamp('01-JAN-+10000 00:00:00') IS NULL,
+       try_to_timestamp_tz('01-JAN-+10000 00:00:00') IS NULL
+----
+1	1	1
+
+statement ok
+UNSET enable_auto_detect_datetime_format
+
+# Persist computed values at the internal upper bound; reading them does not
+# parse calendar text again. The displayed text need not be accepted as input.
+statement ok
+CREATE OR REPLACE TABLE datetime_range_upper(d DATE, ts TIMESTAMP, z TIMESTAMP_TZ)
+
+statement ok
+INSERT INTO datetime_range_upper SELECT
+    add_years(DATE '9999-12-31', 1001),
+    add_years(TIMESTAMP '9999-12-31 23:59:59.999999', 1001),
+    to_timestamp_tz('9999-12-31 23:59:59.999999 +0000') + INTERVAL 1001 YEAR
+
+query TTTII
+SELECT d, ts, z, to_year(d), to_iso_year(d) FROM datetime_range_upper
+----
++11000-12-31	+11000-12-31 23:59:59.999999	+11000-12-31 23:59:59.999999 +0000	11000	11001
+
+query BBB
+SELECT try_to_date(to_string(d)) IS NULL,
+       try_to_timestamp(to_string(ts)) IS NULL,
+       try_to_timestamp_tz(to_string(z)) IS NULL
+FROM datetime_range_upper
+----
+1	1	1
+
+statement error 1006
+SELECT d + INTERVAL 1 DAY FROM datetime_range_upper
+
+statement error 1006
+SELECT d - INTERVAL -1 DAY FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 24 HOUR FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 1440 MINUTE FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 86400 SECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 1 MONTH FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 1 YEAR FROM datetime_range_upper
+
+statement error 1006
+SELECT ts + to_interval('1 microsecond') FROM datetime_range_upper
+
+statement error 1006
+SELECT z + to_interval('1 microsecond') FROM datetime_range_upper
+
+statement error 1006
+SELECT to_interval('1 microsecond') + z FROM datetime_range_upper
+
+statement error 1006
+SELECT add_days(d, 1) FROM datetime_range_upper
+
+statement error 1006
+SELECT count(*) FROM datetime_range_upper WHERE d + 1 > DATE '0001-01-01'
+
+statement error 1006
+SELECT time_slice(d, 1, 'day', 'end') FROM datetime_range_upper
+
+statement error 1006
+SELECT time_slice(ts, 1, 'second', 'end') FROM datetime_range_upper
+
+query T
+SELECT time_slice(d, 1, 'year', 'start') FROM datetime_range_upper
+----
++11000-01-01
+
+statement error 1006
+SELECT add_years(DATE '9999-12-31', 1001) + 1
+
+statement error 1006
+SELECT TIMESTAMP '0001-01-01' - to_interval('1 microsecond')
+
+statement error 1006
+SELECT DATE '0001-01-01' - INTERVAL 1 DAY
+
+statement error 1006
+SELECT to_timestamp_tz('0001-01-01 00:00:00 +0000') - to_interval('1 microsecond')
+
+statement error 1006
+SELECT date_from_parts(2024, 1, 9223372036854775807)
+
+statement error 1006
+SELECT timestamp_from_parts(2024, 1, 1, 0, 0, 9223372036854775807)
+
+statement error 1006
+SELECT timestamp_tz_from_parts(2024, 1, 1, 0, 0, 9223372036854775807)
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01' + INTERVAL 9223372036854775807 HOUR
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01' + to_microseconds(-9223372036854775808)
+
+statement error 1006
+SELECT to_interval('9223372036854775808 second')
+
+statement error 1006
+SELECT to_interval('-2147483648 day ago')
+
+query T
+SELECT to_string(to_microseconds(-9223372036854775808))
+----
+-2562047788:00:54.775808
+
+query BBBB
+SELECT try_to_timestamp(9223372036854775807, 0) IS NULL,
+       try_to_date(9223372036854775807) IS NULL,
+       (CAST(NULL AS DATE NULL) + INTERVAL 1 DAY) IS NULL,
+       if(false, add_years(DATE '9999-12-31', 1002), NULL) IS NULL
+----
+1	1	1	1
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+# UTC bounds, not local calendar years, govern internal TIMESTAMP values.
+query T
+SELECT ts FROM datetime_range_upper
+----
++11001-01-01 07:59:59.999999
+
+statement error 1006
+SELECT to_date(ts) FROM datetime_range_upper
+
+statement error 1006
+SELECT count(*) FROM datetime_range_upper WHERE to_start_of_year(ts) > d
+
+query B
+SELECT try_to_timestamp(DATE '0001-01-01') IS NULL
+----
+1
+
+query T
+SELECT add_years(TIMESTAMP '9999-12-01', 1001) + INTERVAL 1 MONTH
+----
++11001-01-01 00:00:00.000000
+
+statement ok
+SET timezone = 'America/Los_Angeles'
+
+query T
+SELECT to_timestamp('9999-12-31 23:59:59.999999')
+----
+9999-12-31 23:59:59.999999
+
+statement error 1006
+SELECT add_years(TIMESTAMP '9999-12-31 23:59:59.999999', 1001)
+
+statement ok
+SET timezone = 'America/New_York'
+
+query TT
+SELECT DATE '2024-03-10' + INTERVAL 3 HOUR,
+       TIMESTAMP '2024-03-10 00:00:00' + INTERVAL 3 HOUR
+----
+2024-03-10 04:00:00.000000	2024-03-10 04:00:00.000000
+
+# Explicit offsets bypass session-local DST gap resolution in both parsers.
+query II
+SELECT to_timestamp('2024-03-10 02:30:00+0000')::BIGINT,
+       to_timestamp('2024-03-10 2:30:00+0000')::BIGINT
+----
+1710037800000000	1710037800000000
+
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+DROP TABLE datetime_range_upper

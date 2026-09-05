@@ -81,39 +81,25 @@ macro_rules! with_weekday_mapped_name {
 
 macro_rules! transform_interval_add_sub {
     ($span: expr, $columns: expr, $builtin_functions: expr, $op: expr, $unit: expr, $date: expr, $interval: expr) => {
-        if $op == BinaryOperator::Plus {
-            with_interval_mapped_name!(|INTERVAL| match $unit {
-                IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: $span,
-                    name: concat!("add_", INTERVAL, "s").to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*$date, $columns, $builtin_functions),
-                        transform_expr(*$interval, $columns, $builtin_functions),
-                    ],
-                },
-                kind => {
-                    unimplemented!("{kind:?} is not supported for interval")
-                }
-            })
-        } else if $op == BinaryOperator::Minus {
-            with_interval_mapped_name!(|INTERVAL| match $unit {
-                IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: $span,
-                    name: concat!("subtract_", INTERVAL, "s").to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*$date, $columns, $builtin_functions),
-                        transform_expr(*$interval, $columns, $builtin_functions),
-                    ],
-                },
-                kind => {
-                    unimplemented!("{kind:?} is not supported for interval")
-                }
-            })
-        } else {
-            unimplemented!("operator {} is not supported for interval", $op)
-        }
+        with_interval_mapped_name!(|INTERVAL| match $unit {
+            IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                span: $span,
+                name: $op.to_func_name(),
+                params: vec![],
+                args: vec![
+                    transform_expr(*$date, $columns, $builtin_functions),
+                    RawExpr::FunctionCall {
+                        span: $span,
+                        name: concat!("to_", INTERVAL, "s").to_string(),
+                        params: vec![],
+                        args: vec![transform_expr(*$interval, $columns, $builtin_functions,)],
+                    },
+                ],
+            },
+            kind => {
+                unimplemented!("{kind:?} is not supported for interval")
+            }
+        })
     };
 }
 

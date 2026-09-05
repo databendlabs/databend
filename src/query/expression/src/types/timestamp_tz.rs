@@ -13,17 +13,20 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::time::Duration as SysDuration;
 
+use chrono::DateTime;
+use chrono::Datelike;
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::datetime::check_input_year;
 use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestamp;
-use jiff::civil::Date;
-use jiff::civil::Time;
-use jiff::fmt;
-use jiff::tz::TimeZone;
+use databend_common_timezone::LocalTimeResolution;
+use databend_common_timezone::Tz;
+use databend_common_timezone::resolve_local_datetime;
 
 use super::ArgType;
 use super::DataType;
@@ -169,6 +172,24 @@ fn try_parse_standard_timestamp_with_offset(ts_str: &[u8]) -> Option<Result<time
     ))
 }
 
+const PARSE_FORMATS_WITH_OFFSET: &[&str] = &[
+    "%Y-%m-%dT%H:%M:%S%.f %z",
+    "%Y-%m-%d %H:%M:%S%.f %z",
+    "%Y-%m-%dT%H:%M:%S%.f%z",
+    "%Y-%m-%d %H:%M:%S%.f%z",
+];
+
+const PARSE_FORMATS_NAIVE: &[&str] = &["%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M:%S%.f"];
+
+fn build_timestamp_tz(micros: i128, offset_seconds: i32) -> Result<timestamp_tz> {
+    if micros < i128::from(TIMESTAMP_MIN) || micros > i128::from(TIMESTAMP_MAX) {
+        return Err(ErrorCode::BadBytes(
+            "Timestamp is out of range after applying timezone offset".to_string(),
+        ));
+    }
+    Ok(timestamp_tz::new(micros as i64, offset_seconds))
+}
+
 fn build_timestamp_tz_from_components(
     year: i32,
     month: u8,
@@ -184,41 +205,51 @@ fn build_timestamp_tz_from_components(
     } else {
         (year, month, day)
     };
-    let year_i16 =
-        i16::try_from(year).map_err(|_| ErrorCode::BadBytes(format!("Invalid year {}", year)))?;
-    let month_i8 =
-        i8::try_from(month).map_err(|_| ErrorCode::BadBytes(format!("Invalid month {}", month)))?;
-    let day_i8 =
-        i8::try_from(day).map_err(|_| ErrorCode::BadBytes(format!("Invalid day {}", day)))?;
-    let date = Date::new(year_i16, month_i8, day_i8).map_err(|_| {
+
+    check_input_year(year)?;
+    let date = NaiveDate::from_ymd_opt(year, month as u32, day as u32).ok_or_else(|| {
         ErrorCode::BadBytes(format!(
             "Invalid date value {:04}-{:02}-{:02}",
             year, month, day
         ))
     })?;
-    let time = Time::new(hour as i8, minute as i8, second as i8, 0)
-        .map_err(|err| ErrorCode::BadBytes(format!("Invalid time value: {}", err)))?;
-    let mut zoned = date
-        .to_datetime(time)
-        .to_zoned(TimeZone::UTC)
-        .map_err(|err| ErrorCode::BadBytes(format!("Invalid time value: {}", err)))?;
-    if micro > 0 {
-        zoned = zoned
-            .checked_add(SysDuration::from_micros(u64::from(micro)))
-            .map_err(|err| ErrorCode::BadBytes(format!("Time overflow: {}", err)))?;
-    }
-    let base_micros = zoned.timestamp().as_microsecond();
-    let adjusted = i128::from(base_micros) - i128::from(offset_seconds) * 1_000_000;
-    if adjusted < i128::from(TIMESTAMP_MIN) || adjusted > i128::from(TIMESTAMP_MAX) {
-        return Err(ErrorCode::BadBytes(
-            "Timestamp is out of range after applying timezone offset".to_string(),
-        ));
-    }
-    Ok(timestamp_tz::new(adjusted as i64, offset_seconds))
+    let local = date
+        .and_hms_opt(hour as u32, minute as u32, second as u32)
+        .ok_or_else(|| {
+            ErrorCode::BadBytes(format!(
+                "Invalid time value {:02}:{:02}:{:02}",
+                hour, minute, second
+            ))
+        })?;
+
+    // The civil fields are relative to `offset_seconds`, so removing that offset
+    // yields the UTC instant.
+    let micros = i128::from(local.and_utc().timestamp()) * 1_000_000 + i128::from(micro)
+        - i128::from(offset_seconds) * 1_000_000;
+
+    build_timestamp_tz(micros, offset_seconds)
+}
+
+/// Interpret a local civil datetime in `tz`.
+///
+/// DST folds and gaps follow the shared timezone policy.
+fn timestamp_tz_from_local(local: &NaiveDateTime, tz: &Tz) -> Result<timestamp_tz> {
+    check_input_year(local.year())?;
+    let micro = local.and_utc().timestamp_subsec_micros();
+    let resolved = resolve_local_datetime(tz, *local, LocalTimeResolution::Compatible, None)
+        .ok_or_else(|| {
+            ErrorCode::BadBytes(format!(
+                "Invalid local datetime {} for timezone {tz}",
+                local.format("%Y-%m-%d %H:%M:%S")
+            ))
+        })?;
+
+    let micros = i128::from(resolved.unix_seconds) * 1_000_000 + i128::from(micro);
+    build_timestamp_tz(micros, resolved.offset_seconds)
 }
 
 #[inline]
-pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
+pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a Tz>(
     ts_str: &[u8],
     fn_tz: F,
 ) -> databend_common_exception::Result<timestamp_tz> {
@@ -226,32 +257,34 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
         return parsed;
     }
 
-    let time = fmt::strtime::parse("%Y-%m-%d", ts_str)
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f %z", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f %:z", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f %z", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f %:z", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f", ts_str))?;
-    match time.offset() {
-        None => {
-            let datetime = time.to_datetime()?;
-            let zoned = datetime.to_zoned(fn_tz().clone())?;
+    let text = std::str::from_utf8(ts_str)
+        .map_err(|_| ErrorCode::BadBytes("Timestamp text is not valid UTF-8".to_string()))?
+        .trim();
 
-            Ok(timestamp_tz::new(
-                zoned.timestamp().as_microsecond(),
-                zoned.offset().seconds(),
-            ))
-        }
-        Some(offset) => {
-            let timestamp = time.to_timestamp()?;
+    // A bare date is midnight in the session timezone.
+    if let Ok(date) = NaiveDate::parse_from_str(text, "%Y-%m-%d") {
+        let local = date.and_hms_opt(0, 0, 0).expect("midnight is valid");
+        return timestamp_tz_from_local(&local, fn_tz());
+    }
 
-            Ok(timestamp_tz::new(
-                timestamp.as_microsecond(),
-                offset.seconds(),
-            ))
+    for format in PARSE_FORMATS_WITH_OFFSET {
+        if let Ok(value) = DateTime::parse_from_str(text, format) {
+            check_input_year(value.year())?;
+            let micros = i128::from(value.timestamp()) * 1_000_000
+                + i128::from(value.timestamp_subsec_micros());
+            return build_timestamp_tz(micros, value.offset().local_minus_utc());
         }
     }
+
+    for format in PARSE_FORMATS_NAIVE {
+        if let Ok(local) = NaiveDateTime::parse_from_str(text, format) {
+            return timestamp_tz_from_local(&local, fn_tz());
+        }
+    }
+
+    Err(ErrorCode::BadBytes(format!(
+        "Timestamp Parsing Error: The value '{text}' could not be parsed into a valid timestamp with timezone"
+    )))
 }
 
 #[cfg(test)]
@@ -260,7 +293,7 @@ mod tests {
 
     #[test]
     fn stores_utc_in_timestamp_field() {
-        let tz = TimeZone::get("Asia/Shanghai").unwrap();
+        let tz = "Asia/Shanghai".parse::<Tz>().unwrap();
         let value = string_to_timestamp_tz(b"2021-12-20 17:01:01 +0800", || &tz).expect("parse tz");
         assert_eq!(value.seconds_offset(), 28_800);
         // timestamp() keeps the UTC instant (09:01:01).

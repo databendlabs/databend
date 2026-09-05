@@ -34,7 +34,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::date::date_from_days;
-use databend_common_expression::types::timestamp::timestamp_from_micros;
+use databend_common_expression::types::timestamp::timestamp_to_rfc3339_utc;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -45,7 +45,6 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_storages_factory::Table;
-use jiff::tz::TimeZone;
 
 use crate::system_tables::parse_task_runs_to_datablock;
 
@@ -255,14 +254,8 @@ pub(crate) struct TableHistoryArgsParsed {
 
 fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
     match v {
-        Scalar::Timestamp(ts) => Some(timestamp_from_micros(*ts, &TimeZone::UTC).to_string()),
-        Scalar::Date(date) => Some(
-            date_from_days(*date)
-                .at(0, 0, 0, 0)
-                .in_tz("UTC")
-                .unwrap() // FIXME: maybe overflow
-                .to_string(),
-        ),
+        Scalar::Timestamp(ts) => Some(timestamp_to_rfc3339_utc(*ts)),
+        Scalar::Date(date) => Some(format!("{}T00:00:00Z", date_from_days(*date))),
         _ => None,
     }
 }

@@ -112,10 +112,12 @@ select to_datetime('0001-01-01 00:00:00')
 ----
 0001-01-01 00:00:00.000000
 
-statement error 1046
+query ?
 select to_datetime('9999-12-31 23:59:59')
+----
+9999-12-31 23:59:59.000000
 
-# Max datetime in UTC
+# The former Jiff timestamp upper bound remains representable.
 query ?
 select to_datetime('9999-12-30 22:00:00')
 ----
@@ -397,15 +399,11 @@ SELECT MONTHS_BETWEEN('2024-01-01'::DATE, '2024-01-01'::DATE),
 ----
 0.0 1.0 1.6774193548387097 1.0 1.0 0.03225806451612903 -12.0
 
-query ?
+statement error 1006
 select to_date('2023-01-01') + 100000000
-----
-0001-01-01
 
-query ?
+statement error 1006
 select to_date('2023-01-01') - 100000000
-----
-0001-01-01
 
 
 query B
@@ -718,15 +716,11 @@ select to_start_of_week(to_date(18769), 9)
 ----
 2021-05-17
 
-query ?
+statement error 1006
 select to_start_of_week(to_date('0001-01-01'))
-----
-0000-12-31
 
-query ?
+statement error 1006
 select to_start_of_week(to_datetime('0001-01-01 00:00:00'))
-----
-0000-12-31
 
 # 2020-2-29 + 1 year
 query ?
@@ -782,7 +776,7 @@ select add_years(to_datetime(1582970400000000), cast(-50, INT8))
 1970-02-28 10:00:00.000000
 
 
-# years gap: -9999..=9999
+# The former year-9999 boundary remains representable.
 query ?
 select add_years(to_date('9998-12-30'), 1)
 ----
@@ -806,15 +800,11 @@ select subtract_months(to_datetime(1582970400000000), cast(122, INT16))
 2009-12-31 10:00:00.000000
 
 
-query ?
+statement error 1006
 select subtract_months(to_date('0001-01-01'), 1)
-----
-0001-01-01
 
-query ?
+statement error 1006
 select subtract_months(to_datetime('0001-01-01 00:00:00'), 1)
-----
-0001-01-01 00:00:00.000000
 
 # 2020-2-29 + 1 day
 query ?
@@ -836,7 +826,7 @@ select add_days(to_date('9999-12-30'), 1)
 query ?
 select add_days(to_datetime('9999-12-30 21:59:59'), 1)
 ----
-9999-12-30 22:00:00.000000
+9999-12-31 21:59:59.000000
 
 # 2020-2-29T10:00:00 + 25 hours
 query ?
@@ -854,7 +844,7 @@ select add_hours(to_date(18321), 1)
 query ?
 select add_hours(to_date('9999-12-30'), 24)
 ----
-9999-12-30 22:00:00.000000
+9999-12-31 00:00:00.000000
 
 query ?
 select add_hours(to_datetime('9999-12-29 23:59:59'), 1)
@@ -867,15 +857,11 @@ select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32))
 ----
 2020-02-29 09:59:00.000000
 
-query ?
+statement error 1006
 select subtract_minutes(to_date('0001-01-01'), 1)
-----
-0001-01-01 00:00:00.000000
 
-query ?
+statement error 1006
 select subtract_minutes(to_datetime('0001-01-01 00:00:00'), 1)
-----
-0001-01-01 00:00:00.000000
 
 # 2020-2-29T10:00:00 + 61 seconds
 query ?
@@ -893,15 +879,11 @@ select to_datetime('2023-01-01 00:00:00') - 10000000000
 ----
 2022-12-31 21:13:20.000000
 
-query ?
+statement error 1006
 select to_datetime('2023-01-01 00:00:00') + 1000000000000000000
-----
-0001-01-01 00:00:00.000000
 
-query ?
+statement error 1006
 select to_datetime('2023-01-01 00:00:00') - 1000000000000000000
-----
-0001-01-01 00:00:00.000000
 
 query I
 select to_month(to_datetime(1633081817000000))
@@ -1693,25 +1675,17 @@ select TRY_TO_TIMESTAMP(1, 0), TRY_TO_TIMESTAMP(1, null);
 ----
 1970-01-01 00:00:01.000000 NULL
 
-query ?
+statement error 1006
 SELECT add_hours(to_date(710455), 1512263452497496403);
-----
-0001-01-01 00:00:00.000000
 
-query ?
+statement error 1006
 SELECT add_hours(to_timestamp(710455), 1512263452497496403);
-----
-0001-01-01 00:00:00.000000
 
-query ?
+statement error 1006
 SELECT add_hours(to_date(710455), 2147483647);
-----
-0001-01-01 00:00:00.000000
 
-query ?
+statement error 1006
 SELECT add_hours(to_timestamp(710455), 2147483647);
-----
-0001-01-01 00:00:00.000000
 
 statement error 1006
 SELECT CAST('2001-04-20 14:42:11.123000000000000000002001-04-20 14:42:11.12300000000000000000' AS TIMESTAMP);

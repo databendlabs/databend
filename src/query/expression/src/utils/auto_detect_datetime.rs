@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::NaiveDate;
+use chrono::format::Parsed;
+use chrono::format::StrftimeItems;
+use chrono::format::parse_and_remainder;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
+use databend_common_io::datetime::check_input_year;
+use databend_common_timezone::Tz;
 use databend_common_timezone::fast_utc_from_local;
-use jiff::Timestamp;
-use jiff::fmt::strtime::BrokenDownTime;
-use jiff::tz::TimeZone;
+use databend_common_timezone::offset_seconds_at;
 
-use crate::serialize::uniform_date;
-use crate::types::date::clamp_date;
+use crate::types::date::check_date;
 use crate::types::date::string_to_date;
 use crate::types::timestamp::MICROS_PER_MILLI;
 use crate::types::timestamp::MICROS_PER_SEC;
-use crate::types::timestamp::TIMESTAMP_MAX;
-use crate::types::timestamp::TIMESTAMP_MIN;
-use crate::types::timestamp::clamp_timestamp;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::string_to_timestamp;
 use crate::types::timestamp_tz::string_to_timestamp_tz;
 
@@ -63,125 +64,149 @@ const AUTO_TS_FORMATS: &[&str] = &[
     "%a %b %d %H:%M:%S %z %Y",
 ];
 
-/// Check if timestamp is within range, and return the timestamp in micros.
+/// Preserve numeric seconds/milliseconds/microseconds detection, but reject
+/// values outside the SQL UTC range rather than replacing them with the minimum.
 #[inline]
-pub fn int64_to_timestamp(mut n: i64) -> i64 {
-    if -31536000000 < n && n < 31536000000 {
+pub fn int64_to_timestamp(n: i64) -> Result<i64, String> {
+    let micros = if -31536000000 < n && n < 31536000000 {
         n * MICROS_PER_SEC
     } else if -31536000000000 < n && n < 31536000000000 {
         n * MICROS_PER_MILLI
     } else {
-        clamp_timestamp(&mut n);
         n
-    }
+    };
+    check_timestamp(micros)
 }
 
-/// calc int64 domain to timestamp domain
-#[inline]
-pub fn calc_int64_to_timestamp_domain(n: i64) -> i64 {
-    if -31536000000 < n && n < 31536000000 {
-        n * MICROS_PER_SEC
-    } else if -31536000000000 < n && n < 31536000000000 {
-        n * MICROS_PER_MILLI
-    } else {
-        n.clamp(TIMESTAMP_MIN, TIMESTAMP_MAX)
-    }
-}
-
-/// Try to parse a string as an epoch number and convert to microseconds.
-/// Reuses the same rules as `int64_to_timestamp` / `to_timestamp(number)`.
 pub fn parse_epoch_str(val: &str) -> Option<i64> {
-    let n: i64 = val.parse().ok()?;
-    Some(int64_to_timestamp(n))
+    int64_to_timestamp(val.parse().ok()?).ok()
 }
 
-/// Core format-matching loop: tries each format, returns `(micros, offset_seconds)`.
-fn try_parse_formats(val: &str, tz: &TimeZone, formats: &[&str]) -> Option<(i64, i32)> {
-    for fmt in formats {
-        let (tm, consumed) = match BrokenDownTime::parse_prefix(fmt, val) {
-            Ok(pair) => pair,
-            Err(_) => continue,
-        };
-        if consumed != val.len() {
-            continue;
+/// Parsed fields; omitted clock fields default to midnight and a missing offset
+/// uses the session timezone.
+pub struct ParsedDateTime {
+    pub year: i32,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+    pub micro: u32,
+    pub offset_seconds: Option<i32>,
+}
+
+impl ParsedDateTime {
+    pub fn parse(format: &str, val: &str) -> Option<Self> {
+        let mut parsed = Parsed::new();
+        let remainder = parse_and_remainder(&mut parsed, val, StrftimeItems::new(format)).ok()?;
+        if !remainder.is_empty() {
+            return None;
         }
-        match tm.offset() {
-            Some(_) => {
-                let zoned = match tm.to_zoned() {
-                    Ok(z) => z,
-                    Err(_) => continue,
+
+        let date = parsed.to_naive_date().ok()?;
+        check_input_year(chrono::Datelike::year(&date)).ok()?;
+        let hour = match (parsed.hour_div_12(), parsed.hour_mod_12()) {
+            (Some(half), Some(hour)) => half * 12 + hour,
+            _ => 0,
+        };
+
+        Some(Self {
+            year: chrono::Datelike::year(&date),
+            month: chrono::Datelike::month(&date) as u8,
+            day: chrono::Datelike::day(&date) as u8,
+            hour: hour as u8,
+            minute: parsed.minute().unwrap_or(0) as u8,
+            second: parsed.second().unwrap_or(0) as u8,
+            micro: parsed.nanosecond().unwrap_or(0) / 1_000,
+            offset_seconds: parsed.offset(),
+        })
+    }
+
+    fn naive_date(&self) -> Option<NaiveDate> {
+        NaiveDate::from_ymd_opt(self.year, self.month as u32, self.day as u32)
+    }
+}
+
+fn try_parse_formats(val: &str, tz: &Tz, formats: &[&str]) -> Option<(i64, i32)> {
+    for format in formats {
+        let Some(parsed) = ParsedDateTime::parse(format, val) else {
+            continue;
+        };
+
+        match parsed.offset_seconds {
+            Some(offset) => {
+                let Some(date) = parsed.naive_date() else {
+                    continue;
                 };
-                return Some((zoned.timestamp().as_microsecond(), zoned.offset().seconds()));
+                let Some(local) = date.and_hms_opt(
+                    parsed.hour as u32,
+                    parsed.minute as u32,
+                    parsed.second as u32,
+                ) else {
+                    continue;
+                };
+                let micros = local.and_utc().timestamp() * MICROS_PER_SEC + parsed.micro as i64
+                    - offset as i64 * MICROS_PER_SEC;
+                return Some((micros, offset));
             }
             None => {
-                let micros = match fast_timestamp_from_tm(&tm, tz) {
-                    Some(m) => m,
-                    None => continue,
+                let Some(micros) = fast_timestamp_from_parsed(&parsed, tz) else {
+                    continue;
                 };
-                let ts = match Timestamp::from_microsecond(micros) {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let zoned = ts.to_zoned(tz.clone());
-                return Some((micros, zoned.offset().seconds()));
+                let offset = offset_seconds_at(tz, micros.div_euclid(MICROS_PER_SEC))?;
+                return Some((micros, offset));
             }
         }
     }
     None
 }
 
-pub fn fast_timestamp_from_tm(tm: &BrokenDownTime, tz: &TimeZone) -> Option<i64> {
-    let year = i32::from(tm.year()?);
-    let month: u8 = tm.month()?.try_into().ok()?;
-    let day: u8 = tm.day()?.try_into().ok()?;
-    let hour: u8 = tm.hour().unwrap_or(0).try_into().ok()?;
-    let minute: u8 = tm.minute().unwrap_or(0).try_into().ok()?;
-    let second: u8 = tm.second().unwrap_or(0).try_into().ok()?;
-    let nanos = tm.subsec_nanosecond().unwrap_or(0);
-    let micro = (nanos / 1_000).max(0) as u32;
-    fast_utc_from_local(tz, year, month, day, hour, minute, second, micro)
+pub fn fast_timestamp_from_parsed(parsed: &ParsedDateTime, tz: &Tz) -> Option<i64> {
+    fast_utc_from_local(
+        tz,
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+        parsed.micro,
+    )
 }
 
-pub fn auto_detect_timestamp(val: &str, tz: &TimeZone) -> Option<i64> {
-    let (mut micros, _) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
-    clamp_timestamp(&mut micros);
-    Some(micros)
+pub fn auto_detect_timestamp(val: &str, tz: &Tz) -> Option<i64> {
+    let (micros, _) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
+    check_timestamp(micros).ok()
 }
 
 pub fn auto_detect_date(val: &str) -> Option<i32> {
-    for fmt in AUTO_DATE_FORMATS {
-        let (tm, consumed) = match BrokenDownTime::parse_prefix(fmt, val) {
-            Ok(pair) => pair,
-            Err(_) => continue,
-        };
-        if consumed != val.len() {
+    for format in AUTO_DATE_FORMATS {
+        let Some(parsed) = ParsedDateTime::parse(format, val) else {
             continue;
-        }
-        let dt = match tm.to_datetime() {
-            Ok(dt) => dt,
-            Err(_) => continue,
         };
-        return Some(clamp_date(uniform_date(dt.date()) as i64));
+        let Some(date) = parsed.naive_date() else {
+            continue;
+        };
+        return check_date(i64::from(crate::serialize::uniform_date(date))).ok();
     }
     None
 }
 
-pub fn auto_detect_timestamp_tz(val: &str, tz: &TimeZone) -> Option<timestamp_tz> {
-    let (mut micros, offset) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
-    clamp_timestamp(&mut micros);
-    Some(timestamp_tz::new(micros, offset))
+pub fn auto_detect_timestamp_tz(val: &str, tz: &Tz) -> Option<timestamp_tz> {
+    let (micros, offset) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
+    Some(timestamp_tz::new(check_timestamp(micros).ok()?, offset))
 }
 
 /// Parse a date string with optional auto-detect fallback.
 /// Chain: ISO -> numeric-day -> auto (no dtparse).
 #[allow(clippy::result_large_err)]
-pub fn parse_date_with_auto(val: &str, tz: &TimeZone, enable_auto: bool) -> Result<i32, ErrorCode> {
+pub fn parse_date_with_auto(val: &str, tz: &Tz, enable_auto: bool) -> Result<i32, ErrorCode> {
     match string_to_date(val, tz) {
-        Ok(d) => Ok(uniform_date(d)),
+        Ok(days) => Ok(days),
         Err(e) => {
             if enable_auto {
                 if let Ok(days) = val.parse::<i64>() {
-                    return Ok(clamp_date(days));
+                    return check_date(days).map_err(ErrorCode::BadArguments);
                 }
                 if let Some(days) = auto_detect_date(val) {
                     return Ok(days);
@@ -195,17 +220,12 @@ pub fn parse_date_with_auto(val: &str, tz: &TimeZone, enable_auto: bool) -> Resu
 /// Parse a timestamp string with optional auto-detect fallback.
 /// Chain: ISO -> epoch -> auto (no dtparse).
 #[allow(clippy::result_large_err)]
-pub fn parse_timestamp_with_auto(
-    val: &str,
-    tz: &TimeZone,
-    enable_auto: bool,
-) -> Result<i64, ErrorCode> {
+pub fn parse_timestamp_with_auto(val: &str, tz: &Tz, enable_auto: bool) -> Result<i64, ErrorCode> {
     match string_to_timestamp(val, tz) {
-        Ok(ts) => Ok(ts.timestamp().as_microsecond()),
+        Ok(micros) => Ok(micros),
         Err(e) => {
             if enable_auto {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
+                if let Some(micros) = parse_epoch_str(val) {
                     return Ok(micros);
                 }
                 if let Some(micros) = auto_detect_timestamp(val, tz) {
@@ -222,19 +242,17 @@ pub fn parse_timestamp_with_auto(
 #[allow(clippy::result_large_err)]
 pub fn parse_timestamp_tz_with_auto(
     val: &str,
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto: bool,
 ) -> Result<timestamp_tz, ErrorCode> {
     match string_to_timestamp_tz(val.as_bytes(), || tz) {
         Ok(ts_tz) => Ok(ts_tz),
         Err(e) => {
             if enable_auto {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
-                    if let Ok(ts) = Timestamp::from_microsecond(micros) {
-                        let offset = tz.to_offset(ts).seconds();
-                        return Ok(timestamp_tz::new(micros, offset));
-                    }
+                if let Some(micros) = parse_epoch_str(val) {
+                    let offset = offset_seconds_at(tz, micros.div_euclid(MICROS_PER_SEC))
+                        .expect("validated Databend timestamp has a timezone offset");
+                    return Ok(timestamp_tz::new(micros, offset));
                 }
                 if let Some(ts_tz) = auto_detect_timestamp_tz(val, tz) {
                     return Ok(ts_tz);
@@ -247,14 +265,11 @@ pub fn parse_timestamp_tz_with_auto(
 
 #[cfg(test)]
 mod tests {
-    use jiff::tz::TimeZone;
-
-    use super::parse_date_with_auto;
-    use super::parse_timestamp_with_auto;
+    use super::*;
 
     #[test]
     fn test_parse_non_padded_iso_date_with_auto_detect() {
-        let tz = TimeZone::UTC;
+        let tz = Tz::UTC;
         let expected = parse_date_with_auto("2027-01-01", &tz, false).unwrap();
 
         for val in ["2027-1-1", "2027-01-1", "2027-1-01"] {
@@ -265,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_parse_non_padded_iso_timestamp_with_auto_detect() {
-        let tz = TimeZone::UTC;
+        let tz = Tz::UTC;
         let expected = parse_timestamp_with_auto("2027-01-01 02:03:04", &tz, false).unwrap();
 
         for val in [

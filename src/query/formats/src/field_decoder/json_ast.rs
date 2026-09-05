@@ -28,7 +28,7 @@ use databend_common_expression::types::VectorColumnBuilder;
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -47,7 +47,7 @@ use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
 use databend_common_io::prelude::InputFormatSettings;
-use jiff::tz::TimeZone;
+use databend_common_timezone::Tz;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 use serde_json::Value;
@@ -55,7 +55,7 @@ use serde_json::Value;
 use crate::FieldDecoder;
 
 pub struct FieldJsonAstDecoder {
-    jiff_timezone: TimeZone,
+    timezone: Tz,
     pub ident_case_sensitive: bool,
     pub is_select: bool,
     is_rounding_mode: bool,
@@ -71,7 +71,7 @@ impl FieldDecoder for FieldJsonAstDecoder {
 impl FieldJsonAstDecoder {
     pub fn create(settings: &InputFormatSettings, is_select: bool) -> Self {
         FieldJsonAstDecoder {
-            jiff_timezone: settings.jiff_timezone.clone(),
+            timezone: settings.timezone,
             ident_case_sensitive: false,
             is_select,
             is_rounding_mode: settings.is_rounding_mode,
@@ -294,7 +294,7 @@ impl FieldJsonAstDecoder {
             Value::String(v) => {
                 let days = parse_date_with_auto(
                     v,
-                    &self.jiff_timezone,
+                    &self.timezone,
                     self.enable_auto_detect_datetime_format,
                 )?;
                 column.push(days);
@@ -302,7 +302,7 @@ impl FieldJsonAstDecoder {
             }
             Value::Number(number) => match number.as_i64() {
                 Some(n) => {
-                    column.push(clamp_date(n));
+                    column.push(check_date(n).map_err(ErrorCode::BadArguments)?);
                     Ok(())
                 }
                 None => Err(ErrorCode::BadArguments("Incorrect date value")),
@@ -316,7 +316,7 @@ impl FieldJsonAstDecoder {
             Value::String(v) => {
                 let micros = parse_timestamp_with_auto(
                     v,
-                    &self.jiff_timezone,
+                    &self.timezone,
                     self.enable_auto_detect_datetime_format,
                 )?;
                 column.push(micros);
@@ -324,7 +324,7 @@ impl FieldJsonAstDecoder {
             }
             Value::Number(number) => match number.as_i64() {
                 Some(n) => {
-                    let n = int64_to_timestamp(n);
+                    let n = int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?;
                     column.push(n);
                     Ok(())
                 }
@@ -341,7 +341,7 @@ impl FieldJsonAstDecoder {
             Value::String(s) => {
                 let ts_tz = parse_timestamp_tz_with_auto(
                     s,
-                    &self.jiff_timezone,
+                    &self.timezone,
                     self.enable_auto_detect_datetime_format,
                 )?;
                 column.push(ts_tz);

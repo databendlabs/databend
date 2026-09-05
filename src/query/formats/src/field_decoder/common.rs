@@ -18,7 +18,7 @@ use bstr::ByteSlice;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::parse_date_with_auto;
@@ -39,7 +39,7 @@ pub(crate) fn read_date(
     let s = std::str::from_utf8(data).map_err(|e| ErrorCode::BadBytes(format!("{e}")))?;
     let days = parse_date_with_auto(
         s,
-        &settings.settings.jiff_timezone,
+        &settings.settings.timezone,
         settings.settings.enable_auto_detect_datetime_format,
     )?;
     column.push(days);
@@ -57,18 +57,18 @@ pub(crate) fn read_timestamp(
         // failure is an immediate error (no fallthrough to ISO).
         if !settings.settings.enable_auto_detect_datetime_format {
             let n: i64 = read_num_text_exact(data)?;
-            column.push(int64_to_timestamp(n));
+            column.push(int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?);
             return Ok(());
         }
         if let Ok(n) = read_num_text_exact::<i64>(data) {
-            column.push(int64_to_timestamp(n));
+            column.push(int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?);
             return Ok(());
         }
     }
 
     // Try ISO/standard timestamp text.
     let mut buffer_readr = Cursor::new(&data);
-    let t = buffer_readr.read_timestamp_text(&settings.settings.jiff_timezone);
+    let t = buffer_readr.read_timestamp_text(&settings.settings.timezone);
     match t {
         Ok(DateTimeResType::Datetime(t)) => {
             if !buffer_readr.eof() {
@@ -80,9 +80,7 @@ pub(crate) fn read_timestamp(
                 );
                 return Err(ErrorCode::BadBytes(msg));
             }
-            let mut ts = t.timestamp().as_microsecond();
-            clamp_timestamp(&mut ts);
-            column.push(ts);
+            column.push(check_timestamp(t).map_err(ErrorCode::BadArguments)?);
             Ok(())
         }
         Ok(_) => unreachable!(),
@@ -94,7 +92,7 @@ pub(crate) fn read_timestamp(
                     column.push(micros);
                     return Ok(());
                 }
-                if let Some(micros) = auto_detect_timestamp(s, &settings.settings.jiff_timezone) {
+                if let Some(micros) = auto_detect_timestamp(s, &settings.settings.timezone) {
                     column.push(micros);
                     return Ok(());
                 }
@@ -112,7 +110,7 @@ pub(crate) fn read_timestamp_tz(
     let s = std::str::from_utf8(data).map_err(|e| ErrorCode::BadBytes(format!("{e}")))?;
     let ts_tz = parse_timestamp_tz_with_auto(
         s,
-        &settings.settings.jiff_timezone,
+        &settings.settings.timezone,
         settings.settings.enable_auto_detect_datetime_format,
     )?;
     column.push(ts_tz);

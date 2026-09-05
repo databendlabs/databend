@@ -14,8 +14,10 @@
 
 use std::borrow::Cow;
 use std::io::Write;
-use std::str::FromStr;
 
+use chrono::DateTime;
+use chrono::NaiveDate;
+use chrono::Utc;
 use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
@@ -30,11 +32,8 @@ use databend_common_expression::utils::auto_detect_datetime::auto_detect_timesta
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp_tz;
 use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_timezone::Tz;
 use goldenfile::Mint;
-use jiff::Timestamp;
-use jiff::Unit;
-use jiff::civil::date;
-use jiff::tz::TimeZone;
 
 use super::TestContext;
 use super::run_ast;
@@ -507,15 +506,18 @@ fn test_date_domain_overflow(file: &mut impl Write) {
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![100]).into()),
-            ("b", Int64Type::from_data(vec![2932897]).into()),
+            (
+                "b",
+                Int64Type::from_data(vec![i64::from(DATE_MAX) + 1]).into(),
+            ),
         ],
         input_domains: Some(&[
             ("a", Domain::Date(SimpleDomain { min: 100, max: 100 })),
             (
                 "b",
                 Domain::Number(NumberDomain::Int64(SimpleDomain {
-                    min: 2932897,
-                    max: 2932897,
+                    min: i64::from(DATE_MAX) + 1,
+                    max: i64::from(DATE_MAX) + 1,
                 })),
             ),
         ]),
@@ -583,7 +585,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
         strict_eval: true,
     });
 
-    // Date plus: i64 saturating_add actually triggers (DATE_MIN + i64::MIN wraps without saturating)
+    // Date plus: domain includes integer underflow, even though the row is valid.
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![DATE_MIN]).into()),
@@ -609,7 +611,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
         strict_eval: true,
     });
 
-    // Date minus: i64 saturating_sub triggers (DATE_MIN - i64::MAX wraps without saturating)
+    // Date minus: domain includes integer underflow, even though the row is valid.
     run_ast_with_context(file, "a - b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![DATE_MIN]).into()),
@@ -701,10 +703,10 @@ fn test_to_number(file: &mut impl Write) {
         DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     let millennium_days = [999, 1000, 1001, 1999, 2000, 2001].map(|year| {
-        date(year, 1, 1)
-            .since((Unit::Day, date(1970, 1, 1)))
+        NaiveDate::from_ymd_opt(year, 1, 1)
             .unwrap()
-            .get_days()
+            .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+            .num_days() as i32
     });
     run_ast(file, "millennium(a)", &[(
         "a",
@@ -1014,12 +1016,12 @@ fn test_date_date_diff(file: &mut impl Write) {
 }
 
 fn test_current_time(file: &mut impl Write) {
-    let tz = TimeZone::UTC;
-    let now = Timestamp::from_str("2024-02-03T04:05:06.789123Z")
+    let tz = Tz::UTC;
+    let now = DateTime::parse_from_rfc3339("2024-02-03T04:05:06.789123Z")
         .unwrap()
-        .to_zoned(tz.clone());
+        .with_timezone(&Utc);
     let func_ctx = FunctionContext {
-        tz: tz.clone(),
+        tz,
         now,
         ..FunctionContext::default()
     };
@@ -1108,7 +1110,7 @@ fn test_auto_detect_date() {
 
 #[test]
 fn test_auto_detect_timestamp() {
-    let tz = TimeZone::UTC;
+    let tz = Tz::UTC;
 
     // DD-MON-YYYY
     assert!(auto_detect_timestamp("17-DEC-1980 10:30:00", &tz).is_some());
@@ -1170,7 +1172,7 @@ fn test_auto_detect_timestamp() {
 
 #[test]
 fn test_auto_detect_timestamp_tz_unit() {
-    let tz = TimeZone::UTC;
+    let tz = Tz::UTC;
 
     // RFC 2822 with offset — offset should be preserved
     let ts_tz = auto_detect_timestamp_tz("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
@@ -1187,7 +1189,7 @@ fn test_calendar_monotonicity_check() {
     // (02:31 UTC): a range straddling that transition sees the wall clock
     // rewind across a day (and month) boundary.
     let st_johns = FunctionContext {
-        tz: TimeZone::get("America/St_Johns").unwrap(),
+        tz: "America/St_Johns".parse::<Tz>().unwrap(),
         ..FunctionContext::default()
     };
     let utc = FunctionContext::default();
@@ -1290,7 +1292,7 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
     use databend_common_expression::type_check::check_function;
 
     let st_johns = FunctionContext {
-        tz: TimeZone::get("America/St_Johns").unwrap(),
+        tz: "America/St_Johns".parse::<Tz>().unwrap(),
         ..FunctionContext::default()
     };
     let utc = FunctionContext::default();
@@ -1302,8 +1304,8 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
     for (name, return_type) in [
         // Exact `calc_domain`, guarded by the session time zone.
         ("to_yyyymmdd", DataType::Number(NumberDataType::UInt32)),
-        // `Full` calc_domain: exercises the fold's monotonic end-point path,
-        // which consumes `monotonicity_check`.
+        // MayThrow calc_domain: exercises the fold's safe monotonic end-point
+        // path, which consumes monotonicity_check.
         ("to_start_of_day", DataType::Timestamp),
     ] {
         let expr = check_function(
@@ -1330,7 +1332,14 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
             &st_johns,
             &BUILTIN_FUNCTIONS,
         );
-        assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
+        let expected_domain = if name == "to_start_of_day" {
+            // Rounders can now throw at SQL boundaries. Without a safe
+            // monotonic segment they must retain MayThrow, not just Full.
+            None
+        } else {
+            Some(Domain::full(&return_type))
+        };
+        assert_eq!(domain, expected_domain, "{name}");
 
         // Under a fixed offset the same range is a single segment: the
         // projection collapses to one day and folds to a constant.

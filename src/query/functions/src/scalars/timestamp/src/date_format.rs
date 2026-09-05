@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt;
 use std::borrow::Cow;
-use std::fmt::Display;
-use std::fmt::FormattingOptions;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::sync::LazyLock;
 
+use chrono::format::Item;
+use chrono::format::StrftimeItems;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::DateType;
@@ -178,18 +178,41 @@ pub(super) fn pg_format_to_strftime(pg_format_string: &str) -> String {
     result
 }
 
-// jiff don't support local formats:
-// https://github.com/BurntSushi/jiff/issues/219
+// Keep locale-dependent formats stable across datetime backends.
 fn replace_time_format(format: &str) -> Cow<'_, str> {
-    if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
-        let format = format
-            .replace("%c", "%x %X")
-            .replace("%x", "%F")
-            .replace("%X", "%T");
-        Cow::Owned(format)
+    let normalized = if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
+        Cow::Owned(
+            format
+                .replace("%c", "%x %X")
+                .replace("%x", "%F")
+                .replace("%X", "%T"),
+        )
     } else {
         Cow::Borrowed(format)
+    };
+
+    if !normalized.contains("%C") {
+        return normalized;
     }
+
+    let mut result = String::with_capacity(normalized.len() + 1);
+    let mut chars = normalized.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '%' {
+            result.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('%') => result.push_str("%%"),
+            Some('C') => result.push_str("%-C"),
+            Some(next) => {
+                result.push('%');
+                result.push(next);
+            }
+            None => result.push('%'),
+        }
+    }
+    Cow::Owned(result)
 }
 
 pub(super) fn register(registry: &mut FunctionRegistry) {
@@ -201,27 +224,20 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
             |micros, format, output, ctx| {
                 let ts = timestamp_from_micros(micros, &ctx.func_ctx.tz);
                 let format = prepare_format_string(format, &ctx.func_ctx.date_format_style);
-                let mut buf = String::new();
-                let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
-                if Display::fmt(&ts.strftime(&format), &mut formatter).is_err() {
+                let items = StrftimeItems::new(&format).collect::<Vec<_>>();
+                if items.iter().any(|item| matches!(item, Item::Error)) {
                     ctx.set_error(output.len(), format!("{format} is invalid time format"));
                     output.builder.commit_row();
                     output.validity.push(true);
-                    return;
-                }
-                match write!(output.builder.row_buffer, "{}", buf) {
-                    Ok(_) => {
+                } else {
+                    let mut rendered = String::new();
+                    if write!(rendered, "{}", ts.format_with_items(items.iter())).is_err() {
+                        ctx.set_error(output.len(), format!("{format} is invalid time format"));
                         output.builder.commit_row();
-                        output.validity.push(true);
+                    } else {
+                        output.builder.put_and_commit(rendered);
                     }
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("{format} is invalid time format, error {e}"),
-                        );
-                        output.builder.commit_row();
-                        output.validity.push(true);
-                    }
+                    output.validity.push(true);
                 }
             },
         ),
