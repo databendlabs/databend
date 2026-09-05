@@ -74,6 +74,7 @@ impl RuleFactory {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
+                ctx.get_stat_context().clone(),
             ))),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
@@ -117,8 +118,12 @@ impl RuleFactory {
                 Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
             }
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
-            RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
-            RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
+            RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
+                ctx.get_stat_context().clone(),
+            ))),
+            RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new(
+                ctx.get_stat_context().clone(),
+            ))),
             RuleID::CommuteJoinBaseTable => Ok(Box::new(RuleCommuteJoinBaseTable::new())),
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),

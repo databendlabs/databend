@@ -32,6 +32,7 @@ use crate::Visibility;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::BoundColumnRef;
@@ -90,6 +91,7 @@ impl EvalScalar {
     pub(crate) fn derive_item_stat(
         scalar: &ScalarExpr,
         input_statistics: &Statistics,
+        func_ctx: &FunctionContext,
         cardinality: StatCardinality,
     ) -> Result<Option<ColumnStat>> {
         let expr = scalar.as_symbol_expr()?;
@@ -107,7 +109,7 @@ impl EvalScalar {
 
         let Some(stat) = StatEvaluator::run(
             &expr,
-            &FunctionContext::default(),
+            func_ctx,
             &BUILTIN_FUNCTIONS,
             cardinality,
             &input_stats,
@@ -187,8 +189,8 @@ impl Operator for EvalScalar {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let input = rel_expr.derive_cardinality_child(0)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         if self.items.iter().all(|item| {
             matches!(
                 &item.scalar,
@@ -226,7 +228,12 @@ impl Operator for EvalScalar {
                 let stat = if let ScalarExpr::BoundColumnRef(column) = &item.scalar {
                     column_stats.get(&column.column.index).cloned()
                 } else {
-                    Self::derive_item_stat(&item.scalar, &input.statistics, cardinality)?
+                    Self::derive_item_stat(
+                        &item.scalar,
+                        &input.statistics,
+                        &stat_ctx.function_context,
+                        cardinality,
+                    )?
                 };
                 Ok(stat.map(|stat| (item.index, stat)))
             })
@@ -303,6 +310,8 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_meta_app::tenant::Tenant;
+    use databend_common_settings::Settings;
     use databend_common_statistics::StatBounds;
 
     use super::*;
@@ -384,7 +393,9 @@ mod tests {
             })),
         );
         let eval = SExpr::create_unary(EvalScalar { items }, input);
-        RelExpr::with_s_expr(&eval).derive_cardinality().unwrap()
+        RelExpr::with_s_expr(&eval)
+            .derive_cardinality(&StatContext::default())
+            .unwrap()
     }
 
     #[test]
@@ -415,7 +426,9 @@ mod tests {
             input,
         );
 
-        let derived = RelExpr::with_s_expr(&eval).derive_cardinality().unwrap();
+        let derived = RelExpr::with_s_expr(&eval)
+            .derive_cardinality(&StatContext::default())
+            .unwrap();
         assert!(Arc::ptr_eq(&derived, &input_stats));
     }
 
@@ -477,6 +490,63 @@ mod tests {
         assert_eq!(derived.bounds(), Some(StatBounds::Int { min: 11, max: 13 }));
         assert_eq!(derived.ndv(), NdvEstimate::exact(3.0));
         assert_eq!(derived.null_count(), StatCount::exact(2));
+    }
+
+    #[test]
+    fn test_derive_item_stat_uses_function_context_timezone() {
+        let input_statistics = Statistics {
+            precise_cardinality: Some(10),
+            column_stats: HashMap::from([(Symbol::new(0), column_stat(1, 2, 2.0))]),
+            top_n: Default::default(),
+            count_min_sketch: Default::default(),
+        };
+        let cast = ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(column_with_type(0, DataType::Date)),
+            target_type: Box::new(DataType::Timestamp),
+        });
+        let cardinality = StatCardinality::exact(10);
+        let settings = Settings::create(Tenant::new_literal("default"));
+        settings
+            .set_setting("timezone".to_string(), "Asia/Shanghai".to_string())
+            .unwrap();
+        let shanghai_tz = settings.get_output_format_settings().unwrap().jiff_timezone;
+
+        let utc = EvalScalar::derive_item_stat(
+            &cast,
+            &input_statistics,
+            &FunctionContext::default(),
+            cardinality,
+        )
+        .unwrap()
+        .unwrap();
+        let shanghai = EvalScalar::derive_item_stat(
+            &cast,
+            &input_statistics,
+            &FunctionContext {
+                tz: shanghai_tz,
+                ..FunctionContext::default()
+            },
+            cardinality,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(
+            utc.bounds(),
+            Some(StatBounds::Int {
+                min: 86_400_000_000,
+                max: 172_800_000_000,
+            })
+        );
+        assert_eq!(
+            shanghai.bounds(),
+            Some(StatBounds::Int {
+                min: 57_600_000_000,
+                max: 144_000_000_000,
+            })
+        );
     }
 
     #[test]

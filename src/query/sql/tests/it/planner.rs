@@ -27,6 +27,7 @@ use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -213,7 +214,8 @@ async fn write_statistics_trace_case(
     case: &StatisticsTraceGoldenCase,
 ) -> Result<()> {
     let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
-    let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+    let optimized =
+        optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "trace: {}", case.trace_file)?;
@@ -435,7 +437,7 @@ async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result
         )
         .await?;
     let plan = ctx.optimize_plan(plan).await?;
-    let plan = plan.format_indent(Default::default())?;
+    let plan = plan.format_indent(Default::default(), &StatContext::default())?;
     assert!(
         plan.contains("split(documents.s"),
         "ProjectSet should keep the lambda UDF body bound to documents.s:\n{plan}"

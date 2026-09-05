@@ -17,6 +17,7 @@ use std::io::Write;
 
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::ColumnEntry;
@@ -28,6 +29,7 @@ use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
@@ -161,7 +163,8 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         else {
             return Err(ErrorCode::Internal("expected query plan"));
         };
-        let opt_ctx = OptimizerContext::new(ctx, metadata.clone());
+        let opt_ctx =
+            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
         let mut collector = CollectStatisticsOptimizer::new(opt_ctx.clone());
         let s_expr = collector.optimize(*s_expr).await?;
         let s_expr = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::PushDownLimitSort])
@@ -179,7 +182,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
     let target = find_operator(&s_expr, case.operator.clone()).ok_or_else(|| {
         ErrorCode::Internal(format!("cannot find {:?} in optimized plan", case.operator))
     })?;
-    let stats = RelExpr::with_s_expr(target).derive_cardinality()?;
+    let stats = RelExpr::with_s_expr(target).derive_cardinality(&StatContext::default())?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;

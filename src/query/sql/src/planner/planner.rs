@@ -312,15 +312,19 @@ impl Planner {
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
 
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
-            .with_settings(&settings)?
-            .set_enable_distributed_optimization(
-                !force_disable_distributed_optimization
-                    && !self.ctx.get_cluster().is_empty()
-                    && !settings.get_enforce_local()?,
-            )
-            .set_sample_executor(self.query_executor.clone())
-            .clone();
+        let opt_ctx = OptimizerContext::new(
+            self.ctx.clone(),
+            metadata.clone(),
+            self.ctx.get_function_context()?,
+        )
+        .with_settings(&settings)?
+        .set_enable_distributed_optimization(
+            !force_disable_distributed_optimization
+                && !self.ctx.get_cluster().is_empty()
+                && !settings.get_enforce_local()?,
+        )
+        .set_sample_executor(self.query_executor.clone())
+        .clone();
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 

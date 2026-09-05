@@ -22,6 +22,7 @@ use databend_common_statistics::StatCount;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
@@ -37,12 +38,14 @@ use crate::plans::ScalarExpr;
 pub struct RuleFoldCountAggregate {
     id: RuleID,
     matchers: Vec<Matcher>,
+    stat_context: StatContext,
 }
 
 impl RuleFoldCountAggregate {
-    pub fn new() -> Self {
+    pub fn new(stat_context: StatContext) -> Self {
         Self {
             id: RuleID::FoldCountAggregate,
+            stat_context,
             //  Aggregate
             //  \
             //   *
@@ -67,7 +70,7 @@ impl Rule for RuleFoldCountAggregate {
         }
 
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let input_stat_info = rel_expr.derive_cardinality_child(0)?;
+        let input_stat_info = rel_expr.derive_cardinality_child(0, &self.stat_context)?;
 
         let is_simple_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
@@ -124,6 +127,6 @@ impl Rule for RuleFoldCountAggregate {
 
 impl Default for RuleFoldCountAggregate {
     fn default() -> Self {
-        Self::new()
+        Self::new(StatContext::default())
     }
 }

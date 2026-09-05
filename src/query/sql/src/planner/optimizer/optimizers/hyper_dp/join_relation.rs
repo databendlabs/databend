@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 
 pub type RelationId = usize;
 pub type RelationSet = Box<[RelationId]>;
@@ -38,9 +39,9 @@ impl JoinRelation {
         self.s_expr.clone()
     }
 
-    pub fn cardinality(&self) -> Result<f64> {
+    pub fn cardinality(&self, stat_context: &StatContext) -> Result<f64> {
         let rel_expr = RelExpr::with_s_expr(&self.s_expr);
-        let card = rel_expr.derive_cardinality()?.cardinality;
+        let card = rel_expr.derive_cardinality(stat_context)?.cardinality;
         Ok(card)
     }
 }
