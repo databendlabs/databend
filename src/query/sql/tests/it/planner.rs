@@ -462,6 +462,17 @@ async fn test_execute_immediate_binds_session_variable_script() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_execute_immediate_applies_statement_settings() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    ctx.bind_sql("EXECUTE IMMEDIATE 'SETTINGS (enable_auto_materialize_cte = 1) SELECT 1'")
+        .await?;
+
+    assert!(ctx.get_settings().get_enable_auto_materialize_cte()?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_time_travel_binds_session_variable_snapshot() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.register_setup_sql("CREATE TABLE t(c int)").await?;

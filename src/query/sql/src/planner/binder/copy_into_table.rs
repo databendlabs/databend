@@ -24,10 +24,7 @@ use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
-use databend_common_ast::ast::Hint;
-use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
@@ -61,7 +58,6 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
-use log::warn;
 use parking_lot::RwLock;
 
 use crate::BindContext;
@@ -566,29 +562,6 @@ impl Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-
-        // disable variant check to allow copy invalid JSON into tables
-        let disable_variant_check = plan
-            .stage_table_info
-            .copy_into_table_options
-            .disable_variant_check;
-        if disable_variant_check {
-            let hints = Hint {
-                hints_list: vec![HintItem {
-                    name: Identifier::from_name(None, "disable_variant_check"),
-                    expr: Expr::Literal {
-                        span: None,
-                        value: Literal::UInt64(1),
-                    },
-                }],
-            };
-            if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
-                warn!(
-                    "In COPY resolve optimize hints {:?} failed, err: {:?}",
-                    hints, e
-                );
-            }
-        }
 
         plan.query = Some(Box::new(Plan::Query {
             s_expr: Box::new(s_expr),

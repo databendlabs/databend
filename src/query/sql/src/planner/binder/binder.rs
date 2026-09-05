@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
@@ -20,8 +19,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono_tz::Tz;
-use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
@@ -34,9 +31,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
@@ -47,7 +41,6 @@ use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_storages_common_table_meta::table::is_stream_name;
-use log::warn;
 
 use super::Any;
 use crate::BindContext;
@@ -61,7 +54,6 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
-use crate::binder::wrap_cast;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::ScanRequiredColumns;
@@ -206,9 +198,12 @@ impl Binder {
                 }
             }
 
-            Statement::StatementWithSettings { settings, stmt } => {
-                self.bind_statement_settings(bind_context, settings, stmt)
-                    .await?
+            Statement::StatementWithSettings { settings: _, stmt } => {
+                if let box Statement::StatementWithSettings { .. } = stmt {
+                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                } else {
+                    self.bind_statement(bind_context, stmt).await?
+                }
             }
 
             Statement::Explain {
@@ -255,27 +250,9 @@ impl Binder {
                     .await?
             }
 
-            Statement::CopyIntoTable(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_copy_into_table(bind_context, stmt).await?
-            }
+            Statement::CopyIntoTable(stmt) => self.bind_copy_into_table(bind_context, stmt).await?,
 
             Statement::CopyIntoLocation(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
                 self.bind_copy_into_location(bind_context, stmt).await?
             }
 
@@ -544,64 +521,14 @@ impl Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
-            Statement::Insert(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "In INSERT resolve optimize hints {:?} failed, err: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_insert(bind_context, stmt).await?
-            }
+            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
             Statement::InsertMultiTable(stmt) => {
                 self.bind_insert_multi_table(bind_context, stmt).await?
             }
-            Statement::Replace(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve REPLACE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_replace(bind_context, stmt).await?
-            }
-            Statement::MergeInto(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve MERGE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_merge_into(bind_context, stmt).await?
-            }
-            Statement::Delete(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve DELETE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_delete(bind_context, stmt).await?
-            }
-            Statement::Update(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve UPDATE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_update(bind_context, stmt).await?
-            }
+            Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
+            Statement::MergeInto(stmt) => self.bind_merge_into(bind_context, stmt).await?,
+            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt).await?,
+            Statement::Update(stmt) => self.bind_update(bind_context, stmt).await?,
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
@@ -960,57 +887,6 @@ impl Binder {
         )?;
         let (scalar, _) = *type_checker.resolve(expr)?;
         Ok(scalar)
-    }
-
-    pub(crate) fn opt_hints_set_var(
-        &mut self,
-        bind_context: &mut BindContext,
-        hints: &Hint,
-    ) -> Result<()> {
-        let mut type_checker = TypeChecker::try_create(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            false,
-        )?;
-        let mut hint_settings: HashMap<String, String> = HashMap::new();
-        for hint in &hints.hints_list {
-            let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr)?;
-
-            let scalar = wrap_cast(&scalar, &DataType::String);
-            let expr = scalar.as_expr()?;
-
-            let (new_expr, _) = ConstantFolder::fold(
-                Cow::Owned(expr),
-                &self.ctx.get_function_context()?,
-                &BUILTIN_FUNCTIONS,
-            );
-            match new_expr.into_owned() {
-                Expr::Constant(Constant { scalar, .. }) => {
-                    let value = scalar.into_string().unwrap();
-                    if variable.to_lowercase().as_str() == "timezone" {
-                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
-                        tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
-                        })?;
-                    }
-                    hint_settings.entry(variable.to_string()).or_insert(value);
-                }
-                _ => {
-                    warn!(
-                        "[SQL-BINDER] Failed to fold hint {:?}: value must be a constant",
-                        hint
-                    );
-                }
-            }
-        }
-
-        self.ctx
-            .get_shared_settings()
-            .set_batch_settings(&hint_settings, true)
     }
 
     pub fn set_bind_recursive_cte(&mut self, val: Option<String>) {

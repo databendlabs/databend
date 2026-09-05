@@ -511,7 +511,7 @@ mod tests {
         settings
             .set_setting("timezone".to_string(), "Asia/Shanghai".to_string())
             .unwrap();
-        let shanghai_tz = settings.get_output_format_settings().unwrap().jiff_timezone;
+        let shanghai_tz = settings.get_output_format_settings().unwrap().timezone;
 
         let utc = EvalScalar::derive_item_stat(
             &cast,
