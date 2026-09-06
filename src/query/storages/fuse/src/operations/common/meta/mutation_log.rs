@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -46,6 +47,7 @@ pub enum MutationLogEntry {
         segment_location: String,
         format_version: FormatVersion,
         summary: Statistics,
+        level_stats: Vec<ClusterLevelLogStats>,
         hll: BlockHLL,
         top_n: BlockTopN,
     },

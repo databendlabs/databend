@@ -173,14 +173,16 @@ impl IPhysicalPlan for Recluster {
                     metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
                     metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
 
-                    log::info!(
-                        "recluster: scheduled blocks level={} block_count={} rows={} bytes={} compressed={}",
-                        task.level,
-                        recluster_block_nums,
-                        task.total_rows,
-                        task.total_bytes,
-                        task.total_compressed,
-                    );
+                    for stats in &task.input_level_stats {
+                        log::info!(
+                            table_id = table.get_id(),
+                            level = stats.level,
+                            block_count = stats.block_count,
+                            block_size = stats.block_size,
+                            file_size = stats.file_size;
+                            "fuse recluster input"
+                        );
+                    }
                 }
 
                 builder.ctx.set_partitions(plan.parts.clone())?;
