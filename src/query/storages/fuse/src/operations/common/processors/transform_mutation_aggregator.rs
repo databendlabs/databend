@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::BlockMetaWithHLL;
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -84,6 +85,7 @@ pub struct TableMutationAggregator {
 
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
+    output_level_stats: BTreeMap<Option<i32>, ClusterLevelLogStats>,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
@@ -126,6 +128,23 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             self.write_segment_ctx.kind, self.processed_log_entries
         );
         self.generate_append_segments().await?;
+        let message = match self.write_segment_ctx.kind {
+            MutationKind::Insert => Some("fuse insert output"),
+            MutationKind::Recluster => Some("fuse recluster output"),
+            _ => None,
+        };
+        if let Some(message) = message {
+            for (&level, stats) in &self.output_level_stats {
+                info!(
+                    table_id = self.table_id,
+                    level,
+                    block_count = stats.block_count,
+                    block_size = stats.block_size,
+                    file_size = stats.file_size;
+                    "{message}"
+                );
+            }
+        }
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
@@ -227,6 +246,7 @@ impl TableMutationAggregator {
             virtual_schema_mode: VirtualSchemaMode::Merge,
             base_segments,
             merged_blocks,
+            output_level_stats: BTreeMap::new(),
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
             removed_statistics,
@@ -274,6 +294,13 @@ impl TableMutationAggregator {
                 block_meta,
                 merge_hll,
             } => {
+                // Count newly written blocks only, not preloaded remained_blocks.
+                if matches!(self.write_segment_ctx.kind, MutationKind::Recluster) {
+                    ClusterLevelLogStats::accumulate(
+                        &mut self.output_level_stats,
+                        &block_meta.block_meta,
+                    );
+                }
                 // MERGE and REPLACE append logical INSERT/UPDATE after-images.
                 if merge_hll
                     || matches!(
@@ -304,9 +331,19 @@ impl TableMutationAggregator {
                 segment_location,
                 format_version,
                 summary,
+                level_stats,
                 hll,
                 top_n,
             } => {
+                if matches!(self.write_segment_ctx.kind, MutationKind::Insert) {
+                    for stats in level_stats {
+                        let total = self.output_level_stats.entry(stats.level).or_default();
+                        total.level = stats.level;
+                        total.block_count += stats.block_count;
+                        total.block_size += stats.block_size;
+                        total.file_size += stats.file_size;
+                    }
+                }
                 merge_statistics_mut(
                     &mut self.appended_statistics,
                     &summary,

@@ -402,7 +402,8 @@ impl ReclusterMutator {
                         average_depth: 0.0,
                     },
                     selected_blocks: Vec::new(),
-                    output_level: 0,
+                    base_level: 0,
+                    input_level_stats: Vec::new(),
                     all_ordered: false,
                 });
             } else {
@@ -590,7 +591,8 @@ impl ReclusterMutator {
                     total_rows,
                     total_bytes,
                     total_compressed,
-                    level: candidate.output_level,
+                    level: candidate.base_level,
+                    input_level_stats: candidate.input_level_stats.clone(),
                     all_ordered: candidate.all_ordered,
                 });
                 selected_block_count += block_metas.len() as u64;
