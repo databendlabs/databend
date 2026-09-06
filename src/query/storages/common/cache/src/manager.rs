@@ -36,7 +36,6 @@ use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
-use crate::caches::ColumnArrayCache;
 use crate::caches::ColumnDataCache;
 use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
@@ -48,6 +47,7 @@ use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
 use crate::caches::SpatialIndexFileCache;
 use crate::caches::SpatialIndexMetaCache;
+use crate::caches::TableDataCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::caches::VectorIndexFileCache;
@@ -118,7 +118,7 @@ pub struct CacheManager {
     virtual_column_meta_cache: CacheSlot<VirtualColumnMetaCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
-    in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
+    in_memory_table_data_cache: CacheSlot<TableDataCache>,
     segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
 
@@ -835,7 +835,7 @@ impl CacheManager {
         self.get_hybrid_cache(self.column_data_cache.get())
     }
 
-    pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
+    pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
         self.in_memory_table_data_cache.get()
     }
 
@@ -1023,6 +1023,8 @@ mod tests {
 
     use super::*;
     use crate::ColumnData;
+    use crate::TableDataCacheEntry;
+
     fn config_with_disk_cache_enabled(cache_path: &str) -> CacheConfig {
         CacheConfig {
             data_cache_storage: CacheStorageTypeInnerConfig::Disk,
@@ -1259,9 +1261,12 @@ mod tests {
         // ----- POPULATE BASIC CACHES -----
 
         // 1. Populate in-memory table data cache
-        let in_memory_table_data_cache = cache_manager.get_table_data_array_cache().unwrap();
+        let in_memory_table_data_cache = cache_manager.get_table_data_cache().unwrap();
         let array: ArrayRef = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5]));
-        in_memory_table_data_cache.insert("not matter".to_string(), (array, 1));
+        in_memory_table_data_cache.insert(
+            "not matter".to_string(),
+            TableDataCacheEntry::from_column_array(array, 1),
+        );
 
         // 2. Populate segment block metas cache
         let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache().unwrap();
@@ -1342,7 +1347,7 @@ mod tests {
 
         // ----- VERIFY INITIAL CACHE STATE -----
         // Verify all caches are correctly populated
-        assert!(!cache_manager.get_table_data_array_cache().is_empty());
+        assert!(!cache_manager.get_table_data_cache().is_empty());
         assert!(
             !cache_manager
                 .get_segment_block_metas_cache()

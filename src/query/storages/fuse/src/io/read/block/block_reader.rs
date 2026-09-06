@@ -272,7 +272,7 @@ impl BlockReadContext {
         let read_from_in_mem_cache_array: usize = block_read_res
             .cached_column_array
             .iter()
-            .map(|(_, sized_array)| sized_array.1)
+            .map(|(_, cache_entry)| cache_entry.memory_size())
             .sum();
 
         cache_metrics.add_cache_metrics(
