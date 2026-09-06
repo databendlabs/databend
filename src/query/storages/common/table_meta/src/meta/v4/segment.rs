@@ -546,6 +546,7 @@ mod tests {
             file_size: 16,
             col_stats: block_col_stats,
             col_metas,
+            column_groups: vec![],
             cluster_stats: None,
             partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
                 "partition-a".to_string(),

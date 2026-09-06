@@ -241,6 +241,10 @@ impl BlockReader {
 }
 
 impl BlockReadContext {
+    pub(crate) fn table_context(&self) -> &Arc<dyn TableContext> {
+        &self.ctx
+    }
+
     pub fn operator(&self) -> &Operator {
         &self.operator
     }

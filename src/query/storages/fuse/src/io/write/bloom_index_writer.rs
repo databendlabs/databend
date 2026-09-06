@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -139,6 +140,18 @@ pub struct BloomIndexRebuilder {
 }
 
 impl BloomIndexRebuilder {
+    pub(crate) fn validate_rebuild_version(bloom_index_location: &Location) -> Result<()> {
+        if bloom_index_location.1 != BlockFilter::VERSION {
+            return Err(ErrorCode::DeprecatedIndexFormat(format!(
+                "cannot rebuild Bloom index {:?} in legacy format {} with current format {}",
+                bloom_index_location,
+                bloom_index_location.1,
+                BlockFilter::VERSION
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn bloom_index_state_from_block_meta(
         &self,
         bloom_index_location: &Location,
@@ -158,7 +171,6 @@ impl BloomIndexRebuilder {
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;
-
         let merge_io_read_result = block_reader
             .read_columns_data_by_merge_io(
                 &settings,
@@ -173,7 +185,7 @@ impl BloomIndexRebuilder {
             merge_io_read_result,
         )?;
 
-        assert_eq!(bloom_index_location.1, BlockFilter::VERSION);
+        Self::validate_rebuild_version(bloom_index_location)?;
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
             self.bloom_index_type,
@@ -190,5 +202,24 @@ impl BloomIndexRebuilder {
                 bloom_index,
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+    use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_table_meta::meta::Versioned;
+
+    use super::BloomIndexRebuilder;
+
+    #[test]
+    fn test_validate_rebuild_version_rejects_legacy_format() {
+        let legacy_location = ("legacy-bloom".to_string(), BlockFilter::VERSION - 1);
+        let err = BloomIndexRebuilder::validate_rebuild_version(&legacy_location).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::DEPRECATED_INDEX_FORMAT);
+
+        let current_location = ("current-bloom".to_string(), BlockFilter::VERSION);
+        BloomIndexRebuilder::validate_rebuild_version(&current_location).unwrap();
     }
 }

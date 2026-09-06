@@ -119,13 +119,9 @@ pub async fn read_block(
     block_meta: &BlockMeta,
     read_settings: &ReadSettings,
 ) -> Result<DataBlock> {
+    let column_groups = reader.projected_column_groups(block_meta);
     let merged_io_read_result = reader
-        .read_columns_data_by_merge_io(
-            read_settings,
-            &block_meta.location.0,
-            &block_meta.col_metas,
-            &None,
-        )
+        .read_column_groups_data_by_merge_io(read_settings, &column_groups, &None)
         .await?;
 
     // deserialize block data
@@ -136,14 +132,16 @@ pub async fn read_block(
     GlobalIORuntime::instance()
         .spawn(async move {
             let column_chunks = merged_io_read_result.columns_chunks()?;
-            reader.deserialize_chunks(
-                block_meta_ptr.location.0.as_str(),
-                block_meta_ptr.row_count as usize,
-                &block_meta_ptr.compression,
-                &block_meta_ptr.col_metas,
-                column_chunks,
-                &storage_format,
-            )
+            match storage_format {
+                FuseStorageFormat::Parquet => reader.deserialize_column_groups(
+                    block_meta_ptr.row_count as usize,
+                    &column_groups,
+                    column_chunks,
+                    &block_meta_ptr.compression,
+                    None,
+                ),
+                FuseStorageFormat::Unsupported => Err(crate::unsupported_storage_format_error()),
+            }
         })
         .await
         .map_err(|e| {

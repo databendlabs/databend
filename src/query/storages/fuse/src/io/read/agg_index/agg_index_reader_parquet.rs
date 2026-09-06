@@ -28,14 +28,7 @@ impl AggIndexReader {
     ) -> Result<DataBlock> {
         let columns_chunks = data.columns_chunks()?;
         let part = FuseBlockPartInfo::from_part(&part)?;
-        let block = self.reader.deserialize_parquet_chunks(
-            part.nums_rows,
-            &part.columns_meta,
-            columns_chunks,
-            &part.compression,
-            &part.location,
-            None,
-        )?;
+        let block = self.reader.deserialize_part(part, columns_chunks, None)?;
 
         self.apply_agg_info(block)
     }

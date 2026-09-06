@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_cache::ColumnData;
@@ -34,7 +33,7 @@ pub enum DataItem<'a> {
 }
 
 pub struct BlockReadResult {
-    merge_io_result: MergeIOReadResult,
+    merge_io_results: Vec<MergeIOReadResult>,
     pub(crate) cached_column_data: CachedColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
 }
@@ -46,22 +45,46 @@ impl BlockReadResult {
         cached_column_array: CachedColumnArray,
     ) -> BlockReadResult {
         BlockReadResult {
-            merge_io_result,
+            merge_io_results: vec![merge_io_result],
+            cached_column_data,
+            cached_column_array,
+        }
+    }
+
+    pub(crate) fn merge(results: Vec<BlockReadResult>) -> BlockReadResult {
+        let mut merge_io_results = Vec::with_capacity(results.len());
+        let mut cached_column_data = vec![];
+        let mut cached_column_array = vec![];
+
+        for result in results {
+            merge_io_results.extend(result.merge_io_results);
+            cached_column_data.extend(result.cached_column_data);
+            cached_column_array.extend(result.cached_column_array);
+        }
+
+        BlockReadResult {
+            merge_io_results,
             cached_column_data,
             cached_column_array,
         }
     }
 
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {
-        let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
+        let capacity = self
+            .merge_io_results
+            .iter()
+            .map(|result| result.columns_chunk_offsets.len())
+            .sum();
+        let mut res = HashMap::with_capacity(capacity);
 
         // merge column data fetched from object storage
-        for (column_id, (chunk_idx, range)) in &self.merge_io_result.columns_chunk_offsets {
-            let chunk = self
-                .merge_io_result
-                .owner_memory
-                .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
-            res.insert(*column_id, DataItem::RawData(chunk.slice(range.clone())));
+        for merge_io_result in &self.merge_io_results {
+            for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+                let chunk = merge_io_result
+                    .owner_memory
+                    .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+                res.insert(*column_id, DataItem::RawData(chunk.slice(range.clone())));
+            }
         }
 
         // merge column data from cache
@@ -72,26 +95,6 @@ impl BlockReadResult {
         // merge column array from cache
         for (column_id, data) in &self.cached_column_array {
             res.insert(*column_id, DataItem::ColumnArray(data));
-        }
-
-        Ok(res)
-    }
-
-    pub fn column_buffers(&self) -> Result<HashMap<ColumnId, Bytes>> {
-        let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
-
-        // merge column data fetched from object storage
-        for (column_id, (chunk_idx, range)) in &self.merge_io_result.columns_chunk_offsets {
-            let chunk = self
-                .merge_io_result
-                .owner_memory
-                .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
-            res.insert(*column_id, chunk.slice(range.clone()).to_bytes());
-        }
-
-        // merge column data from cache
-        for (column_id, data) in &self.cached_column_data {
-            res.insert(*column_id, data.bytes());
         }
 
         Ok(res)
