@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use chrono::Weekday;
+use chrono_tz::Tz;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::DateType;
@@ -21,7 +22,6 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::vectorize_with_builder_4_arg;
-use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
 

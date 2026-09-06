@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
@@ -24,7 +25,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_storage::init_stage_operator;
-use databend_common_timezone::Tz;
 
 use super::OrcTable;
 use crate::processors::decoder::StripeDecoder;

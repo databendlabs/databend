@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use chrono_tz::Tz;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -39,7 +40,6 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
-use databend_common_timezone::Tz;
 use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::read_record_batch_to_variant_column;
 use databend_storages_common_stage::record_batch_to_variant_block;

@@ -14,6 +14,7 @@
 
 use chrono::Datelike;
 use chrono::NaiveDate;
+use chrono_tz::Tz;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
@@ -32,13 +33,12 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::LocalTimeResolution;
-use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
 use databend_common_timezone::local_datetime_at;
@@ -215,7 +215,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         let utc = result.checked_sub(offset_micros).ok_or_else(|| {
                             "Invalid date: timestamp timezone value is out of range".to_string()
                         })?;
-                        ensure_timestamp_tz_range(utc)?;
+                        let utc = ensure_timestamp_tz_range(utc)?;
                         Ok(timestamp_tz::new(utc, offset))
                     },
                     Tz::UTC,
@@ -272,7 +272,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         let utc = result.checked_sub(offset_micros).ok_or_else(|| {
                             "Invalid date: timestamp timezone value is out of range".to_string()
                         })?;
-                        ensure_timestamp_tz_range(utc)?;
+                        let utc = ensure_timestamp_tz_range(utc)?;
                         Ok(timestamp_tz::new(utc, offset))
                     },
                     Tz::UTC,
@@ -357,7 +357,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         let utc = result.checked_sub(offset_micros).ok_or_else(|| {
                             "Invalid date: timestamp timezone value is out of range".to_string()
                         })?;
-                        ensure_timestamp_tz_range(utc)?;
+                        let utc = ensure_timestamp_tz_range(utc)?;
                         Ok(timestamp_tz::new(utc, offset))
                     },
                     Tz::UTC,
@@ -857,10 +857,11 @@ pub(crate) fn civil_date_from_days(days: i128) -> (i128, u8, u8) {
     (year, month as u8, day as u8)
 }
 
-pub(crate) fn ensure_timestamp_range(timestamp: i64) -> std::result::Result<i64, String> {
-    // Check the resulting UTC instant, not intermediate local calendar fields.
+pub(crate) fn ensure_timestamp_range(mut timestamp: i64) -> std::result::Result<i64, String> {
+    // Clamp only the completed UTC result, never intermediate local calendar fields.
     // Local year 11001 can still map to a legal UTC instant in a positive offset.
-    check_timestamp(timestamp)
+    clamp_timestamp(&mut timestamp);
+    Ok(timestamp)
 }
 
 fn ensure_timestamp_tz_range(timestamp: i64) -> std::result::Result<i64, String> {

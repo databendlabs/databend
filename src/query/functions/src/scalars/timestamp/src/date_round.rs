@@ -15,6 +15,7 @@
 use chrono::Datelike;
 use chrono::NaiveDate as Date;
 use chrono::Weekday;
+use chrono_tz::Tz;
 use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
@@ -25,6 +26,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::DATE_MAX;
 use databend_common_expression::types::date::DATE_MIN;
 use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
@@ -32,7 +34,6 @@ use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
 
@@ -240,7 +241,7 @@ fn previous_or_next_date_day(date: &Date, target: Weekday, is_previous: bool) ->
 
     days_diff = if days_diff == 0 { 7 } else { days_diff };
 
-    date_to_inner_number(date) + dir * days_diff
+    clamp_date((date_to_inner_number(date) + dir * days_diff) as i64)
 }
 
 fn rounding_monotonicity(ctx: &FunctionContext, args: &[Domain]) -> Option<usize> {

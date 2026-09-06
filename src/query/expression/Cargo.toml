@@ -20,6 +20,7 @@ base64 = { workspace = true }
 borsh = { workspace = true }
 bumpalo = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }

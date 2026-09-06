@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Timelike;
 use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -29,7 +30,6 @@ use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::utils::serialize::uniform_date;
 use databend_common_expression::vectorize_with_builder_1_arg;
-use databend_common_timezone::Tz;
 use databend_common_timezone::fast_utc_from_local;
 use databend_common_timezone::local_datetime_at;
 
@@ -119,10 +119,16 @@ pub(super) fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    // Conversion domains are calculated by their overloads. A global monotonic
-    // flag is unsound for extended-year strings, AUTO numeric units, timezone
-    // transitions, and conversions which can fail at the SQL range boundaries.
-    // In particular, byte ordering of "+10000" and "9999" is reversed.
+    // Preserve the existing conversion folding policy. Its global monotonicity
+    // assumptions need to be addressed separately from the datetime backend.
+    for name in &["to_timestamp", "to_timestamp_tz", "to_date"] {
+        registry
+            .properties
+            .insert(name.to_string(), FunctionProperty::default().monotonicity());
+    }
+
+    // Do not mark to_string as monotonic: byte ordering of "+10000" and "9999"
+    // is reversed in the extended datetime range.
 
     registry.register_0_arg_core::<TimestampType, _>(
         "now",

@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use arrow_array::RecordBatch;
+use chrono_tz::Tz;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
-use databend_common_timezone::Tz;
 
 pub fn read_record_batch_to_variant_column(
     record_batch: RecordBatch,

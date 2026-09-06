@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Write;
 
+use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::QuotedString;
@@ -31,7 +32,6 @@ use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_wkt;
-use databend_common_timezone::Tz;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use chrono_tz::Tz;
 use dashmap::DashMap;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -27,7 +28,6 @@ use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_timezone::Tz;
 use itertools::Itertools;
 use serde::Deserializer;
 use serde::Serializer;

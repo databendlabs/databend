@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::string::String;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,7 +41,6 @@ use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_sql::binder::AsyncFunctionDesc;
-use databend_common_timezone::Tz;
 use redis::AsyncCommands;
 use redis::Client;
 use redis::ConnectionInfo;

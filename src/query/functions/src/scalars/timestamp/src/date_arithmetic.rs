@@ -15,6 +15,7 @@
 use chrono::Datelike;
 use chrono::NaiveDate as Date;
 use chrono::TimeDelta;
+use chrono_tz::Tz;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_expression::EvalContext;
@@ -28,18 +29,17 @@ use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::DATE_MAX;
 use databend_common_expression::types::date::DATE_MIN;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
-use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_timezone::DateTimeComponents;
-use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
 use num_traits::AsPrimitive;
 
@@ -166,7 +166,7 @@ fn timestamp_components(timestamp: i64, timezone: &Tz) -> DateTimeComponents {
 }
 
 pub(crate) fn ensure_date_range(value: i64) -> std::result::Result<i32, String> {
-    check_date(value)
+    Ok(clamp_date(value))
 }
 
 #[inline]
@@ -542,18 +542,15 @@ impl EvalWeeksImpl {
 pub(super) struct EvalDaysImpl;
 
 impl EvalDaysImpl {
-    pub(super) fn eval_date(date: i32, delta: i64) -> Result<i32, String> {
-        i64::from(date)
-            .checked_add(delta)
-            .ok_or_else(|| "Invalid date: date arithmetic overflow".to_string())
-            .and_then(check_date)
+    pub(super) fn eval_date(date: i32, delta: i64) -> i32 {
+        clamp_date((date as i64).saturating_add(delta))
     }
 
     pub(super) fn eval_date_diff(date_start: i32, date_end: i32) -> i32 {
         date_end - date_start
     }
 
-    pub(super) fn eval_timestamp(date: i64, delta: i64) -> Result<i64, String> {
+    pub(super) fn eval_timestamp(date: i64, delta: i64) -> i64 {
         EvalTimesImpl::eval_timestamp(date, delta, 86_400)
     }
 
@@ -587,14 +584,14 @@ impl EvalDaysImpl {
 struct EvalTimesImpl;
 
 impl EvalTimesImpl {
-    fn eval_timestamp(us: i64, delta: i64, factor: i64) -> Result<i64, String> {
-        // Widen before multiplication: an oversized interval must not wrap back
-        // into the SQL range and appear to be a valid date.
-        let value =
-            i128::from(us) + i128::from(delta) * i128::from(factor) * i128::from(MICROS_PER_SEC);
-        i64::try_from(value)
-            .map_err(|_| "Invalid date: timestamp arithmetic overflow".to_string())
-            .and_then(check_timestamp)
+    fn eval_timestamp(us: i64, delta: i64, factor: i64) -> i64 {
+        // Widen before multiplication so overflow cannot wrap into the valid range.
+        let value = us as i128 + delta as i128 * factor as i128 * MICROS_PER_SEC as i128;
+        if (TIMESTAMP_MIN as i128..=TIMESTAMP_MAX as i128).contains(&value) {
+            value as i64
+        } else {
+            TIMESTAMP_MIN
+        }
     }
 
     fn eval_timestamp_diff(date_start: i64, date_end: i64, factor: i64) -> i64 {
@@ -710,27 +707,17 @@ fn register_day_based_arith_function(
     name: &'static str,
     day_multiplier: i64,
 ) {
-    registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
+    registry.register_2_arg::<DateType, Int64Type, DateType, _>(
         name,
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(
-            move |date, delta, output, ctx| {
-                let result = scale_delta(delta, day_multiplier)
-                    .and_then(|delta| EvalDaysImpl::eval_date(date, delta));
-                push_result(result, output, ctx);
-            },
-        ),
+        |_, _, _| FunctionDomain::Full,
+        move |date, delta, _| EvalDaysImpl::eval_date(date, delta.saturating_mul(day_multiplier)),
     );
-    registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
+    registry.register_2_arg::<TimestampType, Int64Type, TimestampType, _>(
         name,
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-            move |timestamp, delta, output, ctx| {
-                let result = scale_delta(delta, day_multiplier)
-                    .and_then(|delta| EvalDaysImpl::eval_timestamp(timestamp, delta));
-                push_result(result, output, ctx);
-            },
-        ),
+        |_, _, _| FunctionDomain::Full,
+        move |timestamp, delta, _| {
+            EvalDaysImpl::eval_timestamp(timestamp, delta.saturating_mul(day_multiplier))
+        },
     );
 }
 
@@ -740,28 +727,20 @@ fn register_time_arith_function(
     delta_sign: i64,
     factor: i64,
 ) {
-    registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, TimestampType, _, _>(
+    registry.register_2_arg::<DateType, Int64Type, TimestampType, _>(
         name,
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
-            move |date, delta, output, ctx| {
-                let timestamp = i64::from(date) * MICROSECS_PER_DAY;
-                let result = scale_delta(delta, delta_sign)
-                    .and_then(|delta| EvalTimesImpl::eval_timestamp(timestamp, delta, factor));
-                push_result(result, output, ctx);
-            },
-        ),
+        |_, _, _| FunctionDomain::Full,
+        move |date, delta, _| {
+            let timestamp = date as i64 * MICROSECS_PER_DAY;
+            EvalTimesImpl::eval_timestamp(timestamp, delta.saturating_mul(delta_sign), factor)
+        },
     );
-    registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
+    registry.register_2_arg::<TimestampType, Int64Type, TimestampType, _>(
         name,
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-            move |timestamp, delta, output, ctx| {
-                let result = scale_delta(delta, delta_sign)
-                    .and_then(|delta| EvalTimesImpl::eval_timestamp(timestamp, delta, factor));
-                push_result(result, output, ctx);
-            },
-        ),
+        |_, _, _| FunctionDomain::Full,
+        move |timestamp, delta, _| {
+            EvalTimesImpl::eval_timestamp(timestamp, delta.saturating_mul(delta_sign), factor)
+        },
     );
 }
 
@@ -1393,9 +1372,17 @@ fn date_arithmetic_domain(raw_min: i128, raw_max: i128) -> FunctionDomain<DateTy
             min: raw_min as i32,
             max: raw_max as i32,
         })
+    } else if raw_min > DATE_MAX as i128 || raw_max < DATE_MIN as i128 {
+        FunctionDomain::Domain(SimpleDomain {
+            min: DATE_MIN,
+            max: DATE_MIN,
+        })
     } else {
-        // A reachable overflow must remain an error after constant folding.
-        FunctionDomain::MayThrow
+        // Include the minimum for overflowing rows, even when the upper endpoint overflows.
+        FunctionDomain::Domain(SimpleDomain {
+            min: DATE_MIN,
+            max: raw_max.min(DATE_MAX as i128) as i32,
+        })
     }
 }
 
@@ -1405,8 +1392,16 @@ fn timestamp_arithmetic_domain(raw_min: i128, raw_max: i128) -> FunctionDomain<T
             min: raw_min as i64,
             max: raw_max as i64,
         })
+    } else if raw_min > TIMESTAMP_MAX as i128 || raw_max < TIMESTAMP_MIN as i128 {
+        FunctionDomain::Domain(SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: TIMESTAMP_MIN,
+        })
     } else {
-        FunctionDomain::MayThrow
+        FunctionDomain::Domain(SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: raw_max.min(TIMESTAMP_MAX as i128) as i64,
+        })
     }
 }
 
@@ -1419,8 +1414,8 @@ pub(super) fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 i128::from(lhs.max) + i128::from(rhs.max),
             )
         },
-        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, ctx| {
-            push_result(EvalDaysImpl::eval_date(a, b), output, ctx);
+        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
+            output.push(EvalDaysImpl::eval_date(a, b));
         }),
     );
 
@@ -1433,12 +1428,10 @@ pub(super) fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
             )
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-            |a, b, output, ctx| {
-                let result = a
-                    .checked_add(b)
-                    .ok_or_else(|| "Invalid date: timestamp arithmetic overflow".to_string())
-                    .and_then(check_timestamp);
-                push_result(result, output, ctx);
+            |a, b, output, _| {
+                let mut sum = a.saturating_add(b);
+                clamp_timestamp(&mut sum);
+                output.push(sum);
             },
         ),
     );
@@ -1451,12 +1444,8 @@ pub(super) fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 i128::from(lhs.max) - i128::from(rhs.min),
             )
         },
-        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, ctx| {
-            let result = i64::from(a)
-                .checked_sub(b)
-                .ok_or_else(|| "Invalid date: date arithmetic overflow".to_string())
-                .and_then(check_date);
-            push_result(result, output, ctx);
+        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, _| {
+            output.push(clamp_date((a as i64).saturating_sub(b)));
         }),
     );
 
@@ -1469,12 +1458,10 @@ pub(super) fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
             )
         },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
-            |a, b, output, ctx| {
-                let result = a
-                    .checked_sub(b)
-                    .ok_or_else(|| "Invalid date: timestamp arithmetic overflow".to_string())
-                    .and_then(check_timestamp);
-                push_result(result, output, ctx);
+            |a, b, output, _| {
+                let mut difference = a.saturating_sub(b);
+                clamp_timestamp(&mut difference);
+                output.push(difference);
             },
         ),
     );

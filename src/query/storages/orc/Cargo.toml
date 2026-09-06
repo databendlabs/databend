@@ -28,8 +28,8 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 dashmap = { workspace = true }
-databend-common-timezone = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }

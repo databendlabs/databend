@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use chrono_tz::Tz;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -27,7 +28,6 @@ use databend_common_expression::TableSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
-use databend_common_timezone::Tz;
 use databend_storages_common_stage::add_internal_columns_with_meta;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use orc_rust::array_decoder::NaiveStripeDecoder;

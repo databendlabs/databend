@@ -18,6 +18,7 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+use chrono_tz::Tz;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
@@ -25,7 +26,6 @@ use databend_common_exception::Result;
 use databend_common_io::datetime::check_input_year;
 use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestamp;
 use databend_common_timezone::LocalTimeResolution;
-use databend_common_timezone::Tz;
 use databend_common_timezone::resolve_local_datetime;
 
 use super::ArgType;

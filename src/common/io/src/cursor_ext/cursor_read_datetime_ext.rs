@@ -19,10 +19,10 @@ use chrono::Datelike;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::Timelike;
+use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
-use databend_common_timezone::Tz;
 use databend_common_timezone::fast_utc_from_local;
 
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
@@ -65,7 +65,23 @@ fn days_from_epoch(date: &NaiveDate) -> i32 {
         .num_days() as i32
 }
 
-fn local_to_micros(tz: &Tz, local: &NaiveDateTime, micro: u32) -> Option<i64> {
+fn local_to_micros_checked(
+    tz: &Tz,
+    local: &NaiveDateTime,
+    micro: u32,
+    provided_offset: Option<i32>,
+) -> Result<i64> {
+    // Explicit offsets are independent of the session timezone and its DST gaps.
+    if let Some(offset) = provided_offset {
+        return local
+            .and_utc()
+            .timestamp()
+            .checked_sub(i64::from(offset))
+            .and_then(|seconds| seconds.checked_mul(MICROS_PER_SEC))
+            .and_then(|micros| micros.checked_add(i64::from(micro)))
+            .ok_or_else(|| ErrorCode::BadBytes("Datetime offset adjustment overflowed"));
+    }
+
     fast_utc_from_local(
         tz,
         local.year(),
@@ -76,26 +92,12 @@ fn local_to_micros(tz: &Tz, local: &NaiveDateTime, micro: u32) -> Option<i64> {
         local.second() as u8,
         micro,
     )
-}
-
-fn local_to_micros_checked(tz: &Tz, local: &NaiveDateTime, micro: u32) -> Result<i64> {
-    local_to_micros(tz, local, micro).ok_or_else(|| {
+    .ok_or_else(|| {
         ErrorCode::BadBytes(format!(
             "Invalid local datetime {} for timezone {tz}",
             local.format("%Y-%m-%d %H:%M:%S")
         ))
     })
-}
-
-/// Explicit offsets are independent of the session timezone and its DST gaps.
-fn micros_with_offset(local: &NaiveDateTime, micro: u32, offset: i32) -> Result<i64> {
-    local
-        .and_utc()
-        .timestamp()
-        .checked_sub(i64::from(offset))
-        .and_then(|seconds| seconds.checked_mul(MICROS_PER_SEC))
-        .and_then(|micros| micros.checked_add(i64::from(micro)))
-        .ok_or_else(|| ErrorCode::BadBytes("Datetime offset adjustment overflowed"))
 }
 
 fn try_read_standard_timestamp<T: AsRef<[u8]>>(
@@ -183,11 +185,7 @@ fn build_best_effort_result(
             ))
         })?;
 
-    let micros = if let Some(offset) = provided_offset {
-        micros_with_offset(&local, micro, offset)?
-    } else {
-        local_to_micros_checked(tz, &local, micro)?
-    };
+    let micros = local_to_micros_checked(tz, &local, micro, provided_offset)?;
     Ok(DateTimeResType::Datetime(micros))
 }
 
@@ -306,15 +304,14 @@ where T: AsRef<[u8]>
             v = "1970-01-01";
         }
 
-        let d = NaiveDate::parse_from_str(v, "%Y-%m-%d").map_err_to_code(
-            ErrorCode::BadBytes,
-            || {
+        let d = v
+            .parse::<NaiveDate>()
+            .map_err_to_code(ErrorCode::BadBytes, || {
                 format!(
                     "Date Parsing Error: The value '{}' could not be parsed into a valid Date",
                     v
                 )
-            },
-        )?;
+            })?;
         check_input_year(d.year())?;
 
         buf.clear();
@@ -325,7 +322,7 @@ where T: AsRef<[u8]>
             }
             let midnight = d.and_hms_opt(0, 0, 0).expect("midnight is valid");
             return Ok(DateTimeResType::Datetime(local_to_micros_checked(
-                tz, &midnight, 0,
+                tz, &midnight, 0, None,
             )?));
         }
 
@@ -360,7 +357,7 @@ where T: AsRef<[u8]>
                 return Ok(DateTimeResType::Date(days_from_epoch(&d)));
             }
             return Ok(DateTimeResType::Datetime(local_to_micros_checked(
-                tz, &local, 0,
+                tz, &local, 0, None,
             )?));
         }
 
@@ -402,11 +399,7 @@ where T: AsRef<[u8]>
             return Ok(DateTimeResType::Date(days_from_epoch(&d)));
         }
 
-        let micros = if let Some(offset) = explicit_offset {
-            micros_with_offset(&local, micro, offset)?
-        } else {
-            local_to_micros_checked(tz, &local, micro)?
-        };
+        let micros = local_to_micros_checked(tz, &local, micro, explicit_offset)?;
         Ok(DateTimeResType::Datetime(micros))
     }
 }

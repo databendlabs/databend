@@ -19,6 +19,7 @@ use std::iter::once;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
+use chrono_tz::Tz;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_expression::Column;
@@ -56,7 +57,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
@@ -65,6 +66,7 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
@@ -76,7 +78,6 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
@@ -3505,9 +3506,7 @@ fn cast_to_date(
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
-        JsonbValue::Date(date) => check_date(i64::from(date.value))
-            .map(Some)
-            .map_err(jsonb::Error::Message),
+        JsonbValue::Date(date) => Ok(Some(clamp_date(date.value as i64))),
         JsonbValue::String(s) => parse_date_with_auto(&s, tz, enable_auto_detect_datetime_format)
             .map(Some)
             .map_err(|e| {
@@ -3525,9 +3524,11 @@ fn cast_to_timestamp(
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
-        JsonbValue::Timestamp(ts) => check_timestamp(ts.value)
-            .map(Some)
-            .map_err(jsonb::Error::Message),
+        JsonbValue::Timestamp(ts) => {
+            let mut value = ts.value;
+            clamp_timestamp(&mut value);
+            Ok(Some(value))
+        }
         JsonbValue::String(s) => {
             parse_timestamp_with_auto(&s, tz, enable_auto_detect_datetime_format)
                 .map(Some)
@@ -3555,7 +3556,8 @@ fn cast_to_timestamp_tz(
             Ok(Some(timestamp_tz::new(ts.value, ts.offset)))
         }
         JsonbValue::Timestamp(ts) => {
-            let value = check_timestamp(ts.value).map_err(jsonb::Error::Message)?;
+            let mut value = ts.value;
+            clamp_timestamp(&mut value);
             let components = components_from_timestamp(value, tz);
             let offset = components.offset_seconds;
             Ok(Some(timestamp_tz::new(
