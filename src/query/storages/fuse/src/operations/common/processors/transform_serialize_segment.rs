@@ -401,11 +401,11 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         segment_location: location,
                         format_version,
                         summary: segment.summary().clone(),
+                        hll,
+                        top_n,
                         level_stats: std::mem::take(&mut self.level_stats)
                             .into_values()
                             .collect(),
-                        hll,
-                        top_n,
                     }],
                     ..Default::default()
                 };

@@ -462,8 +462,10 @@ pub struct ReclusterTask {
     /// Base level; the serializer requests `level + 1` (perfect blocks may become -1).
     pub level: i32,
     /// Effective input levels under the current cluster key, not historical stored levels.
+    #[serde(default)]
     pub input_level_stats: Vec<ClusterLevelLogStats>,
     // All input blocks in this task are already ordered by the current cluster key.
+    #[serde(default)]
     pub all_ordered: bool,
 }
 

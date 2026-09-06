@@ -47,9 +47,9 @@ pub enum MutationLogEntry {
         segment_location: String,
         format_version: FormatVersion,
         summary: Statistics,
-        level_stats: Vec<ClusterLevelLogStats>,
         hll: BlockHLL,
         top_n: BlockTopN,
+        level_stats: Vec<ClusterLevelLogStats>,
     },
     AppendBlock {
         block_meta: Arc<ExtendedBlockMeta>,

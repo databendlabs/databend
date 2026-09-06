@@ -331,9 +331,9 @@ impl TableMutationAggregator {
                 segment_location,
                 format_version,
                 summary,
-                level_stats,
                 hll,
                 top_n,
+                level_stats,
             } => {
                 if matches!(self.write_segment_ctx.kind, MutationKind::Insert) {
                     for stats in level_stats {
