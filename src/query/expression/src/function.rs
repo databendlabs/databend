@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -31,7 +32,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_io::prelude::BinaryDisplayFormat;
-use databend_common_timezone::Tz;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;

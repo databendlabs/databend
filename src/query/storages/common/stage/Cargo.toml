@@ -9,13 +9,13 @@ edition = { workspace = true }
 [dependencies]
 arrow-array = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-timezone = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 

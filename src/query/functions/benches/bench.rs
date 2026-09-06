@@ -621,6 +621,7 @@ mod datetime_fast_path {
     use chrono::NaiveDate;
     use chrono::Offset;
     use chrono::Timelike;
+    use chrono_tz::Tz;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
@@ -637,7 +638,6 @@ mod datetime_fast_path {
     use databend_common_expression_test_support as parser;
     use databend_common_functions::BUILTIN_FUNCTIONS;
     use databend_common_timezone::LocalTimeResolution;
-    use databend_common_timezone::Tz;
     use databend_common_timezone::resolve_local_datetime;
     use rand::Rng;
     use rand::SeedableRng;

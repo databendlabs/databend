@@ -35,6 +35,7 @@ use std::time::UNIX_EPOCH;
 use async_channel::Receiver;
 use async_channel::Sender;
 use chrono::Utc;
+use chrono_tz::Tz;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
@@ -138,7 +139,6 @@ use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_timezone::Tz;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;

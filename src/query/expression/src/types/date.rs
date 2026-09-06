@@ -17,12 +17,12 @@ use std::io::Cursor;
 
 use chrono::NaiveDate;
 use chrono::TimeDelta;
+use chrono_tz::Tz;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
 pub use databend_common_io::datetime::check_input_year;
-use databend_common_timezone::Tz;
 use num_traits::AsPrimitive;
 
 use super::ArgType;
@@ -53,6 +53,16 @@ pub fn date_from_days(days: impl AsPrimitive<i64>) -> NaiveDate {
         .expect("epoch date is valid")
         .checked_add_signed(TimeDelta::days(days.as_()))
         .expect("date day count is inside the chrono civil range")
+}
+
+/// Preserve the legacy conversion policy: either bound overflow maps to DATE_MIN.
+#[inline]
+pub fn clamp_date(days: i64) -> i32 {
+    if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
+        days as i32
+    } else {
+        DATE_MIN
+    }
 }
 
 /// Validate the SQL DATE range without silently changing the value.

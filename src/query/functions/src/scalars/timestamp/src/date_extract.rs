@@ -14,6 +14,7 @@
 
 use chrono::Datelike;
 use chrono::NaiveDate;
+use chrono_tz::Tz;
 use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
@@ -38,7 +39,6 @@ use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_timezone::DateTimeComponents;
-use databend_common_timezone::Tz;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::wall_clock_is_monotonic;
 

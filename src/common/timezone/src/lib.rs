@@ -27,7 +27,7 @@ use chrono::Offset;
 use chrono::TimeDelta;
 use chrono::TimeZone as _;
 use chrono::Utc;
-pub use chrono_tz::Tz;
+use chrono_tz::Tz;
 pub use civil::DateTimeComponents;
 pub use lut::components_from_timestamp;
 pub use lut::fast_utc_from_local;

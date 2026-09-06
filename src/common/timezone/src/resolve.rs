@@ -17,7 +17,7 @@
 use chrono::LocalResult;
 use chrono::NaiveDateTime;
 use chrono::Offset;
-use chrono::TimeZone as _;
+use chrono::TimeZone;
 use chrono_tz::GapInfo;
 use chrono_tz::Tz;
 
@@ -100,10 +100,7 @@ fn resolve_named(
     }
 }
 
-fn resolved<Tz: chrono::TimeZone>(
-    unix_seconds: i64,
-    value: &chrono::DateTime<Tz>,
-) -> ResolvedLocalTime {
+fn resolved<Tz: TimeZone>(unix_seconds: i64, value: &chrono::DateTime<Tz>) -> ResolvedLocalTime {
     ResolvedLocalTime {
         unix_seconds,
         offset_seconds: value.offset().fix().local_minus_utc(),

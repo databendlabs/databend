@@ -18,6 +18,7 @@ use std::io::Write;
 use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
@@ -32,7 +33,6 @@ use databend_common_expression::utils::auto_detect_datetime::auto_detect_timesta
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp_tz;
 use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_timezone::Tz;
 use goldenfile::Mint;
 
 use super::TestContext;

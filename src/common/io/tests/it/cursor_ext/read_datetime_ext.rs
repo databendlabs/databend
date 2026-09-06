@@ -15,8 +15,8 @@
 use std::io::Cursor;
 
 use chrono::NaiveDate;
+use chrono_tz::Tz;
 use databend_common_io::cursor_ext::*;
-use databend_common_timezone::Tz;
 use databend_common_timezone::local_datetime_at;
 
 /// Render microseconds as a local datetime in `tz`, for comparison against the

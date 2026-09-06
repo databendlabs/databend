@@ -12,6 +12,7 @@ blake3 = { workspace = true }
 borsh = { workspace = true }
 bstr = { workspace = true }
 bumpalo = { workspace = true }
+chrono-tz = { workspace = true }
 ctor = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }

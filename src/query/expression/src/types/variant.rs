@@ -16,9 +16,9 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use chrono_tz::Tz;
 use databend_common_exception::Result;
 use databend_common_io::deserialize_bitmap;
-use databend_common_timezone::Tz;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
 use jsonb::OwnedJsonb;

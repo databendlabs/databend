@@ -16,8 +16,8 @@ use std::borrow::Cow;
 
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
-use databend_common_timezone::Tz;
 
 use crate::GeometryDataType;
 

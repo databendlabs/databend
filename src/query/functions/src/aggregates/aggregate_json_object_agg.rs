@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateRegistry;
@@ -38,7 +39,6 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::*;
-use databend_common_timezone::Tz;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 

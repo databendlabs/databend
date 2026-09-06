@@ -18,12 +18,12 @@ use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
-use databend_common_timezone::Tz;
 use num_traits::AsPrimitive;
 
 use super::ArgType;
@@ -44,7 +44,8 @@ pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
 /// not exposed as an expanded input contract.
 /// Validate the final UTC instant after timezone resolution: a valid instant may
 /// display in local year 0 or 11001. Converting that local date to SQL DATE must
-/// separately validate DATE_MIN/MAX. Overflow is an error, never a clamp or wrap.
+/// separately validate DATE_MIN/MAX. Conversion and arithmetic paths retain
+/// their legacy overflow policies; display conversion clamps to these bounds.
 /// 0001-01-01 00:00:00.000000 UTC
 pub const TIMESTAMP_MIN: i64 = -62_135_596_800_000_000;
 /// 11000-12-31 23:59:59.999999 UTC
@@ -53,22 +54,28 @@ pub const TIMESTAMP_MAX: i64 = 284_990_831_999_999_999;
 pub const MICROS_PER_SEC: i64 = 1_000_000;
 pub const MICROS_PER_MILLI: i64 = 1_000;
 
-pub type ZonedTimestamp = DateTime<Tz>;
-
-/// Render an already validated instant without clamping it to a different value.
-/// Chrono has room for local year 0/11001 at the SQL timestamp boundaries.
-pub fn timestamp_from_micros(micros: impl AsPrimitive<i64>, tz: &Tz) -> ZonedTimestamp {
-    let micros = micros.as_();
+/// Clamp to the SQL UTC bounds before converting for display.
+/// Chrono has room for local year 0/11001 at these boundaries.
+pub fn timestamp_from_micros(micros: impl AsPrimitive<i64>, tz: &Tz) -> DateTime<Tz> {
+    let micros = micros.as_().clamp(TIMESTAMP_MIN, TIMESTAMP_MAX);
     let seconds = micros.div_euclid(MICROS_PER_SEC);
     let subsec = micros.rem_euclid(MICROS_PER_SEC) as u32;
     DateTime::<Utc>::from_timestamp(seconds, subsec * 1_000)
-        .expect("validated timestamp is inside the chrono range")
+        .expect("clamped timestamp is inside the chrono range")
         .with_timezone(tz)
 }
 
 pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
+
+/// Preserve the legacy conversion policy: either bound overflow maps to TIMESTAMP_MIN.
+#[inline]
+pub fn clamp_timestamp(micros: &mut i64) {
+    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
+        *micros = TIMESTAMP_MIN;
+    }
+}
 
 /// Validate the final SQL instant, not its local calendar year.
 #[inline]
