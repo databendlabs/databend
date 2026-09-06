@@ -77,6 +77,20 @@ pub(crate) struct AggregationContext {
 type UpdateOffset = HashSet<usize>;
 type DeleteOffset = HashSet<usize>;
 
+fn take_mutation_offsets(
+    offsets: &mut HashMap<u64, (UpdateOffset, DeleteOffset)>,
+) -> Result<HashMap<u64, (UpdateOffset, DeleteOffset)>> {
+    // Validate the entire batch before transferring ownership to block tasks.
+    for (updates, deletes) in offsets.values() {
+        if !updates.is_disjoint(deletes) {
+            return Err(ErrorCode::UnresolvableConflict(
+                "multi rows from source match one and the same row in the target_table multi times",
+            ));
+        }
+    }
+    Ok(std::mem::take(offsets))
+}
+
 fn validate_matched_mutation_log(
     target_build_optimization: bool,
     logs: &MutationLogs,
@@ -490,9 +504,10 @@ impl MatchedAggregator {
                 });
             }
         } else {
-            kinds.reserve(self.block_mutation_row_offset.len());
-            for (prefix, (update_offsets, delete_offsets)) in &self.block_mutation_row_offset {
-                let (segment_idx, reverse_block_idx) = split_prefix(*prefix);
+            let offsets = take_mutation_offsets(&mut self.block_mutation_row_offset)?;
+            kinds.reserve(offsets.len());
+            for (prefix, (mut update_offsets, mut delete_offsets)) in offsets {
+                let (segment_idx, reverse_block_idx) = split_prefix(prefix);
                 let segment_idx = segment_idx as usize;
                 let segment_info = segment_infos.get(&segment_idx).unwrap();
                 let block_idx = segment_info.blocks.len() - reverse_block_idx as usize - 1;
@@ -502,13 +517,14 @@ impl MatchedAggregator {
                     segment_idx, block_idx
                 );
 
-                let modified_offsets: HashSet<usize> =
-                    update_offsets.union(delete_offsets).copied().collect();
-                if modified_offsets.len() < update_offsets.len() + delete_offsets.len() {
-                    return Err(ErrorCode::UnresolvableConflict(
-                        "multi rows from source match one and the same row in the target_table multi times",
-                    ));
+                let logical_updated_rows = update_offsets.len() as u64;
+                let logical_deleted_rows = delete_offsets.len() as u64;
+                // Reuse the larger allocation instead of retaining a second set
+                // of offsets for every queued block. Counts above keep their roles.
+                if update_offsets.capacity() < delete_offsets.capacity() {
+                    std::mem::swap(&mut update_offsets, &mut delete_offsets);
                 }
+                update_offsets.extend(delete_offsets);
 
                 kinds.push(MatchedBlockMutationKind::Apply {
                     index: BlockMetaIndex {
@@ -516,9 +532,9 @@ impl MatchedAggregator {
                         block_idx,
                     },
                     block_meta: segment_info.blocks[block_idx].clone(),
-                    modified_offsets,
-                    logical_updated_rows: update_offsets.len() as u64,
-                    logical_deleted_rows: delete_offsets.len() as u64,
+                    modified_offsets: update_offsets,
+                    logical_updated_rows,
+                    logical_deleted_rows,
                 });
             }
         }
@@ -604,6 +620,36 @@ impl AggregationContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_take_mutation_offsets_transfers_allocations() {
+        let mut updates = HashSet::with_capacity(100);
+        updates.insert(1);
+        let mut deletes = HashSet::with_capacity(200);
+        deletes.insert(2);
+        let capacities = (updates.capacity(), deletes.capacity());
+        let mut offsets = HashMap::from([(7, (updates, deletes))]);
+
+        let taken = take_mutation_offsets(&mut offsets).unwrap();
+        assert!(offsets.is_empty());
+        assert_eq!(offsets.capacity(), 0);
+        assert_eq!(taken[&7].0, HashSet::from([1]));
+        assert_eq!(taken[&7].1, HashSet::from([2]));
+        assert_eq!((taken[&7].0.capacity(), taken[&7].1.capacity()), capacities);
+    }
+
+    #[test]
+    fn test_take_mutation_offsets_rejects_overlap_without_consuming_batch() {
+        let mut offsets = HashMap::from([
+            (0, (HashSet::from([1]), HashSet::new())),
+            (1, (HashSet::new(), HashSet::from([2]))),
+            (2, (HashSet::from([3]), HashSet::from([3, 4]))),
+        ]);
+        let original = offsets.clone();
+        let error = take_mutation_offsets(&mut offsets).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::UNRESOLVABLE_CONFLICT);
+        assert_eq!(offsets, original);
+    }
 
     #[test]
     fn test_validate_matched_mutation_log() {
