@@ -126,14 +126,10 @@ impl RangeIndex {
         // pattern in the expression and are retried per block through
         // `has_rewrite_candidates` below, so pruning results are unchanged.
         let expr = if has_rewrite_candidates(&func_ctx, &expr) {
-            let full_domains = expr
-                .column_refs()
-                .into_iter()
-                .map(|(name, ty)| {
-                    let domain = Domain::full(&ty);
-                    (name, domain)
-                })
-                .collect();
+            let mut full_domains = HashMap::new();
+            for (name, ty) in expr.column_refs() {
+                full_domains.insert(name, Domain::full(&ty));
+            }
             match eliminate_cast(&expr, full_domains, &func_ctx) {
                 Some(rewritten) => rewritten,
                 None => expr,
@@ -142,26 +138,21 @@ impl RangeIndex {
             expr
         };
 
-        let column_slots = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, data_type)| {
-                // internal column and stream column are not actual stored columns
-                let leaf_column_ids = if is_internal_column(&name) || is_stream_column(&name) {
-                    None
-                } else {
-                    let column_ids = schema.leaf_columns_of(&name);
-                    // virtual columns are not included in leaf columns
-                    // TODO: add range filter for virtual columns
-                    (!column_ids.is_empty()).then_some(column_ids)
-                };
-                ColumnDomainSlot {
-                    name,
-                    data_type,
-                    leaf_column_ids,
-                }
-            })
-            .collect();
+        let mut column_slots = Vec::new();
+        for (name, data_type) in expr.column_refs() {
+            // Internal/stream columns are not stored; virtual columns have no leaf IDs.
+            let leaf_column_ids = if is_internal_column(&name) || is_stream_column(&name) {
+                None
+            } else {
+                let column_ids = schema.leaf_columns_of(&name);
+                (!column_ids.is_empty()).then_some(column_ids)
+            };
+            column_slots.push(ColumnDomainSlot {
+                name,
+                data_type,
+                leaf_column_ids,
+            });
+        }
         let has_rewrite_candidates = has_rewrite_candidates(&func_ctx, &expr);
         Self {
             expr,
@@ -200,22 +191,17 @@ impl RangeIndex {
             let domain = match &slot.leaf_column_ids {
                 None => Domain::full(&slot.data_type),
                 Some(column_ids) => {
-                    let stats = column_ids
-                        .iter()
-                        .filter_map(|column_id| match stats.get(column_id) {
-                            None => {
-                                if column_is_default(column_id)
-                                    && self.default_stats.contains_key(column_id)
-                                {
-                                    Some(&self.default_stats[column_id])
-                                } else {
-                                    None
-                                }
+                    let mut column_stats = Vec::with_capacity(column_ids.len());
+                    for column_id in column_ids {
+                        if let Some(stat) = stats.get(column_id) {
+                            column_stats.push(stat);
+                        } else if column_is_default(column_id) {
+                            if let Some(stat) = self.default_stats.get(column_id) {
+                                column_stats.push(stat);
                             }
-                            other => other,
-                        })
-                        .collect();
-                    statistics_to_domain(stats, &slot.data_type)
+                        }
+                    }
+                    statistics_to_domain(column_stats, &slot.data_type)
                 }
             };
             input_domains.insert(slot.name.clone(), domain);

@@ -1,0 +1,54 @@
+# More than MAX_PLAN_SAMPLES rows, split into one large and two small input blocks, forces the
+# parallel workers to resample against their final weighted quotas. Forced sort spilling also
+# exercises ordered replay from the recluster spill buffer before Hilbert range exchange.
+statement ok
+CREATE OR REPLACE DATABASE test_hilbert_processor_resample
+
+statement ok
+USE test_hilbert_processor_resample
+
+statement ok
+SET force_sort_data_spill = 1
+
+statement ok
+SET sort_spilling_batch_bytes = 1048576
+
+statement ok
+SET max_threads = 4
+
+statement ok
+CREATE OR REPLACE TABLE t(b int, c int, payload string) CLUSTER BY HILBERT(b, c) row_per_block=200000 block_per_segment=100 recluster_depth=8
+
+statement ok
+INSERT INTO t SELECT number % 100, 100 - number % 100, repeat('x', 100) FROM numbers(100000)
+
+statement ok
+INSERT INTO t SELECT number % 100, 100 - number % 100, repeat('y', 100) FROM numbers(100)
+
+statement ok
+INSERT INTO t SELECT number % 100, 100 - number % 100, repeat('z', 100) FROM numbers(100)
+
+statement ok
+ALTER TABLE t RECLUSTER
+
+statement ok
+UNSET force_sort_data_spill
+
+statement ok
+UNSET sort_spilling_batch_bytes
+
+statement ok
+UNSET max_threads
+
+query BI
+SELECT max(level) > 0, count() FROM clustering_statistics('test_hilbert_processor_resample', 't')
+----
+1 1
+
+query III
+SELECT count(), sum(b + c), sum(length(payload)) FROM t
+----
+100200 10020000 10020000
+
+statement ok
+DROP DATABASE test_hilbert_processor_resample

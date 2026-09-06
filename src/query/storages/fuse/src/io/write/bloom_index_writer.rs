@@ -247,7 +247,7 @@ impl BlockIndexWriter for BloomIndexWriter {
         self.builder.add_block(block)
     }
 
-    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
         let Some(index) = self.builder.finalize()? else {
             return Ok(PendingBlockIndexOutput::default());
         };

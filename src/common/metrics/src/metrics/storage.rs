@@ -242,6 +242,15 @@ static RECLUSTER_ROW_NUMS_TO_READ: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_recluster_row_nums_to_read"));
 static RECLUSTER_WRITE_BLOCK_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_recluster_write_block_nums"));
+static MAINTENANCE_ACTIVE_TASKS: LazyLock<Gauge> =
+    LazyLock::new(|| register_gauge("fuse_maintenance_active_tasks"));
+static SEGMENT_CLAIM_CONFLICTS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_segment_claim_conflicts"));
+static MAINTENANCE_COMMIT_GATE_WAIT_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_maintenance_commit_gate_wait_milliseconds")
+});
+static MAINTENANCE_OCC_RETRIES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_maintenance_occ_retries"));
 static SEGMENTS_RANGE_PRUNING_BEFORE: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_segments_range_pruning_before"));
 static SEGMENTS_RANGE_PRUNING_AFTER: LazyLock<Counter> =
@@ -980,6 +989,26 @@ pub fn metrics_inc_recluster_row_nums_to_read(c: u64) {
 
 pub fn metrics_inc_recluster_write_block_nums() {
     RECLUSTER_WRITE_BLOCK_NUMS.inc();
+}
+
+pub fn metrics_inc_maintenance_active_tasks() {
+    MAINTENANCE_ACTIVE_TASKS.inc();
+}
+
+pub fn metrics_dec_maintenance_active_tasks() {
+    MAINTENANCE_ACTIVE_TASKS.dec();
+}
+
+pub fn metrics_inc_segment_claim_conflicts() {
+    SEGMENT_CLAIM_CONFLICTS.inc();
+}
+
+pub fn metrics_observe_maintenance_commit_gate_wait_milliseconds(c: u64) {
+    MAINTENANCE_COMMIT_GATE_WAIT_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_maintenance_occ_retries() {
+    MAINTENANCE_OCC_RETRIES.inc();
 }
 
 /// Aggregate index metrics.

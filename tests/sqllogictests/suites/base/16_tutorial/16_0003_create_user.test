@@ -1,0 +1,42 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/001-create-user.sql
+
+statement ok
+DROP ROLE IF EXISTS demo_workshop_role
+
+statement ok
+DROP USER IF EXISTS demo_workshop_user
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE ROLE demo_workshop_role
+
+statement ok
+CREATE USER demo_workshop_user IDENTIFIED BY 'StrongPassw0rd!' WITH DEFAULT_ROLE='demo_workshop_role'
+
+statement ok
+GRANT ALL ON citydrive_demo.* TO role demo_workshop_role
+
+statement ok
+GRANT ROLE demo_workshop_role TO USER demo_workshop_user
+
+statement ok
+SHOW GRANTS FOR USER demo_workshop_user
+
+query T
+SELECT grants FROM show_grants('user', 'demo_workshop_user')
+----
+GRANT ALL ON 'default'.'citydrive_demo'.* TO 'demo_workshop_user'@'%'
+
+statement ok
+DROP USER IF EXISTS demo_workshop_user
+
+statement ok
+DROP ROLE IF EXISTS demo_workshop_role
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use arrow_schema::Schema;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -34,6 +36,9 @@ use crate::rand_block_for_all_types;
 
 #[test]
 fn test_aggregate_state_physical_type() {
+    let ordinary_tuple = DataType::Tuple(vec![DataType::String, DataType::Boolean]);
+    assert!(matches!(ordinary_tuple.physical_type(), Cow::Borrowed(_)));
+
     let state_type = DataType::Tuple(vec![
         DataType::Number(NumberDataType::UInt64),
         DataType::Boolean,

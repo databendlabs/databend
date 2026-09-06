@@ -270,5 +270,46 @@ select min, max from clustering_statistics('mutation_worker_regression','replace
 [5] [6]
 [NULL] [NULL]
 
+# Reusing the larger offset set must not swap logical UPDATE and DELETE counts.
+statement ok
+create table merge_offset_reuse(id int, value int)
+
+statement ok
+insert into merge_offset_reuse values (1,10),(2,20),(3,30),(4,40)
+
+statement ok
+insert into merge_offset_reuse values (5,50),(6,60),(7,70),(8,80)
+
+query II
+merge into merge_offset_reuse as t using (select number::int as id from numbers(9) where number between 2 and 7) as s on t.id = s.id when matched and s.id in (2,6) then update set t.value = t.value + 100 when matched then delete
+----
+2 4
+
+query II rowsort
+select * from merge_offset_reuse
+----
+1 10
+2 120
+6 160
+8 80
+
+# Cross-action conflicts must be detected before any block task is returned.
+statement ok
+create table merge_overlap_source(id int, action string)
+
+statement ok
+insert into merge_overlap_source values (1,'update'),(8,'delete'),(6,'update'),(6,'delete')
+
+statement error 4001
+merge into merge_offset_reuse as t using merge_overlap_source as s on t.id = s.id when matched and s.action = 'update' then update set t.value = 999 when matched then delete
+
+query II rowsort
+select * from merge_offset_reuse
+----
+1 10
+2 120
+6 160
+8 80
+
 statement ok
 drop database mutation_worker_regression

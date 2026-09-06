@@ -372,7 +372,7 @@ impl PrefetchedGranuleMarks {
             layout.size
         );
         let cache = match operator_info.scheme() {
-            opendal::Scheme::Fs | opendal::Scheme::Memory => None,
+            "fs" | "memory" => None,
             _ => CacheManager::instance().get_granule_index_file_cache(),
         };
         if let Some(data) = cache

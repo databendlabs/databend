@@ -41,6 +41,7 @@ use crate::physical_plans::physical_aggregate_final::AggregateShuffleMode;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::runtime_scan_filter::register_runtime_top_n_filter;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
@@ -167,6 +168,16 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let runtime_top_n_filter = self.rank_limit.as_ref().and_then(|(order_by, limit)| {
+            let [desc] = order_by.as_slice() else {
+                return None;
+            };
+            if !self.group_by.contains(&desc.order_by) {
+                return None;
+            }
+            register_runtime_top_n_filter(&builder.ctx, &self.input, order_by, *limit)
+        });
+
         self.input.build_pipeline(builder)?;
 
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
@@ -202,8 +213,16 @@ impl IPhysicalPlan for AggregatePartial {
         if let Some((sort_desc, limit)) =
             self.resolve_rank_limit_descriptions(&schema_before_group_by)
         {
+            let filter = runtime_top_n_filter
+                .as_ref()
+                .map(|filter| (sort_desc[0].offset, filter.clone()));
             builder.main_pipeline.add_accumulating_transformer(|| {
-                TransformRankLimitSort::new(limit, sort_desc.clone(), max_block_rows)
+                TransformRankLimitSort::new(
+                    limit,
+                    sort_desc.clone(),
+                    max_block_rows,
+                    filter.clone(),
+                )
             });
         }
 

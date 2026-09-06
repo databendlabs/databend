@@ -45,6 +45,12 @@ group by a, b, c
 statement ok
 refresh materialized view mv_by_abc
 
+# Repeated SELECTs exercise the planner cache for an MV-rewritten plan. The
+# same query is executed again after a source append below to verify that the
+# source endpoint change invalidates the cached plan.
+statement ok
+set enable_planner_cache = 1
+
 # The equality predicate fixes c to a single value, so the query's (a, b)
 # groups correspond one-to-one with the MV's (a, b, c) groups. The rewrite
 # should filter the MV by c and read the precomputed max_t value.
@@ -64,6 +70,24 @@ group by a, b
 ----
 <slt:ignore>table: default.test_materialized_view_rewrite.mv_by_abc<slt:ignore>
 
+query IIIIIIRI rowsort
+select
+    a,
+    b,
+    min(t),
+    max(t),
+    sum(t),
+    count(t),
+    avg(t),
+    approx_count_distinct(t)
+from source
+where c = 'xxxxxxx'
+group by a, b
+----
+1 10 5 9 14 2 7.0 2
+2 20 7 7 7 1 7.0 1
+
+# The same SELECT should be served by the planner cache on the second bind.
 query IIIIIIRI rowsort
 select
     a,

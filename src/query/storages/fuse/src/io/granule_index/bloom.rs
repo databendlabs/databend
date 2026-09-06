@@ -526,7 +526,7 @@ struct BloomGranuleIndexLowLevelColumnWriter {
 
 fn finalize_filter(builder: Option<BloomIndexBuilder>) -> Result<Option<Vec<u8>>> {
     match builder {
-        Some(mut builder) => match builder.finalize()? {
+        Some(builder) => match builder.finalize()? {
             Some(bloom) if !bloom.filters.is_empty() => Ok(Some(bloom.filters[0].to_bytes()?)),
             _ => Ok(None),
         },

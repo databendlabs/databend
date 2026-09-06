@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[VACUUM]");
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use chrono::DateTime;
 use chrono::Duration;
@@ -44,7 +45,6 @@ use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
-use opendal::Scheme;
 use uuid::Uuid;
 
 use crate::FuseTable;
@@ -167,7 +167,7 @@ async fn fs_list_until_prefix(
 }
 
 /// Check if an entry is a candidate for garbage collection
-async fn is_gc_candidate_segment_block(
+pub async fn is_gc_candidate_segment_block(
     entry: &Entry,
     op: &Operator,
     gc_root_meta_ts: DateTime<Utc>,
@@ -189,7 +189,7 @@ async fn is_gc_candidate_segment_block(
             ))
         })?
     };
-
+    let last_modified = DateTime::<Utc>::from(SystemTime::from(last_modified));
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
@@ -255,6 +255,7 @@ impl FuseTable {
                     }
                 },
             };
+            let modified = DateTime::<Utc>::from(SystemTime::from(modified));
             if modified <= retention_time {
                 orphan_payloads.push(entry.path().to_string());
             }
@@ -285,6 +286,18 @@ impl FuseTable {
         }
     }
 
+    pub fn vacuum2_until_prefix(path: &str, until: DateTime<Utc>) -> String {
+        let uuid = uuid_from_date_time(until);
+        let uuid_str = uuid.simple().to_string();
+
+        // extract the most significant 48 bits, which is 12 characters
+        let timestamp_component = &uuid_str[..12];
+        format!(
+            "{}{}{}",
+            path, VACUUM2_OBJECT_KEY_PREFIX, timestamp_component
+        )
+    }
+
     /// List files until a specific timestamp
     ///
     /// This implementation uses UUID v7 timestamp extraction for precise filtering.
@@ -296,15 +309,7 @@ impl FuseTable {
         need_one_more: bool,
         gc_root_meta_ts: Option<DateTime<Utc>>,
     ) -> Result<Vec<Entry>> {
-        let uuid = uuid_from_date_time(until);
-        let uuid_str = uuid.simple().to_string();
-
-        // extract the most significant 48 bits, which is 12 characters
-        let timestamp_component = &uuid_str[..12];
-        let until = format!(
-            "{}{}{}",
-            path, VACUUM2_OBJECT_KEY_PREFIX, timestamp_component
-        );
+        let until = Self::vacuum2_until_prefix(path, until);
         self.list_files_until_prefix(path, &until, need_one_more, gc_root_meta_ts)
             .await
     }
@@ -324,9 +329,7 @@ impl FuseTable {
         let dal = self.get_operator_ref();
 
         match dal.info().scheme() {
-            Scheme::Fs => {
-                fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await
-            }
+            "fs" => fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
             _ => general_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
         }
     }
@@ -674,6 +677,7 @@ impl FuseTable {
                 };
             }
         };
+        let gc_root_meta_ts = DateTime::<Utc>::from(SystemTime::from(gc_root_meta_ts));
 
         match gc_root {
             Ok((gc_root, _)) => {
@@ -698,6 +702,7 @@ impl FuseTable {
                             })?,
                             Some(v) => v,
                         };
+                        let last_modified = DateTime::<Utc>::from(SystemTime::from(last_modified));
                         if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
                             gc_candidates.push(path.to_owned());
                         }

@@ -56,9 +56,11 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::BloomIndexType;
+use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_index::NgramHashAlgorithm;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use goldenfile::Mint;
@@ -707,24 +709,23 @@ fn eval_index_expr(
         });
     }
 
-    let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
-    for (field, (_, scalar)) in result
-        .ngram_fields
-        .iter()
-        .zip(result.ngram_scalars.into_iter())
-    {
-        let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
-            continue;
-        };
-        let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+    let mut like_scalar_map = HashMap::<usize, HashMap<Scalar, Vec<u64>>>::new();
+    for (index, scalar) in result.ngram_scalars {
+        let ngram_arg = &ngram_args[index];
+        let mut digests = Vec::new();
+        BloomIndex::calculate_ngram_digests(
             Value::Scalar(scalar.clone()),
             ngram_arg.gram_size(),
-            BloomIndex::ngram_hash,
-        )
-        .next() else {
-            continue;
-        };
-        like_scalar_map.entry(scalar).or_insert(digests);
+            ngram_arg.hash_algorithm(),
+            |digest| digests.push(digest),
+        );
+        if !digests.is_empty() {
+            like_scalar_map
+                .entry(index)
+                .or_default()
+                .entry(scalar)
+                .or_insert(digests);
+        }
     }
 
     let mut builder = BloomIndexBuilder::create(
@@ -898,7 +899,14 @@ fn ngram_args(schema: &TableSchema, cols: &[FieldIndex]) -> Vec<NgramArgs> {
         let table_field = schema.field(i);
         let data_type = DataType::from(table_field.data_type());
         if Xor8Filter::supported_type(&data_type) {
-            ngram_args.push(NgramArgs::new(i, table_field.clone(), 3, 1024))
+            ngram_args.push(NgramArgs::new(
+                i,
+                table_field.clone(),
+                3,
+                1024,
+                DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
+                NgramHashAlgorithm::City64V0,
+            ))
         }
     }
     ngram_args

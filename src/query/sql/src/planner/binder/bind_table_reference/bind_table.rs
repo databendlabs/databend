@@ -273,14 +273,13 @@ impl Binder {
                 .cte_context
                 .set_cte_context(new_bind_context.cte_context.clone());
 
-            let cols = table_meta
+            for (field, column) in table_meta
                 .schema()
                 .fields()
                 .iter()
-                .map(|f| f.name().clone())
-                .collect::<Vec<_>>();
-            for (index, column_name) in cols.iter().enumerate() {
-                new_bind_context.columns[index].column_name = column_name.clone();
+                .zip(new_bind_context.columns.iter_mut())
+            {
+                column.column_name.clone_from(field.name());
             }
 
             if let Some(alias) = alias {

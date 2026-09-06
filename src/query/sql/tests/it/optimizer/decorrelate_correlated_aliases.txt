@@ -155,3 +155,359 @@ Exchange(Merge)
                 └── num_rows: [1]
 
 
+=== lambda_argument_survives_correlated_exists_decorrelation ===
+description: Lambda-function arguments must be flattened when a correlated EXISTS projection is decorrelated.
+sql: 
+        SELECT ref0
+        FROM (
+            SELECT t1.c0array AS ref0,
+                   EXISTS (
+                       SELECT 1
+                       FROM (VALUES (['baz', 'ab', 'baz'])) AS t66(c0array)
+                       WHERE t66.c0array = t1.c0array
+                         AND array_any(array_filter(t66.c0array, x -> x = 'baz')) = 'baz'
+                   ) AS ref1
+            FROM (VALUES (['other'])) AS t1(c0array)
+        ) AS s
+        WHERE ref1
+    
+raw_plan:
+EvalScalar
+├── scalars: [c0array (#0) AS (#0)]
+└── Filter
+    ├── filters: [ref1 (#3)]
+    └── EvalScalar
+        ├── scalars: [c0array (#0) AS (#0), SUBQUERY AS (#2) AS (#3)]
+        ├── subquerys
+        │   └── Subquery (Exists)
+        │       ├── output_column: 1 (#2)
+        │       └── EvalScalar
+        │           ├── scalars: [1 AS (#2)]
+        │           └── Filter
+        │               ├── filters: [eq(c0array (#1), c0array (#0)), eq(array_any(array_filter(c0array (#1), ["x"] -> x (#2) = 'baz')), 'baz')]
+        │               └── ConstantTableScan
+        │                   ├── columns: [c0array (#1)]
+        │                   └── num_rows: [1]
+        └── ConstantTableScan
+            ├── columns: [c0array (#0)]
+            └── num_rows: [1]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [c0array (#0) AS (#0), ref1 (#3) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [c0array (#0) AS (#0), is_true(marker (#4)) AS (#3)]
+        └── Filter
+            ├── filters: [is_true(marker (#4))]
+            └── Join(RightMark)
+                ├── build keys: [c0array (#1)]
+                ├── probe keys: [c0array (#0)]
+                ├── other filters: []
+                ├── Exchange(Broadcast)
+                │   └── EvalScalar
+                │       ├── scalars: [c0array (#1) AS (#1), 1 AS (#2)]
+                │       └── Filter
+                │           ├── filters: [eq(array_any(array_filter(c0array (#1), ["x"] -> x (#2) = 'baz')), 'baz')]
+                │           └── ConstantTableScan
+                │               ├── columns: [c0array (#1)]
+                │               └── num_rows: [1]
+                └── ConstantTableScan
+                    ├── columns: [c0array (#0)]
+                    └── num_rows: [1]
+
+
+=== correlated_lambda_argument_uses_derived_column ===
+description: A correlated column used as a lambda-function argument must be remapped to its derived column during decorrelation.
+sql: 
+        SELECT ref0
+        FROM (
+            SELECT t1.c0array AS ref0,
+                   EXISTS (
+                       SELECT 1
+                       FROM (VALUES (1)) AS t66(c)
+                       WHERE t66.c = 1
+                         AND array_any(array_filter(t1.c0array, x -> x = 'baz')) = 'baz'
+                   ) AS ref1
+            FROM (VALUES (['baz', 'ab'])) AS t1(c0array)
+        ) AS s
+        WHERE ref1
+    
+raw_plan:
+EvalScalar
+├── scalars: [c0array (#0) AS (#0)]
+└── Filter
+    ├── filters: [ref1 (#3)]
+    └── EvalScalar
+        ├── scalars: [c0array (#0) AS (#0), SUBQUERY AS (#2) AS (#3)]
+        ├── subquerys
+        │   └── Subquery (Exists)
+        │       ├── output_column: 1 (#2)
+        │       └── EvalScalar
+        │           ├── scalars: [1 AS (#2)]
+        │           └── Filter
+        │               ├── filters: [eq(c (#1), 1), eq(array_any(array_filter(c0array (#0), ["x"] -> x (#2) = 'baz')), 'baz')]
+        │               └── ConstantTableScan
+        │                   ├── columns: [c (#1)]
+        │                   └── num_rows: [1]
+        └── ConstantTableScan
+            ├── columns: [c0array (#0)]
+            └── num_rows: [1]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [c0array (#0) AS (#0), ref1 (#3) AS (#7)]
+    └── EvalScalar
+        ├── scalars: [c0array (#0) AS (#0), is_true(marker (#5)) AS (#3)]
+        └── Filter
+            ├── filters: [is_true(marker (#5))]
+            └── Join(RightMark)
+                ├── build keys: [c0array (#4)]
+                ├── probe keys: [c0array (#0)]
+                ├── other filters: []
+                ├── Exchange(Broadcast)
+                │   └── EvalScalar
+                │       ├── scalars: [1 AS (#2), c0array (#4) AS (#4), c (#1) AS (#6)]
+                │       └── Join(Cross)
+                │           ├── build keys: []
+                │           ├── probe keys: []
+                │           ├── other filters: []
+                │           ├── Exchange(Broadcast)
+                │           │   └── Filter
+                │           │       ├── filters: [eq(c (#1), 1)]
+                │           │       └── ConstantTableScan
+                │           │           ├── columns: [c (#1)]
+                │           │           └── num_rows: [1]
+                │           └── Aggregate(Final)
+                │               ├── group items: [c0array (#4) AS (#4)]
+                │               ├── aggregate functions: []
+                │               └── Aggregate(Partial)
+                │                   ├── group items: [c0array (#4) AS (#4)]
+                │                   ├── aggregate functions: []
+                │                   └── Exchange(Hash)
+                │                       ├── Exchange(Hash): keys: [c0array (#4)]
+                │                       └── Filter
+                │                           ├── filters: [eq(array_any(array_filter(c0array (#4), ["x"] -> x (#2) = 'baz')), 'baz')]
+                │                           └── ConstantTableScan
+                │                               ├── columns: [c0array (#4)]
+                │                               └── num_rows: [1]
+                └── ConstantTableScan
+                    ├── columns: [c0array (#0)]
+                    └── num_rows: [1]
+
+
+=== typed_constant_survives_correlated_exists_decorrelation ===
+description: A folded scalar subquery constant must remain valid while its containing correlated EXISTS is decorrelated.
+sql: 
+        SELECT ref0
+        FROM (
+            SELECT o.a AS ref0,
+                   EXISTS (
+                       SELECT 1
+                       FROM typed_constant_inner AS i
+                       WHERE i.b = o.a AND (SELECT true)
+                   ) AS ref1
+            FROM typed_constant_outer AS o
+        ) AS s
+        WHERE ref1
+    
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_outer.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [ref1 (#4)]
+    └── EvalScalar
+        ├── scalars: [typed_constant_outer.a (#0) AS (#0), SUBQUERY AS (#3) AS (#4)]
+        ├── subquerys
+        │   └── Subquery (Exists)
+        │       ├── output_column: 1 (#3)
+        │       └── EvalScalar
+        │           ├── scalars: [1 AS (#3)]
+        │           └── Filter
+        │               ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_outer.a (#0)), SUBQUERY AS (#2)]
+        │               ├── subquerys
+        │               │   └── Subquery (Scalar)
+        │               │       ├── output_column: TRUE (#2)
+        │               │       └── EvalScalar
+        │               │           ├── scalars: [true AS (#2)]
+        │               │           └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        │               └── Scan
+        │                   ├── table: default.typed_constant_inner (#1)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── Scan
+            ├── table: default.typed_constant_outer (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [typed_constant_outer.a (#0) AS (#0), ref1 (#4) AS (#6)]
+└── EvalScalar
+    ├── scalars: [typed_constant_outer.a (#0) AS (#0), is_true(marker (#5)) AS (#4)]
+    └── Filter
+        ├── filters: [is_true(marker (#5))]
+        └── Join(RightMark)
+            ├── build keys: [typed_constant_inner.b (#1)]
+            ├── probe keys: [typed_constant_outer.a (#0)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [typed_constant_inner.b (#1) AS (#1), 1 AS (#3)]
+            │   └── Filter
+            │       ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_inner.b (#1)), true]
+            │       └── Scan
+            │           ├── table: default.typed_constant_inner (#1)
+            │           ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_inner.b (#1)), true]
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Scan
+                ├── table: default.typed_constant_outer (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== lambda_udf_survives_correlated_exists_decorrelation ===
+description: An expanded SQL lambda UDF must remain valid inside a decorrelated EXISTS predicate.
+sql: 
+        SELECT ref0
+        FROM (
+            SELECT o.a AS ref0,
+                   EXISTS (
+                       SELECT 1
+                       FROM lambda_udf_inner AS i
+                       WHERE i.b = o.a AND is_positive(i.b)
+                   ) AS ref1
+            FROM lambda_udf_outer AS o
+        ) AS s
+        WHERE ref1
+    
+raw_plan:
+EvalScalar
+├── scalars: [lambda_udf_outer.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [ref1 (#3)]
+    └── EvalScalar
+        ├── scalars: [lambda_udf_outer.a (#0) AS (#0), SUBQUERY AS (#2) AS (#3)]
+        ├── subquerys
+        │   └── Subquery (Exists)
+        │       ├── output_column: 1 (#2)
+        │       └── EvalScalar
+        │           ├── scalars: [1 AS (#2)]
+        │           └── Filter
+        │               ├── filters: [eq(lambda_udf_inner.b (#1), lambda_udf_outer.a (#0)), is_positive(gt(lambda_udf_inner.b (#1), 0))]
+        │               └── Scan
+        │                   ├── table: default.lambda_udf_inner (#1)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── Scan
+            ├── table: default.lambda_udf_outer (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [lambda_udf_outer.a (#0) AS (#0), ref1 (#3) AS (#5)]
+└── EvalScalar
+    ├── scalars: [lambda_udf_outer.a (#0) AS (#0), is_true(marker (#4)) AS (#3)]
+    └── Filter
+        ├── filters: [is_true(marker (#4))]
+        └── Join(RightMark)
+            ├── build keys: [lambda_udf_inner.b (#1)]
+            ├── probe keys: [lambda_udf_outer.a (#0)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [lambda_udf_inner.b (#1) AS (#1), 1 AS (#2)]
+            │   └── Filter
+            │       ├── filters: [eq(lambda_udf_inner.b (#1), lambda_udf_inner.b (#1)), is_positive(gt(lambda_udf_inner.b (#1), 0))]
+            │       └── Scan
+            │           ├── table: default.lambda_udf_inner (#1)
+            │           ├── filters: [eq(lambda_udf_inner.b (#1), lambda_udf_inner.b (#1)), is_positive(gt(lambda_udf_inner.b (#1), 0))]
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Scan
+                ├── table: default.lambda_udf_outer (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== udaf_survives_correlated_scalar_subquery_decorrelation ===
+description: A UDAF and its arguments must remain valid when a correlated scalar subquery is decorrelated.
+sql: 
+        SELECT ref0
+        FROM (
+            SELECT o.a AS ref0,
+                   (
+                       SELECT weighted_avg(i.b, 1)
+                       FROM udaf_inner AS i
+                       WHERE i.b = o.a
+                   ) AS ref1
+            FROM udaf_outer AS o
+        ) AS s
+        WHERE ref1 > 0
+    
+raw_plan:
+EvalScalar
+├── scalars: [udaf_outer.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(ref1 (#4), 0)]
+    └── EvalScalar
+        ├── scalars: [udaf_outer.a (#0) AS (#0), SUBQUERY AS (#3) AS (#4)]
+        ├── subquerys
+        │   └── Subquery (Scalar)
+        │       ├── output_column: weighted_avg(i.b, 1) (#3)
+        │       └── EvalScalar
+        │           ├── scalars: [weighted_avg(i.b, 1) (#3) AS (#3)]
+        │           └── Aggregate(Initial)
+        │               ├── group items: []
+        │               ├── aggregate functions: [weighted_avg(i.b, 1) AS (#3)]
+        │               └── EvalScalar
+        │                   ├── scalars: [udaf_inner.b (#1) AS (#1), CAST(1 AS Int32 NULL) AS (#2)]
+        │                   └── Filter
+        │                       ├── filters: [eq(udaf_inner.b (#1), udaf_outer.a (#0))]
+        │                       └── Scan
+        │                           ├── table: default.udaf_inner (#1)
+        │                           ├── filters: []
+        │                           ├── order by: []
+        │                           └── limit: NONE
+        └── Scan
+            ├── table: default.udaf_outer (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [udaf_outer.a (#0) AS (#0), weighted_avg(i.b, 1) (#3) AS (#4), weighted_avg(i.b, 1) (#3) AS (#5)]
+└── Join(Inner)
+    ├── build keys: [udaf_outer.a (#0)]
+    ├── probe keys: [udaf_inner.b (#1)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.udaf_outer (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [gt(weighted_avg(i.b, 1) (#3), 0)]
+        └── Aggregate(Final)
+            ├── group items: [udaf_inner.b (#1) AS (#1)]
+            ├── aggregate functions: [weighted_avg(i.b, 1) AS (#3)]
+            └── Aggregate(Partial)
+                ├── group items: [udaf_inner.b (#1) AS (#1)]
+                ├── aggregate functions: [weighted_avg(i.b, 1) AS (#3)]
+                └── EvalScalar
+                    ├── scalars: [udaf_inner.b (#1) AS (#1), CAST(1 AS Int32 NULL) AS (#2)]
+                    └── Scan
+                        ├── table: default.udaf_inner (#1)
+                        ├── filters: [eq(udaf_inner.b (#1), udaf_inner.b (#1))]
+                        ├── order by: []
+                        └── limit: NONE
+
+

@@ -35,7 +35,6 @@ use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::RangeReader;
 use databend_storages_common_io::ReadSettings;
 use opendal::Buffer;
-use opendal::Scheme;
 
 use super::BlockReadContext;
 use super::BlockReadResult;
@@ -498,7 +497,7 @@ impl GranuleDataReader {
             // Local filesystems seek cheaply; the cost model only pays off on
             // object storage where every request costs a round trip.
             equivalent_bytes: match read_context.operator().info().scheme() {
-                Scheme::Fs | Scheme::Memory => 0,
+                "fs" | "memory" => 0,
                 _ => read_context.storage_io_merge_equivalent_bytes()?,
             },
             chunk_align: crate::io::disk_cache_chunk_size().unwrap_or(1),
