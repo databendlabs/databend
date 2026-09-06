@@ -307,7 +307,7 @@ impl Binder {
         Ok(())
     }
 
-    fn check_materialized_view_license(&self) -> Result<()> {
+    pub(in crate::planner::binder) fn check_materialized_view_license(&self) -> Result<()> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)
     }
