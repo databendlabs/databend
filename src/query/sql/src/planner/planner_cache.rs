@@ -29,6 +29,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::is_cacheable_function;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
@@ -369,6 +370,14 @@ impl TableRefVisitor {
                     if table.engine() == MATERIALIZED_VIEW_ENGINE {
                         // A direct MV read may fall back to its live source endpoint, which is not
                         // represented by the ordinary table snapshot.
+                        self.cache_miss = true;
+                        return;
+                    }
+                    if table.engine() == DYNAMIC_TABLE_ENGINE {
+                        // A Dynamic Table read selects a physical scan or a view expansion based
+                        // on its source endpoint checkpoint, which the ordinary table snapshot
+                        // does not represent. Bypass the cache so a source commit cannot keep
+                        // serving a cached fresh scan.
                         self.cache_miss = true;
                         return;
                     }

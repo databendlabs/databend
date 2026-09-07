@@ -1,0 +1,259 @@
+statement ok
+DROP DATABASE IF EXISTS dt_ddl
+
+statement ok
+CREATE DATABASE dt_ddl
+
+statement ok
+USE dt_ddl
+
+statement ok
+CREATE TABLE orders(order_id INT NOT NULL, customer_id INT NOT NULL, amount INT NOT NULL)
+
+statement ok
+CREATE TABLE customers(customer_id INT NOT NULL, customer_name STRING NOT NULL)
+
+statement ok
+INSERT INTO orders VALUES (1, 10, 100), (2, 20, 200)
+
+statement ok
+INSERT INTO customers VALUES (10, 'alice'), (20, 'bob')
+
+# A dynamic table over a multi-table join. INITIALIZE = ON_SCHEDULE publishes the
+# definition without materializing data, so the first read must fall back.
+statement ok
+CREATE DYNAMIC TABLE order_detail REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS
+SELECT o.order_id, o.amount, c.customer_name
+FROM orders AS o JOIN customers AS c ON o.customer_id = c.customer_id
+
+# Uninitialized: the defining query is expanded like an ordinary view, so the
+# result is still correct.
+query IIT
+SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
+----
+1 100 alice
+2 200 bob
+
+statement ok
+REFRESH DYNAMIC TABLE order_detail
+
+# Fresh: reads now scan the materialized result and must return the same rows.
+query IIT
+SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
+----
+1 100 alice
+2 200 bob
+
+# A source commit makes the stored endpoint vector stale. The read falls back to
+# the defining query, so new source rows are visible before the next refresh.
+statement ok
+INSERT INTO orders VALUES (3, 10, 300)
+
+query IIT
+SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
+----
+1 100 alice
+2 200 bob
+3 300 alice
+
+statement ok
+REFRESH DYNAMIC TABLE order_detail
+
+query IIT
+SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
+----
+1 100 alice
+2 200 bob
+3 300 alice
+
+# Refreshing twice without any source change must stay fresh and idempotent.
+statement ok
+REFRESH DYNAMIC TABLE order_detail
+
+query I
+SELECT count(*) FROM order_detail
+----
+3
+
+# Source deletes are also full-refresh visible.
+statement ok
+DELETE FROM orders WHERE order_id = 3
+
+statement ok
+REFRESH DYNAMIC TABLE order_detail
+
+query IIT
+SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
+----
+1 100 alice
+2 200 bob
+
+# An empty source produces an empty result rather than retaining old rows.
+statement ok
+CREATE TABLE empty_src(id INT NOT NULL)
+
+statement ok
+CREATE DYNAMIC TABLE empty_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS SELECT id FROM empty_src
+
+query I
+SELECT count(*) FROM empty_dt
+----
+0
+
+statement ok
+INSERT INTO empty_src VALUES (1)
+
+statement ok
+REFRESH DYNAMIC TABLE empty_dt
+
+query I
+SELECT id FROM empty_dt
+----
+1
+
+statement ok
+TRUNCATE TABLE empty_src
+
+statement ok
+REFRESH DYNAMIC TABLE empty_dt
+
+query I
+SELECT count(*) FROM empty_dt
+----
+0
+
+# INITIALIZE = ON_CREATE materializes during CREATE, so the first read is fresh.
+statement ok
+CREATE DYNAMIC TABLE agg_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS
+SELECT c.customer_name, sum(o.amount) AS total
+FROM orders AS o JOIN customers AS c ON o.customer_id = c.customer_id
+GROUP BY c.customer_name
+
+query TI
+SELECT customer_name, total FROM agg_dt ORDER BY customer_name
+----
+alice 100
+bob 200
+
+# Self-joins keep one endpoint per distinct source table.
+statement ok
+CREATE DYNAMIC TABLE self_join_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS
+SELECT l.order_id AS left_id, r.order_id AS right_id
+FROM orders AS l JOIN orders AS r ON l.customer_id = r.customer_id
+
+query II
+SELECT left_id, right_id FROM self_join_dt ORDER BY left_id, right_id
+----
+1 1
+2 2
+
+# A dynamic table is read-only for user DML.
+statement error 3905
+INSERT INTO order_detail VALUES (9, 900, 'carol')
+
+statement error 3905
+DELETE FROM order_detail WHERE order_id = 1
+
+statement error 3905
+UPDATE order_detail SET amount = 1 WHERE order_id = 1
+
+statement error 3905
+TRUNCATE TABLE order_detail
+
+# The engine cannot be used to bypass CREATE DYNAMIC TABLE metadata creation. The engine
+# parser rejects it before the binder guard is reached.
+statement error 1005
+CREATE TABLE fake_dt(a INT) ENGINE = DYNAMIC_TABLE
+
+# Protected options: a user cannot forge refresh state via CREATE TABLE.
+statement error 1301
+CREATE TABLE fake_dt(a INT) dynamic_table_initialized = 'true'
+
+statement error 1301
+CREATE TABLE fake_dt(a INT) dynamic_table_source_endpoints = '[]'
+
+# REFRESH DYNAMIC TABLE only accepts dynamic tables.
+statement error 1302
+REFRESH DYNAMIC TABLE orders
+
+# Scheduling and incremental refresh are not implemented; they must be rejected
+# instead of silently accepted.
+statement error 1002
+CREATE DYNAMIC TABLE sched_dt TARGET_LAG = 5 MINUTE AS SELECT order_id FROM orders
+
+statement error 1002
+CREATE DYNAMIC TABLE incr_dt REFRESH_MODE = INCREMENTAL AS SELECT order_id FROM orders
+
+# Derived objects are not supported as sources in this phase.
+statement ok
+CREATE VIEW orders_view AS SELECT order_id FROM orders
+
+statement error 1302
+CREATE DYNAMIC TABLE from_view_dt REFRESH_MODE = FULL AS SELECT order_id FROM orders_view
+
+statement error 1302
+CREATE DYNAMIC TABLE from_dt_dt REFRESH_MODE = FULL AS SELECT order_id FROM order_detail
+
+# SHOW CREATE emits a re-executable CREATE DYNAMIC TABLE, not CREATE TABLE.
+query TT
+SHOW CREATE TABLE empty_dt
+----
+empty_dt CREATE DYNAMIC TABLE `dt_ddl`.`empty_dt` REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS SELECT id FROM dt_ddl.empty_src
+
+# Internal refresh state is not user-settable.
+statement error 1301
+ALTER TABLE empty_dt SET OPTIONS (dynamic_table_initialized = 'true')
+
+statement error 1301
+ALTER TABLE empty_dt SET OPTIONS (dynamic_table_source_endpoints = '[]')
+
+# Schema-altering DDL must not be able to desynchronize the stored result from its definition.
+statement error 3905
+ALTER TABLE order_detail ADD COLUMN extra INT
+
+statement error 3905
+ALTER TABLE order_detail DROP COLUMN amount
+
+# A dynamic table reports its own object type, not BASE TABLE.
+query TT
+SELECT name, table_type FROM system.tables WHERE database = 'dt_ddl' AND name = 'order_detail'
+----
+order_detail DYNAMIC TABLE
+
+# WAREHOUSE is parsed for the eventual scheduling design but cannot be honoured yet, so it must
+# be rejected rather than silently ignored.
+statement error 1002
+CREATE DYNAMIC TABLE wh_dt WAREHOUSE = 'wh' AS SELECT order_id FROM orders
+
+# Dropping a source leaves the object unreadable rather than silently returning stale rows.
+statement ok
+CREATE TABLE drop_src(id INT NOT NULL)
+
+statement ok
+INSERT INTO drop_src VALUES (1)
+
+statement ok
+CREATE DYNAMIC TABLE drop_src_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS SELECT id FROM drop_src
+
+query I
+SELECT id FROM drop_src_dt
+----
+1
+
+statement ok
+DROP TABLE drop_src
+
+statement error
+SELECT id FROM drop_src_dt
+
+statement ok
+DROP TABLE drop_src_dt
+
+statement ok
+DROP TABLE order_detail
+
+statement ok
+DROP TABLE IF EXISTS empty_dt
+
+statement ok
+DROP DATABASE dt_ddl

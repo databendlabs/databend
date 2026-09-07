@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// Canonical defining query of a Dynamic Table.
 pub const OPT_KEY_AS_QUERY: &str = "as_query";
+/// JSON array of source identities, table sequences, and snapshots used by the last refresh.
+pub const OPT_KEY_SOURCE_ENDPOINTS: &str = "dynamic_table_source_endpoints";
+pub const OPT_KEY_INITIALIZED: &str = "dynamic_table_initialized";
 pub const OPT_KEY_TARGET_LAG: &str = "target_lag";
 pub const OPT_KEY_REFRESH_MODE: &str = "refresh_mode";
 pub const OPT_KEY_INITIALIZE: &str = "initialize";

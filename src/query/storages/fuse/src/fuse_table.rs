@@ -68,6 +68,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -1549,7 +1550,9 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly() || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+        self.table_type.is_readonly()
+            || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+            || self.table_info.meta.engine == DYNAMIC_TABLE_ENGINE
     }
 
     fn use_own_sample_block(&self) -> bool {

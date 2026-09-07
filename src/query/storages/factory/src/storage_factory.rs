@@ -19,6 +19,7 @@ pub use databend_common_catalog::catalog::StorageDescription;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -120,8 +121,12 @@ impl StorageFactory {
             descriptor: Arc::new(FuseTable::description),
         });
         new_creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
-            creator: fuse_creator,
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(materialized_view_description),
+        });
+        new_creators.insert(DYNAMIC_TABLE_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(dynamic_table_description),
         });
 
         Self {
@@ -154,8 +159,12 @@ impl StorageFactory {
         });
 
         creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
-            creator: fuse_creator,
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(materialized_view_description),
+        });
+        creators.insert(DYNAMIC_TABLE_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(dynamic_table_description),
         });
 
         // Register VIEW table engine
@@ -237,6 +246,14 @@ fn materialized_view_description() -> StorageDescription {
     StorageDescription {
         engine_name: MATERIALIZED_VIEW_ENGINE.to_string(),
         comment: "Materialized View (Fuse-backed)".to_string(),
+        support_cluster_key: true,
+    }
+}
+
+fn dynamic_table_description() -> StorageDescription {
+    StorageDescription {
+        engine_name: DYNAMIC_TABLE_ENGINE.to_string(),
+        comment: "Dynamic Table (Fuse-backed)".to_string(),
         support_cluster_key: true,
     }
 }

@@ -39,7 +39,7 @@ pub fn dynamic_table(i: Input) -> IResult<Statement> {
     rule!(
         #create_dynamic_table : "`CREATE [OR REPLACE] [TRANSIENT] DYNAMIC TABLE [ IF NOT EXISTS ] [<database>.]<table> [<source>]
   [ CLUSTER BY <expr> ]
-  TARGET_LAG = { <num> { SECOND | MINUTE | HOUR | DAY } | DOWNSTREAM}
+  [ TARGET_LAG = { <num> { SECOND | MINUTE | HOUR | DAY } | DOWNSTREAM} ]
   [ { WAREHOUSE = <string> } ]
   [ REFRESH_MODE = { AUTO | FULL | INCREMENTAL } ]
   [ INITIALIZE = { ON_CREATE | ON_SCHEDULE } ]
@@ -103,12 +103,33 @@ fn dynamic_table_options(
     Option<RefreshMode>,
     Option<InitializeMode>,
 )> {
-    let target_lag = map(
-        rule! {
-            TARGET_LAG ~ "=" ~ #target_lag
-        },
-        |(_, _, target_lag)| target_lag,
-    );
+    alt((
+        |i| dynamic_table_options_with_mode(i, false),
+        |i| dynamic_table_options_with_mode(i, true),
+    ))
+    .parse(i)
+}
+
+fn dynamic_table_options_with_mode(
+    i: Input,
+    manual: bool,
+) -> IResult<(
+    TargetLag,
+    WarehouseOptions,
+    Option<RefreshMode>,
+    Option<InitializeMode>,
+)> {
+    let target_lag = move |i| {
+        if manual {
+            Ok((i, TargetLag::Manual))
+        } else {
+            map(
+                rule! { TARGET_LAG ~ "=" ~ #target_lag },
+                |(_, _, target_lag)| target_lag,
+            )
+            .parse(i)
+        }
+    };
 
     let refresh_mode = alt((
         value(RefreshMode::Auto, rule! { AUTO }),
@@ -140,6 +161,77 @@ fn dynamic_table_options(
         initialize_opt,
     ))
     .parse(i)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::Dialect;
+    use crate::parser::parse_sql;
+    use crate::parser::tokenize_sql;
+
+    fn parse_statement(sql: &str) -> Statement {
+        let tokens = tokenize_sql(sql).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap().0
+    }
+
+    fn parse_create(sql: &str) -> CreateDynamicTableStmt {
+        let Statement::CreateDynamicTable(statement) = parse_statement(sql) else {
+            panic!("expected CREATE DYNAMIC TABLE");
+        };
+        statement
+    }
+
+    #[test]
+    fn test_dynamic_table_refresh_syntax() {
+        let statement = parse_statement("REFRESH DYNAMIC TABLE db.dt");
+        assert_eq!(statement.to_string(), "REFRESH DYNAMIC TABLE db.dt");
+        assert!(matches!(statement, Statement::RefreshDynamicTable(_)));
+    }
+
+    #[test]
+    fn test_dynamic_table_manual_refresh_syntax() {
+        for sql in [
+            "CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id",
+            "CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a",
+            "CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS SELECT id FROM a",
+        ] {
+            let statement = parse_create(sql);
+            assert_eq!(statement.target_lag, TargetLag::Manual);
+            assert_eq!(statement.initialize, InitializeMode::OnCreate);
+            let formatted = statement.to_string();
+            assert!(!formatted.contains("TARGET_LAG"));
+            let reparsed = parse_create(&formatted);
+            assert_eq!(reparsed.target_lag, statement.target_lag);
+            assert_eq!(reparsed.refresh_mode, statement.refresh_mode);
+            assert_eq!(reparsed.initialize, statement.initialize);
+            assert_eq!(reparsed.to_string(), formatted);
+        }
+    }
+
+    #[test]
+    fn test_dynamic_table_scheduled_syntax_is_preserved() {
+        let statement = parse_create(
+            "CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS SELECT id FROM a",
+        );
+        assert_eq!(statement.target_lag, TargetLag::IntervalSecs(600));
+        assert_eq!(statement.refresh_mode, RefreshMode::Full);
+        assert_eq!(statement.initialize, InitializeMode::OnSchedule);
+        assert_eq!(
+            parse_create(&statement.to_string()).to_string(),
+            statement.to_string()
+        );
+
+        let statement =
+            parse_create("CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a");
+        assert_eq!(statement.target_lag, TargetLag::Downstream);
+        assert_eq!(statement.refresh_mode, RefreshMode::Auto);
+        assert_eq!(statement.initialize, InitializeMode::OnCreate);
+        assert_eq!(
+            parse_create(&statement.to_string()).to_string(),
+            statement.to_string()
+        );
+    }
 }
 
 fn target_lag(i: Input) -> IResult<TargetLag> {

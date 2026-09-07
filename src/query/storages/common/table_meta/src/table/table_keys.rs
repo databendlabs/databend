@@ -21,8 +21,15 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 
+use super::dynamic_table_keys::OPT_KEY_AS_QUERY;
+use super::dynamic_table_keys::OPT_KEY_INITIALIZE;
+use super::dynamic_table_keys::OPT_KEY_INITIALIZED;
+use super::dynamic_table_keys::OPT_KEY_REFRESH_MODE;
+use super::dynamic_table_keys::OPT_KEY_SOURCE_ENDPOINTS;
+use super::dynamic_table_keys::OPT_KEY_TARGET_LAG;
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
@@ -118,7 +125,9 @@ pub fn is_fuse_engine(engine: &str) -> bool {
 }
 
 pub fn is_fuse_backed_engine(engine: &str) -> bool {
-    is_fuse_engine(engine) || is_materialized_view_engine(engine)
+    is_fuse_engine(engine)
+        || is_materialized_view_engine(engine)
+        || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
 }
 
 /// Table option keys that reserved for internal usage only
@@ -135,6 +144,12 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_ENDPOINTS);
+    r.insert(OPT_KEY_INITIALIZED);
+    r.insert(OPT_KEY_TARGET_LAG);
+    r.insert(OPT_KEY_REFRESH_MODE);
+    r.insert(OPT_KEY_INITIALIZE);
     r
 });
 
@@ -153,6 +168,12 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_ENDPOINTS);
+    r.insert(OPT_KEY_INITIALIZED);
+    r.insert(OPT_KEY_TARGET_LAG);
+    r.insert(OPT_KEY_REFRESH_MODE);
+    r.insert(OPT_KEY_INITIALIZE);
     r
 });
 

@@ -64,6 +64,7 @@ use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::CreateFileFormatPlan;
+use crate::plans::RefreshDynamicTablePlan;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateMaterializedViewPlan;
 use crate::plans::CreateNetworkPolicyPlan;
@@ -486,6 +487,7 @@ pub enum Plan {
     ExecuteTask(Box<ExecuteTaskPlan>),
 
     CreateDynamicTable(Box<CreateDynamicTablePlan>),
+    RefreshDynamicTable(Box<RefreshDynamicTablePlan>),
 
     // Txn
     Begin,

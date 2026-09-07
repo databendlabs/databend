@@ -296,6 +296,14 @@ impl InsertInterpreter {
         plan: Insert,
         target_table_id: u64,
     ) -> Result<InterpreterPtr> {
+        Self::try_create_refresh(ctx, plan, target_table_id)
+    }
+
+    pub fn try_create_refresh(
+        ctx: Arc<QueryContext>,
+        plan: Insert,
+        target_table_id: u64,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
