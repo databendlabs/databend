@@ -187,8 +187,8 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
             assert!(schema.is_some());
             let schema = schema.unwrap();
             assert_eq!(schema.fields.len(), 2);
-            assert_eq!(schema.fields[0].name(), "v.a");
-            assert_eq!(schema.fields[1].name(), "v.b");
+            assert_eq!(schema.fields[0].name(), "1_v.a");
+            assert_eq!(schema.fields[1].name(), "1_v.b");
         }
     }
 

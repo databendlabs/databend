@@ -444,13 +444,13 @@ fn test_range_index_plain_predicate_without_rewrite_candidates() {
 
     // Pruned by the first conjunct: '2815' is outside [3000, 3100].
     let stats = make_stats("3000", "3100", 0, 100);
-    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
     // Kept: both conjuncts overlap the block ranges.
     let stats = make_stats("2800", "2900", 0, 100);
-    assert!(index.apply(&stats, None, |_| false).unwrap());
+    assert!(index.apply(&stats, None, None, |_| false).unwrap());
     // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
     let stats = make_stats("2800", "2900", 1000, 2000);
-    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -480,7 +480,7 @@ fn test_range_index_rewrites_candidates_nested_under_and() {
         )
         .unwrap();
         assert!(
-            !index.apply(&stats, None, |_| false).unwrap(),
+            !index.apply(&stats, None, None, |_| false).unwrap(),
             "{text} should prune the block"
         );
     }
@@ -567,13 +567,13 @@ fn test_range_index_int_column_string_literal_with_contains() {
 
     // Pruned by the first conjunct: 2815 is outside [3000, 3100].
     let stats = make_stats(3000, 3100, 0, 100);
-    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
     // Kept: both conjuncts overlap the block ranges.
     let stats = make_stats(2800, 2900, 0, 100);
-    assert!(index.apply(&stats, None, |_| false).unwrap());
+    assert!(index.apply(&stats, None, None, |_| false).unwrap());
     // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
     let stats = make_stats(2800, 2900, 1000, 2000);
-    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
 #[test]

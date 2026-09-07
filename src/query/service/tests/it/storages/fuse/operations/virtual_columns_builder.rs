@@ -20,6 +20,10 @@ use databend_common_catalog::plan::VirtualColumnPath;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int32Type;
@@ -33,6 +37,7 @@ use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
 use jsonb::OwnedJsonb;
+use parquet::file::metadata::ParquetMetaDataReader;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder() -> anyhow::Result<()> {
@@ -585,6 +590,78 @@ async fn test_rebuild_uses_new_virtual_column_location() -> anyhow::Result<()> {
             .any(|meta| meta.name == "b")
     );
     assert!(!second_meta.virtual_columns_complete);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_direct_physical_names_do_not_collide_across_sources() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let write_settings = FuseTable::try_from_table(table.as_ref())?.get_write_settings();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("v", TableDataType::Variant),
+        TableField::new("v.a", TableDataType::Variant),
+    ]));
+    let v_id = schema.column_id_of("v")?;
+    let v_a_id = schema.column_id_of("v.a")?;
+    let layout = Arc::new(VirtualColumnLayout {
+        direct_paths: vec![
+            VirtualColumnPath {
+                source_column_id: v_id,
+                path: "a.b".to_string(),
+            },
+            VirtualColumnPath {
+                source_column_id: v_a_id,
+                path: "b".to_string(),
+            },
+        ],
+    });
+    let block = DataBlock::new(
+        vec![
+            VariantType::from_data(vec![
+                OwnedJsonb::from_str(r#"{"a":{"b":"left"}}"#)?.to_vec(),
+            ])
+            .into(),
+            VariantType::from_data(vec![OwnedJsonb::from_str(r#"{"b":"right"}"#)?.to_vec()]).into(),
+        ],
+        1,
+    );
+    let mut builder =
+        VirtualColumnBuilder::try_create(schema, VirtualColumnLayoutPolicy::default())?
+            .with_adaptive_layout(layout);
+    builder.add_block(&block)?;
+    let result = builder.finalize(
+        &write_settings,
+        &("_b/virtual_column_name_collision.parquet".to_string(), 0),
+    )?;
+    let parquet_meta = ParquetMetaDataReader::new().parse_and_finish(&result.data.to_bytes())?;
+    let physical_names = parquet_meta.row_groups()[0]
+        .columns()
+        .iter()
+        .map(|meta| meta.column_path().parts()[0].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(physical_names, vec!["0_v.a.b", "1_v.a.b"]);
+    let virtual_columns = result
+        .draft_virtual_block_meta
+        .virtual_columns
+        .as_ref()
+        .unwrap();
+    assert!(virtual_columns.virtual_columns_complete);
+    let metas = &virtual_columns.virtual_column_metas;
+
+    assert_eq!(metas.len(), 2);
+    let left = find_virtual_col(metas, v_id, "a.b").unwrap();
+    let right = find_virtual_col(metas, v_a_id, "b").unwrap();
+    assert_ne!(left.column_meta.offset, right.column_meta.offset);
+    let left_stat = left.column_meta.column_stat.as_ref().unwrap();
+    let right_stat = right.column_meta.column_stat.as_ref().unwrap();
+    assert_eq!(left_stat.min(), &Scalar::String("left".to_string()));
+    assert_eq!(left_stat.max(), &Scalar::String("left".to_string()));
+    assert_eq!(right_stat.min(), &Scalar::String("right".to_string()));
+    assert_eq!(right_stat.max(), &Scalar::String("right".to_string()));
     Ok(())
 }
 
