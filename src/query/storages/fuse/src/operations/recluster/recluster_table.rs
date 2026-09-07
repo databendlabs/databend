@@ -606,7 +606,8 @@ mod tests {
                 .into_iter()
                 .map(|position| (position, vec![0]))
                 .collect(),
-            output_level: 0,
+            base_level: 0,
+            input_level_stats: Vec::new(),
             all_ordered: false,
         }
     }
