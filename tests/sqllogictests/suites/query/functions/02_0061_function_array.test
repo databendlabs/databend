@@ -1,3 +1,54 @@
+# Array subscripts accept expressions and remain one-based, with NULL for missing elements.
+query T
+select array('a', 'b', 'c')[number % 2] from numbers(3) order by number
+----
+NULL
+a
+NULL
+
+query TT
+select array('a', 'b', 'c')[number], array('a', 'b', 'c')[4] from numbers(5) order by number
+----
+NULL NULL
+a NULL
+b NULL
+c NULL
+NULL NULL
+
+query T
+select array('a', 'b', 'c')[if(number = 1, NULL, number + 1)] from numbers(3) order by number
+----
+a
+NULL
+c
+
+query II
+select [10, NULL, 30][number + 1], [][number + 1] from numbers(3) order by number
+----
+10 NULL
+NULL NULL
+30 NULL
+
+query III
+select [[10, 20], [30, 40]][number + 1][2], [[10, 20], [30, 40]][1][number + 1], [[10, 20], [30, 40]][number + 1][number + 1] from numbers(2) order by number
+----
+20 10 10
+40 20 40
+
+query I
+select {'k0': 10, 'k1': 20}[concat('k', to_string(number))] from numbers(3) order by number
+----
+10
+20
+NULL
+
+query T
+select parse_json('{"a":[10,20]}')[concat('a', '')][number] from numbers(3) order by number
+----
+10
+20
+NULL
+
 query T
 select range(10, 20)
 ----
