@@ -44,6 +44,9 @@ use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 
 const DEFAULT_NON_EQUI_SELECTIVITY: f64 = 0.5;
+// Keep strongest-condition estimates until multi-condition backoff handles
+// correlated and repeated join keys without severe underestimation.
+const ENABLE_JOIN_SELECTIVITY_BACKOFF: bool = false;
 
 pub(super) struct JoinStats {
     pub(super) output_rows: f64,
@@ -96,6 +99,7 @@ struct JoinConditionEstimates {
     right: JoinSideConditionEstimates,
     strongest_equi_pair_rows: f64,
     strongest_condition_ndv: Option<NdvEstimate>,
+    strongest_equi_estimate: Option<JoinEstimateContribution>,
 }
 
 #[derive(Clone, Copy)]
@@ -187,6 +191,7 @@ impl JoinConditionEstimates {
             right: JoinSideConditionEstimates::default(),
             strongest_equi_pair_rows: input_pair_rows,
             strongest_condition_ndv: None,
+            strongest_equi_estimate: None,
         };
         for contribution in contributions {
             estimates.add_contribution(
@@ -235,7 +240,15 @@ impl JoinConditionEstimates {
         if estimate.matched_pair_rows < self.strongest_equi_pair_rows {
             self.strongest_equi_pair_rows = estimate.matched_pair_rows;
             self.strongest_condition_ndv = estimate.ndv;
+            self.strongest_equi_estimate = Some(estimate);
         }
+        if !ENABLE_JOIN_SELECTIVITY_BACKOFF {
+            return;
+        }
+        self.add_equi_side_estimate(estimate);
+    }
+
+    fn add_equi_side_estimate(&mut self, estimate: JoinEstimateContribution) {
         self.left.add_equi_matches(
             estimate.left_matched_rows,
             estimate.left_histogram_estimated_matched_rows,
@@ -252,6 +265,11 @@ impl JoinConditionEstimates {
         right_input_rows: f64,
         cap_side_matches_by_pair_rows: bool,
     ) -> CombinedJoinConditionEstimates {
+        // Side coverage and histogram uncertainty must come from the same
+        // strongest equality, rather than minima from different conditions.
+        if !ENABLE_JOIN_SELECTIVITY_BACKOFF && let Some(estimate) = self.strongest_equi_estimate {
+            self.add_equi_side_estimate(estimate);
+        }
         let input_pair_rows = left_input_rows * right_input_rows;
         let matched_pair_rows =
             combine_condition_estimates(input_pair_rows, &mut self.pair_rows, input_pair_rows);
@@ -651,10 +669,13 @@ impl JoinStatsEstimator {
             (JoinType::Full | JoinType::FullAsof, Side::Right) => left.unmatched_rows(),
             _ => 0.0,
         };
-        let combines_condition_ndv = matches!(
-            self.join_type,
-            JoinType::Inner | JoinType::InnerAny | JoinType::LeftSemi | JoinType::RightSemi
-        );
+        // Without backoff, propagate side coverage without applying an extra
+        // condition selectivity to either join keys or non-key columns.
+        let combines_condition_ndv = ENABLE_JOIN_SELECTIVITY_BACKOFF
+            && matches!(
+                self.join_type,
+                JoinType::Inner | JoinType::InnerAny | JoinType::LeftSemi | JoinType::RightSemi
+            );
         let (ndv_surviving_input_rows, residual_ndv_selectivity) =
             if !combines_condition_ndv || expression_output == ExpressionStatOutput::Input {
                 (surviving_input_rows, 1.0)
@@ -1125,6 +1146,15 @@ fn combine_condition_estimates(
 ) -> f64 {
     if estimates.is_empty() || input_cardinality <= 0.0 {
         return fallback;
+    }
+
+    if !ENABLE_JOIN_SELECTIVITY_BACKOFF {
+        return estimates
+            .iter()
+            .copied()
+            .reduce(f64::min)
+            .unwrap()
+            .clamp(0.0, input_cardinality);
     }
 
     estimates.sort_by(f64::total_cmp);
