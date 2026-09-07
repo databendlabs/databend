@@ -138,7 +138,7 @@ SELECT d FROM decimal_cluster_key WHERE d >= 2.00
 4.00
 
 statement ok
-OPTIMIZE TABLE decimal_cluster_key RECLUSTER
+ALTER TABLE decimal_cluster_key RECLUSTER
 
 query R
 SELECT d FROM decimal_cluster_key ORDER BY d

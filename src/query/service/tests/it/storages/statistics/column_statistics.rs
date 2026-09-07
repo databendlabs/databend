@@ -95,6 +95,7 @@ fn test_column_statistic() -> anyhow::Result<()> {
     )?;
 
     assert_eq!(5, col_stats.len());
+    let leaf_fields = schema.leaf_fields();
 
     (0..5).for_each(|i| {
         let stats = col_stats.get(&(i as u32)).unwrap();
@@ -103,7 +104,7 @@ fn test_column_statistic() -> anyhow::Result<()> {
             .map(|i| column.index(i).unwrap().to_owned())
             .collect();
         let view = stats
-            .try_view_with_table_type(schema.field(i).data_type())
+            .try_view_with_table_type(leaf_fields[i].data_type())
             .unwrap();
         assert_eq!(
             view.min(),

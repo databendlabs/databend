@@ -220,10 +220,11 @@ fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
         .collect::<databend_common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats);
     assert_eq!(3, r.len());
+    let leaf_fields = schema.leaf_fields();
     let col0_stats = r.get(&0).unwrap();
     assert_column_stats_bounds(
         col0_stats,
-        schema.field_of_column_id(0)?.data_type(),
+        leaf_fields[0].data_type(),
         &Scalar::Number(NumberScalar::Int32(val_start_with)),
         &Scalar::Number(NumberScalar::Int32(num_of_blocks as i32)),
     );
@@ -231,14 +232,14 @@ fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
     let col1_stats = r.get(&1).unwrap();
     assert_column_stats_bounds(
         col1_stats,
-        schema.field_of_column_id(1)?.data_type(),
+        leaf_fields[1].data_type(),
         &Scalar::Number(NumberScalar::Int32(val_start_with * 2)),
         &Scalar::Number(NumberScalar::Int32((num_of_blocks * 2) as i32)),
     );
     let col2_stats = r.get(&2).unwrap();
     assert_column_stats_bounds(
         col2_stats,
-        schema.field_of_column_id(2)?.data_type(),
+        leaf_fields[2].data_type(),
         &Scalar::Number(NumberScalar::Int32(val_start_with * 3)),
         &Scalar::Number(NumberScalar::Int32((num_of_blocks * 3) as i32)),
     );

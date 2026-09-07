@@ -1374,7 +1374,9 @@ impl Table for FuseTable {
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges
-            partial_col_stats.push(reduced);
+            if !reduced.is_empty() {
+                partial_col_stats.push(reduced);
+            }
             // 2. Append ranges of this chunk
             for compacted_seg in segments.into_iter() {
                 let segment = compacted_seg?;
