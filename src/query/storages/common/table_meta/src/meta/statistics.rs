@@ -1029,6 +1029,29 @@ mod tests {
     }
 
     #[test]
+    fn reduce_linear_cluster_stats_orders_null_last() {
+        let string_min = vec![Scalar::String("a".to_string())];
+        let string_max = vec![Scalar::Null];
+        let later_min = vec![Scalar::String("b".to_string())];
+        let later_max = vec![Scalar::String("c".to_string())];
+
+        for (mins, maxs) in [
+            (vec![string_min.as_slice(), later_min.as_slice()], vec![
+                string_max.as_slice(),
+                later_max.as_slice(),
+            ]),
+            (vec![later_min.as_slice(), string_min.as_slice()], vec![
+                later_max.as_slice(),
+                string_max.as_slice(),
+            ]),
+        ] {
+            let (min, max) = reduce_cluster_min_max(&mins, &maxs, ClusterType::Linear).unwrap();
+            assert_eq!(min, string_min);
+            assert_eq!(max, string_max);
+        }
+    }
+
+    #[test]
     fn reduce_cluster_decimal_stats_normalizes_precision() {
         let old_min = vec![decimal64_scalar(100, 10, 2)];
         let old_max = vec![decimal64_scalar(200, 10, 2)];

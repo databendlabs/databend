@@ -717,9 +717,13 @@ impl ClusterStatistics {
 /// Compare scalars used by persisted statistics without changing global [`Scalar`] semantics.
 ///
 /// Decimal precision is capacity rather than value identity. Physical variant and scale must
-/// still match; all other incomparable values return `None`.
+/// still match. NULL follows the ascending, NULLS LAST ordering used by cluster keys; all other
+/// incomparable values return `None`.
 pub fn compare_statistics_scalars(left: &ScalarRef<'_>, right: &ScalarRef<'_>) -> Option<Ordering> {
     match (left, right) {
+        (ScalarRef::Null, ScalarRef::Null) => Some(Ordering::Equal),
+        (ScalarRef::Null, _) => Some(Ordering::Greater),
+        (_, ScalarRef::Null) => Some(Ordering::Less),
         (
             ScalarRef::Decimal(DecimalScalar::Decimal64(left, left_size)),
             ScalarRef::Decimal(DecimalScalar::Decimal64(right, right_size)),
