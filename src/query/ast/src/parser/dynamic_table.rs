@@ -163,6 +163,47 @@ fn dynamic_table_options_with_mode(
     .parse(i)
 }
 
+fn target_lag(i: Input) -> IResult<TargetLag> {
+    let interval_sec = map(
+        rule! {
+             #literal_u64 ~ SECOND
+        },
+        |(secs, _)| TargetLag::IntervalSecs(secs),
+    );
+    let interval_min = map(
+        rule! {
+             #literal_u64 ~ MINUTE
+        },
+        |(mins, _)| TargetLag::IntervalSecs(mins * 60),
+    );
+    let interval_hour = map(
+        rule! {
+             #literal_u64 ~ HOUR
+        },
+        |(hours, _)| TargetLag::IntervalSecs(hours * 60 * 60),
+    );
+    let interval_day = map(
+        rule! {
+             #literal_u64 ~ DAY
+        },
+        |(days, _)| TargetLag::IntervalSecs(days * 60 * 60 * 24),
+    );
+    let downstream = map(
+        rule! {
+            DOWNSTREAM
+        },
+        |_| TargetLag::Downstream,
+    );
+    rule!(
+        #interval_sec
+        | #interval_min
+        | #interval_hour
+        | #interval_day
+        | #downstream
+    )
+    .parse(i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,45 +273,4 @@ mod tests {
             statement.to_string()
         );
     }
-}
-
-fn target_lag(i: Input) -> IResult<TargetLag> {
-    let interval_sec = map(
-        rule! {
-             #literal_u64 ~ SECOND
-        },
-        |(secs, _)| TargetLag::IntervalSecs(secs),
-    );
-    let interval_min = map(
-        rule! {
-             #literal_u64 ~ MINUTE
-        },
-        |(mins, _)| TargetLag::IntervalSecs(mins * 60),
-    );
-    let interval_hour = map(
-        rule! {
-             #literal_u64 ~ HOUR
-        },
-        |(hours, _)| TargetLag::IntervalSecs(hours * 60 * 60),
-    );
-    let interval_day = map(
-        rule! {
-             #literal_u64 ~ DAY
-        },
-        |(days, _)| TargetLag::IntervalSecs(days * 60 * 60 * 24),
-    );
-    let downstream = map(
-        rule! {
-            DOWNSTREAM
-        },
-        |_| TargetLag::Downstream,
-    );
-    rule!(
-        #interval_sec
-        | #interval_min
-        | #interval_hour
-        | #interval_day
-        | #downstream
-    )
-    .parse(i)
 }
