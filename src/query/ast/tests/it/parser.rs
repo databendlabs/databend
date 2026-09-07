@@ -871,8 +871,6 @@ SELECT * from s;"#,
             CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
                 TARGET_LAG = 10 SECOND
                 WAREHOUSE = 'MyWarehouse'
-                REFRESH_MODE = FULL
-                INITIALIZE = ON_CREATE
                 COMMENT = 'This is test dynamic table'
             AS
                 SELECT * FROM t
@@ -881,8 +879,6 @@ SELECT * from s;"#,
             CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
                 TARGET_LAG = 10 MINUTE
                 WAREHOUSE = 'MyWarehouse'
-                REFRESH_MODE = INCREMENTAL
-                INITIALIZE = ON_SCHEDULE
                 COMMENT = 'This is test dynamic table'
             AS
                 SELECT * FROM t
@@ -891,7 +887,6 @@ SELECT * from s;"#,
             CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
                 CLUSTER BY (a)
                 TARGET_LAG = 10 HOUR
-                REFRESH_MODE = AUTO
                 COMMENT = 'This is test dynamic table'
                 STORAGE_FORMAT = 'native'
             AS
@@ -907,7 +902,6 @@ SELECT * from s;"#,
         r#"
             CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
                 CLUSTER BY (a)
-                REFRESH_MODE = INCREMENTAL
                 TARGET_LAG = DOWNSTREAM
             AS
                 SELECT avg(a), d FROM db.t GROUP BY d
