@@ -443,6 +443,10 @@ impl ClusteringInformationImpl<'_> {
                 constant_block_count,
                 average_overlaps: rounded_average(aggregate.sum_overlap, aggregate.block_count),
                 average_depth: rounded_average(aggregate.sum_depth, aggregate.block_count),
+                max_depth: aggregate
+                    .depth_counts
+                    .last_key_value()
+                    .map_or(0, |(&depth, _)| depth),
                 p95_depth: percentile_depth(&aggregate.depth_counts, aggregate.block_count, 95),
                 p99_depth: percentile_depth(&aggregate.depth_counts, aggregate.block_count, 99),
                 block_depth_histogram: {
@@ -461,13 +465,14 @@ impl ClusteringInformationImpl<'_> {
             }
         };
         info!(
-            "clustering_information: finished table={} cluster_type={} blocks={} constant_blocks={} average_overlaps={} average_depth={} p95_depth={} p99_depth={} calculation_elapsed={:?} total_elapsed={:?}",
+            "clustering_information: finished table={} cluster_type={} blocks={} constant_blocks={} average_overlaps={} average_depth={} max_depth={} p95_depth={} p99_depth={} calculation_elapsed={:?} total_elapsed={:?}",
             self.table.table_info.desc,
             cluster_type,
             info.total_block_count,
             info.constant_block_count,
             info.average_overlaps,
             info.average_depth,
+            info.max_depth,
             info.p95_depth,
             info.p99_depth,
             calculation_start.elapsed(),
@@ -674,6 +679,7 @@ struct LinearClusterStatistics {
     constant_block_count: u64,
     average_overlaps: f64,
     average_depth: f64,
+    max_depth: usize,
     p95_depth: usize,
     p99_depth: usize,
     block_depth_histogram: BTreeMap<String, u64>,
