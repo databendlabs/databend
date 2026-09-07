@@ -64,6 +64,11 @@ drop table if exists article;
 statement ok
 drop table if exists author;
 
+# Keep this legacy EXPLAIN ANALYZE profile focused on scan metrics. The distributed metadata
+# exchange has its own plan and cluster regression coverage.
+statement ok
+set enable_distributed_pruning = 0;
+
 statement ok
 create table if not exists article (article_id int, author_id int, viewer_id int, view_date date);
 
@@ -245,3 +250,6 @@ drop table if exists article;
 
 statement ok
 drop table if exists author;
+
+statement ok
+set enable_distributed_pruning = 1;

@@ -31,6 +31,7 @@ use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
+use crate::physical_plans::FusePrune;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MaterializedCTE;
 use crate::physical_plans::MutationSource;
@@ -393,6 +394,10 @@ impl PhysicalPlanVisitor for FragmentTypeVisitor {
         }
 
         if TableScan::check_physical_plan(v) {
+            self.fragment_type = FragmentType::Source;
+        }
+
+        if FusePrune::check_physical_plan(v) {
             self.fragment_type = FragmentType::Source;
         }
 

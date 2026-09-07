@@ -33,6 +33,7 @@ use crate::physical_plans::CompactSource;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::FusePrune;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
@@ -62,8 +63,8 @@ pub enum FragmentType {
     /// doesn't contain any `TableScan` operator.
     Intermediate,
 
-    /// Leaf fragment of a query plan, which contains
-    /// a `TableScan` operator.
+    /// Leaf fragment of a query plan, which contains a row-producing scan or a metadata-producing
+    /// `FusePrune` source operator.
     Source,
     /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
     ReplaceInto,
@@ -551,6 +552,9 @@ impl PlanFragment {
                 if let Some(scan) = TableScan::from_physical_plan(plan) {
                     self.data_sources
                         .insert(plan.get_id(), DataSource::Table(*scan.source.clone()));
+                } else if let Some(prune) = FusePrune::from_physical_plan(plan) {
+                    self.data_sources
+                        .insert(plan.get_id(), DataSource::Table(*prune.source.clone()));
                 } else if let Some(scan) = ConstantTableScan::from_physical_plan(plan) {
                     self.data_sources.insert(
                         plan.get_id(),
@@ -650,6 +654,22 @@ impl DeriveHandle for ReadSourceDeriveHandle {
             return Ok(PhysicalPlan::new(TableScan {
                 source: Box::new(source),
                 ..table_scan.clone()
+            }));
+        } else if let Some(fuse_prune) = FusePrune::from_physical_plan(v) {
+            let Some(source) = self.sources.remove(&fuse_prune.get_id()) else {
+                unreachable!(
+                    "Cannot find data source for Fuse prune plan {}",
+                    fuse_prune.get_id()
+                )
+            };
+
+            let Ok(source) = DataSourcePlan::try_from(source) else {
+                unreachable!("Cannot create data source plan");
+            };
+
+            return Ok(PhysicalPlan::new(FusePrune {
+                source: Box::new(source),
+                ..fuse_prune.clone()
             }));
         } else if let Some(table_scan) = ConstantTableScan::from_physical_plan(v) {
             let Some(source) = self.sources.remove(&table_scan.get_id()) else {

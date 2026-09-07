@@ -35,12 +35,14 @@ with NativeClient(name="client1>") as client1:
         mycursor.execute(f"insert into test_explain_analyze_0011_1 values ({i})")
 
     def explain_output(res):
-        cnt = 0
         pruning_fields = ["partitions total", "partitions scanned", "pruning stats"]
+        # Distributed pruning can report a field from both its prune and read operators.
+        found_fields = set()
         for row in res:
-            if any(field in row[0] for field in pruning_fields):
-                cnt += 1
-        print(cnt)
+            for field in pruning_fields:
+                if field in row[0]:
+                    found_fields.add(field)
+        print(len(found_fields))
 
     mycursor.execute(
         """EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5"""

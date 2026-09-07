@@ -59,10 +59,43 @@ pub fn build_fuse_source_pipeline(
 ) -> Result<()> {
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
-    let waker = pipeline.get_waker();
     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+    let source_batch_size = if receiver.is_some() { 1 } else { batch_size };
+    build_fuse_partitions_source_pipeline(
+        ctx.clone(),
+        pipeline,
+        plan,
+        max_io_requests,
+        receiver,
+        source_batch_size,
+    )?;
+
+    build_fuse_read_transform_pipeline(
+        ctx,
+        storage_format,
+        table_schema,
+        pipeline,
+        block_reader,
+        max_threads,
+        max_io_requests,
+        plan,
+        index_reader,
+        virtual_reader,
+        false,
+    )
+}
+
+pub(crate) fn build_fuse_partitions_source_pipeline(
+    ctx: Arc<dyn TableContext>,
+    pipeline: &mut Pipeline,
+    plan: &DataSourcePlan,
+    max_io_requests: usize,
+    receiver: Option<Receiver<Result<PartInfoPtr>>>,
+    batch_size: usize,
+) -> Result<()> {
+    let waker = pipeline.get_waker();
     let stream: Arc<dyn PartitionStream> = match receiver {
-        Some(rx) => Arc::new(ReceiverPartitionStream::new(rx)),
+        Some(rx) => Arc::new(ReceiverPartitionStream::with_batch_size(rx, batch_size)),
         None => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
@@ -88,6 +121,25 @@ pub fn build_fuse_source_pipeline(
     }
     pipeline.add_pipe(source_builder.finalize());
 
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_fuse_read_transform_pipeline(
+    ctx: Arc<dyn TableContext>,
+    storage_format: FuseStorageFormat,
+    table_schema: Arc<TableSchema>,
+    pipeline: &mut Pipeline,
+    block_reader: Arc<BlockReader>,
+    max_threads: usize,
+    max_io_requests: usize,
+    plan: &DataSourcePlan,
+    index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
+    record_partitions: bool,
+) -> Result<()> {
+    pipeline.try_resize(max_io_requests)?;
+
     let block_format = match storage_format {
         FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(),
         FuseStorageFormat::Unsupported => {
@@ -111,6 +163,7 @@ pub fn build_fuse_source_pipeline(
             table_schema.clone(),
             block_reader.clone(),
             read_block_context.clone(),
+            record_partitions,
             input,
             output,
         )
