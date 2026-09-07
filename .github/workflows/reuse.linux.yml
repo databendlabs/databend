@@ -83,7 +83,7 @@ jobs:
           # fetch all tags, metasrv and meta client need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 90
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
