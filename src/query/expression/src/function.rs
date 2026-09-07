@@ -619,13 +619,21 @@ impl EvalContext<'_> {
         };
 
         let first_error_row = match selection {
-            None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+            None => {
+                let Some((row, _)) = valids.iter().enumerate().find(|(_, valid)| !valid) else {
+                    return Ok(());
+                };
+                row
+            }
             Some(selection) if valids.len() == 1 => {
-                if valids.get(0) || selection.is_empty() {
+                if valids.get(0) {
                     return Ok(());
                 }
 
-                selection.first().map(|x| *x as usize).unwrap()
+                let Some(row) = selection.first() else {
+                    return Ok(());
+                };
+                *row as usize
             }
             Some(selection) => {
                 let Some(first_invalid) = selection.iter().find(|idx| !valids.get(**idx as usize))
@@ -677,5 +685,41 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
                 )),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::bitmap::MutableBitmap;
+
+    use super::EvalContext;
+
+    #[test]
+    fn render_error_ignores_error_channel_without_invalid_rows() {
+        let errors = Some((MutableBitmap::from_len_set(2), "error".to_string()));
+
+        assert!(EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", None).is_ok());
+    }
+
+    #[test]
+    fn render_error_ignores_empty_selection() {
+        let errors = Some((MutableBitmap::from_len_zeroed(1), "error".to_string()));
+
+        assert!(
+            EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", Some(&[])).is_ok()
+        );
+    }
+
+    #[test]
+    fn render_error_returns_sql_error_for_invalid_row() {
+        let errors = Some((MutableBitmap::from_len_zeroed(1), "error".to_string()));
+
+        let err = EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", None)
+            .expect_err("an invalid row must be reported as a SQL error");
+        assert_eq!(err.code(), 1006);
+        assert!(
+            err.message()
+                .contains("error while evaluating function `fn()`")
+        );
     }
 }
