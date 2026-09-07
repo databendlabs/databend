@@ -431,12 +431,13 @@ impl StealablePartitions {
     }
 }
 
-/// Per-level block sizes for insert/recluster diagnostic logs, not table statistics.
+/// Per-level block counts, rows and sizes for insert/recluster diagnostic logs, not table statistics.
 /// `None` means no cluster statistics; -1 denotes a perfect block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ClusterLevelLogStats {
     pub level: Option<i32>,
     pub block_count: u64,
+    pub row_count: u64,
     pub block_size: u64,
     pub file_size: u64,
 }
@@ -447,6 +448,7 @@ impl ClusterLevelLogStats {
         let stats = levels.entry(level).or_default();
         stats.level = level;
         stats.block_count += 1;
+        stats.row_count += block.row_count;
         stats.block_size += block.block_size;
         stats.file_size += block.file_size;
     }

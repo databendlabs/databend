@@ -434,6 +434,7 @@ pub(crate) fn task_candidate(
                 ..Default::default()
             });
         stats.block_count += 1;
+        stats.row_count = stats.row_count.saturating_add(block.meta.row_count);
         stats.block_size = stats.block_size.saturating_add(block.meta.block_size);
         stats.file_size = stats.file_size.saturating_add(block.meta.file_size);
     }

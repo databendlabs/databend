@@ -2111,12 +2111,14 @@ async fn test_final_low_maturity_level_uses_block_size_ratio() -> anyhow::Result
                 ClusterLevelLogStats {
                     level: Some(1),
                     block_count: 2,
+                    row_count: 2000,
                     block_size: 200,
                     file_size: 100
                 },
                 ClusterLevelLogStats {
                     level: Some(3),
                     block_count: 1,
+                    row_count: 1000,
                     block_size: 200,
                     file_size: 100
                 },

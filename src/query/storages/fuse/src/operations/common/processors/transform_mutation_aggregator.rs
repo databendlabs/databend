@@ -347,6 +347,7 @@ impl TableMutationAggregator {
                         let total = self.output_level_stats.entry(stats.level).or_default();
                         total.level = stats.level;
                         total.block_count += stats.block_count;
+                        total.row_count += stats.row_count;
                         total.block_size += stats.block_size;
                         total.file_size += stats.file_size;
                     }
