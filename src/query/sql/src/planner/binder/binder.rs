@@ -397,9 +397,6 @@ impl Binder {
             }
 
             // Indexes
-            Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
-            Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
-            Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
             Statement::CreateTableIndex(stmt) => {
                 self.bind_create_table_index(bind_context, stmt).await?
             }

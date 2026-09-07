@@ -58,14 +58,17 @@ CREATE NGRAM INDEX idx2 ON t2(content) false_positive_rate = 0
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) false_positive_rate = 1
 
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content) hash_algorithm = 'invalid'
+
 statement ok
-CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576 false_positive_rate = 0.02
+CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576 false_positive_rate = 0.02 hash_algorithm = 'city64_v0'
 
 query TTTT
 select name, type, original, definition from system.indexes where database = 'test_gram_index' AND type = 'NGRAM';
 ----
 idx1 NGRAM (empty) t1(content)bloom_size='1048576' gram_size='5'
-idx2 NGRAM (empty) t2(content)bloom_size='1048576' false_positive_rate='0.02' gram_size='5'
+idx2 NGRAM (empty) t2(content)bloom_size='1048576' false_positive_rate='0.02' gram_size='5' hash_algorithm='city64_v0'
 
 statement error
 CREATE INVERTED INDEX idx1 ON t1(content)

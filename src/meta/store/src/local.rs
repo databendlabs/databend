@@ -38,7 +38,7 @@ use log::info;
 use log::warn;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tonic_013::transport::Server;
+use tonic::transport::Server;
 
 struct InProcessGrpcServer<RT: RuntimeApi> {
     _endpoint: InProcessGrpcEndpoint,

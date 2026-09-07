@@ -1783,7 +1783,6 @@ mod tests {
             None,
             false,
             false,
-            false,
             None,
         )
     }
@@ -1801,7 +1800,6 @@ mod tests {
             fake_stream_table(table_id, table_name, lineage_source.clone()),
             None,
             None,
-            false,
             false,
             false,
             None,
@@ -1867,7 +1865,6 @@ mod tests {
             }),
             None,
             None,
-            false,
             false,
             true,
             None,

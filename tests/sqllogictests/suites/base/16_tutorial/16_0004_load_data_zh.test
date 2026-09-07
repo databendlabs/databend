@@ -1,0 +1,51 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/zh_CN/002-load-data.sql
+# The Chinese tutorial uses a different NDJSON sample than the English one.
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE STAGE citydrive_ndjson_stage
+
+query III
+COPY INTO @citydrive_ndjson_stage/metadata.ndjson FROM (
+    SELECT 'VID-001' AS video_id, PARSE_JSON('{"resolution":"1080p", "codec":"h264", "audio":"stereo"}') AS raw_data
+    UNION ALL SELECT 'VID-002', PARSE_JSON('{"resolution":"4k", "codec":"hevc", "hdr":true}')
+    UNION ALL SELECT 'VID-003', PARSE_JSON('{"resolution":"720p", "codec":"h264", "bitrate":5000}')
+    )
+    FILE_FORMAT = (TYPE = NDJSON)
+----
+3 255 255
+
+statement ok
+CREATE OR REPLACE TABLE frame_metadata_catalog (
+    video_id STRING,
+    raw_data VARIANT
+)
+
+statement ok
+COPY INTO frame_metadata_catalog
+    FROM @citydrive_ndjson_stage/metadata.ndjson
+    FILE_FORMAT = (TYPE = NDJSON)
+
+query TTTB
+SELECT
+    video_id,
+    raw_data:resolution::STRING AS resolution,
+    raw_data:codec::STRING AS codec,
+    raw_data:hdr::BOOLEAN AS is_hdr
+FROM frame_metadata_catalog
+ORDER BY video_id
+----
+VID-001 1080p h264 NULL
+VID-002 4k hevc 1
+VID-003 720p h264 NULL
+
+statement ok
+DROP STAGE IF EXISTS citydrive_ndjson_stage
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo

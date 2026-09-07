@@ -573,7 +573,6 @@ impl Binder {
             table_alias_name,
             false,
             false,
-            false,
             None,
         );
         let (s_expr, mut target_context) =

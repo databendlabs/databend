@@ -83,6 +83,36 @@ fn test_calc_compact_block_num() {
 }
 
 #[test]
+fn test_threshold_arithmetic_at_usize_limit() {
+    for value in [0, 1, 4, 5, 6, 1000, usize::MAX / 2, usize::MAX] {
+        let expected = ((value as u128 * 4).div_ceil(5)) as usize;
+        assert_eq!(BlockThresholds::min_block_threshold(value), expected);
+    }
+
+    let thresholds = BlockThresholds::new(usize::MAX, usize::MAX, usize::MAX, 4);
+    assert_eq!(thresholds.max_bytes_per_block, usize::MAX);
+    assert_eq!(
+        default_thresholds()
+            .set_bytes_per_block(usize::MAX)
+            .max_bytes_per_block,
+        usize::MAX
+    );
+    assert!(!thresholds.check_perfect_segment(4, usize::MAX - 1, 1, 1));
+    assert!(!thresholds.check_perfect_segment(4, 1, usize::MAX - 1, 1));
+    assert!(!thresholds.check_perfect_segment(4, 1, 1, usize::MAX - 1));
+    assert!(thresholds.check_for_compact(usize::MAX - 1, usize::MAX - 1));
+    assert!(!thresholds.check_too_large(usize::MAX - 1, usize::MAX - 1));
+    assert_eq!(
+        thresholds.calc_compact_block_num(usize::MAX - 1, usize::MAX - 1),
+        1
+    );
+    assert_eq!(
+        thresholds.calc_rows_for_recluster(usize::MAX - 1, usize::MAX - 1, usize::MAX - 1),
+        (usize::MAX - 1, usize::MAX.div_ceil(2))
+    );
+}
+
+#[test]
 fn test_calc_rows_for_recluster() {
     let t = default_thresholds();
 

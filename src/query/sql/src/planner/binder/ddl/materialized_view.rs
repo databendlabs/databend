@@ -169,10 +169,7 @@ impl Binder {
         bind_context: &mut BindContext,
         metadata: &MetadataRef,
     ) -> Result<()> {
-        if bind_context.planning_agg_index
-            || bind_context.planning_materialized_view_rewrite
-            || !self.ctx.get_can_scan_from_agg_index()
-            || !self.enable_materialized_view_rewrite
+        if bind_context.planning_materialized_view_rewrite || !self.enable_materialized_view_rewrite
         {
             return Ok(());
         }
@@ -180,10 +177,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let source_entries = metadata.read().tables().to_vec();
         for source_entry in source_entries {
-            if source_entry.is_source_of_view()
-                || source_entry.is_source_of_index()
-                || source_entry.is_source_of_stage()
-            {
+            if source_entry.is_source_of_view() || source_entry.is_source_of_stage() {
                 continue;
             }
             let source_table = source_entry.table();
