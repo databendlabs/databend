@@ -75,8 +75,17 @@ retained delta history.
 ## Refresh protocol
 
 1. Acquire the target table lock, evict cache, reload, and verify the engine.
-2. Read the definition and overwrite the target through `InsertInterpreter::try_create_refresh`,
-   the only path allowed to write a read-only Dynamic Table, which checks the exact target id.
+2. Plan the stored definition, then build an overwriting `Insert` plan **structurally** from the
+   target's own `TableInfo` and execute it through `InsertInterpreter::try_create_refresh`, the
+   only path allowed to write a read-only Dynamic Table, which checks the exact target id.
+
+Step 2 is built structurally rather than by formatting an `INSERT OVERWRITE` string. The tokenizer
+forbids a backtick inside backtick-quotes (`` `[^`]*` ``), but permits one inside double-quotes,
+and PostgreSQL dialect quotes identifiers with `"`. So `CREATE DATABASE "bt`db"` is reachable, and
+formatting that name back into backticks produced
+`` INSERT OVERWRITE `default`.`bt`db`.`dt` ... `` — the name broke out of its quoting in a write
+path, error 1005. This was reproduced end to end, then fixed. Only the stored definition, which the
+system itself serialized, is parsed here.
 
 `INSERT OVERWRITE` lands as a single Fuse commit, so a reader observes either the previous contents
 or the new ones, never a mixture, and a failed refresh leaves the previous contents intact. An empty
@@ -116,29 +125,37 @@ tables, or awkward identifiers.
 
 | Gap | Impact |
 | --- | --- |
-| Refresh builds `INSERT OVERWRITE` by interpolating backtick identifiers and re-parsing | A backtick is legal inside a quoted identifier, so a crafted db/table name can break out of quoting in a write path. Fix: build the `Insert` plan structurally. |
-| No operational visibility | No system view for last refresh time, duration, error, or in-flight state; no row cap, timeout, or progress. Makes every other gap hard to diagnose, and makes unbounded staleness invisible. |
+| No operational visibility | No system view for refresh history, duration, error, or in-flight state; no row cap, timeout, or progress. Makes every other gap hard to diagnose, and makes unbounded staleness invisible. `system.tables.updated_on` is currently the only signal, and for a Dynamic Table it does equal the last refresh time. |
 | Unbounded staleness | With no scheduler, a never-refreshed object serves old rows forever. Nothing reports how stale it is. |
 | Refresh serializes against itself but not against source DDL | Refresh takes the target lock, not source locks. |
 | No snapshot pinning | See above. |
 
-Suggested order: identifier handling → a `system.dynamic_tables` view (makes the rest diagnosable)
-→ snapshot pinning → scheduling last, since it depends on all of the above.
+Suggested order: a `system.dynamic_tables` view (makes the rest diagnosable) → snapshot pinning →
+scheduling last, since it depends on all of the above.
+
+A note for whoever builds that view: `is_fresh` cannot be reported as a fact any more. The refresh
+checkpoint was removed, so the only available basis would be comparing the object's Fuse snapshot
+timestamp against its sources'. That misreports in both directions — a source compaction creates a
+newer snapshot with unchanged logical content (false stale), and a flashback moves a source to an
+older snapshot (false fresh). Reporting refresh *time* is factual; reporting freshness needs a
+deliberately reintroduced checkpoint.
 
 ## Verification
 
-`tests/sqllogictests/suites/base/05_ddl/05_0066_ddl_dynamic_table.test` (84 assertions) covers the
+`tests/sqllogictests/suites/base/05_ddl/05_0066_ddl_dynamic_table.test` (96 assertions) covers the
 stale-read contract (a source commit does not change what the object returns), refresh publishing
 new rows, idempotent refresh, empty results, aggregates, self-joins, `CREATE` rollback on a failed
-initial refresh, reads surviving a dropped source while refresh fails, every read-only and
-option-forging guard, rejected policies, `SHOW CREATE` round-trip, and object-type reporting.
+initial refresh, reads surviving a dropped source while refresh fails, a database name containing a
+backtick, every read-only and option-forging guard, rejected policies, `SHOW CREATE` round-trip, and
+object-type reporting.
 
-The `CREATE` rollback assertion was verified to fail when the rollback is removed, so it is not
-vacuous. The stale-read contract was additionally confirmed against a live server with `EXPLAIN`:
-the plan is a plain `TableScan` of the object itself, unchanged by a source commit, and querying
-the base tables produces a join with no reference to the Dynamic Table.
+Two assertions were verified non-vacuous by reverting their fix and observing the failure: the
+`CREATE` rollback (leaks the empty table), and the backtick identifier (error 1005 on the
+string-formatted overwrite). The stale-read contract was additionally confirmed against a live
+server with `EXPLAIN`: the plan is a plain `TableScan` of the object itself, unchanged by a source
+commit, and querying the base tables produces a join with no reference to the Dynamic Table.
 
-Regression suites at this commit: `05_ddl` 2261, `20+_others` 685, `01_system` 137, `06_show` 396.
+Regression suites at this commit: `05_ddl` 2273, `20+_others` 685, `01_system` 137, `06_show` 396.
 `01_system` and `06_show` fail when run immediately after the full `05_ddl` directory; this was
 confirmed pre-existing by reproducing it with this branch's test file removed entirely.
 

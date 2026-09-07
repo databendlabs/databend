@@ -261,5 +261,45 @@ DROP TABLE order_detail
 statement ok
 DROP TABLE IF EXISTS empty_dt
 
+# A backtick is legal inside a double-quoted identifier, and PostgreSQL dialect quotes with ".
+# Refresh must therefore not build its write statement by formatting names into backticks: doing
+# so lets the name break out of its quoting in a write path (observed as error 1005).
+statement ok
+SET sql_dialect = 'PostgreSQL'
+
+statement ok
+CREATE DATABASE "bt`db"
+
+statement ok
+CREATE TABLE "bt`db".src(id INT NOT NULL)
+
+statement ok
+INSERT INTO "bt`db".src VALUES (1),(2)
+
+statement ok
+CREATE DYNAMIC TABLE "bt`db".dt AS SELECT id FROM "bt`db".src
+
+query I
+SELECT count(*) FROM "bt`db".dt
+----
+2
+
+statement ok
+INSERT INTO "bt`db".src VALUES (3)
+
+statement ok
+REFRESH DYNAMIC TABLE "bt`db".dt
+
+query I
+SELECT count(*) FROM "bt`db".dt
+----
+3
+
+statement ok
+DROP DATABASE "bt`db"
+
+statement ok
+SET sql_dialect = 'MySQL'
+
 statement ok
 DROP DATABASE dt_ddl
