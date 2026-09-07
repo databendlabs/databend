@@ -21,6 +21,7 @@ use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::MapAccessor;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -68,7 +69,10 @@ pub(crate) fn contains_subquery(expr: &Expr) -> bool {
                 || results.iter().any(contains_subquery)
                 || else_result.as_ref().is_some_and(|e| contains_subquery(e))
         }
-        Expr::MapAccess { expr, .. } => contains_subquery(expr),
+        Expr::MapAccess { expr, accessor, .. } => {
+            contains_subquery(expr)
+                || matches!(accessor, MapAccessor::Bracket { key } if contains_subquery(key))
+        }
         Expr::Array { exprs, .. } => exprs.iter().any(contains_subquery),
         Expr::Tuple { exprs, .. } => exprs.iter().any(contains_subquery),
         _ => false,

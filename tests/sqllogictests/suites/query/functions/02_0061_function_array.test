@@ -1,3 +1,19 @@
+# Table-argument subquery detection must inspect bracket keys, including nested expressions.
+query I
+select number from numbers([1][(select 1)])
+----
+0
+
+query I
+select number from numbers([[1]][1][(select 0) + 1])
+----
+0
+
+query I
+select number from numbers((select [1])[1])
+----
+0
+
 # Array subscripts accept expressions and remain one-based, with NULL for missing elements.
 query T
 select array('a', 'b', 'c')[number % 2] from numbers(3) order by number
