@@ -162,12 +162,8 @@ impl From<ClusterStatistics> for crate::meta::ClusterStatistics {
 
         let pages = pages.map(|pages| pages.into_iter().map(Scalar::from).collect());
 
-        Self {
-            cluster_key_id,
-            min,
-            max,
-            level,
-            pages,
-        }
+        let mut stats = Self::new(cluster_key_id, min, max, level);
+        stats.pages = pages;
+        stats
     }
 }

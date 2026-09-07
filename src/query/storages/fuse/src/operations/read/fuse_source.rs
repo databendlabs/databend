@@ -244,6 +244,8 @@ mod tests {
 
     use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;
@@ -256,6 +258,10 @@ mod tests {
 
     fn stats(min: i64, max: i64, null_count: u64) -> ColumnStatistics {
         ColumnStatistics::new(int64(min), int64(max), null_count, 0, None)
+    }
+
+    fn int64_filter(asc: bool, nulls_first: bool) -> RuntimeTopNFilter {
+        RuntimeTopNFilter::new(3, DataType::Number(NumberDataType::Int64), asc, nulls_first)
     }
 
     fn part_with_stats(location: &str, min_max: Option<(i64, i64)>) -> PartInfoPtr {
@@ -308,14 +314,14 @@ mod tests {
         ]);
 
         let mut asc = RuntimeScanFilters::default();
-        asc.push(Arc::new(RuntimeTopNFilter::new(3, true, false)));
+        asc.push(Arc::new(int64_filter(true, false)));
         front_load_parts_for_runtime_top_n(&mut parts, &asc, 1024);
         assert_eq!(part_locations(&parts), vec![
             "low", "mid", "high", "no_stats"
         ]);
 
         let mut desc = RuntimeScanFilters::default();
-        desc.push(Arc::new(RuntimeTopNFilter::new(3, false, false)));
+        desc.push(Arc::new(int64_filter(false, false)));
         front_load_parts_for_runtime_top_n(&mut parts, &desc, 1024);
         assert_eq!(part_locations(&parts), vec![
             "high", "mid", "low", "no_stats"
@@ -331,7 +337,7 @@ mod tests {
     #[test]
     fn test_front_load_ranks_null_bearing_blocks_best_under_nulls_first() {
         let mut nulls_first = RuntimeScanFilters::default();
-        nulls_first.push(Arc::new(RuntimeTopNFilter::new(3, true, true)));
+        nulls_first.push(Arc::new(int64_filter(true, true)));
         let mut parts = vec![
             part_with_stats("low", Some((1, 10))),
             part_with_nullable_stats("with_nulls", Some((50, 60, 2))),
@@ -346,7 +352,7 @@ mod tests {
         ]);
 
         let mut nulls_last = RuntimeScanFilters::default();
-        nulls_last.push(Arc::new(RuntimeTopNFilter::new(3, true, false)));
+        nulls_last.push(Arc::new(int64_filter(true, false)));
         front_load_parts_for_runtime_top_n(&mut parts, &nulls_last, 1024);
         assert_eq!(part_locations(&parts), vec![
             "low",

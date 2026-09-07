@@ -27,6 +27,7 @@ use databend_common_expression::FilterVisitor;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_expression::types::DataType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -106,7 +107,7 @@ impl BlockReader {
             .enumerate()
             .zip(self.project_column_nodes.iter())
         {
-            let data_type = field.data_type().into();
+            let data_type: DataType = field.data_type().into();
 
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
@@ -130,8 +131,13 @@ impl BlockReader {
                         if let Some(cache) = &array_cache {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
-                            let key =
-                                TableDataCacheKey::new(block_path, field.column_id, offset, len);
+                            let key = TableDataCacheKey::new_array(
+                                block_path,
+                                field.column_id,
+                                offset,
+                                len,
+                                &data_type.to_string(),
+                            );
                             let array_memory_size = arrow_array.get_array_memory_size();
                             cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                         }

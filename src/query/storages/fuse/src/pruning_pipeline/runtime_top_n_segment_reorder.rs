@@ -128,10 +128,10 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> AccumulatingTransform for RuntimeTopN
             return Ok(vec![]);
         }
 
-        let rank = self.order.rank(Self::column_stats(&block)).cloned();
+        let rank = self.order.rank(Self::column_stats(&block));
         self.buffered.push(Entry {
             rank,
-            order: self.order,
+            order: self.order.clone(),
             block,
         });
 
@@ -164,6 +164,8 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -173,6 +175,10 @@ mod tests {
     use super::*;
     use crate::SegmentLocation;
     use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+
+    fn int64_filter(asc: bool, nulls_first: bool) -> RuntimeTopNFilter {
+        RuntimeTopNFilter::new(3, DataType::Number(NumberDataType::Int64), asc, nulls_first)
+    }
 
     fn segment_block(location: &str, min: i64, max: i64) -> DataBlock {
         segment_block_with_nulls(location, min, max, 0)
@@ -218,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_window_releases_most_promising_segment_first() -> Result<()> {
-        let filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        let filter = Arc::new(int64_filter(true, false));
         let order = filter.preferred_order().unwrap();
         let mut reorder =
             RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 2);
@@ -239,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_nulls_first_ranks_null_bearing_segments_best() -> Result<()> {
-        let filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
+        let filter = Arc::new(int64_filter(true, true));
         let order = filter.preferred_order().unwrap();
         let mut reorder =
             RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 1);
@@ -257,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_boundary_prunes_segments_at_entry_and_emission() -> Result<()> {
-        let filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        let filter = Arc::new(int64_filter(true, false));
         let order = filter.preferred_order().unwrap();
         let mut reorder =
             RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter.clone(), order, 8);

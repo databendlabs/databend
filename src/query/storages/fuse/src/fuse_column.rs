@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableSchemaRef;
 use databend_common_statistics::Histogram;
 use databend_storages_common_table_meta::meta::BlockCountMinSketch;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -38,6 +39,7 @@ pub struct FuseTableColumnStatisticsProvider {
 impl FuseTableColumnStatisticsProvider {
     pub fn new(
         column_stats: HashMap<ColumnId, FuseColumnStatistics>,
+        schema: TableSchemaRef,
         histograms: HashMap<ColumnId, Histogram>,
         top_n: BlockTopN,
         count_min_sketch: BlockCountMinSketch,
@@ -46,6 +48,7 @@ impl FuseTableColumnStatisticsProvider {
         row_count: u64,
     ) -> Self {
         let distinct_map = column_distinct_values.as_ref();
+        let leaf_fields = schema.leaf_fields();
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
@@ -53,14 +56,24 @@ impl FuseTableColumnStatisticsProvider {
                     .and_then(|map| map.get(&column_id).cloned())
                     .or(stat.distinct_of_values)
                     .unwrap_or(row_count);
-                let stat = BasicColumnStatistics {
-                    min: stat.min.to_datum(),
-                    max: stat.max.to_datum(),
-                    ndv: Some(ndv),
-                    null_count: stat.null_count,
-                    in_memory_size: stat.in_memory_size,
-                };
-                (column_id, stat.get_useful_stat(row_count, stats_row_count))
+                let null_count = stat.null_count;
+                let in_memory_size = stat.in_memory_size;
+                let stat = leaf_fields
+                    .iter()
+                    .find(|field| field.column_id() == column_id)
+                    .and_then(|field| stat.try_view_with_table_type(field.data_type()))
+                    .map(|view| {
+                        let (min, max) = view.datum_bounds();
+                        BasicColumnStatistics {
+                            min,
+                            max,
+                            ndv: Some(ndv),
+                            null_count,
+                            in_memory_size,
+                        }
+                    })
+                    .and_then(|stat| stat.get_useful_stat(row_count, stats_row_count));
+                (column_id, stat)
             })
             .collect();
         Self {

@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -65,6 +66,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMN
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use parquet::arrow::ArrowSchemaConverter;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -436,12 +438,17 @@ impl ModifyTableColumnInterpreter {
                 let old_field = schema.field_with_name(&field.name)?;
                 let is_alter_column_string_to_binary =
                     is_string_to_binary(&old_field.data_type, &field.data_type);
+                let is_decimal_precision_widening = format_as_parquet
+                    && is_decimal_precision_widening(&old_field.data_type, &field.data_type)?;
                 // If two conditions are met, we don't need rebuild the table,
-                // as rebuild table can be a time-consuming job.
-                // 1. alter column from string to binary in parquet or data type not changed.
+                // as rebuilding a table can be a time-consuming job.
+                // 1. The physical representation is unchanged: alter column from string to
+                //    binary in parquet, widen a decimal within the same storage width without
+                //    changing its scale, or leave the data type unchanged.
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
                 if ((format_as_parquet && is_alter_column_string_to_binary)
+                    || is_decimal_precision_widening
                     || old_field.data_type == field.data_type)
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
@@ -889,6 +896,30 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
     }
 }
 
+fn is_decimal_precision_widening(old_ty: &TableDataType, new_ty: &TableDataType) -> Result<bool> {
+    match (old_ty, new_ty) {
+        (TableDataType::Decimal(old), TableDataType::Decimal(new)) => {
+            if old.scale() != new.scale() || old.precision() >= new.precision() {
+                return Ok(false);
+            }
+
+            Ok(decimal_parquet_physical_type(old_ty)? == decimal_parquet_physical_type(new_ty)?)
+        }
+        (TableDataType::Nullable(old), TableDataType::Nullable(new)) => {
+            is_decimal_precision_widening(old, new)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn decimal_parquet_physical_type(data_type: &TableDataType) -> Result<(parquet::basic::Type, i32)> {
+    let schema = TableSchema::new(vec![TableField::new("decimal", data_type.clone())]);
+    let arrow_schema = ArrowSchema::from(&schema);
+    let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+    let column = parquet_schema.column(0);
+    Ok((column.physical_type(), column.type_length()))
+}
+
 pub(crate) async fn build_select_insert_plan(
     ctx: Arc<QueryContext>,
     sql: String,
@@ -955,4 +986,71 @@ pub(crate) async fn build_select_insert_plan(
     )?;
 
     Ok(build_res)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    fn decimal(precision: u8, scale: u8) -> TableDataType {
+        TableDataType::Decimal(DecimalDataType::from(
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    // Decimal64 is encoded as Decimal128 in meta protobuf and deserialized with that variant.
+    fn persisted_decimal(precision: u8, scale: u8) -> TableDataType {
+        let size = DecimalSize::new(precision, scale).unwrap();
+        let decimal = if size.can_carried_by_128() {
+            DecimalDataType::Decimal128(size)
+        } else {
+            DecimalDataType::Decimal256(size)
+        };
+        TableDataType::Decimal(decimal)
+    }
+
+    #[test]
+    fn test_is_decimal_precision_widening() {
+        assert!(is_decimal_precision_widening(&persisted_decimal(10, 2), &decimal(15, 2)).unwrap());
+        assert!(
+            is_decimal_precision_widening(
+                &persisted_decimal(20, 0).wrap_nullable(),
+                &decimal(21, 0).wrap_nullable()
+            )
+            .unwrap()
+        );
+        assert!(is_decimal_precision_widening(&persisted_decimal(39, 5), &decimal(40, 5)).unwrap());
+
+        // Crossing a Parquet physical-width boundary requires rewriting the column chunks.
+        assert!(!is_decimal_precision_widening(&persisted_decimal(1, 0), &decimal(5, 0)).unwrap());
+        assert!(!is_decimal_precision_widening(&persisted_decimal(9, 0), &decimal(10, 0)).unwrap());
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(18, 0), &decimal(19, 0)).unwrap()
+        );
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(20, 0), &decimal(30, 0)).unwrap()
+        );
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(21, 0), &decimal(22, 0)).unwrap()
+        );
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(38, 0), &decimal(39, 0)).unwrap()
+        );
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(40, 0), &decimal(50, 0)).unwrap()
+        );
+
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(30, 0), &decimal(20, 0)).unwrap()
+        );
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(20, 0), &decimal(30, 2)).unwrap()
+        );
+        assert!(
+            !is_decimal_precision_widening(&persisted_decimal(20, 0), &decimal(20, 0)).unwrap()
+        );
+    }
 }

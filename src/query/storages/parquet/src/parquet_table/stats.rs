@@ -18,15 +18,17 @@ use std::sync::Arc;
 use databend_common_catalog::plan::FullParquetMeta;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ParquetTableColumnStatisticsProvider;
+use databend_common_expression::TableField;
+use databend_common_expression::types::DataType;
 
 // let's just read the first parquet meta and predict the whole stats
 pub fn create_stats_provider(
     sample_metas: &[Arc<FullParquetMeta>],
     total_files: usize,
-    num_columns: usize,
+    leaf_fields: &[TableField],
 ) -> ParquetTableColumnStatisticsProvider {
     let mut num_rows = 0;
-    let mut basic_column_stats = vec![BasicColumnStatistics::new_null(); num_columns];
+    let mut basic_column_stats = vec![BasicColumnStatistics::new_null(); leaf_fields.len()];
 
     for meta in sample_metas {
         num_rows += meta
@@ -41,8 +43,15 @@ pub fn create_stats_provider(
                 for rg_stat in stats {
                     for (column_id, col_stat) in rg_stat {
                         let column_id = *column_id as usize;
-                        let col_stat = col_stat.clone().into();
-                        basic_column_stats[column_id].merge(col_stat);
+                        let Some(field) = leaf_fields.get(column_id) else {
+                            continue;
+                        };
+                        if let Some(col_stat) = BasicColumnStatistics::try_from_column_statistics(
+                            col_stat,
+                            &DataType::from(field.data_type()),
+                        ) {
+                            basic_column_stats[column_id].merge(col_stat);
+                        }
                     }
                 }
             }

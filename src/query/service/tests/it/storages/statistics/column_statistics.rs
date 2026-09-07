@@ -102,14 +102,17 @@ fn test_column_statistic() -> anyhow::Result<()> {
         let values: Vec<Scalar> = (0..column.len())
             .map(|i| column.index(i).unwrap().to_owned())
             .collect();
+        let view = stats
+            .try_view_with_table_type(schema.field(i).data_type())
+            .unwrap();
         assert_eq!(
-            stats.min(),
+            view.min(),
             values.iter().min().unwrap(),
             "checking min of col {}",
             i
         );
         assert_eq!(
-            stats.max(),
+            view.max(),
             values.iter().max().unwrap(),
             "checking max of col {}",
             i

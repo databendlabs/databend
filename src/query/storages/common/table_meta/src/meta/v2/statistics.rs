@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
@@ -20,13 +22,17 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::F32;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_statistics::Datum;
 use databend_common_vector::angular_distance;
 use databend_common_vector::l1_distance;
 use databend_common_vector::l2_distance;
@@ -44,16 +50,57 @@ pub struct ColumnStatistics {
         serialize_with = "serialize_index_scalar",
         deserialize_with = "deserialize_index_scalar"
     )]
-    pub min: Scalar,
+    min: Scalar,
     #[serde(
         serialize_with = "serialize_index_scalar",
         deserialize_with = "deserialize_index_scalar"
     )]
-    pub max: Scalar,
+    max: Scalar,
 
     pub null_count: u64,
     pub in_memory_size: u64,
     pub distinct_of_values: Option<u64>,
+}
+
+/// Column statistics bounds aligned with the current table schema.
+///
+/// Persisted decimal statistics may carry an older precision after a metadata-only precision
+/// widening. The raw decimal value remains valid when the decimal kind and scale are unchanged,
+/// so this view retags only the precision while leaving persisted metadata untouched.
+#[derive(Clone, Debug)]
+pub struct ColumnStatisticsView<'a> {
+    min: Cow<'a, Scalar>,
+    max: Cow<'a, Scalar>,
+    null_count: u64,
+}
+
+impl ColumnStatisticsView<'_> {
+    pub fn min(&self) -> &Scalar {
+        &self.min
+    }
+
+    pub fn max(&self) -> &Scalar {
+        &self.max
+    }
+
+    pub fn null_count(&self) -> u64 {
+        self.null_count
+    }
+
+    pub fn datum_bounds(&self) -> (Option<Datum>, Option<Datum>) {
+        (
+            self.min.as_ref().clone().to_datum(),
+            self.max.as_ref().clone().to_datum(),
+        )
+    }
+
+    pub fn into_owned(self) -> ColumnStatisticsView<'static> {
+        ColumnStatisticsView {
+            min: Cow::Owned(self.min.into_owned()),
+            max: Cow::Owned(self.max.into_owned()),
+            null_count: self.null_count,
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
@@ -63,12 +110,12 @@ pub struct ClusterStatistics {
         serialize_with = "serialize_index_scalar_vec",
         deserialize_with = "deserialize_index_scalar_vec"
     )]
-    pub min: Vec<Scalar>,
+    min: Vec<Scalar>,
     #[serde(
         serialize_with = "serialize_index_scalar_vec",
         deserialize_with = "deserialize_index_scalar_vec"
     )]
-    pub max: Vec<Scalar>,
+    max: Vec<Scalar>,
     pub level: i32,
 
     // Page pruning has been removed, but this field must remain in the persisted wire format so
@@ -79,6 +126,26 @@ pub struct ClusterStatistics {
         deserialize_with = "deserialize_index_scalar_option_vec"
     )]
     pub pages: Option<Vec<Scalar>>,
+}
+
+/// Cluster statistics bounds aligned with the current cluster-key expression types.
+///
+/// As with [`ColumnStatisticsView`], Decimal precision may be retagged after a metadata-only
+/// widening. Persisted bounds remain borrowed when no retagging is necessary.
+#[derive(Clone, Debug)]
+pub struct ClusterStatisticsView<'a> {
+    min: Cow<'a, [Scalar]>,
+    max: Cow<'a, [Scalar]>,
+}
+
+impl ClusterStatisticsView<'_> {
+    pub fn min(&self) -> &[Scalar] {
+        &self.min
+    }
+
+    pub fn max(&self) -> &[Scalar] {
+        &self.max
+    }
 }
 
 /// Exact values of the PARTITION BY expressions for a block or segment.
@@ -100,6 +167,11 @@ impl PartitionStatistics {
 pub fn validate_segment_partition_statistics<'a>(
     stats: impl IntoIterator<Item = Option<&'a PartitionStatistics>>,
 ) -> databend_common_exception::Result<Option<PartitionStatistics>> {
+    // MODIFY COLUMN currently rejects every column referenced by PARTITION BY, so persisted and
+    // newly generated values must have identical logical types. If that restriction is relaxed,
+    // callers must first align values with the current partition-key types; treating a Decimal
+    // precision-only difference as a different partition would turn a safe widening into a hard
+    // metadata error.
     let mut partition = None;
     let mut has_unknown = false;
     for stats in stats {
@@ -341,12 +413,103 @@ impl ColumnStatistics {
         }
     }
 
-    pub fn min(&self) -> &Scalar {
+    /// Align persisted bounds with the current logical type.
+    ///
+    /// Returns `None` when the persisted values cannot safely represent the current type. Stats
+    /// consumers must treat that case conservatively instead of comparing incompatible scalars.
+    pub fn try_view(&self, data_type: &DataType) -> Option<ColumnStatisticsView<'_>> {
+        let data_type = data_type.remove_nullable();
+        let min = align_stat_scalar(&self.min, &data_type)?;
+        let max = align_stat_scalar(&self.max, &data_type)?;
+        min.as_ref()
+            .as_ref()
+            .infer_common_type(&max.as_ref().as_ref())?;
+        Some(ColumnStatisticsView {
+            min,
+            max,
+            null_count: self.null_count,
+        })
+    }
+
+    pub fn try_view_with_table_type(
+        &self,
+        data_type: &TableDataType,
+    ) -> Option<ColumnStatisticsView<'_>> {
+        self.try_view(&DataType::from(data_type))
+    }
+
+    /// Raw persisted bound for serialization and statistics re-derivation only.
+    /// Do not compare it; use [`Self::try_view`] with the current field type.
+    pub(crate) fn raw_min(&self) -> &Scalar {
         &self.min
     }
 
-    pub fn max(&self) -> &Scalar {
+    /// Raw persisted bound for serialization and statistics re-derivation only.
+    /// Do not compare it; use [`Self::try_view`] with the current field type.
+    pub(crate) fn raw_max(&self) -> &Scalar {
         &self.max
+    }
+
+    pub fn is_const(&self) -> bool {
+        self.min == self.max
+    }
+
+    pub fn is_all_null(&self) -> bool {
+        self.min.is_null() && self.max.is_null()
+    }
+
+    /// Reduce compatible column statistics into one range.
+    ///
+    /// Decimal bounds with the same kind and scale are aligned to the largest precision before
+    /// comparison. Any genuinely incomparable input makes the statistics unusable.
+    pub fn try_reduce(stats: &[&ColumnStatistics]) -> Option<ColumnStatistics> {
+        if stats.is_empty() {
+            return None;
+        }
+        let data_type = common_stats_type(stats)?;
+        let mut min = None;
+        let mut max = None;
+        let mut null_count = 0;
+        let mut in_memory_size = 0;
+        let mut distinct_of_values = Some(0_u64);
+
+        for stats in stats {
+            let view = stats.try_view(&data_type)?;
+            if !view.min().is_null() {
+                match min.as_ref() {
+                    None => min = Some(view.min().clone()),
+                    Some(current) => match view.min().partial_cmp(current) {
+                        Some(std::cmp::Ordering::Less) => min = Some(view.min().clone()),
+                        Some(_) => {}
+                        None => return None,
+                    },
+                }
+            }
+            if !view.max().is_null() {
+                match max.as_ref() {
+                    None => max = Some(view.max().clone()),
+                    Some(current) => match view.max().partial_cmp(current) {
+                        Some(std::cmp::Ordering::Greater) => max = Some(view.max().clone()),
+                        Some(_) => {}
+                        None => return None,
+                    },
+                }
+            }
+            null_count += stats.null_count;
+            in_memory_size += stats.in_memory_size;
+            distinct_of_values = match (distinct_of_values, stats.distinct_of_values) {
+                (Some(total), Some(value)) => Some(total + value),
+                _ => None,
+            };
+        }
+
+        Some(ColumnStatistics::new(
+            min.unwrap_or(Scalar::Null),
+            max.unwrap_or(Scalar::Null),
+            null_count,
+            in_memory_size,
+            distinct_of_values,
+        ))
     }
 
     pub fn from_v0(
@@ -379,6 +542,74 @@ impl ColumnStatistics {
     }
 }
 
+pub(crate) fn align_stat_scalar<'a>(
+    scalar: &'a Scalar,
+    data_type: &DataType,
+) -> Option<Cow<'a, Scalar>> {
+    if scalar.is_null() {
+        return Some(Cow::Borrowed(scalar));
+    }
+
+    match (scalar, data_type) {
+        (Scalar::Decimal(decimal), DataType::Decimal(target_size))
+            if decimal.scale() == target_size.scale()
+                // External Parquet statistics retain the physical Arrow variant, which may be
+                // wider than the kind implied by the declared precision. Compare the persisted
+                // and current logical widths here; the wider external container is preserved.
+                && decimal.size().data_kind() == target_size.data_kind()
+                && decimal.size().precision() <= target_size.precision() =>
+        {
+            if decimal.size() == *target_size {
+                return Some(Cow::Borrowed(scalar));
+            }
+            let decimal = match decimal {
+                DecimalScalar::Decimal64(value, _) => {
+                    DecimalScalar::Decimal64(*value, *target_size)
+                }
+                DecimalScalar::Decimal128(value, _) => {
+                    DecimalScalar::Decimal128(*value, *target_size)
+                }
+                DecimalScalar::Decimal256(value, _) => {
+                    DecimalScalar::Decimal256(*value, *target_size)
+                }
+            };
+            Some(Cow::Owned(Scalar::Decimal(decimal)))
+        }
+        _ if scalar.as_ref().infer_data_type() == *data_type => Some(Cow::Borrowed(scalar)),
+        _ => None,
+    }
+}
+
+fn common_stats_type(stats: &[&ColumnStatistics]) -> Option<DataType> {
+    let mut target = None;
+    for stats in stats {
+        for scalar in [&stats.min, &stats.max] {
+            if scalar.is_null() {
+                continue;
+            }
+            let data_type = scalar.as_ref().infer_data_type();
+            target = match target {
+                None => Some(data_type),
+                Some(DataType::Decimal(current)) => match data_type {
+                    DataType::Decimal(candidate)
+                        if current.data_kind() == candidate.data_kind()
+                            && current.scale() == candidate.scale() =>
+                    {
+                        Some(DataType::Decimal(DecimalSize::new_unchecked(
+                            current.precision().max(candidate.precision()),
+                            current.scale(),
+                        )))
+                    }
+                    _ => return None,
+                },
+                Some(current) if current == data_type => Some(current),
+                Some(_) => return None,
+            };
+        }
+    }
+    Some(target.unwrap_or(DataType::Null))
+}
+
 impl ClusterStatistics {
     pub fn new(cluster_key_id: u32, min: Vec<Scalar>, max: Vec<Scalar>, level: i32) -> Self {
         Self {
@@ -390,11 +621,53 @@ impl ClusterStatistics {
         }
     }
 
-    pub fn min(&self) -> &Vec<Scalar> {
+    /// Align persisted bounds with the current cluster-key expression types.
+    ///
+    /// Consumers must fail open when this returns `None`; comparing the persisted scalars
+    /// directly can collapse incompatible Decimal sizes into `Ordering::Equal`.
+    pub fn try_view(&self, data_types: &[DataType]) -> Option<ClusterStatisticsView<'_>> {
+        if self.min.len() != data_types.len() || self.max.len() != data_types.len() {
+            return None;
+        }
+
+        let min = align_stat_scalars(&self.min, data_types)?;
+        let max = align_stat_scalars(&self.max, data_types)?;
+        Some(ClusterStatisticsView { min, max })
+    }
+
+    /// Return an owned copy whose bounds are aligned with the current cluster-key types.
+    pub fn normalized(&self, data_types: &[DataType]) -> Option<Self> {
+        let view = self.try_view(data_types)?;
+        Some(Self {
+            cluster_key_id: self.cluster_key_id,
+            min: view.min().to_vec(),
+            max: view.max().to_vec(),
+            level: self.level,
+            pages: self.pages.clone(),
+        })
+    }
+
+    /// Compare persisted cluster bounds without treating incompatible values as equal.
+    pub fn try_cmp(&self, other: &Self) -> Option<Ordering> {
+        let min = compare_statistics_scalar_slices(&self.min, &other.min)?;
+        let max = compare_statistics_scalar_slices(&self.max, &other.max)?;
+        if min != Ordering::Equal {
+            return Some(min);
+        }
+        Some(max)
+    }
+
+    /// Raw persisted bounds for serialization and metadata conversion only.
+    ///
+    /// Do not compare these values. Use [`Self::try_view`] or a stats-specific comparison helper.
+    pub(crate) fn raw_min(&self) -> &[Scalar] {
         &self.min
     }
 
-    pub fn max(&self) -> &Vec<Scalar> {
+    /// Raw persisted bounds for serialization and metadata conversion only.
+    ///
+    /// Do not compare these values. Use [`Self::try_view`] or a stats-specific comparison helper.
+    pub(crate) fn raw_max(&self) -> &[Scalar] {
         &self.max
     }
 
@@ -439,6 +712,60 @@ impl ClusterStatistics {
             pages: None,
         })
     }
+}
+
+/// Compare scalars used by persisted statistics without changing global [`Scalar`] semantics.
+///
+/// Decimal precision is capacity rather than value identity. Physical variant and scale must
+/// still match; all other incomparable values return `None`.
+pub fn compare_statistics_scalars(left: &ScalarRef<'_>, right: &ScalarRef<'_>) -> Option<Ordering> {
+    match (left, right) {
+        (
+            ScalarRef::Decimal(DecimalScalar::Decimal64(left, left_size)),
+            ScalarRef::Decimal(DecimalScalar::Decimal64(right, right_size)),
+        ) if left_size.scale() == right_size.scale() => left.partial_cmp(right),
+        (
+            ScalarRef::Decimal(DecimalScalar::Decimal128(left, left_size)),
+            ScalarRef::Decimal(DecimalScalar::Decimal128(right, right_size)),
+        ) if left_size.scale() == right_size.scale() => left.partial_cmp(right),
+        (
+            ScalarRef::Decimal(DecimalScalar::Decimal256(left, left_size)),
+            ScalarRef::Decimal(DecimalScalar::Decimal256(right, right_size)),
+        ) if left_size.scale() == right_size.scale() => left.partial_cmp(right),
+        (ScalarRef::Decimal(_), ScalarRef::Decimal(_)) => None,
+        _ => left.partial_cmp(right),
+    }
+}
+
+pub fn compare_statistics_scalar_slices(left: &[Scalar], right: &[Scalar]) -> Option<Ordering> {
+    if left.len() != right.len() {
+        return None;
+    }
+    for (left, right) in left.iter().zip(right) {
+        let ordering = compare_statistics_scalars(&left.as_ref(), &right.as_ref())?;
+        if ordering != Ordering::Equal {
+            return Some(ordering);
+        }
+    }
+    Some(Ordering::Equal)
+}
+
+pub(crate) fn align_stat_scalars<'a>(
+    scalars: &'a [Scalar],
+    data_types: &[DataType],
+) -> Option<Cow<'a, [Scalar]>> {
+    let mut aligned = None;
+    for (index, (scalar, data_type)) in scalars.iter().zip(data_types).enumerate() {
+        let scalar = align_stat_scalar(scalar, &data_type.remove_nullable())?;
+        if let Cow::Owned(scalar) = scalar {
+            let values = aligned.get_or_insert_with(|| scalars.to_vec());
+            values[index] = scalar;
+        }
+    }
+    Some(match aligned {
+        Some(values) => Cow::Owned(values),
+        None => Cow::Borrowed(scalars),
+    })
 }
 
 impl Statistics {
@@ -670,6 +997,23 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
 mod tests {
     use super::*;
 
+    #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+    struct LegacyColumnStatistics {
+        #[serde(
+            serialize_with = "serialize_index_scalar",
+            deserialize_with = "deserialize_index_scalar"
+        )]
+        min: Scalar,
+        #[serde(
+            serialize_with = "serialize_index_scalar",
+            deserialize_with = "deserialize_index_scalar"
+        )]
+        max: Scalar,
+        null_count: u64,
+        in_memory_size: u64,
+        distinct_of_values: Option<u64>,
+    }
+
     #[derive(serde::Serialize)]
     struct ClusterStatisticsWithoutPages {
         cluster_key_id: u32,
@@ -678,6 +1022,28 @@ mod tests {
         #[serde(serialize_with = "serialize_index_scalar_vec")]
         max: Vec<Scalar>,
         level: i32,
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+    struct ClusterStatisticsPublicLayout {
+        cluster_key_id: u32,
+        #[serde(
+            serialize_with = "serialize_index_scalar_vec",
+            deserialize_with = "deserialize_index_scalar_vec"
+        )]
+        min: Vec<Scalar>,
+        #[serde(
+            serialize_with = "serialize_index_scalar_vec",
+            deserialize_with = "deserialize_index_scalar_vec"
+        )]
+        max: Vec<Scalar>,
+        level: i32,
+        #[serde(
+            default,
+            serialize_with = "serialize_index_scalar_option_vec",
+            deserialize_with = "deserialize_index_scalar_option_vec"
+        )]
+        pages: Option<Vec<Scalar>>,
     }
 
     #[test]
@@ -706,6 +1072,226 @@ mod tests {
         let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
 
         assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
+    }
+
+    #[test]
+    fn cluster_statistics_serialization_matches_public_field_layout() {
+        let old = ClusterStatisticsPublicLayout {
+            cluster_key_id: 7,
+            min: vec![Scalar::Number(1_i64.into())],
+            max: vec![Scalar::Number(9_i64.into())],
+            level: 2,
+            pages: None,
+        };
+        let new = ClusterStatistics::new(7, old.min.clone(), old.max.clone(), 2);
+
+        let old_bytes = rmp_serde::to_vec_named(&old).unwrap();
+        let new_bytes = rmp_serde::to_vec_named(&new).unwrap();
+        assert_eq!(new_bytes, old_bytes);
+
+        let decoded_new: ClusterStatistics = rmp_serde::from_slice(&old_bytes).unwrap();
+        assert_eq!(decoded_new, new);
+        let decoded_old: ClusterStatisticsPublicLayout = rmp_serde::from_slice(&new_bytes).unwrap();
+        assert_eq!(decoded_old, old);
+    }
+
+    fn decimal64(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    fn decimal128(value: i128, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal128(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    #[test]
+    fn column_statistics_decimal_view_is_schema_aware() {
+        let stats = ColumnStatistics::new(decimal64(1, 1, 0), decimal64(9, 1, 0), 2, 16, Some(9));
+        let widened_size = DecimalSize::new(5, 0).unwrap();
+        let view = stats
+            .try_view(&DataType::Decimal(widened_size))
+            .expect("same-kind Decimal precision widening is safe");
+        assert_eq!(view.min(), &decimal64(1, 5, 0));
+        assert_eq!(view.max(), &decimal64(9, 5, 0));
+        assert_eq!(view.null_count(), 2);
+
+        assert!(
+            stats
+                .try_view(&DataType::Decimal(DecimalSize::new(1, 0).unwrap()))
+                .is_some()
+        );
+        assert!(
+            stats
+                .try_view(&DataType::Decimal(DecimalSize::new(1, 1).unwrap()))
+                .is_none()
+        );
+        assert!(
+            stats
+                .try_view(&DataType::Decimal(DecimalSize::new(19, 0).unwrap()))
+                .is_none()
+        );
+
+        let wider_stats =
+            ColumnStatistics::new(decimal64(100, 10, 2), decimal64(900, 10, 2), 0, 16, None);
+        assert!(
+            wider_stats
+                .try_view(&DataType::Decimal(DecimalSize::new(9, 2).unwrap()))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn column_statistics_decimal_view_accepts_wider_external_variant() {
+        let persisted_size = DecimalSize::new(9, 2).unwrap();
+        let stats =
+            ColumnStatistics::new(decimal128(100, 9, 2), decimal128(900, 9, 2), 0, 16, None);
+
+        let view = stats
+            .try_view(&DataType::Decimal(persisted_size))
+            .expect("external Parquet stats may use a wider physical scalar variant");
+        assert_eq!(view.min(), &decimal128(100, 9, 2));
+        assert_eq!(view.max(), &decimal128(900, 9, 2));
+
+        let widened_size = DecimalSize::new(15, 2).unwrap();
+        let view = stats
+            .try_view(&DataType::Decimal(widened_size))
+            .expect("logical widening within the same kind remains compatible");
+        assert_eq!(view.min(), &decimal128(100, 15, 2));
+        assert_eq!(view.max(), &decimal128(900, 15, 2));
+
+        assert!(
+            stats
+                .try_view(&DataType::Decimal(DecimalSize::new(19, 2).unwrap()))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn cluster_statistics_decimal_view_is_schema_aware() {
+        let stats = ClusterStatistics::new(
+            3,
+            vec![decimal64(100, 10, 2)],
+            vec![decimal64(900, 10, 2)],
+            1,
+        );
+        let widened_size = DecimalSize::new(15, 2).unwrap();
+        let view = stats
+            .try_view(&[DataType::Decimal(widened_size)])
+            .expect("same-kind Decimal precision widening is safe");
+        assert_eq!(view.min(), &[decimal64(100, 15, 2)]);
+        assert_eq!(view.max(), &[decimal64(900, 15, 2)]);
+
+        assert!(
+            stats
+                .try_view(&[DataType::Decimal(DecimalSize::new(9, 2).unwrap())])
+                .is_none()
+        );
+        assert!(
+            stats
+                .try_view(&[DataType::Decimal(DecimalSize::new(15, 3).unwrap())])
+                .is_none()
+        );
+        assert!(
+            stats
+                .try_view(&[DataType::Decimal(DecimalSize::new(19, 2).unwrap())])
+                .is_none()
+        );
+
+        let widened = ClusterStatistics::new(
+            3,
+            vec![decimal64(200, 15, 2)],
+            vec![decimal64(999, 15, 2)],
+            1,
+        );
+        assert_eq!(stats.try_cmp(&widened), Some(Ordering::Less));
+        let incompatible = ClusterStatistics::new(
+            3,
+            vec![decimal64(2000, 15, 3)],
+            vec![decimal64(9990, 15, 3)],
+            1,
+        );
+        assert_eq!(stats.try_cmp(&incompatible), None);
+    }
+
+    #[test]
+    fn column_statistics_all_null_view_is_valid() {
+        let stats = ColumnStatistics::new(Scalar::Null, Scalar::Null, 8, 0, Some(0));
+        let view = stats
+            .try_view(&DataType::Decimal(DecimalSize::new(15, 2).unwrap()))
+            .unwrap();
+        assert_eq!(view.min(), &Scalar::Null);
+        assert_eq!(view.max(), &Scalar::Null);
+        assert_eq!(view.null_count(), 8);
+    }
+
+    #[test]
+    fn column_statistics_reduces_widened_decimal_in_either_order() {
+        let old =
+            ColumnStatistics::new(decimal64(100, 10, 2), decimal64(200, 10, 2), 1, 16, Some(2));
+        let new =
+            ColumnStatistics::new(decimal64(700, 15, 2), decimal64(800, 15, 2), 2, 16, Some(2));
+        let expected_size = DecimalSize::new(15, 2).unwrap();
+
+        for inputs in [[&old, &new], [&new, &old]] {
+            let reduced = ColumnStatistics::try_reduce(&inputs).unwrap();
+            let view = reduced.try_view(&DataType::Decimal(expected_size)).unwrap();
+            assert_eq!(view.min(), &decimal64(100, 15, 2));
+            assert_eq!(view.max(), &decimal64(800, 15, 2));
+            assert_eq!(reduced.null_count, 3);
+            assert_eq!(reduced.in_memory_size, 32);
+            assert_eq!(reduced.distinct_of_values, Some(4));
+        }
+
+        let changed_scale =
+            ColumnStatistics::new(decimal64(1, 10, 3), decimal64(2, 10, 3), 0, 16, None);
+        assert!(ColumnStatistics::try_reduce(&[&old, &changed_scale]).is_none());
+
+        let changed_kind = ColumnStatistics::new(
+            Scalar::Decimal(DecimalScalar::Decimal128(
+                1,
+                DecimalSize::new(19, 2).unwrap(),
+            )),
+            Scalar::Decimal(DecimalScalar::Decimal128(
+                2,
+                DecimalSize::new(19, 2).unwrap(),
+            )),
+            0,
+            32,
+            None,
+        );
+        assert!(ColumnStatistics::try_reduce(&[&old, &changed_kind]).is_none());
+    }
+
+    #[test]
+    fn column_statistics_serialization_matches_public_field_layout() {
+        let legacy = LegacyColumnStatistics {
+            min: decimal64(100, 10, 2),
+            max: decimal64(900, 10, 2),
+            null_count: 3,
+            in_memory_size: 16,
+            distinct_of_values: Some(9),
+        };
+        let current = ColumnStatistics::new(
+            legacy.min.clone(),
+            legacy.max.clone(),
+            legacy.null_count,
+            legacy.in_memory_size,
+            legacy.distinct_of_values,
+        );
+
+        let legacy_bytes = rmp_serde::to_vec_named(&legacy).unwrap();
+        let current_bytes = rmp_serde::to_vec_named(&current).unwrap();
+        assert_eq!(current_bytes, legacy_bytes);
+
+        let decoded_current: ColumnStatistics = rmp_serde::from_slice(&legacy_bytes).unwrap();
+        assert_eq!(decoded_current, current);
+        let decoded_legacy: LegacyColumnStatistics = rmp_serde::from_slice(&current_bytes).unwrap();
+        assert_eq!(decoded_legacy, legacy);
     }
 
     #[test]

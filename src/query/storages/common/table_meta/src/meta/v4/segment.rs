@@ -356,6 +356,7 @@ mod tests {
 
     use databend_common_column::types::timestamp_tz;
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
 
@@ -364,6 +365,17 @@ mod tests {
     use crate::meta::ColumnStatistics;
     use crate::meta::Compression;
     use crate::meta::PartitionStatistics;
+
+    fn assert_stat_bounds(
+        stats: &ColumnStatistics,
+        data_type: &DataType,
+        expected_min: &Scalar,
+        expected_max: &Scalar,
+    ) {
+        let view = stats.try_view(data_type).unwrap();
+        assert_eq!(view.min(), expected_min);
+        assert_eq!(view.max(), expected_max);
+    }
 
     #[allow(dead_code)]
     #[derive(Serialize)]
@@ -588,9 +600,11 @@ mod tests {
 
         assert_eq!(segment.format_version, SegmentInfo::VERSION);
         assert_eq!(segment.summary.row_count, 3);
-        assert_eq!(
-            segment.summary.col_stats[&1].min,
-            Scalar::String("aaa".to_string())
+        assert_stat_bounds(
+            &segment.summary.col_stats[&1],
+            &DataType::String,
+            &Scalar::String("aaa".to_string()),
+            &Scalar::String("zzz".to_string()),
         );
         assert_eq!(segment.blocks.len(), 1);
         assert!(segment.summary.partition_stats.is_none());
@@ -600,7 +614,12 @@ mod tests {
         assert_eq!(block.row_count, 3);
         assert_eq!(block.location.0, "block.parquet");
         assert!(block.col_metas[&1].as_parquet().is_some());
-        assert_eq!(block.col_stats[&1].max, Scalar::String("zzz".to_string()));
+        assert_stat_bounds(
+            &block.col_stats[&1],
+            &DataType::String,
+            &Scalar::String("aaa".to_string()),
+            &Scalar::String("zzz".to_string()),
+        );
         Ok(())
     }
 
@@ -610,17 +629,21 @@ mod tests {
         let segment = CompactSegmentInfo::from_reader(Cursor::new(bytes))?;
 
         assert_eq!(segment.summary.row_count, 3);
-        assert_eq!(
-            segment.summary.col_stats[&1].min,
-            Scalar::String("aaa".to_string())
+        assert_stat_bounds(
+            &segment.summary.col_stats[&1],
+            &DataType::String,
+            &Scalar::String("aaa".to_string()),
+            &Scalar::String("zzz".to_string()),
         );
 
         let blocks = segment.block_metas()?;
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].row_count, 3);
-        assert_eq!(
-            blocks[0].col_stats[&1].max,
-            Scalar::String("zzz".to_string())
+        assert_stat_bounds(
+            &blocks[0].col_stats[&1],
+            &DataType::String,
+            &Scalar::String("aaa".to_string()),
+            &Scalar::String("zzz".to_string()),
         );
         Ok(())
     }
@@ -632,16 +655,18 @@ mod tests {
 
         assert_eq!(segment.format_version, SegmentInfo::VERSION);
         assert_eq!(segment.summary.row_count, 3);
-        assert_eq!(
-            segment.summary.col_stats[&2].max,
-            Scalar::TimestampTz(timestamp_tz::new(2000, 0))
+        assert_stat_bounds(
+            &segment.summary.col_stats[&2],
+            &DataType::TimestampTz,
+            &Scalar::TimestampTz(timestamp_tz::new(1000, 0)),
+            &Scalar::TimestampTz(timestamp_tz::new(2000, 0)),
         );
-        assert_eq!(
-            segment.summary.col_stats[&3].min,
-            Scalar::Decimal(DecimalScalar::Decimal64(
-                123,
-                DecimalSize::new_unchecked(10, 2)
-            ))
+        let decimal_size = DecimalSize::new_unchecked(10, 2);
+        assert_stat_bounds(
+            &segment.summary.col_stats[&3],
+            &DataType::Decimal(decimal_size),
+            &Scalar::Decimal(DecimalScalar::Decimal64(123, decimal_size)),
+            &Scalar::Decimal(DecimalScalar::Decimal64(456, decimal_size)),
         );
 
         assert_eq!(segment.blocks.len(), 1);
@@ -653,12 +678,11 @@ mod tests {
             segment.blocks[0].partition_stats.as_ref().unwrap().values,
             vec![Scalar::String("partition-a".to_string())]
         );
-        assert_eq!(
-            segment.blocks[0].col_stats[&3].max,
-            Scalar::Decimal(DecimalScalar::Decimal64(
-                456,
-                DecimalSize::new_unchecked(10, 2)
-            ))
+        assert_stat_bounds(
+            &segment.blocks[0].col_stats[&3],
+            &DataType::Decimal(decimal_size),
+            &Scalar::Decimal(DecimalScalar::Decimal64(123, decimal_size)),
+            &Scalar::Decimal(DecimalScalar::Decimal64(456, decimal_size)),
         );
         Ok(())
     }
@@ -670,19 +694,21 @@ mod tests {
 
         assert_eq!(segment.raw_block_metas.encoding, MetaEncoding::MessagePack);
         assert_eq!(segment.summary.row_count, 3);
-        assert_eq!(
-            segment.summary.col_stats[&2].min,
-            Scalar::TimestampTz(timestamp_tz::new(1000, 0))
+        assert_stat_bounds(
+            &segment.summary.col_stats[&2],
+            &DataType::TimestampTz,
+            &Scalar::TimestampTz(timestamp_tz::new(1000, 0)),
+            &Scalar::TimestampTz(timestamp_tz::new(2000, 0)),
         );
 
         let blocks = segment.block_metas()?;
         assert_eq!(blocks.len(), 1);
-        assert_eq!(
-            blocks[0].col_stats[&3].max,
-            Scalar::Decimal(DecimalScalar::Decimal64(
-                456,
-                DecimalSize::new_unchecked(10, 2)
-            ))
+        let decimal_size = DecimalSize::new_unchecked(10, 2);
+        assert_stat_bounds(
+            &blocks[0].col_stats[&3],
+            &DataType::Decimal(decimal_size),
+            &Scalar::Decimal(DecimalScalar::Decimal64(123, decimal_size)),
+            &Scalar::Decimal(DecimalScalar::Decimal64(456, decimal_size)),
         );
         Ok(())
     }

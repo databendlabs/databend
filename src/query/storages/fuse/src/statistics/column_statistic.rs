@@ -356,6 +356,7 @@ mod tests {
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
 
     use super::MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN;
@@ -418,10 +419,11 @@ mod tests {
 
         let stats =
             gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), cached).unwrap();
+        let view = stats[&0].try_view(&DataType::String).unwrap();
 
-        assert_eq!(stats[&0].min(), &Scalar::String([prefix, "a"].concat()));
+        assert_eq!(view.min(), &Scalar::String([prefix, "a"].concat()));
         assert_eq!(
-            stats[&0].max(),
+            view.max(),
             &Scalar::String([prefix, &END_OF_UNICODE_RANGE.to_string()].concat())
         );
     }
