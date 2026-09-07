@@ -92,9 +92,6 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         };
 
         if let Some(table) = table {
-            let table = catalog
-                .get_table(&tenant, &self.args.database_name, &self.args.table_name)
-                .await?;
             let table_id = table.get_id();
 
             if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {
