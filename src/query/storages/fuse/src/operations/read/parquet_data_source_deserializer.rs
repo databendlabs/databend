@@ -44,7 +44,6 @@ use super::parquet_data_source::ParquetDataSource;
 use super::read_state::ReadState;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
@@ -63,7 +62,6 @@ pub struct DeserializeDataTransform {
     parts: Vec<PartInfoPtr>,
     chunks: Vec<ParquetDataSource>,
 
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
@@ -82,7 +80,6 @@ impl DeserializeDataTransform {
         plan: &DataSourcePlan,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -122,7 +119,6 @@ impl DeserializeDataTransform {
             output_schema,
             parts: vec![],
             chunks: vec![],
-            index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
             block_meta_options: plan.block_meta_options.clone(),
@@ -194,97 +190,74 @@ impl Processor for DeserializeDataTransform {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
-            match read_res {
-                ParquetDataSource::AggIndex((actual_part, data)) => {
-                    let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
+            let start = Instant::now();
+            let columns_chunks = read_res.data.columns_chunks()?;
+            let part = FuseBlockPartInfo::from_part(&part)?;
 
-                    let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        block.memory_size(),
-                    );
-
-                    self.output_data = Some(block);
-                }
-                ParquetDataSource::Normal((data, virtual_data)) => {
-                    let start = Instant::now();
-                    let columns_chunks = data.columns_chunks()?;
-                    let part = FuseBlockPartInfo::from_part(&part)?;
-
-                    if self.read_state.is_none() {
-                        self.read_state = Some(ReadState::create(
-                            self.ctx.clone(),
-                            self.scan_id,
-                            self.prewhere_info.as_ref(),
-                            self.block_reader.clone(),
-                        )?);
-                    }
-
-                    let (mut data_block, row_selection, bitmap_selection) = self
-                        .read_state
-                        .as_ref()
-                        .unwrap()
-                        .deserialize_and_filter(columns_chunks, part)?;
-
-                    if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                        data_block = virtual_reader.deserialize_virtual_columns(
-                            data_block,
-                            virtual_data,
-                            row_selection.as_ref().map(|s| s.selection.clone()),
-                        )?;
-                    }
-
-                    // Perf.
-                    {
-                        metrics_inc_remote_io_deserialize_milliseconds(
-                            start.elapsed().as_millis() as u64
-                        );
-                    }
-
-                    let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::ScanBytes,
-                        data_block.memory_size(),
-                    );
-
-                    let mut data_block =
-                        data_block.resort(&self.src_schema, &self.output_schema)?;
-
-                    // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-                    // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    let offsets = if self.block_meta_options.query_internal_columns {
-                        bitmap_selection.as_ref().map(|bitmap| {
-                            RoaringTreemap::from_sorted_iter(
-                                (0..bitmap.len())
-                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                    .map(|i| i as u64),
-                            )
-                            .unwrap()
-                        })
-                    } else {
-                        None
-                    };
-
-                    data_block = add_data_block_meta(
-                        data_block,
-                        part,
-                        offsets,
-                        self.base_block_ids.clone(),
-                        &self.block_meta_options,
-                    )?;
-
-                    self.output_data = Some(data_block);
-                }
+            if self.read_state.is_none() {
+                self.read_state = Some(ReadState::create(
+                    self.ctx.clone(),
+                    self.scan_id,
+                    self.prewhere_info.as_ref(),
+                    self.block_reader.clone(),
+                )?);
             }
+
+            let (mut data_block, row_selection, bitmap_selection) = self
+                .read_state
+                .as_ref()
+                .unwrap()
+                .deserialize_and_filter(columns_chunks, part)?;
+
+            if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                data_block = virtual_reader.deserialize_virtual_columns(
+                    data_block,
+                    read_res.virtual_data,
+                    row_selection.as_ref().map(|s| s.selection.clone()),
+                )?;
+            }
+
+            // Perf.
+            {
+                metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+            }
+
+            let progress_values = ProgressValues {
+                rows: data_block.num_rows(),
+                bytes: data_block.memory_size(),
+            };
+            self.scan_progress.incr(&progress_values);
+            Profile::record_usize_profile(
+                ProfileStatisticsName::ScanBytes,
+                data_block.memory_size(),
+            );
+
+            let mut data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+            // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+            // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
+            let offsets = if self.block_meta_options.query_internal_columns {
+                bitmap_selection.as_ref().map(|bitmap| {
+                    RoaringTreemap::from_sorted_iter(
+                        (0..bitmap.len())
+                            .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                            .map(|i| i as u64),
+                    )
+                    .unwrap()
+                })
+            } else {
+                None
+            };
+
+            data_block = add_data_block_meta(
+                data_block,
+                part,
+                offsets,
+                self.base_block_ids.clone(),
+                &self.block_meta_options,
+            )?;
+
+            self.output_data = Some(data_block);
         }
 
         Ok(())

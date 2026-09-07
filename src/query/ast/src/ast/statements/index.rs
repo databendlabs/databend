@@ -23,25 +23,13 @@ use derive_visitor::DriveMut;
 
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
-use crate::ast::Query;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
-pub struct CreateIndexStmt {
-    pub index_type: TableIndexType,
-    pub create_option: CreateOption,
-
-    pub index_name: Identifier,
-
-    pub query: Box<Query>,
-    pub sync_creation: bool,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum TableIndexType {
-    Aggregating,
+    // Aggregating,
     // Join
     Inverted,
     Ngram,
@@ -52,9 +40,6 @@ pub enum TableIndexType {
 impl Display for TableIndexType {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            TableIndexType::Aggregating => {
-                write!(f, "AGGREGATING")
-            }
             TableIndexType::Inverted => {
                 write!(f, "INVERTED")
             }
@@ -68,59 +53,6 @@ impl Display for TableIndexType {
                 write!(f, "SPATIAL")
             }
         }
-    }
-}
-
-impl Display for CreateIndexStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, "OR REPLACE ")?;
-        }
-        if !self.sync_creation {
-            write!(f, "ASYNC ")?;
-        }
-        write!(f, "{} INDEX", self.index_type)?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, " IF NOT EXISTS")?;
-        }
-
-        write!(f, " {}", self.index_name)?;
-        write!(f, " AS {}", self.query)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
-pub struct DropIndexStmt {
-    pub if_exists: bool,
-    pub index: Identifier,
-}
-
-impl Display for DropIndexStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DROP AGGREGATING INDEX")?;
-        if self.if_exists {
-            write!(f, " IF EXISTS")?;
-        }
-
-        write!(f, " {index}", index = self.index)?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct RefreshIndexStmt {
-    pub index: Identifier,
-    pub limit: Option<u64>,
-}
-
-impl Display for RefreshIndexStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "REFRESH AGGREGATING INDEX {index}", index = self.index)?;
-        if let Some(limit) = self.limit {
-            write!(f, " LIMIT {limit}")?;
-        }
-        Ok(())
     }
 }
 

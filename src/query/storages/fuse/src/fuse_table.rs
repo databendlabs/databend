@@ -1556,16 +1556,11 @@ impl Table for FuseTable {
         true
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        index_id: u64,
-    ) -> Result<u64> {
-        let prefix = format!(
-            "{}/{}",
-            self.meta_location_generator.agg_index_location_prefix(),
-            index_id
-        );
+    async fn remove_aggregating_index_files(&self, ctx: Arc<dyn TableContext>) -> Result<u64> {
+        let prefix = self
+            .meta_location_generator
+            .agg_index_location_prefix()
+            .to_string();
         let op = &self.operator;
         info!("remove_aggregating_index_files: {}", prefix);
         let mut lister = op.lister_with(&prefix).recursive(true).await?;
