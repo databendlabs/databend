@@ -39,16 +39,16 @@ pub struct FuseVacuumDropAggregatingIndex {
 }
 
 struct FuseVacuumDropAggregatingIndexArgs {
-    database_name: String,
-    table_name: String,
+    database_table: Option<(String, String)>,
 }
 
 impl From<&FuseVacuumDropAggregatingIndexArgs> for TableArgs {
     fn from(args: &FuseVacuumDropAggregatingIndexArgs) -> Self {
-        let table_args = vec![
-            string_literal(&args.database_name),
-            string_literal(&args.table_name),
-        ];
+        let mut table_args = vec![];
+        if let Some((database, table)) = &args.database_table {
+            table_args.push(string_literal(database));
+            table_args.push(string_literal(table));
+        }
         TableArgs::new_positioned(table_args)
     }
 }
@@ -82,32 +82,43 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         let mut num_removed_files = Vec::new();
         let catalog = ctx.get_default_catalog()?;
         let tenant = ctx.get_tenant();
-        let table = catalog
-            .get_table(&tenant, &self.args.database_name, &self.args.table_name)
-            .await?;
-        let table_id = table.get_id();
-
-        if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {
-            let table_info = TableInfo::new(
-                Default::default(),
-                Default::default(),
-                TableIdent::new(table_id, table_meta.seq),
-                table_meta.data,
-            );
-            let table = catalog.get_table_by_info(&table_info)?;
-            let n = table.remove_aggregating_index_files(ctx.clone()).await?;
-
-            table_ids.push(table_id);
-            num_removed_files.push(n);
-
-            info!(
-                "indexes_to_be_vacuumed for table: {:?}, file numbers: {:?}",
-                table_id, n
-            );
-        } else {
-            // Skip vacuuming indexes of dropped tables - this will be handled by the vacuum drop table operation
-            info!("skip vacuuming indexes of dropped table: {}", table_id);
+        let table = match &self.args.database_table {
+            Some((database_name, table_name)) => Some(
+                catalog
+                    .get_table(&tenant, database_name, table_name)
+                    .await?,
+            ),
+            None => None,
         };
+
+        if let Some(table) = table {
+            let table = catalog
+                .get_table(&tenant, &self.args.database_name, &self.args.table_name)
+                .await?;
+            let table_id = table.get_id();
+
+            if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {
+                let table_info = TableInfo::new(
+                    Default::default(),
+                    Default::default(),
+                    TableIdent::new(table_id, table_meta.seq),
+                    table_meta.data,
+                );
+                let table = catalog.get_table_by_info(&table_info)?;
+                let n = table.remove_aggregating_index_files(ctx.clone()).await?;
+
+                table_ids.push(table_id);
+                num_removed_files.push(n);
+
+                info!(
+                    "indexes_to_be_vacuumed for table: {:?}, file numbers: {:?}",
+                    table_id, n
+                );
+            } else {
+                // Skip vacuuming indexes of dropped tables - this will be handled by the vacuum drop table operation
+                info!("skip vacuuming indexes of dropped table: {}", table_id);
+            }
+        }
 
         Ok(Some(DataBlock::new_from_columns(vec![
             UInt64Type::from_data(table_ids),
@@ -118,21 +129,22 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let args = table_args.expect_all_positioned(func_name, None)?;
-        match args.len() {
+        let database_table = match args.len() {
             2 => {
                 let database_name = string_value(&args[0])?;
                 let table_name = string_value(&args[1])?;
-                Ok(Self {
-                    args: FuseVacuumDropAggregatingIndexArgs {
-                        database_name,
-                        table_name,
-                    },
-                })
+                Some((database_name, table_name))
             }
-            _ => Err(ErrorCode::BadArguments(format!(
-                "expecting (<database_name>, <table_name>) or no args, but got {:?}",
-                args
-            ))),
-        }
+            0 => None,
+            _ => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "expecting (<database_name>, <table_name>) or no args, but got {:?}",
+                    args
+                )));
+            }
+        };
+        Ok(Self {
+            args: FuseVacuumDropAggregatingIndexArgs { database_table },
+        })
     }
 }
