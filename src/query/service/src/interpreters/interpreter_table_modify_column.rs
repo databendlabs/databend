@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
+use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -29,6 +31,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -52,24 +55,36 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name_by_str;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::CachedMetaWriter;
+use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::read_segment_stats;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use parquet::arrow::ArrowSchemaConverter;
+use uuid::Uuid;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::meta_service_error;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
@@ -86,6 +101,12 @@ use crate::sessions::TableContextTableManagement;
 pub struct ModifyTableColumnInterpreter {
     ctx: Arc<QueryContext>,
     plan: ModifyTableColumnPlan,
+}
+
+#[derive(Clone, Copy)]
+struct DecimalStatsRewrite {
+    column_id: u32,
+    size: DecimalSize,
 }
 
 impl ModifyTableColumnInterpreter {
@@ -428,6 +449,7 @@ impl ModifyTableColumnInterpreter {
         }
 
         let mut modified_default_scalars = HashMap::new();
+        let mut decimal_stats_rewrites = Vec::new();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         let format_as_parquet = fuse_table.storage_format_as_parquet();
@@ -436,12 +458,24 @@ impl ModifyTableColumnInterpreter {
                 let old_field = schema.field_with_name(&field.name)?;
                 let is_alter_column_string_to_binary =
                     is_string_to_binary(&old_field.data_type, &field.data_type);
+                let is_decimal_precision_widening = format_as_parquet
+                    && !fuse_table.is_column_oriented()
+                    && is_decimal_precision_widening(&old_field.data_type, &field.data_type)?;
+                if is_decimal_precision_widening {
+                    decimal_stats_rewrites.push(DecimalStatsRewrite {
+                        column_id: old_field.column_id,
+                        size: decimal_size(&field.data_type).ok_or_else(|| {
+                            ErrorCode::Internal("Decimal widening has no target DecimalSize")
+                        })?,
+                    });
+                }
                 // If two conditions are met, we don't need rebuild the table,
                 // as rebuild table can be a time-consuming job.
                 // 1. alter column from string to binary in parquet or data type not changed.
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
                 if ((format_as_parquet && is_alter_column_string_to_binary)
+                    || is_decimal_precision_widening
                     || old_field.data_type == field.data_type)
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
@@ -457,8 +491,35 @@ impl ModifyTableColumnInterpreter {
 
         // if don't need to rebuild table, only update table meta.
         if modified_default_scalars.is_empty()
-            || base_snapshot.is_none_or(|v| v.summary.row_count == 0)
+            || base_snapshot
+                .as_ref()
+                .is_none_or(|v| v.summary.row_count == 0)
         {
+            if !decimal_stats_rewrites.is_empty()
+                && base_snapshot
+                    .as_ref()
+                    .is_some_and(|v| v.summary.row_count > 0)
+                && !fuse_table.is_column_oriented()
+            {
+                let cluster_rewrites = decimal_cluster_stats_rewrites(
+                    self.ctx.clone(),
+                    fuse_table,
+                    new_schema.clone(),
+                )?;
+                rewrite_decimal_stats_and_commit(
+                    &self.ctx,
+                    fuse_table,
+                    base_snapshot.unwrap(),
+                    new_schema,
+                    table_info.meta.clone(),
+                    catalog,
+                    &decimal_stats_rewrites,
+                    &cluster_rewrites,
+                    table_meta_timestamps,
+                )
+                .await?;
+                return Ok(PipelineBuildResult::create());
+            }
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -887,6 +948,232 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_decimal_precision_widening(old_ty: &TableDataType, new_ty: &TableDataType) -> Result<bool> {
+    match (old_ty, new_ty) {
+        (TableDataType::Decimal(old), TableDataType::Decimal(new)) => {
+            if old.scale() != new.scale() || old.precision() >= new.precision() {
+                return Ok(false);
+            }
+            Ok(decimal_parquet_physical_type(old_ty)? == decimal_parquet_physical_type(new_ty)?)
+        }
+        (TableDataType::Nullable(old), TableDataType::Nullable(new)) => {
+            is_decimal_precision_widening(old, new)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn decimal_size(data_type: &TableDataType) -> Option<DecimalSize> {
+    match data_type {
+        TableDataType::Decimal(decimal) => Some(decimal.size()),
+        TableDataType::Nullable(inner) => decimal_size(inner),
+        _ => None,
+    }
+}
+
+fn expression_decimal_size(data_type: &DataType) -> Option<DecimalSize> {
+    match data_type {
+        DataType::Decimal(size) => Some(*size),
+        DataType::Nullable(inner) => expression_decimal_size(inner),
+        _ => None,
+    }
+}
+
+fn decimal_cluster_stats_rewrites(
+    ctx: Arc<QueryContext>,
+    table: &FuseTable,
+    new_schema: TableSchemaRef,
+) -> Result<Vec<(usize, DecimalSize)>> {
+    let Some((_, cluster_key)) = table.cluster_key_meta() else {
+        return Ok(Vec::new());
+    };
+    let (_, old_exprs) = analyze_cluster_keys(ctx.clone(), Arc::new(table.clone()), &cluster_key)?;
+    let (_, new_exprs) = analyze_cluster_keys(ctx, table.with_schema(new_schema), &cluster_key)?;
+    if old_exprs.len() != new_exprs.len() {
+        return Err(ErrorCode::Internal(
+            "cluster key dimensions changed during Decimal precision widening",
+        ));
+    }
+
+    let mut rewrites = Vec::new();
+    for (index, (old, new)) in old_exprs.iter().zip(&new_exprs).enumerate() {
+        let (Some(old_size), Some(new_size)) = (
+            expression_decimal_size(old.data_type()),
+            expression_decimal_size(new.data_type()),
+        ) else {
+            continue;
+        };
+        if old_size != new_size {
+            if old_size.scale() != new_size.scale()
+                || old_size.data_kind() != new_size.data_kind()
+                || old_size.precision() > new_size.precision()
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "cannot widen Decimal cluster statistics from {old_size} to {new_size}"
+                )));
+            }
+            rewrites.push((index, new_size));
+        }
+    }
+    Ok(rewrites)
+}
+
+fn widen_cluster_statistics(
+    stats: &mut Option<databend_storages_common_table_meta::meta::ClusterStatistics>,
+    rewrites: &[(usize, DecimalSize)],
+) -> Result<()> {
+    if let Some(stats) = stats {
+        for (index, size) in rewrites {
+            stats.widen_decimal_dimension(*index, *size)?;
+        }
+    }
+    Ok(())
+}
+
+fn widen_segment_metadata(
+    segment: &mut SegmentInfo,
+    column_rewrites: &[DecimalStatsRewrite],
+    cluster_rewrites: &[(usize, DecimalSize)],
+) -> Result<()> {
+    for block in &mut segment.blocks {
+        let block = Arc::make_mut(block);
+        for rewrite in column_rewrites {
+            if let Some(stats) = block.col_stats.get_mut(&rewrite.column_id) {
+                stats.widen_decimal_size(rewrite.size)?;
+            }
+        }
+        widen_cluster_statistics(&mut block.cluster_stats, cluster_rewrites)?;
+    }
+    for rewrite in column_rewrites {
+        segment
+            .summary
+            .widen_decimal_column(rewrite.column_id, rewrite.size)?;
+    }
+    widen_cluster_statistics(&mut segment.summary.cluster_stats, cluster_rewrites)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn rewrite_decimal_stats_and_commit(
+    ctx: &Arc<QueryContext>,
+    fuse_table: &FuseTable,
+    base_snapshot: Arc<TableSnapshot>,
+    new_schema: TableSchemaRef,
+    mut new_table_meta: TableMeta,
+    catalog: Arc<dyn Catalog>,
+    column_rewrites: &[DecimalStatsRewrite],
+    cluster_rewrites: &[(usize, DecimalSize)],
+    table_meta_timestamps: TableMetaTimestamps,
+) -> Result<()> {
+    let operator = fuse_table.get_operator_ref();
+    let segments_io = SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
+    let segments = segments_io
+        .read_segments::<SegmentInfo>(&base_snapshot.segments, false)
+        .await?;
+    let mut new_segment_locations = Vec::with_capacity(segments.len());
+
+    for segment in segments {
+        let mut segment = segment?;
+        widen_segment_metadata(&mut segment, column_rewrites, cluster_rewrites)?;
+
+        let segment_location = fuse_table
+            .meta_location_generator()
+            .gen_segment_info_location_from_uuid(&Uuid::now_v7(), false);
+        if let Some(old_stats_location) = segment.summary.additional_stats_loc() {
+            let mut stats = read_segment_stats(operator.clone(), old_stats_location)
+                .await?
+                .as_ref()
+                .clone();
+            for rewrite in column_rewrites {
+                stats.widen_decimal_column(rewrite.column_id, rewrite.size)?;
+            }
+            let stats_location = databend_common_storages_fuse::io::TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
+                &segment_location,
+            );
+            let stats_size = stats.to_bytes()?.len() as u64;
+            stats.write_meta(operator, &stats_location).await?;
+            if let Some(meta) = &mut segment.summary.additional_stats_meta {
+                meta.size = stats_size;
+                meta.location = (stats_location, SegmentStatistics::VERSION);
+            }
+        }
+
+        segment.format_version = SegmentInfo::VERSION;
+        segment
+            .write_meta_through_cache(operator, &segment_location)
+            .await?;
+        new_segment_locations.push((segment_location, SegmentInfo::VERSION));
+    }
+
+    let mut new_snapshot = TableSnapshot::try_from_previous(
+        base_snapshot.clone(),
+        fuse_table.cluster_key_info(),
+        Some(fuse_table.get_table_info().ident.seq),
+        table_meta_timestamps,
+    )?;
+    new_snapshot.schema = new_schema.as_ref().clone();
+    new_snapshot.segments = new_segment_locations;
+    for rewrite in column_rewrites {
+        new_snapshot
+            .summary
+            .widen_decimal_column(rewrite.column_id, rewrite.size)?;
+    }
+    widen_cluster_statistics(&mut new_snapshot.summary.cluster_stats, cluster_rewrites)?;
+
+    if let Some(mut table_stats) = fuse_table
+        .read_table_snapshot_statistics(Some(&base_snapshot))
+        .await?
+        .map(|stats| stats.as_ref().clone())
+    {
+        for rewrite in column_rewrites {
+            table_stats.widen_decimal_column(rewrite.column_id, rewrite.size)?;
+        }
+        // A statistics sidecar describes the data inherited from the base snapshot.
+        // The new metadata-only snapshot points back to that base snapshot.
+        table_stats.snapshot_id = base_snapshot.snapshot_id;
+        let location = fuse_table
+            .meta_location_generator()
+            .snapshot_statistics_location_from_uuid(
+                &SnapshotId::now_v7(),
+                table_stats.format_version(),
+            )?;
+        table_stats.write_meta(operator, &location).await?;
+        new_snapshot.table_statistics_location = Some(location);
+    }
+
+    let new_snapshot_location = fuse_table
+        .meta_location_generator()
+        .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    new_snapshot
+        .write_meta(operator, &new_snapshot_location)
+        .await?;
+
+    new_table_meta.schema = new_schema;
+    new_table_meta.options.insert(
+        OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+        new_snapshot_location.clone(),
+    );
+    new_table_meta.updated_on = Utc::now();
+    update_table_meta(fuse_table, &new_table_meta, catalog, ctx.get_tenant()).await?;
+    FuseTable::write_last_snapshot_hint(
+        ctx.as_ref(),
+        operator,
+        fuse_table.meta_location_generator(),
+        &new_snapshot_location,
+        &new_table_meta,
+    )
+    .await;
+    Ok(())
+}
+
+fn decimal_parquet_physical_type(data_type: &TableDataType) -> Result<(parquet::basic::Type, i32)> {
+    let schema = TableSchema::new(vec![TableField::new("decimal", data_type.clone())]);
+    let arrow_schema = ArrowSchema::from(&schema);
+    let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+    let column = parquet_schema.column(0);
+    Ok((column.physical_type(), column.type_length()))
 }
 
 pub(crate) async fn build_select_insert_plan(

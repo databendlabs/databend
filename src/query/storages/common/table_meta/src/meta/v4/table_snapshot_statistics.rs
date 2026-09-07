@@ -14,7 +14,9 @@
 
 use std::collections::HashMap;
 
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DecimalSize;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use databend_common_statistics::Histogram;
@@ -87,6 +89,15 @@ impl TableSnapshotStatistics {
             .iter()
             .map(|hll| (*hll.0, hll.1.count() as u64))
             .collect()
+    }
+
+    /// Retag Top-N values for one Decimal column. Other statistics either do not store
+    /// DecimalSize or deliberately hash only the raw value.
+    pub fn widen_decimal_column(&mut self, column_id: ColumnId, size: DecimalSize) -> Result<()> {
+        if let Some(top_n) = self.top_n.get_mut(&column_id) {
+            top_n.widen_decimal_size(size)?;
+        }
+        Ok(())
     }
 }
 

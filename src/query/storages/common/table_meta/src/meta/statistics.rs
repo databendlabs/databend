@@ -26,6 +26,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_storage::MetaHLL;
 use serde::Deserialize;
@@ -364,6 +365,15 @@ impl ColumnTopN {
         self
     }
 
+    /// Retag Decimal values while preserving their counts and ordering.
+    pub fn widen_decimal_size(&mut self, size: DecimalSize) -> Result<()> {
+        for entry in &mut self.values {
+            crate::meta::widen_decimal_scalar(&mut entry.scalar, size)?;
+        }
+        self.min_index = None;
+        Ok(())
+    }
+
     fn add_ref_with_options(&mut self, scalar: ScalarRef<'_>, count: u64, error: u64) {
         if self.capacity == 0 || count == 0 || matches!(scalar, ScalarRef::Null) {
             return;
@@ -696,6 +706,8 @@ pub fn merge_column_count_min_sketch_mut(lhs: &mut BlockCountMinSketch, rhs: Blo
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberScalar;
 
     use super::*;
@@ -792,6 +804,26 @@ mod tests {
 
         assert_eq!(top_n.get(&int32_scalar(5)), Some(10));
         assert_eq!(top_n.get(&uint_scalar(5)), None);
+    }
+
+    #[test]
+    fn column_top_n_retags_decimal_values() {
+        let old = DecimalSize::new_unchecked(10, 2);
+        let new = DecimalSize::new_unchecked(15, 2);
+        let old_scalar = Scalar::Decimal(DecimalScalar::Decimal64(123, old));
+        let new_scalar = Scalar::Decimal(DecimalScalar::Decimal64(123, new));
+        let mut top_n = ColumnTopN::with_capacity(2);
+        top_n.add_entry_for_test(ColumnTopNEntry {
+            scalar: old_scalar.clone(),
+            count: 10,
+            error: 1,
+        });
+
+        top_n.widen_decimal_size(new).unwrap();
+
+        assert_eq!(top_n.get(&old_scalar), None);
+        assert_eq!(top_n.get(&new_scalar), Some(10));
+        assert_eq!(top_n.values[0].error, 1);
     }
 
     #[test]

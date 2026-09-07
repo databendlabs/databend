@@ -30,6 +30,7 @@ pub use v2::VectorDistanceType;
 pub use v2::VirtualBlockMeta;
 pub use v2::VirtualColumnMeta;
 pub use v2::validate_segment_partition_statistics;
+pub use v2::widen_decimal_scalar;
 pub use v4::CompactSegmentInfo;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;

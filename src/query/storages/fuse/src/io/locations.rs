@@ -206,6 +206,14 @@ impl TableMetaLocationGenerator {
         is_column_oriented: bool,
     ) -> String {
         let segment_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
+        self.gen_segment_info_location_from_uuid(&segment_uuid, is_column_oriented)
+    }
+
+    pub fn gen_segment_info_location_from_uuid(
+        &self,
+        segment_uuid: &Uuid,
+        is_column_oriented: bool,
+    ) -> String {
         match is_column_oriented {
             true => format!(
                 "{}{}{}.col",
