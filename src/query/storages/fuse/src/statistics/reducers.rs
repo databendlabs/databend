@@ -263,6 +263,13 @@ pub fn merge_statistics_mut(
     r: &Statistics,
     cluster_key_info: Option<&ClusterKeyInfo>,
 ) {
+    // A default statistics value is the identity used by incremental aggregators. In
+    // particular, mutations may have no appended rows and still merge their default
+    // `appended_statistics` into an already populated replacement summary. Do not treat that
+    // identity as a real input with missing column statistics.
+    if r.row_count == 0 {
+        return;
+    }
     l.additional_stats_meta = None;
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
@@ -490,7 +497,9 @@ mod tests {
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::meta::Statistics;
 
+    use super::merge_statistics_mut;
     use super::reduce_block_statistics;
     use super::reduce_column_statistics;
 
@@ -543,5 +552,27 @@ mod tests {
         let without_stats = HashMap::new();
 
         assert!(reduce_block_statistics(&[with_stats, without_stats]).is_empty());
+    }
+
+    #[test]
+    fn test_merge_statistics_ignores_empty_right_identity() {
+        let stats = ColumnStatistics::new(
+            Scalar::Number(1_i64.into()),
+            Scalar::Number(9_i64.into()),
+            0,
+            16,
+            None,
+        );
+        let mut summary = Statistics {
+            row_count: 2,
+            block_count: 1,
+            col_stats: HashMap::from([(1, stats)]),
+            ..Statistics::default()
+        };
+        let expected = summary.clone();
+
+        merge_statistics_mut(&mut summary, &Statistics::default(), None);
+
+        assert_eq!(summary, expected);
     }
 }
