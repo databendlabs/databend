@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-MUTATION]");
+
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -124,26 +126,31 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         info!(
-            "{}: finished aggregating mutation logs, entries: {}",
-            self.write_segment_ctx.kind, self.processed_log_entries
+            event = "mutation.aggregated",
+            operation = self.write_segment_ctx.kind.to_string().to_ascii_lowercase().as_str(),
+            table_id = self.table_id,
+            entry_count = self.processed_log_entries;
+            "Mutation logs aggregated"
         );
         self.generate_append_segments().await?;
-        let message = match self.write_segment_ctx.kind {
-            MutationKind::Insert => Some("fuse insert output"),
-            MutationKind::Recluster => Some("fuse recluster output"),
+        let operation = match self.write_segment_ctx.kind {
+            MutationKind::Insert => Some("insert"),
+            MutationKind::Recluster => Some("recluster"),
             _ => None,
         };
-        if let Some(message) = message {
-            for (&level, stats) in &self.output_level_stats {
-                info!(
-                    table_id = self.table_id,
-                    level,
-                    block_count = stats.block_count,
-                    block_size = stats.block_size,
-                    file_size = stats.file_size;
-                    "{message}"
-                );
-            }
+        if let Some(operation) = operation
+            && !self.output_level_stats.is_empty()
+        {
+            // Newly written blocks collected by this aggregator only; segment reuse is
+            // not rewrite output. These statistics precede CommitSink and do not imply
+            // a successful commit. Keep all levels together, even across multiple tasks.
+            info!(
+                event = "mutation.output_written",
+                operation,
+                table_id = self.table_id,
+                output_levels :serde = self.output_level_stats.values().collect::<Vec<_>>();
+                "Mutation output written"
+            );
         }
 
         let mut new_segment_locs = Vec::new();
@@ -538,7 +545,11 @@ impl TableMutationAggregator {
             }
         }
 
-        info!("removed_segment_indexes:{:?}", self.removed_segment_indexes);
+        info!(
+            table_id = self.table_id,
+            removed_segment_indexes :? = self.removed_segment_indexes;
+            "Mutation segment removals collected"
+        );
 
         if matches!(self.virtual_schema_mode, VirtualSchemaMode::Merge) {
             self.update_virtual_schema_block_number(&merged_statistics);

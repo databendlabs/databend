@@ -178,7 +178,7 @@ impl FuseTable {
             .map(|(idx, location)| (location, idx))
             .collect::<HashMap<_, _>>();
         let number_segments = snapshot.segments.len();
-        let mut recluster_blocks_count = 0;
+        let mut repack_count = 0;
         let mut recluster_segment_pruner = None;
         let mut decode_semaphore = None;
 
@@ -295,7 +295,7 @@ impl FuseTable {
                 .await?;
 
                 let status = format!(
-                    "[FUSE-RECLUSTER] Scanned segment range: scan_start={} scan_end={} scan_segments={} probe_segments={} segment_progress={}/{}, elapsed={:?}",
+                    "[FUSE-RECLUSTER] Scanned segment range: scan_start={} scan_end={} scanned_segments={} probe_segments={} segment_progress={}/{} elapsed={:?}",
                     scan_start,
                     scan_end,
                     scan_segments,
@@ -384,18 +384,20 @@ impl FuseTable {
                             pending_windows.push(window);
                         }
                     }
-                    info!(
-                        "recluster: probed candidate windows candidate_windows={} probe_windows={} probe_tasks={} pending_windows={} elapsed={:?}",
-                        windows_num,
-                        probe_windows,
-                        probe_tasks,
-                        pending_windows.len(),
-                        probe_start.elapsed(),
+                    debug!(
+                        event = "recluster.probed",
+                        table_id = self.get_id(),
+                        candidate_windows = windows_num,
+                        probed_windows = probe_windows,
+                        probe_tasks = probe_tasks,
+                        pending_windows = pending_windows.len(),
+                        elapsed :? = probe_start.elapsed();
+                        "Recluster windows probed"
                     );
                 }
             }
 
-            let (block_count, parts) = if pending_windows.is_empty() {
+            let (_, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
                 // Step 3: choose task candidates. Preserve score-only ranking unless
@@ -428,9 +430,19 @@ impl FuseTable {
                     } else {
                         for &task_idx in &task_indices {
                             let task = &window.tasks[task_idx];
+                            repack_count += usize::from(task.is_repack_only());
                             info!(
-                                "recluster: selected task candidate window_idx={} task_idx={} {}",
-                                window_idx, task_idx, task,
+                                event = "recluster.candidate_selected",
+                                table_id = self.get_id(),
+                                window_idx,
+                                task_idx,
+                                base_level = task.base_level,
+                                repack_only = task.is_repack_only(),
+                                max_depth = task.score.max_depth,
+                                avg_depth = task.score.average_depth,
+                                block_count = task.selected_block_count(),
+                                block_size = task.score.selected_total_bytes;
+                                "Recluster candidate selected"
                             );
                         }
                         // Any selected task consumes its whole window.
@@ -452,8 +464,6 @@ impl FuseTable {
                     MAX_SEGMENT_LOCATIONS_PER_CLAIM,
                 )));
             }
-            recluster_blocks_count += block_count;
-
             if !parts.is_empty() {
                 // Keep unselected windows as best-effort continuation state for this scan range.
                 // Empty windows cache stable probes while other tasks are still being rewritten.
@@ -492,11 +502,19 @@ impl FuseTable {
 
         let recluster_seg_num = parts.removed_segment_indexes.len() as u64;
         let elapsed_time = start.elapsed();
+        info!(
+            event = "recluster.planned",
+            table_id = self.get_id(),
+            strategy = format!("{:?}", mutator.properties.cluster_key_info.cluster_type).as_str(),
+            mode = format!("{:?}", mode).as_str(),
+            tasks = parts.tasks.len(),
+            repack_count,
+            segments = recluster_seg_num,
+            block_count = parts.tasks.iter().map(|task| task.parts.len()).sum::<usize>();
+            "Recluster planned"
+        );
         ctx.set_status_info(&format!(
-            "[FUSE-RECLUSTER] Built recluster tasks: tasks={} segments={} blocks={} elapsed={:?}",
-            parts.tasks.len(),
-            recluster_seg_num,
-            recluster_blocks_count,
+            "[FUSE-RECLUSTER] Task planning completed: elapsed={:?}",
             elapsed_time,
         ));
         metrics_inc_recluster_build_task_milliseconds(elapsed_time.as_millis() as u64);

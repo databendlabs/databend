@@ -337,6 +337,16 @@ impl ReclusterTaskCandidate {
             .sum()
     }
 
+    /// Requested output level for logs, or "null" for repack-only candidates.
+    /// Perfect output blocks may instead become -1.
+    pub(crate) fn requested_output_level(&self) -> String {
+        if self.is_repack_only() {
+            "null".to_string()
+        } else {
+            (self.base_level + 1).to_string()
+        }
+    }
+
     /// Whether this candidate only repacks unchanged blocks into fewer segments.
     pub(crate) fn is_repack_only(&self) -> bool {
         self.selected_blocks.is_empty()
@@ -347,12 +357,8 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "output_level={} repack_only={} max_depth={} avg_depth={} selected_count={} bytes={}",
-            if self.is_repack_only() {
-                "none".to_string()
-            } else {
-                (self.base_level + 1).to_string()
-            },
+            "requested_output_level={} repack_only={} max_depth={} avg_depth={} block_count={} block_size={}",
+            self.requested_output_level(),
             self.is_repack_only(),
             self.score.max_depth,
             self.score.average_depth,

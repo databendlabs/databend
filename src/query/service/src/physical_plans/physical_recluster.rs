@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
+
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -173,16 +175,13 @@ impl IPhysicalPlan for Recluster {
                     metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
                     metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
 
-                    for stats in &task.input_level_stats {
-                        log::info!(
-                            table_id = table.get_id(),
-                            level = stats.level,
-                            block_count = stats.block_count,
-                            block_size = stats.block_size,
-                            file_size = stats.file_size;
-                            "fuse recluster input"
-                        );
-                    }
+                    // Keep all effective input levels in one event per task pipeline build.
+                    log::info!(
+                        event = "recluster.input_planned",
+                        table_id = table.get_id(),
+                        input_levels :serde = task.input_level_stats;
+                        "Recluster input planned"
+                    );
                 }
 
                 builder.ctx.set_partitions(plan.parts.clone())?;

@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
@@ -490,7 +489,7 @@ impl ReclusterMutator {
                     && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
                 if defer {
                     debug!(
-                        "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
+                        "recluster: defer candidate group={} block_size={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
                         group,
                         candidate.score.selected_total_bytes,
                         candidate.score.max_depth,
@@ -663,6 +662,8 @@ impl ReclusterMutator {
         }))
     }
 
+    // Capture group selection time in tracing without duplicating strategy summaries.
+    #[fastrace::trace]
     fn build_recluster_task_candidates_for_indices(
         &self,
         group: ReclusterGroup,
@@ -671,7 +672,6 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
-        let group_start = Instant::now();
         let block_count = indices.len();
         if block_count < 2 {
             return Ok(Vec::new());
@@ -711,23 +711,8 @@ impl ReclusterMutator {
             return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }
 
-        let candidates = self.strategy.fetch_task_candidates(
-            &self.properties,
-            group,
-            &indices,
-            blocks,
-            task_budget,
-        )?;
-
-        debug!(
-            "recluster: candidate selection group={} block_count={} task_count={} elapsed={:?}",
-            group,
-            block_count,
-            candidates.len(),
-            group_start.elapsed(),
-        );
-
-        Ok(candidates)
+        self.strategy
+            .fetch_task_candidates(&self.properties, group, &indices, blocks, task_budget)
     }
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.
