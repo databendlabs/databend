@@ -39,7 +39,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::conversion::number_common_type;
 use databend_common_expression::infer_schema_type;
-use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalScalar;
@@ -680,20 +679,23 @@ impl VirtualColumnBuilder {
         format!("{source_column_id}_{source_name}.{canonical_path}")
     }
 
+    // Shared names omit the direct path separator before their tagged first-leaf
+    // ordinal. Readers still use trie/shared leaf ordinals as authoritative identity.
     fn shared_column_name(
         source_column_id: ColumnId,
         source_name: &str,
         data_type: VirtualColumnSharedDataType,
+        parquet_column_id: u32,
     ) -> String {
-        let suffix = match data_type {
-            VirtualColumnSharedDataType::Boolean => "__shared_bool_virtual_column_data__",
-            VirtualColumnSharedDataType::UInt64 => "__shared_uint64_virtual_column_data__",
-            VirtualColumnSharedDataType::Int64 => "__shared_int64_virtual_column_data__",
-            VirtualColumnSharedDataType::Float64 => "__shared_float64_virtual_column_data__",
-            VirtualColumnSharedDataType::String => "__shared_string_virtual_column_data__",
-            VirtualColumnSharedDataType::Jsonb => "__shared_virtual_column_data__",
+        let data_type = match data_type {
+            VirtualColumnSharedDataType::Boolean => "bool",
+            VirtualColumnSharedDataType::UInt64 => "uint64",
+            VirtualColumnSharedDataType::Int64 => "int64",
+            VirtualColumnSharedDataType::Float64 => "float64",
+            VirtualColumnSharedDataType::String => "string",
+            VirtualColumnSharedDataType::Jsonb => "jsonb",
         };
-        format!("{source_column_id}_{source_name}.{suffix}")
+        format!("{source_column_id}_{source_name}__shared_{data_type}_{parquet_column_id}__")
     }
 
     #[async_backtrace::framed]
@@ -874,6 +876,7 @@ impl VirtualColumnBuilder {
                     source_field.column_id,
                     &source_field.name,
                     shared_data_type,
+                    column_id,
                 );
                 let field = TableField::new_from_column_id(&physical_name, map_type, column_id);
                 virtual_columns.push(BlockEntry::Column(column));
@@ -1020,6 +1023,17 @@ impl VirtualColumnBuilder {
         Some(common_type)
     }
 
+    /// Returns a Decimal type that can represent both inputs without reducing
+    /// either integer capacity or scale. Values wider than Decimal256 fall back
+    /// to Jsonb through the caller.
+    fn lossless_decimal_common_type(left: DecimalSize, right: DecimalSize) -> Option<DataType> {
+        let scale = left.scale().max(right.scale());
+        let leading_digits = left.leading_digits().max(right.leading_digits());
+        let precision = leading_digits.checked_add(scale)?;
+        let size = DecimalSize::new(precision, scale).ok()?;
+        Some(DataType::Decimal(size))
+    }
+
     /// Merges distinct types only in two explicitly supported cases: compatible
     /// Number types, or exact Number/Decimal types. All other combinations
     /// return `None` without consulting broader SQL conversion rules.
@@ -1036,16 +1050,16 @@ impl VirtualColumnBuilder {
                     Some(number_common_type(left, right))
                 }
             }
-            (left @ DataType::Number(num), right @ DataType::Decimal(_))
-            | (left @ DataType::Decimal(_), right @ DataType::Number(num)) => {
-                if !num.is_float() {
-                    common_super_type(left, right, &[])
-                } else {
-                    None
+            (DataType::Number(num), DataType::Decimal(decimal))
+            | (DataType::Decimal(decimal), DataType::Number(num)) => {
+                if num.is_float() {
+                    return None;
                 }
+                let number = num.get_decimal_properties()?;
+                Self::lossless_decimal_common_type(number, decimal)
             }
-            (left @ DataType::Decimal(_), right @ DataType::Decimal(_)) => {
-                common_super_type(left, right, &[])
+            (DataType::Decimal(left), DataType::Decimal(right)) => {
+                Self::lossless_decimal_common_type(left, right)
             }
             _ => None,
         }
@@ -1173,11 +1187,16 @@ struct JsonbScalarValue {
 mod type_inference_tests {
     use std::collections::HashSet;
 
+    use databend_common_expression::Scalar;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::i256;
+    use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
 
+    use super::JsonbScalarValue;
     use super::VirtualColumnBuilder;
 
     fn types(values: impl IntoIterator<Item = DataType>) -> HashSet<DataType> {
@@ -1234,7 +1253,7 @@ mod type_inference_tests {
             DataType::Decimal(decimal),
         ]))
         .unwrap();
-        assert!(matches!(result, DataType::Decimal(_)));
+        assert_eq!(result, DataType::Decimal(DecimalSize::new(21, 2).unwrap()));
 
         let result = VirtualColumnBuilder::common_virtual_data_type(&types([
             DataType::Number(NumberDataType::Int64),
@@ -1242,6 +1261,109 @@ mod type_inference_tests {
         ]))
         .unwrap();
         assert!(matches!(result, DataType::Decimal(_)));
+    }
+
+    #[test]
+    fn common_virtual_type_preserves_decimal_integer_capacity() {
+        let result = VirtualColumnBuilder::common_virtual_data_type(&types([
+            DataType::Decimal(DecimalSize::new(38, 0).unwrap()),
+            DataType::Decimal(DecimalSize::new(38, 20).unwrap()),
+        ]));
+        let expected_size = DecimalSize::new(58, 20).unwrap();
+        assert_eq!(result, Some(DataType::Decimal(expected_size)));
+        assert_eq!(
+            super::data_type_to_physical_type(result.as_ref().unwrap()),
+            Some(
+                databend_storages_common_table_meta::meta::VirtualColumnPhysicalType::Decimal(
+                    DecimalDataType::Decimal256(expected_size)
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn decimal_merge_is_order_independent() {
+        const ORDERS: [[usize; 3]; 6] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [
+            2, 1, 0,
+        ]];
+
+        let exact = [
+            DataType::Decimal(DecimalSize::new(38, 0).unwrap()),
+            DataType::Decimal(DecimalSize::new(38, 20).unwrap()),
+            DataType::Number(NumberDataType::Int64),
+        ];
+        let expected = Some(DataType::Decimal(DecimalSize::new(58, 20).unwrap()));
+        for order in ORDERS {
+            let first = VirtualColumnBuilder::merge_virtual_data_types(
+                exact[order[0]].clone(),
+                exact[order[1]].clone(),
+            );
+            let result = first.and_then(|common| {
+                VirtualColumnBuilder::merge_virtual_data_types(common, exact[order[2]].clone())
+            });
+            assert_eq!(result, expected);
+        }
+
+        let unsafe_sets = [
+            [
+                DataType::Decimal(DecimalSize::new(76, 0).unwrap()),
+                DataType::Decimal(DecimalSize::new(76, 1).unwrap()),
+                DataType::Number(NumberDataType::Int8),
+            ],
+            [
+                DataType::Decimal(DecimalSize::new(38, 0).unwrap()),
+                DataType::Decimal(DecimalSize::new(38, 20).unwrap()),
+                DataType::Number(NumberDataType::Float64),
+            ],
+        ];
+        for values in unsafe_sets {
+            for order in ORDERS {
+                let first = VirtualColumnBuilder::merge_virtual_data_types(
+                    values[order[0]].clone(),
+                    values[order[1]].clone(),
+                );
+                let result = first.and_then(|common| {
+                    VirtualColumnBuilder::merge_virtual_data_types(common, values[order[2]].clone())
+                });
+                assert_eq!(result, None);
+            }
+        }
+    }
+
+    #[test]
+    fn common_virtual_type_rejects_decimal_beyond_decimal256_capacity() {
+        assert_eq!(
+            VirtualColumnBuilder::common_virtual_data_type(&types([
+                DataType::Decimal(DecimalSize::new(76, 0).unwrap()),
+                DataType::Decimal(DecimalSize::new(76, 1).unwrap()),
+            ])),
+            None
+        );
+    }
+
+    #[test]
+    fn inference_falls_back_to_jsonb_beyond_decimal256_capacity() {
+        let values = vec![
+            JsonbScalarValue {
+                row: 0,
+                scalar: Scalar::Decimal(DecimalScalar::Decimal256(
+                    i256::from(1),
+                    DecimalSize::new(76, 0).unwrap(),
+                )),
+            },
+            JsonbScalarValue {
+                row: 1,
+                scalar: Scalar::Decimal(DecimalScalar::Decimal256(
+                    i256::from(1),
+                    DecimalSize::new(76, 1).unwrap(),
+                )),
+            },
+        ];
+
+        assert_eq!(
+            VirtualColumnBuilder::inference_data_type(&values),
+            VirtualColumnPhysicalType::Jsonb
+        );
     }
 
     #[test]

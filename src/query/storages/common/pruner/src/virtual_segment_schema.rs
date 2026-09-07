@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_expression::ColumnId;
+use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use jsonb::keypath::OwnedKeyPaths;
 
@@ -88,6 +89,13 @@ impl ProjectedVirtualSegmentField {
     /// in addition to, or instead of, its exact materialized column.
     pub fn has_related_paths(&self) -> bool {
         !self.ancestors.is_empty() || !self.descendants.is_empty()
+    }
+
+    /// Whether this direct field's statistics represent every logical value in
+    /// the block. Incomplete sidecars may contain unrepresented shared related
+    /// paths, so absence from the projection alone is not sufficient evidence.
+    pub fn can_use_direct_virtual_stats(&self, virtual_block_meta: &VirtualBlockMeta) -> bool {
+        virtual_block_meta.virtual_columns_complete && !self.has_related_paths()
     }
 }
 

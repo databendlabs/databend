@@ -283,6 +283,11 @@ impl VirtualColumnPruner {
         virtual_block_meta: &VirtualBlockMeta,
         projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     ) -> Option<VirtualBlockMetaIndex> {
+        // Incomplete block metadata may omit shared ancestors/descendants from
+        // the bounded segment schema. The sidecar footer trie is authoritative.
+        if !virtual_block_meta.virtual_columns_complete {
+            return None;
+        }
         let schema = projected_virtual_schema?;
 
         let mut virtual_column_metas = BTreeMap::new();
@@ -305,12 +310,9 @@ impl VirtualColumnPruner {
                 return None;
             }
             let Some(column_id) = projected_field.column_id else {
-                if virtual_block_meta.virtual_columns_complete {
-                    virtual_column_read_plan
-                        .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
-                    continue;
-                }
-                return None;
+                virtual_column_read_plan
+                    .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
+                continue;
             };
             match virtual_block_meta.virtual_column_metas.get(&column_id) {
                 Some(column_meta) => {
@@ -319,11 +321,10 @@ impl VirtualColumnPruner {
                         VirtualColumnReadPlan::BlockMetaDirect { column_id },
                     ]);
                 }
-                None if virtual_block_meta.virtual_columns_complete => {
+                None => {
                     virtual_column_read_plan
                         .insert(field.query_column_id, vec![VirtualColumnReadPlan::Missing]);
                 }
-                None => return None,
             }
         }
 
@@ -371,7 +372,7 @@ fn build_runtime_virtual_column_stats(
         .iter()
         .filter_map(|field| {
             let projected_field = schema.get(field.field.source_column_id, &field.encoded_path)?;
-            if projected_field.has_related_paths() {
+            if !projected_field.can_use_direct_virtual_stats(block_meta) {
                 return None;
             }
             let column_id = projected_field.column_id?;

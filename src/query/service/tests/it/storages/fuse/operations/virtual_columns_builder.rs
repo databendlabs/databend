@@ -19,6 +19,7 @@ use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_catalog::plan::VirtualColumnPath;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataType;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -33,6 +34,9 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::VirtualColumnBuilder;
 use databend_common_storages_fuse::io::VirtualColumnLayoutPolicy;
 use databend_query::test_kits::*;
+use databend_storages_common_index::VirtualColumnFileMeta;
+use databend_storages_common_index::VirtualColumnNameIndex;
+use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
@@ -662,6 +666,166 @@ async fn test_direct_physical_names_do_not_collide_across_sources() -> anyhow::R
     assert_eq!(left_stat.max(), &Scalar::String("left".to_string()));
     assert_eq!(right_stat.min(), &Scalar::String("right".to_string()));
     assert_eq!(right_stat.max(), &Scalar::String("right".to_string()));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_direct_and_shared_physical_names_are_disjoint_in_footer() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let schema = table.get_table_info().meta.schema.clone();
+    let source_column_id = schema.column_id_of("v")?;
+    let write_settings = FuseTable::try_from_table(table.as_ref())?.get_write_settings();
+    let direct_path = "__shared_uint64_virtual_column_data__";
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![1, 2]).into(),
+            VariantType::from_data(vec![
+                OwnedJsonb::from_str(r#"{"__shared_uint64_virtual_column_data__":7,"z":9}"#)?
+                    .to_vec(),
+                OwnedJsonb::from_str(r#"{"__shared_uint64_virtual_column_data__":8}"#)?.to_vec(),
+            ])
+            .into(),
+        ],
+        2,
+    );
+    let mut builder = VirtualColumnBuilder::try_create(schema, VirtualColumnLayoutPolicy {
+        max_direct_columns: 1,
+        ..Default::default()
+    })?;
+    builder.add_block(&block)?;
+
+    let result = builder.finalize(
+        &write_settings,
+        &("_b/virtual_column_kind_collision.parquet".to_string(), 0),
+    )?;
+    let parquet_meta = ParquetMetaDataReader::new().parse_and_finish(&result.data.to_bytes())?;
+    let physical_names = parquet_meta.row_groups()[0]
+        .columns()
+        .iter()
+        .map(|meta| meta.column_path().parts()[0].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(physical_names, vec![
+        format!("{source_column_id}_v.{direct_path}"),
+        format!("{source_column_id}_v__shared_uint64_1__"),
+        format!("{source_column_id}_v__shared_uint64_1__"),
+    ]);
+    assert_ne!(physical_names[0], physical_names[1]);
+
+    let virtual_meta = VirtualColumnFileMeta::try_from(parquet_meta)?;
+    let segment_id = virtual_meta
+        .string_table
+        .iter()
+        .position(|segment| segment == direct_path)
+        .unwrap() as u32;
+    let direct_node = virtual_meta
+        .virtual_column_nodes
+        .get(&source_column_id)
+        .unwrap()
+        .children
+        .get(&segment_id)
+        .unwrap();
+    let Some(VirtualColumnNameIndex::Column(direct_column_id)) = direct_node.leaf.as_ref() else {
+        panic!("expected direct footer leaf for {direct_path}");
+    };
+    assert_eq!(*direct_column_id, 0);
+    let direct_meta =
+        virtual_meta.column_metas[*direct_column_id as usize].to_virtual_column_meta()?;
+    assert_eq!(
+        direct_meta.physical_type(),
+        VirtualColumnPhysicalType::Number(NumberDataType::UInt64)
+    );
+    let draft_direct_meta = &find_virtual_col(
+        &result
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_column_metas,
+        source_column_id,
+        direct_path,
+    )
+    .unwrap()
+    .column_meta;
+    assert_eq!(direct_meta.offset, draft_direct_meta.offset);
+    assert_eq!(direct_meta.len, draft_direct_meta.len);
+    assert_eq!(direct_meta.num_values, draft_direct_meta.num_values);
+    assert_eq!(
+        direct_meta.physical_type(),
+        draft_direct_meta.physical_type()
+    );
+
+    let (shared_key, shared_value) = virtual_meta
+        .typed_shared_column_metas
+        .get(&source_column_id)
+        .and_then(|metas| metas.get(&VirtualColumnSharedDataType::UInt64))
+        .unwrap();
+    assert_eq!(shared_key.parquet_column_id, 1);
+    assert_eq!(shared_value.parquet_column_id, 2);
+    assert_eq!(
+        shared_key.data_type,
+        DataType::Number(NumberDataType::UInt32)
+    );
+    assert_eq!(
+        shared_value.data_type,
+        DataType::Number(NumberDataType::UInt64)
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_direct_decimal_common_type_preserves_integer_capacity() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let schema = table.get_table_info().meta.schema.clone();
+    let source_column_id = schema.column_id_of("v")?;
+    let write_settings = FuseTable::try_from_table(table.as_ref())?.get_write_settings();
+    let layout = Arc::new(VirtualColumnLayout {
+        direct_paths: vec![VirtualColumnPath {
+            source_column_id,
+            path: "a".to_string(),
+        }],
+    });
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![1, 2]).into(),
+            VariantType::from_data(vec![
+                OwnedJsonb::from_str(r#"{"a":99999999999999999999999999999999999999}"#)?.to_vec(),
+                OwnedJsonb::from_str(r#"{"a":0.12345678901234567890}"#)?.to_vec(),
+            ])
+            .into(),
+        ],
+        2,
+    );
+    let mut builder =
+        VirtualColumnBuilder::try_create(schema, VirtualColumnLayoutPolicy::default())?
+            .with_adaptive_layout(layout);
+    builder.add_block(&block)?;
+
+    let result = builder.finalize(
+        &write_settings,
+        &("_b/virtual_column_decimal_capacity.parquet".to_string(), 0),
+    )?;
+    assert!(!result.data.is_empty());
+    let metas = &result
+        .draft_virtual_block_meta
+        .virtual_columns
+        .as_ref()
+        .unwrap()
+        .virtual_column_metas;
+    let meta = find_virtual_col(metas, source_column_id, "a").unwrap();
+    let expected_size = DecimalSize::new(58, 20).unwrap();
+    assert_eq!(
+        meta.data_type,
+        VirtualColumnPhysicalType::Decimal(DecimalDataType::Decimal256(expected_size))
+    );
+    assert!(meta.column_meta.column_stat.is_some());
     Ok(())
 }
 

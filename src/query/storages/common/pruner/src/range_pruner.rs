@@ -103,10 +103,9 @@ fn build_virtual_col_stats(
         else {
             continue;
         };
-        // Exact-column statistics do not cover values that may be reconstructed
-        // from a parent or descendants observed elsewhere in the segment, so using
-        // those statistics alone would be unsafe.
-        if projected_field.has_related_paths() {
+        // Exact-column statistics are safe only when the block metadata is
+        // complete and no related path is known.
+        if !projected_field.can_use_direct_virtual_stats(virtual_meta) {
             continue;
         }
         let Some(column_id) = projected_field.column_id else {
