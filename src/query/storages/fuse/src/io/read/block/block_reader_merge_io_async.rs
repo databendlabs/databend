@@ -70,7 +70,7 @@ impl BlockReadContext {
 
         let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
 
-        for (_index, (column_id, ..)) in self.project_indices().iter() {
+        for (_index, (column_id, _, data_type)) in self.project_indices().iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
                     continue;
@@ -81,10 +81,17 @@ impl BlockReadContext {
                 let (offset, len) = column_meta.offset_length();
 
                 let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
+                let column_array_cache_key = column_cache_key_builder.array_cache_key(
+                    column_id,
+                    column_meta,
+                    &data_type.to_string(),
+                );
 
                 // first, check in memory table data cache
                 // column_array_cache
-                if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len) {
+                if let Some(cache_array) =
+                    column_array_cache.get_sized(&column_array_cache_key, len)
+                {
                     // Record bytes scanned from memory cache (table data only)
                     Profile::record_usize_profile(
                         ProfileStatisticsName::ScanBytesFromMemory,
@@ -170,5 +177,15 @@ impl<'a> ColumnCacheKeyBuilder<'a> {
     fn cache_key(&self, column_id: &ColumnId, column_meta: &ColumnMeta) -> TableDataCacheKey {
         let (offset, len) = column_meta.offset_length();
         TableDataCacheKey::new(self.block_path, *column_id, offset, len)
+    }
+
+    fn array_cache_key(
+        &self,
+        column_id: &ColumnId,
+        column_meta: &ColumnMeta,
+        data_type: &str,
+    ) -> TableDataCacheKey {
+        let (offset, len) = column_meta.offset_length();
+        TableDataCacheKey::new_array(self.block_path, *column_id, offset, len, data_type)
     }
 }

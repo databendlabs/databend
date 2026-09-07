@@ -1,0 +1,43 @@
+statement ok
+DROP TABLE IF EXISTS decimal_derived_cluster_key
+
+statement ok
+DROP TABLE IF EXISTS decimal_derived_cluster_key_blocks
+
+# The column itself stays INT64 in Parquet, but the derived cluster key changes
+# from Decimal64(18, 0) to Decimal128(19, 0). Metadata-only retagging cannot
+# safely update those cluster statistics, so MODIFY COLUMN must fall back to the
+# existing full-table rewrite instead of returning an internal error.
+statement ok
+CREATE TABLE decimal_derived_cluster_key(d DECIMAL(17, 0)) CLUSTER BY (d + CAST(1 AS DECIMAL(1, 0)))
+
+statement ok
+INSERT INTO decimal_derived_cluster_key VALUES (1), (2), (99999999999999999)
+
+statement ok
+CREATE TABLE decimal_derived_cluster_key_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_derived_cluster_key')
+
+statement ok
+ALTER TABLE decimal_derived_cluster_key MODIFY COLUMN d DECIMAL(18, 0)
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_derived_cluster_key
+----
+1 DECIMAL(18, 0) NULL
+2 DECIMAL(18, 0) NULL
+99999999999999999 DECIMAL(18, 0) NULL
+
+query I
+SELECT count(*)
+FROM decimal_derived_cluster_key_blocks old_blocks
+JOIN fuse_block('default', 'decimal_derived_cluster_key') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+----
+0
+
+statement ok
+DROP TABLE decimal_derived_cluster_key
+
+statement ok
+DROP TABLE decimal_derived_cluster_key_blocks

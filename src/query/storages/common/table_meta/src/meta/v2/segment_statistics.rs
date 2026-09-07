@@ -16,6 +16,7 @@ use std::io::Read;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DecimalSize;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use databend_common_io::prelude::BinaryRead;
@@ -87,6 +88,16 @@ impl SegmentStatistics {
                 })
                 .sum::<usize>();
         std::mem::size_of::<Self>() + hll_size + top_n_size
+    }
+
+    /// Retag Top-N values for one Decimal column in every block.
+    pub fn widen_decimal_column(&mut self, column_id: ColumnId, size: DecimalSize) -> Result<()> {
+        for block_top_n in &mut self.block_top_ns {
+            if let Some(top_n) = block_top_n.get_mut(&column_id) {
+                top_n.widen_decimal_size(size)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {

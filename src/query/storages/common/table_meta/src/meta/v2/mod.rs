@@ -37,4 +37,5 @@ pub use statistics::Statistics;
 pub use statistics::VectorColumnStatistics;
 pub use statistics::VectorDistanceType;
 pub use statistics::validate_segment_partition_statistics;
+pub use statistics::widen_decimal_scalar;
 pub use table_snapshot_statistics::TableSnapshotStatistics;

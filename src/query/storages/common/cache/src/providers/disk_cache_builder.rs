@@ -47,6 +47,20 @@ impl TableDataCacheKey {
             cache_key: format!("{block_path}-{column_id}-{offset}-{len}"),
         }
     }
+
+    pub fn new_array(
+        block_path: &str,
+        column_id: u32,
+        offset: u64,
+        len: u64,
+        data_type: &str,
+    ) -> Self {
+        // Deserialized arrays carry logical type metadata, so schema evolution must invalidate
+        // them even when the underlying Parquet column chunk is unchanged.
+        Self {
+            cache_key: format!("{block_path}-{column_id}-{offset}-{len}-{data_type}"),
+        }
+    }
 }
 
 impl From<TableDataCacheKey> for String {
@@ -58,6 +72,24 @@ impl From<TableDataCacheKey> for String {
 impl AsRef<str> for TableDataCacheKey {
     fn as_ref(&self) -> &str {
         &self.cache_key
+    }
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+    use super::*;
+
+    #[test]
+    fn array_cache_key_includes_data_type() {
+        let raw = TableDataCacheKey::new("block", 1, 2, 3);
+        let old = TableDataCacheKey::new_array("block", 1, 2, 3, "Decimal(10, 2)");
+        let new = TableDataCacheKey::new_array("block", 1, 2, 3, "Decimal(15, 2)");
+        assert_ne!(raw.as_ref(), old.as_ref());
+        assert_ne!(old.as_ref(), new.as_ref());
+        assert_eq!(
+            new.as_ref(),
+            TableDataCacheKey::new_array("block", 1, 2, 3, "Decimal(15, 2)").as_ref()
+        );
     }
 }
 
