@@ -77,7 +77,6 @@ use crate::binder::Binder;
 use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
-use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::planner::semantic::MaterializedViewChecker;
 use crate::planner::semantic::MaterializedViewRewriter;
 use crate::planner::semantic::ViewRewriter;
@@ -487,11 +486,7 @@ impl Binder {
         let checker = MaterializedViewChecker::check_query(query);
         if !checker.is_supported() {
             return Err(ErrorCode::SemanticError(format!(
-                "Materialized View only support simple query, like: \
-                    `SELECT ... FROM ... WHERE ... GROUP BY ...`, \
-                     and these aggregate funcs: {}, \
-                     non-deterministic functions are not support like: NOW()",
-                SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
+                "Materialized View only supports simple SELECT queries over one table, with optional WHERE/GROUP BY clauses, registered aggregate functions, and deterministic expressions",
             )));
         }
 

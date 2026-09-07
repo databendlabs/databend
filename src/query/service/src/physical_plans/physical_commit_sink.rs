@@ -145,11 +145,16 @@ impl IPhysicalPlan for CommitSink {
                         prev_snapshot_id,
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
+                        false,
                     )
                 })
             }
             CommitType::Mutation { kind, merge_meta } => {
                 let cluster_key_info = table.cluster_key_info();
+                let acquire_commit_lock = self
+                    .recluster_info
+                    .as_ref()
+                    .is_some_and(|info| info.acquire_commit_lock);
                 if *merge_meta {
                     builder.main_pipeline.add_accumulating_transformer(move || {
                         TransformMergeCommitMeta::create(cluster_key_info.clone())
@@ -211,6 +216,7 @@ impl IPhysicalPlan for CommitSink {
                         None,
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
+                        acquire_commit_lock,
                     )
                 })
             }

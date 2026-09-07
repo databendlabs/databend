@@ -120,6 +120,23 @@ runs:
         cat /proc/cpuinfo
         free -h
 
+    - name: configure lindera dictionary cache
+      shell: bash
+      run: |
+        echo "LINDERA_BUILD_DICTIONARY_CACHE_DIR=${HOME}/.cache/lindera" >> "$GITHUB_ENV"
+        mkdir -p "${HOME}/.cache/lindera"
+
+    - name: cache lindera dictionary
+      if: env.RUNNER_PROVIDER != 'aws'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/lindera
+        key: lindera/${{ runner.os }}/${{ runner.arch }}/${{ inputs.target }}/${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          lindera/${{ runner.os }}/${{ runner.arch }}/${{ inputs.target }}/
+          lindera/${{ runner.os }}/${{ runner.arch }}/
+          lindera/${{ runner.os }}/
+
     - uses: everpcpc/actions-cache@v2
       if: env.RUNNER_PROVIDER == 'aws'
       env:
@@ -131,6 +148,7 @@ runs:
           ~/.cargo/registry/cache
           ~/.cargo/registry/index
           ~/.cargo/git/db
+          ~/.cache/lindera
         key: |
           ${{ runner.os }}/${{ inputs.target }}/${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |

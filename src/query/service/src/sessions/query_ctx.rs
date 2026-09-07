@@ -168,7 +168,7 @@ use tokio::sync::Semaphore;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
-use crate::locks::LockManager;
+use crate::locks::CoordinationManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -529,6 +529,10 @@ impl QueryContext {
 
     pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
         self.shared.set_executor(weak_ptr)
+    }
+
+    pub(crate) fn kill<C>(&self, cause: ErrorCode<C>) {
+        self.shared.kill(cause)
     }
 
     pub fn attach_stage(&self, attachment: StageAttachment) {

@@ -33,7 +33,7 @@ Sequence
     ├── filters: [b1.b (#3) < b2.b (#5)]
     ├── build join filters:
     │   └── filter id:0, build key:b2.a (#4), probe targets:[b1.a (#2)@scan1], filter type:bloom,inlist,min_max
-    ├── estimated rows: 40.00
+    ├── estimated rows: 28.28
     ├── MaterializeCTERef(Build)
     │   ├── cte_name: b
     │   ├── cte_schema: [a (#4), b (#5)]

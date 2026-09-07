@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod hilbert_recluster;
 mod linear_recluster;
 mod recluster_mutator;
 mod recluster_strategy;
 mod recluster_table;
 mod vector_recluster;
 
+pub(crate) use hilbert_recluster::HilbertReclusterStrategy;
 pub(crate) use linear_recluster::LinearReclusterStrategy;
 pub(crate) use linear_recluster::select_scalar_segments;
 pub use recluster_mutator::ReclusterCandidateWindow;

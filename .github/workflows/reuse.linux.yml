@@ -455,25 +455,6 @@ jobs:
         with:
           name: test-stateful-iceberg-catalogs-standalone
 
-  # TODO: tmp disable since hive image not running on arm64
-  # test_stateful_hive_standalone:
-  #   needs: [ build, check ]
-  #   runs-on:
-  #     - self-hosted
-  #     - "${{ inputs.runner_arch }}"
-  #     - Linux
-  #     - 2c
-  #     - "${{ inputs.runner_provider }}"
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - uses: ./.github/actions/test_stateful_hive_standalone
-  #       timeout-minutes: 10
-  #     - name: Upload failure
-  #       if: failure()
-  #       uses: ./.github/actions/artifact_failure
-  #       with:
-  #         name: test_stateful_hive_standalone
-
   # test_fuzz_standalone:
   #   needs: [build, check]
   #   runs-on:

@@ -294,8 +294,12 @@ pub(crate) async fn compact_table(
                 selection: None,
                 is_final: false,
             };
-            let recluster_interpreter =
-                ReclusterTableInterpreter::try_create(ctx.clone(), recluster, lock_opt)?;
+            let allow_segment_claims = lock_opt != LockTableOption::NoLock;
+            let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                ctx.clone(),
+                recluster,
+                allow_segment_claims,
+            )?;
             // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
             // we do not need to use `PipelineCompleteExecutor` to execute it.
             let build_res = recluster_interpreter.execute2().await?;

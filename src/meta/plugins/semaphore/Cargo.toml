@@ -21,7 +21,7 @@ log = { workspace = true }
 seq-marked = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tonic_013 = { package = "tonic", version = "0.13.1" }
+tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

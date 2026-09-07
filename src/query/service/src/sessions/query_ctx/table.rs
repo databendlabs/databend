@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::schema::LockKey;
+
 use super::*;
 
 impl TableContextTableFactory for QueryContext {
@@ -140,8 +142,7 @@ impl TableContextTableAccess for QueryContext {
         tbl_name: &str,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
-        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
-        if !enabled_table_lock {
+        if !self.get_settings().get_enable_table_lock().unwrap_or(false) {
             return Ok(None);
         }
 
@@ -153,16 +154,40 @@ impl TableContextTableAccess for QueryContext {
             return Ok(None);
         }
 
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        let lock_guard = match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self.clone(), false).await?,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self.clone(), true).await?,
-            LockTableOption::NoLock => None,
-        };
+        let lock_guard = self
+            .clone()
+            .acquire_table_lock_by_id(catalog_name, tbl.get_id(), lock_opt)
+            .await?;
         if lock_guard.is_some() {
             self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
         }
         Ok(lock_guard)
+    }
+
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        catalog_name: &str,
+        table_id: u64,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        if !self.get_settings().get_enable_table_lock().unwrap_or(false) {
+            return Ok(None);
+        }
+
+        let should_retry = match lock_opt {
+            LockTableOption::LockWithRetry => true,
+            LockTableOption::LockNoRetry => false,
+            LockTableOption::NoLock => return Ok(None),
+        };
+        let tenant = self.get_tenant();
+        CoordinationManager::instance()
+            .try_table_lock(
+                self,
+                LockKey::Table { tenant, table_id },
+                catalog_name,
+                should_retry,
+            )
+            .await
     }
 
     fn get_temp_table_prefix(&self) -> Result<String> {

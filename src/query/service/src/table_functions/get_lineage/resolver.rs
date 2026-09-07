@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_lineage_table_endpoint_engines() {
-        for engine in ["FUSE", "HIVE", "ICEBERG", "PAIMON"] {
+        for engine in ["FUSE", "ICEBERG", "PAIMON"] {
             assert!(is_lineage_table_endpoint(engine, false), "engine={engine}");
         }
         for engine in [VIEW_ENGINE, STREAM_ENGINE, "MEMORY", "DELTA"] {

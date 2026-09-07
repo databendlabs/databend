@@ -201,8 +201,60 @@ select a, b from t_top_n order by a asc nulls last, b asc limit 3
 statement ok
 unset force_sort_data_spill;
 
+# Aggregate rank-limit publishes a boundary to the direct FUSE scan. Keep one
+# stream and small batches so the first all-equal batch cannot prematurely
+# establish a LIMIT 3 boundary and prune the groups needed by the result.
+statement ok
+set max_threads = 1;
+
+statement ok
+set max_block_size = 5;
+
+# Nullable group keys use the same NULL ordering at rank-limit and scan.
+query II
+select a, count(*) from t_top_n group by a order by a asc nulls first limit 3
+----
+NULL 2
+1 1
+2 1
+
 statement ok
 drop table t_top_n;
+
+statement ok
+create or replace table t_aggregate_rank_limit (k int not null) row_per_block = 5;
+
+statement ok
+insert into t_aggregate_rank_limit values (0), (0), (0), (0), (0);
+
+statement ok
+insert into t_aggregate_rank_limit values (1), (2), (3), (4), (5);
+
+statement ok
+insert into t_aggregate_rank_limit values (6), (7), (8), (9), (10);
+
+query II
+select k, count(*) from t_aggregate_rank_limit group by k order by k asc limit 3
+----
+0 5
+1 1
+2 1
+
+query II
+select k, count(*) from t_aggregate_rank_limit group by k order by k desc limit 3
+----
+10 1
+9 1
+8 1
+
+statement ok
+drop table t_aggregate_rank_limit;
+
+statement ok
+unset max_block_size;
+
+statement ok
+unset max_threads;
 
 # Runtime TopN over a multi-block FUSE table: `row_per_block` forces many
 # small blocks so the shared-boundary block pruning, per-node scheduling and

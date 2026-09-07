@@ -26,6 +26,86 @@ ORDER BY empid;
 3	cars	April	50
 
 query ITTI
+SELECT empid, dept, month, sales
+FROM monthly_sales_1
+UNPIVOT(sales FOR month IN (jan AS 'Jan', feb AS '2', mar 'MARCH', april))
+ORDER BY empid;
+----
+1 electronics Jan 100
+1 electronics 2 200
+1 electronics MARCH 300
+1 electronics april 100
+2 clothes Jan 100
+2 clothes 2 300
+2 clothes MARCH 150
+2 clothes april 200
+3 cars Jan 200
+3 cars 2 400
+3 cars MARCH 100
+3 cars april 50
+
+query ITI
+SELECT empid, month, sales
+FROM monthly_sales_1
+UNPIVOT(sales FOR month IN (jan AS 'Jan', feb AS '2', mar 'MARCH', april))
+WHERE month = '2'
+ORDER BY empid;
+----
+1 2 200
+2 2 300
+3 2 400
+
+query ITI
+SELECT m.empid, m.month, m.sales
+FROM monthly_sales_1 AS m(empid, dept, jan, feb, mar, april)
+UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+WHERE m.month = 'feb'
+ORDER BY m.empid;
+----
+1 feb 200
+2 feb 300
+3 feb 400
+
+query ITTI
+SELECT default.monthly_sales_1.*
+FROM default.monthly_sales_1
+UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+WHERE default.monthly_sales_1.month = 'feb'
+ORDER BY default.monthly_sales_1.empid;
+----
+1 electronics feb 200
+2 clothes feb 300
+3 cars feb 400
+
+query I
+SELECT monthly_sales_1.empid
+FROM (SELECT * FROM monthly_sales_1)
+UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+ORDER BY monthly_sales_1.empid, month;
+----
+1
+1
+1
+1
+2
+2
+2
+2
+3
+3
+3
+3
+
+query TI
+SELECT month, sales
+FROM (SELECT 10 AS jan, 20 AS feb)
+UNPIVOT(sales FOR month IN (jan, feb))
+ORDER BY month;
+----
+feb 20
+jan 10
+
+query ITTI
 SELECT empid,dept,month,sales FROM (
     SELECT * FROM monthly_sales_1
         UNPIVOT(sales FOR month IN (jan as 'Jan', feb As '2', mar 'MARCH', april))

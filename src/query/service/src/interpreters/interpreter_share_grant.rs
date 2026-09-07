@@ -102,6 +102,7 @@ impl Interpreter for GrantShareInterpreter {
                     table: table.clone(),
                     table_id: table_ref.get_id(),
                     table_meta_seq: table_ref.get_table_info().ident.seq,
+                    storage_params: storage_params.without_credentials(),
                 };
                 validate_share_table_grant(self.ctx.clone(), &grant).await?;
                 let manager = share_mgr();

@@ -72,5 +72,9 @@ rand = { workspace = true }
 name = "build_from_block"
 harness = false
 
+[[bench]]
+name = "range_index_apply"
+harness = false
+
 [lints]
 workspace = true

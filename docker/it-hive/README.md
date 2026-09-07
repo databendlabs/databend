@@ -1,1 +1,0 @@
-`hive-docker-compose.yml` and `hadoop-hive.env` are from https://github.com/big-data-europe/docker-hive, with slight modifications
