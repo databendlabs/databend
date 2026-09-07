@@ -27,6 +27,7 @@ use databend_common_timezone::fast_utc_from_local;
 
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 use crate::datetime::check_input_year;
+use crate::datetime::check_timezone_offset;
 use crate::datetime::parse_standard_timestamp as parse_iso_timestamp;
 
 pub enum DateTimeResType {
@@ -43,9 +44,6 @@ pub trait BufferReadDateTimeExt {
 const DATE_LEN: usize = 10;
 const MICROS_PER_SEC: i64 = 1_000_000;
 const SECONDS_PER_DAY: i64 = 86_400;
-
-// ISO 8601 maximum offset.
-const MAX_OFFSET_HOURS: i32 = 14;
 
 fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
     if size > 0 && size < 3 {
@@ -195,18 +193,15 @@ fn read_offset_seconds<T: AsRef<[u8]>>(
     west_tz: bool,
 ) -> Result<i32> {
     fn validated(hour_offset: i32, minute_offset: i32, west_tz: bool) -> Result<i32> {
-        let in_range = (hour_offset == MAX_OFFSET_HOURS && minute_offset == 0)
-            || ((0..60).contains(&minute_offset) && hour_offset < MAX_OFFSET_HOURS);
-
-        if !in_range {
-            return Err(ErrorCode::BadBytes(format!(
-                "Invalid Timezone Offset: The minute offset '{}' is outside the valid range. Expected range is [00-59] within a timezone gap of [-14:00, +14:00]",
-                minute_offset
-            )));
+        if !(0..60).contains(&minute_offset) {
+            return Err(ErrorCode::InvalidTimezone(
+                "Timezone offset minute must be in [00, 59]",
+            ));
         }
-
         let seconds = hour_offset * 3600 + minute_offset * 60;
-        Ok(if west_tz { -seconds } else { seconds })
+        let offset = if west_tz { -seconds } else { seconds };
+        check_timezone_offset(offset)?;
+        Ok(offset)
     }
 
     let n = cursor.keep_read(buf, |f| f.is_ascii_digit());
@@ -216,12 +211,6 @@ fn read_offset_seconds<T: AsRef<[u8]>>(
                 .map_err_to_code(ErrorCode::BadBytes, || {
                     "hour offset parse error".to_string()
                 })?;
-            if !(0..=MAX_OFFSET_HOURS).contains(&hour_offset) {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
-                    hour_offset
-                )));
-            }
 
             buf.clear();
             if !cursor.ignore_byte(b':') {
@@ -250,12 +239,6 @@ fn read_offset_seconds<T: AsRef<[u8]>>(
                 })?;
             buf.clear();
 
-            if !(0..=MAX_OFFSET_HOURS).contains(&hour_offset) {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
-                    hour_offset
-                )));
-            }
             validated(hour_offset, minute_offset, west_tz)
         }
         _ => Err(ErrorCode::BadBytes(

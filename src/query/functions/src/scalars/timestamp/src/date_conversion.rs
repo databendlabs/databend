@@ -127,8 +127,8 @@ pub(super) fn register_real_time_functions(registry: &mut FunctionRegistry) {
             .insert(name.to_string(), FunctionProperty::default().monotonicity());
     }
 
-    // Do not mark to_string as monotonic: byte ordering of "+10000" and "9999"
-    // is reversed in the extended datetime range.
+    // Do not mark to_string as monotonic: a timezone offset can move a valid
+    // timestamp into local year 10000, whose leading '+' reverses byte ordering.
 
     registry.register_0_arg_core::<TimestampType, _>(
         "now",

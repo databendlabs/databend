@@ -86,6 +86,7 @@ pub(crate) fn read_timestamp(
             Ok(())
         }
         Ok(_) => unreachable!(),
+        Err(e) if e.code() == ErrorCode::INVALID_TIMEZONE => Err(e),
         Err(e) => {
             if settings.settings.enable_auto_detect_datetime_format
                 && let Ok(s) = std::str::from_utf8(data)
@@ -94,7 +95,7 @@ pub(crate) fn read_timestamp(
                     column.push(micros);
                     return Ok(());
                 }
-                if let Some(micros) = auto_detect_timestamp(s, &settings.settings.timezone) {
+                if let Some(micros) = auto_detect_timestamp(s, &settings.settings.timezone)? {
                     column.push(micros);
                     return Ok(());
                 }

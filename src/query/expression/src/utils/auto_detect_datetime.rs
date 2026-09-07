@@ -20,6 +20,7 @@ use chrono_tz::Tz;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_io::datetime::check_input_year;
+use databend_common_io::datetime::check_timezone_offset;
 use databend_common_timezone::fast_utc_from_local;
 use databend_common_timezone::offset_seconds_at;
 
@@ -128,7 +129,14 @@ impl ParsedDateTime {
     }
 }
 
-fn try_parse_formats(val: &str, tz: &Tz, formats: &[&str]) -> Option<(i64, i32)> {
+// A matched format with an invalid explicit offset is an error, not a signal
+// to try a more permissive parser. UTC range clamping remains the caller's policy.
+#[allow(clippy::result_large_err)]
+fn try_parse_formats(
+    val: &str,
+    tz: &Tz,
+    formats: &[&str],
+) -> Result<Option<(i64, i32)>, ErrorCode> {
     for format in formats {
         let Some(parsed) = ParsedDateTime::parse(format, val) else {
             continue;
@@ -136,6 +144,7 @@ fn try_parse_formats(val: &str, tz: &Tz, formats: &[&str]) -> Option<(i64, i32)>
 
         match parsed.offset_seconds {
             Some(offset) => {
+                check_timezone_offset(offset)?;
                 let Some(date) = parsed.naive_date() else {
                     continue;
                 };
@@ -148,18 +157,20 @@ fn try_parse_formats(val: &str, tz: &Tz, formats: &[&str]) -> Option<(i64, i32)>
                 };
                 let micros = local.and_utc().timestamp() * MICROS_PER_SEC + parsed.micro as i64
                     - offset as i64 * MICROS_PER_SEC;
-                return Some((micros, offset));
+                return Ok(Some((micros, offset)));
             }
             None => {
                 let Some(micros) = fast_timestamp_from_parsed(&parsed, tz) else {
                     continue;
                 };
-                let offset = offset_seconds_at(tz, micros.div_euclid(MICROS_PER_SEC))?;
-                return Some((micros, offset));
+                let Some(offset) = offset_seconds_at(tz, micros.div_euclid(MICROS_PER_SEC)) else {
+                    continue;
+                };
+                return Ok(Some((micros, offset)));
             }
         }
     }
-    None
+    Ok(None)
 }
 
 pub fn fast_timestamp_from_parsed(parsed: &ParsedDateTime, tz: &Tz) -> Option<i64> {
@@ -175,10 +186,13 @@ pub fn fast_timestamp_from_parsed(parsed: &ParsedDateTime, tz: &Tz) -> Option<i6
     )
 }
 
-pub fn auto_detect_timestamp(val: &str, tz: &Tz) -> Option<i64> {
-    let (mut micros, _) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
+#[allow(clippy::result_large_err)]
+pub fn auto_detect_timestamp(val: &str, tz: &Tz) -> Result<Option<i64>, ErrorCode> {
+    let Some((mut micros, _)) = try_parse_formats(val, tz, AUTO_TS_FORMATS)? else {
+        return Ok(None);
+    };
     clamp_timestamp(&mut micros);
-    Some(micros)
+    Ok(Some(micros))
 }
 
 pub fn auto_detect_date(val: &str) -> Option<i32> {
@@ -194,10 +208,13 @@ pub fn auto_detect_date(val: &str) -> Option<i32> {
     None
 }
 
-pub fn auto_detect_timestamp_tz(val: &str, tz: &Tz) -> Option<timestamp_tz> {
-    let (mut micros, offset) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
+#[allow(clippy::result_large_err)]
+pub fn auto_detect_timestamp_tz(val: &str, tz: &Tz) -> Result<Option<timestamp_tz>, ErrorCode> {
+    let Some((mut micros, offset)) = try_parse_formats(val, tz, AUTO_TS_FORMATS)? else {
+        return Ok(None);
+    };
     clamp_timestamp(&mut micros);
-    Some(timestamp_tz::new(micros, offset))
+    Ok(Some(timestamp_tz::new(micros, offset)))
 }
 
 /// Parse a date string with optional auto-detect fallback.
@@ -226,12 +243,13 @@ pub fn parse_date_with_auto(val: &str, tz: &Tz, enable_auto: bool) -> Result<i32
 pub fn parse_timestamp_with_auto(val: &str, tz: &Tz, enable_auto: bool) -> Result<i64, ErrorCode> {
     match string_to_timestamp(val, tz) {
         Ok(micros) => Ok(micros),
+        Err(e) if e.code() == ErrorCode::INVALID_TIMEZONE => Err(e),
         Err(e) => {
             if enable_auto {
                 if let Some(micros) = parse_epoch_str(val) {
                     return Ok(micros);
                 }
-                if let Some(micros) = auto_detect_timestamp(val, tz) {
+                if let Some(micros) = auto_detect_timestamp(val, tz)? {
                     return Ok(micros);
                 }
             }
@@ -250,6 +268,7 @@ pub fn parse_timestamp_tz_with_auto(
 ) -> Result<timestamp_tz, ErrorCode> {
     match string_to_timestamp_tz(val.as_bytes(), || tz) {
         Ok(ts_tz) => Ok(ts_tz),
+        Err(e) if e.code() == ErrorCode::INVALID_TIMEZONE => Err(e),
         Err(e) => {
             if enable_auto {
                 if let Some(micros) = parse_epoch_str(val) {
@@ -257,7 +276,7 @@ pub fn parse_timestamp_tz_with_auto(
                         .expect("validated Databend timestamp has a timezone offset");
                     return Ok(timestamp_tz::new(micros, offset));
                 }
-                if let Some(ts_tz) = auto_detect_timestamp_tz(val, tz) {
+                if let Some(ts_tz) = auto_detect_timestamp_tz(val, tz)? {
                     return Ok(ts_tz);
                 }
             }

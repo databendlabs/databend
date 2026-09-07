@@ -59,8 +59,8 @@ pub fn parse_four_digits(bytes: &[u8]) -> Option<i32> {
 }
 
 /// Calendar text and explicit date-part constructors keep the four-digit year
-/// contract. The wider SQL value range is headroom for arithmetic and timezone
-/// conversion, not an extension of accepted calendar input.
+/// contract. Intermediate arithmetic and timezone conversion may use wider
+/// calendar years, with the final result checked against the SQL type bounds.
 pub fn check_input_year(year: i32) -> Result<()> {
     if (1..=9999).contains(&year) {
         Ok(())
@@ -68,6 +68,20 @@ pub fn check_input_year(year: i32) -> Result<()> {
         Err(ErrorCode::BadArguments(
             "Invalid date: input year must be in [1, 9999]",
         ))
+    }
+}
+
+/// Validate an explicit numeric timezone offset in seconds.
+/// This input restriction does not apply to offsets resolved from named timezones.
+#[inline]
+pub fn check_timezone_offset(offset_seconds: i32) -> Result<()> {
+    const MAX_OFFSET: i32 = 14 * 3600;
+    if (-MAX_OFFSET..=MAX_OFFSET).contains(&offset_seconds) {
+        Ok(())
+    } else {
+        Err(ErrorCode::InvalidTimezone(format!(
+            "Timezone offset {offset_seconds} seconds is out of range [-14:00, +14:00]"
+        )))
     }
 }
 
@@ -188,16 +202,16 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
                     idx += 2;
                 }
 
-                if hour_offset > 14
-                    || minute_offset >= 60
-                    || (hour_offset == 14 && minute_offset != 0)
-                {
-                    return Some(Err(ErrorCode::BadBytes(
-                        "Timezone offset out of range".to_string(),
+                if minute_offset >= 60 {
+                    return Some(Err(ErrorCode::InvalidTimezone(
+                        "Timezone offset minute must be in [00, 59]",
                     )));
                 }
-
-                provided_offset = Some(sign * (hour_offset * 3600 + minute_offset * 60));
+                let offset = sign * (hour_offset * 3600 + minute_offset * 60);
+                if let Err(err) = check_timezone_offset(offset) {
+                    return Some(Err(err));
+                }
+                provided_offset = Some(offset);
             }
             _ => return None,
         }

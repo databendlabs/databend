@@ -64,6 +64,7 @@ use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::check_timezone_offset;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
@@ -274,6 +275,7 @@ fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i6
     // Layer 1: ISO parse
     let iso_err = match string_to_timestamp(val, &func_ctx.tz) {
         Ok(ts) => return Ok(ts),
+        Err(e) if e.code() == ErrorCode::INVALID_TIMEZONE => return Err(e),
         Err(e) => e,
     };
     // Layer 2+3: Epoch detection + AUTO structured format detection
@@ -281,7 +283,7 @@ fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i6
         if let Some(micros) = parse_epoch_str(val) {
             return Ok(micros);
         }
-        if let Some(micros) = auto_detect_timestamp(val, &func_ctx.tz) {
+        if let Some(micros) = auto_detect_timestamp(val, &func_ctx.tz)? {
             return Ok(micros);
         }
     }
@@ -748,6 +750,9 @@ fn string_to_format_datetime(
 
     let mut parsed = Parsed::new();
     let remainder = parse_formatted_fields(&mut parsed, timestamp, &format)?;
+    if let Some(offset) = parsed.offset() {
+        check_timezone_offset(offset).map_err(Box::new)?;
+    }
     if !ctx.func_ctx.parse_datetime_ignore_remainder && !remainder.is_empty() {
         return Err(Box::new(ErrorCode::BadArguments(format!(
             "Can not fully parse timestamp {timestamp} by format {format}",
@@ -1239,8 +1244,8 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn normalize_date_parts(year: i64, month: i64, day: i64) -> Result<NaiveDate, String> {
-    // Constructors keep their calendar-input contract. The extended range is
-    // reserved for operations on already constructed DATE/TIMESTAMP values.
+    // Constructors validate calendar input years independently of the UTC
+    // bounds applied after timezone resolution.
     let year =
         i32::try_from(year).map_err(|_| "Invalid date: input year out of range".to_string())?;
     check_input_year(year).map_err(|err| err.message().to_string())?;

@@ -1112,62 +1112,64 @@ fn test_auto_detect_date() {
 fn test_auto_detect_timestamp() {
     let tz = Tz::UTC;
 
+    let detect = |value| auto_detect_timestamp(value, &tz).unwrap();
+
     // DD-MON-YYYY
-    assert!(auto_detect_timestamp("17-DEC-1980 10:30:00", &tz).is_some());
-    assert!(auto_detect_timestamp("01-JAN-2000 23:59:59.123456", &tz).is_some());
+    assert!(detect("17-DEC-1980 10:30:00").is_some());
+    assert!(detect("01-JAN-2000 23:59:59.123456").is_some());
 
     // DD-MON-YYYY lowercase
     assert_eq!(
-        auto_detect_timestamp("17-dec-1980 10:30:00", &tz),
-        auto_detect_timestamp("17-DEC-1980 10:30:00", &tz)
+        detect("17-dec-1980 10:30:00"),
+        detect("17-DEC-1980 10:30:00")
     );
 
     // MM/DD/YYYY
-    assert!(auto_detect_timestamp("12/17/1980 10:30:00", &tz).is_some());
-    assert!(auto_detect_timestamp("2/18/2008 02:36:48", &tz).is_some());
-    assert!(auto_detect_timestamp("2/18/2008 02:36:48.123", &tz).is_some());
+    assert!(detect("12/17/1980 10:30:00").is_some());
+    assert!(detect("2/18/2008 02:36:48").is_some());
+    assert!(detect("2/18/2008 02:36:48.123").is_some());
 
     // RFC 2822 (24h, with tz) — should convert +0200 to UTC
-    let ts = auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
-    let ts_no_tz = auto_detect_timestamp("Thu, 21 Dec 2000 14:01:07", &tz).unwrap();
+    let ts = detect("Thu, 21 Dec 2000 16:01:07 +0200").unwrap();
+    let ts_no_tz = detect("Thu, 21 Dec 2000 14:01:07").unwrap();
     assert_eq!(ts, ts_no_tz); // 16:01:07+0200 == 14:01:07 UTC
 
     // RFC 2822 (24h, no tz)
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07", &tz).is_some());
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07.999", &tz).is_some());
+    assert!(detect("Thu, 21 Dec 2000 16:01:07").is_some());
+    assert!(detect("Thu, 21 Dec 2000 16:01:07.999").is_some());
 
     // RFC 2822 (12h AM/PM, with tz)
-    let ts_12h = auto_detect_timestamp("Thu, 21 Dec 2000 04:01:07 PM +0200", &tz).unwrap();
+    let ts_12h = detect("Thu, 21 Dec 2000 04:01:07 PM +0200").unwrap();
     assert_eq!(ts_12h, ts); // same as 24h version
 
     // RFC 2822 (12h AM/PM, no tz)
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 04:01:07 PM", &tz).is_some());
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 11:30:00 AM", &tz).is_some());
+    assert!(detect("Thu, 21 Dec 2000 04:01:07 PM").is_some());
+    assert!(detect("Thu, 21 Dec 2000 11:30:00 AM").is_some());
 
     // AM/PM boundary: 12:00 AM = midnight, 12:00 PM = noon
-    let midnight = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00 AM", &tz).unwrap();
-    let noon = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00 PM", &tz).unwrap();
-    let zero_h = auto_detect_timestamp("Thu, 21 Dec 2000 00:00:00", &tz).unwrap();
-    let twelve_h = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00", &tz).unwrap();
+    let midnight = detect("Thu, 21 Dec 2000 12:00:00 AM").unwrap();
+    let noon = detect("Thu, 21 Dec 2000 12:00:00 PM").unwrap();
+    let zero_h = detect("Thu, 21 Dec 2000 00:00:00").unwrap();
+    let twelve_h = detect("Thu, 21 Dec 2000 12:00:00").unwrap();
     assert_eq!(midnight, zero_h);
     assert_eq!(noon, twelve_h);
 
     // Leap year
-    assert!(auto_detect_timestamp("29-FEB-2024 12:00:00", &tz).is_some());
-    assert!(auto_detect_timestamp("02/29/2024 12:00:00", &tz).is_some());
+    assert!(detect("29-FEB-2024 12:00:00").is_some());
+    assert!(detect("02/29/2024 12:00:00").is_some());
 
     // Unix date
-    assert!(auto_detect_timestamp("Mon Jul 08 18:09:51 +0000 2013", &tz).is_some());
+    assert!(detect("Mon Jul 08 18:09:51 +0000 2013").is_some());
 
     // Epoch is no longer handled by auto_detect_timestamp (caller's job)
-    assert_eq!(auto_detect_timestamp("1487654321", &tz), None);
-    assert_eq!(auto_detect_timestamp("1487654321321", &tz), None);
-    assert_eq!(auto_detect_timestamp("20240305", &tz), None);
-    assert_eq!(auto_detect_timestamp("-86400", &tz), None);
+    assert_eq!(detect("1487654321"), None);
+    assert_eq!(detect("1487654321321"), None);
+    assert_eq!(detect("20240305"), None);
+    assert_eq!(detect("-86400"), None);
 
     // Invalid
-    assert_eq!(auto_detect_timestamp("not-a-timestamp", &tz), None);
-    assert_eq!(auto_detect_timestamp("", &tz), None);
+    assert_eq!(detect("not-a-timestamp"), None);
+    assert_eq!(detect(""), None);
 }
 
 #[test]
@@ -1175,11 +1177,15 @@ fn test_auto_detect_timestamp_tz_unit() {
     let tz = Tz::UTC;
 
     // RFC 2822 with offset — offset should be preserved
-    let ts_tz = auto_detect_timestamp_tz("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
+    let ts_tz = auto_detect_timestamp_tz("Thu, 21 Dec 2000 16:01:07 +0200", &tz)
+        .unwrap()
+        .unwrap();
     assert_eq!(ts_tz.seconds_offset(), 7200); // +0200 = 7200s
 
     // No offset — should use session tz (UTC → 0)
-    let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz).unwrap();
+    let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz)
+        .unwrap()
+        .unwrap();
     assert_eq!(ts_tz.seconds_offset(), 0);
 }
 

@@ -24,6 +24,7 @@ use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::datetime::check_input_year;
+use databend_common_io::datetime::check_timezone_offset;
 use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestamp;
 use databend_common_timezone::LocalTimeResolution;
 use databend_common_timezone::resolve_local_datetime;
@@ -270,6 +271,7 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a Tz>(
     for format in PARSE_FORMATS_WITH_OFFSET {
         if let Ok(value) = DateTime::parse_from_str(text, format) {
             check_input_year(value.year())?;
+            check_timezone_offset(value.offset().local_minus_utc())?;
             let micros = i128::from(value.timestamp()) * 1_000_000
                 + i128::from(value.timestamp_subsec_micros());
             return build_timestamp_tz(micros, value.offset().local_minus_utc());

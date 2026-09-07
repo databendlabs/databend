@@ -17,8 +17,8 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 // SQL DATE bounds, as days since 1970-01-01. Keep in sync with common-expression.
-// Out-of-range SQL values are errors, not silently replaced with another date.
-pub const DATE_MAX: i32 = 3_298_504; // 11000-12-31
+// Conversion and arithmetic paths retain their own overflow policies.
+pub const DATE_MAX: i32 = 2_932_896; // 9999-12-31
 pub const DATE_MIN: i32 = -719_162; // 0001-01-01
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]

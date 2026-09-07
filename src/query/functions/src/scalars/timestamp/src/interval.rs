@@ -33,6 +33,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -180,7 +181,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         output,
                         ctx,
                         |input| input,
-                        ensure_timestamp_range,
+                        check_timestamp,
                         ctx.func_ctx.tz,
                     );
                 },
@@ -236,7 +237,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         output,
                         ctx,
                         |input| input,
-                        ensure_timestamp_range,
+                        check_timestamp,
                         ctx.func_ctx.tz,
                     );
                 },
@@ -321,7 +322,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         output,
                         ctx,
                         |input| input,
-                        ensure_timestamp_range,
+                        check_timestamp,
                         ctx.func_ctx.tz,
                     );
                 },
@@ -858,14 +859,14 @@ pub(crate) fn civil_date_from_days(days: i128) -> (i128, u8, u8) {
 }
 
 pub(crate) fn ensure_timestamp_range(mut timestamp: i64) -> std::result::Result<i64, String> {
-    // Clamp only the completed UTC result, never intermediate local calendar fields.
-    // Local year 11001 can still map to a legal UTC instant in a positive offset.
+    // Preserve clamping for add_years/add_months and time_slice. INTERVAL
+    // operators use check_timestamp on their completed UTC result instead.
     clamp_timestamp(&mut timestamp);
     Ok(timestamp)
 }
 
 fn ensure_timestamp_tz_range(timestamp: i64) -> std::result::Result<i64, String> {
-    ensure_timestamp_range(timestamp)
+    check_timestamp(timestamp)
 }
 
 fn eval_date_interval(
@@ -894,7 +895,7 @@ fn eval_date_interval(
         .and_then(|timestamp| {
             apply_interval_to_timestamp(timestamp, interval, &ctx.func_ctx.tz, is_addition, false)
         })
-        .and_then(ensure_timestamp_range);
+        .and_then(check_timestamp);
     match result {
         Ok(result) => output.push(result),
         Err(err) => {

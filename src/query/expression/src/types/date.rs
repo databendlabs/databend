@@ -37,15 +37,12 @@ use crate::values::Column;
 use crate::values::Scalar;
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
-/// Internal SQL DATE bounds, represented as days since 1970-01-01.
-/// Years through 11000 provide headroom for arithmetic and timezone conversion;
-/// calendar text and explicit date-part constructors still accept 0001..=9999.
-/// This keeps the UInt16 year extraction API. Computed extended dates can be
-/// displayed, but their text is not necessarily accepted as calendar input.
+/// SQL DATE bounds, represented as days since 1970-01-01.
+/// Calendar inputs and computed DATE values both use years 0001..=9999.
 /// 0001-01-01
 pub const DATE_MIN: i32 = -719_162;
-/// 11000-12-31
-pub const DATE_MAX: i32 = 3_298_504;
+/// 9999-12-31
+pub const DATE_MAX: i32 = 2_932_896;
 
 /// Converts internal epoch days. SQL inputs must pass `check_date` first.
 pub fn date_from_days(days: impl AsPrimitive<i64>) -> NaiveDate {
@@ -71,7 +68,7 @@ pub fn check_date(days: i64) -> Result<i32, String> {
     if (i64::from(DATE_MIN)..=i64::from(DATE_MAX)).contains(&days) {
         Ok(days as i32)
     } else {
-        Err("Invalid date: date is out of range [0001-01-01, 11000-12-31]".to_string())
+        Err("Invalid date: date is out of range [0001-01-01, 9999-12-31]".to_string())
     }
 }
 

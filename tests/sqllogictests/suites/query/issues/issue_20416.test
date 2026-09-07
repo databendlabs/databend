@@ -1,76 +1,88 @@
+# SQL DATE ends at 9999-12-31; TIMESTAMP bounds apply to UTC instants.
+# INTERVAL overflow is an error; other paths retain their existing clamp policy.
+# Use STRING output for boundary timestamps to avoid the client's narrower Jiff range.
+
 statement ok
 SET timezone = 'UTC'
 
-# TODO(bendsql): Re-enable the commented boundary queries below once driver-core
-# supports Databend's full TIMESTAMP/TIMESTAMP_TZ range. Its Jiff decoder cannot
-# represent these results (even 9999-12-31 UTC exceeds Jiff's timestamp limit).
-# Keep the SQL and expected results for restoring native-type decoding coverage.
-# query T
-# SELECT to_timestamp_tz('9999-12-31 23:59:59.999999 +0000')
-# ----
-# 9999-12-31 23:59:59.999999 +0000
+# Calendar input and formatted parsing.
+query TTTT
+SELECT to_string(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000')),
+       to_string(to_timestamp_tz(to_timestamp('9999-12-31 23:59:59.999999'))),
+       to_string(to_timestamp_tz(to_date('9999-12-31'))),
+       to_string(timestamp_tz_from_parts(9999, 12, 31, 23, 59, 59, 999999000, 'UTC'))
+----
+9999-12-31 23:59:59.999999 +0000	9999-12-31 23:59:59.999999 +0000	9999-12-31 00:00:00.000000 +0000	9999-12-31 23:59:59.999999 +0000
 
-# query T
-# SELECT to_timestamp_tz(to_timestamp('9999-12-31 23:59:59.999999'))
-# ----
-# 9999-12-31 23:59:59.999999 +0000
+statement error
+SELECT DATE '10000-01-01'
 
-# query T
-# SELECT to_timestamp_tz(to_date('9999-12-31'))
-# ----
-# 9999-12-31 00:00:00.000000 +0000
+statement error
+SELECT TIMESTAMP '10000-01-01'
 
-# query T
-# SELECT timestamp_tz_from_parts(9999, 12, 31, 23, 59, 59, 999999000, 'UTC')
-# ----
-# 9999-12-31 23:59:59.999999 +0000
+statement error
+SELECT to_date('+10000-01-01')
 
-# query T
-# SELECT to_timestamp_tz('9999-12-31 23:59:59.999999 +0000') + to_interval('0 day')
-# ----
-# 9999-12-31 23:59:59.999999 +0000
+statement error
+SELECT to_timestamp('+10000-01-01 00:00:00')
+
+statement error
+SELECT to_timestamp_tz('+10000-01-01 00:00:00 +0000')
+
+statement error 1006
+SELECT date_from_parts(10000, 1, 1)
+
+statement error 1006
+SELECT timestamp_from_parts(10000, 1, 1, 0, 0, 0)
+
+statement error 1006
+SELECT timestamp_tz_from_parts(10000, 1, 1, 0, 0, 0, 'UTC')
+
+statement error 1006
+SELECT date_from_parts(9999, 13, 1)
+
+statement error 1006
+SELECT timestamp_from_parts(9999, 12, 31, 24, 0, 0)
+
+query BBBBB
+SELECT try_to_date('+10000-01-01', '%Y-%m-%d') IS NULL,
+       try_to_timestamp('+10000-01-01', '%Y-%m-%d') IS NULL,
+       try_to_timestamp_tz('+10000-01-01 00:00:00') IS NULL,
+       try_to_date('0000-12-31') IS NULL,
+       try_to_timestamp('0000-12-31') IS NULL
+----
+1 1 1 1 1
+
+query BBB
+settings(enable_auto_detect_datetime_format=1)
+SELECT try_to_date('01-JAN-+10000') IS NULL,
+       try_to_timestamp('01-JAN-+10000 00:00:00') IS NULL,
+       try_to_timestamp_tz('01-JAN-+10000 00:00:00') IS NULL
+----
+1 1 1
 
 query TTTTTTT
-SELECT
-    to_timestamp('2017', '%Y'),
-    to_timestamp('03', '%m'),
-    to_timestamp('04', '%d'),
-    to_timestamp('05', '%H'),
-    to_timestamp('06', '%M'),
-    to_timestamp('07', '%S'),
-    to_timestamp('12', '%I')
+SELECT to_timestamp('2017', '%Y'), to_timestamp('03', '%m'), to_timestamp('04', '%d'),
+       to_timestamp('05', '%H'), to_timestamp('06', '%M'), to_timestamp('07', '%S'),
+       to_timestamp('12', '%I')
 ----
 2017-01-01 00:00:00.000000	1970-03-01 00:00:00.000000	1970-01-04 00:00:00.000000	1970-01-01 05:00:00.000000	1970-01-01 00:06:00.000000	1970-01-01 00:00:07.000000	1970-01-01 12:00:00.000000
 
 query TTTTTTTTT
-SELECT
-    to_timestamp('20', '%C'),
-    to_timestamp('20-24', '%C-%y'),
-    to_timestamp('69', '%y'),
-    to_timestamp('68', '%y'),
-    to_timestamp('69-01-1', '%g-%V-%u'),
-    to_timestamp('PM', '%p'),
-    to_timestamp('13AM', '%H%p'),
-    to_timestamp('13PM', '%H%p'),
-    to_timestamp('123456', '%f')
+SELECT to_timestamp('20', '%C'), to_timestamp('20-24', '%C-%y'),
+       to_timestamp('69', '%y'), to_timestamp('68', '%y'),
+       to_timestamp('69-01-1', '%g-%V-%u'), to_timestamp('PM', '%p'),
+       to_timestamp('13AM', '%H%p'), to_timestamp('13PM', '%H%p'), to_timestamp('123456', '%f')
 ----
 2000-01-01 00:00:00.000000	2024-01-01 00:00:00.000000	1969-01-01 00:00:00.000000	2068-01-01 00:00:00.000000	1968-12-30 00:00:00.000000	1970-01-01 12:00:00.000000	1970-01-01 01:00:00.000000	1970-01-01 13:00:00.000000	1970-01-01 00:00:00.123456
 
-statement ok
-SET parse_datetime_ignore_remainder = 0
-
 query TTTBB
-SELECT
-    to_timestamp('68-01-1', '%g-%V-%u'),
-    to_timestamp('1', '%f'),
-    to_timestamp('123456789', '%f'),
-    try_to_timestamp('1234567890', '%f') IS NULL,
-    try_to_timestamp('', '%f') IS NULL
+settings(parse_datetime_ignore_remainder=0)
+SELECT to_timestamp('68-01-1', '%g-%V-%u'), to_timestamp('1', '%f'),
+       to_timestamp('123456789', '%f'), try_to_timestamp('1234567890', '%f') IS NULL,
+       try_to_timestamp('', '%f') IS NULL
 ----
 2068-01-02 00:00:00.000000	1970-01-01 00:00:00.100000	1970-01-01 00:00:00.123456	1	1
-
-statement ok
-UNSET parse_datetime_ignore_remainder
 
 query T
 SELECT to_timestamp('2024-01-02 03:04:59', '%Y-%m-%d %H:%M:%S')
@@ -84,103 +96,353 @@ statement error 1006
 SELECT to_timestamp('2024-01-02 03:04:61', '%Y-%m-%d %H:%M:%S')
 
 query BB
-SELECT
-    try_to_timestamp('2024-01-02 03:04:60', '%Y-%m-%d %H:%M:%S') IS NULL,
-    try_to_timestamp('2024-01-02 03:04:61', '%Y-%m-%d %H:%M:%S') IS NULL
+SELECT try_to_timestamp('2024-01-02 03:04:60', '%Y-%m-%d %H:%M:%S') IS NULL,
+       try_to_timestamp('2024-01-02 03:04:61', '%Y-%m-%d %H:%M:%S') IS NULL
 ----
-1	1
+1 1
 
-query T
-SELECT to_string(to_timestamp('0999-01-01', '%Y-%m-%d'), '%C')
+query TT
+SELECT to_string(to_timestamp('0999-01-01', '%Y-%m-%d'), '%C'),
+       to_string(to_timestamp('253402300799', '%s'))
 ----
-9
+9	9999-12-31 23:59:59.000000
 
-# TODO(bendsql): Blocked by driver-core's Jiff timestamp range; see above.
-# query T
-# SELECT to_timestamp('253402300799', '%s')
-# ----
-# 9999-12-31 23:59:59.000000
-
-# query T
-# SELECT to_timestamp('9999-12-31 23:59:59.999999 -00:01')
-# ----
-# +10000-01-01 00:00:59.999999
+statement error 1006
+SELECT to_timestamp('9999-12-31 23:59:59.999999 -00:01')
 
 statement error 1006
 SELECT to_timestamp('0001-01-01 00:00:00.000000 +00:01')
 
-# TODO(bendsql): Blocked by driver-core's Jiff timestamp range; see above.
-# query T
-# SELECT to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z')
-# ----
-# +10000-01-01 00:00:59.999999
+statement error 1006
+SELECT to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z')
 
 statement error 1006
 SELECT to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z')
 
 statement error 1006
-SELECT to_timestamp('284990832000', '%s')
+SELECT to_timestamp('253402300800', '%s')
 
 query BBBBB
-SELECT
-    try_to_timestamp('9999-12-31 23:59:59.999999 -00:01') IS NOT NULL,
-    try_to_timestamp('0001-01-01 00:00:00.000000 +00:01') IS NULL,
-    try_to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NOT NULL,
-    try_to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
-    try_to_timestamp('284990832000', '%s') IS NULL
+SELECT try_to_timestamp('9999-12-31 23:59:59.999999 -00:01') IS NULL,
+       try_to_timestamp('0001-01-01 00:00:00.000000 +00:01') IS NULL,
+       try_to_timestamp('9999-12-31 23:59:59.999999 -0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
+       try_to_timestamp('0001-01-01 00:00:00.000000 +0001', '%Y-%m-%d %H:%M:%S%.f %z') IS NULL,
+       try_to_timestamp('253402300800', '%s') IS NULL
 ----
-1	1	1	1	1
+1 1 1 1 1
 
-# TODO(bendsql): Blocked by driver-core's Jiff timestamp range; see above.
-# query TT
-# SELECT typeof(DATE '9999-12-31' + to_interval('0 day')), DATE '9999-12-31' + to_interval('0 day')
-# ----
-# TIMESTAMP	9999-12-31 00:00:00.000000
-
-query T
-SELECT TIMESTAMP '0001-01-01 00:00:00' - to_interval('1 minute')
+# Numeric conversion and arithmetic keep clamp-to-MIN, including domain folding.
+query BBBBBB
+SELECT to_date(2932896)::BIGINT = 2932896,
+       to_date(2932897) = DATE '0001-01-01', to_date(-719163) = DATE '0001-01-01',
+       to_timestamp(253402300799999999, 6)::BIGINT = 253402300799999999,
+       to_timestamp(253402300800000000, 6) = TIMESTAMP '0001-01-01',
+       to_timestamp(-62135596800000001, 6) = TIMESTAMP '0001-01-01'
 ----
-0001-01-01 00:00:00.000000
+1 1 1 1 1 1
 
-# TODO(bendsql): Blocked by driver-core's Jiff timestamp range; see above.
-# query T
-# SELECT TIMESTAMP '9999-12-31 23:59:59.999999' + to_interval('1 microsecond')
-# ----
-# +10000-01-01 00:00:00.000000
+statement ok
+CREATE OR REPLACE TABLE datetime_clamp_inputs(n BIGINT NOT NULL)
 
-query T
-SELECT DATE '0001-01-01' - to_interval('1 day')
+statement ok
+INSERT INTO datetime_clamp_inputs VALUES (-9223372036854775808), (0), (9223372036854775807)
+
+query BBBBBB
+SELECT to_date(n) = DATE '0001-01-01', try_to_date(n) = DATE '0001-01-01',
+       to_timestamp(n) = TIMESTAMP '0001-01-01', try_to_timestamp(n) = TIMESTAMP '0001-01-01',
+       to_timestamp(n, 0) = TIMESTAMP '0001-01-01', try_to_timestamp(n, 0) = TIMESTAMP '0001-01-01'
+FROM datetime_clamp_inputs WHERE n != 0
 ----
-0001-01-01 00:00:00.000000
+1 1 1 1 1 1
+1 1 1 1 1 1
+
+query BBBB
+SELECT DATE '1970-01-01' + n = DATE '0001-01-01', DATE '1970-01-01' - n = DATE '0001-01-01',
+       TIMESTAMP '1970-01-01' + n = TIMESTAMP '0001-01-01', TIMESTAMP '1970-01-01' - n = TIMESTAMP '0001-01-01'
+FROM datetime_clamp_inputs WHERE n != 0
+----
+1 1 1 1
+1 1 1 1
+
+query BBB
+settings(enable_auto_detect_datetime_format=1)
+SELECT to_date(n::STRING) = DATE '0001-01-01',
+       to_timestamp(n::STRING) = TIMESTAMP '0001-01-01',
+       to_timestamp_tz(n::STRING) = to_timestamp_tz('0001-01-01 00:00:00 +0000')
+FROM datetime_clamp_inputs WHERE n != 0
+----
+1 1 1
+1 1 1
+
+query II
+SELECT count_if(to_date(n) = DATE '1970-01-01'), count_if(to_timestamp(n) = TIMESTAMP '1970-01-01')
+FROM datetime_clamp_inputs
+----
+1 1
+
+query I
+SELECT count(*) FROM datetime_clamp_inputs WHERE to_timestamp(n) > TIMESTAMP '1960-01-01'
+----
+1
+
+statement ok
+DROP TABLE datetime_clamp_inputs
+
+# INTERVAL results are checked against the final UTC bounds, not intermediate fields.
+statement ok
+CREATE OR REPLACE TABLE datetime_range_upper(d DATE NOT NULL, ts TIMESTAMP NOT NULL, z TIMESTAMP_TZ NOT NULL)
+
+statement ok
+INSERT INTO datetime_range_upper VALUES
+    ('9999-12-31', '9999-12-31 23:59:59.999999', '9999-12-31 23:59:59.999999 +0000')
+
+query TTTII
+SELECT d, to_string(ts), to_string(z), to_year(d), to_iso_year(d) FROM datetime_range_upper
+----
+9999-12-31	9999-12-31 23:59:59.999999	9999-12-31 23:59:59.999999 +0000	9999	9999
+
+query BBBBBBB
+SELECT ts + INTERVAL 0 SECOND = ts, ts - INTERVAL 0 SECOND = ts, INTERVAL 0 SECOND + ts = ts,
+       z + INTERVAL 0 SECOND = z, z - INTERVAL 0 SECOND = z, INTERVAL 0 SECOND + z = z,
+       ts - INTERVAL 1 MICROSECOND = to_timestamp(253402300799999998, 6)
+FROM datetime_range_upper
+----
+1 1 1 1 1 1 1
+
+query TTT
+SELECT typeof(d + INTERVAL 0 DAY), to_string(d + INTERVAL 0 DAY), to_string(d - INTERVAL 1 DAY)
+FROM datetime_range_upper
+----
+TIMESTAMP	9999-12-31 00:00:00.000000	9999-12-30 00:00:00.000000
 
 statement error 1006
-SELECT TIMESTAMP '1970-01-01 00:00:00' + to_interval('100000000 day')
+SELECT d + INTERVAL 1 DAY FROM datetime_range_upper
 
 statement error 1006
-SELECT TIMESTAMP '1970-01-01 00:00:00' + to_interval('-100000000 day')
+SELECT d - INTERVAL -1 DAY FROM datetime_range_upper
 
+statement error 1006
+SELECT INTERVAL 1 DAY + d FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 24 HOUR FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 1440 MINUTE FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 86400 SECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 1 MONTH FROM datetime_range_upper
+
+statement error 1006
+SELECT d + INTERVAL 1 YEAR FROM datetime_range_upper
+
+statement error 1006
+SELECT ts + INTERVAL 1 MICROSECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT ts - INTERVAL -1 MICROSECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT INTERVAL 1 MICROSECOND + ts FROM datetime_range_upper
+
+statement error 1006
+SELECT z + INTERVAL 1 MICROSECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT INTERVAL 1 MICROSECOND + z FROM datetime_range_upper
+
+# Both predicate forms must retain the arithmetic error through folding/pruning.
+statement error 1006
+SELECT d FROM datetime_range_upper WHERE d + INTERVAL 1 DAY = DATE '0001-01-01'
+
+statement error 1006
+SELECT ref0 FROM (
+    SELECT d AS ref0, d + INTERVAL 24 HOUR = DATE '0001-01-01' AS ref1
+    FROM datetime_range_upper
+) s WHERE ref1
+
+query BB
+SELECT ts + to_interval('1 month -31 days') = ts,
+       d + to_interval('1 month -31 days') = to_timestamp(d)
+FROM datetime_range_upper
+----
+1 1
+
+query BBBBBBB
+SELECT d + 1 = DATE '0001-01-01', add_days(d, 1) = DATE '0001-01-01',
+       add_months(d, 1) = DATE '0001-01-01', add_years(d, 1) = DATE '0001-01-01',
+       ts + 1 = TIMESTAMP '0001-01-01', add_months(ts, 1) = TIMESTAMP '0001-01-01',
+       add_years(ts, 1) = TIMESTAMP '0001-01-01'
+FROM datetime_range_upper
+----
+1 1 1 1 1 1 1
+
+query I
+SELECT count(*) FROM datetime_range_upper WHERE d + 1 > DATE '0001-01-01'
+----
+0
+
+query BB
+SELECT time_slice(d, 1, 'day', 'end') = DATE '0001-01-01',
+       time_slice(ts, 1, 'second', 'end') = TIMESTAMP '0001-01-01'
+FROM datetime_range_upper
+----
+1 1
+
+statement error 1006
+SELECT TIMESTAMP '0001-01-01' - INTERVAL 1 MICROSECOND
+
+statement error 1006
+SELECT TIMESTAMP '0001-01-01' - INTERVAL 1 MINUTE
+
+statement error 1006
+SELECT DATE '0001-01-01' - INTERVAL 1 DAY
+
+statement error 1006
+SELECT to_timestamp_tz('0001-01-01 00:00:00 +0000') - INTERVAL 1 MICROSECOND
+
+query BBB
+SELECT TIMESTAMP '0001-01-01' + INTERVAL 0 SECOND = TIMESTAMP '0001-01-01',
+       TIMESTAMP '0001-01-01' + INTERVAL 1 MICROSECOND = to_timestamp(-62135596799999999, 6),
+       subtract_days(DATE '0001-01-01', 1) = DATE '0001-01-01'
+----
+1 1 1
+
+statement error 1006
+SELECT date_from_parts(2024, 1, 9223372036854775807)
+
+statement error 1006
+SELECT timestamp_from_parts(2024, 1, 1, 0, 0, 9223372036854775807)
+
+statement error 1006
+SELECT timestamp_tz_from_parts(2024, 1, 1, 0, 0, 9223372036854775807)
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01' + to_interval('100000000 day')
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01' + to_interval('-100000000 day')
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01' + INTERVAL 9223372036854775807 HOUR
+
+statement error 1006
+SELECT TIMESTAMP '1970-01-01' + to_microseconds(-9223372036854775808)
+
+statement error 1006
+SELECT to_interval('9223372036854775808 second')
+
+statement error 1006
+SELECT to_interval('-2147483648 day ago')
+
+query T
+SELECT to_string(to_microseconds(-9223372036854775808))
+----
+-2562047788:00:54.775808
+
+query BB
+SELECT (CAST(NULL AS DATE NULL) + INTERVAL 1 DAY) IS NULL,
+       if(false, TIMESTAMP '9999-12-31 23:59:59.999999' + INTERVAL 1 MICROSECOND, NULL) IS NULL
+----
+1 1
+
+# Positive and negative session offsets still use UTC bounds.
 statement ok
 SET timezone = 'Asia/Shanghai'
 
-query TT
-SELECT to_date(to_timestamp(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000'))), try_to_date(to_timestamp(to_timestamp_tz('9999-12-31 23:59:59.999999 +0000')))
+query TTT
+SELECT to_string(d + INTERVAL 1 DAY), to_string(d + INTERVAL 24 HOUR), to_string(d - INTERVAL -1 DAY)
+FROM datetime_range_upper
 ----
-+10000-01-01	+10000-01-01
++10000-01-01 00:00:00.000000	+10000-01-01 00:00:00.000000	+10000-01-01 00:00:00.000000
+
+query TBB
+SELECT to_string(ts), ts + INTERVAL 0 SECOND = ts, z + INTERVAL 0 SECOND = z
+FROM datetime_range_upper
+----
++10000-01-01 07:59:59.999999 1 1
+
+statement error 1006
+SELECT ts + INTERVAL 1 MICROSECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT z + INTERVAL 1 MICROSECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT to_date(ts) FROM datetime_range_upper
+
+query B
+SELECT try_to_date(to_timestamp(z)) IS NULL FROM datetime_range_upper
+----
+1
+
+statement error 1006
+SELECT count(*) FROM datetime_range_upper WHERE to_start_of_year(ts) > d
+
+# The source midnight is outside the UTC range, but adding a day brings it in.
+query BB
+SELECT try_to_timestamp(DATE '0001-01-01') IS NULL,
+       DATE '0001-01-01' + INTERVAL 1 DAY = TIMESTAMP '0001-01-02'
+----
+1 1
+
+statement error 1006
+SELECT DATE '0001-01-01' + INTERVAL 0 SECOND
+
+statement ok
+SET timezone = 'America/Los_Angeles'
+
+statement error 1006
+SELECT DATE '9999-12-31' + INTERVAL 24 HOUR
+
+statement error 1006
+SELECT DATE '9999-12-31' + INTERVAL 20 HOUR
+
+query BBB
+SELECT ts + INTERVAL 0 SECOND = ts, z - INTERVAL 0 SECOND = z,
+       DATE '9999-12-31' + INTERVAL 15 HOUR = TIMESTAMP '9999-12-31 15:00:00'
+FROM datetime_range_upper
+----
+1 1 1
+
+statement error 1006
+SELECT ts + INTERVAL 1 MICROSECOND FROM datetime_range_upper
+
+statement error 1006
+SELECT to_timestamp(-62135596800000000, 6) - INTERVAL 1 MICROSECOND
+
+query B
+SELECT to_timestamp(-62135596800000000, 6) + INTERVAL 0 SECOND = to_timestamp(-62135596800000000, 6)
+----
+1
+
+statement ok
+DROP TABLE datetime_range_upper
+
+# DST folds/gaps, calendar days versus elapsed hours, and transition-aware domains.
+statement ok
+SET timezone = 'America/New_York'
+
+query TT
+SELECT DATE '2024-03-10' + INTERVAL 1 DAY, DATE '2024-03-10' + INTERVAL 24 HOUR
+----
+2024-03-11 00:00:00.000000	2024-03-11 01:00:00.000000
+
+query TT
+SELECT DATE '2024-03-10' + INTERVAL 3 HOUR, TIMESTAMP '2024-03-10 00:00:00' + INTERVAL 3 HOUR
+----
+2024-03-10 04:00:00.000000	2024-03-10 04:00:00.000000
+
+query II
+SELECT to_timestamp('2024-03-10 02:30:00+0000')::BIGINT, to_timestamp('2024-03-10 2:30:00+0000')::BIGINT
+----
+1710037800000000 1710037800000000
 
 statement ok
 CREATE OR REPLACE TABLE issue_20416_interval_cases(ts TIMESTAMP, delta VARCHAR, is_subtract BOOLEAN, expected BIGINT)
-
-statement ok
-CREATE OR REPLACE TABLE issue_20416_domain_cases(ts TIMESTAMP)
-
-statement ok
-CREATE OR REPLACE TABLE issue_20416_local_cases(value VARCHAR, expected BIGINT)
-
-statement ok
-CREATE OR REPLACE TABLE issue_20416_age_cases(value TIMESTAMP_TZ)
-
-statement ok
-SET timezone = 'America/New_York'
 
 statement ok
 INSERT INTO issue_20416_interval_cases VALUES
@@ -199,18 +461,23 @@ FROM issue_20416_interval_cases
 7
 
 statement ok
+CREATE OR REPLACE TABLE issue_20416_domain_cases(ts TIMESTAMP)
+
+statement ok
 INSERT INTO issue_20416_domain_cases VALUES
-    (to_timestamp(1710052200)),
-    (to_timestamp(1710054000)),
-    (to_timestamp(1710055800))
+    (to_timestamp(1710052200)), (to_timestamp(1710054000)), (to_timestamp(1710055800))
 
 query II
 SELECT to_unix_timestamp(ts), to_minute(ts)
-FROM issue_20416_domain_cases
-WHERE to_minute(ts) = 0
-ORDER BY ts
+FROM issue_20416_domain_cases WHERE to_minute(ts) = 0 ORDER BY ts
 ----
-1710054000	0
+1710054000 0
+
+statement ok
+DROP TABLE issue_20416_domain_cases
+
+statement ok
+CREATE OR REPLACE TABLE issue_20416_age_cases(value TIMESTAMP_TZ)
 
 statement ok
 INSERT INTO issue_20416_age_cases VALUES
@@ -244,6 +511,9 @@ query I
 SELECT count_if(age(value)::string LIKE '%12:00:00') FROM issue_20416_age_cases
 ----
 3
+
+statement ok
+DROP TABLE issue_20416_age_cases
 
 statement ok
 DELETE FROM issue_20416_interval_cases
@@ -280,6 +550,12 @@ FROM issue_20416_interval_cases
 2
 
 statement ok
+DROP TABLE issue_20416_interval_cases
+
+statement ok
+CREATE OR REPLACE TABLE issue_20416_local_cases(value VARCHAR, expected BIGINT)
+
+statement ok
 SET timezone = 'Africa/Algiers'
 
 statement ok
@@ -305,13 +581,147 @@ SELECT count_if(to_unix_timestamp(to_timestamp(value)) = expected) FROM issue_20
 1
 
 statement ok
-DROP TABLE issue_20416_interval_cases
-
-statement ok
-DROP TABLE issue_20416_domain_cases
-
-statement ok
 DROP TABLE issue_20416_local_cases
 
+# Explicit numeric offsets use [-14:00, +14:00] across parser entry points.
 statement ok
-DROP TABLE issue_20416_age_cases
+SET timezone = 'UTC'
+
+query TTTT
+SELECT to_timestamp('2024-01-01 00:00:00.123456 +1400', '%Y-%m-%d %H:%M:%S%.f %z'),
+       to_timestamp('2024-01-01 00:00:00.123456 -1400', '%Y-%m-%d %H:%M:%S%.f %z'),
+       to_timestamp('2024-01-01 00:00:00 +14:00', '%Y-%m-%d %H:%M:%S %:z'),
+       to_timestamp('2024-01-01 00:00:00 -14:00', '%Y-%m-%d %H:%M:%S %:z')
+----
+2023-12-31 10:00:00.123456	2024-01-01 14:00:00.123456	2023-12-31 10:00:00.000000	2024-01-01 14:00:00.000000
+
+statement error 1006
+SELECT to_timestamp('2024-01-01 00:00:00 +99:00', '%Y-%m-%d %H:%M:%S %z')
+
+statement error 1006
+SELECT to_timestamp('2024-01-01 00:00:00 -14:01', '%Y-%m-%d %H:%M:%S %:z')
+
+statement ok
+CREATE OR REPLACE TABLE datetime_offset_inputs(s STRING)
+
+statement ok
+INSERT INTO datetime_offset_inputs VALUES
+    ('2024-01-01 00:00:00 +14:01'), ('2024-01-01 00:00:00 -14:01'),
+    ('2024-01-01 00:00:00 +15:00'), ('2024-01-01 00:00:00 -23:59'),
+    ('2024-01-01 00:00:00 +99:00'), ('2024-01-01 00:00:00 -99:59')
+
+query IIII
+SELECT count_if(try_to_timestamp(s, '%Y-%m-%d %H:%M:%S %z') IS NULL),
+       count_if(try_to_timestamp(s, '%Y-%m-%d %H:%M:%S %:z') IS NULL),
+       count_if(try_to_timestamp(s) IS NULL), count_if(try_to_timestamp_tz(s) IS NULL)
+FROM datetime_offset_inputs
+----
+6 6 6 6
+
+# Remainder and fallback settings must not hide an invalid offset field.
+query B
+settings(parse_datetime_ignore_remainder=1)
+SELECT try_to_timestamp('2024-01-01 00:00:00 +99:00 trailing', '%Y-%m-%d %H:%M:%S %z') IS NULL
+----
+1
+
+query B
+settings(parse_datetime_ignore_remainder=0)
+SELECT try_to_timestamp('2024-01-01 00:00:00 +99:00', '%Y-%m-%d %H:%M:%S %z') IS NULL
+----
+1
+
+query I
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=0)
+SELECT count_if(try_to_timestamp(s) IS NULL) FROM datetime_offset_inputs
+----
+6
+
+statement ok
+SET enable_strict_datetime_parser = 0
+
+statement ok
+SET enable_auto_detect_datetime_format = 1
+
+query II
+SELECT count_if(try_to_timestamp(s) IS NULL), count_if(try_to_timestamp_tz(s) IS NULL)
+FROM datetime_offset_inputs
+----
+6 6
+
+statement ok
+TRUNCATE TABLE datetime_offset_inputs
+
+statement ok
+INSERT INTO datetime_offset_inputs VALUES
+    ('Mon, 01 Jan 2024 00:00:00 +1401'), ('Mon, 01 Jan 2024 00:00:00 -1401'),
+    ('Mon, 01 Jan 2024 00:00:00 +1500'), ('Mon, 01 Jan 2024 00:00:00 -2359'),
+    ('Mon, 01 Jan 2024 00:00:00 +9900'), ('Mon, 01 Jan 2024 00:00:00 -9959')
+
+statement error 1006
+SELECT to_timestamp('Mon, 01 Jan 2024 00:00:00 +9900')
+
+statement error 1006
+SELECT to_timestamp_tz('Mon, 01 Jan 2024 00:00:00 +1401')
+
+query IIII
+SELECT count_if(try_to_timestamp(s) IS NULL), count_if(try_to_timestamp_tz(s) IS NULL),
+       count_if(try_cast(to_variant(s) AS TIMESTAMP) IS NULL),
+       count_if(try_cast(to_variant(s) AS TIMESTAMP_TZ) IS NULL)
+FROM datetime_offset_inputs
+----
+6 6 6 6
+
+query II
+settings(enable_strict_datetime_parser=1)
+SELECT count_if(try_to_timestamp(s) IS NULL), count_if(try_to_timestamp_tz(s) IS NULL)
+FROM datetime_offset_inputs
+----
+6 6
+
+# Non-padded time/date inputs exercise cursor and TIMESTAMP_TZ fallback parsing.
+query BBBB
+SELECT try_to_timestamp('2024-01-01 0:00:00+1401') IS NULL,
+       try_to_timestamp('2024-01-01 0:00:00-1500') IS NULL,
+       try_to_timestamp_tz('2024-1-1 00:00:00 +1401') IS NULL,
+       try_to_timestamp_tz('2024-1-1 00:00:00 +9900') IS NULL
+----
+1 1 1 1
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+query BBBB
+SELECT to_timestamp('Mon, 01 Jan 2024 00:00:00 +1400')::BIGINT = 1704016800000000,
+       to_timestamp('Mon, 01 Jan 2024 00:00:00 -1400')::BIGINT = 1704117600000000,
+       to_timestamp('2024-01-01 00:00:00 +14:00', '%Y-%m-%d %H:%M:%S %z')::BIGINT = 1704016800000000,
+       try_to_timestamp('Mon, 01 Jan 2024 00:00:00 +9900') IS NULL
+----
+1 1 1 1
+
+query TT
+SELECT to_string(to_timestamp_tz('Mon, 01 Jan 2024 00:00:00 +1400')),
+       to_string(to_timestamp_tz('2024-1-1 00:00:00 -1400'))
+----
+2024-01-01 00:00:00.000000 +1400	2024-01-01 00:00:00.000000 -1400
+
+# Valid offsets retain the legacy AUTO clamp at either UTC boundary.
+query BBBB
+SELECT to_timestamp('Mon, 01 Jan 0001 00:00:00 +1400')::BIGINT = -62135596800000000,
+       to_timestamp('Fri, 31 Dec 9999 23:59:59 -1400')::BIGINT = -62135596800000000,
+       try_to_timestamp('9223372036854775807')::BIGINT = -62135596800000000,
+       to_timestamp(to_timestamp_tz('Mon, 01 Jan 0001 00:00:00 +1400'))::BIGINT = -62135596800000000
+----
+1 1 1 1
+
+statement ok
+DROP TABLE datetime_offset_inputs
+
+statement ok
+UNSET enable_auto_detect_datetime_format
+
+statement ok
+UNSET enable_strict_datetime_parser
+
+statement ok
+SET timezone = 'UTC'

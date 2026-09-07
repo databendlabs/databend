@@ -137,7 +137,6 @@ fn test_timestamp_display_clamps_bounds() {
             (-1_000_001, -1_000_001),
             (-1, -1),
             (0, 0),
-            (253_402_300_799_999_999, 253_402_300_799_999_999),
             (TIMESTAMP_MAX, TIMESTAMP_MAX),
             (TIMESTAMP_MAX + 1, TIMESTAMP_MAX),
             (i64::MAX, TIMESTAMP_MAX),
@@ -156,7 +155,7 @@ fn test_timestamp_display_clamps_bounds() {
     );
     assert_eq!(
         timestamp_to_rfc3339_utc(i64::MAX),
-        "+11000-12-31T23:59:59.999999Z"
+        "9999-12-31T23:59:59.999999Z"
     );
     assert_eq!(
         timestamp_to_rfc3339_utc(i64::MIN),
