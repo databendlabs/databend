@@ -16,8 +16,6 @@ use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::CreateDynamicTableStmt;
-use crate::ast::InitializeMode;
-use crate::ast::RefreshMode;
 use crate::ast::Statement;
 use crate::ast::TargetLag;
 use crate::ast::WarehouseOptions;
@@ -41,8 +39,6 @@ pub fn dynamic_table(i: Input) -> IResult<Statement> {
   [ CLUSTER BY <expr> ]
   [ TARGET_LAG = { <num> { SECOND | MINUTE | HOUR | DAY } | DOWNSTREAM} ]
   [ { WAREHOUSE = <string> } ]
-  [ REFRESH_MODE = { AUTO | FULL | INCREMENTAL } ]
-  [ INITIALIZE = { ON_CREATE | ON_SCHEDULE } ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
@@ -70,7 +66,7 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
             (catalog, database, table),
             source,
             opt_cluster_by,
-            (target_lag, warehouse_opts, refresh_mode_opt, initialize_opt),
+            (target_lag, warehouse_opts),
             opt_table_options,
             (_, query),
         )| {
@@ -86,8 +82,6 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
                 cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
                 target_lag,
                 warehouse_opts,
-                refresh_mode: refresh_mode_opt.unwrap_or(RefreshMode::Auto),
-                initialize: initialize_opt.unwrap_or(InitializeMode::OnCreate),
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: Box::new(query),
             }))
@@ -95,14 +89,7 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
     )(i)
 }
 
-fn dynamic_table_options(
-    i: Input,
-) -> IResult<(
-    TargetLag,
-    WarehouseOptions,
-    Option<RefreshMode>,
-    Option<InitializeMode>,
-)> {
+fn dynamic_table_options(i: Input) -> IResult<(TargetLag, WarehouseOptions)> {
     alt((
         |i| dynamic_table_options_with_mode(i, false),
         |i| dynamic_table_options_with_mode(i, true),
@@ -113,12 +100,7 @@ fn dynamic_table_options(
 fn dynamic_table_options_with_mode(
     i: Input,
     manual: bool,
-) -> IResult<(
-    TargetLag,
-    WarehouseOptions,
-    Option<RefreshMode>,
-    Option<InitializeMode>,
-)> {
+) -> IResult<(TargetLag, WarehouseOptions)> {
     let target_lag = move |i| {
         if manual {
             Ok((i, TargetLag::Manual))
@@ -131,36 +113,7 @@ fn dynamic_table_options_with_mode(
         }
     };
 
-    let refresh_mode = alt((
-        value(RefreshMode::Auto, rule! { AUTO }),
-        value(RefreshMode::Full, rule! { FULL }),
-        value(RefreshMode::Incremental, rule! { INCREMENTAL }),
-    ));
-    let refresh_mode_opt = map(
-        rule! {
-            (REFRESH_MODE ~ "=" ~ #refresh_mode)?
-        },
-        |v| v.map(|v| v.2),
-    );
-
-    let initialize_mode = alt((
-        value(InitializeMode::OnCreate, rule! { ON_CREATE }),
-        value(InitializeMode::OnSchedule, rule! { ON_SCHEDULE }),
-    ));
-    let initialize_opt = map(
-        rule! {
-            (INITIALIZE ~ "=" ~ #initialize_mode)?
-        },
-        |v| v.map(|v| v.2),
-    );
-
-    permutation((
-        target_lag,
-        task_warehouse_option,
-        refresh_mode_opt,
-        initialize_opt,
-    ))
-    .parse(i)
+    permutation((target_lag, task_warehouse_option)).parse(i)
 }
 
 fn target_lag(i: Input) -> IResult<TargetLag> {
@@ -234,30 +187,26 @@ mod tests {
     fn test_dynamic_table_manual_refresh_syntax() {
         for sql in [
             "CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id",
-            "CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a",
-            "CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS SELECT id FROM a",
+            "CREATE DYNAMIC TABLE dt AS SELECT id FROM a",
         ] {
             let statement = parse_create(sql);
             assert_eq!(statement.target_lag, TargetLag::Manual);
-            assert_eq!(statement.initialize, InitializeMode::OnCreate);
             let formatted = statement.to_string();
             assert!(!formatted.contains("TARGET_LAG"));
+            // Refresh is always full, so the statement must not advertise a mode it cannot vary.
+            assert!(!formatted.contains("REFRESH_MODE"));
+            assert!(!formatted.contains("INITIALIZE"));
             let reparsed = parse_create(&formatted);
             assert_eq!(reparsed.target_lag, statement.target_lag);
-            assert_eq!(reparsed.refresh_mode, statement.refresh_mode);
-            assert_eq!(reparsed.initialize, statement.initialize);
             assert_eq!(reparsed.to_string(), formatted);
         }
     }
 
     #[test]
     fn test_dynamic_table_scheduled_syntax_is_preserved() {
-        let statement = parse_create(
-            "CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS SELECT id FROM a",
-        );
+        let statement =
+            parse_create("CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE AS SELECT id FROM a");
         assert_eq!(statement.target_lag, TargetLag::IntervalSecs(600));
-        assert_eq!(statement.refresh_mode, RefreshMode::Full);
-        assert_eq!(statement.initialize, InitializeMode::OnSchedule);
         assert_eq!(
             parse_create(&statement.to_string()).to_string(),
             statement.to_string()
@@ -266,11 +215,34 @@ mod tests {
         let statement =
             parse_create("CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a");
         assert_eq!(statement.target_lag, TargetLag::Downstream);
-        assert_eq!(statement.refresh_mode, RefreshMode::Auto);
-        assert_eq!(statement.initialize, InitializeMode::OnCreate);
         assert_eq!(
             parse_create(&statement.to_string()).to_string(),
             statement.to_string()
         );
+    }
+
+    /// `REFRESH_MODE` / `INITIALIZE` are no longer part of the grammar. Pin down what the parser
+    /// actually does with them so the user-visible rejection is a deliberate choice, not an
+    /// accident of the generic table-option rule sitting next to these keywords.
+    #[test]
+    fn test_removed_options_do_not_parse_as_dynamic_table_options() {
+        for sql in [
+            "CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a",
+            "CREATE DYNAMIC TABLE dt INITIALIZE = ON_CREATE AS SELECT id FROM a",
+        ] {
+            let tokens = tokenize_sql(sql).unwrap();
+            match parse_sql(&tokens, Dialect::PostgreSQL) {
+                Err(_) => {}
+                Ok((Statement::CreateDynamicTable(statement), _)) => {
+                    // If the generic table-option rule absorbed it, it must land in table_options
+                    // where the binder rejects it as a reserved key -- never silently ignored.
+                    assert!(
+                        !statement.table_options.is_empty(),
+                        "removed option vanished silently: {sql}"
+                    );
+                }
+                Ok((other, _)) => panic!("unexpected statement for {sql}: {other}"),
+            }
+        }
     }
 }

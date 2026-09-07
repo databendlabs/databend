@@ -64,8 +64,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
-use databend_storages_common_table_meta::table::OPT_KEY_INITIALIZE;
-use databend_storages_common_table_meta::table::OPT_KEY_INITIALIZED;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
@@ -73,12 +71,9 @@ use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
-use databend_storages_common_table_meta::table::OPT_KEY_REFRESH_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
-use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_ENDPOINTS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use databend_storages_common_table_meta::table::OPT_KEY_TARGET_LAG;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 pub use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
@@ -249,16 +244,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
         Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
         Engine::MaterializedView => CREATE_MATERIALIZED_VIEW_OPTIONS.contains(opt_key),
         Engine::DynamicTable => {
-            CREATE_FUSE_OPTIONS.contains(opt_key)
-                || matches!(
-                    opt_key,
-                    OPT_KEY_AS_QUERY
-                        | OPT_KEY_SOURCE_ENDPOINTS
-                        | OPT_KEY_INITIALIZED
-                        | OPT_KEY_TARGET_LAG
-                        | OPT_KEY_REFRESH_MODE
-                        | OPT_KEY_INITIALIZE
-                )
+            CREATE_FUSE_OPTIONS.contains(opt_key) || opt_key == OPT_KEY_AS_QUERY
         }
     }
 }

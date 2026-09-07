@@ -53,48 +53,6 @@ impl Display for TargetLag {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum RefreshMode {
-    Auto,
-    Full,
-    Incremental,
-}
-
-impl Display for RefreshMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            RefreshMode::Auto => {
-                write!(f, "AUTO")
-            }
-            RefreshMode::Full => {
-                write!(f, "FULL")
-            }
-            RefreshMode::Incremental => {
-                write!(f, "INCREMENTAL")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum InitializeMode {
-    OnCreate,
-    OnSchedule,
-}
-
-impl Display for InitializeMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            InitializeMode::OnCreate => {
-                write!(f, "ON_CREATE")
-            }
-            InitializeMode::OnSchedule => {
-                write!(f, "ON_SCHEDULE")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDynamicTableStmt {
     pub create_option: CreateOption,
     pub transient: bool,
@@ -106,8 +64,6 @@ pub struct CreateDynamicTableStmt {
 
     pub target_lag: TargetLag,
     pub warehouse_opts: WarehouseOptions,
-    pub refresh_mode: RefreshMode,
-    pub initialize: InitializeMode,
 
     pub table_options: BTreeMap<String, String>,
     pub as_query: Box<Query>,
@@ -168,8 +124,6 @@ impl Display for CreateDynamicTableStmt {
         if self.warehouse_opts.warehouse.is_some() {
             write!(f, " {}", self.warehouse_opts)?;
         }
-        write!(f, " REFRESH_MODE = {}", self.refresh_mode)?;
-        write!(f, " INITIALIZE = {}", self.initialize)?;
 
         // Format table options
         if !self.table_options.is_empty() {

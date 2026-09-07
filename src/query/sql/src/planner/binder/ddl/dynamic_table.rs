@@ -29,13 +29,8 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_INITIALIZE;
-use databend_storages_common_table_meta::table::OPT_KEY_INITIALIZED;
-use databend_storages_common_table_meta::table::OPT_KEY_REFRESH_MODE;
-use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_ENDPOINTS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use databend_storages_common_table_meta::table::OPT_KEY_TARGET_LAG;
 use databend_storages_common_table_meta::table::is_fuse_engine;
 
 use crate::BindContext;
@@ -59,9 +54,7 @@ impl Binder {
             source,
             cluster_by,
             target_lag,
-            refresh_mode,
             warehouse_opts,
-            initialize,
             table_options,
             as_query,
         } = stmt;
@@ -75,12 +68,6 @@ impl Binder {
             if *transient {
                 options.insert("TRANSIENT".to_owned(), "T".to_owned());
             }
-
-            options.insert(OPT_KEY_INITIALIZED.to_owned(), "false".to_string());
-            options.insert(OPT_KEY_SOURCE_ENDPOINTS.to_owned(), "[]".to_string());
-            options.insert(OPT_KEY_TARGET_LAG.to_owned(), format!("{target_lag}"));
-            options.insert(OPT_KEY_REFRESH_MODE.to_owned(), format!("{refresh_mode}"));
-            options.insert(OPT_KEY_INITIALIZE.to_owned(), format!("{initialize}"));
 
             let catalog = self.ctx.get_catalog(&catalog_name).await?;
             let db = catalog
@@ -213,15 +200,6 @@ impl Binder {
             }
         }
 
-        if !matches!(
-            refresh_mode,
-            databend_common_ast::ast::RefreshMode::Full
-                | databend_common_ast::ast::RefreshMode::Auto
-        ) {
-            return Err(ErrorCode::Unimplemented(
-                "Dynamic Table currently supports only FULL refresh mode",
-            ));
-        }
         if !matches!(target_lag, databend_common_ast::ast::TargetLag::Manual) {
             return Err(ErrorCode::Unimplemented(
                 "Dynamic Table scheduling is not implemented; omit TARGET_LAG",
@@ -271,8 +249,6 @@ impl Binder {
             as_query: canonical_query.to_string(),
             target_lag: target_lag.clone(),
             warehouse_opts: warehouse_opts.clone(),
-            refresh_mode: refresh_mode.clone(),
-            initialize: initialize.clone(),
         };
         Ok(Plan::CreateDynamicTable(Box::new(plan)))
     }

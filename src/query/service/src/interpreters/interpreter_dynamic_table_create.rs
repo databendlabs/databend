@@ -14,12 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::InitializeMode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::CreateDynamicTablePlan;
+use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::plans::RefreshDynamicTablePlan;
 
 use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshDynamicTableInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -33,6 +34,20 @@ pub struct CreateDynamicTableInterpreter {
 impl CreateDynamicTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateDynamicTablePlan) -> Result<Self> {
         Ok(Self { ctx, plan })
+    }
+
+    async fn initial_refresh(&self) -> Result<()> {
+        let refresh = RefreshDynamicTableInterpreter::try_create(
+            self.ctx.clone(),
+            RefreshDynamicTablePlan {
+                tenant: self.plan.table_plan.tenant.clone(),
+                catalog: self.plan.table_plan.catalog.clone(),
+                database: self.plan.table_plan.database.clone(),
+                table: self.plan.table_plan.table.clone(),
+            },
+        )?;
+        refresh.execute2().await?;
+        Ok(())
     }
 }
 
@@ -52,17 +67,26 @@ impl Interpreter for CreateDynamicTableInterpreter {
             CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
         let result = table_interpreter.execute2().await?;
 
-        if self.plan.initialize == InitializeMode::OnCreate {
-            let refresh = RefreshDynamicTableInterpreter::try_create(
-                self.ctx.clone(),
-                RefreshDynamicTablePlan {
-                    tenant: self.plan.table_plan.tenant.clone(),
-                    catalog: self.plan.table_plan.catalog.clone(),
-                    database: self.plan.table_plan.database.clone(),
-                    table: self.plan.table_plan.table.clone(),
-                },
-            )?;
-            refresh.execute2().await?;
+        // Reads always serve the materialized result, so an object that exists but was never
+        // populated would answer queries with zero rows instead of an error. CREATE is therefore
+        // all-or-nothing: if the initial refresh fails, drop the table and surface the failure.
+        if let Err(refresh_error) = self.initial_refresh().await {
+            let drop = DropTableInterpreter::try_create(self.ctx.clone(), DropTablePlan {
+                if_exists: true,
+                tenant: self.plan.table_plan.tenant.clone(),
+                catalog: self.plan.table_plan.catalog.clone(),
+                database: self.plan.table_plan.database.clone(),
+                table: self.plan.table_plan.table.clone(),
+                all: false,
+            })?;
+            if let Err(drop_error) = drop.execute2().await {
+                // Report the original cause, but do not hide a leaked empty table.
+                return Err(refresh_error.add_message_back(format!(
+                    " (rolling back the empty dynamic table also failed: {drop_error}; drop {}.{} manually)",
+                    self.plan.table_plan.database, self.plan.table_plan.table
+                )));
+            }
+            return Err(refresh_error);
         }
 
         Ok(result)

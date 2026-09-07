@@ -21,7 +21,6 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
-use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table::TimeNavigation;
@@ -31,13 +30,8 @@ use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_storages_basic::view_table::QUERY;
-use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
-use databend_storages_common_table_meta::table::OPT_KEY_INITIALIZED;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_ENDPOINTS;
 use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
@@ -374,18 +368,9 @@ impl Binder {
                 sample,
                 cte_suffix_name,
             ),
-            DYNAMIC_TABLE_ENGINE => self.bind_dynamic_table(
-                bind_context,
-                &catalog,
-                &database,
-                &self.normalize_identifier(table).name,
-                table_meta,
-                alias,
-                &branch_name,
-                &table_name_alias,
-                sample,
-                cte_suffix_name,
-            ),
+            // A Dynamic Table is read exactly like a physical table: queries always see the
+            // result materialized by the last refresh, however stale that is. It therefore needs
+            // no arm of its own and falls through to the ordinary base-table path below.
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog.clone(),
@@ -460,161 +445,6 @@ impl Binder {
                 Ok((s_expr, bind_context))
             }
         }
-    }
-
-    fn dynamic_table_is_fresh(
-        &self,
-        catalog_name: &str,
-        table_meta: &std::sync::Arc<dyn databend_common_catalog::table::Table>,
-    ) -> Result<bool> {
-        #[derive(serde::Deserialize)]
-        struct Endpoint {
-            table_id: u64,
-            table_seq: u64,
-            snapshot_location: Option<String>,
-        }
-
-        let options = &table_meta.get_table_info().meta.options;
-        if options.get(OPT_KEY_INITIALIZED).map(String::as_str) != Some("true") {
-            return Ok(false);
-        }
-        let value = options
-            .get(OPT_KEY_SOURCE_ENDPOINTS)
-            .ok_or_else(|| ErrorCode::InvalidOperation("dynamic table checkpoint is missing"))?;
-        let mut endpoints: Vec<Endpoint> = serde_json::from_str(value).map_err(|error| {
-            ErrorCode::InvalidOperation(format!("invalid dynamic table checkpoint: {error}"))
-        })?;
-        if endpoints.is_empty() {
-            return Ok(false);
-        }
-        endpoints.sort_by_key(|endpoint| endpoint.table_id);
-        if endpoints
-            .windows(2)
-            .any(|pair| pair[0].table_id == pair[1].table_id)
-        {
-            return Err(ErrorCode::InvalidOperation(
-                "dynamic table checkpoint contains duplicate source tables",
-            ));
-        }
-
-        databend_common_base::runtime::block_on(async {
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            for endpoint in endpoints {
-                let Some(source_meta) = catalog.get_table_meta_by_id(endpoint.table_id).await?
-                else {
-                    return Err(ErrorCode::UnknownTable(format!(
-                        "dynamic table source table {} no longer exists",
-                        endpoint.table_id
-                    )));
-                };
-                if source_meta.seq != endpoint.table_seq {
-                    return Ok(false);
-                }
-                let current = source_meta
-                    .data
-                    .options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    .cloned();
-                if current != endpoint.snapshot_location {
-                    return Ok(false);
-                }
-            }
-            Ok(true)
-        })
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_dynamic_table(
-        &mut self,
-        bind_context: &mut BindContext,
-        catalog: &str,
-        database: &str,
-        table_name: &str,
-        table_meta: std::sync::Arc<dyn databend_common_catalog::table::Table>,
-        alias: &Option<TableAlias>,
-        branch_name: &Option<String>,
-        table_name_alias: &Option<String>,
-        sample: &Option<SampleConfig>,
-        cte_suffix_name: Option<String>,
-    ) -> Result<(SExpr, BindContext)> {
-        if self.dynamic_table_is_fresh(catalog, &table_meta)? {
-            let table_index = self.metadata.write().add_table(
-                catalog.to_string(),
-                database.to_string(),
-                table_meta,
-                branch_name.clone(),
-                table_name_alias.clone(),
-                false,
-                false,
-                false,
-                cte_suffix_name,
-            );
-            let (s_expr, mut context) =
-                self.bind_base_table(bind_context, database, table_index, None, sample, true)?;
-            if let Some(alias) = alias {
-                context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-            }
-            return Ok((s_expr, context));
-        }
-
-        let query = table_meta
-            .get_table_info()
-            .meta
-            .options
-            .get(OPT_KEY_AS_QUERY)
-            .cloned()
-            .ok_or_else(|| ErrorCode::InvalidOperation("dynamic table definition is missing"))?;
-        // The stored definition is a serialized AST, not SQL in the reader's dialect. Parse it
-        // with one fixed dialect so a session setting cannot change what a published Dynamic
-        // Table means.
-        let tokens = tokenize_sql(&query)?;
-        let (statement, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-        let Statement::Query(query) = statement else {
-            return Err(ErrorCode::InvalidOperation(
-                "dynamic table definition must be a query",
-            ));
-        };
-        // A fallback expansion must not route back through this same object.
-        let dynamic_table_ident = ViewIdent {
-            catalog: catalog.to_string(),
-            database: database.to_string(),
-            name: table_name.to_string(),
-        };
-        bind_context.check_view_loop(&dynamic_table_ident)?;
-        let mut nested = BindContext::with_parent(bind_context.clone())?;
-        nested.binding_views.insert(dynamic_table_ident);
-        let (s_expr, mut nested) = self.bind_query(&mut nested, &query)?;
-        if nested
-            .columns
-            .iter()
-            .filter(|column| column.visibility == Visibility::Visible)
-            .count()
-            != table_meta.schema().fields().len()
-        {
-            return Err(ErrorCode::InvalidOperation(format!(
-                "dynamic table {}.{} definition no longer matches its declared schema; recreate it",
-                database, table_name
-            )));
-        }
-        for (field, column) in table_meta
-            .schema()
-            .fields()
-            .iter()
-            .zip(nested.columns.iter_mut())
-        {
-            column.column_name.clone_from(field.name());
-        }
-        if let Some(alias) = alias {
-            nested.apply_table_alias(alias, &self.name_resolution_ctx)?;
-        } else {
-            for column in nested.columns.iter_mut() {
-                column.database_name = Some(database.to_string());
-                column.table_name = Some(table_name.to_string());
-            }
-        }
-        nested.binding_views = bind_context.binding_views.clone();
-        nested.parent = Some(Box::new(bind_context.clone()));
-        Ok((s_expr, nested))
     }
 
     fn add_view_lineage_source_columns(

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::InitializeMode;
-use databend_common_ast::ast::RefreshMode;
 use databend_common_ast::ast::TargetLag;
 use databend_common_ast::ast::WarehouseOptions;
 use databend_common_expression::TableSchemaRef;
@@ -29,8 +27,6 @@ pub struct CreateDynamicTablePlan {
     pub as_query: String,
     pub target_lag: TargetLag,
     pub warehouse_opts: WarehouseOptions,
-    pub refresh_mode: RefreshMode,
-    pub initialize: InitializeMode,
 }
 
 impl CreateDynamicTablePlan {

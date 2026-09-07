@@ -19,33 +19,22 @@ INSERT INTO orders VALUES (1, 10, 100), (2, 20, 200)
 statement ok
 INSERT INTO customers VALUES (10, 'alice'), (20, 'bob')
 
-# A dynamic table over a multi-table join. INITIALIZE = ON_SCHEDULE publishes the
-# definition without materializing data, so the first read must fall back.
+# A dynamic table over a multi-table join. CREATE always materializes, so the first
+# read already serves stored rows.
 statement ok
-CREATE DYNAMIC TABLE order_detail REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS
+CREATE DYNAMIC TABLE order_detail AS
 SELECT o.order_id, o.amount, c.customer_name
 FROM orders AS o JOIN customers AS c ON o.customer_id = c.customer_id
 
-# Uninitialized: the defining query is expanded like an ordinary view, so the
-# result is still correct.
 query IIT
 SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
 ----
 1 100 alice
 2 200 bob
 
-statement ok
-REFRESH DYNAMIC TABLE order_detail
-
-# Fresh: reads now scan the materialized result and must return the same rows.
-query IIT
-SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
-----
-1 100 alice
-2 200 bob
-
-# A source commit makes the stored endpoint vector stale. The read falls back to
-# the defining query, so new source rows are visible before the next refresh.
+# The defining contract: a source commit does NOT change what the dynamic table
+# returns. Reads serve the result materialized by the last refresh, however stale.
+# This is the whole point of the object, and it is what separates it from a view.
 statement ok
 INSERT INTO orders VALUES (3, 10, 300)
 
@@ -54,8 +43,8 @@ SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
 ----
 1 100 alice
 2 200 bob
-3 300 alice
 
+# The new row only becomes visible after an explicit refresh.
 statement ok
 REFRESH DYNAMIC TABLE order_detail
 
@@ -66,7 +55,7 @@ SELECT order_id, amount, customer_name FROM order_detail ORDER BY order_id
 2 200 bob
 3 300 alice
 
-# Refreshing twice without any source change must stay fresh and idempotent.
+# Refreshing again without a source change is idempotent.
 statement ok
 REFRESH DYNAMIC TABLE order_detail
 
@@ -75,9 +64,14 @@ SELECT count(*) FROM order_detail
 ----
 3
 
-# Source deletes are also full-refresh visible.
+# A source delete is likewise invisible until the next refresh.
 statement ok
 DELETE FROM orders WHERE order_id = 3
+
+query I
+SELECT count(*) FROM order_detail
+----
+3
 
 statement ok
 REFRESH DYNAMIC TABLE order_detail
@@ -93,7 +87,7 @@ statement ok
 CREATE TABLE empty_src(id INT NOT NULL)
 
 statement ok
-CREATE DYNAMIC TABLE empty_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS SELECT id FROM empty_src
+CREATE DYNAMIC TABLE empty_dt AS SELECT id FROM empty_src
 
 query I
 SELECT count(*) FROM empty_dt
@@ -122,9 +116,9 @@ SELECT count(*) FROM empty_dt
 ----
 0
 
-# INITIALIZE = ON_CREATE materializes during CREATE, so the first read is fresh.
+# Aggregates are materialized like any other query shape.
 statement ok
-CREATE DYNAMIC TABLE agg_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS
+CREATE DYNAMIC TABLE agg_dt AS
 SELECT c.customer_name, sum(o.amount) AS total
 FROM orders AS o JOIN customers AS c ON o.customer_id = c.customer_id
 GROUP BY c.customer_name
@@ -135,9 +129,9 @@ SELECT customer_name, total FROM agg_dt ORDER BY customer_name
 alice 100
 bob 200
 
-# Self-joins keep one endpoint per distinct source table.
+# A repeated source is read at one consistent snapshot by the refresh.
 statement ok
-CREATE DYNAMIC TABLE self_join_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS
+CREATE DYNAMIC TABLE self_join_dt AS
 SELECT l.order_id AS left_id, r.order_id AS right_id
 FROM orders AS l JOIN orders AS r ON l.customer_id = r.customer_id
 
@@ -165,49 +159,49 @@ TRUNCATE TABLE order_detail
 statement error 1005
 CREATE TABLE fake_dt(a INT) ENGINE = DYNAMIC_TABLE
 
-# Protected options: a user cannot forge refresh state via CREATE TABLE.
+# The stored definition is not user-settable, so a plain table cannot impersonate one.
 statement error 1301
-CREATE TABLE fake_dt(a INT) dynamic_table_initialized = 'true'
-
-statement error 1301
-CREATE TABLE fake_dt(a INT) dynamic_table_source_endpoints = '[]'
+CREATE TABLE fake_dt(a INT) as_query = 'SELECT 1'
 
 # REFRESH DYNAMIC TABLE only accepts dynamic tables.
 statement error 1302
 REFRESH DYNAMIC TABLE orders
 
-# Scheduling and incremental refresh are not implemented; they must be rejected
-# instead of silently accepted.
+# Scheduling is not implemented, so TARGET_LAG must be rejected rather than accepted
+# and then silently never honoured.
 statement error 1002
 CREATE DYNAMIC TABLE sched_dt TARGET_LAG = 5 MINUTE AS SELECT order_id FROM orders
 
+# WAREHOUSE is parsed for the eventual scheduling design but cannot be honoured yet.
 statement error 1002
-CREATE DYNAMIC TABLE incr_dt REFRESH_MODE = INCREMENTAL AS SELECT order_id FROM orders
+CREATE DYNAMIC TABLE wh_dt WAREHOUSE = 'wh' AS SELECT order_id FROM orders
+
+# REFRESH_MODE and INITIALIZE are gone: refresh is always full, and CREATE always
+# materializes. They must not be silently accepted and ignored.
+statement error
+CREATE DYNAMIC TABLE mode_dt REFRESH_MODE = FULL AS SELECT order_id FROM orders
+
+statement error
+CREATE DYNAMIC TABLE init_dt INITIALIZE = ON_CREATE AS SELECT order_id FROM orders
 
 # Derived objects are not supported as sources in this phase.
 statement ok
 CREATE VIEW orders_view AS SELECT order_id FROM orders
 
 statement error 1302
-CREATE DYNAMIC TABLE from_view_dt REFRESH_MODE = FULL AS SELECT order_id FROM orders_view
+CREATE DYNAMIC TABLE from_view_dt AS SELECT order_id FROM orders_view
 
 statement error 1302
-CREATE DYNAMIC TABLE from_dt_dt REFRESH_MODE = FULL AS SELECT order_id FROM order_detail
+CREATE DYNAMIC TABLE from_dt_dt AS SELECT order_id FROM order_detail
 
-# SHOW CREATE emits a re-executable CREATE DYNAMIC TABLE, not CREATE TABLE.
+# SHOW CREATE emits a re-executable CREATE DYNAMIC TABLE, not CREATE TABLE, and must not
+# echo a refresh policy the parser no longer accepts.
 query TT
 SHOW CREATE TABLE empty_dt
 ----
-empty_dt CREATE DYNAMIC TABLE `dt_ddl`.`empty_dt` REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS SELECT id FROM dt_ddl.empty_src
+empty_dt CREATE DYNAMIC TABLE `dt_ddl`.`empty_dt` AS SELECT id FROM dt_ddl.empty_src
 
-# Internal refresh state is not user-settable.
-statement error 1301
-ALTER TABLE empty_dt SET OPTIONS (dynamic_table_initialized = 'true')
-
-statement error 1301
-ALTER TABLE empty_dt SET OPTIONS (dynamic_table_source_endpoints = '[]')
-
-# Schema-altering DDL must not be able to desynchronize the stored result from its definition.
+# Schema-altering DDL must not desynchronize the stored result from its definition.
 statement error 3905
 ALTER TABLE order_detail ADD COLUMN extra INT
 
@@ -220,12 +214,19 @@ SELECT name, table_type FROM system.tables WHERE database = 'dt_ddl' AND name = 
 ----
 order_detail DYNAMIC TABLE
 
-# WAREHOUSE is parsed for the eventual scheduling design but cannot be honoured yet, so it must
-# be rejected rather than silently ignored.
-statement error 1002
-CREATE DYNAMIC TABLE wh_dt WAREHOUSE = 'wh' AS SELECT order_id FROM orders
+# CREATE is all-or-nothing. Reads always serve the materialized result, so an object that
+# exists but was never populated would answer with zero rows instead of an error. If the
+# initial refresh fails, the table must not be left behind.
+statement error
+CREATE DYNAMIC TABLE bad_dt AS SELECT order_id, amount / (order_id - order_id) AS q FROM orders
 
-# Dropping a source leaves the object unreadable rather than silently returning stale rows.
+query I
+SELECT count(*) FROM system.tables WHERE database = 'dt_ddl' AND name = 'bad_dt'
+----
+0
+
+# Dropping a source does not break reads: the stored result is self-contained and keeps
+# being served. Refresh is what fails, which is where the user learns the pipeline is broken.
 statement ok
 CREATE TABLE drop_src(id INT NOT NULL)
 
@@ -233,7 +234,7 @@ statement ok
 INSERT INTO drop_src VALUES (1)
 
 statement ok
-CREATE DYNAMIC TABLE drop_src_dt REFRESH_MODE = FULL INITIALIZE = ON_CREATE AS SELECT id FROM drop_src
+CREATE DYNAMIC TABLE drop_src_dt AS SELECT id FROM drop_src
 
 query I
 SELECT id FROM drop_src_dt
@@ -243,8 +244,13 @@ SELECT id FROM drop_src_dt
 statement ok
 DROP TABLE drop_src
 
-statement error
+query I
 SELECT id FROM drop_src_dt
+----
+1
+
+statement error
+REFRESH DYNAMIC TABLE drop_src_dt
 
 statement ok
 DROP TABLE drop_src_dt

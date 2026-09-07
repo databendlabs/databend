@@ -412,21 +412,23 @@ impl ShowCreateTableInterpreter {
             .options()
             .get(OPT_KEY_AS_QUERY)
             .ok_or_else(|| ErrorCode::InvalidOperation("dynamic table definition is missing"))?;
-        let mut sql = format!(
-            "CREATE DYNAMIC TABLE `{}`.`{}` REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS {}",
-            database,
-            table.name(),
-            query
-        );
-        if let Some(cluster_key) = table.get_table_info().meta.cluster_key_str() {
-            sql = format!(
-                "CREATE DYNAMIC TABLE `{}`.`{}` CLUSTER BY {} REFRESH_MODE = FULL INITIALIZE = ON_SCHEDULE AS {}",
+        // Refresh is always full, so there is no policy to echo back. Emitting one would produce
+        // a statement the parser no longer accepts.
+        let sql = match table.get_table_info().meta.cluster_key_str() {
+            Some(cluster_key) => format!(
+                "CREATE DYNAMIC TABLE `{}`.`{}` CLUSTER BY {} AS {}",
                 database,
                 table.name(),
                 cluster_key,
                 query
-            );
-        }
+            ),
+            None => format!(
+                "CREATE DYNAMIC TABLE `{}`.`{}` AS {}",
+                database,
+                table.name(),
+                query
+            ),
+        };
         Ok(sql)
     }
 
