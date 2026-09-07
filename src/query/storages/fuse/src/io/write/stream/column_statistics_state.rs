@@ -111,9 +111,9 @@ impl ColumnStatisticsState {
             let mut col_stats = stats.finalize()?;
             if let Some(count) = column_distinct_count.get(&id) {
                 col_stats.distinct_of_values = Some(*count as u64);
-            } else if col_stats.min == col_stats.max {
+            } else if col_stats.is_const() {
                 // Bloom index will skip the large string column, it also no need to calc distinct values.
-                if col_stats.min.is_null() {
+                if col_stats.is_all_null() {
                     col_stats.distinct_of_values = Some(0);
                 } else {
                     col_stats.distinct_of_values = Some(1);
@@ -214,13 +214,14 @@ mod tests {
         state.add_block(&schema, &block)?;
         let stats = state.finalize(HashMap::new())?;
         let col_stats = stats.get(&0).unwrap();
+        let view = col_stats.try_view(&DataType::String).unwrap();
 
         assert_eq!(
-            col_stats.min(),
+            view.min(),
             &databend_common_expression::Scalar::String(format!("{prefix}a"))
         );
         assert_eq!(
-            col_stats.max(),
+            view.max(),
             &databend_common_expression::Scalar::String(format!("{prefix}{END_OF_UNICODE_RANGE}"))
         );
         Ok(())

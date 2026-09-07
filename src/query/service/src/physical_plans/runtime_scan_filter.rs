@@ -117,6 +117,7 @@ fn create_runtime_top_n_filter(
         source.scan_id,
         Arc::new(RuntimeTopNFilter::new(
             *column_id,
+            data_type.clone(),
             desc.asc,
             desc.nulls_first,
         )),

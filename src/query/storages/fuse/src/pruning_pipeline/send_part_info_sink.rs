@@ -229,7 +229,7 @@ impl AsyncSink for SendPartInfoSink {
             if let Some((_, order)) = filters.preferred_filter() {
                 let mut ranked = Vec::with_capacity(block_metas.len());
                 for block_meta in block_metas.drain(..) {
-                    let rank = order.rank(Some(&block_meta.1.col_stats)).cloned();
+                    let rank = order.rank(Some(&block_meta.1.col_stats));
                     ranked.push((rank, block_meta));
                 }
 

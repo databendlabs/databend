@@ -148,17 +148,28 @@ impl ReplaceIntoMutator {
     // filter out rows that definitely have no conflict, by using table level range index
     fn table_level_row_prune(&self, data_block: &DataBlock) -> Result<DataBlock> {
         let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_index;
+        let stats_views = self
+            .on_conflict_fields
+            .iter()
+            .map(|field| {
+                column_stats
+                    .get(&field.table_field.column_id)
+                    .and_then(|stats| stats.try_view_with_table_type(field.table_field.data_type()))
+            })
+            .collect::<Vec<_>>();
         let mut bitmap = MutableBitmap::new();
         // for each row, check if it may have conflict
         for row_idx in 0..data_block.num_rows() {
             let mut should_keep = true;
             // for each column, check if it may have conflict
-            for field in &self.on_conflict_fields {
+            for (field, stats) in self.on_conflict_fields.iter().zip(&stats_views) {
                 let column = &data_block.get_by_offset(field.field_index).value();
                 let value = column.row_scalar(row_idx)?;
-                let stats = column_stats.get(&field.table_field.column_id);
-                if let Some(stats) = stats {
-                    should_keep = !(value < stats.min().as_ref() || value > stats.max().as_ref());
+                if let Some(view) = stats {
+                    let below_min = value.partial_cmp(&view.min().as_ref()) == Some(Ordering::Less);
+                    let above_max =
+                        value.partial_cmp(&view.max().as_ref()) == Some(Ordering::Greater);
+                    should_keep = !(below_min || above_max);
                     if !should_keep {
                         // if one column outsides the table level range, no need to check other columns
                         break;

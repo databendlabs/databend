@@ -207,21 +207,28 @@ fn build_virtual_column_metas(
         lens.push(virtual_column_meta.len);
         num_values.push(virtual_column_meta.num_values);
 
-        let data_type = virtual_column_meta
-            .physical_type()
-            .table_data_type()
-            .to_string();
-        data_types.push(data_type);
+        let data_type = virtual_column_meta.physical_type().table_data_type();
+        data_types.push(data_type.to_string());
 
-        if let Some(column_stat) = &virtual_column_meta.column_stat {
+        if let Some((column_stat, column_stat_view)) = virtual_column_meta
+            .column_stat
+            .as_ref()
+            .and_then(|column_stat| {
+                column_stat
+                    .try_view_with_table_type(&data_type)
+                    .map(|view| (column_stat, view))
+            })
+        {
             column_stat_bitmap.push(true);
-            let min_type = infer_schema_type(&column_stat.min.as_ref().infer_data_type()).unwrap();
-            let min_val = build_variant(column_stat.min.clone(), &min_type, func_ctx);
+            let min_type =
+                infer_schema_type(&column_stat_view.min().as_ref().infer_data_type()).unwrap();
+            let min_val = build_variant(column_stat_view.min().clone(), &min_type, func_ctx);
             mins.push(min_val);
-            let max_type = infer_schema_type(&column_stat.max.as_ref().infer_data_type()).unwrap();
-            let max_val = build_variant(column_stat.max.clone(), &max_type, func_ctx);
+            let max_type =
+                infer_schema_type(&column_stat_view.max().as_ref().infer_data_type()).unwrap();
+            let max_val = build_variant(column_stat_view.max().clone(), &max_type, func_ctx);
             maxes.push(max_val);
-            null_counts.push(column_stat.null_count);
+            null_counts.push(column_stat_view.null_count());
             in_memory_sizes.push(column_stat.in_memory_size);
         } else {
             column_stat_bitmap.push(false);

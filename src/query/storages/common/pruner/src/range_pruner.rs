@@ -117,27 +117,22 @@ fn build_virtual_col_stats(
         let Some(column_stat) = column.column_stat.as_ref() else {
             continue;
         };
-        let Some(scalar_data_type) = column_stat
-            .min
-            .as_ref()
-            .infer_common_type(&column_stat.max.as_ref())
-        else {
-            continue;
-        };
         let physical_data_type = column.data_type();
         let physical_expression_type = DataType::from(&physical_data_type);
         if matches!(
             physical_expression_type.remove_nullable(),
             DataType::Variant
-        ) || physical_expression_type.remove_nullable() != scalar_data_type.remove_nullable()
-        {
+        ) {
             continue;
         }
+        let Some(column_stat) = column_stat.try_view(&physical_expression_type) else {
+            continue;
+        };
         stats.insert(virtual_ref.name.clone(), VirtualColumnStat {
             query_column_id: virtual_ref.query_column_id,
-            min: column_stat.min.clone(),
-            max: column_stat.max.clone(),
-            null_count: column_stat.null_count,
+            min: column_stat.min().clone(),
+            max: column_stat.max().clone(),
+            null_count: column_stat.null_count(),
             data_type: physical_data_type,
         });
     }

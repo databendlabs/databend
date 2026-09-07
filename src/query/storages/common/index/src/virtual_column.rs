@@ -53,13 +53,7 @@ pub struct VirtualColumnStat {
 
 impl VirtualColumnStat {
     pub fn to_column_statistics(&self) -> ColumnStatistics {
-        ColumnStatistics {
-            min: self.min.clone(),
-            max: self.max.clone(),
-            null_count: self.null_count,
-            in_memory_size: 0,
-            distinct_of_values: None,
-        }
+        ColumnStatistics::new(self.min.clone(), self.max.clone(), self.null_count, 0, None)
     }
 }
 

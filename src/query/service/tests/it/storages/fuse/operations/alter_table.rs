@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -83,11 +84,17 @@ async fn check_segment_column_ids(
     };
 
     let snapshot = snapshot_reader.read(&params).await?;
+    let leaf_fields = fuse_table.schema().leaf_fields();
     if let Some(expected_column_min_max) = expected_column_min_max {
         for (column_id, (min, max)) in &expected_column_min_max {
             if let Some(stat) = snapshot.summary.col_stats.get(column_id) {
-                assert_eq!(min, stat.min());
-                assert_eq!(max, stat.max());
+                let field = leaf_fields
+                    .iter()
+                    .find(|field| field.column_id() == *column_id)
+                    .unwrap();
+                let view = stat.try_view_with_table_type(field.data_type()).unwrap();
+                assert_eq!(min, view.min());
+                assert_eq!(max, view.max());
             }
         }
     }

@@ -153,12 +153,49 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
     } else {
         return None;
     };
+    // Arrow commonly represents external Parquet decimals with precision <= 18 as Decimal128,
+    // while Databend's canonical scalar representation for that precision is Decimal64. Normalize
+    // successfully decoded footer statistics before they enter the shared schema-aware stats API.
+    // Malformed values that do not fit the precision-derived variant fail open.
+    let canonicalize = |scalar| match scalar {
+        Scalar::Decimal(decimal) => Some(Scalar::Decimal(decimal.strict_decimal_checked()?)),
+        scalar => Some(scalar),
+    };
     Some(ColumnStatistics::new(
-        min,
-        max,
+        canonicalize(min)?,
+        canonicalize(max)?,
         // Doc this
         s.null_count_opt().unwrap_or(0),
         0, // this field is not used.
         s.distinct_count_opt(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    #[test]
+    fn convert_external_decimal_stats_to_canonical_variant() {
+        let size = DecimalSize::new_unchecked(10, 2);
+        let parquet_stats = Statistics::int64(Some(100), Some(900), None, Some(3), false);
+        // External Parquet schemas commonly expose low-precision decimals as Decimal128.
+        let table_type = TableDataType::Decimal(DecimalDataType::Decimal128(size));
+
+        let stats = convert_column_statistics(&parquet_stats, &table_type).unwrap();
+        let view = stats.try_view(&DataType::Decimal(size)).unwrap();
+
+        assert_eq!(
+            view.min(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(100, size))
+        );
+        assert_eq!(
+            view.max(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(900, size))
+        );
+        assert_eq!(view.null_count(), 3);
+    }
 }

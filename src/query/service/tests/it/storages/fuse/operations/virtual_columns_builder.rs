@@ -662,6 +662,8 @@ async fn test_direct_physical_names_do_not_collide_across_sources() -> anyhow::R
     assert_ne!(left.column_meta.offset, right.column_meta.offset);
     let left_stat = left.column_meta.column_stat.as_ref().unwrap();
     let right_stat = right.column_meta.column_stat.as_ref().unwrap();
+    let left_stat = left_stat.try_view(&DataType::String).unwrap();
+    let right_stat = right_stat.try_view(&DataType::String).unwrap();
     assert_eq!(left_stat.min(), &Scalar::String("left".to_string()));
     assert_eq!(left_stat.max(), &Scalar::String("left".to_string()));
     assert_eq!(right_stat.min(), &Scalar::String("right".to_string()));

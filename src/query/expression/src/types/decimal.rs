@@ -407,6 +407,51 @@ pub enum DecimalScalar {
 }
 
 impl DecimalScalar {
+    /// Convert the scalar to the canonical physical Decimal variant derived from its precision.
+    ///
+    /// Returns `None` when the value cannot be represented by the target variant. This is useful
+    /// for untrusted metadata such as external Parquet statistics, where narrowing must fail open
+    /// instead of truncating the value.
+    pub fn strict_decimal_checked(self) -> Option<Self> {
+        let size = self.size();
+        match size.data_kind() {
+            DecimalDataKind::Decimal64 => {
+                let value = match self {
+                    DecimalScalar::Decimal64(value, _) => value,
+                    DecimalScalar::Decimal128(value, _) => i64::try_from(value).ok()?,
+                    DecimalScalar::Decimal256(value, _) => {
+                        if value < i256::from(i64::MIN) || value > i256::from(i64::MAX) {
+                            return None;
+                        }
+                        value.as_i64()
+                    }
+                };
+                Some(DecimalScalar::Decimal64(value, size))
+            }
+            DecimalDataKind::Decimal128 => {
+                let value = match self {
+                    DecimalScalar::Decimal64(value, _) => value as i128,
+                    DecimalScalar::Decimal128(value, _) => value,
+                    DecimalScalar::Decimal256(value, _) => {
+                        if value < i256::from(i128::MIN) || value > i256::from(i128::MAX) {
+                            return None;
+                        }
+                        value.as_i128()
+                    }
+                };
+                Some(DecimalScalar::Decimal128(value, size))
+            }
+            DecimalDataKind::Decimal256 => {
+                let value = match self {
+                    DecimalScalar::Decimal64(value, _) => i256::from(value),
+                    DecimalScalar::Decimal128(value, _) => i256::from(value),
+                    DecimalScalar::Decimal256(value, _) => value,
+                };
+                Some(DecimalScalar::Decimal256(value, size))
+            }
+        }
+    }
+
     pub fn to_float32(&self) -> f32 {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(v, size) => v.to_float32(size.scale),
@@ -428,6 +473,12 @@ impl DecimalScalar {
     pub fn size(&self) -> DecimalSize {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(_, size) => *size,
+        })
+    }
+
+    pub fn data_kind(&self) -> DecimalDataKind {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(_, _) => DecimalDataKind::DECIMAL,
         })
     }
 
@@ -3172,6 +3223,59 @@ decimal_convert_type!(i256, i64, Decimal256As64Type, I256ToI64);
 mod tests {
     use super::ValueType;
     use super::*;
+
+    #[test]
+    fn test_decimal_scalar_strict_decimal_checked() {
+        let size18 = DecimalSize::new_unchecked(18, 2);
+        assert_eq!(
+            DecimalScalar::Decimal128(123, size18).strict_decimal_checked(),
+            Some(DecimalScalar::Decimal64(123, size18))
+        );
+
+        let size19 = DecimalSize::new_unchecked(19, 2);
+        assert_eq!(
+            DecimalScalar::Decimal64(123, size19).strict_decimal_checked(),
+            Some(DecimalScalar::Decimal128(123, size19))
+        );
+
+        let size38 = DecimalSize::new_unchecked(38, 2);
+        assert_eq!(
+            DecimalScalar::Decimal256(i256::from(123), size38).strict_decimal_checked(),
+            Some(DecimalScalar::Decimal128(123, size38))
+        );
+
+        let size39 = DecimalSize::new_unchecked(39, 2);
+        assert_eq!(
+            DecimalScalar::Decimal128(123, size39).strict_decimal_checked(),
+            Some(DecimalScalar::Decimal256(i256::from(123), size39))
+        );
+    }
+
+    #[test]
+    fn test_decimal_scalar_strict_decimal_checked_rejects_overflow() {
+        let size18 = DecimalSize::new_unchecked(18, 2);
+        assert_eq!(
+            DecimalScalar::Decimal128(i64::MAX as i128 + 1, size18).strict_decimal_checked(),
+            None
+        );
+        assert_eq!(
+            DecimalScalar::Decimal256(i256::from(i64::MIN) - i256::ONE, size18)
+                .strict_decimal_checked(),
+            None
+        );
+
+        let size38 = DecimalSize::new_unchecked(38, 2);
+        assert_eq!(
+            DecimalScalar::Decimal256(i256::from(i128::MAX) + i256::ONE, size38)
+                .strict_decimal_checked(),
+            None
+        );
+        assert_eq!(
+            DecimalScalar::Decimal256(i256::from(i128::MIN) - i256::ONE, size38)
+                .strict_decimal_checked(),
+            None
+        );
+    }
 
     #[test]
     fn test_decimal_cast() {

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::compare_statistics_scalar_slices;
 use indexmap::IndexSet;
 use log::debug;
 
@@ -64,16 +65,16 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             // window-global block index range. `indices` maps each local index
             // back to its `blocks` index.
             let stats = blocks[i].stats();
-            let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
-            if min.len() != properties.scalar_cluster_key_types.len()
-                || max.len() != properties.scalar_cluster_key_types.len()
-            {
+            let Some(view) = stats.try_view(&properties.scalar_cluster_key_types) else {
                 continue;
-            }
-            let point: &mut (Vec<usize>, Vec<usize>) =
-                points_map.entry(ScalarSlice(min)).or_default();
+            };
+            let point: &mut (Vec<usize>, Vec<usize>) = points_map
+                .entry(StatsPoint::new(view.min().to_vec()))
+                .or_default();
             point.0.push(local_idx);
-            let point = points_map.entry(ScalarSlice(max)).or_default();
+            let point = points_map
+                .entry(StatsPoint::new(view.max().to_vec()))
+                .or_default();
             point.1.push(local_idx);
         }
         if points_map.is_empty() {
@@ -370,13 +371,10 @@ pub(crate) fn select_scalar_segments(
         }
 
         total_blocks += compact_segment.summary.block_count as usize;
-        let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
-        if min.len() != properties.scalar_cluster_key_types.len()
-            || max.len() != properties.scalar_cluster_key_types.len()
-        {
+        let Some(view) = stats.try_view(&properties.scalar_cluster_key_types) else {
             continue;
-        }
-        segment_stats.push((i, stats.min, stats.max));
+        };
+        segment_stats.push((i, view.min().to_vec(), view.max().to_vec()));
         segments[i] = Some(SelectedReclusterSegment {
             loc: loc.clone(),
             info: compact_segment.clone(),
@@ -396,10 +394,13 @@ pub(crate) fn select_scalar_segments(
     let mut current_window_max_depth = 0usize;
     let mut segment_points = BTreeMap::new();
     for (i, min, max) in &segment_stats {
-        let point: &mut (Vec<usize>, Vec<usize>) =
-            segment_points.entry(ScalarSlice(min)).or_default();
+        let point: &mut (Vec<usize>, Vec<usize>) = segment_points
+            .entry(StatsPoint::new(min.clone()))
+            .or_default();
         point.0.push(*i);
-        let point = segment_points.entry(ScalarSlice(max)).or_default();
+        let point = segment_points
+            .entry(StatsPoint::new(max.clone()))
+            .or_default();
         point.1.push(*i);
     }
 
@@ -479,31 +480,43 @@ pub(crate) fn select_scalar_segments(
         .collect())
 }
 
-#[derive(Clone, Copy)]
-struct ScalarSlice<'a>(&'a [Scalar]);
+/// Owned cluster-statistics endpoint used by the recluster sweep.
+///
+/// `Scalar::Ord` treats incomparable values as equal. In particular, it collapses NULL and a
+/// non-NULL scalar into one `BTreeMap` key, which corrupts interval depths. Statistics endpoints
+/// have already been aligned to the current cluster-key types, so use the statistics comparator:
+/// it preserves the established NULL ordering and ignores Decimal precision only when safe.
+#[derive(Clone, Debug)]
+struct StatsPoint(Vec<Scalar>);
 
-impl Ord for ScalarSlice<'_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0
-            .iter()
-            .map(Scalar::as_ref)
-            .cmp(other.0.iter().map(Scalar::as_ref))
+impl StatsPoint {
+    fn new(values: Vec<Scalar>) -> Self {
+        Self(values)
     }
 }
 
-impl PartialOrd for ScalarSlice<'_> {
+impl Ord for StatsPoint {
+    fn cmp(&self, other: &Self) -> Ordering {
+        compare_statistics_scalar_slices(&self.0, &other.0).unwrap_or_else(|| {
+            debug_assert!(false, "aligned cluster statistics must be comparable");
+            format!("{:?}", self.0).cmp(&format!("{:?}", other.0))
+        })
+    }
+}
+
+impl PartialOrd for StatsPoint {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for ScalarSlice<'_> {
+impl PartialEq for StatsPoint {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == Ordering::Equal
     }
 }
 
-impl Eq for ScalarSlice<'_> {}
+impl Eq for StatsPoint {}
 
 fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) -> usize {
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
@@ -519,4 +532,41 @@ fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) 
     }
 
     open_interval_count + start.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+
+    use super::*;
+
+    fn decimal64(value: i64, precision: u8, scale: u8) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            value,
+            DecimalSize::new(precision, scale).unwrap(),
+        ))
+    }
+
+    #[test]
+    fn test_stats_point_preserves_null_and_decimal_ordering() {
+        let null = StatsPoint::new(vec![Scalar::Null]);
+        let a = StatsPoint::new(vec![Scalar::String("a".to_string())]);
+        let b = StatsPoint::new(vec![Scalar::String("b".to_string())]);
+
+        assert!(a < b);
+        assert!(b < null);
+
+        let mut points = BTreeMap::new();
+        points.insert(null, 0);
+        points.insert(a, 1);
+        points.insert(b, 2);
+        assert_eq!(points.len(), 3);
+
+        let old = StatsPoint::new(vec![decimal64(100, 10, 2)]);
+        let widened_same_value = StatsPoint::new(vec![decimal64(100, 15, 2)]);
+        let widened_larger_value = StatsPoint::new(vec![decimal64(200, 15, 2)]);
+        assert_eq!(old, widened_same_value);
+        assert!(old < widened_larger_value);
+    }
 }

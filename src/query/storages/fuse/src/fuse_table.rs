@@ -1332,6 +1332,8 @@ impl Table for FuseTable {
                 .unwrap_or(0);
             FuseTableColumnStatisticsProvider::new(
                 stats,
+                self.schema(),
+                self.stream_columns(),
                 histograms,
                 top_n,
                 count_min_sketch,
@@ -1384,6 +1386,7 @@ impl Table for FuseTable {
 
         // Fold column ranges of segments chunk by chunk
         let mut reduced = HashMap::with_capacity(num_fields);
+        let mut has_reduced_input = false;
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
@@ -1391,7 +1394,9 @@ impl Table for FuseTable {
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges
-            partial_col_stats.push(reduced);
+            if has_reduced_input {
+                partial_col_stats.push(reduced);
+            }
             // 2. Append ranges of this chunk
             for compacted_seg in segments.into_iter() {
                 let segment = compacted_seg?;
@@ -1401,35 +1406,41 @@ impl Table for FuseTable {
             }
             // 3. Reduces them
             reduced = reduce_block_statistics(&partial_col_stats);
+            has_reduced_input = true;
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
+        let leaf_fields = self.schema().leaf_fields();
         let r = reduced
             .into_iter()
-            .map(|(k, v)| {
+            .filter_map(|(k, v)| {
+                let field = leaf_fields.iter().find(|field| field.column_id() == k)?;
+                let view = v.try_view_with_table_type(field.data_type())?;
                 let truncate_len = col_stats_truncate_lens
                     .get(&k)
                     .map(|&n| n as usize)
                     .unwrap_or(STATS_STRING_PREFIX_LEN);
-                let min_may_be_truncated = match &v.min {
+                let min = view.min().clone();
+                let max = view.max().clone();
+                let min_may_be_truncated = match &min {
                     Scalar::String(s) => s.len() >= truncate_len,
                     _ => false,
                 };
-                let max_may_be_truncated = match &v.max {
+                let max_may_be_truncated = match &max {
                     Scalar::String(s) => s.len() >= truncate_len,
                     _ => false,
                 };
-                (k, ColumnRange {
+                Some((k, ColumnRange {
                     min: Bound {
                         may_be_truncated: min_may_be_truncated,
-                        value: v.min,
+                        value: min,
                     },
                     max: Bound {
                         may_be_truncated: max_may_be_truncated,
-                        value: v.max,
+                        value: max,
                     },
-                })
+                }))
             })
             .collect();
         Ok(Some(r))
