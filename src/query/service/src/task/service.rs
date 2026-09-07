@@ -329,7 +329,13 @@ impl TaskService {
                                 let tz = schedule_options
                                     .time_zone
                                     .as_ref()
-                                    .map(|tz| tz.parse::<Tz>())
+                                    .map(|tz| {
+                                        tz.parse::<Tz>().map_err(|error| {
+                                            ErrorCode::InvalidTimezone(format!(
+                                                "Invalid task timezone {tz}: {error}"
+                                            ))
+                                        })
+                                    })
                                     .transpose()?
                                     .unwrap_or(Tz::UCT);
                                 let schedule = Schedule::from_str(cron_expr).unwrap();

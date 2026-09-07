@@ -15,6 +15,9 @@
 use std::borrow::Cow;
 
 use arrow_schema::Schema;
+use chrono_tz::Tz;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
@@ -25,10 +28,15 @@ use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::date::DATE_MAX;
+use databend_common_expression::types::date::DATE_MIN;
+use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
+use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp::timestamp_from_micros;
+use databend_common_expression::types::timestamp::timestamp_to_rfc3339_utc;
 use databend_common_expression::types::timestamp::timestamp_to_string;
-use jiff::fmt::strtime::BrokenDownTime;
-use jiff::tz;
-use jiff::tz::TimeZone;
 
 use crate::DataTypeFilter;
 use crate::get_all_test_data_types;
@@ -107,41 +115,111 @@ fn test_aggregate_function_param_scalar_conversion() {
 fn test_timestamp_to_string_formats() {
     // Unix timestamp for "2024-01-01 01:02:03" UTC
     let ts = 1_704_070_923_000_000;
-    let tz = TimeZone::UTC;
+    let tz = Tz::UTC;
 
     assert_eq!(
         timestamp_to_string(ts, &tz).to_string(),
         "2024-01-01 01:02:03.000000"
     );
+    assert_eq!(
+        timestamp_to_rfc3339_utc(253_402_300_799_999_999),
+        "9999-12-31T23:59:59.999999Z"
+    );
 }
 
 #[test]
-fn test_parse_jiff() {
-    let (mut tm, offset) = BrokenDownTime::parse_prefix(
-        "%Y年%m月%d日，%H时%M分%S秒[America/New_York]Y",
-        "2022年02月04日，8时58分59秒[America/New_York]Yxxxxxxxxxxx",
-    )
-    .unwrap();
-
-    tm.set_offset(Some(tz::offset(0 as _)));
-    let ts = tm.to_timestamp().unwrap();
-    assert_eq!(ts.to_string(), "2022-02-04T08:58:59Z");
-    assert_eq!(ts.as_microsecond(), 1643965139000000);
-    assert_eq!(offset, 53);
-
+fn test_timestamp_display_clamps_bounds() {
+    for tz in [Tz::UTC, Tz::Asia__Shanghai, Tz::America__New_York] {
+        for (input, expected) in [
+            (i64::MIN, TIMESTAMP_MIN),
+            (TIMESTAMP_MIN - 1, TIMESTAMP_MIN),
+            (TIMESTAMP_MIN, TIMESTAMP_MIN),
+            (-1_000_001, -1_000_001),
+            (-1, -1),
+            (0, 0),
+            (TIMESTAMP_MAX, TIMESTAMP_MAX),
+            (TIMESTAMP_MAX + 1, TIMESTAMP_MAX),
+            (i64::MAX, TIMESTAMP_MAX),
+        ] {
+            let value = timestamp_from_micros(input, &tz);
+            assert_eq!(value.timestamp_micros(), expected, "{input} in {tz}");
+            assert_eq!(
+                timestamp_to_string(input, &tz).to_string(),
+                timestamp_to_string(expected, &tz).to_string(),
+            );
+        }
+    }
     assert_eq!(
-        "2022年02月04日，8时58分59秒[America/New_York]Y".len(),
-        offset
+        timestamp_to_string(-1, &Tz::UTC).to_string(),
+        "1969-12-31 23:59:59.999999"
     );
-
-    // Jiff 0.2.16 requires a full civil date to build a datetime.  For inputs
-    // that only specify a Unix timestamp (`%s`), verify via `to_timestamp`.
-    let (mut tm, _) = BrokenDownTime::parse_prefix("%s", "200").unwrap();
-    tm.set_offset(Some(tz::offset(0 as _)));
     assert_eq!(
-        "1970-01-01T00:03:20Z",
-        tm.to_timestamp().unwrap().to_string()
+        timestamp_to_rfc3339_utc(i64::MAX),
+        "9999-12-31T23:59:59.999999Z"
     );
+    assert_eq!(
+        timestamp_to_rfc3339_utc(i64::MIN),
+        "0001-01-01T00:00:00.000000Z"
+    );
+}
+
+#[test]
+fn test_datetime_clamp_to_minimum() {
+    for value in [
+        i64::MIN,
+        DATE_MIN as i64 - 1,
+        DATE_MIN as i64,
+        -1,
+        0,
+        DATE_MAX as i64,
+        DATE_MAX as i64 + 1,
+        i64::MAX,
+    ] {
+        let expected = if (DATE_MIN as i64..=DATE_MAX as i64).contains(&value) {
+            value as i32
+        } else {
+            DATE_MIN
+        };
+        assert_eq!(clamp_date(value), expected);
+    }
+
+    let values = [
+        i64::MIN,
+        TIMESTAMP_MIN - 1,
+        TIMESTAMP_MIN,
+        -1,
+        0,
+        TIMESTAMP_MAX,
+        TIMESTAMP_MAX + 1,
+        i64::MAX,
+    ];
+    let mut expected = Vec::new();
+    let mut bytes = Vec::new();
+    let mut scalar_builder = ColumnBuilder::with_capacity(&DataType::Timestamp, values.len());
+    for value in values {
+        let mut clamped = value;
+        clamp_timestamp(&mut clamped);
+        let expected_value = if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value) {
+            value
+        } else {
+            TIMESTAMP_MIN
+        };
+        assert_eq!(clamped, expected_value);
+        expected.push(expected_value);
+        let encoded = value.to_le_bytes();
+        scalar_builder.push_binary(&mut encoded.as_slice()).unwrap();
+        bytes.extend(encoded);
+    }
+    let mut batch_builder = ColumnBuilder::with_capacity(&DataType::Timestamp, values.len());
+    batch_builder
+        .push_fix_len_binaries(&bytes, size_of::<i64>(), values.len())
+        .unwrap();
+    for column in [scalar_builder.build(), batch_builder.build()] {
+        let Column::Timestamp(values) = column else {
+            panic!("expected timestamp column");
+        };
+        assert_eq!(values.as_slice(), expected.as_slice());
+    }
 }
 
 #[test]
