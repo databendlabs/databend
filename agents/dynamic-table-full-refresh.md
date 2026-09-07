@@ -142,7 +142,7 @@ deliberately reintroduced checkpoint.
 
 ## Verification
 
-`tests/sqllogictests/suites/base/05_ddl/05_0066_ddl_dynamic_table.test` (96 assertions) covers the
+`tests/sqllogictests/suites/base/05_ddl/05_0066_ddl_dynamic_table.test` (94 assertions) covers the
 stale-read contract (a source commit does not change what the object returns), refresh publishing
 new rows, idempotent refresh, empty results, aggregates, self-joins, `CREATE` rollback on a failed
 initial refresh, reads surviving a dropped source while refresh fails, a database name containing a
