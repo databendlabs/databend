@@ -28,6 +28,33 @@ FROM (
 ----
 5
 
+## Later groups resolve expressions using settings applied by earlier groups.
+
+statement ok
+SET timezone = 'UTC'
+
+query T
+SELECT /*+ SET_VAR(timezone='Asia/Shanghai') */ timezone()
+FROM (SELECT /*+ SET_VAR(timezone=timezone()) */ 1)
+----
+Asia/Shanghai
+
+query T
+SELECT /*+ SET_VAR(timezone='Asia/Shanghai') */ timezone()
+FROM (SELECT /*+ SET_VAR(timezone='America/Los_Angeles') */ 1)
+----
+America/Los_Angeles
+
+## Sequential application remains query-local.
+
+query T
+SELECT timezone()
+----
+UTC
+
+statement ok
+UNSET timezone
+
 ## SETTINGS takes priority over SET_VAR when both occur in the same statement.
 
 query T

@@ -120,17 +120,17 @@ pub fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) ->
         }
     } else if !collector.hints.is_empty() {
         let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let mut resolved = HashMap::new();
         for hint in collector.hints {
             match resolve_hint(ctx.clone(), metadata.clone(), &hint) {
-                // Later hint groups override earlier groups in AST walk order.
-                Ok(group) => resolved.extend(group),
+                // Apply each group before resolving the next so dependent expressions
+                // see earlier settings. Later groups override earlier groups in AST walk order.
+                Ok(group) => ctx.get_shared_settings().set_batch_settings(&group, true)?,
                 Err(error) => {
                     warn!("[SQL-PLANNER] Failed to resolve optimize hint {hint:?}: {error:?}");
                 }
             }
         }
-        resolved
+        HashMap::new()
     } else {
         HashMap::new()
     };
