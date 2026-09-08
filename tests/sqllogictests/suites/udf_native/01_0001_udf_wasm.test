@@ -62,3 +62,142 @@ select number, wasm_is_prime(number) from numbers(5) where number > 0 order by 1
 2 1
 3 1
 4 0
+
+# WASM ABI scalar type matrix.
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_boolean (BOOLEAN) RETURNS BOOLEAN LANGUAGE wasm HANDLER = 'wasm_identity_boolean' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_int8 (TINYINT) RETURNS TINYINT LANGUAGE wasm HANDLER = 'wasm_identity_int8' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_int16 (SMALLINT) RETURNS SMALLINT LANGUAGE wasm HANDLER = 'wasm_identity_int16' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_int32 (INT) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_identity_int32' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_int64 (BIGINT) RETURNS BIGINT LANGUAGE wasm HANDLER = 'wasm_identity_int64' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_uint8 (TINYINT UNSIGNED) RETURNS TINYINT UNSIGNED LANGUAGE wasm HANDLER = 'wasm_identity_uint8' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_uint16 (SMALLINT UNSIGNED) RETURNS SMALLINT UNSIGNED LANGUAGE wasm HANDLER = 'wasm_identity_uint16' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_uint32 (INT UNSIGNED) RETURNS INT UNSIGNED LANGUAGE wasm HANDLER = 'wasm_identity_uint32' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_uint64 (BIGINT UNSIGNED) RETURNS BIGINT UNSIGNED LANGUAGE wasm HANDLER = 'wasm_identity_uint64' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_float32 (FLOAT) RETURNS FLOAT LANGUAGE wasm HANDLER = 'wasm_identity_float32' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_float64 (DOUBLE) RETURNS DOUBLE LANGUAGE wasm HANDLER = 'wasm_identity_float64' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query B
+SELECT wasm_identity_boolean(TRUE)
+----
+1
+
+query T
+SELECT concat(
+    to_string(wasm_identity_int8(-8::TINYINT)), ',',
+    to_string(wasm_identity_int16(-16::SMALLINT)), ',',
+    to_string(wasm_identity_int32(-32::INT)), ',',
+    to_string(wasm_identity_int64(-64::BIGINT)), ',',
+    to_string(wasm_identity_uint8(8::TINYINT UNSIGNED)), ',',
+    to_string(wasm_identity_uint16(16::SMALLINT UNSIGNED)), ',',
+    to_string(wasm_identity_uint32(32::INT UNSIGNED)), ',',
+    to_string(wasm_identity_uint64(64::BIGINT UNSIGNED)), ',',
+    to_string(wasm_identity_float32(1.25::FLOAT)), ',',
+    to_string(wasm_identity_float64(2.5::DOUBLE)))
+----
+-8,-16,-32,-64,8,16,32,64,1.25,2.5
+
+# Utf8View is converted to the WASM ABI's Utf8 at the runtime boundary.
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_string (VARCHAR) RETURNS VARCHAR LANGUAGE wasm HANDLER = 'wasm_identity_string' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_string_length (VARCHAR) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_string_length' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query IT
+SELECT wasm_string_length(CAST('{"a":1}' AS VARCHAR)), wasm_identity_string(CAST('{"a":1}' AS VARCHAR))
+----
+7 {"a":1}
+
+query B
+SELECT is_null(wasm_identity_string(NULL::VARCHAR))
+----
+1
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_binary (BINARY) RETURNS BINARY LANGUAGE wasm HANDLER = 'wasm_identity_binary' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query T
+SELECT to_hex(wasm_identity_binary(to_binary('Databend')))
+----
+4461746162656E64
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_date (DATE) RETURNS DATE LANGUAGE wasm HANDLER = 'wasm_identity_date' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_timestamp (TIMESTAMP) RETURNS TIMESTAMP LANGUAGE wasm HANDLER = 'wasm_identity_timestamp' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query TT
+SELECT to_string(wasm_identity_date('2026-09-08'::DATE)), to_string(wasm_identity_timestamp('2026-09-08 10:11:12.123456'::TIMESTAMP))
+----
+2026-09-08 2026-09-08 10:11:12.123456
+
+# arrowudf.decimal is backed by rust_decimal, so only precision and scale up to 28 are supported.
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_decimal64 (DECIMAL(18, 2)) RETURNS DECIMAL(18, 2) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_decimal128 (DECIMAL(28, 28)) RETURNS DECIMAL(28, 28) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query TT
+SELECT
+    to_string(wasm_identity_decimal64('-1234567890123456.78'::DECIMAL(18, 2))),
+    to_string(wasm_identity_decimal128('0.1234567890123456789012345678'::DECIMAL(28, 28)))
+----
+-1234567890123456.78 0.1234567890123456789012345678
+
+query BB
+SELECT
+    is_null(wasm_identity_decimal64(NULL::DECIMAL(18, 2))),
+    is_null(wasm_identity_decimal128(NULL::DECIMAL(28, 28)))
+----
+1 1
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_decimal29 (DECIMAL(29, 0)) RETURNS DECIMAL(29, 0) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query error rust_decimal.*precision up to 28.*scale between 0 and 28
+SELECT wasm_identity_decimal29(1::DECIMAL(29, 0))
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_decimal76 (DECIMAL(76, 30)) RETURNS DECIMAL(76, 30) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query error rust_decimal.*precision up to 28.*scale between 0 and 28
+SELECT wasm_identity_decimal76('1234567890123456789012345678901234567890.123456789012345678901234567890'::DECIMAL(76, 30))
+
+# Databend LargeList is converted to the WASM ABI's List recursively.
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_array_sum_int32 (ARRAY(INT)) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_array_sum_int32' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_array_sum_float64 (ARRAY(DOUBLE)) RETURNS DOUBLE LANGUAGE wasm HANDLER = 'wasm_array_sum_float64' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query IR
+SELECT wasm_array_sum_int32([1, 2, 3]), wasm_array_sum_float64([1.25, 2.5, 3.75])
+----
+6 7.5
