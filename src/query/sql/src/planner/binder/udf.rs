@@ -27,6 +27,8 @@ use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_PRECISION;
+use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_SCALE;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
@@ -61,18 +63,12 @@ fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
     tys.iter().map(table_type_to_data_type).collect()
 }
 
-// arrow-udf represents decimals with rust_decimal, whose ABI cannot represent
-// Databend's full Decimal128/256 range. Keep this conservative limit aligned
-// with script_udf_support's execution-time compatibility check.
-const WASM_DECIMAL_MAX_PRECISION: u8 = 28;
-const WASM_DECIMAL_MAX_SCALE: u8 = 28;
-
 fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
     match data_type {
         TableDataType::Decimal(decimal) => {
             let size = decimal.size();
-            if size.precision() > WASM_DECIMAL_MAX_PRECISION
-                || size.scale() > WASM_DECIMAL_MAX_SCALE
+            if size.precision() > ARROW_UDF_DECIMAL_MAX_PRECISION
+                || size.scale() > ARROW_UDF_DECIMAL_MAX_SCALE
             {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to 28 and scale between 0 and 28"

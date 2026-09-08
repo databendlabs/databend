@@ -40,6 +40,8 @@ use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_TIMESTAMP_TIMEZO
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_PRECISION;
+use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_SCALE;
 use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 #[cfg_attr(not(feature = "python-udf"), allow(unused_imports))]
@@ -299,9 +301,6 @@ if '{dir}' not in sys.path:
 
 const ARROW_UDF_EXTENSION_KEY: &str = "ARROW:extension:name";
 const ARROW_UDF_DECIMAL: &str = "arrowudf.decimal";
-// This is a conservative subset of rust_decimal's 96-bit coefficient domain.
-const ARROW_UDF_DECIMAL_MAX_PRECISION: u8 = 28;
-const ARROW_UDF_DECIMAL_MAX_SCALE: i8 = 28;
 
 fn wasm_declared_return_type(data_type: &DataType) -> String {
     data_type.remove_nullable().to_string()
@@ -383,7 +382,7 @@ fn wasm_compatible_data_type(data_type: &ArrowDataType) -> Result<ArrowDataType>
             // The scale guard also protects Arrow types that Databend does not currently produce.
             if *precision > ARROW_UDF_DECIMAL_MAX_PRECISION
                 || *scale < 0
-                || *scale > ARROW_UDF_DECIMAL_MAX_SCALE
+                || *scale > ARROW_UDF_DECIMAL_MAX_SCALE as i8
             {
                 return Err(ErrorCode::UDFRuntimeError(format!(
                     "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to 28 and scale between 0 and 28"
