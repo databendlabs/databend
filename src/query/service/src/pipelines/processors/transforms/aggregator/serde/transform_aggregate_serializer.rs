@@ -18,19 +18,18 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
+use crate::pipelines::processors::transforms::aggregator::AggregateExchangeDataCodec;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
-use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
 pub struct TransformAggregateSerializer {
-    params: Arc<AggregatorParams>,
+    codec: Arc<AggregateExchangeDataCodec>,
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -48,7 +47,7 @@ impl TransformAggregateSerializer {
             TransformAggregateSerializer {
                 input,
                 output,
-                params,
+                codec: AggregateExchangeDataCodec::create(params),
                 input_data: None,
                 output_data: None,
             },
@@ -123,74 +122,53 @@ impl TransformAggregateSerializer {
             unreachable!()
         };
 
-        self.input_data = Some(SerializeAggregateStream::create(&self.params, p));
+        self.input_data = Some(self.codec.encode_stream(p));
         Ok(Event::Sync)
     }
 }
 
-pub struct SerializeAggregateStream {
-    _params: Arc<AggregatorParams>,
-    payload: AggregatePayload,
-    flush_state: PayloadFlushState,
-    end_iter: bool,
-    nums: usize,
-}
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::Int64Type;
 
-unsafe impl Send for SerializeAggregateStream {}
+    use super::*;
+    use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
+    use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_codec::tests::params;
+    use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_codec::tests::payload_block;
 
-unsafe impl Sync for SerializeAggregateStream {}
-
-impl SerializeAggregateStream {
-    pub fn create(params: &Arc<AggregatorParams>, payload: AggregatePayload) -> Self {
-        SerializeAggregateStream {
-            payload,
-            flush_state: PayloadFlushState::default(),
-            _params: params.clone(),
-            end_iter: false,
-            nums: 0,
-        }
-    }
-}
-
-impl Iterator for SerializeAggregateStream {
-    type Item = Result<DataBlock>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Result::transpose(self.next_impl())
-    }
-}
-
-impl SerializeAggregateStream {
-    fn next_impl(&mut self) -> Result<Option<DataBlock>> {
-        if self.end_iter {
-            return Ok(None);
-        }
-
-        let AggregatePayload {
-            bucket,
-            ref payload,
-            max_partition_count,
-        } = self.payload;
-        match payload.aggregate_flush(&mut self.flush_state)? {
-            Some(block) => {
-                self.nums += 1;
-                Ok(Some(block.add_meta(Some(
-                    AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, false),
-                ))?))
-            }
-            None => {
-                self.end_iter = true;
-                // always return at least one block
-                if self.nums == 0 {
-                    self.nums += 1;
-                    let block = payload.empty_block(1);
-                    Ok(Some(block.add_meta(Some(
-                        AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, true),
-                    ))?))
-                } else {
-                    Ok(None)
-                }
+    #[test]
+    fn test_merge_serializer_keeps_payload_flush_batches() -> Result<()> {
+        let mut serializer = TransformAggregateSerializer {
+            codec: AggregateExchangeDataCodec::create(params()),
+            input: InputPort::create(),
+            output: OutputPort::create(),
+            input_data: None,
+            output_data: None,
+        };
+        serializer.transform_input_data(payload_block((0..5000).collect()))?;
+        let mut batches = 0;
+        let mut values = Vec::new();
+        while serializer.input_data.is_some() {
+            serializer.process()?;
+            if let Some(block) = serializer.output_data.take() {
+                batches += 1;
+                let meta = block
+                    .get_meta()
+                    .and_then(AggregateSerdeMeta::downcast_ref_from)
+                    .unwrap();
+                assert_eq!((meta.bucket, meta.max_partition_count), (7, 8));
+                let column = block.get_by_offset(0).to_column();
+                values
+                    .extend_from_slice(Int64Type::try_downcast_column(&column).unwrap().as_slice());
             }
         }
+        assert!(
+            batches > 1,
+            "merge exchange must not concatenate the whole payload"
+        );
+        values.sort_unstable();
+        assert_eq!(values, (0..5000).collect::<Vec<_>>());
+        Ok(())
     }
 }
