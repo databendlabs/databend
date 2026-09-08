@@ -140,9 +140,9 @@ statement ok
 CREATE OR REPLACE FUNCTION wasm_identity_binary (BINARY) RETURNS BINARY LANGUAGE wasm HANDLER = 'wasm_identity_binary' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
 query T
-SELECT to_hex(wasm_identity_binary(to_binary('Databend')))
+SELECT lower(to_hex(wasm_identity_binary(to_binary('Databend'))))
 ----
-4461746162656E64
+4461746162656e64
 
 statement ok
 CREATE OR REPLACE FUNCTION wasm_identity_date (DATE) RETURNS DATE LANGUAGE wasm HANDLER = 'wasm_identity_date' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
