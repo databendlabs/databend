@@ -15,31 +15,30 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
-use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_index::InvertedIndexBundleFooter;
+use databend_storages_common_index::MANAGED_JSON_PATH;
+use databend_storages_common_index::META_JSON_PATH;
+use databend_storages_common_index::collect_index_open_slices;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::table::TableCompression;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
 use lindera::dictionary::Dictionary;
@@ -57,7 +56,7 @@ use tantivy::Directory;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
 use tantivy::IndexWriter;
-use tantivy::index::SegmentComponent;
+use tantivy::directory::RamDirectory;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -76,7 +75,6 @@ use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy_jieba::JiebaTokenizer;
 
-use crate::index::build_tantivy_footer;
 use crate::io::TableMetaLocationGenerator;
 
 static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
@@ -92,12 +90,11 @@ pub struct InvertedIndexBuilder {
 }
 
 impl InvertedIndexBuilder {
-    pub fn gen_inverted_index_location(&self, block_location: &Location) -> String {
-        TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-            &block_location.0,
-            &self.name,
-            &self.version,
-        )
+    pub fn gen_inverted_index_location(
+        &self,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> String {
+        location_generator.gen_inverted_index_v2_location(&self.version)
     }
 }
 
@@ -145,32 +142,37 @@ pub struct InvertedIndexState {
     pub(crate) data: Buffer,
     pub(crate) size: u64,
     pub(crate) location: Location,
+    pub(crate) index_name: String,
+    pub(crate) index_version: String,
 }
 
 impl InvertedIndexState {
-    pub fn try_create(data: Buffer, location: String) -> Result<Self> {
+    pub fn try_create(
+        data: Buffer,
+        location: String,
+        index_name: String,
+        index_version: String,
+    ) -> Result<Self> {
         let size = data.len() as u64;
         Ok(Self {
             data,
             size,
-            location: (location, 0),
+            location: (location, INVERTED_INDEX_FILE_FORMAT_VERSION),
+            index_name,
+            index_version,
         })
     }
 
     pub fn from_data_block(
         source_schema: &TableSchemaRef,
         block: &DataBlock,
-        block_location: &Location,
+        location_generator: &TableMetaLocationGenerator,
         inverted_index_builder: &InvertedIndexBuilder,
     ) -> Result<Self> {
         let start = Instant::now();
 
         let inverted_index_location =
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &block_location.0,
-                &inverted_index_builder.name,
-                &inverted_index_builder.version,
-            );
+            inverted_index_builder.gen_inverted_index_location(location_generator);
 
         info!(
             "Start build inverted index for location: {}",
@@ -195,12 +197,18 @@ impl InvertedIndexState {
             inverted_index_location, size, elapsed_ms
         );
 
-        Self::try_create(data, inverted_index_location)
+        Self::try_create(
+            data,
+            inverted_index_location,
+            inverted_index_builder.name.clone(),
+            inverted_index_builder.version.clone(),
+        )
     }
 }
 
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
+    directory: RamDirectory,
     index_writer: IndexWriter,
     operations: Vec<UserOperation>,
 }
@@ -223,12 +231,14 @@ impl InvertedIndexWriter {
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let index = index_builder.create_in_ram()?;
+        let directory = RamDirectory::default();
+        let index = index_builder.open_or_create(directory.clone())?;
         let index_writer = index.writer(DEFAULT_BLOCK_BUFFER_SIZE)?;
         let operations = Vec::new();
 
         Ok(Self {
             schema,
+            directory,
             index_writer,
             operations,
         })
@@ -284,76 +294,71 @@ impl InvertedIndexWriter {
 
     #[async_backtrace::framed]
     pub fn finalize(mut self) -> Result<Buffer> {
-        let _ = self.index_writer.run(self.operations);
-        let _ = self.index_writer.commit()?;
+        self.index_writer.run(self.operations)?;
+        self.index_writer.commit()?;
+        let raw_directory = self.directory.clone();
         let index = self.index_writer.index();
-        let directory = index.directory();
-
-        let mut index_columns = Vec::with_capacity(8);
-
-        let managed_filepath = Path::new(".managed.json");
-        let managed_bytes = directory.atomic_read(managed_filepath)?;
-        let managed_scalar = Scalar::Binary(managed_bytes);
-        let managed_block_entry = BlockEntry::new_const_column(DataType::Binary, managed_scalar, 1);
-        index_columns.push(managed_block_entry);
-
-        let meta_filepath = Path::new("meta.json");
-        let meta_data = directory.atomic_read(meta_filepath)?;
-        let meta_string = std::str::from_utf8(&meta_data)?;
-        let meta_val: serde_json::Value = serde_json::from_str(meta_string)?;
-        let meta_json: String = serde_json::to_string(&meta_val)?;
-        let meta_scalar = Scalar::Binary(meta_json.into_bytes());
-        let meta_block_entry = BlockEntry::new_const_column(DataType::Binary, meta_scalar, 1);
-        index_columns.push(meta_block_entry);
-
-        let segments = index.searchable_segments()?;
-        let segment = &segments[0];
-        let components = vec![
-            SegmentComponent::FastFields,
-            SegmentComponent::Store,
-            SegmentComponent::FieldNorms,
-            SegmentComponent::Positions,
-            SegmentComponent::Postings,
-            SegmentComponent::Terms,
-        ];
-        for component in components {
-            let component_field = segment.open_read(component)?;
-            let bytes = component_field.read_bytes()?;
-            let mut value = bytes.as_slice().to_vec();
-            let footer = build_tantivy_footer(&value)?;
-            value.extend_from_slice(&footer);
-
-            let scalar = Scalar::Binary(value);
-            let block_entry = BlockEntry::new_const_column(DataType::Binary, scalar, 1);
-            index_columns.push(block_entry);
+        let index_meta = index.load_metas()?;
+        if index_meta.segments.len() != 1 {
+            return Err(ErrorCode::StorageOther(format!(
+                "inverted index bundle expects one Tantivy segment, got {}",
+                index_meta.segments.len()
+            )));
         }
 
-        let index_fields = vec![
-            TableField::new(".managed.json", TableDataType::Binary),
-            TableField::new("meta.json", TableDataType::Binary),
-            TableField::new("fast", TableDataType::Binary),
-            TableField::new("store", TableDataType::Binary),
-            TableField::new("fieldnorm", TableDataType::Binary),
-            TableField::new("pos", TableDataType::Binary),
-            TableField::new("idx", TableDataType::Binary),
-            TableField::new("term", TableDataType::Binary),
-        ];
+        // Observe the opaque segment ranges Tantivy reads while synchronously opening the index.
+        // Databend stores these bytes in the footer without interpreting component internals.
+        let open_slices = collect_index_open_slices(raw_directory.clone())?;
 
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
+        let managed_json = raw_directory.atomic_read(Path::new(MANAGED_JSON_PATH))?;
+        let meta_json = raw_directory.atomic_read(Path::new(META_JSON_PATH))?;
 
-        let serialized = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for inverted index
-            false,
-            None,
-        )?;
+        // Preserve every managed segment/plugin file byte-for-byte in the raw region. The two
+        // frequently read index-level JSON files live in the footer instead. ManagedDirectory can
+        // briefly retain stale paths, so only include files that still exist after the commit.
+        let mut paths: Vec<PathBuf> = index
+            .directory()
+            .list_managed_files()
+            .into_iter()
+            .filter(|path| {
+                path != Path::new(MANAGED_JSON_PATH) && path != Path::new(META_JSON_PATH)
+            })
+            .collect();
+        // Keep small, high-reuse lookup components next to the footer so the normal 1 MiB tail
+        // read can populate them without another object request. Preserve deterministic ordering
+        // within each component priority.
+        sort_bundle_paths(&mut paths);
 
-        Ok(Buffer::from(serialized.payload))
+        let mut files = Vec::with_capacity(paths.len());
+        for path in paths {
+            if raw_directory.exists(&path)? {
+                let bytes = raw_directory.atomic_read(&path)?;
+                files.push((path, bytes));
+            }
+        }
+
+        let bundle_bytes =
+            InvertedIndexBundleFooter::build(files, open_slices, managed_json, meta_json)?;
+        Ok(Buffer::from(bundle_bytes))
     }
+}
+
+fn bundle_path_priority(path: &Path) -> u8 {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("store") => 1,
+        Some("fast") => 2,
+        Some("fieldnorm") => 3,
+        Some("term") => 4,
+        _ => 0,
+    }
+}
+
+fn sort_bundle_paths(paths: &mut [PathBuf]) {
+    paths.sort_unstable_by(|left, right| {
+        bundle_path_priority(left)
+            .cmp(&bundle_path_priority(right))
+            .then_with(|| left.cmp(right))
+    });
 }
 
 // Create tokenizers for English, Chinese, and Japanese.
@@ -508,9 +513,11 @@ pub(crate) fn create_index_schema(
         .set_tokenizer(&tokenizer_name)
         .set_index_option(index_record);
     let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
+    // Tantivy executes JSON range queries over fast fields. The remote reader warms the segment's
+    // `.fast` file asynchronously before starting synchronous search.
     let json_options = JsonObjectOptions::default()
         .set_indexing_options(text_field_indexing)
-        .set_fast("raw");
+        .set_fast(Some("raw"));
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());
@@ -530,4 +537,36 @@ pub(crate) fn create_index_schema(
     let index_schema = schema_builder.build();
 
     Ok((index_schema, index_fields))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::sort_bundle_paths;
+
+    #[test]
+    fn test_sort_bundle_paths_places_lookup_components_near_footer() {
+        let mut paths = vec![
+            PathBuf::from("segment.term"),
+            PathBuf::from("segment.pos"),
+            PathBuf::from("segment.store"),
+            PathBuf::from("segment.idx"),
+            PathBuf::from("segment.fieldnorm"),
+            PathBuf::from("segment.custom"),
+            PathBuf::from("segment.fast"),
+        ];
+
+        sort_bundle_paths(&mut paths);
+
+        assert_eq!(paths, vec![
+            PathBuf::from("segment.custom"),
+            PathBuf::from("segment.idx"),
+            PathBuf::from("segment.pos"),
+            PathBuf::from("segment.store"),
+            PathBuf::from("segment.fast"),
+            PathBuf::from("segment.fieldnorm"),
+            PathBuf::from("segment.term"),
+        ]);
+    }
 }

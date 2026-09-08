@@ -22,6 +22,7 @@ databend-common-vector = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
+async-trait = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 base64 = { workspace = true }
@@ -30,13 +31,11 @@ bitvec = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }
 cbordata = { workspace = true }
-crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
 geo = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
-levenshtein_automata = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }
@@ -46,13 +45,10 @@ parking_lot = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
-roaring = { workspace = true }
 self_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }
-tantivy-common = { workspace = true }
-tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
 unicase = { workspace = true }
 xorf = { workspace = true }

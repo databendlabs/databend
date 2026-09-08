@@ -554,6 +554,7 @@ mod tests {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             inverted_index_size: None,
+            inverted_index_metas: None,
             ngram_filter_index_size: None,
             vector_index_size: None,
             vector_index_location: None,

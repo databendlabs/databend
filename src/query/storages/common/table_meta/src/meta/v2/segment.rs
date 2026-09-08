@@ -333,6 +333,19 @@ pub struct DraftVirtualBlockMeta {
     pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
 }
 
+/// Metadata of one inverted index generated for a block.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct BlockInvertedIndexMeta {
+    /// Logical index name.
+    pub index_name: String,
+    /// Complete object location. `Location.1` is the outer inverted-index file format version.
+    pub location: Location,
+    /// Object size in bytes.
+    pub size: u64,
+    /// Complete `TableIndex.version` identifying the index definition.
+    pub index_version: String,
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -354,6 +367,10 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
+    /// `None` means legacy metadata without an authoritative index list. `Some` is authoritative,
+    /// including `Some(Vec::new())`. Entries are kept sorted by `index_name`.
+    #[serde(default)]
+    pub inverted_index_metas: Option<Vec<BlockInvertedIndexMeta>>,
     pub ngram_filter_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
     pub vector_index_location: Option<Location>,
@@ -407,6 +424,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             inverted_index_size,
+            inverted_index_metas: Some(Vec::new()),
             ngram_filter_index_size,
             vector_index_size,
             vector_index_location,
@@ -419,6 +437,17 @@ impl BlockMeta {
             compression,
             create_on,
         }
+    }
+
+    /// Returns metadata for the named inverted index.
+    ///
+    /// The entries are expected to be sorted by `index_name` and unique.
+    pub fn inverted_index_meta(&self, index_name: &str) -> Option<&BlockInvertedIndexMeta> {
+        let metas = self.inverted_index_metas.as_ref()?;
+        metas
+            .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
+            .ok()
+            .map(|index| &metas[index])
     }
 
     pub fn compression(&self) -> Compression {
@@ -544,6 +573,7 @@ impl BlockMeta {
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
+            inverted_index_metas: None,
             vector_index_size: None,
             vector_index_location: None,
             spatial_index_size: None,
@@ -578,6 +608,7 @@ impl BlockMeta {
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
+            inverted_index_metas: None,
             vector_index_size: None,
             vector_index_location: None,
             spatial_index_size: None,

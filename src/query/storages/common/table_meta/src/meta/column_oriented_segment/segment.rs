@@ -19,11 +19,13 @@ use std::sync::Arc;
 use arrow::datatypes::Schema;
 use bytes::Bytes;
 use databend_common_column::binview::BinaryViewColumnGeneric;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::Buffer;
@@ -37,12 +39,14 @@ use super::BLOCK_SIZE;
 use super::BLOOM_FILTER_INDEX_SIZE;
 use super::COMPRESSION;
 use super::FILE_SIZE;
+use super::INVERTED_INDEX_METAS;
 use super::LOCATION_PATH;
 use super::ROW_COUNT;
 use super::block_meta::AbstractBlockMeta;
 use super::block_meta::ColumnOrientedBlockMeta;
 use super::meta_name;
 use super::stat_name;
+use crate::meta::BlockInvertedIndexMeta;
 use crate::meta::BlockMeta;
 use crate::meta::CompactSegmentInfo;
 use crate::meta::MetaCompression;
@@ -164,6 +168,19 @@ impl ColumnOrientedSegment {
             .as_string()
             .unwrap()
             .clone()
+    }
+
+    pub fn inverted_index_metas(&self, row: usize) -> Result<Option<Vec<BlockInvertedIndexMeta>>> {
+        let Some(column) = self.col_by_name(&[INVERTED_INDEX_METAS]) else {
+            return Ok(None);
+        };
+        match column.index(row) {
+            None | Some(ScalarRef::Null) => Ok(None),
+            Some(ScalarRef::Binary(bytes)) => decode(&MetaEncoding::MessagePack, bytes).map(Some),
+            Some(value) => Err(ErrorCode::Internal(format!(
+                "invalid inverted index metadata value: {value:?}"
+            ))),
+        }
     }
 
     pub fn compression_col(&self) -> Buffer<u8> {

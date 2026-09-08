@@ -35,6 +35,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
@@ -82,7 +83,7 @@ struct BlockGcContext<'a> {
     gc_root_meta_ts: DateTime<Utc>,
     /// Hashes of data block paths still referenced by the gc root or refs.
     gc_root_blocks: &'a HashSet<u128>,
-    /// Inverted index metadata used to derive index object paths from data blocks.
+    /// Current table indexes used only to derive historical block-addressed index paths.
     inverted_indexes: &'a BTreeMap<String, TableIndex>,
     /// Start time of the block GC phase, used only for status reporting.
     start: std::time::Instant,
@@ -185,6 +186,7 @@ pub async fn do_vacuum2(
         .len()
         .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
     let mut gc_root_blocks = HashSet::new();
+    let mut protected_inverted_index_locations = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
         .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
         .enumerate()
@@ -202,6 +204,16 @@ pub async fn do_vacuum2(
             .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
             .await?;
         for segment in segments {
+            for block in segment?.block_metas()? {
+                protected_inverted_index_locations.extend(
+                    block
+                        .inverted_index_metas
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|meta| meta.location.0.clone()),
+                );
+            }
             gc_root_blocks.extend(
                 segment?
                     .block_metas()?
@@ -220,17 +232,38 @@ pub async fn do_vacuum2(
         ));
     }
     ctx.set_status_info(&format!(
-        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
+        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}, protected inverted indexes: {}",
         table_info.desc,
         start.elapsed(),
-        gc_root_blocks.len()
+        gc_root_blocks.len(),
+        protected_inverted_index_locations.len(),
+    ));
+
+    let start = std::time::Instant::now();
+    let removed_inverted_index_v2 = purge_inverted_index_v2_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        fuse_table
+            .meta_location_generator()
+            .inverted_index_v2_location_prefix(),
+        &protected_inverted_index_locations,
+        gc_root_timestamp,
+        gc_root_meta_ts,
+    )
+    .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index V2 objects for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_inverted_index_v2,
     ));
 
     let start = std::time::Instant::now();
     let inverted_indexes = &table_info.meta.indexes;
 
-    // order is important
-    // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
+    // Order is important: historical block-addressed indexes and bloom indexes must be removed
+    // before their data blocks, while current `_i_i_v2` objects are handled by the reference-aware
+    // scan above.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
     let block_gc_ctx = BlockGcContext {
         dal: fuse_table.get_operator_ref(),
@@ -289,7 +322,8 @@ pub async fn do_vacuum2(
         .ref_snapshot_location_prefix();
     let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
-    let removed_files = block_gc_stats.removed_files
+    let removed_files = removed_inverted_index_v2
+        + block_gc_stats.removed_files
         + stats_to_gc.len()
         + segments_to_gc.len()
         + snapshots_to_gc.len();
@@ -301,6 +335,47 @@ pub async fn do_vacuum2(
     ));
 
     Ok(())
+}
+
+async fn purge_inverted_index_v2_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        let Some(object_timestamp) = try_extract_uuid_v7_timestamp_from_path(entry.path())? else {
+            // Unknown and pre-v7 naming schemes are handled by their block-addressed cleanup path.
+            continue;
+        };
+        if object_timestamp >= gc_root_timestamp {
+            continue;
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
 }
 
 /// Hash the full path, including legacy names, prefixes and format versions.
@@ -499,7 +574,8 @@ fn collect_block_index_locations(
     blocks_to_gc: &[String],
     inverted_indexes: &BTreeMap<String, TableIndex>,
 ) -> Vec<String> {
-    let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len() * (inverted_indexes.len() + 1));
+    let mut indexes_to_gc =
+        Vec::with_capacity(blocks_to_gc.len() * (inverted_indexes.len() * 2 + 1));
     for loc in blocks_to_gc {
         for idx in inverted_indexes.values() {
             indexes_to_gc.push(

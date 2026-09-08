@@ -31,6 +31,7 @@ use uuid::Version;
 
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
+use crate::FUSE_TBL_INVERTED_INDEX_PREFIX_V2;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
@@ -43,8 +44,9 @@ use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
-use crate::index::InvertedIndexFile;
 use crate::index::filters::BlockFilter;
+
+const LEGACY_INVERTED_INDEX_FILE_FORMAT_VERSION: u64 = 0;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
@@ -72,6 +74,7 @@ pub struct TableMetaLocationGenerator {
     snapshot_location_prefix: String,
     agg_index_location_prefix: String,
     inverted_index_location_prefix: String,
+    inverted_index_v2_location_prefix: String,
     vector_index_location_prefix: String,
     spatial_index_location_prefix: String,
     segment_statistics_location_prefix: String,
@@ -89,6 +92,8 @@ impl TableMetaLocationGenerator {
         let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
         let inverted_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
+        let inverted_index_v2_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX_V2);
         let vector_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
         let spatial_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
@@ -103,6 +108,7 @@ impl TableMetaLocationGenerator {
             snapshot_location_prefix,
             agg_index_location_prefix,
             inverted_index_location_prefix,
+            inverted_index_v2_location_prefix,
             vector_index_location_prefix,
             spatial_index_location_prefix,
             segment_statistics_location_prefix,
@@ -317,6 +323,11 @@ impl TableMetaLocationGenerator {
         &self.inverted_index_location_prefix
     }
 
+    pub fn inverted_index_v2_location_prefix(&self) -> &str {
+        &self.inverted_index_v2_location_prefix
+    }
+
+    // Historical V1 prefix retained for cleanup of pre-V2 index objects.
     pub fn gen_specific_inverted_index_prefix(
         &self,
         index_name: &str,
@@ -324,13 +335,38 @@ impl TableMetaLocationGenerator {
     ) -> String {
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
-            "{}/{}/{}",
+            "{}{}/{}/",
             self.inverted_index_location_prefix(),
             index_name,
             short_ver,
         )
     }
 
+    // Historical raw bundle prefix retained for cleanup of objects written before the dedicated
+    // `_i_i_v2` namespace was introduced.
+    pub fn gen_specific_inverted_index_legacy_v2_prefix(
+        &self,
+        index_name: &str,
+        index_version: &str,
+    ) -> String {
+        format!(
+            "{}{}/{}/",
+            self.inverted_index_location_prefix(),
+            index_name,
+            index_version,
+        )
+    }
+
+    pub fn gen_specific_inverted_index_v2_prefix(&self, index_version: &str) -> String {
+        format!(
+            "{}{}/",
+            self.inverted_index_v2_location_prefix(),
+            index_version,
+        )
+    }
+
+    // Historical V1 container location. New indexes use
+    // `gen_inverted_index_v2_location`.
     pub fn gen_inverted_index_location_from_block_location(
         loc: &str,
         index_name: &str,
@@ -349,7 +385,22 @@ impl TableMetaLocationGenerator {
             index_name,
             short_ver,
             id,
-            InvertedIndexFile::VERSION,
+            LEGACY_INVERTED_INDEX_FILE_FORMAT_VERSION,
+        )
+    }
+
+    /// Generates a new immutable inverted-index object location for one index build.
+    ///
+    /// The `h`-prefixed object UUID is independent from the data block UUID, so rebuilding the
+    /// same index generation never overwrites an object still referenced by an older snapshot.
+    pub fn gen_inverted_index_v2_location(&self, index_version: &str) -> String {
+        let index_object_id = Uuid::now_v7();
+        format!(
+            "{}{}/{}{}.index",
+            self.inverted_index_v2_location_prefix(),
+            index_version,
+            VACUUM2_OBJECT_KEY_PREFIX,
+            index_object_id.as_simple(),
         )
     }
 
@@ -444,6 +495,38 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_inverted_index_v2_location() {
+        let index_version = "fedcba9876543210fedcba9876543210";
+        let generator = TableMetaLocationGenerator::new("table".to_string());
+        let first = generator.gen_inverted_index_v2_location(index_version);
+        let second = generator.gen_inverted_index_v2_location(index_version);
+
+        let expected_prefix = "table/_i_i_v2/fedcba9876543210fedcba9876543210/";
+        assert_ne!(first, second);
+        for location in [&first, &second] {
+            assert!(location.starts_with(expected_prefix));
+            assert!(!location.contains("index_name"));
+            let file_name = location.rsplit('/').next().unwrap();
+            let object_id = file_name.strip_suffix(".index").unwrap();
+            assert_eq!(object_id.len(), 32);
+            assert!(object_id.chars().all(|ch| ch.is_ascii_hexdigit()));
+        }
+
+        assert_eq!(
+            generator.gen_specific_inverted_index_v2_prefix(index_version),
+            expected_prefix
+        );
+        assert_eq!(
+            generator.gen_specific_inverted_index_prefix("index_name", index_version),
+            "table/_i_i/index_name/fedcba9/"
+        );
+        assert_eq!(
+            generator.gen_specific_inverted_index_legacy_v2_prefix("index_name", index_version,),
+            "table/_i_i/index_name/fedcba9876543210fedcba9876543210/"
+        );
+    }
 
     #[test]
     fn test_virtual_block_locations_are_generation_specific() {

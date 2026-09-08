@@ -397,7 +397,11 @@ impl BlockPruner {
                 let matched_rows = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksInverted,
-                        inverted_index_pruner.should_keep(&block_meta.location.0, row_count),
+                        inverted_index_pruner.should_keep(
+                            &block_meta.location.0,
+                            block_meta.inverted_index_metas.as_deref(),
+                            row_count,
+                        ),
                     )
                     .await?;
 

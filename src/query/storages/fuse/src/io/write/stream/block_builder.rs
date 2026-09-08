@@ -44,6 +44,7 @@ use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockInvertedIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -350,10 +351,14 @@ impl StreamBlockBuilder {
             .enumerate()
         {
             let inverted_index_location = self.properties.inverted_index_builders[i]
-                .gen_inverted_index_location(&block_location);
+                .gen_inverted_index_location(&self.properties.meta_locations);
             let data = inverted_index_writer.finalize()?;
-            let inverted_index_state =
-                InvertedIndexState::try_create(data, inverted_index_location)?;
+            let inverted_index_state = InvertedIndexState::try_create(
+                data,
+                inverted_index_location,
+                self.properties.inverted_index_builders[i].name.clone(),
+                self.properties.inverted_index_builders[i].version.clone(),
+            )?;
             inverted_index_states.push(inverted_index_state);
         }
         let virtual_column_state =
@@ -412,6 +417,16 @@ impl StreamBlockBuilder {
             .iter()
             .map(|v| v.size)
             .reduce(|a, b| a + b);
+        let mut inverted_index_metas = inverted_index_states
+            .iter()
+            .map(|state| BlockInvertedIndexMeta {
+                index_name: state.index_name.clone(),
+                location: state.location.clone(),
+                size: state.size,
+                index_version: state.index_version.clone(),
+            })
+            .collect::<Vec<_>>();
+        inverted_index_metas.sort_unstable_by(|left, right| left.index_name.cmp(&right.index_name));
         let block_meta = BlockMeta {
             row_count: self.row_count as u64,
             block_size: self.block_size as u64,
@@ -430,6 +445,7 @@ impl StreamBlockBuilder {
                 .unwrap_or_default(),
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
+            inverted_index_metas: Some(inverted_index_metas),
             vector_index_size,
             vector_index_location,
             spatial_index_size,
