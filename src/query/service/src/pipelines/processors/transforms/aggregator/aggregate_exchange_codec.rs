@@ -71,7 +71,7 @@ impl AggregateExchangeDataCodec {
             .enumerate()
         {
             let actual = entry.data_type();
-            if &actual != field.data_type() {
+            if !field.data_type().matches_physical_type(&actual) {
                 return Err(ErrorCode::BadBytes(format!(
                     "Aggregate transport schema mismatch at column {index}: expected {:?}, got {actual:?}",
                     field.data_type()
@@ -397,14 +397,18 @@ pub(crate) mod tests {
     use arrow_schema::Schema as ArrowSchema;
     use bumpalo::Bump;
     use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::Column;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
     use databend_common_expression::aggregate::AggregatePayload;
     use databend_common_expression::aggregate::SerializedPayload as ExpressionSerializedPayload;
+    use databend_common_expression::types::AggregateStateDataType;
+    use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::UInt64Type;
     use parquet::basic::Repetition;
     use parquet::file::metadata::RowGroupMetaData;
     use parquet::schema::types::SchemaDescriptor;
@@ -596,6 +600,64 @@ pub(crate) mod tests {
             restored.data_block.get_by_offset(0).to_column(),
             group_column
         );
+    }
+
+    #[test]
+    fn test_nullable_aggregate_state_group_key_remote_round_trip() {
+        let uint64 = DataType::Number(NumberDataType::UInt64);
+        let group_type = DataType::AggregateState(Box::new(AggregateStateDataType {
+            function_name: "sum".to_string(),
+            params: vec![],
+            argument_types: vec![uint64.clone()],
+            state_type: Box::new(DataType::Tuple(vec![uint64, DataType::Boolean])),
+        }))
+        .wrap_nullable();
+        let params = AggregatorParams::try_create(
+            DataSchemaRefExt::create(vec![DataField::new("group", group_type.clone())]),
+            vec![group_type],
+            &[0],
+            &[],
+            &[],
+            true,
+            1024,
+            1024 * 1024,
+        )
+        .unwrap();
+        let codec = AggregateExchangeDataCodec::create(params.clone());
+        let group_column = Column::Tuple(vec![
+            UInt64Type::from_data(vec![10, 0, 30]),
+            BooleanType::from_data(vec![true, false, true]),
+        ])
+        .wrap_nullable(Some([true, false, true].into_iter().collect()));
+
+        // GROUP BY sum_state uses the logical AggregateState schema, while
+        // Arrow restores the nullable tuple that physically stores each state.
+        for meta in [
+            AggregateSerdeMeta::create_agg_payload(2, 4, false),
+            AggregateSerdeMeta::create_partitioned_payload(vec![2], vec![3], false),
+        ] {
+            let transport = DataBlock::new_from_columns(vec![group_column.clone()])
+                .add_meta(Some(meta))
+                .unwrap();
+            let transport = flight_round_trip(transport, &params.spill_schema());
+            let mut restored = codec.decode(transport).unwrap().unwrap();
+            let restored = restored
+                .take_meta()
+                .and_then(AggregateMeta::downcast_from)
+                .unwrap();
+            let payload = match restored {
+                AggregateMeta::Serialized(payload) => payload,
+                AggregateMeta::Partitioned {
+                    data: PartitionedData::Serialized(mut payloads),
+                    ..
+                } => payloads.remove(0),
+                _ => panic!("expected serialized aggregate payload"),
+            };
+            assert_eq!(
+                payload.data_block.get_by_offset(0).to_column(),
+                group_column
+            );
+        }
     }
 
     #[tokio::test]
