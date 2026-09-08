@@ -139,17 +139,49 @@ WHERE database = 'db_05_clone_history' AND name = 'tracked'
 ----
 1
 
+# CLONE and FLASHBACK clear physical column-selection options incompatible with the
+# historical schema, while leaving the source's current options unchanged.
 statement ok
-ALTER TABLE source SET OPTIONS (bloom_index_columns = 'evolved')
+ALTER TABLE source SET OPTIONS (bloom_index_columns = 'evolved', approx_distinct_columns = 'evolved')
 
-statement error
-CREATE TABLE invalid_option CLONE source AT (SNAPSHOT => $first_snap)
+statement ok
+CREATE TABLE pruned_options CLONE source AT (SNAPSHOT => $first_snap)
+
+query IT
+SELECT id, payload FROM pruned_options
+----
+1 old
 
 query I
 SELECT count(*) FROM system.tables
-WHERE database = 'db_05_clone_history' AND name = 'invalid_option'
+WHERE database = 'db_05_clone_history' AND name = 'pruned_options'
+  AND table_option NOT LIKE '%BLOOM_INDEX_COLUMNS=%'
+  AND table_option NOT LIKE '%APPROX_DISTINCT_COLUMNS=%'
 ----
-0
+1
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'source'
+  AND table_option LIKE '%BLOOM_INDEX_COLUMNS=%'
+  AND table_option LIKE '%APPROX_DISTINCT_COLUMNS=%'
+----
+1
+
+# Compatible and explicitly empty selections are retained, not reset unconditionally.
+statement ok
+ALTER TABLE source SET OPTIONS (bloom_index_columns = 'id', approx_distinct_columns = '')
+
+statement ok
+CREATE TABLE kept_options CLONE source AT (SNAPSHOT => $first_snap)
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone_history' AND name = 'kept_options'
+  AND table_option LIKE '%BLOOM_INDEX_COLUMNS=''id''%'
+  AND table_option LIKE '%APPROX_DISTINCT_COLUMNS=''''%'
+----
+1
 
 # Persisted table indexes require more than ColumnId existence: their column types and options
 # must remain valid for the historical structure.

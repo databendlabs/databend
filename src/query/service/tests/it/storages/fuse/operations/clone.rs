@@ -30,6 +30,11 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_
 #[tokio::test(flavor = "multi_thread")]
 async fn test_clone_source_privileges() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
+    let session = fixture.default_session();
+    let mut admin = session.get_current_user()?;
+    admin.grants.grant_role("account_admin".to_string());
+    session.set_authed_user(admin, None).await?;
+    session.set_current_role_checked("account_admin").await?;
     for sql in [
         "CREATE DATABASE `clone.source`",
         "CREATE DATABASE clone_target",
@@ -59,6 +64,10 @@ async fn test_clone_source_privileges() -> anyhow::Result<()> {
         .await?
         .unwrap();
     let session = fixture.default_session();
+    // Fixture root starts with PUBLIC as its current role. Create source objects under
+    // ACCOUNT_ADMIN above so restricted PUBLIC users cannot inherit their ownership.
+    session.set_current_role_checked("public").await?;
+    session.set_secondary_roles_checked(Some(vec![])).await?;
     let mut creator = UserInfo::new("clone_creator", "%", AuthInfo::None);
     creator.grants.grant_privileges(
         &GrantObject::DatabaseById("default".into(), target_db),

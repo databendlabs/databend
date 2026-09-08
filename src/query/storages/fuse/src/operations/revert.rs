@@ -108,7 +108,7 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
-        self.apply_snapshot_versioned_metadata_to_meta(&mut table_info.meta, snapshot.as_ref())?;
+        self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot.as_ref())?;
         FuseTable::prepare_persistent_navigation_metadata(&mut table_info.meta);
         self.validate_persistent_navigation_metadata(ctx.clone(), &table_info.meta, "flashback")
             .await?;

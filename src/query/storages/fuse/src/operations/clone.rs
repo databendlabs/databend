@@ -55,7 +55,7 @@ impl FuseTable {
             .insert(OPT_KEY_DATABASE_ID.to_string(), target_database_id);
 
         if let Some(snapshot) = snapshot {
-            self.apply_snapshot_versioned_metadata_to_meta(&mut table_meta, snapshot)?;
+            self.apply_snapshot_metadata_to_meta(&mut table_meta, snapshot)?;
             Self::apply_snapshot_statistics(&mut table_meta, snapshot);
         }
 

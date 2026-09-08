@@ -570,12 +570,10 @@ impl FuseTable {
         Ok(table_tag.data.snapshot_loc)
     }
 
-    /// Overlay metadata that is actually versioned by a snapshot onto current table metadata.
-    ///
-    /// Metadata that snapshots do not version (constraints, indexes, policies, options, and table
-    /// comments) deliberately remains untouched. Callers that persist the result must validate
-    /// that metadata against the projected schema instead of silently pruning it.
-    pub(crate) fn apply_snapshot_versioned_metadata_to_meta(
+    /// Project snapshot metadata and clear incompatible bloom/HLL options when the schema changes.
+    /// Returns whether the schema changed. Constraints, indexes and policies remain untouched;
+    /// callers validate them before publication or apply the read-only Time Travel projection.
+    pub(crate) fn apply_snapshot_metadata_to_meta(
         &self,
         table_meta: &mut TableMeta,
         snapshot: &TableSnapshot,
@@ -649,24 +647,11 @@ impl FuseTable {
         table_meta
             .field_stats_truncate_len
             .retain(|column_id, _| column_ids.contains(column_id));
-        Ok(schema_changed)
-    }
-
-    pub(crate) fn apply_snapshot_metadata_to_meta(
-        &self,
-        table_meta: &mut TableMeta,
-        snapshot: &TableSnapshot,
-    ) -> Result<bool> {
-        if !self.apply_snapshot_versioned_metadata_to_meta(table_meta, snapshot)? {
+        if !schema_changed {
             return Ok(false);
         }
 
-        // Read-only Time Travel keeps its established best-effort projection behavior. Operations
-        // that persist metadata use the strict projection and validation helpers below.
-        table_meta.virtual_schema = None;
-        table_meta.column_mask_policy = None;
-        table_meta.row_access_policy = None;
-
+        // Column-selection options must remain applicable to the projected schema.
         if let Some(value) = table_meta.options.get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
             if let ApproxDistinctColumns::Specify(cols) = value.parse::<ApproxDistinctColumns>()? {
                 let compatible = cols.iter().all(|col| {
@@ -768,6 +753,11 @@ impl FuseTable {
         snapshot: &TableSnapshot,
     ) -> Result<()> {
         if self.apply_snapshot_metadata_to_meta(table_meta, snapshot)? {
+            // Read-only Time Travel discards root-specific virtual metadata and applies
+            // best-effort policy projection, unlike persistent CLONE and FLASHBACK.
+            table_meta.virtual_schema = None;
+            table_meta.column_mask_policy = None;
+            table_meta.row_access_policy = None;
             self.apply_navigation_metadata(table_meta)?;
         }
         Self::apply_snapshot_statistics(table_meta, snapshot);

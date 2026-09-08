@@ -149,6 +149,23 @@ async fn test_fuse_navigate() -> anyhow::Result<()> {
         );
     }
 
+    // FLASHBACK clears bloom/HLL options that reference columns absent from the snapshot.
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {}.{} ADD COLUMN extra INT",
+            db,
+            fixture.default_table_name()
+        ))
+        .await?;
+    fixture.execute_command(&format!(
+        "ALTER TABLE {}.{} SET OPTIONS(bloom_index_columns = 'extra', approx_distinct_columns = 'extra')",
+        db, fixture.default_table_name()
+    )).await?;
+    fixture.execute_command(&flashback).await?;
+    let reverted = fixture.latest_default_table().await?;
+    assert!(!reverted.options().contains_key("bloom_index_columns"));
+    assert!(!reverted.options().contains_key("approx_distinct_columns"));
+
     Ok(())
 }
 

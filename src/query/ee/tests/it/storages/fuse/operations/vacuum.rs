@@ -1344,10 +1344,11 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyho
     let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
     assert_eq!(items.len(), 6);
 
-    // there should be ownerships for 2 db ids and 5 table ids, one of the ownership is revoked by drop table
+    // Replacement retires old table ownership at publication; DROP revokes db2.t1 ownership.
+    // Only the two databases and the current db1.t1 retain ownership before vacuum.
     let prefix = "__fd_object_owners";
     let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
-    assert_eq!(items.len(), 7);
+    assert_eq!(items.len(), 3);
 
     for sql in vacuum_stmts {
         fixture.execute_command(sql).await?;
