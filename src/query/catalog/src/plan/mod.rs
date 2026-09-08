@@ -20,6 +20,7 @@ mod projection;
 mod pruning_statistics;
 mod pushdown;
 mod stream_column;
+mod virtual_column;
 
 pub use datasource::*;
 pub use internal_column::*;
@@ -29,3 +30,4 @@ pub use projection::Projection;
 pub use pruning_statistics::PruningStatistics;
 pub use pushdown::*;
 pub use stream_column::*;
+pub use virtual_column::*;

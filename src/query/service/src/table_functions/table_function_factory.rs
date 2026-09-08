@@ -32,8 +32,10 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
+use databend_common_storages_fuse::table_functions::FuseVirtualColumnBlockMetaFunc;
 use databend_common_storages_fuse::table_functions::FuseVirtualColumnBuildFunc;
-use databend_common_storages_fuse::table_functions::FuseVirtualColumnFunc;
+use databend_common_storages_fuse::table_functions::FuseVirtualColumnParquetMetaFunc;
+use databend_common_storages_fuse::table_functions::FuseVirtualColumnSegmentSchemaFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
@@ -237,10 +239,26 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "fuse_virtual_column".to_string(),
+            "fuse_virtual_column_parquet_meta".to_string(),
             (
                 next_id(),
-                Arc::new(TableFunctionTemplate::<FuseVirtualColumnFunc>::create),
+                Arc::new(TableFunctionTemplate::<FuseVirtualColumnParquetMetaFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_virtual_column_block_meta".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVirtualColumnBlockMetaFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_virtual_column_segment_schema".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVirtualColumnSegmentSchemaFunc>::create),
             ),
         );
 

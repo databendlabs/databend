@@ -24,7 +24,6 @@ mod traverse;
 
 pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
-pub use accumulator::VirtualColumnAccumulator;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use cluster_statistics::ClusterStatsKey;
 pub use cluster_statistics::ClusterStatsLayout;
