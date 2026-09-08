@@ -7,7 +7,7 @@ use databend_common_expression::types::DataType;
 
 use super::aggregate_simulation_support::eval_aggregate_for_test;
 
-pub(super) fn eval_aggregate(
+pub fn eval_aggregate(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],

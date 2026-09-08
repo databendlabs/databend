@@ -28,10 +28,10 @@ use databend_common_expression::types::TimestampType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_string_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -231,4 +231,120 @@ fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
         ScalarRef::String("abc|xyz")
     );
     Ok(())
+}
+
+// string_agg.rs: String/Boolean/NumberType and AnyType formatting paths;
+// nullable samples cover the outer presence flag. Aliases share this implementation.
+#[test]
+fn test_state_baselines() {
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::StringType;
+
+    use super::support::Case;
+    use super::support::MergeResult;
+    use super::support::Sample;
+    use super::support::string;
+    use super::support::tuple;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "string_agg(x0)",
+            arguments: vec!["Boolean"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean)",
+        },
+        Case::Metadata {
+            expression: "string_agg(x0)",
+            arguments: vec!["Float64"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean)",
+        },
+        Case::Metadata {
+            expression: "string_agg(x0)",
+            arguments: vec!["Int64"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean)",
+        },
+        Case::Metadata {
+            expression: "string_agg(x0)",
+            arguments: vec!["Variant"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean)",
+        },
+        Case::Metadata {
+            expression: "string_agg(x0)",
+            arguments: vec!["Decimal(15, 2)"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean)",
+        },
+        Case::Samples {
+            expression: "string_agg(x0)",
+            arguments: vec!["String"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean)",
+            samples: vec![
+                Sample {
+                    label: "string/false/empty",
+                    inputs: vec![StringType::from_data(Vec::<&str>::new())],
+                    state: tuple(vec![string(""), Scalar::Boolean(false)]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::SameAsResult,
+                },
+                Sample {
+                    label: "string/false/mixed",
+                    inputs: vec![StringType::from_data(vec!["-220", "", "110", "500", "900"])],
+                    state: tuple(vec![string("-220110500900"), Scalar::Boolean(true)]),
+                    result: string("-220110500900"),
+                    merge_result: MergeResult::Value(string("-220110500900-220110500900")),
+                },
+            ],
+        },
+        Case::Samples {
+            expression: "string_agg(x0)",
+            arguments: vec!["Nullable(String)"],
+            result: "Nullable(String)",
+            state: "Tuple(String, Boolean, Boolean)",
+            samples: vec![
+                Sample {
+                    label: "string/true/empty",
+                    inputs: vec![StringType::from_opt_data(Vec::<Option<&str>>::new())],
+                    state: tuple(vec![
+                        string(""),
+                        Scalar::Boolean(false),
+                        Scalar::Boolean(false),
+                    ]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::SameAsResult,
+                },
+                Sample {
+                    label: "string/true/all_null",
+                    inputs: vec![StringType::from_opt_data(vec![None::<&str>; 2])],
+                    state: tuple(vec![
+                        string(""),
+                        Scalar::Boolean(false),
+                        Scalar::Boolean(true),
+                    ]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::SameAsResult,
+                },
+                Sample {
+                    label: "string/true/mixed",
+                    inputs: vec![StringType::from_opt_data(vec![
+                        Some("-220"),
+                        None,
+                        Some("110"),
+                        Some("500"),
+                        Some("900"),
+                    ])],
+                    state: tuple(vec![
+                        string("-220110500900"),
+                        Scalar::Boolean(true),
+                        Scalar::Boolean(true),
+                    ]),
+                    result: string("-220110500900"),
+                    merge_result: MergeResult::Value(string("-220110500900-220110500900")),
+                },
+            ],
+        },
+    ]);
 }

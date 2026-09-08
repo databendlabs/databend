@@ -13,12 +13,8 @@
 // limitations under the License.
 
 mod agg_hashtable;
-mod aggregate_case_fixtures;
-mod aggregate_case_support;
 mod aggregate_distinct;
-mod aggregate_function_v2_support;
 mod aggregate_if;
-mod aggregate_simulation_support;
 mod any;
 mod approx_count_distinct;
 mod arg_max;
@@ -60,5 +56,6 @@ mod st_union_agg;
 mod stddev;
 mod string_agg;
 mod sum;
+mod support;
 mod uniq;
 mod window_funnel;

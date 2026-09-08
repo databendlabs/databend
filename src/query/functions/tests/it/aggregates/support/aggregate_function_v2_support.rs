@@ -10,14 +10,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 
-pub(super) fn state_serde_data_type(item: &StateSerdeItem) -> DataType {
+pub fn state_serde_data_type(item: &StateSerdeItem) -> DataType {
     match item {
         StateSerdeItem::DataType(data_type) => data_type.clone(),
         StateSerdeItem::Binary(_) => DataType::Binary,
     }
 }
 
-pub(super) fn eval_v2_aggr(
+pub fn eval_v2_aggr(
     name: &str,
     entries: &[BlockEntry],
     rows: usize,
@@ -26,7 +26,7 @@ pub(super) fn eval_v2_aggr(
     eval_v2_aggr_with_params(name, &[], entries, rows, with_serialize)
 }
 
-pub(super) fn eval_v2_aggr_with_params(
+pub fn eval_v2_aggr_with_params(
     name: &str,
     params: &[Scalar],
     entries: &[BlockEntry],
@@ -115,7 +115,7 @@ fn eval_v2_aggr_with_params_and_sort(
     Ok((builder.build(), data_type))
 }
 
-pub(super) fn assert_v2_direct_matches_serialized(
+pub fn assert_v2_direct_matches_serialized(
     name: &str,
     entries: &[BlockEntry],
     rows: usize,
@@ -129,7 +129,7 @@ pub(super) fn assert_v2_direct_matches_serialized(
     Ok(())
 }
 
-pub(super) fn assert_v2_read_only_matches_final_result(
+pub fn assert_v2_read_only_matches_final_result(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -183,7 +183,7 @@ pub(super) fn assert_v2_read_only_matches_final_result(
     Ok(())
 }
 
-pub(super) fn assert_v2_serialized_read_only_matches_final_result(
+pub fn assert_v2_serialized_read_only_matches_final_result(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -259,7 +259,7 @@ pub(super) fn assert_v2_serialized_read_only_matches_final_result(
     Ok(())
 }
 
-pub(super) fn assert_single_float_close(result: &(Column, DataType), expected: f64) {
+pub fn assert_single_float_close(result: &(Column, DataType), expected: f64) {
     let ScalarRef::Number(NumberScalar::Float64(value)) = (unsafe { result.0.index_unchecked(0) })
     else {
         panic!("expected Float64 result");

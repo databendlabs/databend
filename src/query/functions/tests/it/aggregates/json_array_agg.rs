@@ -3,10 +3,10 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_json_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -125,4 +125,38 @@ fn test_json_array_agg_two_groups() {
         .new_goldenfile("json_array_agg_two_groups.txt")
         .unwrap();
     run_json_array_agg_cases(file, simulate_two_groups_group_by);
+}
+
+// json_array_agg.rs: one native Variant state; scalar, JSON and nested input
+// values plus nullable samples represent conversion and SQL/JSON null handling.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Int64"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Variant"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Array(Int64)"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Nullable(Int64)"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+    ]);
 }

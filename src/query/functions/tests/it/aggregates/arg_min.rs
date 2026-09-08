@@ -4,10 +4,10 @@ use databend_common_expression::FromData;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_arg_min_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -115,4 +115,69 @@ fn test_arg_min_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("arg_min_group_by.txt").unwrap();
     run_arg_min_cases(file, simulate_two_groups_group_by);
+}
+
+// arg_min_max.rs: both argument and comparison dispatch have String, Boolean,
+// Date, Timestamp, AnyNumberType and AnyType branches. Diagonal representatives
+// plus heterogeneous calls cover them without a type cross product.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Boolean", "Boolean"],
+            result: "Nullable(Boolean)",
+            state: "Tuple(Boolean, Boolean, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Date", "Date"],
+            result: "Nullable(Date)",
+            state: "Tuple(Boolean, Date, Date, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Int64", "Int64"],
+            result: "Nullable(Int64)",
+            state: "Tuple(Boolean, Int64, Int64, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["String", "Int64"],
+            result: "Nullable(String)",
+            state: "Tuple(Boolean, Int64, String, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["String", "String"],
+            result: "Nullable(String)",
+            state: "Tuple(Boolean, String, String, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Timestamp", "Timestamp"],
+            result: "Nullable(Timestamp)",
+            state: "Tuple(Boolean, Timestamp, Timestamp, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Nullable(Int64)", "Int64"],
+            result: "Nullable(Int64)",
+            state: "Tuple(Boolean, Int64, Int64, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Nullable(Int64)", "Nullable(Int64)"],
+            result: "Nullable(Int64)",
+            state: "Tuple(Boolean, Int64, Int64, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "arg_min(x0, x1)",
+            arguments: vec!["Tuple(String, Int64)", "Tuple(String, Int64)"],
+            result: "Nullable(Tuple(String, Int64))",
+            state: "Tuple(Boolean, Tuple(String, Int64), Tuple(String, Int64), Boolean)",
+        },
+    ]);
 }

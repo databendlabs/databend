@@ -10,11 +10,11 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::assert_v2_direct_matches_serialized;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_count_distinct_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [

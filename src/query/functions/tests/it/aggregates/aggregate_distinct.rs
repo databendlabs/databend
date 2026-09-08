@@ -9,10 +9,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [

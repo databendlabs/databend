@@ -9,11 +9,11 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_function_v2_support::eval_v2_aggr;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::eval_v2_aggr;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_retention_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -129,4 +129,38 @@ fn test_v2_retention_null_argument_in_any_position_returns_null() -> Result<()> 
     let (column, _) = eval_v2_aggr("retention", &entries, 4, false)?;
     assert_ne!(unsafe { column.index_unchecked(0) }, ScalarRef::Null);
     Ok(())
+}
+
+// retention.rs: variable Boolean arity and nullable filtering are the branches;
+// keep the small existing set instead of expanding argument combinations.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "retention(x0, x1, x2)",
+            arguments: vec!["Boolean", "Boolean", "Boolean"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean)",
+        },
+        Case::Metadata {
+            expression: "retention(x0, x1)",
+            arguments: vec!["Boolean", "Boolean"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean)",
+        },
+        Case::Metadata {
+            expression: "retention(x0, x1)",
+            arguments: vec!["Nullable(Boolean)", "Boolean"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "retention(x0, x1)",
+            arguments: vec!["Nullable(Boolean)", "Nullable(Boolean)"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean, Boolean)",
+        },
+    ]);
 }

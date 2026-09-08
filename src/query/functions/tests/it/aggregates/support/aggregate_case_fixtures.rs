@@ -6,7 +6,7 @@ use databend_common_expression::types::StringType;
 use databend_common_io::HybridBitmap;
 use itertools::Itertools;
 
-pub(super) fn bitmap_column() -> Column {
+pub fn bitmap_column() -> Column {
     // construct bitmap column with 4 row:
     // 0..5, 1..6, 2..7, 3..8
     const N: u64 = 4;
@@ -29,7 +29,7 @@ pub(super) fn bitmap_column() -> Column {
     BitmapType::from_data(rbs)
 }
 
-pub(super) fn geometry_columns() -> Vec<(&'static str, BlockEntry)> {
+pub fn geometry_columns() -> Vec<(&'static str, BlockEntry)> {
     [
         (
             "point",
@@ -163,7 +163,7 @@ pub(super) fn geometry_columns() -> Vec<(&'static str, BlockEntry)> {
     .collect()
 }
 
-pub(super) fn overlapping_geometry_columns() -> Vec<(&'static str, BlockEntry)> {
+pub fn overlapping_geometry_columns() -> Vec<(&'static str, BlockEntry)> {
     [
         (
             "polygon_overlap",

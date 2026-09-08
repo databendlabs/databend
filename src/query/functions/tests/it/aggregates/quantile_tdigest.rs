@@ -40,11 +40,11 @@ use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::eval_aggregate_for_test;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::eval_aggregate_for_test;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 struct StateDropGuard {
     func: AggregateCallRef,
@@ -912,4 +912,38 @@ fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
     }
 
     Ok(())
+}
+
+// quantile_tdigest_weighted.rs: value/weight conversions feed one digest;
+// retain integer/float values and asymmetric/both-nullable input adaptors.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "median_tdigest_weighted(x0, x1)",
+            arguments: vec!["Float64", "UInt64"],
+            result: "Nullable(Float64)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "median_tdigest_weighted(x0, x1)",
+            arguments: vec!["Int64", "UInt64"],
+            result: "Nullable(Float64)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "median_tdigest_weighted(x0, x1)",
+            arguments: vec!["Nullable(Float64)", "UInt64"],
+            result: "Nullable(Float64)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "median_tdigest_weighted(x0, x1)",
+            arguments: vec!["Nullable(Float64)", "Nullable(UInt64)"],
+            result: "Nullable(Float64)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+    ]);
 }

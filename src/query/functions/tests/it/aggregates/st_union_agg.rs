@@ -2,59 +2,59 @@ use std::io::Write;
 
 use goldenfile::Mint;
 
-use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::geometry_columns;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_st_union_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     write_aggregate_expr_case(
         file,
         "st_union_agg(to_geometry(point))",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
     write_aggregate_expr_case(
         file,
         "st_union_agg_distinct(to_geometry(point))",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
     write_aggregate_expr_case(
         file,
         "st_union_agg(NULL)",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
     write_aggregate_expr_case(
         file,
         "st_union_agg(to_geometry(polygon))",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
     write_aggregate_expr_case(
         file,
         "st_union_agg(to_geometry(point_null))",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
     write_aggregate_expr_case(
         file,
         "st_union_agg(to_geometry(point_all_null))",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
     write_aggregate_expr_case(
         file,
         "st_union_agg(to_geometry(mixed_srid))",
-        fixtures::geometry_columns().as_slice(),
+        geometry_columns().as_slice(),
         simulator,
         vec![],
     );
@@ -72,4 +72,110 @@ fn test_st_union_agg_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("st_union_agg_group_by.txt").unwrap();
     run_st_union_agg_cases(file, simulate_two_groups_group_by);
+}
+
+// geographic.rs: all four geometry operations have distinct computation;
+// preserve both nullable forms and all captured EWKB/collection samples.
+#[test]
+fn test_state_baselines() {
+    use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::GeometryType;
+
+    use super::support::Case;
+    use super::support::MergeResult;
+    use super::support::Sample;
+    use super::support::binary;
+    use super::support::bytes;
+    use super::support::geometry;
+    use super::support::tuple;
+
+    super::support::check_state_baselines(vec![
+        Case::Samples {
+            expression: "st_union_agg(x0)",
+            arguments: vec!["Geometry"],
+            result: "Nullable(Geometry)",
+            state: "Tuple(Binary, Boolean)",
+            samples: vec![
+                Sample {
+                    label: "geometry/false/empty",
+                    inputs: vec![GeometryType::from_data(Vec::<Vec<u8>>::new())],
+                    state: tuple(vec![binary(""), Scalar::Boolean(false)]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::SameAsResult,
+                },
+                Sample {
+                    label: "geometry/false/mixed",
+                    inputs: vec![GeometryType::from_data(vec![
+                        bytes(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAA==",
+                        ),
+                        bytes(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAADwPwAAAAAAAAAAAAAAAAAACEAAAAAAAAAAAAAAAAAAAAhAAAAAAAAAAEAAAAAAAADwPwAAAAAAAABAAAAAAAAA8D8AAAAAAAAAAA==",
+                        ),
+                        bytes(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAA==",
+                        ),
+                    ])],
+                    state: tuple(vec![
+                        binary(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhAAAAAAAAAAAAAAAAAAAAIQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQA==",
+                        ),
+                        Scalar::Boolean(true),
+                    ]),
+                    result: geometry(
+                        "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhAAAAAAAAAAAAAAAAAAAAIQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQA==",
+                    ),
+                    merge_result: MergeResult::SameAsResult,
+                },
+            ],
+        },
+        Case::Samples {
+            expression: "st_union_agg(x0)",
+            arguments: vec!["Nullable(Geometry)"],
+            result: "Nullable(Geometry)",
+            state: "Tuple(Binary, Boolean)",
+            samples: vec![
+                Sample {
+                    label: "geometry/true/empty",
+                    inputs: vec![GeometryType::from_opt_data(Vec::<Option<Vec<u8>>>::new())],
+                    state: tuple(vec![binary(""), Scalar::Boolean(false)]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::SameAsResult,
+                },
+                Sample {
+                    label: "geometry/true/nulls",
+                    inputs: vec![GeometryType::from_opt_data(vec![None::<Vec<u8>>; 2])],
+                    state: tuple(vec![binary(""), Scalar::Boolean(true)]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::SameAsResult,
+                },
+                Sample {
+                    label: "geometry/true/mixed",
+                    inputs: vec![GeometryType::from_opt_data(vec![
+                        Some(bytes(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAA==",
+                        )),
+                        None,
+                        Some(bytes(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAADwPwAAAAAAAAAAAAAAAAAACEAAAAAAAAAAAAAAAAAAAAhAAAAAAAAAAEAAAAAAAADwPwAAAAAAAABAAAAAAAAA8D8AAAAAAAAAAA==",
+                        )),
+                        Some(bytes(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAA==",
+                        )),
+                    ])],
+                    state: tuple(vec![
+                        binary(
+                            "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhAAAAAAAAAAAAAAAAAAAAIQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQA==",
+                        ),
+                        Scalar::Boolean(true),
+                    ]),
+                    result: geometry(
+                        "AQMAACDmEAAAAQAAAAUAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhAAAAAAAAAAAAAAAAAAAAIQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQA==",
+                    ),
+                    merge_result: MergeResult::SameAsResult,
+                },
+            ],
+        },
+    ]);
 }

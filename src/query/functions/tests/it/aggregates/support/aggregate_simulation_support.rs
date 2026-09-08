@@ -40,9 +40,9 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use itertools::Itertools;
 
-use super::super::scalars::parser;
+use crate::scalars::parser;
 
-pub(super) trait AggregationSimulator = Fn(
+pub trait AggregationSimulator = Fn(
         &str,
         Vec<Scalar>,
         &[BlockEntry],
@@ -52,7 +52,7 @@ pub(super) trait AggregationSimulator = Fn(
     + Copy;
 
 /// Run an aggregate expression against the given simulator and write its golden output.
-pub(super) fn write_aggregate_expr_case(
+pub fn write_aggregate_expr_case(
     file: &mut impl Write,
     text: &str,
     entries: &[(&str, BlockEntry)],
@@ -228,7 +228,7 @@ fn evaluate_scalar_expr(
 /// let group1 = vec![1, 3, 5];
 /// let group2 = vec![2, 4];
 /// ```
-pub(super) fn simulate_two_groups_group_by(
+pub fn simulate_two_groups_group_by(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],
@@ -285,7 +285,7 @@ pub(super) fn simulate_two_groups_group_by(
     Ok((builder.build(), data_type))
 }
 
-pub(super) fn eval_aggregate_for_test(
+pub fn eval_aggregate_for_test(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],

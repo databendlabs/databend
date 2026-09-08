@@ -3,10 +3,10 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_markov_train_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -89,4 +89,26 @@ fn test_markov_train_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("markov_train_group_by.txt").unwrap();
     run_markov_train_cases(file, simulate_two_groups_group_by);
+}
+
+// markov_train.rs requires String at execution. Non-String v1 factory-only
+// signatures are not useful compatibility representatives and are omitted.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "markov_train(x0)",
+            arguments: vec!["String"],
+            result: "Nullable(Array(Tuple(UInt32, UInt32, UInt32, Map(UInt32, UInt32))))",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "markov_train(x0)",
+            arguments: vec!["Nullable(String)"],
+            result: "Nullable(Array(Tuple(UInt32, UInt32, UInt32, Map(UInt32, UInt32))))",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+    ]);
 }

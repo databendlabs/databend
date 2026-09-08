@@ -27,14 +27,14 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
-use super::aggregate_function_v2_support::assert_v2_read_only_matches_final_result;
-use super::aggregate_function_v2_support::assert_v2_serialized_read_only_matches_final_result;
-use super::aggregate_function_v2_support::eval_v2_aggr;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::assert_v2_direct_matches_serialized;
+use super::support::assert_v2_read_only_matches_final_result;
+use super::support::assert_v2_serialized_read_only_matches_final_result;
+use super::support::eval_aggregate;
+use super::support::eval_v2_aggr;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_sum_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -665,4 +665,122 @@ fn test_v2_sum_interval_accumulates_component_wise() -> Result<()> {
     let expected_micros = (3 * 30 + 6) * months_days_micros::MICROS_PER_DAY + 18;
     assert_eq!(merged.total_micros(), expected_micros);
     Ok(())
+}
+
+// sum.rs: signed/unsigned/float accumulators, interval, and each decimal width.
+// One nullable input covers the outer presence flag; sum_zero has its own result policy.
+#[test]
+fn test_state_baselines() {
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int64Type;
+
+    use super::support::Case;
+    use super::support::MergeResult;
+    use super::support::Sample;
+    use super::support::int64;
+    use super::support::tuple;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["Float64"],
+            result: "Nullable(Float64)",
+            state: "Tuple(Float64, Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["Int64"],
+            result: "Nullable(Int64)",
+            state: "Tuple(Int64, Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["Interval"],
+            result: "Nullable(Interval)",
+            state: "Tuple(Interval, Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["UInt64"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(UInt64, Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["Decimal(15, 2)"],
+            result: "Nullable(Decimal(18, 2))",
+            state: "Tuple(Decimal(18, 2), Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["Decimal(38, 6)"],
+            result: "Nullable(Decimal(38, 6))",
+            state: "Tuple(Decimal(38, 6), Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum(x0)",
+            arguments: vec!["Decimal(76, 12)"],
+            result: "Nullable(Decimal(76, 12))",
+            state: "Tuple(Decimal(76, 12), Boolean)",
+        },
+        Case::Metadata {
+            expression: "sum_zero(x0)",
+            arguments: vec!["UInt64"],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+        Case::Metadata {
+            expression: "sum_zero(x0)",
+            arguments: vec!["Nullable(UInt64)"],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+        Case::Samples {
+            expression: "sum(x0)",
+            arguments: vec!["Nullable(Int64)"],
+            result: "Nullable(Int64)",
+            state: "Tuple(Int64, Boolean, Boolean)",
+            samples: vec![
+                Sample {
+                    label: "empty",
+                    inputs: vec![Int64Type::from_opt_data(Vec::<Option<i64>>::new())],
+                    state: tuple(vec![
+                        int64(0),
+                        Scalar::Boolean(false),
+                        Scalar::Boolean(false),
+                    ]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::Skip,
+                },
+                Sample {
+                    label: "all_null",
+                    inputs: vec![Int64Type::from_opt_data(vec![None::<i64>; 2])],
+                    state: tuple(vec![
+                        int64(0),
+                        Scalar::Boolean(false),
+                        Scalar::Boolean(true),
+                    ]),
+                    result: Scalar::Null,
+                    merge_result: MergeResult::Skip,
+                },
+                Sample {
+                    label: "mixed",
+                    inputs: vec![Int64Type::from_opt_data(vec![
+                        Some(2),
+                        None,
+                        Some(2),
+                        Some(5),
+                        Some(9),
+                    ])],
+                    state: tuple(vec![
+                        int64(18),
+                        Scalar::Boolean(true),
+                        Scalar::Boolean(true),
+                    ]),
+                    result: int64(18),
+                    merge_result: MergeResult::Skip,
+                },
+            ],
+        },
+    ]);
 }

@@ -10,11 +10,11 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_function_v2_support::assert_v2_direct_matches_serialized;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::assert_v2_direct_matches_serialized;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_count_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -113,4 +113,32 @@ fn test_v2_count_reports_argument_count_mismatch() {
         Err(error) => error,
     };
     assert_eq!(error.code(), 1028);
+}
+
+// count.rs: row count has one state regardless of argument type; distinguish
+// zero arguments, non-nullable input and nullable input filtering.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "count(x0)",
+            arguments: vec!["UInt64"],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+        Case::Metadata {
+            expression: "count()",
+            arguments: vec![],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+        Case::Metadata {
+            expression: "count(x0)",
+            arguments: vec!["Nullable(UInt64)"],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+    ]);
 }

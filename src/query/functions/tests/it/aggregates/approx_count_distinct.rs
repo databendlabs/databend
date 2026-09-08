@@ -6,11 +6,11 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_function_v2_support::eval_v2_aggr_with_params;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::eval_v2_aggr_with_params;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_approx_count_distinct_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -116,4 +116,56 @@ fn test_approx_count_distinct_accepts_decimal_error_rate() -> Result<()> {
     ))];
     eval_v2_aggr_with_params("approx_count_distinct", &params, &entries, 4, false)?;
     Ok(())
+}
+
+// approx_count_distinct.rs: typed numeric/string/date/timestamp hashes and
+// the AnyType fallback; precision parameters are outside this capture stage.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["Date"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["Float64"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["Int64"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["String"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["Timestamp"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["Nullable(Int64)"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "approx_count_distinct(x0)",
+            arguments: vec!["Tuple(String, Int64)"],
+            result: "UInt64",
+            state: "Tuple(Binary)",
+        },
+    ]);
 }

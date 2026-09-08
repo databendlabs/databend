@@ -14,12 +14,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_aggregate;
-use super::aggregate_function_v2_support::eval_v2_aggr;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::bitmap_column;
+use super::support::eval_aggregate;
+use super::support::eval_v2_aggr;
+use super::support::geometry_columns;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let mut columns: Vec<(&str, databend_common_expression::BlockEntry)> = vec![
@@ -112,8 +113,8 @@ fn run_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulat
             .into(),
         ),
     ];
-    columns.push(("bitmap", fixtures::bitmap_column().into()));
-    columns.extend(fixtures::geometry_columns());
+    columns.push(("bitmap", bitmap_column().into()));
+    columns.extend(geometry_columns());
     let columns = columns.as_slice();
 
     write_aggregate_expr_case(file, "array_agg(1)", columns, simulator, vec![]);
@@ -248,4 +249,92 @@ fn test_v2_array_agg_if_applies_predicate() -> Result<()> {
     assert_eq!(direct_v2, expected);
     assert_eq!(serialized_v2, expected);
     Ok(())
+}
+
+// array_agg.rs: Core values, binary-backed values, Boolean, and AnyType
+// use different state paths. Keep decimal widths and one nullable representative.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Boolean"],
+            result: "Array(Boolean)",
+            state: "Tuple(Array(Boolean))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Date"],
+            result: "Array(Date)",
+            state: "Tuple(Array(Date))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Float64"],
+            result: "Array(Float64)",
+            state: "Tuple(Array(Float64))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Int64"],
+            result: "Array(Int64)",
+            state: "Tuple(Array(Int64))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Interval"],
+            result: "Array(Interval)",
+            state: "Tuple(Array(Interval))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["String"],
+            result: "Array(String)",
+            state: "Tuple(Array(String))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Timestamp"],
+            result: "Array(Timestamp)",
+            state: "Tuple(Array(Timestamp))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Variant"],
+            result: "Array(Variant)",
+            state: "Tuple(Array(Variant))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Array(Int64)"],
+            result: "Array(Array(Int64))",
+            state: "Tuple(Array(Array(Int64)))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Decimal(15, 2)"],
+            result: "Array(Decimal(15, 2))",
+            state: "Tuple(Array(Decimal(15, 2)))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Decimal(38, 6)"],
+            result: "Array(Decimal(38, 6))",
+            state: "Tuple(Array(Decimal(38, 6)))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Decimal(76, 12)"],
+            result: "Array(Decimal(76, 12))",
+            state: "Tuple(Array(Decimal(76, 12)))",
+        },
+        Case::Metadata {
+            expression: "array_agg(x0)",
+            arguments: vec!["Nullable(Int64)"],
+            result: "Array(Int64)",
+            state: "Tuple(Array(Int64))",
+        },
+    ]);
 }
