@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-MUTATION]");
+
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -19,6 +21,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::plan::BlockMetaWithHLL;
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -88,6 +92,7 @@ pub struct TableMutationAggregator {
 
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
+    output_level_stats: BTreeMap<Option<i32>, ClusterLevelLogStats>,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
@@ -124,10 +129,32 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         info!(
-            "{}: finished aggregating mutation logs, entries: {}",
-            self.write_segment_ctx.kind, self.processed_log_entries
+            event = "mutation.aggregated",
+            operation = self.write_segment_ctx.kind.to_string().to_ascii_lowercase().as_str(),
+            table_id = self.table_id,
+            entry_count = self.processed_log_entries;
+            "Mutation logs aggregated"
         );
         self.generate_append_segments().await?;
+        let operation = match self.write_segment_ctx.kind {
+            MutationKind::Insert => Some("insert"),
+            MutationKind::Recluster => Some("recluster"),
+            _ => None,
+        };
+        if let Some(operation) = operation
+            && !self.output_level_stats.is_empty()
+        {
+            // Newly written blocks collected by this aggregator only; segment reuse is
+            // not rewrite output. These statistics precede CommitSink and do not imply
+            // a successful commit. Keep all levels together, even across multiple tasks.
+            info!(
+                event = "mutation.output_written",
+                operation,
+                table_id = self.table_id,
+                output_levels :serde = self.output_level_stats.values().collect::<Vec<_>>();
+                "Mutation output written"
+            );
+        }
 
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
@@ -224,6 +251,7 @@ impl TableMutationAggregator {
             appended_segments: vec![],
             base_segments,
             merged_blocks,
+            output_level_stats: BTreeMap::new(),
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
             removed_statistics,
@@ -271,6 +299,13 @@ impl TableMutationAggregator {
                 block_meta,
                 merge_hll,
             } => {
+                // Count newly written blocks only, not preloaded remained_blocks.
+                if matches!(self.write_segment_ctx.kind, MutationKind::Recluster) {
+                    ClusterLevelLogStats::accumulate(
+                        &mut self.output_level_stats,
+                        &block_meta.block_meta,
+                    );
+                }
                 // MERGE and REPLACE append logical INSERT/UPDATE after-images.
                 if merge_hll
                     || matches!(
@@ -303,7 +338,18 @@ impl TableMutationAggregator {
                 summary,
                 hll,
                 top_n,
+                level_stats,
             } => {
+                if matches!(self.write_segment_ctx.kind, MutationKind::Insert) {
+                    for stats in level_stats {
+                        let total = self.output_level_stats.entry(stats.level).or_default();
+                        total.level = stats.level;
+                        total.block_count += stats.block_count;
+                        total.row_count += stats.row_count;
+                        total.block_size += stats.block_size;
+                        total.file_size += stats.file_size;
+                    }
+                }
                 merge_statistics_mut(
                     &mut self.appended_statistics,
                     &summary,
@@ -514,7 +560,11 @@ impl TableMutationAggregator {
             }
         }
 
-        info!("removed_segment_indexes:{:?}", self.removed_segment_indexes);
+        info!(
+            table_id = self.table_id,
+            removed_segment_indexes :? = self.removed_segment_indexes;
+            "Mutation segment removals collected"
+        );
 
         merge_statistics_mut(
             &mut merged_statistics,

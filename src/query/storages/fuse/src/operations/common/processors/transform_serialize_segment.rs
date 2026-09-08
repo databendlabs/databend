@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -77,6 +79,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
     segment_builder: B,
+    level_stats: BTreeMap<Option<i32>, ClusterLevelLogStats>,
     hll_accumulator: ColumnHLLAccumulator,
     block_top_n_template: Option<BlockTopN>,
     block_top_ns: Vec<BlockTopN>,
@@ -127,6 +130,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
             segment_builder,
+            level_stats: Default::default(),
             hll_accumulator: ColumnHLLAccumulator::default(),
             block_top_n_template,
             block_top_ns: Vec::new(),
@@ -260,6 +264,12 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 .draft_virtual_block_meta
                 .map(VirtualBlockInput::Draft)
                 .unwrap_or(VirtualBlockInput::None);
+
+            ClusterLevelLogStats::accumulate(
+                &mut self.level_stats,
+                &extended_block_meta.block_meta,
+            );
+
             self.segment_builder
                 .add_block(extended_block_meta.block_meta, virtual_input)?;
 
@@ -351,6 +361,9 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         summary: segment.summary().clone(),
                         hll,
                         top_n,
+                        level_stats: std::mem::take(&mut self.level_stats)
+                            .into_values()
+                            .collect(),
                     }],
                     ..Default::default()
                 };

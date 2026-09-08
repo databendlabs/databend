@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
@@ -431,6 +432,29 @@ impl StealablePartitions {
     }
 }
 
+/// Per-level block counts, rows and sizes for insert/recluster diagnostic logs, not table statistics.
+/// `None` means no cluster statistics; -1 denotes a perfect block.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ClusterLevelLogStats {
+    pub level: Option<i32>,
+    pub block_count: u64,
+    pub row_count: u64,
+    pub block_size: u64,
+    pub file_size: u64,
+}
+
+impl ClusterLevelLogStats {
+    pub fn accumulate(levels: &mut BTreeMap<Option<i32>, Self>, block: &BlockMeta) {
+        let level = block.cluster_stats.as_ref().map(|stats| stats.level);
+        let stats = levels.entry(level).or_default();
+        stats.level = level;
+        stats.block_count += 1;
+        stats.row_count += block.row_count;
+        stats.block_size += block.block_size;
+        stats.file_size += block.file_size;
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterTask {
     pub parts: Partitions,
@@ -438,7 +462,11 @@ pub struct ReclusterTask {
     pub total_rows: usize,
     pub total_bytes: usize,
     pub total_compressed: usize,
+    /// Base level; the serializer requests `level + 1` (perfect blocks may become -1).
     pub level: i32,
+    /// Effective input levels under the current cluster key, not historical stored levels.
+    #[serde(default)]
+    pub input_level_stats: Vec<ClusterLevelLogStats>,
     // All input blocks in this task are already ordered by the current cluster key.
     #[serde(default)]
     pub all_ordered: bool,
