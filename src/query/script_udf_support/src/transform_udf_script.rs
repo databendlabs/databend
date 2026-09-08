@@ -34,6 +34,8 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_INTERVAL;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::DataType;
@@ -289,6 +291,7 @@ if '{dir}' not in sys.path:
 
 const ARROW_UDF_EXTENSION_KEY: &str = "ARROW:extension:name";
 const ARROW_UDF_DECIMAL: &str = "arrowudf.decimal";
+// This is a conservative subset of rust_decimal's 96-bit coefficient domain.
 const ARROW_UDF_DECIMAL_MAX_PRECISION: u8 = 28;
 const ARROW_UDF_DECIMAL_MAX_SCALE: i8 = 28;
 
@@ -318,6 +321,17 @@ fn call_wasm_function(
 }
 
 fn wasm_compatible_field(field: &Field) -> Result<Field> {
+    if let Some(extension) = field.metadata().get(EXTENSION_KEY)
+        && matches!(
+            extension.as_str(),
+            ARROW_EXT_TYPE_INTERVAL | ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE
+        )
+    {
+        return Err(ErrorCode::UDFRuntimeError(format!(
+            "WASM UDF type {extension} is not supported"
+        )));
+    }
+
     let mut metadata = field.metadata().clone();
     let data_type = wasm_compatible_data_type(field.data_type())?;
     if matches!(
@@ -343,6 +357,7 @@ fn wasm_compatible_data_type(data_type: &ArrowDataType) -> Result<ArrowDataType>
         ArrowDataType::Decimal64(precision, scale)
         | ArrowDataType::Decimal128(precision, scale)
         | ArrowDataType::Decimal256(precision, scale) => {
+            // The scale guard also protects Arrow types that Databend does not currently produce.
             if *precision > ARROW_UDF_DECIMAL_MAX_PRECISION
                 || *scale < 0
                 || *scale > ARROW_UDF_DECIMAL_MAX_SCALE
@@ -403,7 +418,14 @@ fn restore_wasm_result_batch(batch: RecordBatch, return_field: &Field) -> Result
     fields[0] = return_field.clone().with_name(fields[0].name());
 
     let mut columns = batch.columns().to_vec();
-    columns[0] = arrow_cast::cast(columns[0].as_ref(), return_field.data_type())?;
+    columns[0] = arrow_cast::cast_with_options(
+        columns[0].as_ref(),
+        return_field.data_type(),
+        &arrow_cast::CastOptions {
+            safe: false,
+            ..Default::default()
+        },
+    )?;
 
     let schema = arrow_schema::Schema::new(fields).with_metadata(schema.metadata().clone());
     RecordBatch::try_new(Arc::new(schema), columns).map_err(Into::into)
@@ -1301,6 +1323,7 @@ mod tests {
     use arrow_array::Int64Array;
     use arrow_array::LargeBinaryArray;
     use arrow_array::LargeListArray;
+    use arrow_array::StringArray;
     use arrow_array::StringViewArray;
     use arrow_array::TimestampMicrosecondArray;
     use arrow_array::UInt8Array;
@@ -1313,6 +1336,8 @@ mod tests {
     use arrow_array::types::Int32Type;
     use arrow_schema::Field;
     use arrow_schema::Schema;
+    use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_BITMAP;
+    use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_GEOMETRY;
 
     use super::*;
 
@@ -1452,6 +1477,87 @@ mod tests {
         );
         let err = wasm_compatible_field(&nested_wide_decimal).unwrap_err();
         assert!(err.message().contains("Decimal256(76, 30)"));
+
+        for extension in [ARROW_EXT_TYPE_INTERVAL, ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE] {
+            let field = Field::new("unsupported", ArrowDataType::Decimal128(38, 0), true)
+                .with_metadata([(EXTENSION_KEY.to_string(), extension.to_string())].into());
+            let err = wasm_compatible_field(&field).unwrap_err();
+            assert!(err.message().contains(extension));
+            assert!(err.message().contains("is not supported"));
+            assert!(!err.message().contains("rust_decimal"));
+        }
+    }
+
+    #[test]
+    fn test_restore_wasm_decimal_result_is_strict_and_rounds_half_up() {
+        let overflowing = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "result",
+                ArrowDataType::Utf8,
+                true,
+            )])),
+            vec![Arc::new(StringArray::from(vec![Some("1.5")]))],
+        )
+        .unwrap();
+        let err = restore_wasm_result_batch(
+            overflowing,
+            &Field::new("result", ArrowDataType::Decimal128(28, 28), true),
+        )
+        .unwrap_err();
+        assert!(err.message().contains("1.5"));
+
+        let valid = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "result",
+                ArrowDataType::Utf8,
+                true,
+            )])),
+            vec![Arc::new(StringArray::from(vec![
+                Some("1.005"),
+                Some("1.004"),
+                None,
+            ]))],
+        )
+        .unwrap();
+        let restored = restore_wasm_result_batch(
+            valid,
+            &Field::new("result", ArrowDataType::Decimal128(10, 2), true),
+        )
+        .unwrap();
+        let values = restored.column(0).as_primitive::<Decimal128Type>();
+        assert_eq!(values.value(0), 101);
+        assert_eq!(values.value(1), 100);
+        assert!(values.is_null(2));
+    }
+
+    #[test]
+    fn test_restore_wasm_result_preserves_databend_extension_metadata() {
+        for extension in [
+            ARROW_EXT_TYPE_VARIANT,
+            ARROW_EXT_TYPE_BITMAP,
+            ARROW_EXT_TYPE_GEOMETRY,
+        ] {
+            let wasm_result = RecordBatch::try_new(
+                Arc::new(Schema::new(vec![Field::new(
+                    "result",
+                    ArrowDataType::LargeBinary,
+                    true,
+                )])),
+                vec![Arc::new(LargeBinaryArray::from(vec![
+                    Some(b"value".as_slice()),
+                    None,
+                ]))],
+            )
+            .unwrap();
+            let return_field = Field::new("declared", ArrowDataType::LargeBinary, true)
+                .with_metadata([(EXTENSION_KEY.to_string(), extension.to_string())].into());
+
+            let restored = restore_wasm_result_batch(wasm_result, &return_field).unwrap();
+            assert_eq!(restored.schema().field(0).name(), "result");
+            assert_eq!(restored.schema().field(0).metadata()[EXTENSION_KEY], extension);
+            assert_eq!(restored.column(0).data_type(), &ArrowDataType::LargeBinary);
+            assert!(restored.column(0).is_null(1));
+        }
     }
 
     #[test]

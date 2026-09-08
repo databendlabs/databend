@@ -189,6 +189,20 @@ CREATE OR REPLACE FUNCTION wasm_identity_decimal76 (DECIMAL(76, 30)) RETURNS DEC
 query error rust_decimal.*precision up to 28.*scale between 0 and 28
 SELECT wasm_identity_decimal76('1234567890123456789012345678901234567890.123456789012345678901234567890'::DECIMAL(76, 30))
 
+# Interval and TimestampTz use Decimal128 as an internal Arrow representation, but they are not decimals.
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_interval (INTERVAL) RETURNS INTERVAL LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query error WASM UDF type Interval is not supported
+SELECT wasm_identity_interval(INTERVAL '1 day')
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_identity_timestamp_tz (TIMESTAMP_TZ) RETURNS TIMESTAMP_TZ LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query error WASM UDF type TimestampTz is not supported
+SELECT wasm_identity_timestamp_tz(TIMESTAMP_TZ '2026-09-08 10:11:12 +0800')
+
 # Databend LargeList is converted to the WASM ABI's List recursively.
 
 statement ok
