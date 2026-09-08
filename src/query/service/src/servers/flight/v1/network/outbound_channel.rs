@@ -35,6 +35,8 @@ use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
+use super::DefaultExchangeDataCodec;
+use super::ExchangeDataCodec;
 use super::outbound_buffer::ExchangeSinkBuffer;
 
 /// Outbound channel trait for sending data blocks.
@@ -96,9 +98,7 @@ fn serialize_to_batches(
         Ok((dicts, vec![batch]))
     } else {
         let schema = block.infer_schema();
-        let arrow_schema = ArrowSchema::from(&schema);
         let batch = block.to_record_batch_with_dataschema(&schema)?;
-        let _ = &arrow_schema; // used for schema inference, batch carries it
         let (dicts, batch_data) = encode_batch(&batch, ipc_options)?;
         Ok((dicts, vec![batch_data]))
     }
@@ -160,6 +160,7 @@ pub struct RemoteChannel {
     channel_id: usize,
     buffer: Arc<ExchangeSinkBuffer>,
     ipc_options: IpcWriteOptions,
+    codec: Arc<dyn ExchangeDataCodec>,
 }
 
 impl RemoteChannel {
@@ -169,11 +170,28 @@ impl RemoteChannel {
         buffer: Arc<ExchangeSinkBuffer>,
         compression: Option<FlightCompression>,
     ) -> Result<Arc<dyn OutboundChannel>> {
+        Self::create_with_codec(
+            dest_idx,
+            channel_id,
+            buffer,
+            compression,
+            DefaultExchangeDataCodec::create(),
+        )
+    }
+
+    pub fn create_with_codec(
+        dest_idx: usize,
+        channel_id: usize,
+        buffer: Arc<ExchangeSinkBuffer>,
+        compression: Option<FlightCompression>,
+        codec: Arc<dyn ExchangeDataCodec>,
+    ) -> Result<Arc<dyn OutboundChannel>> {
         Ok(Arc::new(Self {
             dest_idx,
             channel_id,
             buffer,
             ipc_options: make_ipc_options(compression)?,
+            codec,
         }))
     }
 }
@@ -187,9 +205,11 @@ impl OutboundChannel for RemoteChannel {
     }
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {
+        let Some(block) = self.codec.encode(block)? else {
+            return Ok(());
+        };
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
-
         let flight_data_list = serialize_block(block, &self.ipc_options, None)?;
 
         let tid_prefix = (self.channel_id as u16).to_le_bytes();
@@ -277,6 +297,7 @@ impl OutboundChannel for DummyOutboundChannel {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
@@ -324,6 +345,21 @@ mod tests {
         DataBlock::new_from_columns(vec![col])
     }
 
+    struct RecordingEncodeCodec {
+        called: Arc<AtomicBool>,
+    }
+
+    impl ExchangeDataCodec for RecordingEncodeCodec {
+        fn encode(&self, _block: DataBlock) -> Result<Option<DataBlock>> {
+            self.called.store(true, Ordering::SeqCst);
+            Ok(Some(make_block(2)))
+        }
+
+        fn decode(&self, _block: DataBlock) -> Result<Option<DataBlock>> {
+            unreachable!("outbound channel never decodes")
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_remote_channel_send_block() {
         let rt = test_runtime();
@@ -344,6 +380,39 @@ mod tests {
         assert_eq!(*meta.last().unwrap(), 0x01);
 
         // Cleanup
+        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remote_channel_encodes_before_arrow_flight() {
+        let rt = test_runtime();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
+        let buffer = Arc::new(
+            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+                .unwrap(),
+        );
+        let called = Arc::new(AtomicBool::new(false));
+        let channel = RemoteChannel::create_with_codec(
+            0,
+            0,
+            buffer,
+            None,
+            Arc::new(RecordingEncodeCodec {
+                called: called.clone(),
+            }),
+        )
+        .unwrap();
+
+        channel.add_block(make_block(1)).await.unwrap();
+        assert!(called.load(Ordering::SeqCst));
+
+        let flight_data = strip_tid(send_rx.recv().await.unwrap());
+        let schema = Arc::new(make_block(2).infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let decoded = deserialize_flight_data(flight_data, &schema, &arrow_schema).unwrap();
+        assert_eq!(decoded.num_rows(), 2);
+
         pong_tx.send(Ok(FlightData::default())).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
     }

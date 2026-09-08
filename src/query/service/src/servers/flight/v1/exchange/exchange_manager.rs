@@ -971,7 +971,7 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.get_mut(&params.get_query_id()) {
+        match queries_coordinator.get_mut(params.get_query_id()) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(coordinator) => params.take_flight_sender(&mut coordinator.flight_data_senders),
         }
@@ -981,7 +981,7 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.get_mut(&params.get_query_id()) {
+        match queries_coordinator.get_mut(params.get_query_id()) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(coordinator) => {
                 params.take_flight_receiver(&mut coordinator.flight_data_receivers)
@@ -1228,7 +1228,7 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            let exchange_params = fragment_coordinator
+            let mut exchange_params = fragment_coordinator
                 .create_exchange_params(
                     info,
                     fragment_coordinator
@@ -1246,7 +1246,7 @@ impl QueryCoordinator {
 
             ExchangeTransform::via(
                 ctx,
-                &exchange_params,
+                &mut exchange_params,
                 &mut build_res.main_pipeline,
                 injector,
             )?;
@@ -1314,18 +1314,18 @@ impl QueryCoordinator {
             );
         }
 
-        for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
+        for ((_, coordinator), mut params) in self.fragments_coordinator.iter_mut().zip(params) {
             if let Some(mut build_res) = coordinator.pipeline_build_res.take() {
                 build_res.set_max_threads(max_threads as usize);
 
                 if build_res.main_pipeline.is_pulling_pipeline()? {
-                    let Some(params) = params else {
+                    let Some(ref mut params) = params else {
                         return Err(ErrorCode::Internal(
                             "pipeline is pulling pipeline, but exchange params is none",
                         ));
                     };
                     // Add exchange data publisher.
-                    ExchangeSink::via(&info.query_ctx, &params, &mut build_res.main_pipeline)?;
+                    ExchangeSink::via(&info.query_ctx, params, &mut build_res.main_pipeline)?;
                 } else if build_res.main_pipeline.is_complete_pipeline()? && params.is_some() {
                     return Err(ErrorCode::Internal(
                         "pipeline is complete pipeline, but exchange params is some",
@@ -1435,7 +1435,6 @@ impl FragmentCoordinator {
         match data_exchange {
             DataExchange::Merge(exchange) => {
                 Ok(Some(ExchangeParams::MergeExchange(MergeExchangeParams {
-                    exchange_injector: exchange_injector.clone(),
                     schema: self.physical_plan.output_schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
@@ -1468,16 +1467,38 @@ impl FragmentCoordinator {
                     allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                 }),
             )),
-            DataExchange::GlobalShuffleExchange(exchange) => Ok(Some(
-                ExchangeParams::GlobalShuffleExchange(GlobalExchangeParams {
-                    query_id: info.query_id.to_string(),
-                    executor_id: info.current_executor.to_string(),
-                    schema: self.physical_plan.output_schema()?,
-                    exchange_id: exchange.id.clone(),
-                    shuffle_keys: exchange.shuffle_keys.clone(),
-                    destination_channels: exchange.destination_channels.clone(),
-                }),
-            )),
+            DataExchange::GlobalShuffleExchange(exchange) => {
+                let local_streams = exchange
+                    .destination_channels
+                    .iter()
+                    .find_map(|(destination, channels)| {
+                        (destination == &info.current_executor).then_some(channels.len())
+                    })
+                    .ok_or_else(|| {
+                        ErrorCode::Internal("Global shuffle has no local destination")
+                    })?;
+                let settings = info.query_ctx.get_settings();
+                let rows_threshold = settings.get_hash_shuffle_rows_threshold()?;
+                let bytes_threshold = settings.get_hash_shuffle_bytes_threshold()?;
+                let partition_streams = exchange_injector.partition_streams(
+                    &info.query_ctx,
+                    exchange,
+                    local_streams,
+                    rows_threshold,
+                    bytes_threshold,
+                )?;
+                Ok(Some(ExchangeParams::GlobalShuffleExchange(
+                    GlobalExchangeParams {
+                        query_id: info.query_id.to_string(),
+                        executor_id: info.current_executor.to_string(),
+                        schema: self.physical_plan.output_schema()?,
+                        exchange_id: exchange.id.clone(),
+                        destination_channels: exchange.destination_channels.clone(),
+                        partition_streams,
+                        codec: exchange_injector.exchange_data_codec(),
+                    },
+                )))
+            }
         }
     }
 

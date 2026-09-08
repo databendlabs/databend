@@ -437,6 +437,7 @@ impl PhysicalPlanBuilder {
                     kind: FragmentKind::Merge,
                     keys: vec![],
                     allow_adjust_parallelism: true,
+                    destination_parallelism: None,
                     ignore_exchange: false,
                     meta: PhysicalPlanMeta::new("Exchange"),
                 });
@@ -672,6 +673,7 @@ impl PhysicalPlanBuilder {
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
+                destination_parallelism: None,
                 ignore_exchange: false,
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
@@ -778,10 +780,11 @@ pub fn build_block_id_shuffle_exchange(
 
     Ok(PhysicalPlan::new(Exchange {
         input: plan,
-        kind: FragmentKind::Normal,
+        kind: FragmentKind::GlobalShuffle,
         meta: PhysicalPlanMeta::new("Exchange"),
         keys: vec![block_id_shuffle_key.as_remote_expr()],
         allow_adjust_parallelism: true,
+        destination_parallelism: None,
         ignore_exchange: false,
     }))
 }

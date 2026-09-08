@@ -15,6 +15,7 @@
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataSchemaRef;
 
 pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;
@@ -25,60 +26,44 @@ pub const PARTITIONED_AGGREGATE_TYPE: usize = 3;
 pub struct AggregateSerdeMeta {
     pub typ: usize,
     pub bucket: isize,
-    pub max_partition_count: usize,
     pub is_empty: bool,
 
     // used for PARTITIONED_AGGREGATE_TYPE
     pub buckets: Vec<isize>,
     pub payload_row_counts: Vec<usize>,
-
-    // used for row/bucket shuffle
-    // -1 for row shuffle
-    pub shuffle_bucket: isize,
 }
 
 impl AggregateSerdeMeta {
-    pub fn create_agg_payload(
-        bucket: isize,
-        max_partition_count: usize,
-        is_empty: bool,
-    ) -> BlockMetaInfoPtr {
+    pub fn create_agg_payload(bucket: isize, is_empty: bool) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: BUCKET_TYPE,
             bucket,
-            max_partition_count,
             is_empty,
             buckets: vec![],
             payload_row_counts: vec![],
-            shuffle_bucket: 0,
         })
     }
 
-    pub fn create_spilled(shuffle_bucket: isize) -> BlockMetaInfoPtr {
+    pub fn create_spilled() -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: SPILLED_TYPE,
             bucket: 0,
-            max_partition_count: 0,
             is_empty: false,
             buckets: vec![],
             payload_row_counts: vec![],
-            shuffle_bucket,
         })
     }
 
     pub fn create_partitioned_payload(
         buckets: Vec<isize>,
         payload_row_counts: Vec<usize>,
-        is_empty: bool,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: PARTITIONED_AGGREGATE_TYPE,
             bucket: 0,
-            max_partition_count: 0,
-            is_empty,
+            is_empty: false,
             buckets,
             payload_row_counts,
-            shuffle_bucket: 0,
         })
     }
 }
@@ -91,5 +76,10 @@ impl BlockMetaInfo for AggregateSerdeMeta {
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
+    }
+
+    fn override_block_schema(&self) -> Option<DataSchemaRef> {
+        (self.typ == SPILLED_TYPE)
+            .then(|| std::sync::Arc::new(super::exchange_defines::spilled_schema()))
     }
 }

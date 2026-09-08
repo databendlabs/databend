@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_scatter;
+mod aggregate_partition_stream;
 mod serde_meta;
-mod transform_aggregate_serializer;
-mod transform_deserializer;
-mod transform_exchange_aggregate_serializer;
 
-pub use aggregate_scatter::*;
+pub use aggregate_partition_stream::*;
 pub use serde_meta::*;
-pub use transform_aggregate_serializer::*;
-pub use transform_deserializer::*;
-pub use transform_exchange_aggregate_serializer::*;
 
 pub mod exchange_defines {
     use arrow_schema::Schema;

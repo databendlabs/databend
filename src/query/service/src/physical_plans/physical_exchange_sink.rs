@@ -43,6 +43,7 @@ pub struct ExchangeSink {
     pub query_id: String,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
+    pub destination_parallelism: Option<usize>,
 }
 
 #[typetag::serde]
@@ -101,6 +102,7 @@ impl IPhysicalPlan for ExchangeSink {
             query_id: self.query_id.clone(),
             ignore_exchange: self.ignore_exchange,
             allow_adjust_parallelism: self.allow_adjust_parallelism,
+            destination_parallelism: self.destination_parallelism,
         })
     }
 

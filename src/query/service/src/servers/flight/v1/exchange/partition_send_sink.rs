@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::task::Poll;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockPartitionStream;
+use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::ExecutorWaker;
@@ -31,51 +31,47 @@ use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskSet;
-use crate::servers::flight::v1::scatter::FlightScatter;
+use crate::servers::flight::v1::partition::PartitionStream;
+use crate::servers::flight::v1::partition::PartitionedBlock;
 
-pub struct HashSendSink {
+pub struct PartitionSendSink {
     id: NodeIndex,
     input: Arc<InputPort>,
-    scatter: Arc<Box<dyn FlightScatter>>,
-    partition_stream: BlockPartitionStream,
+    partition_stream: Box<dyn PartitionStream>,
     tasks: SyncTaskSet,
     channels: OutboundSendChannels,
     handle: Option<OutboundSendHandle>,
 }
 
-impl HashSendSink {
+impl PartitionSendSink {
     pub fn create_item(
         worker_id: usize,
-        scatter: Arc<Box<dyn FlightScatter>>,
+        partition_stream: Box<dyn PartitionStream>,
         channels: Vec<Arc<dyn OutboundChannel>>,
         waker: Arc<ExecutorWaker>,
-        rows_threshold: usize,
-        bytes_threshold: usize,
     ) -> PipeItem {
         let input = InputPort::create();
-        let scatter_size = channels.len();
         let channels = OutboundSendChannels::create(channels);
         let processor = ProcessorPtr::create(Box::new(Self {
-            scatter,
+            partition_stream,
             channels,
             input: input.clone(),
             tasks: SyncTaskSet::new(worker_id, waker),
-            partition_stream: BlockPartitionStream::create(
-                rows_threshold,
-                bytes_threshold,
-                scatter_size,
-            ),
             handle: None,
             id: NodeIndex::default(),
         }));
 
         PipeItem::create(processor, vec![input], vec![])
     }
+
+    fn partition_block(&mut self, data_block: DataBlock) -> Result<Vec<PartitionedBlock>> {
+        self.partition_stream.push(data_block)
+    }
 }
 
-impl Processor for HashSendSink {
+impl Processor for PartitionSendSink {
     fn name(&self) -> String {
-        String::from("HashSendSink")
+        String::from("PartitionSendSink")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -102,42 +98,43 @@ impl Processor for HashSendSink {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
+            let ready_blocks = self.partition_block(data_block)?;
 
-            if let Some(indices) = self.scatter.scatter_indices(&data_block)? {
-                let ready_blocks = self.partition_stream.partition(indices, data_block, true);
+            let mut futures = Vec::new();
 
-                let mut futures = Vec::new();
-
-                for (partition_id, block) in ready_blocks {
-                    if block.is_empty() {
-                        continue;
-                    }
-                    if self.channels.is_closed(partition_id) {
-                        continue;
-                    }
-
-                    futures.push({
-                        let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
-                    });
+            for PartitionedBlock {
+                partition_id,
+                block,
+            } in ready_blocks
+            {
+                if block.is_empty() && block.get_meta().is_none() {
+                    continue;
+                }
+                if self.channels.is_closed(partition_id) {
+                    continue;
                 }
 
-                if !futures.is_empty() {
-                    let joined = Box::pin(futures::future::join_all(futures));
-                    let mut handle = self.tasks.spawn(self.id, joined);
+                futures.push({
+                    let channel = self.channels.channel(partition_id).clone();
+                    async move { (partition_id, channel.add_block(block).await) }
+                });
+            }
 
-                    match handle.poll(true) {
-                        Poll::Ready(results) => {
-                            self.channels.handle_send_results(results)?;
-                            if self.channels.all_closed() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
-                            }
+            if !futures.is_empty() {
+                let joined = Box::pin(futures::future::join_all(futures));
+                let mut handle = self.tasks.spawn(self.id, joined);
+
+                match handle.poll(true) {
+                    Poll::Ready(results) => {
+                        self.channels.handle_send_results(results)?;
+                        if self.channels.all_closed() {
+                            self.input.finish();
+                            return Ok(Event::Finished);
                         }
-                        Poll::Pending => {
-                            self.handle = Some(handle);
-                            return Ok(Event::NeedConsume);
-                        }
+                    }
+                    Poll::Pending => {
+                        self.handle = Some(handle);
+                        return Ok(Event::NeedConsume);
                     }
                 }
             }
@@ -146,21 +143,22 @@ impl Processor for HashSendSink {
         if self.input.is_finished() {
             let mut futures = Vec::new();
 
-            for partition_id in 0..self.channels.len() {
+            for PartitionedBlock {
+                partition_id,
+                block,
+            } in self.partition_stream.finish()?
+            {
                 if self.channels.is_closed(partition_id) {
                     continue;
                 }
-
-                if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
-                    if block.is_empty() {
-                        continue;
-                    }
-
-                    futures.push({
-                        let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
-                    });
+                if block.is_empty() && block.get_meta().is_none() {
+                    continue;
                 }
+
+                futures.push({
+                    let channel = self.channels.channel(partition_id).clone();
+                    async move { (partition_id, channel.add_block(block).await) }
+                });
             }
 
             if futures.is_empty() {
@@ -189,12 +187,11 @@ impl Processor for HashSendSink {
 
     fn details_status(&self) -> Option<String> {
         Some(format!(
-            "handle_pending={}, closed_channels={}/{}, closed={:?}, buffered_partitions={:?}",
+            "handle_pending={}, closed_channels={}/{}, closed={:?}",
             self.handle.is_some(),
             self.channels.closed_count(),
             self.channels.len(),
             self.channels.closed_status(),
-            self.partition_stream.partition_ids(),
         ))
     }
 

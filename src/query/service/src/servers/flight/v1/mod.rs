@@ -16,6 +16,7 @@ pub mod actions;
 pub mod exchange;
 pub mod network;
 pub mod packets;
+pub mod partition;
 pub mod scatter;
 
 mod flight_service;

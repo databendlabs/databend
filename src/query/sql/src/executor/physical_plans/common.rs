@@ -66,12 +66,12 @@ pub struct OnConflictField {
 pub enum FragmentKind {
     // Init-partition
     Init,
-    // Partitioned by hash
+    // Node-to-node partitioning used by distributed sort.
     Normal,
     // Broadcast
     Expansive,
     Merge,
-    // Ping-pong based hash shuffle (used by hash join)
+    // Ping-pong based global hash shuffle.
     GlobalShuffle,
 }
 

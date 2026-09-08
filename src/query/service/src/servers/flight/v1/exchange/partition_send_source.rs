@@ -31,7 +31,7 @@ use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 
-pub struct HashSendSource {
+pub struct PartitionSendSource {
     id: NodeIndex,
     output: Arc<OutputPort>,
     tasks: SyncTaskSet,
@@ -39,7 +39,7 @@ pub struct HashSendSource {
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
 }
 
-impl HashSendSource {
+impl PartitionSendSource {
     pub fn create_item(
         worker_id: usize,
         receiver: Arc<dyn InboundChannel>,
@@ -58,9 +58,9 @@ impl HashSendSource {
     }
 }
 
-impl Processor for HashSendSource {
+impl Processor for PartitionSendSource {
     fn name(&self) -> String {
-        String::from("HashSendSource")
+        String::from("PartitionSendSource")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -70,7 +70,6 @@ impl Processor for HashSendSource {
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         if self.output.is_finished() {
             self.receiver.close();
-
             return Ok(Event::Finished);
         }
 
@@ -101,7 +100,7 @@ impl Processor for HashSendSource {
                 Poll::Pending => {
                     self.handle = Some(handle);
                 }
-            };
+            }
         }
 
         if self.handle.is_none() {

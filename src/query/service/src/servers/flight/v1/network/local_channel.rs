@@ -62,7 +62,10 @@ impl OutboundChannel for LocalOutboundChannel {
     }
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {
-        let size = block.memory_size();
+        // Meta-only blocks can own substantial process-local state (for
+        // example an aggregate payload). Use the metadata-aware profile size
+        // so local zero-copy exchange still applies meaningful backpressure.
+        let size = block.profile_statistics().bytes;
         let size = std::cmp::min(size, self.max_bytes_local_channel);
 
         let semaphore = self.semaphore.clone();
