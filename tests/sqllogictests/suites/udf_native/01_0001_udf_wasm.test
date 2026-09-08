@@ -215,6 +215,14 @@ CREATE OR REPLACE FUNCTION wasm_identity_interval (INTERVAL) RETURNS INT LANGUAG
 statement error WASM UDF type TimestampTz is not supported
 CREATE OR REPLACE FUNCTION wasm_identity_timestamp_tz (INT) RETURNS TIMESTAMP_TZ LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
+# Arrow-UDF WASM does not expose Map or FixedSizeList in its ABI type matrix.
+
+statement error WASM UDF type Map.*is not supported
+CREATE OR REPLACE FUNCTION wasm_identity_map (MAP(VARCHAR, INT)) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+statement error WASM UDF type Vector.*is not supported
+CREATE OR REPLACE FUNCTION wasm_identity_vector (INT) RETURNS VECTOR(3) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
 # Databend LargeList is converted to the WASM ABI's List recursively.
 
 statement ok

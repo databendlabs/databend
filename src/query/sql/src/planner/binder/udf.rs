@@ -89,9 +89,17 @@ fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
                 "WASM UDF type TimestampTz is not supported",
             ));
         }
-        TableDataType::Nullable(inner)
-        | TableDataType::Array(inner)
-        | TableDataType::Map(inner) => validate_wasm_udf_type(inner)?,
+        TableDataType::Map(_)
+        | TableDataType::Vector(_)
+        | TableDataType::Opaque(_)
+        | TableDataType::StageLocation => {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "WASM UDF type {data_type} is not supported"
+            )));
+        }
+        TableDataType::Nullable(inner) | TableDataType::Array(inner) => {
+            validate_wasm_udf_type(inner)?;
+        }
         TableDataType::Tuple { fields_type, .. } => {
             fields_type.iter().try_for_each(validate_wasm_udf_type)?;
         }
@@ -588,5 +596,21 @@ mod tests {
         assert!(validate_wasm_udf_type(&nested_wide_decimal).is_err());
         assert!(validate_wasm_udf_type(&TableDataType::Interval).is_err());
         assert!(validate_wasm_udf_type(&TableDataType::TimestampTz).is_err());
+        assert!(
+            validate_wasm_udf_type(&TableDataType::Vector(
+                databend_common_expression::types::VectorDataType::Float32(3),
+            ))
+            .is_err()
+        );
+
+        let map = TableDataType::Map(Box::new(TableDataType::Tuple {
+            fields_name: vec!["key".to_string(), "value".to_string()],
+            fields_type: vec![
+                TableDataType::String,
+                TableDataType::Number(databend_common_expression::types::NumberDataType::Int32),
+            ],
+        }));
+        assert!(validate_wasm_udf_type(&map).is_err());
+        assert!(validate_wasm_udf_type(&TableDataType::Array(Box::new(map))).is_err());
     }
 }
