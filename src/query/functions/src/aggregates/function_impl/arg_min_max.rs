@@ -55,8 +55,8 @@ impl ArgMinMaxBuilder {
         NameRoute::new(
             &["arg_min"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
-            ArgMinMaxBuilder::ARG_MIN_FEATURES,
-            NullPolicy::Skip,
+            ArgMinMaxBuilder::ARG_MIN_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create::<TYPE_MIN>))
         .then(MergeRoute::multi_arg(true, Self::create::<TYPE_MIN>))
@@ -68,8 +68,8 @@ impl ArgMinMaxBuilder {
         NameRoute::new(
             &["arg_max"],
             ArgMinMaxBuilder::arg_min_max_arguments(),
-            ArgMinMaxBuilder::ARG_MAX_FEATURES,
-            NullPolicy::Skip,
+            ArgMinMaxBuilder::ARG_MAX_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create::<TYPE_MAX>))
         .then(MergeRoute::multi_arg(true, Self::create::<TYPE_MAX>))
@@ -92,26 +92,28 @@ impl ArgMinMaxBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any(), ArgumentPattern::any()])
     }
 
-    const ARG_MIN_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ARG_MIN_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the argument associated with the minimum value",
-        definition: "arg_min(arg, value)",
-        example: "select arg_min(name, score) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the argument associated with the minimum value",
+            definition: "arg_min(arg, value)",
+            example: "select arg_min(name, score) from t",
+        },
     };
 
-    const ARG_MAX_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ARG_MAX_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the argument associated with the maximum value",
-        definition: "arg_max(arg, value)",
-        example: "select arg_max(name, score) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the argument associated with the maximum value",
+            definition: "arg_max(arg, value)",
+            example: "select arg_max(name, score) from t",
+        },
     };
 }
 

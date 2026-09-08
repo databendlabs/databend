@@ -33,6 +33,7 @@ use super::AccumulateRowInput;
 use super::AggregateCallInstance;
 use super::AggregateCallRef;
 use super::AggregateEval;
+use super::AggregateMetadata;
 use super::AggregateSignature;
 use super::AggregateStateSet;
 use super::ArgumentsPattern;
@@ -50,6 +51,7 @@ pub(crate) type LegacySignatureResolver = fn(&[Scalar], &DataType) -> Vec<Vec<Da
 
 pub(super) fn create(
     request: RawAggregateCall<'_>,
+    metadata: AggregateMetadata,
     nested_name: &str,
     nested_aliases: &[&str],
     nested_arguments: &ArgumentsPattern,
@@ -96,12 +98,11 @@ pub(super) fn create(
         order_by: request.order_by.to_vec(),
         return_type,
     };
-    let features = nested.features().clone();
     let state = nested.state().clone();
     Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
-        features,
+        metadata.into_features(),
         state,
         MergeEval {
             nested,

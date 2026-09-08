@@ -29,8 +29,6 @@ use databend_common_expression::StateSerdeType;
 use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::utils::column_merge_validity;
 
 use super::*;
@@ -315,16 +313,9 @@ pub(crate) fn nullable_input_state_description(
 
 pub(crate) fn create_state_null_result_function(
     request: RawAggregateCall<'_>,
-    returns_default_when_only_null: bool,
+    call_metadata: AggregateMetadata,
 ) -> Result<AggregateCallRef> {
-    let (data_type, result) = if returns_default_when_only_null {
-        (
-            DataType::Number(NumberDataType::UInt64),
-            Scalar::Number(NumberScalar::UInt64(0)),
-        )
-    } else {
-        (DataType::Null, Scalar::Null)
-    };
+    let (data_type, result) = call_metadata.null_argument_result.value();
     let serde_item = StateSerdeItem::DataType(data_type.clone());
     let physical_type = StateSerdeType::new(vec![serde_item.clone()]).data_type();
     let function_name = request
@@ -352,7 +343,7 @@ pub(crate) fn create_state_null_result_function(
     Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
-        StateNullResultEval::FEATURES,
+        call_metadata.into_features(),
         state,
         StateNullResultEval { result },
     )))
@@ -363,17 +354,6 @@ struct StateNullResultEval {
 }
 
 impl StateNullResultEval {
-    const FEATURES: AggregateFeatures = AggregateFeatures {
-        is_decomposable: false,
-        supports_filter: false,
-        sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "",
-        description: "",
-        definition: "",
-        example: "",
-    };
-
     fn push_result(&self, builder: &mut ColumnBuilder) {
         builder.push(self.result.as_ref());
     }

@@ -55,8 +55,8 @@ impl HistogramBuilder {
         NameRoute::new(
             &["histogram"],
             HistogramBuilder::histogram_arguments(),
-            HistogramBuilder::HISTOGRAM_FEATURES,
-            NullPolicy::Skip,
+            HistogramBuilder::HISTOGRAM_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, HistogramBuilder::create))
         .then(MergeRoute::unary(true, HistogramBuilder::create))
@@ -83,15 +83,16 @@ impl HistogramBuilder {
         )
     }
 
-    const HISTOGRAM_FEATURES: AggregateFeatures = AggregateFeatures {
+    const HISTOGRAM_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "builds an equi-height histogram",
-        definition: "histogram(expr[, buckets])",
-        example: "select histogram(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "builds an equi-height histogram",
+            definition: "histogram(expr[, buckets])",
+            example: "select histogram(number) from numbers(10)",
+        },
     };
 }
 

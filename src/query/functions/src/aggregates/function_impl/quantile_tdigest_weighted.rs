@@ -48,8 +48,8 @@ impl QuantileTDigestWeightedBuilder {
         NameRoute::new(
             &["quantile_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
-            QuantileTDigestWeightedBuilder::QUANTILE_TDIGEST_WEIGHTED_FEATURES,
-            NullPolicy::Skip,
+            QuantileTDigestWeightedBuilder::QUANTILE_TDIGEST_WEIGHTED_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create))
         .then(MergeRoute::multi_arg(true, Self::create))
@@ -60,8 +60,8 @@ impl QuantileTDigestWeightedBuilder {
         NameRoute::new(
             &["median_tdigest_weighted"],
             QuantileTDigestWeightedBuilder::quantile_tdigest_weighted_arguments(),
-            QuantileTDigestWeightedBuilder::MEDIAN_TDIGEST_WEIGHTED_FEATURES,
-            NullPolicy::Skip,
+            QuantileTDigestWeightedBuilder::MEDIAN_TDIGEST_WEIGHTED_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create_median))
         .then(MergeRoute::multi_arg(true, Self::create_median))
@@ -96,26 +96,28 @@ impl QuantileTDigestWeightedBuilder {
         ])
     }
 
-    const QUANTILE_TDIGEST_WEIGHTED_FEATURES: AggregateFeatures = AggregateFeatures {
+    const QUANTILE_TDIGEST_WEIGHTED_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns an approximate weighted quantile value using t-digest",
-        definition: "quantile_tdigest_weighted(level)(expr, weight)",
-        example: "select quantile_tdigest_weighted(0.5)(number, weight) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns an approximate weighted quantile value using t-digest",
+            definition: "quantile_tdigest_weighted(level)(expr, weight)",
+            example: "select quantile_tdigest_weighted(0.5)(number, weight) from t",
+        },
     };
 
-    const MEDIAN_TDIGEST_WEIGHTED_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MEDIAN_TDIGEST_WEIGHTED_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the approximate weighted median input value using t-digest",
-        definition: "median_tdigest_weighted(expr, weight)",
-        example: "select median_tdigest_weighted(number, weight) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the approximate weighted median input value using t-digest",
+            definition: "median_tdigest_weighted(expr, weight)",
+            example: "select median_tdigest_weighted(number, weight) from t",
+        },
     };
 }
 

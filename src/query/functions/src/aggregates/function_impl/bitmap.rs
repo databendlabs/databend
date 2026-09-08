@@ -96,114 +96,123 @@ impl BitmapBuilder {
         ])
     }
 
-    const BITMAP_CONSTRUCT_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_CONSTRUCT_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "constructs a bitmap from unsigned integer values",
-        definition: "bitmap_construct_agg(expr)",
-        example: "select bitmap_construct_agg(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "constructs a bitmap from unsigned integer values",
+            definition: "bitmap_construct_agg(expr)",
+            example: "select bitmap_construct_agg(number) from numbers(10)",
+        },
     };
 
-    const BITMAP_AND_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_AND_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts bits in the intersection of bitmap values",
-        definition: "bitmap_and_count(bitmap)",
-        example: "select bitmap_and_count(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts bits in the intersection of bitmap values",
+            definition: "bitmap_and_count(bitmap)",
+            example: "select bitmap_and_count(bitmap_col) from t",
+        },
     };
 
-    const BITMAP_NOT_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_NOT_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts bits after subtracting subsequent bitmap values from the first",
-        definition: "bitmap_not_count(bitmap)",
-        example: "select bitmap_not_count(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts bits after subtracting subsequent bitmap values from the first",
+            definition: "bitmap_not_count(bitmap)",
+            example: "select bitmap_not_count(bitmap_col) from t",
+        },
     };
 
-    const BITMAP_OR_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_OR_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts bits in the union of bitmap values",
-        definition: "bitmap_or_count(bitmap)",
-        example: "select bitmap_or_count(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts bits in the union of bitmap values",
+            definition: "bitmap_or_count(bitmap)",
+            example: "select bitmap_or_count(bitmap_col) from t",
+        },
     };
 
-    const BITMAP_XOR_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_XOR_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts bits in the xor of bitmap values",
-        definition: "bitmap_xor_count(bitmap)",
-        example: "select bitmap_xor_count(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts bits in the xor of bitmap values",
+            definition: "bitmap_xor_count(bitmap)",
+            example: "select bitmap_xor_count(bitmap_col) from t",
+        },
     };
 
-    const BITMAP_UNION_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_UNION_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the union of bitmap values",
-        definition: "bitmap_union(bitmap)",
-        example: "select bitmap_union(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the union of bitmap values",
+            definition: "bitmap_union(bitmap)",
+            example: "select bitmap_union(bitmap_col) from t",
+        },
     };
 
-    const BITMAP_INTERSECT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_INTERSECT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the intersection of bitmap values",
-        definition: "bitmap_intersect(bitmap)",
-        example: "select bitmap_intersect(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the intersection of bitmap values",
+            definition: "bitmap_intersect(bitmap)",
+            example: "select bitmap_intersect(bitmap_col) from t",
+        },
     };
 
-    const BITMAP_XOR_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BITMAP_XOR_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the xor of bitmap values",
-        definition: "bitmap_xor_agg(bitmap)",
-        example: "select bitmap_xor_agg(bitmap_col) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the xor of bitmap values",
+            definition: "bitmap_xor_agg(bitmap)",
+            example: "select bitmap_xor_agg(bitmap_col) from t",
+        },
     };
 
-    const INTERSECT_COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const INTERSECT_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts bits in the intersection of filtered bitmap values",
-        definition: "intersect_count(params...)(bitmap, expr)",
-        example: "select intersect_count(1, 2)(bitmap_col, key) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts bits in the intersection of filtered bitmap values",
+            definition: "intersect_count(params...)(bitmap, expr)",
+            example: "select intersect_count(1, 2)(bitmap_col, key) from t",
+        },
     };
 
-    fn bitmap_features<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> AggregateFeatures {
+    fn bitmap_metadata<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> AggregateMetadata {
         match (OP_TYPE, RESULT_TYPE) {
-            (BITMAP_AND, BITMAP_COUNT) => Self::BITMAP_AND_COUNT_FEATURES,
-            (BITMAP_NOT, BITMAP_COUNT) => Self::BITMAP_NOT_COUNT_FEATURES,
-            (BITMAP_OR, BITMAP_COUNT) => Self::BITMAP_OR_COUNT_FEATURES,
-            (BITMAP_XOR, BITMAP_COUNT) => Self::BITMAP_XOR_COUNT_FEATURES,
-            (BITMAP_OR, BITMAP_RAW) => Self::BITMAP_UNION_FEATURES,
-            (BITMAP_AND, BITMAP_RAW) => Self::BITMAP_INTERSECT_FEATURES,
-            (BITMAP_XOR, BITMAP_RAW) => Self::BITMAP_XOR_AGG_FEATURES,
+            (BITMAP_AND, BITMAP_COUNT) => Self::BITMAP_AND_COUNT_METADATA,
+            (BITMAP_NOT, BITMAP_COUNT) => Self::BITMAP_NOT_COUNT_METADATA,
+            (BITMAP_OR, BITMAP_COUNT) => Self::BITMAP_OR_COUNT_METADATA,
+            (BITMAP_XOR, BITMAP_COUNT) => Self::BITMAP_XOR_COUNT_METADATA,
+            (BITMAP_OR, BITMAP_RAW) => Self::BITMAP_UNION_METADATA,
+            (BITMAP_AND, BITMAP_RAW) => Self::BITMAP_INTERSECT_METADATA,
+            (BITMAP_XOR, BITMAP_RAW) => Self::BITMAP_XOR_AGG_METADATA,
             _ => unreachable!(),
         }
     }
@@ -707,12 +716,12 @@ where
 impl BitmapBuilder {
     fn bitmap_route<const OP_TYPE: u8, const RESULT_TYPE: u8>() -> NameRoute {
         let arguments = Self::bitmap_arguments();
-        let features = Self::bitmap_features::<OP_TYPE, RESULT_TYPE>();
+        let metadata = Self::bitmap_metadata::<OP_TYPE, RESULT_TYPE>();
         let route = NameRoute::new(
             Self::bitmap_names::<OP_TYPE, RESULT_TYPE>(),
             arguments,
-            features,
-            NullPolicy::Skip,
+            metadata,
+            NullInput::Filter,
         )
         .with_validator(Self::validate_bitmap_request)
         .then(MergeRoute::multi_arg(
@@ -775,12 +784,12 @@ impl BitmapBuilder {
 
     fn construct_route() -> NameRoute {
         let arguments = Self::bitmap_numeric_arguments();
-        let features = Self::BITMAP_CONSTRUCT_AGG_FEATURES;
+        let metadata = Self::BITMAP_CONSTRUCT_AGG_METADATA;
         NameRoute::new(
             &["bitmap_construct_agg", "group_bitmap"],
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::ReturnsDefaultWhenOnlyNull,
+            arguments,
+            metadata,
+            NullInput::Filter,
         )
         .then(MergeRoute::new(false, BitmapBuilder::create_group_bitmap))
         .then(MergeRoute::new(true, BitmapBuilder::create_group_bitmap))
@@ -796,8 +805,8 @@ impl BitmapBuilder {
         NameRoute::new(
             &["intersect_count"],
             Self::bitmap_intersect_count_arguments(),
-            Self::INTERSECT_COUNT_FEATURES,
-            NullPolicy::Skip,
+            Self::INTERSECT_COUNT_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create_intersect_count))
         .then(MergeRoute::multi_arg(true, Self::create_intersect_count))

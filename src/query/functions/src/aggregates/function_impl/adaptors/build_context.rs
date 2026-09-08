@@ -23,7 +23,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 
 use super::AggregateEval;
-use super::AggregateFeatures;
+use super::AggregateMetadata;
 use super::AggregateSignature;
 use super::AggregateStateDescription;
 use super::Combinator;
@@ -37,15 +37,11 @@ use super::UnaryOrNull;
 use super::UnaryState;
 use super::UnaryStateEval;
 
-fn build_signature(
-    request: &RawAggregateCall<'_>,
-    signature_args_type: &[DataType],
-    return_type: DataType,
-) -> AggregateSignature {
+fn build_signature(request: &RawAggregateCall<'_>, return_type: DataType) -> AggregateSignature {
     AggregateSignature {
         name: request.name.to_string(),
         params: request.params.to_vec(),
-        args_type: signature_args_type.to_vec(),
+        args_type: request.args_type.to_vec(),
         distinct: request.distinct,
         order_by: request.order_by.to_vec(),
         return_type,
@@ -57,36 +53,35 @@ where C: Combinator
 {
     pub(super) fn new(
         request: RawAggregateCall<'a>,
-        signature_args_type: &'a [DataType],
-        features: AggregateFeatures,
+        input_types: &'a [DataType],
+        metadata: AggregateMetadata,
         combinator: C,
     ) -> Result<Self> {
-        let [arg_type] = request.args_type else {
+        let [arg_type] = input_types else {
             return Err(ErrorCode::BadArguments(format!(
                 "{} expects exactly one argument, got {}",
                 request.name,
-                request.args_type.len()
+                input_types.len()
             )));
         };
         Ok(Self {
-            request,
-            signature_args_type,
-            features,
+            call: request,
+            metadata,
             combinator,
-            arg_type: arg_type.remove_nullable(),
+            input_type: arg_type.remove_nullable(),
         })
     }
 
     pub(crate) fn name(&self) -> &str {
-        self.request.name
+        self.call.name
     }
 
     pub(crate) fn params(&self) -> &[databend_common_expression::Scalar] {
-        self.request.params
+        self.call.params
     }
 
     pub(crate) fn arg_type(&self) -> &DataType {
-        &self.arg_type
+        &self.input_type
     }
 
     pub(crate) fn create_unary<S, I, R>(
@@ -100,17 +95,17 @@ where C: Combinator
         I: AccessType,
         R: ValueType,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
+        let signature = build_signature(&self.call, return_type);
         if signature.args_type[0].is_nullable_or_null() {
             let eval =
                 UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, true>::new(function_info.into()));
             self.combinator
-                .create::<false>(signature, self.features, state, eval)
+                .create::<false>(signature, self.metadata, state, eval)
         } else {
             let eval =
                 UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, false>::new(function_info.into()));
             self.combinator
-                .create::<false>(signature, self.features, state, eval)
+                .create::<false>(signature, self.metadata, state, eval)
         }
     }
 
@@ -125,12 +120,12 @@ where C: Combinator
         I: AccessType,
         R: ValueType,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
+        let signature = build_signature(&self.call, return_type);
         let nested = UnaryStateEval::<S, I, R, false>::new(Arc::new(function_info));
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(nested));
         let state = state.with_null_flag();
         self.combinator
-            .create::<false>(signature, self.features, state, eval)
+            .create::<false>(signature, self.metadata, state, eval)
     }
 
     pub(crate) fn create_unary_or_null_with_eval<I, R, U>(
@@ -144,11 +139,11 @@ where C: Combinator
         R: ValueType,
         U: UnaryEval<I, R>,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
+        let signature = build_signature(&self.call, return_type);
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(eval));
         let state = state.with_null_flag();
         self.combinator
-            .create::<false>(signature, self.features, state, eval)
+            .create::<false>(signature, self.metadata, state, eval)
     }
 
     pub(crate) fn create_unary_distinct_or_null<S, I, R>(
@@ -162,17 +157,12 @@ where C: Combinator
         I: AccessType,
         R: ValueType,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
-        let distinct_args_type = self
-            .request
-            .args_type
-            .iter()
-            .map(DataType::remove_nullable)
-            .collect();
+        let signature = build_signature(&self.call, return_type);
+        let distinct_args_type = vec![self.input_type.clone()];
         super::create_unary_distinct_or_null_aggregate_function::<S, I, R, _>(
             self.combinator,
             signature,
-            self.features,
+            self.metadata,
             state,
             function_info,
             distinct_args_type,
@@ -185,34 +175,29 @@ where C: Combinator
 {
     pub(super) fn new(
         request: RawAggregateCall<'a>,
-        signature_args_type: &'a [DataType],
-        features: AggregateFeatures,
+        input_types: &'a [DataType],
+        metadata: AggregateMetadata,
         combinator: C,
     ) -> Self {
-        let args_type = request
-            .args_type
-            .iter()
-            .map(DataType::remove_nullable)
-            .collect();
+        let input_types = input_types.iter().map(DataType::remove_nullable).collect();
         Self {
-            request,
-            signature_args_type,
-            features,
+            call: request,
+            metadata,
             combinator,
-            args_type,
+            input_types,
         }
     }
 
     pub(crate) fn name(&self) -> &str {
-        self.request.name
+        self.call.name
     }
 
     pub(crate) fn params(&self) -> &[databend_common_expression::Scalar] {
-        self.request.params
+        self.call.params
     }
 
     pub(crate) fn args_type(&self) -> &[DataType] {
-        &self.args_type
+        &self.input_types
     }
 
     pub(crate) fn create_multi_arg_or_null<I>(
@@ -224,11 +209,11 @@ where C: Combinator
     where
         I: AggregateEval,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
+        let signature = build_signature(&self.call, return_type);
         debug_assert!(signature.order_by.is_empty());
         self.combinator.create::<false>(
             signature,
-            self.features,
+            self.metadata,
             state.with_null_flag(),
             MultiArgOrNullEval::new(eval),
         )
@@ -240,28 +225,28 @@ where C: Combinator
 {
     pub(super) fn new(
         request: RawAggregateCall<'a>,
-        signature_args_type: &'a [DataType],
-        features: AggregateFeatures,
+        input_types: &'a [DataType],
+        metadata: AggregateMetadata,
         combinator: C,
     ) -> Self {
         Self {
-            request,
-            signature_args_type,
-            features,
+            call: request,
+            metadata,
             combinator,
+            input_types,
         }
     }
 
     pub(crate) fn name(&self) -> &str {
-        self.request.name
+        self.call.name
     }
 
     pub(crate) fn params(&self) -> &[databend_common_expression::Scalar] {
-        self.request.params
+        self.call.params
     }
 
     pub(crate) fn args_type(&self) -> &[DataType] {
-        self.request.args_type
+        self.input_types
     }
 
     pub(crate) fn create<I>(
@@ -273,10 +258,10 @@ where C: Combinator
     where
         I: AggregateEval,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
+        let signature = build_signature(&self.call, return_type);
         debug_assert!(signature.order_by.is_empty());
         self.combinator
-            .create::<false>(signature, self.features, state, eval)
+            .create::<false>(signature, self.metadata, state, eval)
     }
 
     pub(crate) fn create_ordered<I>(
@@ -288,8 +273,130 @@ where C: Combinator
     where
         I: AggregateEval,
     {
-        let signature = build_signature(&self.request, self.signature_args_type, return_type);
+        let signature = build_signature(&self.call, return_type);
         self.combinator
-            .create::<true>(signature, self.features, state, eval)
+            .create::<true>(signature, self.metadata, state, eval)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::UInt64Type;
+
+    use super::*;
+    use crate::aggregates::function_impl::adaptors::*;
+    use crate::aggregates::function_impl::sum::AggregateSumUInt64State;
+
+    fn build_probe<C: Combinator>(build: UnaryBuildContext<'_, C>) -> Result<AggregateCallRef> {
+        // The implementation sees one non-null input while the complete call
+        // retains its nullable argument and, for IF, its condition argument.
+        assert_eq!(build.arg_type(), &UInt64Type::data_type());
+        if build.call.name == "contract_probe" {
+            assert_eq!(
+                build.metadata.documentation.description,
+                "intrinsic aggregate"
+            );
+        }
+        if build.call.name.ends_with("_if") {
+            assert_eq!(build.call.args_type, &[
+                UInt64Type::data_type().wrap_nullable(),
+                DataType::Boolean,
+            ]);
+        } else {
+            assert_eq!(build.call.args_type.len(), 1);
+        }
+        build.create_unary_or_null::<AggregateSumUInt64State, UInt64Type, UInt64Type>(
+            UInt64Type::data_type().wrap_nullable(),
+            AggregateSumUInt64State::state_description(UInt64Type::data_type()),
+            (),
+        )
+    }
+
+    #[test]
+    fn test_external_contract_survives_internal_build() -> Result<()> {
+        let base_metadata = AggregateMetadata {
+            documentation: AggregateDocumentation {
+                description: "intrinsic aggregate",
+                ..Default::default()
+            },
+            is_decomposable: true,
+            ..Default::default()
+        };
+        let descriptors = NameRoute::new(
+            &["contract_probe"],
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+            base_metadata,
+            NullInput::Filter,
+        )
+        .then(PlainRoute::unary(build_probe))
+        .then(
+            IfRoute::unary(build_probe).with_metadata(AggregateMetadata {
+                documentation: AggregateDocumentation {
+                    description: "intrinsic IF variant",
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        )
+        .then(
+            StateRoute::unary(build_probe).with_metadata(AggregateMetadata {
+                documentation: AggregateDocumentation {
+                    description: "intrinsic STATE variant",
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        )
+        .then(DistinctRoute::<true>::unary(build_probe))
+        .then(MergeRoute::unary(false, build_probe))
+        .then(MergeRoute::unary(true, build_probe))
+        .into_descriptors();
+        let mut registry = AggregateRegistry::empty();
+        for descriptor in descriptors {
+            registry.register(descriptor);
+        }
+
+        let resolve = |name: &str, args_type: &[DataType]| -> Result<AggregateCallRef> {
+            let call = registry.resolve(RawAggregateCall {
+                name,
+                params: &[],
+                args_type,
+                distinct: false,
+                order_by: &[],
+            })?;
+            assert_eq!(call.signature().name, name);
+            assert_eq!(call.signature().args_type, args_type);
+            let expected_description = if name.ends_with("_if") {
+                "intrinsic IF variant"
+            } else if name.ends_with("_state") && !name.ends_with("_merge_state") {
+                "intrinsic STATE variant"
+            } else {
+                "intrinsic aggregate"
+            };
+            assert_eq!(call.features().description, expected_description);
+            if name.ends_with("_merge") || name.ends_with("_merge_state") {
+                assert_eq!(call.features().distinct_policy, DistinctPolicy::Unsupported);
+            }
+            Ok(call)
+        };
+        let nullable = UInt64Type::data_type().wrap_nullable();
+        resolve("contract_probe", std::slice::from_ref(&nullable))?;
+        resolve("contract_probe_if", &[nullable.clone(), DataType::Boolean])?;
+        resolve("contract_probe_distinct", std::slice::from_ref(&nullable))?;
+        let state = resolve("contract_probe_state", std::slice::from_ref(&nullable))?;
+        resolve(
+            "contract_probe_merge",
+            std::slice::from_ref(&state.signature().return_type),
+        )?;
+        resolve(
+            "contract_probe_merge_state",
+            std::slice::from_ref(&state.signature().return_type),
+        )?;
+        // Short-circuits must keep the same external metadata as normal builds.
+        resolve("contract_probe", &[DataType::Null])?;
+        resolve("contract_probe_if", &[DataType::Null, DataType::Boolean])?;
+        resolve("contract_probe_state", &[DataType::Null])?;
+        Ok(())
     }
 }

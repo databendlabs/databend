@@ -48,8 +48,8 @@ impl MomentsBuilder {
         NameRoute::new(
             &["skewness"],
             MomentsBuilder::moments_arguments(),
-            MomentsBuilder::SKEWNESS_FEATURES,
-            NullPolicy::Skip,
+            MomentsBuilder::SKEWNESS_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create_skewness))
         .then(MergeRoute::unary(true, Self::create_skewness))
@@ -60,8 +60,8 @@ impl MomentsBuilder {
         NameRoute::new(
             &["kurtosis"],
             MomentsBuilder::moments_arguments(),
-            MomentsBuilder::KURTOSIS_FEATURES,
-            NullPolicy::Skip,
+            MomentsBuilder::KURTOSIS_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create_kurtosis))
         .then(MergeRoute::unary(true, Self::create_kurtosis))
@@ -83,26 +83,28 @@ impl MomentsBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const SKEWNESS_FEATURES: AggregateFeatures = AggregateFeatures {
+    const SKEWNESS_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates skewness",
-        definition: "skewness(expr)",
-        example: "select skewness(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates skewness",
+            definition: "skewness(expr)",
+            example: "select skewness(number) from numbers(10)",
+        },
     };
 
-    const KURTOSIS_FEATURES: AggregateFeatures = AggregateFeatures {
+    const KURTOSIS_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates kurtosis",
-        definition: "kurtosis(expr)",
-        example: "select kurtosis(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates kurtosis",
+            definition: "kurtosis(expr)",
+            example: "select kurtosis(number) from numbers(10)",
+        },
     };
 }
 

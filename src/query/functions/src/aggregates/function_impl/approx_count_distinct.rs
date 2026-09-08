@@ -49,8 +49,8 @@ impl ApproxCountDistinctBuilder {
         NameRoute::new(
             &["approx_count_distinct"],
             ArgumentsPattern::fixed(vec![ArgumentPattern::any()]),
-            Self::APPROX_COUNT_DISTINCT_FEATURES,
-            NullPolicy::ReturnsDefaultWhenOnlyNull,
+            Self::APPROX_COUNT_DISTINCT_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create))
         .then(MergeRoute::unary(true, Self::create))
@@ -68,15 +68,16 @@ inventory::submit! {
 }
 
 impl ApproxCountDistinctBuilder {
-    const APPROX_COUNT_DISTINCT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const APPROX_COUNT_DISTINCT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "estimates the number of distinct input values",
-        definition: "approx_count_distinct(expr)",
-        example: "select approx_count_distinct(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "estimates the number of distinct input values",
+            definition: "approx_count_distinct(expr)",
+            example: "select approx_count_distinct(number) from numbers(10)",
+        },
     };
 }
 

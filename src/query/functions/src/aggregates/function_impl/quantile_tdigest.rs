@@ -51,8 +51,8 @@ impl QuantileTDigestBuilder {
         NameRoute::new(
             &["quantile_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
-            QuantileTDigestBuilder::QUANTILE_TDIGEST_FEATURES,
-            NullPolicy::Skip,
+            QuantileTDigestBuilder::QUANTILE_TDIGEST_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create))
         .then(MergeRoute::unary(true, Self::create))
@@ -63,8 +63,8 @@ impl QuantileTDigestBuilder {
         NameRoute::new(
             &["median_tdigest"],
             QuantileTDigestBuilder::quantile_tdigest_arguments(),
-            QuantileTDigestBuilder::MEDIAN_TDIGEST_FEATURES,
-            NullPolicy::Skip,
+            QuantileTDigestBuilder::MEDIAN_TDIGEST_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create_median))
         .then(MergeRoute::unary(true, Self::create_median))
@@ -96,26 +96,28 @@ impl QuantileTDigestBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_TDIGEST_FEATURES: AggregateFeatures = AggregateFeatures {
+    const QUANTILE_TDIGEST_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns an approximate quantile value using t-digest",
-        definition: "quantile_tdigest(level)(expr)",
-        example: "select quantile_tdigest(0.5)(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns an approximate quantile value using t-digest",
+            definition: "quantile_tdigest(level)(expr)",
+            example: "select quantile_tdigest(0.5)(number) from numbers(10)",
+        },
     };
 
-    const MEDIAN_TDIGEST_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MEDIAN_TDIGEST_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the approximate median input value using t-digest",
-        definition: "median_tdigest(expr)",
-        example: "select median_tdigest(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the approximate median input value using t-digest",
+            definition: "median_tdigest(expr)",
+            example: "select median_tdigest(number) from numbers(10)",
+        },
     };
 }
 

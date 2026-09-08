@@ -57,14 +57,14 @@ impl RetentionBuilder {
         NameRoute::new(
             &["retention"],
             Self::retention_arguments(),
-            Self::RETENTION_FEATURES,
-            NullPolicy::Skip,
+            Self::RETENTION_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create))
         .then(MergeRoute::multi_arg(true, Self::create))
         .then(PlainRoute::multi_arg(Self::create))
         .then(IfRoute::multi_arg(Self::create))
-        .then(StateRoute::multi_arg(Self::create).with_features(Self::RETENTION_STATE_FEATURES))
+        .then(StateRoute::multi_arg(Self::create).with_metadata(Self::RETENTION_STATE_METADATA))
         .then(DistinctRoute::<true>::multi_arg(Self::create))
         .register(registry);
     }
@@ -86,26 +86,28 @@ impl RetentionBuilder {
         )
     }
 
-    const RETENTION_FEATURES: AggregateFeatures = AggregateFeatures {
+    const RETENTION_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates event retention flags",
-        definition: "retention(cond1, cond2, ...)",
-        example: "select retention(event1, event2) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates event retention flags",
+            definition: "retention(cond1, cond2, ...)",
+            example: "select retention(event1, event2) from t",
+        },
     };
 
-    const RETENTION_STATE_FEATURES: AggregateFeatures = AggregateFeatures {
+    const RETENTION_STATE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the serialized aggregate state",
-        definition: "aggregate_state(args...)",
-        example: "select retention_state(event1, event2) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the serialized aggregate state",
+            definition: "aggregate_state(args...)",
+            example: "select retention_state(event1, event2) from t",
+        },
     };
 }
 

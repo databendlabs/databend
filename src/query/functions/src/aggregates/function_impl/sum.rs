@@ -101,8 +101,8 @@ impl SumBuilder {
         NameRoute::new(
             &["sum"],
             Self::sum_arguments(),
-            Self::SUM_FEATURES,
-            NullPolicy::Skip,
+            Self::SUM_METADATA,
+            NullInput::Filter,
         )
         .with_distinct_target("sum_distinct")
         .then(
@@ -114,16 +114,16 @@ impl SumBuilder {
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(PlainRoute::unary(Self::create))
-        .then(IfRoute::unary(Self::create).with_features(Self::SUM_IF_FEATURES))
-        .then(StateRoute::unary(Self::create).with_features(Self::STATE_FEATURES))
+        .then(IfRoute::unary(Self::create).with_metadata(Self::SUM_IF_METADATA))
+        .then(StateRoute::unary(Self::create).with_metadata(Self::STATE_METADATA))
     }
 
     fn sum0_route() -> NameRoute {
         NameRoute::new(
             &["sum0", "sum_zero"],
             Self::sum_zero_arguments(),
-            Self::SUM_ZERO_FEATURES,
-            NullPolicy::ReturnsDefaultWhenOnlyNull,
+            Self::SUM_ZERO_METADATA,
+            NullInput::Filter,
         )
         .then(
             MergeRoute::unary(false, Self::create_zero)
@@ -134,7 +134,12 @@ impl SumBuilder {
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(PlainRoute::unary(Self::create_zero).with_validator(Self::validate_sum0_plain))
-        .then(StateRoute::unary(Self::create_zero).with_features(Self::STATE_FEATURES))
+        .then(
+            StateRoute::unary(Self::create_zero).with_metadata(AggregateMetadata {
+                null_argument_result: NullArgumentResult::UInt64Zero,
+                ..Self::STATE_METADATA
+            }),
+        )
         .then(DistinctRoute::<true>::unary(Self::create_zero))
     }
 
@@ -142,8 +147,8 @@ impl SumBuilder {
         NameRoute::new(
             &["sum_distinct"],
             Self::sum_distinct_arguments(),
-            Self::SUM_DISTINCT_FEATURES,
-            NullPolicy::Skip,
+            Self::SUM_DISTINCT_METADATA,
+            NullInput::Filter,
         )
         .then(PlainRoute::unary(Self::create_distinct))
     }
@@ -177,59 +182,64 @@ impl SumBuilder {
         ])
     }
 
-    const SUM_FEATURES: AggregateFeatures = AggregateFeatures {
+    const SUM_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "sums non-null numeric or interval values",
-        definition: "sum(expr)",
-        example: "select sum(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums non-null numeric or interval values",
+            definition: "sum(expr)",
+            example: "select sum(number) from numbers(10)",
+        },
     };
 
-    const SUM_DISTINCT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const SUM_DISTINCT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "sums distinct non-null numeric or interval values",
-        definition: "sum_distinct(expr)",
-        example: "select sum_distinct(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums distinct non-null numeric or interval values",
+            definition: "sum_distinct(expr)",
+            example: "select sum_distinct(number) from numbers(10)",
+        },
     };
 
-    const SUM_ZERO_FEATURES: AggregateFeatures = AggregateFeatures {
+    const SUM_ZERO_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "sums UInt64 values and returns zero when no values are aggregated",
-        definition: "sum0(expr)",
-        example: "select sum0(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums UInt64 values and returns zero when no values are aggregated",
+            definition: "sum0(expr)",
+            example: "select sum0(number) from numbers(10)",
+        },
     };
 
-    const SUM_IF_FEATURES: AggregateFeatures = AggregateFeatures {
+    const SUM_IF_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "sums input values matching a boolean condition",
-        definition: "sum_if(expr, cond)",
-        example: "select sum_if(number, number > 0) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums input values matching a boolean condition",
+            definition: "sum_if(expr, cond)",
+            example: "select sum_if(number, number > 0) from numbers(10)",
+        },
     };
 
-    const STATE_FEATURES: AggregateFeatures = AggregateFeatures {
+    const STATE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the serialized aggregate state",
-        definition: "aggregate_state(args...)",
-        example: "select sum_state(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the serialized aggregate state",
+            definition: "aggregate_state(args...)",
+            example: "select sum_state(number) from numbers(10)",
+        },
     };
 }
 

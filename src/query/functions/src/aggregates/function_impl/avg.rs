@@ -55,15 +55,16 @@ struct AvgBuilder;
 impl AvgBuilder {
     const NAME: &'static str = "avg";
 
-    const FEATURES: AggregateFeatures = AggregateFeatures {
+    const METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "averages non-null numeric values",
-        definition: "avg(expr)",
-        example: "select avg(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "averages non-null numeric values",
+            definition: "avg(expr)",
+            example: "select avg(number) from numbers(10)",
+        },
     };
 
     fn arguments() -> ArgumentsPattern {
@@ -74,8 +75,8 @@ impl AvgBuilder {
         NameRoute::new(
             &[Self::NAME],
             Self::arguments(),
-            Self::FEATURES,
-            NullPolicy::Skip,
+            Self::METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create))
         .then(MergeRoute::unary(true, Self::create))

@@ -74,8 +74,8 @@ impl CountBuilder {
         NameRoute::new(
             &["count"],
             Self::count_arguments(),
-            Self::COUNT_FEATURES,
-            NullPolicy::ReturnsDefaultWhenOnlyNull,
+            Self::COUNT_METADATA,
+            NullInput::Filter,
         )
         .with_distinct_target("count_distinct")
         .then(
@@ -87,18 +87,18 @@ impl CountBuilder {
                 .with_legacy_signature_resolver(Self::legacy_signatures),
         )
         .then(PlainRoute::new(Self::create))
-        .then(IfRoute::direct(Self::create).with_features(Self::COUNT_IF_FEATURES))
+        .then(IfRoute::direct(Self::create).with_metadata(Self::COUNT_IF_METADATA))
         .then(
             StateRoute::direct(Self::create)
                 .with_arguments(state_arguments)
-                .with_features(Self::COUNT_STATE_FEATURES),
+                .with_metadata(Self::COUNT_STATE_METADATA),
         )
         .register(registry);
         NameRoute::new(
             &["count_distinct"],
             CountBuilder::count_distinct_arguments(),
-            CountBuilder::COUNT_DISTINCT_FEATURES,
-            NullPolicy::Keep,
+            CountBuilder::COUNT_DISTINCT_METADATA,
+            NullInput::Native,
         )
         .then(PlainRoute::new(Self::create_distinct))
         .register(registry);
@@ -123,48 +123,52 @@ impl CountBuilder {
         ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 1, Some(32))
     }
 
-    const COUNT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const COUNT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts input rows or non-null argument values",
-        definition: "count([expr])",
-        example: "select count(*) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts input rows or non-null argument values",
+            definition: "count([expr])",
+            example: "select count(*) from numbers(10)",
+        },
     };
 
-    const COUNT_DISTINCT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const COUNT_DISTINCT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts distinct non-null input rows",
-        definition: "count_distinct(expr[, ...])",
-        example: "select count_distinct(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts distinct non-null input rows",
+            definition: "count_distinct(expr[, ...])",
+            example: "select count_distinct(number) from numbers(10)",
+        },
     };
 
-    const COUNT_IF_FEATURES: AggregateFeatures = AggregateFeatures {
+    const COUNT_IF_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts rows matching a boolean condition",
-        definition: "count_if(cond)",
-        example: "select count_if(number > 0) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts rows matching a boolean condition",
+            definition: "count_if(cond)",
+            example: "select count_if(number > 0) from numbers(10)",
+        },
     };
 
-    const COUNT_STATE_FEATURES: AggregateFeatures = AggregateFeatures {
+    const COUNT_STATE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the serialized aggregate state",
-        definition: "aggregate_state(args...)",
-        example: "select count_state(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the serialized aggregate state",
+            definition: "aggregate_state(args...)",
+            example: "select count_state(number) from numbers(10)",
+        },
     };
 }
 

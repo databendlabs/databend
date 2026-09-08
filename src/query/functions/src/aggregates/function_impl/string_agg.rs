@@ -63,15 +63,16 @@ impl StringAggBuilder {
         )
     }
 
-    const STRING_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const STRING_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Optional,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "concatenates input values into a string",
-        definition: "string_agg(expr[, delimiter])",
-        example: "select string_agg(name) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "concatenates input values into a string",
+            definition: "string_agg(expr[, delimiter])",
+            example: "select string_agg(name) from t",
+        },
     };
 }
 
@@ -182,12 +183,12 @@ impl ToStringType for AnyType {
 impl StringAggBuilder {
     fn route() -> NameRoute {
         let arguments = Self::string_agg_arguments();
-        let features = Self::STRING_AGG_FEATURES;
+        let metadata = Self::STRING_AGG_METADATA;
         NameRoute::new(
             &["string_agg", "listagg", "group_concat"],
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Skip,
+            arguments,
+            metadata,
+            NullInput::Filter,
         )
         .then(MergeRoute::new(false, StringAggBuilder::create))
         .then(MergeRoute::new(true, StringAggBuilder::create))

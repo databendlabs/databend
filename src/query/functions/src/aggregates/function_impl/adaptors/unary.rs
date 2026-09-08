@@ -264,7 +264,7 @@ where
 pub(crate) fn create_unary_distinct_or_null_aggregate_function<S, I, R, C>(
     combinator: C,
     signature: AggregateSignature,
-    features: AggregateFeatures,
+    metadata: AggregateMetadata,
     state: AggregateStateDescription,
     function_info: S::FunctionInfo,
     distinct_args_type: Vec<DataType>,
@@ -281,7 +281,7 @@ where
         distinct_args_type[0].clone(),
     ))));
     let state = unary_distinct_or_null_state_description(&state);
-    combinator.create::<false>(signature, features, state, eval)
+    combinator.create::<false>(signature, metadata, state, eval)
 }
 
 fn unary_distinct_or_null_state_description(

@@ -48,8 +48,8 @@ impl ModeBuilder {
         NameRoute::new(
             &["mode"],
             ModeBuilder::mode_arguments(),
-            ModeBuilder::MODE_FEATURES,
-            NullPolicy::Skip,
+            ModeBuilder::MODE_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, ModeBuilder::create))
         .then(MergeRoute::unary(true, ModeBuilder::create))
@@ -71,15 +71,16 @@ impl ModeBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const MODE_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MODE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the most frequent input value",
-        definition: "mode(expr)",
-        example: "select mode(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the most frequent input value",
+            definition: "mode(expr)",
+            example: "select mode(number) from numbers(10)",
+        },
     };
 }
 

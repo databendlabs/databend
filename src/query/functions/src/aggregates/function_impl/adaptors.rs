@@ -59,35 +59,37 @@ pub(super) use unary_nullable::UnarySkipNull;
 pub(super) use unary_state::AggregateUnaryState;
 pub(super) use unary_state::AggregateUnaryStateEval;
 
+/// Builds an implementation while retaining the complete external call contract.
 pub(super) struct UnaryBuildContext<'a, C> {
-    request: RawAggregateCall<'a>,
-    signature_args_type: &'a [DataType],
-    features: AggregateFeatures,
+    // Keep the complete call unchanged when adapting implementation inputs.
+    call: RawAggregateCall<'a>,
+    metadata: AggregateMetadata,
     combinator: C,
-    arg_type: DataType,
+    input_type: DataType,
 }
 
 pub(super) struct MultiArgBuildContext<'a, C> {
-    request: RawAggregateCall<'a>,
-    signature_args_type: &'a [DataType],
-    features: AggregateFeatures,
+    call: RawAggregateCall<'a>,
+    metadata: AggregateMetadata,
     combinator: C,
-    args_type: Vec<DataType>,
+    input_types: Vec<DataType>,
 }
 
 pub(super) struct DirectBuildContext<'a, C> {
-    request: RawAggregateCall<'a>,
-    signature_args_type: &'a [DataType],
-    features: AggregateFeatures,
+    call: RawAggregateCall<'a>,
+    metadata: AggregateMetadata,
     combinator: C,
+    // Includes nullable types when the implementation handles NULL itself.
+    input_types: &'a [DataType],
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum NullPolicy {
+pub(crate) enum NullInput {
     #[default]
-    Skip,
-    Keep,
-    ReturnsDefaultWhenOnlyNull,
+    /// The routing adaptors filter NULLs before invoking the implementation.
+    Filter,
+    /// The implementation owns NULL input handling; this does not imply retaining NULLs.
+    Native,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

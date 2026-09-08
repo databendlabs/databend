@@ -53,8 +53,8 @@ impl QuantileContBuilder {
         NameRoute::new(
             &["quantile_cont"],
             QuantileContBuilder::quantile_cont_arguments(),
-            QuantileContBuilder::QUANTILE_CONT_FEATURES,
-            NullPolicy::Skip,
+            QuantileContBuilder::QUANTILE_CONT_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create))
         .then(MergeRoute::unary(true, Self::create))
@@ -65,8 +65,8 @@ impl QuantileContBuilder {
         NameRoute::new(
             &["median"],
             QuantileContBuilder::quantile_cont_arguments(),
-            QuantileContBuilder::MEDIAN_FEATURES,
-            NullPolicy::Skip,
+            QuantileContBuilder::MEDIAN_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create_median))
         .then(MergeRoute::unary(true, Self::create_median))
@@ -98,26 +98,28 @@ impl QuantileContBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_CONT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const QUANTILE_CONT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns a continuous quantile value",
-        definition: "quantile_cont(level)(expr)",
-        example: "select quantile_cont(0.5)(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns a continuous quantile value",
+            definition: "quantile_cont(level)(expr)",
+            example: "select quantile_cont(0.5)(number) from numbers(10)",
+        },
     };
 
-    const MEDIAN_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MEDIAN_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the median input value",
-        definition: "median(expr)",
-        example: "select median(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the median input value",
+            definition: "median(expr)",
+            example: "select median(number) from numbers(10)",
+        },
     };
 }
 

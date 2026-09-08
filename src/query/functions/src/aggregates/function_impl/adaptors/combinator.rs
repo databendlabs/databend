@@ -23,7 +23,7 @@ use super::AggregateBoundOrderBySource;
 use super::AggregateCallInstance;
 use super::AggregateCallRef;
 use super::AggregateEval;
-use super::AggregateFeatures;
+use super::AggregateMetadata;
 use super::AggregateSignature;
 use super::AggregateStateDescription;
 use super::FunctionInputLayout;
@@ -37,7 +37,7 @@ pub(crate) trait Combinator {
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
-        features: AggregateFeatures,
+        metadata: AggregateMetadata,
         state: AggregateStateDescription,
         eval: impl AggregateEval,
     ) -> Result<AggregateCallRef>;
@@ -66,7 +66,7 @@ pub(crate) struct StateCombinator {
 
 fn finish<I>(
     signature: AggregateSignature,
-    features: AggregateFeatures,
+    call_metadata: AggregateMetadata,
     state: AggregateStateDescription,
     eval: I,
 ) -> AggregateCallRef
@@ -76,7 +76,7 @@ where
     Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
-        features,
+        call_metadata.into_features(),
         state,
         eval,
     ))
@@ -85,7 +85,7 @@ where
 fn finish_with_input_layout<I>(
     signature: AggregateSignature,
     input_layout: FunctionInputLayout,
-    features: AggregateFeatures,
+    call_metadata: AggregateMetadata,
     state: AggregateStateDescription,
     eval: I,
 ) -> AggregateCallRef
@@ -95,7 +95,7 @@ where
     Arc::new(AggregateCallInstance::new(
         signature,
         input_layout,
-        features,
+        call_metadata.into_features(),
         state,
         eval,
     ))
@@ -103,7 +103,7 @@ where
 
 fn finish_with_order_by<I>(
     signature: AggregateSignature,
-    features: AggregateFeatures,
+    call_metadata: AggregateMetadata,
     state: AggregateStateDescription,
     eval: I,
 ) -> AggregateCallRef
@@ -111,28 +111,28 @@ where
     I: AggregateEval,
 {
     if signature.order_by.is_empty() {
-        return finish(signature, features, state, eval);
+        return finish(signature, call_metadata, state, eval);
     }
 
     let (input_types, order_by) =
         sort_combinator::sort_runtime_inputs(&signature.args_type, &signature.order_by);
     let state = sort_combinator::sort_state_description(&state);
     let eval = sort_combinator::SortEval::new(eval, input_types, order_by);
-    finish(signature, features, state, eval)
+    finish(signature, call_metadata, state, eval)
 }
 
 impl Combinator for PlainCombinator {
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
-        features: AggregateFeatures,
+        call_metadata: AggregateMetadata,
         state: AggregateStateDescription,
         eval: impl AggregateEval,
     ) -> Result<AggregateCallRef> {
         if ORDERED {
-            Ok(finish_with_order_by(signature, features, state, eval))
+            Ok(finish_with_order_by(signature, call_metadata, state, eval))
         } else {
-            Ok(finish(signature, features, state, eval))
+            Ok(finish(signature, call_metadata, state, eval))
         }
     }
 }
@@ -141,7 +141,7 @@ impl Combinator for IfCombinator {
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
-        features: AggregateFeatures,
+        call_metadata: AggregateMetadata,
         state: AggregateStateDescription,
         eval: impl AggregateEval,
     ) -> Result<AggregateCallRef> {
@@ -153,7 +153,7 @@ impl Combinator for IfCombinator {
                 self.always_false,
                 self.strip_nullable_input,
             );
-            return Ok(finish(signature, features, state, eval));
+            return Ok(finish(signature, call_metadata, state, eval));
         }
 
         // Runtime inputs place the condition last, making the nested ordered
@@ -208,7 +208,7 @@ impl Combinator for IfCombinator {
             return Ok(finish_with_input_layout(
                 signature,
                 input_layout,
-                features,
+                call_metadata,
                 state,
                 eval,
             ));
@@ -228,7 +228,7 @@ impl Combinator for IfCombinator {
         Ok(finish_with_input_layout(
             signature,
             input_layout,
-            features,
+            call_metadata,
             state,
             eval,
         ))
@@ -239,16 +239,16 @@ impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
-        features: AggregateFeatures,
+        call_metadata: AggregateMetadata,
         state: AggregateStateDescription,
         eval: impl AggregateEval,
     ) -> Result<AggregateCallRef> {
         let state = distinct_combinator::distinct_state_description(&state);
         let eval = distinct_combinator::DistinctEval::<SKIP_NULLS>::new(eval, self.args_type);
         if ORDERED {
-            Ok(finish_with_order_by(signature, features, state, eval))
+            Ok(finish_with_order_by(signature, call_metadata, state, eval))
         } else {
-            Ok(finish(signature, features, state, eval))
+            Ok(finish(signature, call_metadata, state, eval))
         }
     }
 }
@@ -257,15 +257,15 @@ impl Combinator for StateCombinator {
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
-        features: AggregateFeatures,
+        call_metadata: AggregateMetadata,
         state: AggregateStateDescription,
         eval: impl AggregateEval,
     ) -> Result<AggregateCallRef> {
         let (signature, state, eval) = self.wrap(signature, state, eval)?;
         if ORDERED {
-            Ok(finish_with_order_by(signature, features, state, eval))
+            Ok(finish_with_order_by(signature, call_metadata, state, eval))
         } else {
-            Ok(finish(signature, features, state, eval))
+            Ok(finish(signature, call_metadata, state, eval))
         }
     }
 }

@@ -75,37 +75,40 @@ impl MinMaxAnyBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const MIN_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MIN_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the minimum input value",
-        definition: "min(expr)",
-        example: "select min(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the minimum input value",
+            definition: "min(expr)",
+            example: "select min(number) from numbers(10)",
+        },
     };
 
-    const MAX_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MAX_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the maximum input value",
-        definition: "max(expr)",
-        example: "select max(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the maximum input value",
+            definition: "max(expr)",
+            example: "select max(number) from numbers(10)",
+        },
     };
 
-    const ANY_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ANY_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns any input value",
-        definition: "any(expr)",
-        example: "select any(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns any input value",
+            definition: "any(expr)",
+            example: "select any(number) from numbers(10)",
+        },
     };
 }
 
@@ -253,25 +256,25 @@ impl MinMaxAnyBuilder {
     }
 
     fn route<const CMP_TYPE: u8>() -> NameRoute {
-        let (names, features, resolver) = match CMP_TYPE {
+        let (names, metadata, resolver) = match CMP_TYPE {
             TYPE_MIN => (
                 &["min"][..],
-                Self::MIN_FEATURES,
+                Self::MIN_METADATA,
                 Some(Self::legacy_signatures as LegacySignatureResolver),
             ),
             TYPE_MAX => (
                 &["max"][..],
-                Self::MAX_FEATURES,
+                Self::MAX_METADATA,
                 Some(Self::legacy_signatures as LegacySignatureResolver),
             ),
-            TYPE_ANY => (&["any", "any_value"][..], Self::ANY_FEATURES, None),
+            TYPE_ANY => (&["any", "any_value"][..], Self::ANY_METADATA, None),
             _ => unreachable!(),
         };
         let route = NameRoute::new(
             names,
             Self::min_max_any_arguments(),
-            features,
-            NullPolicy::Skip,
+            metadata,
+            NullInput::Filter,
         );
         let route = match resolver {
             Some(resolver) => route

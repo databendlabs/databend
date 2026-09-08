@@ -63,12 +63,12 @@ inventory::submit! {
 
 impl StddevBuilder {
     fn route<const TYPE: u8>() -> NameRoute {
-        let (names, features) = match TYPE {
-            STD_POP => (&["stddev_pop", "std"][..], Self::STDDEV_POP_FEATURES),
-            STD_SAMP => (&["stddev_samp", "stddev"][..], Self::STDDEV_SAMP_FEATURES),
+        let (names, metadata) = match TYPE {
+            STD_POP => (&["stddev_pop", "std"][..], Self::STDDEV_POP_METADATA),
+            STD_SAMP => (&["stddev_samp", "stddev"][..], Self::STDDEV_SAMP_METADATA),
             _ => unreachable!(),
         };
-        NameRoute::new(names, Self::stddev_arguments(), features, NullPolicy::Skip)
+        NameRoute::new(names, Self::stddev_arguments(), metadata, NullInput::Filter)
             .then(MergeRoute::unary(false, Self::create_for_type::<TYPE>))
             .then(MergeRoute::unary(true, Self::create_for_type::<TYPE>))
             .then(PlainRoute::unary(Self::create_for_type::<TYPE>))
@@ -80,26 +80,28 @@ impl StddevBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const STDDEV_POP_FEATURES: AggregateFeatures = AggregateFeatures {
+    const STDDEV_POP_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates population standard deviation",
-        definition: "stddev_pop(expr)",
-        example: "select stddev_pop(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates population standard deviation",
+            definition: "stddev_pop(expr)",
+            example: "select stddev_pop(number) from numbers(10)",
+        },
     };
 
-    const STDDEV_SAMP_FEATURES: AggregateFeatures = AggregateFeatures {
+    const STDDEV_SAMP_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates sample standard deviation",
-        definition: "stddev_samp(expr)",
-        example: "select stddev_samp(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates sample standard deviation",
+            definition: "stddev_samp(expr)",
+            example: "select stddev_samp(number) from numbers(10)",
+        },
     };
 }
 

@@ -38,34 +38,30 @@ impl UniqBuilder {
         ArgumentsPattern::variadic(vec![], ArgumentPattern::any(), 1, Some(32))
     }
 
-    const UNIQ_FEATURES: AggregateFeatures = AggregateFeatures {
+    const UNIQ_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "counts distinct non-null input rows",
-        definition: "uniq(expr[, ...])",
-        example: "select uniq(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "counts distinct non-null input rows",
+            definition: "uniq(expr[, ...])",
+            example: "select uniq(number) from numbers(10)",
+        },
     };
 }
 
 impl UniqBuilder {
     fn route() -> NameRoute {
         let arguments = Self::uniq_arguments();
-        let features = Self::UNIQ_FEATURES;
-        NameRoute::new(
-            &["uniq"],
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::ReturnsDefaultWhenOnlyNull,
-        )
-        .with_validator(Self::validate_request)
-        .then(MergeRoute::new(false, UniqBuilder::create))
-        .then(MergeRoute::new(true, UniqBuilder::create))
-        .then(PlainRoute::new(UniqBuilder::create))
-        .then(IfRoute::direct(UniqBuilder::create))
-        .then(StateRoute::direct(UniqBuilder::create))
+        let metadata = Self::UNIQ_METADATA;
+        NameRoute::new(&["uniq"], arguments, metadata, NullInput::Filter)
+            .with_validator(Self::validate_request)
+            .then(MergeRoute::new(false, UniqBuilder::create))
+            .then(MergeRoute::new(true, UniqBuilder::create))
+            .then(PlainRoute::new(UniqBuilder::create))
+            .then(IfRoute::direct(UniqBuilder::create))
+            .then(StateRoute::direct(UniqBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

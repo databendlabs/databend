@@ -65,15 +65,16 @@ impl ArrayAggBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const ARRAY_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ARRAY_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Optional,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "aggregates values into an array",
-        definition: "array_agg(expr)",
-        example: "select array_agg(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "aggregates values into an array",
+            definition: "array_agg(expr)",
+            example: "select array_agg(number) from numbers(10)",
+        },
     };
 }
 
@@ -587,12 +588,12 @@ where T: ArgType + AccessType + Debug + Send + Sync
 impl ArrayAggBuilder {
     fn route() -> NameRoute {
         let arguments = Self::array_agg_arguments();
-        let features = Self::ARRAY_AGG_FEATURES;
+        let metadata = Self::ARRAY_AGG_METADATA;
         NameRoute::new(
             &["array_agg", "list"],
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Keep,
+            arguments,
+            metadata,
+            NullInput::Native,
         )
         .with_validator(Self::validate_request)
         .then(MergeRoute::new(false, ArrayAggBuilder::create))

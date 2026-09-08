@@ -64,8 +64,8 @@ impl RangeBoundBuilder {
         NameRoute::new(
             &["range_bound"],
             RangeBoundBuilder::range_bound_arguments(),
-            RangeBoundBuilder::RANGE_BOUND_FEATURES,
-            NullPolicy::Skip,
+            RangeBoundBuilder::RANGE_BOUND_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, RangeBoundBuilder::create))
         .then(MergeRoute::unary(true, RangeBoundBuilder::create))
@@ -87,15 +87,16 @@ impl RangeBoundBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const RANGE_BOUND_FEATURES: AggregateFeatures = AggregateFeatures {
+    const RANGE_BOUND_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates partition boundaries for a column",
-        definition: "range_bound(partition_num, sample_size)(expr)",
-        example: "select range_bound(4)(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates partition boundaries for a column",
+            definition: "range_bound(partition_num, sample_size)(expr)",
+            example: "select range_bound(4)(number) from numbers(10)",
+        },
     };
 }
 

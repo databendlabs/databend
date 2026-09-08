@@ -41,8 +41,8 @@ struct JsonArrayAggBuilder;
 
 impl JsonArrayAggBuilder {
     fn register(registry: &mut AggregateRegistry) {
-        Self::route(&["json_array_agg"], Self::JSON_ARRAY_AGG_FEATURES).register(registry);
-        Self::route(&["json_agg"], Self::JSON_AGG_FEATURES).register(registry);
+        Self::route(&["json_array_agg"], Self::JSON_ARRAY_AGG_METADATA).register(registry);
+        Self::route(&["json_agg"], Self::JSON_AGG_METADATA).register(registry);
     }
 }
 
@@ -57,26 +57,28 @@ impl JsonArrayAggBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
-    const JSON_ARRAY_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const JSON_ARRAY_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "aggregates values into a JSON array",
-        definition: "json_array_agg(expr)",
-        example: "select json_array_agg(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "aggregates values into a JSON array",
+            definition: "json_array_agg(expr)",
+            example: "select json_array_agg(number) from numbers(10)",
+        },
     };
 
-    const JSON_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const JSON_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "aggregates values into a JSON array",
-        definition: "json_agg(expr)",
-        example: "select json_agg(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "aggregates values into a JSON array",
+            definition: "json_agg(expr)",
+            example: "select json_agg(number) from numbers(10)",
+        },
     };
 }
 
@@ -214,9 +216,9 @@ where
 }
 
 impl JsonArrayAggBuilder {
-    fn route(names: &'static [&'static str], features: AggregateFeatures) -> NameRoute {
+    fn route(names: &'static [&'static str], metadata: AggregateMetadata) -> NameRoute {
         let arguments = Self::json_array_agg_arguments();
-        NameRoute::new(names, arguments.clone(), features.clone(), NullPolicy::Keep)
+        NameRoute::new(names, arguments, metadata, NullInput::Native)
             .with_validator(Self::validate_request)
             .then(MergeRoute::new(false, JsonArrayAggBuilder::create))
             .then(MergeRoute::new(true, JsonArrayAggBuilder::create))

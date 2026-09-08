@@ -65,15 +65,16 @@ impl JsonObjectAggBuilder {
         ])
     }
 
-    const JSON_OBJECT_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const JSON_OBJECT_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "aggregates key-value pairs into a JSON object",
-        definition: "json_object_agg(key, value)",
-        example: "select json_object_agg(name, value) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "aggregates key-value pairs into a JSON object",
+            definition: "json_object_agg(key, value)",
+            example: "select json_object_agg(name, value) from t",
+        },
     };
 }
 
@@ -393,19 +394,14 @@ where
 impl JsonObjectAggBuilder {
     fn route() -> NameRoute {
         let arguments = Self::json_object_agg_arguments();
-        let features = Self::JSON_OBJECT_AGG_FEATURES;
-        NameRoute::new(
-            &["json_object_agg"],
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Keep,
-        )
-        .with_validator(Self::validate_request)
-        .then(MergeRoute::new(false, JsonObjectAggBuilder::create))
-        .then(MergeRoute::new(true, JsonObjectAggBuilder::create))
-        .then(PlainRoute::new(JsonObjectAggBuilder::create))
-        .then(IfRoute::direct(JsonObjectAggBuilder::create))
-        .then(StateRoute::direct(JsonObjectAggBuilder::create))
+        let metadata = Self::JSON_OBJECT_AGG_METADATA;
+        NameRoute::new(&["json_object_agg"], arguments, metadata, NullInput::Native)
+            .with_validator(Self::validate_request)
+            .then(MergeRoute::new(false, JsonObjectAggBuilder::create))
+            .then(MergeRoute::new(true, JsonObjectAggBuilder::create))
+            .then(PlainRoute::new(JsonObjectAggBuilder::create))
+            .then(IfRoute::direct(JsonObjectAggBuilder::create))
+            .then(StateRoute::direct(JsonObjectAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

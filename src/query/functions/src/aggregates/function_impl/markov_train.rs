@@ -47,8 +47,8 @@ impl MarkovTrainBuilder {
         NameRoute::new(
             &["markov_train"],
             MarkovTrainBuilder::markov_train_arguments(),
-            MarkovTrainBuilder::MARKOV_TRAIN_FEATURES,
-            NullPolicy::Skip,
+            MarkovTrainBuilder::MARKOV_TRAIN_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, MarkovTrainBuilder::create))
         .then(MergeRoute::multi_arg(true, MarkovTrainBuilder::create))
@@ -71,15 +71,16 @@ impl MarkovTrainBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::String)])
     }
 
-    const MARKOV_TRAIN_FEATURES: AggregateFeatures = AggregateFeatures {
+    const MARKOV_TRAIN_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "trains a markov model",
-        definition: "markov_train([params])(expr)",
-        example: "select markov_train(text) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "trains a markov model",
+            definition: "markov_train([params])(expr)",
+            example: "select markov_train(text) from t",
+        },
     };
 }
 

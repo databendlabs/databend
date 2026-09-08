@@ -34,8 +34,8 @@ impl BooleanBuilder {
         NameRoute::new(
             &["bool_and"],
             BooleanBuilder::boolean_arguments(),
-            BooleanBuilder::BOOL_AND_FEATURES,
-            NullPolicy::Skip,
+            BooleanBuilder::BOOL_AND_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create::<true>))
         .then(MergeRoute::unary(true, Self::create::<true>))
@@ -47,8 +47,8 @@ impl BooleanBuilder {
         NameRoute::new(
             &["bool_or"],
             BooleanBuilder::boolean_arguments(),
-            BooleanBuilder::BOOL_OR_FEATURES,
-            NullPolicy::Skip,
+            BooleanBuilder::BOOL_OR_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create::<false>))
         .then(MergeRoute::unary(true, Self::create::<false>))
@@ -71,26 +71,28 @@ impl BooleanBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Boolean)])
     }
 
-    const BOOL_AND_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BOOL_AND_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns true when all non-null input values are true",
-        definition: "bool_and(expr)",
-        example: "select bool_and(flag) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns true when all non-null input values are true",
+            definition: "bool_and(expr)",
+            example: "select bool_and(flag) from t",
+        },
     };
 
-    const BOOL_OR_FEATURES: AggregateFeatures = AggregateFeatures {
+    const BOOL_OR_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns true when any non-null input value is true",
-        definition: "bool_or(expr)",
-        example: "select bool_or(flag) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns true when any non-null input value is true",
+            definition: "bool_or(expr)",
+            example: "select bool_or(flag) from t",
+        },
     };
 }
 

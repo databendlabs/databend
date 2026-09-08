@@ -21,24 +21,14 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 
 use super::*;
 
 pub(crate) fn try_create_null_argument_result_function(
     request: RawAggregateCall<'_>,
-    returns_default_when_only_null: bool,
+    call_metadata: AggregateMetadata,
 ) -> Result<AggregateCallRef> {
-    let (data_type, result) = if returns_default_when_only_null {
-        (
-            DataType::Number(NumberDataType::UInt64),
-            Scalar::Number(NumberScalar::UInt64(0)),
-        )
-    } else {
-        (DataType::Null, Scalar::Null)
-    };
+    let (data_type, result) = call_metadata.null_argument_result.value();
     let return_type = data_type.clone();
     let signature = AggregateSignature {
         name: request.name.to_string(),
@@ -55,7 +45,7 @@ pub(crate) fn try_create_null_argument_result_function(
     Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,
-        AggregateFeatures::default(),
+        call_metadata.into_features(),
         state,
         FixedResultEval { result },
     )))

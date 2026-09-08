@@ -61,22 +61,22 @@ inventory::submit! {
 
 impl CovarianceBuilder {
     fn route<const TYPE: u8>() -> NameRoute {
-        let (names, features) = match TYPE {
+        let (names, metadata) = match TYPE {
             COVAR_POP => (
                 &["covar_pop", "var_pop", "variance_pop"][..],
-                Self::COVAR_POP_FEATURES,
+                Self::COVAR_POP_METADATA,
             ),
             COVAR_SAMP => (
                 &["covar_samp", "var_samp", "variance_samp"][..],
-                Self::COVAR_SAMP_FEATURES,
+                Self::COVAR_SAMP_METADATA,
             ),
             _ => unreachable!(),
         };
         NameRoute::new(
             names,
             Self::covariance_arguments(),
-            features,
-            NullPolicy::Skip,
+            metadata,
+            NullInput::Filter,
         )
         .then(MergeRoute::multi_arg(false, Self::create::<TYPE>))
         .then(MergeRoute::multi_arg(true, Self::create::<TYPE>))
@@ -92,26 +92,28 @@ impl CovarianceBuilder {
         ])
     }
 
-    const COVAR_POP_FEATURES: AggregateFeatures = AggregateFeatures {
+    const COVAR_POP_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates population covariance",
-        definition: "covar_pop(left, right)",
-        example: "select covar_pop(a, b) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates population covariance",
+            definition: "covar_pop(left, right)",
+            example: "select covar_pop(a, b) from t",
+        },
     };
 
-    const COVAR_SAMP_FEATURES: AggregateFeatures = AggregateFeatures {
+    const COVAR_SAMP_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: true,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates sample covariance",
-        definition: "covar_samp(left, right)",
-        example: "select covar_samp(a, b) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates sample covariance",
+            definition: "covar_samp(left, right)",
+            example: "select covar_samp(a, b) from t",
+        },
     };
 }
 

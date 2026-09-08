@@ -47,8 +47,8 @@ impl QuantileDiscBuilder {
         NameRoute::new(
             &["quantile_disc", "quantile"],
             Self::quantile_disc_arguments(),
-            Self::QUANTILE_FEATURES,
-            NullPolicy::Skip,
+            Self::QUANTILE_METADATA,
+            NullInput::Filter,
         )
         .then(MergeRoute::unary(false, Self::create))
         .then(MergeRoute::unary(true, Self::create))
@@ -70,15 +70,16 @@ impl QuantileDiscBuilder {
         ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()])
     }
 
-    const QUANTILE_FEATURES: AggregateFeatures = AggregateFeatures {
+    const QUANTILE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns a discrete quantile value",
-        definition: "quantile(level)(expr)",
-        example: "select quantile(0.5)(number) from numbers(10)",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns a discrete quantile value",
+            definition: "quantile(level)(expr)",
+            example: "select quantile(0.5)(number) from numbers(10)",
+        },
     };
 }
 

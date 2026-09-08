@@ -68,15 +68,16 @@ impl WindowFunnelBuilder {
         )
     }
 
-    const WINDOW_FUNNEL_FEATURES: AggregateFeatures = AggregateFeatures {
+    const WINDOW_FUNNEL_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "calculates the maximum event funnel level within a time window",
-        definition: "window_funnel(window)(timestamp, event1, ...)",
-        example: "select window_funnel(60)(ts, event1, event2) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates the maximum event funnel level within a time window",
+            definition: "window_funnel(window)(timestamp, event1, ...)",
+            example: "select window_funnel(60)(ts, event1, event2) from t",
+        },
     };
 }
 
@@ -151,18 +152,13 @@ fn compare_event<T: Ord>(lhs: &(T, u8), rhs: &(T, u8)) -> Ordering {
 impl WindowFunnelBuilder {
     fn route() -> NameRoute {
         let arguments = Self::window_funnel_arguments();
-        let features = Self::WINDOW_FUNNEL_FEATURES;
-        NameRoute::new(
-            &["window_funnel"],
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Skip,
-        )
-        .then(MergeRoute::new(false, WindowFunnelBuilder::create))
-        .then(MergeRoute::new(true, WindowFunnelBuilder::create))
-        .then(PlainRoute::new(WindowFunnelBuilder::create))
-        .then(IfRoute::direct(WindowFunnelBuilder::create))
-        .then(StateRoute::direct(WindowFunnelBuilder::create))
+        let metadata = Self::WINDOW_FUNNEL_METADATA;
+        NameRoute::new(&["window_funnel"], arguments, metadata, NullInput::Filter)
+            .then(MergeRoute::new(false, WindowFunnelBuilder::create))
+            .then(MergeRoute::new(true, WindowFunnelBuilder::create))
+            .then(PlainRoute::new(WindowFunnelBuilder::create))
+            .then(IfRoute::direct(WindowFunnelBuilder::create))
+            .then(StateRoute::direct(WindowFunnelBuilder::create))
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {

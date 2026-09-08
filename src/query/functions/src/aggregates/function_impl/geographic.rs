@@ -48,7 +48,7 @@ struct GeographicBuilder;
 
 trait GeographicAggregateMetadata {
     const NAMES: &'static [&'static str];
-    const FEATURES: AggregateFeatures;
+    const METADATA: AggregateMetadata;
 
     fn route() -> NameRoute;
 }
@@ -70,49 +70,44 @@ inventory::submit! {
 
 impl GeographicAggregateMetadata for CollectAggOp {
     const NAMES: &'static [&'static str] = &["st_collect"];
-    const FEATURES: AggregateFeatures = GeographicBuilder::ST_COLLECT_FEATURES;
+    const METADATA: AggregateMetadata = GeographicBuilder::ST_COLLECT_METADATA;
 
     fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
-        let features = CollectAggOp::FEATURES;
-        NameRoute::new(
-            CollectAggOp::NAMES,
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Skip,
-        )
-        .then(MergeRoute::new(
-            false,
-            GeographicBuilder::create_collect::<CollectAggOp>,
-        ))
-        .then(MergeRoute::new(
-            true,
-            GeographicBuilder::create_collect::<CollectAggOp>,
-        ))
-        .then(PlainRoute::new(
-            GeographicBuilder::create_collect::<CollectAggOp>,
-        ))
-        .then(IfRoute::direct(
-            GeographicBuilder::create_collect::<CollectAggOp>,
-        ))
-        .then(StateRoute::direct(
-            GeographicBuilder::create_collect::<CollectAggOp>,
-        ))
+        let metadata = CollectAggOp::METADATA;
+        NameRoute::new(CollectAggOp::NAMES, arguments, metadata, NullInput::Filter)
+            .then(MergeRoute::new(
+                false,
+                GeographicBuilder::create_collect::<CollectAggOp>,
+            ))
+            .then(MergeRoute::new(
+                true,
+                GeographicBuilder::create_collect::<CollectAggOp>,
+            ))
+            .then(PlainRoute::new(
+                GeographicBuilder::create_collect::<CollectAggOp>,
+            ))
+            .then(IfRoute::direct(
+                GeographicBuilder::create_collect::<CollectAggOp>,
+            ))
+            .then(StateRoute::direct(
+                GeographicBuilder::create_collect::<CollectAggOp>,
+            ))
     }
 }
 
 impl GeographicAggregateMetadata for GeometryUnionAggOp {
     const NAMES: &'static [&'static str] = &["st_union_agg"];
-    const FEATURES: AggregateFeatures = GeographicBuilder::ST_UNION_AGG_FEATURES;
+    const METADATA: AggregateMetadata = GeographicBuilder::ST_UNION_AGG_METADATA;
 
     fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
-        let features = GeometryUnionAggOp::FEATURES;
+        let metadata = GeometryUnionAggOp::METADATA;
         NameRoute::new(
             GeometryUnionAggOp::NAMES,
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Skip,
+            arguments,
+            metadata,
+            NullInput::Filter,
         )
         .then(MergeRoute::new(
             false,
@@ -139,16 +134,16 @@ impl GeographicAggregateMetadata for GeometryUnionAggOp {
 
 impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
     const NAMES: &'static [&'static str] = &["st_intersection_agg"];
-    const FEATURES: AggregateFeatures = GeographicBuilder::ST_INTERSECTION_AGG_FEATURES;
+    const METADATA: AggregateMetadata = GeographicBuilder::ST_INTERSECTION_AGG_METADATA;
 
     fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
-        let features = GeometryIntersectionAggOp::FEATURES;
+        let metadata = GeometryIntersectionAggOp::METADATA;
         NameRoute::new(
             GeometryIntersectionAggOp::NAMES,
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Skip,
+            arguments,
+            metadata,
+            NullInput::Filter,
         )
         .then(MergeRoute::new(
             false,
@@ -175,37 +170,32 @@ impl GeographicAggregateMetadata for GeometryIntersectionAggOp {
 
 impl GeographicAggregateMetadata for EnvelopeAggOp {
     const NAMES: &'static [&'static str] = &["st_envelope_agg"];
-    const FEATURES: AggregateFeatures = GeographicBuilder::ST_ENVELOPE_AGG_FEATURES;
+    const METADATA: AggregateMetadata = GeographicBuilder::ST_ENVELOPE_AGG_METADATA;
 
     fn route() -> NameRoute {
         let arguments = GeographicBuilder::geometry_arguments();
-        let features = EnvelopeAggOp::FEATURES;
-        NameRoute::new(
-            EnvelopeAggOp::NAMES,
-            arguments.clone(),
-            features.clone(),
-            NullPolicy::Skip,
-        )
-        .then(MergeRoute::new(
-            false,
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
-        .then(MergeRoute::new(
-            true,
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
-        .then(PlainRoute::new(
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
-        .then(IfRoute::direct(
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
-        .then(StateRoute::direct(
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
-        .then(DistinctAliasRoute::direct(
-            GeographicBuilder::create_agg::<EnvelopeAggOp>,
-        ))
+        let metadata = EnvelopeAggOp::METADATA;
+        NameRoute::new(EnvelopeAggOp::NAMES, arguments, metadata, NullInput::Filter)
+            .then(MergeRoute::new(
+                false,
+                GeographicBuilder::create_agg::<EnvelopeAggOp>,
+            ))
+            .then(MergeRoute::new(
+                true,
+                GeographicBuilder::create_agg::<EnvelopeAggOp>,
+            ))
+            .then(PlainRoute::new(
+                GeographicBuilder::create_agg::<EnvelopeAggOp>,
+            ))
+            .then(IfRoute::direct(
+                GeographicBuilder::create_agg::<EnvelopeAggOp>,
+            ))
+            .then(StateRoute::direct(
+                GeographicBuilder::create_agg::<EnvelopeAggOp>,
+            ))
+            .then(DistinctAliasRoute::direct(
+                GeographicBuilder::create_agg::<EnvelopeAggOp>,
+            ))
     }
 }
 
@@ -217,48 +207,52 @@ impl GeographicBuilder {
         ])
     }
 
-    const ST_COLLECT_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ST_COLLECT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "collects geometry values",
-        definition: "st_collect(geometry)",
-        example: "select st_collect(geom) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "collects geometry values",
+            definition: "st_collect(geometry)",
+            example: "select st_collect(geom) from t",
+        },
     };
 
-    const ST_UNION_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ST_UNION_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the union of geometry values",
-        definition: "st_union_agg(geometry)",
-        example: "select st_union_agg(geom) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the union of geometry values",
+            definition: "st_union_agg(geometry)",
+            example: "select st_union_agg(geom) from t",
+        },
     };
 
-    const ST_INTERSECTION_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ST_INTERSECTION_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the intersection of geometry values",
-        definition: "st_intersection_agg(geometry)",
-        example: "select st_intersection_agg(geom) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the intersection of geometry values",
+            definition: "st_intersection_agg(geometry)",
+            example: "select st_intersection_agg(geom) from t",
+        },
     };
 
-    const ST_ENVELOPE_AGG_FEATURES: AggregateFeatures = AggregateFeatures {
+    const ST_ENVELOPE_AGG_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
         is_decomposable: false,
-        supports_filter: false,
         sort_policy: SortPolicy::Unsupported,
-        distinct_policy: DistinctPolicy::Unsupported,
-        category: "Aggregate",
-        description: "returns the envelope of geometry values",
-        definition: "st_envelope_agg(geometry)",
-        example: "select st_envelope_agg(geom) from t",
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the envelope of geometry values",
+            definition: "st_envelope_agg(geometry)",
+            example: "select st_envelope_agg(geom) from t",
+        },
     };
 }
 
