@@ -47,6 +47,7 @@ use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
+use crate::pipelines::processors::transforms::aggregator::statistics::FinalAggregateFinishMode;
 use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -329,26 +330,38 @@ impl TransformFinalAggregate {
         spilled_depth: usize,
         tx: Sender<FinalAggregateTask>,
     ) -> Result<()> {
-        if self.spilled_occurred {
+        let pending_blocks = if self.spilled_occurred {
             self.spill_out()?;
-            // If no partition reached the stream threshold, merge the buffered
-            // states locally instead of writing another spill level.
-            if let Some(pending_blocks) = self.spiller.take_pending_if_unspilled() {
-                self.spilled_occurred = false;
-                for (bucket, data_block) in pending_blocks {
-                    check_interrupt()?;
-                    // These states were already counted as input. Do not check
-                    // spill again under the same sustained memory pressure.
-                    self.merge_serialized(SerializedPayload {
-                        bucket: bucket as isize,
-                        data_block,
-                        max_partition_count: SPILL_BUCKET_NUM,
-                    })?;
-                }
-            }
-        }
+            self.spiller.take_pending_if_unspilled()
+        } else {
+            None
+        };
 
-        if self.spilled_occurred {
+        let (output_rows, hash_index_resizes, finish_mode) = if let Some(pending_blocks) =
+            pending_blocks
+        {
+            // Disjoint buckets can be output and released one at a time without
+            // another spill check or buffering results to form larger blocks.
+            let mut output_rows = 0;
+            let mut hash_index_resizes = 0;
+            for (bucket, data_block) in pending_blocks {
+                self.ensure_spill_depth(spilled_depth);
+                // These states were already counted as input.
+                self.merge_serialized(SerializedPayload {
+                    bucket: bucket as isize,
+                    data_block,
+                    max_partition_count: SPILL_BUCKET_NUM,
+                })?;
+                let (rows, resizes) = self.output_hashtable(None)?;
+                output_rows += rows;
+                hash_index_resizes += resizes;
+            }
+            (
+                output_rows,
+                hash_index_resizes,
+                FinalAggregateFinishMode::Buffered,
+            )
+        } else if self.spilled_occurred {
             let (output_rows, hash_index_resizes) = match &self.hashtable {
                 HashTable::AggregateHashTable(ht) => {
                     (ht.payload.len(), ht.hash_index_resize_count())
@@ -356,71 +369,72 @@ impl TransformFinalAggregate {
                 _ => unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state before spill"),
             };
             self.spill_finish(spilled_depth, tx)?;
-            if let Some(task_id) = task_id {
-                self.statistics.log_task_finish_statistics(
-                    task_id,
-                    self._id,
-                    spilled_depth,
-                    output_rows,
-                    hash_index_resizes,
-                    true,
-                );
-            } else {
-                self.statistics.reset();
-            }
-
-            self.spilled_occurred = false;
-            let _ = mem::take(&mut self.hashtable);
-            return Ok(());
-        }
-
-        if let HashTable::AggregateHashTable(hashtable) = mem::take(&mut self.hashtable) {
-            let output_rows = hashtable.payload.len();
-            let hash_index_resizes = hashtable.hash_index_resize_count();
-            let mut output_stream = BlockPartitionStream::create(
+            (
+                output_rows,
+                hash_index_resizes,
+                FinalAggregateFinishMode::Spilled,
+            )
+        } else {
+            let output_stream = BlockPartitionStream::create(
                 self.params.max_block_rows,
                 self.params.max_block_bytes,
                 1,
             );
-            self.flush_state.clear();
+            let (output_rows, hash_index_resizes) = self.output_hashtable(Some(output_stream))?;
+            (
+                output_rows,
+                hash_index_resizes,
+                FinalAggregateFinishMode::InMemory,
+            )
+        };
 
-            // Consuming the hash table drops its index before result materialization. Each
-            // payload owns its arena, so finishing one partition also releases its states.
-            for payload in hashtable.into_payloads() {
-                loop {
-                    check_interrupt()?;
-                    let Some(block) = payload.merge_result(&mut self.flush_state)? else {
-                        self.flush_state.clear();
-                        break;
-                    };
+        self.statistics.log_final_finish_statistics(
+            task_id,
+            self._id,
+            spilled_depth,
+            output_rows,
+            hash_index_resizes,
+            finish_mode,
+        );
+        self.spilled_occurred = false;
+        let _ = mem::take(&mut self.hashtable);
+        Ok(())
+    }
 
+    fn output_hashtable(
+        &mut self,
+        mut output_stream: Option<BlockPartitionStream>,
+    ) -> Result<(usize, usize)> {
+        let HashTable::AggregateHashTable(hashtable) = mem::take(&mut self.hashtable) else {
+            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state before output")
+        };
+        let output_rows = hashtable.payload.len();
+        let hash_index_resizes = hashtable.hash_index_resize_count();
+        self.flush_state.clear();
+
+        // Consuming the hash table drops its index before result materialization. Each
+        // payload owns its arena, so finishing one partition also releases its states.
+        for payload in hashtable.into_payloads() {
+            loop {
+                check_interrupt()?;
+                let Some(block) = payload.merge_result(&mut self.flush_state)? else {
+                    self.flush_state.clear();
+                    break;
+                };
+                if let Some(output_stream) = output_stream.as_mut() {
                     let num_rows = block.num_rows();
                     let ready = output_stream.partition(vec![0; num_rows], block, true);
                     self.output_data
                         .extend(ready.into_iter().map(|(_, block)| block));
+                } else {
+                    self.output_data.push_back(block);
                 }
             }
-
-            if let Some(block) = output_stream.finalize_partition(0) {
-                self.output_data.push_back(block);
-            }
-
-            if let Some(task_id) = task_id {
-                self.statistics.log_task_finish_statistics(
-                    task_id,
-                    self._id,
-                    spilled_depth,
-                    output_rows,
-                    hash_index_resizes,
-                    false,
-                );
-            } else {
-                self.statistics
-                    .log_finish_statistics_values(output_rows, hash_index_resizes);
-            }
         }
-
-        Ok(())
+        if let Some(block) = output_stream.and_then(|mut stream| stream.finalize_partition(0)) {
+            self.output_data.push_back(block);
+        }
+        Ok((output_rows, hash_index_resizes))
     }
 
     fn spill_finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
