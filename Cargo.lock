@@ -6534,6 +6534,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
  "arrow-ipc 58.4.0",
  "arrow-schema 58.4.0",
  "arrow-select 58.4.0",
@@ -6555,6 +6557,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "zip",
+ "zstd 0.12.4",
 ]
 
 [[package]]

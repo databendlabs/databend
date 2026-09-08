@@ -20,6 +20,9 @@ use std::sync::LazyLock;
 use std::sync::atomic::AtomicUsize;
 
 use arrow_array::RecordBatch;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Field;
+use arrow_schema::Fields;
 use arrow_udf_runtime::javascript::FunctionOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_cache::Cache;
@@ -183,31 +186,10 @@ if '{dir}' not in sys.path:
                 batch
             }
             ScriptRuntime::WebAssembly(runtime) => {
-                let args_types: Vec<_> = input_batch
-                    .schema()
-                    .fields()
-                    .iter()
-                    .map(|f| f.as_ref().clone())
-                    .collect();
                 let return_type = func.data_type.as_ref().clone();
                 let f = DataField::new(&func.func_name, return_type);
-                let return_f = arrow_schema::Field::from(&f);
-
-                let handle = runtime
-                    .find_function(&func.func_name, args_types, return_f)
-                    .map_err(|err| {
-                        ErrorCode::UDFRuntimeError(format!(
-                            "WASM UDF {:?} execution failed: {err}",
-                            func.func_name
-                        ))
-                    })?;
-
-                runtime.call(&handle, input_batch).map_err(|err| {
-                    ErrorCode::UDFRuntimeError(format!(
-                        "WASM UDF {:?} execution failed: {err}",
-                        func.func_name
-                    ))
-                })?
+                let return_field = arrow_schema::Field::from(&f);
+                call_wasm_function(runtime, &func.func_name, input_batch, &return_field)?
             }
         };
         Ok(result_batch)
@@ -303,6 +285,114 @@ if '{dir}' not in sys.path:
             _ => Vec::new(),
         }
     }
+}
+
+const ARROW_UDF_EXTENSION_KEY: &str = "ARROW:extension:name";
+const ARROW_UDF_DECIMAL: &str = "arrowudf.decimal";
+
+fn call_wasm_function(
+    runtime: &arrow_udf_runtime::wasm::Runtime,
+    name: &str,
+    input_batch: &RecordBatch,
+    return_field: &Field,
+) -> Result<RecordBatch> {
+    let input_batch = wasm_compatible_record_batch(input_batch)?;
+    let args_types = input_batch
+        .schema()
+        .fields()
+        .iter()
+        .map(|field| field.as_ref().clone())
+        .collect();
+    let return_type = wasm_compatible_field(return_field);
+    let handle = runtime
+        .find_function(name, args_types, return_type)
+        .map_err(|err| {
+            ErrorCode::UDFRuntimeError(format!("WASM UDF {name:?} execution failed: {err}"))
+        })?;
+    let result = runtime.call(&handle, &input_batch).map_err(|err| {
+        ErrorCode::UDFRuntimeError(format!("WASM UDF {name:?} execution failed: {err}"))
+    })?;
+    restore_wasm_result_batch(result, return_field)
+}
+
+fn wasm_compatible_field(field: &Field) -> Field {
+    let mut metadata = field.metadata().clone();
+    let data_type = wasm_compatible_data_type(field.data_type());
+    if matches!(
+        field.data_type(),
+        ArrowDataType::Decimal64(_, _)
+            | ArrowDataType::Decimal128(_, _)
+            | ArrowDataType::Decimal256(_, _)
+    ) {
+        metadata.insert(
+            ARROW_UDF_EXTENSION_KEY.to_string(),
+            ARROW_UDF_DECIMAL.to_string(),
+        );
+    }
+    field
+        .clone()
+        .with_data_type(data_type)
+        .with_metadata(metadata)
+}
+
+fn wasm_compatible_data_type(data_type: &ArrowDataType) -> ArrowDataType {
+    match data_type {
+        ArrowDataType::Utf8View
+        | ArrowDataType::Decimal64(_, _)
+        | ArrowDataType::Decimal128(_, _)
+        | ArrowDataType::Decimal256(_, _) => ArrowDataType::Utf8,
+        ArrowDataType::LargeList(field) => {
+            ArrowDataType::List(Arc::new(wasm_compatible_field(field)))
+        }
+        ArrowDataType::List(field) => ArrowDataType::List(Arc::new(wasm_compatible_field(field))),
+        ArrowDataType::Struct(fields) => ArrowDataType::Struct(Fields::from(
+            fields
+                .iter()
+                .map(|field| wasm_compatible_field(field))
+                .collect::<Vec<_>>(),
+        )),
+        _ => data_type.clone(),
+    }
+}
+
+fn wasm_compatible_record_batch(batch: &RecordBatch) -> Result<RecordBatch> {
+    let schema = batch.schema();
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|field| wasm_compatible_field(field))
+        .collect::<Vec<_>>();
+    let columns = batch
+        .columns()
+        .iter()
+        .zip(fields.iter())
+        .map(|(array, field)| {
+            arrow_cast::cast(array.as_ref(), field.data_type()).map_err(ErrorCode::from)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let schema = arrow_schema::Schema::new(fields).with_metadata(schema.metadata().clone());
+
+    RecordBatch::try_new(Arc::new(schema), columns).map_err(Into::into)
+}
+
+fn restore_wasm_result_batch(batch: RecordBatch, return_field: &Field) -> Result<RecordBatch> {
+    if batch.num_columns() == 0 {
+        return Ok(batch);
+    }
+
+    let schema = batch.schema();
+    let mut fields = schema
+        .fields()
+        .iter()
+        .map(|field| field.as_ref().clone())
+        .collect::<Vec<_>>();
+    fields[0] = return_field.clone().with_name(fields[0].name());
+
+    let mut columns = batch.columns().to_vec();
+    columns[0] = arrow_cast::cast(columns[0].as_ref(), return_field.data_type())?;
+
+    let schema = arrow_schema::Schema::new(fields).with_metadata(schema.metadata().clone());
+    RecordBatch::try_new(Arc::new(schema), columns).map_err(Into::into)
 }
 
 pub struct JsRuntimeBuilder {
@@ -1184,6 +1274,35 @@ mod venv {
 
 #[cfg(test)]
 mod tests {
+    use arrow_array::Array;
+    use arrow_array::BooleanArray;
+    use arrow_array::Date32Array;
+    use arrow_array::Decimal64Array;
+    use arrow_array::Decimal128Array;
+    use arrow_array::Decimal256Array;
+    use arrow_array::Float32Array;
+    use arrow_array::Float64Array;
+    use arrow_array::Int8Array;
+    use arrow_array::Int16Array;
+    use arrow_array::Int32Array;
+    use arrow_array::Int64Array;
+    use arrow_array::LargeBinaryArray;
+    use arrow_array::LargeListArray;
+    use arrow_array::StringViewArray;
+    use arrow_array::TimestampMicrosecondArray;
+    use arrow_array::UInt8Array;
+    use arrow_array::UInt16Array;
+    use arrow_array::UInt32Array;
+    use arrow_array::UInt64Array;
+    use arrow_array::cast::AsArray;
+    use arrow_array::types::Decimal64Type;
+    use arrow_array::types::Decimal128Type;
+    use arrow_array::types::Decimal256Type;
+    use arrow_array::types::Int32Type;
+    use arrow_buffer::i256;
+    use arrow_schema::Field;
+    use arrow_schema::Schema;
+
     use super::*;
 
     #[test]
@@ -1201,5 +1320,361 @@ mod tests {
             err.message()
                 .contains("Failed to parse UDF script metadata as TOML")
         );
+    }
+
+    #[test]
+    fn test_wasm_compatible_record_batch_converts_utf8_view() {
+        let field = Field::new("input", ArrowDataType::Utf8View, true)
+            .with_metadata([("key".to_string(), "value".to_string())].into());
+        let schema = Schema::new(vec![field])
+            .with_metadata([("schema_key".to_string(), "schema_value".to_string())].into());
+        let input = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(StringViewArray::from(
+            vec![Some("{\"a\":1}"), None],
+        ))])
+        .unwrap();
+
+        let output = wasm_compatible_record_batch(&input).unwrap();
+
+        assert_eq!(output.schema().field(0).data_type(), &ArrowDataType::Utf8);
+        assert_eq!(output.schema().field(0).metadata()["key"], "value");
+        assert_eq!(output.schema().metadata()["schema_key"], "schema_value");
+        let values = output.column(0).as_string::<i32>();
+        assert_eq!(values.value(0), "{\"a\":1}");
+        assert!(values.is_null(1));
+    }
+
+    #[test]
+    fn test_wasm_compatible_field_type_matrix() {
+        let unchanged = [
+            ArrowDataType::Null,
+            ArrowDataType::Boolean,
+            ArrowDataType::Int8,
+            ArrowDataType::Int16,
+            ArrowDataType::Int32,
+            ArrowDataType::Int64,
+            ArrowDataType::UInt8,
+            ArrowDataType::UInt16,
+            ArrowDataType::UInt32,
+            ArrowDataType::UInt64,
+            ArrowDataType::Float32,
+            ArrowDataType::Float64,
+            ArrowDataType::Date32,
+            ArrowDataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+            ArrowDataType::Binary,
+            ArrowDataType::LargeBinary,
+            ArrowDataType::Utf8,
+            ArrowDataType::LargeUtf8,
+        ];
+        for data_type in unchanged {
+            let field = Field::new("value", data_type.clone(), true);
+            assert_eq!(wasm_compatible_field(&field).data_type(), &data_type);
+        }
+
+        let converted = [
+            ArrowDataType::Utf8View,
+            ArrowDataType::Decimal64(18, 2),
+            ArrowDataType::Decimal128(38, 10),
+            ArrowDataType::Decimal256(76, 20),
+        ];
+        for data_type in converted {
+            let field = Field::new("value", data_type.clone(), true);
+            let field = wasm_compatible_field(&field);
+            assert_eq!(field.data_type(), &ArrowDataType::Utf8);
+            if !matches!(data_type, ArrowDataType::Utf8View) {
+                assert_eq!(field.metadata()[ARROW_UDF_EXTENSION_KEY], ARROW_UDF_DECIMAL);
+            }
+        }
+
+        let decimal = Arc::new(Field::new(
+            "decimal",
+            ArrowDataType::Decimal128(38, 10),
+            true,
+        ));
+        let string = Arc::new(Field::new("string", ArrowDataType::Utf8View, true));
+        let nested = Field::new(
+            "nested",
+            ArrowDataType::Struct(Fields::from(vec![
+                Field::new("array", ArrowDataType::LargeList(string.clone()), true),
+                decimal.as_ref().clone(),
+            ])),
+            true,
+        );
+        let nested = wasm_compatible_field(&nested);
+        let ArrowDataType::Struct(fields) = nested.data_type() else {
+            panic!("expected struct");
+        };
+        let ArrowDataType::List(item) = fields[0].data_type() else {
+            panic!("expected list");
+        };
+        assert_eq!(item.data_type(), &ArrowDataType::Utf8);
+        assert_eq!(fields[1].data_type(), &ArrowDataType::Utf8);
+        assert_eq!(
+            fields[1].metadata()[ARROW_UDF_EXTENSION_KEY],
+            ARROW_UDF_DECIMAL
+        );
+    }
+
+    #[test]
+    fn test_wasm_decimal_arrays_round_trip() {
+        let fields = vec![
+            Field::new("decimal64", ArrowDataType::Decimal64(18, 2), true),
+            Field::new("decimal128", ArrowDataType::Decimal128(38, 10), true),
+            Field::new("decimal256", ArrowDataType::Decimal256(76, 20), true),
+        ];
+        let input = RecordBatch::try_new(Arc::new(Schema::new(fields.clone())), vec![
+            Arc::new(
+                Decimal64Array::from(vec![Some(12345), Some(-1), None])
+                    .with_precision_and_scale(18, 2)
+                    .unwrap(),
+            ),
+            Arc::new(
+                Decimal128Array::from(vec![Some(123456789012345), Some(-1), None])
+                    .with_precision_and_scale(38, 10)
+                    .unwrap(),
+            ),
+            Arc::new(
+                Decimal256Array::from(vec![
+                    Some(i256::from_i128(1234567890123456789)),
+                    Some(i256::from_i128(-1)),
+                    None,
+                ])
+                .with_precision_and_scale(76, 20)
+                .unwrap(),
+            ),
+        ])
+        .unwrap();
+
+        let wasm_batch = wasm_compatible_record_batch(&input).unwrap();
+        for field in wasm_batch.schema().fields() {
+            assert_eq!(field.data_type(), &ArrowDataType::Utf8);
+            assert_eq!(field.metadata()[ARROW_UDF_EXTENSION_KEY], ARROW_UDF_DECIMAL);
+        }
+        assert_eq!(wasm_batch.column(0).as_string::<i32>().value(0), "123.45");
+        assert_eq!(
+            wasm_batch.column(1).as_string::<i32>().value(0),
+            "12345.6789012345"
+        );
+        assert_eq!(
+            wasm_batch.column(2).as_string::<i32>().value(0),
+            "0.01234567890123456789"
+        );
+
+        for (index, return_field) in fields.iter().enumerate() {
+            let wasm_result = RecordBatch::try_new(
+                Arc::new(Schema::new(vec![wasm_batch.schema().field(index).clone()])),
+                vec![wasm_batch.column(index).clone()],
+            )
+            .unwrap();
+            let restored = restore_wasm_result_batch(wasm_result, return_field).unwrap();
+            assert_eq!(
+                restored.schema().field(0).data_type(),
+                return_field.data_type()
+            );
+            assert!(restored.column(0).is_null(2));
+            match index {
+                0 => assert_eq!(
+                    restored.column(0).as_primitive::<Decimal64Type>().values(),
+                    input.column(0).as_primitive::<Decimal64Type>().values()
+                ),
+                1 => assert_eq!(
+                    restored.column(0).as_primitive::<Decimal128Type>().values(),
+                    input.column(1).as_primitive::<Decimal128Type>().values()
+                ),
+                2 => assert_eq!(
+                    restored.column(0).as_primitive::<Decimal256Type>().values(),
+                    input.column(2).as_primitive::<Decimal256Type>().values()
+                ),
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn test_wasm_runtime_type_matrix() {
+        let compressed = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../tests/data/udf/test10_udf_wasm_gcd.wasm.zst"
+        ));
+        let code = zstd::stream::decode_all(compressed.as_slice()).unwrap();
+        let runtime = arrow_udf_runtime::wasm::Runtime::new(&code).unwrap();
+
+        let scalar_cases: Vec<(&str, ArrowDataType, Arc<dyn Array>)> = vec![
+            (
+                "wasm_identity_boolean",
+                ArrowDataType::Boolean,
+                Arc::new(BooleanArray::from(vec![Some(true), None])),
+            ),
+            (
+                "wasm_identity_int8",
+                ArrowDataType::Int8,
+                Arc::new(Int8Array::from(vec![Some(-8), None])),
+            ),
+            (
+                "wasm_identity_int16",
+                ArrowDataType::Int16,
+                Arc::new(Int16Array::from(vec![Some(-16), None])),
+            ),
+            (
+                "wasm_identity_int32",
+                ArrowDataType::Int32,
+                Arc::new(Int32Array::from(vec![Some(-32), None])),
+            ),
+            (
+                "wasm_identity_int64",
+                ArrowDataType::Int64,
+                Arc::new(Int64Array::from(vec![Some(-64), None])),
+            ),
+            (
+                "wasm_identity_uint8",
+                ArrowDataType::UInt8,
+                Arc::new(UInt8Array::from(vec![Some(8), None])),
+            ),
+            (
+                "wasm_identity_uint16",
+                ArrowDataType::UInt16,
+                Arc::new(UInt16Array::from(vec![Some(16), None])),
+            ),
+            (
+                "wasm_identity_uint32",
+                ArrowDataType::UInt32,
+                Arc::new(UInt32Array::from(vec![Some(32), None])),
+            ),
+            (
+                "wasm_identity_uint64",
+                ArrowDataType::UInt64,
+                Arc::new(UInt64Array::from(vec![Some(64), None])),
+            ),
+            (
+                "wasm_identity_float32",
+                ArrowDataType::Float32,
+                Arc::new(Float32Array::from(vec![Some(1.25), None])),
+            ),
+            (
+                "wasm_identity_float64",
+                ArrowDataType::Float64,
+                Arc::new(Float64Array::from(vec![Some(2.5), None])),
+            ),
+            (
+                "wasm_identity_binary",
+                ArrowDataType::LargeBinary,
+                Arc::new(LargeBinaryArray::from(vec![
+                    Some(b"Databend".as_slice()),
+                    None,
+                ])),
+            ),
+            (
+                "wasm_identity_date",
+                ArrowDataType::Date32,
+                Arc::new(Date32Array::from(vec![Some(20_704), None])),
+            ),
+            (
+                "wasm_identity_timestamp",
+                ArrowDataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+                Arc::new(TimestampMicrosecondArray::from(vec![
+                    Some(1_789_360_272_123_456),
+                    None,
+                ])),
+            ),
+        ];
+        for (handler, data_type, array) in scalar_cases {
+            let field = Field::new("value", data_type, true);
+            let input = RecordBatch::try_new(Arc::new(Schema::new(vec![field.clone()])), vec![
+                array.clone(),
+            ])
+            .unwrap();
+            let output = call_wasm_function(&runtime, handler, &input, &field).unwrap();
+            assert_eq!(output.column(0).to_data(), array.to_data(), "{handler}");
+        }
+
+        let string_field = Field::new("input", ArrowDataType::Utf8View, true);
+        let string_input =
+            RecordBatch::try_new(Arc::new(Schema::new(vec![string_field])), vec![Arc::new(
+                StringViewArray::from(vec![Some("{\"a\":1}"), None]),
+            )])
+            .unwrap();
+        let string_output = call_wasm_function(
+            &runtime,
+            "wasm_identity_string",
+            &string_input,
+            &Field::new("result", ArrowDataType::Utf8View, true),
+        )
+        .unwrap();
+        let strings = string_output.column(0).as_string_view();
+        assert_eq!(strings.value(0), "{\"a\":1}");
+        assert!(strings.is_null(1));
+
+        let decimals = [
+            (
+                Field::new("input", ArrowDataType::Decimal64(18, 2), true),
+                Arc::new(
+                    Decimal64Array::from(vec![Some(12345), None])
+                        .with_precision_and_scale(18, 2)
+                        .unwrap(),
+                ) as Arc<dyn Array>,
+            ),
+            (
+                Field::new("input", ArrowDataType::Decimal128(38, 10), true),
+                Arc::new(
+                    Decimal128Array::from(vec![Some(1234567890123456789012345678), None])
+                        .with_precision_and_scale(38, 10)
+                        .unwrap(),
+                ) as Arc<dyn Array>,
+            ),
+            (
+                Field::new("input", ArrowDataType::Decimal256(76, 20), true),
+                Arc::new(
+                    Decimal256Array::from(vec![
+                        Some(i256::from_i128(1234567812345678901234567890)),
+                        None,
+                    ])
+                    .with_precision_and_scale(76, 20)
+                    .unwrap(),
+                ) as Arc<dyn Array>,
+            ),
+        ];
+        for (field, array) in decimals {
+            let input = RecordBatch::try_new(Arc::new(Schema::new(vec![field.clone()])), vec![
+                array.clone(),
+            ])
+            .unwrap();
+            let output = call_wasm_function(
+                &runtime,
+                "wasm_identity_decimal",
+                &input,
+                &field.clone().with_name("result"),
+            )
+            .unwrap();
+            assert_eq!(output.schema().field(0).data_type(), field.data_type());
+            assert_eq!(output.column(0).to_data(), array.to_data());
+        }
+
+        let list_field = Arc::new(Field::new_list_field(ArrowDataType::Int32, true));
+        let list = LargeListArray::from_iter_primitive::<Int32Type, _, _>(vec![
+            Some(vec![Some(1), Some(2), Some(3)]),
+            None,
+        ]);
+        let list_input = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "input",
+                ArrowDataType::LargeList(list_field),
+                true,
+            )])),
+            vec![Arc::new(list)],
+        )
+        .unwrap();
+        let list_output = call_wasm_function(
+            &runtime,
+            "wasm_array_sum_int32",
+            &list_input,
+            &Field::new("result", ArrowDataType::Int32, true),
+        )
+        .unwrap();
+        let sums = list_output
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int32Array>()
+            .unwrap();
+        assert_eq!(sums.value(0), 6);
+        assert!(sums.is_null(1));
     }
 }
