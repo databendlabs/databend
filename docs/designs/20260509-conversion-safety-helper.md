@@ -48,19 +48,19 @@ The current Databend APIs do not make this distinction explicit.
 
 Databend already has useful building blocks:
 
-- `check_function` in `../../src/query/expression/src/type_check.rs` checks whether a
+- `check_function` in `src/query/expression/src/type_check.rs` checks whether a
   function call can be typed and inserts casts.
 - `FunctionRegistry::{get_auto_cast_rules,is_auto_try_cast_rule}` in
-  `../../src/query/expression/src/function.rs` exposes auto-cast rules and
+  `src/query/expression/src/function.rs` exposes auto-cast rules and
   TRY_CAST-based rules.
 - `can_auto_cast_to` and `common_super_type` in
-  `../../src/query/expression/src/type_check.rs` provide type-level coercion and
+  `src/query/expression/src/type_check.rs` provide type-level coercion and
   common type inference.
 - `NumberDataType::can_lossless_cast_to` and `get_decimal_properties` in
-  `../../src/query/expression/src/types/number.rs` provide partial numeric widening
+  `src/query/expression/src/types/number.rs` provide partial numeric widening
   information.
 - Comparison function registration in
-  `../../src/query/functions/src/scalars/comparison.rs` describes which same-type
+  `src/query/functions/src/scalars/comparison.rs` describes which same-type
   comparison functions exist today.
 
 However, these APIs do not answer whether a conversion is:
