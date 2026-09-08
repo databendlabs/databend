@@ -71,7 +71,7 @@ fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
                 || size.scale() > ARROW_UDF_DECIMAL_MAX_SCALE
             {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to 28 and scale between 0 and 28"
+                    "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to {ARROW_UDF_DECIMAL_MAX_PRECISION} and scale between 0 and {ARROW_UDF_DECIMAL_MAX_SCALE}"
                 )));
             }
         }

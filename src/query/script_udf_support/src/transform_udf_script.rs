@@ -385,7 +385,7 @@ fn wasm_compatible_data_type(data_type: &ArrowDataType) -> Result<ArrowDataType>
                 || *scale > ARROW_UDF_DECIMAL_MAX_SCALE as i8
             {
                 return Err(ErrorCode::UDFRuntimeError(format!(
-                    "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to 28 and scale between 0 and 28"
+                    "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to {ARROW_UDF_DECIMAL_MAX_PRECISION} and scale between 0 and {ARROW_UDF_DECIMAL_MAX_SCALE}"
                 )));
             }
             ArrowDataType::Utf8
@@ -1515,8 +1515,12 @@ mod tests {
         ] {
             let err = wasm_compatible_field(&Field::new("wide", data_type, true)).unwrap_err();
             assert!(err.message().contains("rust_decimal"));
-            assert!(err.message().contains("precision up to 28"));
-            assert!(err.message().contains("scale between 0 and 28"));
+            assert!(err.message().contains(&format!(
+                "precision up to {ARROW_UDF_DECIMAL_MAX_PRECISION}"
+            )));
+            assert!(err.message().contains(&format!(
+                "scale between 0 and {ARROW_UDF_DECIMAL_MAX_SCALE}"
+            )));
         }
 
         let nested_wide_decimal = Field::new(

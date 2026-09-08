@@ -38,8 +38,5 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 zip = { workspace = true }
 
-[dev-dependencies]
-zstd = { workspace = true }
-
 [lints]
 workspace = true
