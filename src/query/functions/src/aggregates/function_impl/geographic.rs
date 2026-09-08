@@ -15,8 +15,6 @@
 use std::alloc::Layout;
 use std::marker::PhantomData;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
@@ -33,9 +31,13 @@ use databend_common_expression::geographic::EnvelopeAggOp;
 use databend_common_expression::geographic::GeoAggOp;
 use databend_common_expression::geographic::GeometryIntersectionAggOp;
 use databend_common_expression::geographic::GeometryUnionAggOp;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GeometryType;
+use databend_common_expression::types::ValueType;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
@@ -366,7 +368,6 @@ where O: GeoAggOp
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateGeometryCollectState<O> {
     values: Vec<Vec<u8>>,
     _p: PhantomData<fn(O)>,
@@ -384,7 +385,7 @@ impl<O> Default for AggregateGeometryCollectState<O> {
 impl<O> AggregateGeometryCollectState<O> {
     fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
-            StateSerdeItem::Binary(None),
+            StateSerdeItem::DataType(ArrayType::<GeometryType>::data_type()),
         ])
         .with_manual_drop(true)
     }
@@ -401,19 +402,24 @@ where O: GeoAggOp
         self.values.append(&mut rhs.values);
     }
 
+    // Keep each EWKB value in a typed array, as in v1. There is no second
+    // binary container format around the geometry payloads.
     fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
-        let binary_builder = builder.as_binary_mut().unwrap();
-        BorshSerialize::serialize(self, &mut binary_builder.data)?;
-        binary_builder.commit_row();
+        let mut builder = ArrayType::<GeometryType>::downcast_builder(builder);
+        for value in &self.values {
+            builder.put_item(value);
+        }
+        builder.commit_row();
         Ok(())
     }
 
     fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<()> {
-        let ScalarRef::Binary(mut data) = value else {
+        let ScalarRef::Array(values) = value else {
             unreachable!()
         };
-        let mut rhs = Self::deserialize_reader(&mut data)?;
-        self.append(&mut rhs);
+        let values = GeometryType::try_downcast_column(&values).unwrap();
+        self.values
+            .extend(GeometryType::iter_column(&values).map(<[u8]>::to_vec));
         Ok(())
     }
 
@@ -752,7 +758,7 @@ impl GeographicBuilder {
     where O: GeoAggOp {
         Self::validate_request(&build)?;
 
-        build.create(
+        build.create_native_nullable(
             DataType::Geometry.wrap_nullable(),
             AggregateGeometryAggState::<O>::state_description(),
             GeometryAggEval::<O>::default(),
@@ -765,7 +771,7 @@ impl GeographicBuilder {
     where O: GeoAggOp {
         Self::validate_request(&build)?;
 
-        build.create(
+        build.create_native_nullable(
             DataType::Geometry.wrap_nullable(),
             AggregateGeometryCollectState::<O>::state_description(),
             GeometryCollectEval::<O>::default(),

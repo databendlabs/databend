@@ -29,6 +29,7 @@ mod build_context;
 mod combinator;
 mod distinct_combinator;
 pub(crate) mod if_combinator;
+mod input_rows;
 #[cfg(test)]
 pub(crate) mod legacy_adapter;
 pub(super) mod merge_combinator;

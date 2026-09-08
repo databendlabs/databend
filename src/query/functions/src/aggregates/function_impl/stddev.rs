@@ -152,6 +152,33 @@ impl<const TYPE: u8> AggregateStddevState<TYPE> {
         }
     }
 
+    fn merge_result_state(
+        &mut self,
+        mut builder: <NullableType<Float64Type> as ValueType>::ColumnBuilderMut<'_>,
+    ) -> Result<()> {
+        match self.result() {
+            Some(value) => builder.push_item(Some(F64::from(value))),
+            None => builder.push_item(None),
+        }
+        Ok(())
+    }
+
+    fn serialize_state(&self, builder: &mut ColumnBuilder) -> Result<()> {
+        let binary_builder = builder.as_binary_mut().unwrap();
+        BorshSerialize::serialize(self, &mut binary_builder.data)?;
+        binary_builder.commit_row();
+        Ok(())
+    }
+
+    fn merge_serialized_state(&mut self, value: ScalarRef<'_>) -> Result<()> {
+        let ScalarRef::Binary(mut data) = value else {
+            unreachable!()
+        };
+        let rhs = Self::deserialize_reader(&mut data)?;
+        self.merge_state(&rhs);
+        Ok(())
+    }
+
     fn result(&self) -> Option<f64> {
         if self.count <= 1 && (TYPE == VAR_SAMP || TYPE == STD_SAMP) {
             return None;
@@ -190,14 +217,10 @@ where
 
     fn merge_result(
         &mut self,
-        mut builder: <NullableType<Float64Type> as ValueType>::ColumnBuilderMut<'_>,
+        builder: <NullableType<Float64Type> as ValueType>::ColumnBuilderMut<'_>,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        match self.result() {
-            Some(value) => builder.push_item(Some(F64::from(value))),
-            None => builder.push_item(None),
-        }
-        Ok(())
+        self.merge_result_state(builder)
     }
 
     fn serialize(
@@ -205,10 +228,7 @@ where
         builder: &mut ColumnBuilder,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let binary_builder = builder.as_binary_mut().unwrap();
-        BorshSerialize::serialize(self, &mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
+        self.serialize_state(builder)
     }
 
     fn merge_serialized(
@@ -216,12 +236,7 @@ where
         value: ScalarRef<'_>,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let ScalarRef::Binary(mut data) = value else {
-            unreachable!()
-        };
-        let rhs = Self::deserialize_reader(&mut data)?;
-        self.merge_state(&rhs);
-        Ok(())
+        self.merge_serialized_state(value)
     }
 }
 

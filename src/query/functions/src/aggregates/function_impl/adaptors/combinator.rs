@@ -34,6 +34,13 @@ use super::sort_combinator;
 use super::state_combinator;
 
 pub(crate) trait Combinator {
+    /// The evaluator consumes nullable columns itself. Retain them through
+    /// input adaptors so input-presence and non-null presence stay distinct.
+    fn with_native_null_input(self) -> Self
+    where Self: Sized {
+        self
+    }
+
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
@@ -138,6 +145,11 @@ impl Combinator for PlainCombinator {
 }
 
 impl Combinator for IfCombinator {
+    fn with_native_null_input(mut self) -> Self {
+        self.strip_nullable_input = false;
+        self
+    }
+
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
@@ -254,6 +266,11 @@ impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
 }
 
 impl Combinator for StateCombinator {
+    fn with_native_null_input(mut self) -> Self {
+        self.plan.strip_nullable_input = false;
+        self
+    }
+
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,

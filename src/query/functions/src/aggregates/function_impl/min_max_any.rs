@@ -33,6 +33,7 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalDataKind;
 use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::EmptyArrayType;
@@ -49,6 +50,32 @@ use databend_common_expression::with_number_mapped_type;
 use super::AggregateRegistration;
 use super::adaptors::*;
 use super::serialized_scalar_at;
+
+fn nullable_value_state(data_type: &DataType) -> bool {
+    matches!(data_type, DataType::String | DataType::Decimal(_))
+}
+
+// State fields depend on the runtime type, not the comparison or Rust scalar type.
+fn value_state_fields(data_type: DataType) -> Vec<StateSerdeItem> {
+    if nullable_value_state(&data_type) {
+        // V1 persisted Decimal's raw integer with the storage kind's default
+        // precision/scale. Do not rescale: result metadata belongs to the call.
+        let data_type = match data_type {
+            DataType::Decimal(size) => {
+                with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                    DecimalDataKind::DECIMAL => DataType::Decimal(DECIMAL::default_decimal_size()),
+                })
+            }
+            other => other,
+        };
+        vec![StateSerdeItem::DataType(data_type.wrap_nullable())]
+    } else {
+        vec![
+            StateSerdeItem::DataType(BooleanType::data_type()),
+            StateSerdeItem::DataType(data_type),
+        ]
+    }
+}
 
 pub const TYPE_ANY: u8 = 0;
 pub const TYPE_MIN: u8 = 1;
@@ -135,11 +162,9 @@ where
         data_type: DataType,
         need_manual_drop: bool,
     ) -> AggregateStateDescription {
-        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
-            StateSerdeItem::DataType(BooleanType::data_type()),
-            StateSerdeItem::DataType(data_type),
-        ])
-        .with_manual_drop(need_manual_drop)
+        let fields = value_state_fields(data_type);
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], fields)
+            .with_manual_drop(need_manual_drop)
     }
 }
 
@@ -250,6 +275,18 @@ impl MinMaxAnyBuilder {
             return Vec::new();
         };
         match fields.as_slice() {
+            [DataType::Nullable(inner), DataType::Boolean] if **inner == DataType::String => {
+                vec![vec![DataType::String]]
+            }
+            [
+                DataType::Nullable(inner),
+                DataType::Boolean,
+                DataType::Boolean,
+            ] if **inner == DataType::String => {
+                vec![vec![DataType::String.wrap_nullable()]]
+            }
+            // Decimal metadata stores raw integer scale, not the original
+            // argument scale. It remains ambiguous without AggregateState metadata.
             [DataType::Boolean, argument_type, ..] => vec![vec![argument_type.clone()]],
             _ => Vec::new(),
         }
@@ -369,7 +406,7 @@ impl MinMaxAnyBuilder {
             return_type.clone(),
             need_manual_drop,
         );
-        let eval = MinMaxAnyEval::<T, CMP_TYPE>::new();
+        let eval = MinMaxAnyEval::<T, CMP_TYPE>::new(nullable_value_state(&return_type));
 
         build.create_unary_or_null_with_eval::<T, T, _>(return_type.wrap_nullable(), state, eval)
     }
@@ -378,14 +415,18 @@ impl MinMaxAnyBuilder {
 struct MinMaxAnyEval<T, const CMP_TYPE: u8>
 where T: ValueType
 {
+    nullable_value: bool,
     _p: PhantomData<fn(T)>,
 }
 
 impl<T, const CMP_TYPE: u8> MinMaxAnyEval<T, CMP_TYPE>
 where T: ValueType
 {
-    fn new() -> Self {
-        Self { _p: PhantomData }
+    fn new(nullable_value: bool) -> Self {
+        Self {
+            nullable_value,
+            _p: PhantomData,
+        }
     }
 }
 
@@ -426,6 +467,18 @@ where
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        if self.nullable_value {
+            // Push raw typed values so Decimal payloads retain their integer bits.
+            let mut builder =
+                databend_common_expression::types::NullableType::<T>::downcast_builder(
+                    &mut input.builders[0],
+                );
+            for state in input.states.iter() {
+                let state = state.get::<AggregateMinMaxAnyState<T, CMP_TYPE>>();
+                builder.push_item(state.value.as_ref().map(T::to_scalar_ref));
+            }
+            return Ok(());
+        }
         let (flag_builders, value_builders) = input.builders.split_at_mut(1);
         let mut flag_builder = BooleanType::downcast_builder(&mut flag_builders[0]);
         let mut value_builder = T::downcast_builder(&mut value_builders[0]);
@@ -448,6 +501,16 @@ where
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
             if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
+                continue;
+            }
+            if self.nullable_value {
+                let value = serialized_scalar_at(input.state, row, 0);
+                if !value.is_null() {
+                    let value = T::try_downcast_scalar(&value)?;
+                    state
+                        .get::<AggregateMinMaxAnyState<T, CMP_TYPE>>()
+                        .add(value, &())?;
+                }
                 continue;
             }
             let ScalarRef::Boolean(flag) = serialized_scalar_at(input.state, row, 0) else {

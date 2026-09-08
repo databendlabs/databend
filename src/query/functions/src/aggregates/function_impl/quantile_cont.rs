@@ -14,8 +14,6 @@
 
 use std::alloc::Layout;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateType;
@@ -135,7 +133,7 @@ pub struct AggregateNumberQuantileContState {
 impl AggregateNumberQuantileContState {
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
-            StateSerdeItem::Binary(None),
+            StateSerdeItem::DataType(DataType::Array(Box::new(Float64Type::data_type()))),
         ])
         .with_manual_drop(true)
     }
@@ -160,21 +158,60 @@ impl AggregateNumberQuantileContState {
     fn merge_owned_state(&mut self, rhs: &mut Self) {
         self.value.append(&mut rhs.value);
     }
-}
 
-impl BorshSerialize for AggregateNumberQuantileContState {
-    fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-        let values = self.value.iter().map(|value| value.0).collect::<Vec<_>>();
-        BorshSerialize::serialize(&values, writer)
+    fn serialize_state(&self, builder: &mut ColumnBuilder) -> Result<()> {
+        let mut builder = ArrayType::<Float64Type>::downcast_builder(builder);
+        for value in &self.value {
+            builder.put_item(value.0.into());
+        }
+        builder.commit_row();
+        Ok(())
     }
-}
 
-impl BorshDeserialize for AggregateNumberQuantileContState {
-    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
-        let values = Vec::<f64>::deserialize_reader(reader)?;
-        Ok(Self {
-            value: values.into_iter().map(Into::into).collect(),
-        })
+    fn merge_serialized_state(&mut self, value: ScalarRef<'_>) -> Result<()> {
+        let ScalarRef::Array(values) = value else {
+            unreachable!()
+        };
+        let values = Float64Type::try_downcast_column(&values).unwrap();
+        self.value.extend(Float64Type::iter_column(&values));
+        Ok(())
+    }
+
+    fn merge_result_array(
+        &mut self,
+        mut builder: ArrayColumnBuilderMut<'_, Float64Type>,
+        function_info: &QuantileContData,
+    ) -> Result<()> {
+        let value_len = self.value.len();
+        for level in &function_info.levels {
+            let (frac, whole) = libm::modf((value_len - 1) as f64 * (*level));
+            let whole = whole as usize;
+            if whole >= value_len {
+                builder.push_default();
+            } else {
+                let value = self.compute_result(whole, frac, value_len);
+                builder.put_item(value.into());
+            }
+        }
+        builder.commit_row();
+        Ok(())
+    }
+
+    fn merge_result_scalar(
+        &mut self,
+        mut builder: <Float64Type as ValueType>::ColumnBuilderMut<'_>,
+        function_info: &QuantileContData,
+    ) -> Result<()> {
+        let value_len = self.value.len();
+        let (frac, whole) = libm::modf((value_len - 1) as f64 * function_info.levels[0]);
+        let whole = whole as usize;
+        if whole >= value_len {
+            builder.push_default();
+        } else {
+            let value = self.compute_result(whole, frac, value_len);
+            builder.push_item(value.into());
+        }
+        Ok(())
     }
 }
 
@@ -206,22 +243,10 @@ where
 
     fn merge_result(
         &mut self,
-        mut builder: ArrayColumnBuilderMut<'_, Float64Type>,
+        builder: ArrayColumnBuilderMut<'_, Float64Type>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let value_len = self.value.len();
-        for level in &function_info.levels {
-            let (frac, whole) = libm::modf((value_len - 1) as f64 * (*level));
-            let whole = whole as usize;
-            if whole >= value_len {
-                builder.push_default();
-            } else {
-                let value = self.compute_result(whole, frac, value_len);
-                builder.put_item(value.into());
-            }
-        }
-        builder.commit_row();
-        Ok(())
+        self.merge_result_array(builder, function_info)
     }
 
     fn serialize(
@@ -229,10 +254,7 @@ where
         builder: &mut ColumnBuilder,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let binary_builder = builder.as_binary_mut().unwrap();
-        BorshSerialize::serialize(self, &mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
+        self.serialize_state(builder)
     }
 
     fn merge_serialized(
@@ -240,12 +262,7 @@ where
         value: ScalarRef<'_>,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let ScalarRef::Binary(mut data) = value else {
-            unreachable!()
-        };
-        let rhs = Self::deserialize_reader(&mut data)?;
-        self.merge_state(&rhs);
-        Ok(())
+        self.merge_serialized_state(value)
     }
 }
 
@@ -277,19 +294,10 @@ where
 
     fn merge_result(
         &mut self,
-        mut builder: <Float64Type as ValueType>::ColumnBuilderMut<'_>,
+        builder: <Float64Type as ValueType>::ColumnBuilderMut<'_>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let value_len = self.value.len();
-        let (frac, whole) = libm::modf((value_len - 1) as f64 * function_info.levels[0]);
-        let whole = whole as usize;
-        if whole >= value_len {
-            builder.push_default();
-        } else {
-            let value = self.compute_result(whole, frac, value_len);
-            builder.push_item(value.into());
-        }
-        Ok(())
+        self.merge_result_scalar(builder, function_info)
     }
 
     fn serialize(
@@ -297,10 +305,7 @@ where
         builder: &mut ColumnBuilder,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let binary_builder = builder.as_binary_mut().unwrap();
-        BorshSerialize::serialize(self, &mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
+        self.serialize_state(builder)
     }
 
     fn merge_serialized(
@@ -308,12 +313,7 @@ where
         value: ScalarRef<'_>,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let ScalarRef::Binary(mut data) = value else {
-            unreachable!()
-        };
-        let rhs = Self::deserialize_reader(&mut data)?;
-        self.merge_state(&rhs);
-        Ok(())
+        self.merge_serialized_state(value)
     }
 }
 
@@ -336,7 +336,11 @@ where
 {
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
-            StateSerdeItem::Binary(None),
+            // Persist raw decimal integers with v1's storage-kind metadata;
+            // the result's precision/scale still comes from the call.
+            StateSerdeItem::DataType(DataType::Array(Box::new(DataType::Decimal(
+                T::Scalar::default_decimal_size(),
+            )))),
         ])
         .with_manual_drop(true)
     }
@@ -370,34 +374,31 @@ where
     fn merge_owned_state(&mut self, rhs: &mut Self) {
         self.value.append(&mut rhs.value);
     }
-}
 
-impl<T> BorshSerialize for AggregateDecimalQuantileContState<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize,
-{
-    fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-        BorshSerialize::serialize(&self.value, writer)
+    fn serialize_state(&self, builder: &mut ColumnBuilder) -> Result<()> {
+        let mut builder = ArrayType::<T>::downcast_builder(builder);
+        for value in &self.value {
+            builder.put_item(T::to_scalar_ref(value));
+        }
+        builder.commit_row();
+        Ok(())
     }
-}
 
-impl<T> BorshDeserialize for AggregateDecimalQuantileContState<T>
-where
-    T: ValueType,
-    T::Scalar: BorshDeserialize,
-{
-    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
-        Ok(Self {
-            value: Vec::<T::Scalar>::deserialize_reader(reader)?,
-        })
+    fn merge_serialized_state(&mut self, value: ScalarRef<'_>) -> Result<()> {
+        let ScalarRef::Array(values) = value else {
+            unreachable!()
+        };
+        let values = T::try_downcast_column(&values).unwrap();
+        self.value
+            .extend(T::iter_column(&values).map(T::to_owned_scalar));
+        Ok(())
     }
 }
 
 impl<T> UnaryState<T, ArrayType<T>> for AggregateDecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Decimal,
+    T::Scalar: Decimal,
 {
     type FunctionInfo = QuantileContData;
 
@@ -445,10 +446,7 @@ where
         builder: &mut ColumnBuilder,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let binary_builder = builder.as_binary_mut().unwrap();
-        BorshSerialize::serialize(self, &mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
+        self.serialize_state(builder)
     }
 
     fn merge_serialized(
@@ -456,19 +454,14 @@ where
         value: ScalarRef<'_>,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let ScalarRef::Binary(mut data) = value else {
-            unreachable!()
-        };
-        let rhs = Self::deserialize_reader(&mut data)?;
-        self.merge_state(&rhs);
-        Ok(())
+        self.merge_serialized_state(value)
     }
 }
 
 impl<T> UnaryState<T, T> for AggregateDecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Decimal,
+    T::Scalar: Decimal,
 {
     type FunctionInfo = QuantileContData;
 
@@ -513,10 +506,7 @@ where
         builder: &mut ColumnBuilder,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let binary_builder = builder.as_binary_mut().unwrap();
-        BorshSerialize::serialize(self, &mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
+        self.serialize_state(builder)
     }
 
     fn merge_serialized(
@@ -524,12 +514,7 @@ where
         value: ScalarRef<'_>,
         _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        let ScalarRef::Binary(mut data) = value else {
-            unreachable!()
-        };
-        let rhs = Self::deserialize_reader(&mut data)?;
-        self.merge_state(&rhs);
-        Ok(())
+        self.merge_serialized_state(value)
     }
 }
 
@@ -607,7 +592,7 @@ impl QuantileContBuilder {
     ) -> Result<AggregateCallRef>
     where
         I: AccessType + ValueType,
-        I::Scalar: BorshSerialize + BorshDeserialize + Decimal,
+        I::Scalar: Decimal,
         R: ValueType,
         AggregateDecimalQuantileContState<I>: UnaryState<I, R, FunctionInfo = QuantileContData>,
     {

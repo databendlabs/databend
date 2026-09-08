@@ -59,7 +59,7 @@ description: A JSON-arrow argument before FILTER should remain an ordinary aggre
 sql: json_object_agg(text, parse_json(text) -> 'v') FILTER (WHERE flag)
 status: ok
 scalar: json_object_agg(text, parse_json(text) -> 'v') FILTER ( WHERE flag )
-type: Variant NULL
+type: Variant
 
 === count_star_filter_lowers_to_count_if ===
 description: COUNT(*) FILTER should add a constant count argument before the filter predicate.

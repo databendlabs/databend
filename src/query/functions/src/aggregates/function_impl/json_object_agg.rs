@@ -427,10 +427,14 @@ impl JsonObjectAggBuilder {
 
         type State = JsonObjectAggState<AnyType>;
         let state = JsonObjectAggEval::<AnyType, State>::state_description();
+        // This function owns NULL handling: SQL NULL keys/values are skipped,
+        // JSON null remains a Variant value, and no valid pairs produce {}.
+        // V1's keep_nullable path used this evaluator directly, without an
+        // outer SQL Nullable result or a serialized input-presence flag.
         build.create(
-            DataType::Variant.wrap_nullable(),
-            state.with_null_flag(),
-            MultiArgOrNullEval::new(JsonObjectAggEval::<AnyType, State>::default()),
+            DataType::Variant,
+            state,
+            JsonObjectAggEval::<AnyType, State>::default(),
         )
     }
 }

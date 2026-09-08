@@ -36,6 +36,8 @@ use super::UnaryEvalAdapter;
 use super::UnaryOrNull;
 use super::UnaryState;
 use super::UnaryStateEval;
+use super::input_rows::InputRowsEval;
+use super::input_rows::PRESERVE_V1_INPUT_ROWS_FLAG;
 
 fn build_signature(request: &RawAggregateCall<'_>, return_type: DataType) -> AggregateSignature {
     AggregateSignature {
@@ -95,17 +97,40 @@ where C: Combinator
         I: AccessType,
         R: ValueType,
     {
+        // Native nullable results (stddev) still had v1's outer OrNull flag,
+        // even for non-nullable input. Keep the kernel's own empty-state logic.
+        let input_rows_flag = return_type.is_nullable();
+        let state = if input_rows_flag {
+            state.with_null_flag()
+        } else {
+            state
+        };
+        // Native nullable kernels need to see all input rows before filtering
+        // NULLs themselves, including through _state and IF input adaptors.
+        let combinator = if input_rows_flag {
+            self.combinator.with_native_null_input()
+        } else {
+            self.combinator
+        };
         let signature = build_signature(&self.call, return_type);
         if signature.args_type[0].is_nullable_or_null() {
             let eval =
                 UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, true>::new(function_info.into()));
-            self.combinator
-                .create::<false>(signature, self.metadata, state, eval)
+            combinator.create::<false>(
+                signature,
+                self.metadata,
+                state,
+                InputRowsEval::new(eval, input_rows_flag),
+            )
         } else {
             let eval =
                 UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, false>::new(function_info.into()));
-            self.combinator
-                .create::<false>(signature, self.metadata, state, eval)
+            combinator.create::<false>(
+                signature,
+                self.metadata,
+                state,
+                InputRowsEval::new(eval, input_rows_flag),
+            )
         }
     }
 
@@ -123,7 +148,15 @@ where C: Combinator
         let signature = build_signature(&self.call, return_type);
         let nested = UnaryStateEval::<S, I, R, false>::new(Arc::new(function_info));
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(nested));
+        let input_rows_flag =
+            PRESERVE_V1_INPUT_ROWS_FLAG && self.call.args_type.iter().any(DataType::is_nullable);
         let state = state.with_null_flag();
+        let state = if input_rows_flag {
+            state.with_null_flag()
+        } else {
+            state
+        };
+        let eval = InputRowsEval::new(eval, input_rows_flag);
         self.combinator
             .create::<false>(signature, self.metadata, state, eval)
     }
@@ -141,7 +174,15 @@ where C: Combinator
     {
         let signature = build_signature(&self.call, return_type);
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(eval));
+        let input_rows_flag =
+            PRESERVE_V1_INPUT_ROWS_FLAG && self.call.args_type.iter().any(DataType::is_nullable);
         let state = state.with_null_flag();
+        let state = if input_rows_flag {
+            state.with_null_flag()
+        } else {
+            state
+        };
+        let eval = InputRowsEval::new(eval, input_rows_flag);
         self.combinator
             .create::<false>(signature, self.metadata, state, eval)
     }
@@ -211,11 +252,19 @@ where C: Combinator
     {
         let signature = build_signature(&self.call, return_type);
         debug_assert!(signature.order_by.is_empty());
+        let input_rows_flag =
+            PRESERVE_V1_INPUT_ROWS_FLAG && self.call.args_type.iter().any(DataType::is_nullable);
+        let state = state.with_null_flag();
+        let state = if input_rows_flag {
+            state.with_null_flag()
+        } else {
+            state
+        };
         self.combinator.create::<false>(
             signature,
             self.metadata,
-            state.with_null_flag(),
-            MultiArgOrNullEval::new(eval),
+            state,
+            InputRowsEval::new(MultiArgOrNullEval::new(eval), input_rows_flag),
         )
     }
 }
@@ -264,6 +313,30 @@ where C: Combinator
             .create::<false>(signature, self.metadata, state, eval)
     }
 
+    /// Native nullable kernels keep v1's input-presence flag while retaining
+    /// ownership of nullable inputs and non-empty result semantics.
+    pub(crate) fn create_native_nullable<I: AggregateEval>(
+        self,
+        return_type: DataType,
+        state: AggregateStateDescription,
+        eval: I,
+    ) -> Result<AggregateCallRef> {
+        debug_assert!(return_type.is_nullable());
+        let enabled = PRESERVE_V1_INPUT_ROWS_FLAG;
+        let state = if enabled {
+            state.with_null_flag()
+        } else {
+            state
+        };
+        let combinator = self.combinator.with_native_null_input();
+        combinator.create::<false>(
+            build_signature(&self.call, return_type),
+            self.metadata,
+            state,
+            InputRowsEval::new(eval, enabled),
+        )
+    }
+
     pub(crate) fn create_ordered<I>(
         self,
         return_type: DataType,
@@ -273,9 +346,23 @@ where C: Combinator
     where
         I: AggregateEval,
     {
+        // string_agg owns its non-null flag but still needs v1's outer flag.
+        // Inspect the original call: _state may already have stripped input NULLs.
+        let input_rows_flag = PRESERVE_V1_INPUT_ROWS_FLAG
+            && return_type.is_nullable()
+            && self.call.args_type.iter().any(DataType::is_nullable);
+        let state = if input_rows_flag {
+            state.with_null_flag()
+        } else {
+            state
+        };
         let signature = build_signature(&self.call, return_type);
-        self.combinator
-            .create::<true>(signature, self.metadata, state, eval)
+        self.combinator.create::<true>(
+            signature,
+            self.metadata,
+            state,
+            InputRowsEval::new(eval, input_rows_flag),
+        )
     }
 }
 
