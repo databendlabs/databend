@@ -217,6 +217,16 @@ mod tests {
     use super::contains_subquery;
 
     #[test]
+    fn test_contains_like_subquery_in_bracket_key() {
+        for modifier in ["any", "all", "some"] {
+            let sql = format!("map([true], [1])['a' like {modifier} (select 'a')]");
+            let tokens = tokenize_sql(&sql).unwrap();
+            let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+            assert!(contains_subquery(&expr), "{sql}");
+        }
+    }
+
+    #[test]
     fn test_contains_subquery_through_expression_children() {
         let wrappers = [
             "substring({value} from 1)",

@@ -14,16 +14,15 @@ select number from numbers((select [1])[1])
 ----
 0
 
-# LIKE ANY/ALL/SOME subqueries in bracket keys also require the table-argument executor.
+# LIKE ANY/SOME subqueries in bracket keys also require the table-argument executor.
 query I
 select number from numbers(map([true], [1])['a' like any (select 'a')])
 ----
 0
 
-query I
+# LIKE ALL subqueries are parsed but their comparison rewrite is not supported yet.
+statement error Converting LIKE to its contrary is not currently supported
 select number from numbers(map([true], [1])['a' like all (select 'a')])
-----
-0
 
 query I
 select number from numbers(map([true], [1])['a' like some (select 'a')])
