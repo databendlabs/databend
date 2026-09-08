@@ -29,7 +29,7 @@ use petgraph::graph::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
+use super::outbound_send_channels::SharedOutboundChannels;
 use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -44,10 +44,10 @@ pub struct HashSendSink {
 }
 
 impl HashSendSink {
-    pub fn create_item(
+    pub(super) fn create_item(
         worker_id: usize,
         scatter: Arc<Box<dyn FlightScatter>>,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: SharedOutboundChannels,
         waker: Arc<ExecutorWaker>,
         rows_threshold: usize,
         bytes_threshold: usize,
@@ -71,6 +71,17 @@ impl HashSendSink {
 
         PipeItem::create(processor, vec![input], vec![])
     }
+
+    fn finish_exchange(&mut self, cause: EventCause) -> Result<Event> {
+        self.input.finish();
+        match self
+            .channels
+            .poll_finish(&self.tasks, self.id, matches!(cause, EventCause::Other))?
+        {
+            Poll::Ready(()) => Ok(Event::Finished),
+            Poll::Pending => Ok(Event::NeedConsume),
+        }
+    }
 }
 
 impl Processor for HashSendSink {
@@ -89,8 +100,7 @@ impl Processor for HashSendSink {
                 Poll::Ready(results) => {
                     self.channels.handle_send_results(results)?;
                     if self.channels.all_closed() {
-                        self.input.finish();
-                        return Ok(Event::Finished);
+                        return self.finish_exchange(cause);
                     }
                 }
                 Poll::Pending => {
@@ -130,8 +140,7 @@ impl Processor for HashSendSink {
                         Poll::Ready(results) => {
                             self.channels.handle_send_results(results)?;
                             if self.channels.all_closed() {
-                                self.input.finish();
-                                return Ok(Event::Finished);
+                                return self.finish_exchange(cause);
                             }
                         }
                         Poll::Pending => {
@@ -164,8 +173,7 @@ impl Processor for HashSendSink {
             }
 
             if futures.is_empty() {
-                self.channels.close_all();
-                return Ok(Event::Finished);
+                return self.finish_exchange(cause);
             }
 
             let joined = Box::pin(futures::future::join_all(futures));
@@ -179,8 +187,7 @@ impl Processor for HashSendSink {
                 }
             }
 
-            self.channels.close_all();
-            return Ok(Event::Finished);
+            return self.finish_exchange(cause);
         }
 
         self.input.set_need_data();

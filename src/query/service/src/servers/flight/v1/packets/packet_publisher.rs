@@ -46,7 +46,8 @@ use crate::sessions::TableContextQueryIdentity;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
     Statistics,
-    /// do_get based channel (unidirectional: receiver pulls from sender)
+    /// Fragment channel. The legacy path uses do_get; the experimental path migrates it to
+    /// reconnectable do_exchange.
     Fragment(String),
     /// do_exchange based channel (bidirectional: sender pushes via ping-pong)
     /// One edge per node pair, identified by exchange_id, carrying all channel_ids.

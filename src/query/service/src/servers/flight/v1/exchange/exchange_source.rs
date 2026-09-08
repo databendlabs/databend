@@ -23,6 +23,7 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 
+use super::exchange_packet_source::create_packet_reader_item;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
 use super::exchange_params::MergeExchangeParams;
@@ -31,8 +32,10 @@ use super::hash_send_source::HashSendSource;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::FlightTransportMode;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 /// Add Exchange Source to the pipeline.
 pub fn via_exchange_source(
@@ -57,12 +60,34 @@ pub fn via_exchange_source(
         )));
     }
 
-    let exchange_params = ExchangeParams::MergeExchange(params.clone());
     let exchange_manager = ctx.get_exchange_manager();
-    let flight_receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
+    let transport = FlightTransportMode::from_settings(&ctx.get_settings())?;
+
+    let remote_items = match transport {
+        FlightTransportMode::Reconnectable(_) => {
+            let channel_set =
+                exchange_manager.get_exchange_channel_set(&params.query_id, &params.channel_id)?;
+            vec![create_packet_reader_item(channel_set.channels[0].clone())]
+        }
+        FlightTransportMode::Legacy => {
+            let exchange_params = ExchangeParams::MergeExchange(params.clone());
+            exchange_manager
+                .get_flight_receiver(&exchange_params)?
+                .into_iter()
+                .map(|flight_exchange| {
+                    let output = OutputPort::create();
+                    PipeItem::create(
+                        ExchangeSourceReader::create(output.clone(), flight_exchange),
+                        vec![],
+                        vec![output],
+                    )
+                })
+                .collect()
+        }
+    };
 
     let last_output_len = pipeline.output_len();
-    let mut items = Vec::with_capacity(last_output_len + flight_receivers.len());
+    let mut items = Vec::with_capacity(last_output_len + remote_items.len());
 
     for _index in 0..last_output_len {
         let input = InputPort::create();
@@ -75,14 +100,7 @@ pub fn via_exchange_source(
         ));
     }
 
-    for flight_exchange in flight_receivers {
-        let output = OutputPort::create();
-        items.push(PipeItem::create(
-            ExchangeSourceReader::create(output.clone(), flight_exchange),
-            vec![],
-            vec![output],
-        ));
-    }
+    items.extend(remote_items);
 
     pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
 

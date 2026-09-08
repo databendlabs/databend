@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use async_channel::Sender;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use tokio::sync::OwnedSemaphorePermit;
@@ -25,6 +24,7 @@ use tokio::sync::Semaphore;
 
 use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::servers::flight::v1::network::OutboundChannel;
+use crate::servers::flight::v1::network::SendOutcome;
 use crate::servers::flight::v1::network::inbound_quota::QueueItem;
 
 pub struct LocalQueueItem {
@@ -61,7 +61,7 @@ impl OutboundChannel for LocalOutboundChannel {
         self.sender.is_closed()
     }
 
-    async fn add_block(&self, block: DataBlock) -> Result<()> {
+    async fn add_block(&self, block: DataBlock) -> Result<SendOutcome> {
         let size = block.memory_size();
         let size = std::cmp::min(size, self.max_bytes_local_channel);
 
@@ -70,29 +70,32 @@ impl OutboundChannel for LocalOutboundChannel {
             let item = LocalQueueItem::create(block, x);
 
             if let Err(cause) = self.sender.try_send(item) {
-                if cause.is_full() {
+                return if cause.is_full() {
                     unreachable!("Logical error, local channel quota queue is full");
-                }
+                } else {
+                    Ok(SendOutcome::ReceiverClosed)
+                };
             }
 
-            return Ok(());
+            return Ok(SendOutcome::Accepted);
         }
 
         let semaphore = self.semaphore.clone();
-        let Ok(x) = semaphore.acquire_many_owned(size as u32).await else {
-            return Err(ErrorCode::Internal(
-                "Logical error, inbound quota semaphore is closed.",
-            ));
-        };
+        let x = semaphore
+            .acquire_many_owned(size as u32)
+            .await
+            .expect("LocalOutboundChannel owns every handle that can close its quota semaphore");
 
         let item = LocalQueueItem::create(block, x);
         if let Err(cause) = self.sender.try_send(item) {
-            if cause.is_full() {
+            return if cause.is_full() {
                 unreachable!("Logical error, local channel quota queue is full");
-            }
+            } else {
+                Ok(SendOutcome::ReceiverClosed)
+            };
         }
 
-        Ok(())
+        Ok(SendOutcome::Accepted)
     }
 }
 

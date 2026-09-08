@@ -32,7 +32,6 @@ use tokio::sync::oneshot;
 use tokio::time::sleep;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
@@ -53,13 +52,12 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        exchange: FlightExchange,
+        tx: FlightSender,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
-        let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner
@@ -91,6 +89,13 @@ impl StatisticsSender {
                                     warn!(
                                         "Cannot send data via flight exchange, cause: {:?}",
                                         error_code
+                                    );
+                                }
+
+                                if let Err(error) = tx.finish().await {
+                                    warn!(
+                                        "Statistics sender finish has error, cause: {:?}.",
+                                        error
                                     );
                                 }
 
@@ -151,6 +156,10 @@ impl StatisticsSender {
 
                     if let Err(error) = Self::send_io_stats(&tx).await {
                         warn!("IoStats send has error, cause: {:?}.", error);
+                    }
+
+                    if let Err(error) = tx.finish().await {
+                        warn!("Statistics sender finish has error, cause: {:?}.", error);
                     }
                 }
             }))
