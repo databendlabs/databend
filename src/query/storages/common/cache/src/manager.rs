@@ -41,8 +41,9 @@ use crate::caches::ColumnDataCache;
 use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::IcebergTableCache;
-use crate::caches::InvertedIndexFileCache;
+use crate::caches::InvertedIndexLookupCache;
 use crate::caches::InvertedIndexMetaCache;
+use crate::caches::InvertedIndexPayloadCache;
 use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
@@ -110,7 +111,8 @@ pub struct CacheManager {
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
-    inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
+    inverted_index_lookup_cache: CacheSlot<InvertedIndexLookupCache>,
+    inverted_index_payload_cache: CacheSlot<InvertedIndexPayloadCache>,
     vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
     vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
     spatial_index_meta_cache: CacheSlot<SpatialIndexMetaCache>,
@@ -234,7 +236,8 @@ impl CacheManager {
                 bloom_index_meta_cache: CacheSlot::new(None),
                 column_oriented_segment_info_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
-                inverted_index_file_cache: CacheSlot::new(None),
+                inverted_index_lookup_cache: CacheSlot::new(None),
+                inverted_index_payload_cache: CacheSlot::new(None),
                 vector_index_meta_cache: CacheSlot::new(None),
                 vector_index_file_cache: CacheSlot::new(None),
                 spatial_index_meta_cache: CacheSlot::new(None),
@@ -313,7 +316,7 @@ impl CacheManager {
                         .join(tenant_id.clone())
                         .join("inverted_index_meta_v1");
                 Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_INVERTED_INDEX_FILE_META_DATA,
+                    HYBRID_CACHE_INVERTED_INDEX_META,
                     config.inverted_index_meta_count as usize,
                     Unit::Count,
                     &inverted_index_meta_on_disk_cache_path,
@@ -325,26 +328,55 @@ impl CacheManager {
                 )?
             };
 
-            // setup inverted index filter cache
-            let inverted_index_file_size = if config.inverted_index_filter_memory_ratio != 0 {
-                (*max_server_memory_usage as usize)
-                    * config.inverted_index_filter_memory_ratio as usize
-                    / 100
-            } else {
-                config.inverted_index_filter_size as usize
-            };
-            let inverted_index_file_cache = {
-                let inverted_index_file_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("inverted_index_file_v1");
+            let inverted_index_lookup_cache = {
+                let cache_path = PathBuf::from(&config.disk_cache_config.path)
+                    .join(tenant_id.clone())
+                    .join("inverted_index_lookup_v1");
                 Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_INVERTED_INDEX_FILE,
-                    inverted_index_file_size,
+                    HYBRID_CACHE_INVERTED_INDEX_LOOKUP,
+                    usize::try_from(config.inverted_index_lookup_size).map_err(|_| {
+                        ErrorCode::BadArguments(
+                            "inverted-index lookup cache size exceeds this platform".to_string(),
+                        )
+                    })?,
                     Unit::Bytes,
-                    &inverted_index_file_on_disk_cache_path,
+                    &cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_inverted_index_data_size as usize,
+                    usize::try_from(config.disk_cache_inverted_index_lookup_size).map_err(
+                        |_| {
+                            ErrorCode::BadArguments(
+                                "inverted-index lookup disk cache size exceeds this platform"
+                                    .to_string(),
+                            )
+                        },
+                    )?,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                    ee_mode,
+                )?
+            };
+            let inverted_index_payload_cache = {
+                let cache_path = PathBuf::from(&config.disk_cache_config.path)
+                    .join(tenant_id.clone())
+                    .join("inverted_index_payload_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_INVERTED_INDEX_PAYLOAD,
+                    usize::try_from(config.inverted_index_payload_size).map_err(|_| {
+                        ErrorCode::BadArguments(
+                            "inverted-index payload cache size exceeds this platform".to_string(),
+                        )
+                    })?,
+                    Unit::Bytes,
+                    &cache_path,
+                    on_disk_cache_queue_size,
+                    usize::try_from(config.disk_cache_inverted_index_payload_size).map_err(
+                        |_| {
+                            ErrorCode::BadArguments(
+                                "inverted-index payload disk cache size exceeds this platform"
+                                    .to_string(),
+                            )
+                        },
+                    )?,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -489,7 +521,8 @@ impl CacheManager {
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
-                inverted_index_file_cache,
+                inverted_index_lookup_cache,
+                inverted_index_payload_cache,
                 vector_index_meta_cache,
                 vector_index_file_cache,
                 spatial_index_meta_cache,
@@ -536,6 +569,9 @@ impl CacheManager {
             // Only the in-memory part of column_data_cache will be cleared
             CacheManager::clear_cache(&me.column_data_cache);
             CacheManager::clear_cache(&me.block_meta_cache);
+            // Payload pages are large and cheap to repopulate relative to the high-priority
+            // footer and lookup-component caches.
+            CacheManager::clear_cache(&me.inverted_index_payload_cache);
         }
 
         fn clear_extra_caches(me: &CacheManager) {
@@ -545,6 +581,8 @@ impl CacheManager {
             CacheManager::clear_cache(&me.compact_segment_info_cache);
             CacheManager::clear_cache(&me.bloom_index_filter_cache);
             CacheManager::clear_cache(&me.bloom_index_meta_cache);
+            CacheManager::clear_cache(&me.inverted_index_lookup_cache);
+            CacheManager::clear_cache(&me.inverted_index_meta_cache);
         }
 
         match clearance_level {
@@ -585,19 +623,25 @@ impl CacheManager {
                     name,
                 );
             }
-            HYBRID_CACHE_INVERTED_INDEX_FILE_META_DATA
-            | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_FILE_META_DATA => {
+            HYBRID_CACHE_INVERTED_INDEX_META | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_META => {
                 Self::set_hybrid_cache_items_capacity(
                     &self.inverted_index_meta_cache,
                     new_capacity,
-                    name,
+                    HYBRID_CACHE_INVERTED_INDEX_META,
                 );
             }
-            HYBRID_CACHE_INVERTED_INDEX_FILE | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_FILE => {
+            HYBRID_CACHE_INVERTED_INDEX_LOOKUP | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_LOOKUP => {
                 Self::set_hybrid_cache_bytes_capacity(
-                    &self.inverted_index_file_cache,
+                    &self.inverted_index_lookup_cache,
                     new_capacity,
-                    name,
+                    HYBRID_CACHE_INVERTED_INDEX_LOOKUP,
+                );
+            }
+            HYBRID_CACHE_INVERTED_INDEX_PAYLOAD | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_PAYLOAD => {
+                Self::set_hybrid_cache_bytes_capacity(
+                    &self.inverted_index_payload_cache,
+                    new_capacity,
+                    HYBRID_CACHE_INVERTED_INDEX_PAYLOAD,
                 );
             }
             HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA
@@ -799,8 +843,12 @@ impl CacheManager {
         self.get_hybrid_cache(self.inverted_index_meta_cache.get())
     }
 
-    pub fn get_inverted_index_file_cache(&self) -> Option<InvertedIndexFileCache> {
-        self.get_hybrid_cache(self.inverted_index_file_cache.get())
+    pub fn get_inverted_index_lookup_cache(&self) -> Option<InvertedIndexLookupCache> {
+        self.get_hybrid_cache(self.inverted_index_lookup_cache.get())
+    }
+
+    pub fn get_inverted_index_payload_cache(&self) -> Option<InvertedIndexPayloadCache> {
+        self.get_hybrid_cache(self.inverted_index_payload_cache.get())
     }
 
     pub fn get_vector_index_meta_cache(&self) -> Option<VectorIndexMetaCache> {
@@ -963,11 +1011,13 @@ impl CacheManager {
 const MEMORY_CACHE_TABLE_DATA: &str = "memory_cache_table_data";
 const MEMORY_CACHE_PARQUET_META_DATA: &str = "memory_cache_parquet_meta_data";
 const MEMORY_CACHE_PRUNE_PARTITIONS: &str = "memory_cache_prune_partitions";
-const HYBRID_CACHE_INVERTED_INDEX_FILE: &str = "cache_inverted_index_file";
-const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_FILE: &str = "memory_cache_inverted_index_file";
-const HYBRID_CACHE_INVERTED_INDEX_FILE_META_DATA: &str = "cache_inverted_index_file_meta_data";
-const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
-    "memory_cache_inverted_index_file_meta_data";
+const HYBRID_CACHE_INVERTED_INDEX_LOOKUP: &str = "cache_inverted_index_lookup";
+const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_LOOKUP: &str = "memory_cache_inverted_index_lookup";
+const HYBRID_CACHE_INVERTED_INDEX_PAYLOAD: &str = "cache_inverted_index_payload";
+const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_PAYLOAD: &str = "memory_cache_inverted_index_payload";
+const HYBRID_CACHE_INVERTED_INDEX_META: &str = "cache_inverted_index_meta_data";
+const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_META: &str = "memory_cache_inverted_index_meta_data";
+
 const HYBRID_CACHE_VECTOR_INDEX_FILE: &str = "cache_vector_index_file";
 const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE: &str = "memory_cache_vector_index_file";
 const HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "cache_vector_index_file_meta_data";
@@ -1034,7 +1084,8 @@ mod tests {
             disk_cache_table_bloom_index_data_size: 1024 * 1024,
             disk_cache_table_bloom_index_meta_size: 1024 * 1024,
             disk_cache_inverted_index_meta_size: 1024 * 1024,
-            disk_cache_inverted_index_data_size: 1024 * 1024,
+            disk_cache_inverted_index_lookup_size: 1024 * 1024,
+            disk_cache_inverted_index_payload_size: 1024 * 1024,
             disk_cache_vector_index_meta_size: 1024 * 1024,
             disk_cache_vector_index_data_size: 1024 * 1024,
             disk_cache_spatial_index_meta_size: 1024 * 1024,
@@ -1050,7 +1101,8 @@ mod tests {
             disk_cache_table_bloom_index_data_size: 0,
             disk_cache_table_bloom_index_meta_size: 0,
             disk_cache_inverted_index_meta_size: 0,
-            disk_cache_inverted_index_data_size: 0,
+            disk_cache_inverted_index_lookup_size: 0,
+            disk_cache_inverted_index_payload_size: 0,
             disk_cache_vector_index_meta_size: 0,
             disk_cache_vector_index_data_size: 0,
             disk_cache_spatial_index_meta_size: 0,
@@ -1078,7 +1130,11 @@ mod tests {
                 .on_disk_cache()
                 .is_some()
             && cache_manager
-                .get_inverted_index_file_cache()
+                .get_inverted_index_lookup_cache()
+                .on_disk_cache()
+                .is_some()
+            && cache_manager
+                .get_inverted_index_payload_cache()
                 .on_disk_cache()
                 .is_some()
             && cache_manager
@@ -1121,7 +1177,11 @@ mod tests {
                 .on_disk_cache()
                 .is_none()
             && cache_manager
-                .get_inverted_index_file_cache()
+                .get_inverted_index_lookup_cache()
+                .on_disk_cache()
+                .is_none()
+            && cache_manager
+                .get_inverted_index_payload_cache()
                 .on_disk_cache()
                 .is_none()
             && cache_manager
@@ -1303,6 +1363,7 @@ mod tests {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             inverted_index_size: None,
+            inverted_index_metas: None,
             ngram_filter_index_size: None,
             vector_index_location: None,
             vector_index_size: None,
@@ -1419,6 +1480,74 @@ mod tests {
                 .is_empty()
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_inverted_index_cache_capacities_are_independent() -> Result<()> {
+        let max_server_memory_usage = 1024 * 1024;
+        let cache_config = CacheConfig {
+            inverted_index_lookup_size: 128 * 1024,
+            inverted_index_payload_size: 512 * 1024,
+            ..Default::default()
+        };
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            false,
+        )?;
+
+        let meta_cache = cache_manager.get_inverted_index_meta_cache().unwrap();
+        let lookup_cache = cache_manager.get_inverted_index_lookup_cache().unwrap();
+        let payload_cache = cache_manager.get_inverted_index_payload_cache().unwrap();
+        assert_eq!(lookup_cache.bytes_capacity(), 128 * 1024);
+        assert_eq!(payload_cache.bytes_capacity(), 512 * 1024);
+        assert_eq!(meta_cache.name(), HYBRID_CACHE_INVERTED_INDEX_META);
+        assert_eq!(lookup_cache.name(), HYBRID_CACHE_INVERTED_INDEX_LOOKUP);
+        assert_eq!(payload_cache.name(), HYBRID_CACHE_INVERTED_INDEX_PAYLOAD);
+
+        cache_manager.set_cache_capacity(HYBRID_CACHE_INVERTED_INDEX_META, 12345)?;
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_meta_cache()
+                .unwrap()
+                .items_capacity(),
+            12345
+        );
+
+        cache_manager.set_cache_capacity(HYBRID_CACHE_INVERTED_INDEX_LOOKUP, 256 * 1024)?;
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_lookup_cache()
+                .unwrap()
+                .bytes_capacity(),
+            256 * 1024
+        );
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_payload_cache()
+                .unwrap()
+                .bytes_capacity(),
+            512 * 1024
+        );
+
+        cache_manager
+            .set_cache_capacity(IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_PAYLOAD, 768 * 1024)?;
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_lookup_cache()
+                .unwrap()
+                .bytes_capacity(),
+            256 * 1024
+        );
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_payload_cache()
+                .unwrap()
+                .bytes_capacity(),
+            768 * 1024
+        );
         Ok(())
     }
 

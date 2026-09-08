@@ -3213,29 +3213,41 @@ pub struct CacheConfig {
     )]
     pub disk_cache_inverted_index_meta_size: u64,
 
-    /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
+    /// Max bytes of cached inverted-index term dictionaries and small fieldnorm/fast components
+    /// in memory.
     #[clap(
-        long = "cache-inverted-index-filter-size",
+        long = "cache-inverted-index-lookup-size",
         value_name = "VALUE",
-        default_value = "64424509440"
+        default_value = "8589934592"
     )]
-    pub inverted_index_filter_size: u64,
+    pub inverted_index_lookup_size: u64,
 
-    /// Max bytes of cached inverted index filters on disk. Set it to 0 to disable it.
+    /// Max bytes of cached inverted-index term dictionaries and small fieldnorm/fast components
+    /// on disk.
+    /// Set it to 0 to disable it.
     #[clap(
-        long = "disk-cache-inverted-index-data-size",
+        long = "disk-cache-inverted-index-lookup-size",
         value_name = "VALUE",
         default_value = "0"
     )]
-    pub disk_cache_inverted_index_data_size: u64,
+    pub disk_cache_inverted_index_lookup_size: u64,
 
-    /// Max percentage of in memory inverted index filter cache relative to whole memory. By default it is 0 (disabled).
+    /// Max bytes of cached inverted-index postings, positions, store, large fieldnorm/fast, and other
+    /// payload pages in memory.
     #[clap(
-        long = "cache-inverted-index-filter-memory-ratio",
+        long = "cache-inverted-index-payload-size",
+        value_name = "VALUE",
+        default_value = "8589934592"
+    )]
+    pub inverted_index_payload_size: u64,
+
+    /// Max bytes of cached inverted-index payload pages on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-inverted-index-payload-size",
         value_name = "VALUE",
         default_value = "0"
     )]
-    pub inverted_index_filter_memory_ratio: u64,
+    pub disk_cache_inverted_index_payload_size: u64,
 
     /// Max number of cached vector index meta objects. Set it to 0 to disable it.
     #[clap(
@@ -3451,9 +3463,10 @@ impl Default for CacheConfig {
             disk_cache_table_bloom_index_data_size: 0,
             inverted_index_meta_count: 30000,
             disk_cache_inverted_index_meta_size: 0,
-            inverted_index_filter_size: 64424509440,
-            disk_cache_inverted_index_data_size: 0,
-            inverted_index_filter_memory_ratio: 0,
+            inverted_index_lookup_size: 8589934592,
+            disk_cache_inverted_index_lookup_size: 0,
+            inverted_index_payload_size: 8589934592,
+            disk_cache_inverted_index_payload_size: 0,
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,

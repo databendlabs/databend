@@ -1604,22 +1604,28 @@ impl Table for FuseTable {
         index_name: String,
         index_version: String,
     ) -> Result<u64> {
-        let prefix = self
-            .meta_location_generator
-            .gen_specific_inverted_index_prefix(&index_name, &index_version);
+        let prefixes = [
+            self.meta_location_generator
+                .gen_specific_inverted_index_prefix(&index_name, &index_version),
+            self.meta_location_generator
+                .gen_specific_inverted_index_v2_prefix(&index_version),
+        ];
         let op = &self.operator;
-        info!("remove_inverted_index_files: {}", prefix);
-        let mut lister = op.lister_with(&prefix).recursive(true).await?;
-        let mut files = Vec::new();
-        while let Some(entry) = lister.try_next().await? {
-            if entry.metadata().is_dir() {
-                continue;
+        let mut files = std::collections::HashSet::new();
+        for prefix in prefixes {
+            info!("remove_inverted_index_files: {}", prefix);
+            let mut lister = op.lister_with(&prefix).recursive(true).await?;
+            while let Some(entry) = lister.try_next().await? {
+                if !entry.metadata().is_dir() {
+                    files.insert(entry.path().to_string());
+                }
             }
-            files.push(entry.path().to_string());
         }
-        let op = Files::create(ctx, self.operator.clone());
+        let files = files.into_iter().collect::<Vec<_>>();
         let len = files.len() as u64;
-        op.remove_file_in_batch(files).await?;
+        Files::create(ctx, self.operator.clone())
+            .remove_file_in_batch(files)
+            .await?;
         Ok(len)
     }
 }

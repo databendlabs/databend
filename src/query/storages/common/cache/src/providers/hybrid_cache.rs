@@ -223,7 +223,9 @@ where
     }
 
     fn evict(&self, k: &str) -> bool {
-        self.memory_cache.evict(k) && self.disk_cache.evict(k)
+        let memory_evicted = self.memory_cache.evict(k);
+        let disk_evicted = self.disk_cache.evict(k);
+        memory_evicted || disk_evicted
     }
 
     fn contains_key(&self, k: &str) -> bool {

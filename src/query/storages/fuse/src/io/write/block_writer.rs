@@ -48,6 +48,7 @@ use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -225,7 +226,7 @@ impl BlockBuilder {
             let inverted_index_state = InvertedIndexState::from_data_block(
                 &self.source_schema,
                 &data_block,
-                &block_location,
+                &self.meta_locations,
                 inverted_index_builder,
             )?;
             inverted_index_states.push(inverted_index_state);
@@ -301,6 +302,16 @@ impl BlockBuilder {
         } else {
             None
         };
+        let mut inverted_index_metas = inverted_index_states
+            .iter()
+            .map(|state| BlockIndexMeta {
+                index_name: state.index_name.clone(),
+                location: state.location.clone(),
+                size: state.size,
+                index_version: state.index_version.clone(),
+            })
+            .collect::<Vec<_>>();
+        inverted_index_metas.sort_unstable_by(|left, right| left.index_name.cmp(&right.index_name));
         let block_meta = BlockMeta {
             row_count,
             block_size,
@@ -327,6 +338,7 @@ impl BlockBuilder {
             vector_stats,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
+            inverted_index_metas: Some(inverted_index_metas),
             virtual_path_statistics: None,
             virtual_block_meta: None,
             create_on: Some(Utc::now()),
