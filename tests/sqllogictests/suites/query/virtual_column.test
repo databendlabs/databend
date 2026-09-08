@@ -138,33 +138,33 @@ test_virtual_column t2 val c String
 query II
 select row_count, virtual_column_size from fuse_block('test_virtual_column', 't2')
 ----
-3 805
+3 817
 
 query III
 select block_count, row_count, virtual_column_size from fuse_segment('test_virtual_column', 't2');
 ----
-1 3 805
+1 3 817
 
 query III
 select block_count, row_count, virtual_column_size from fuse_snapshot('test_virtual_column', 't2');
 ----
-1 3 805
+1 3 817
 1 3 NULL
 
 query IIT
 select virtual_column_size, virtual_column_count, virtual_schema from fuse_virtual_column_segment_schema('test_virtual_column', 't2')
 ----
-805 1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.b"},{"column_id":2,"path":"val.c"}]
+817 1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.b"},{"column_id":2,"path":"val.c"}]
 
 query IIBT
 select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 't2')
 ----
-805 3 1 [{"column_id":0,"column_stat":{"in_memory_size":25,"max":22,"min":11,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":4,"path":"val.a"},{"column_id":1,"column_stat":{"in_memory_size":25,"max":2,"min":1,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":44,"path":"val.b"},{"column_id":2,"column_stat":{"in_memory_size":49,"max":"test","min":"data","null_count":1},"data_type":"String","len":40,"num_values":3,"offset":84,"path":"val.c"}]
+817 3 1 [{"column_id":0,"column_stat":{"in_memory_size":25,"max":22,"min":11,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":4,"path":"val.a"},{"column_id":1,"column_stat":{"in_memory_size":25,"max":2,"min":1,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":44,"path":"val.b"},{"column_id":2,"column_stat":{"in_memory_size":49,"max":"test","min":"data","null_count":1},"data_type":"String","len":40,"num_values":3,"offset":84,"path":"val.c"}]
 
 query IIIIII
 select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
 ----
-1 3 134 697 1221 1
+1 3 134 697 1233 1
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
@@ -346,14 +346,14 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 query IIT
 select virtual_column_size, virtual_column_count, virtual_schema from fuse_virtual_column_segment_schema('test_virtual_column', 'tweets')
 ----
-2086 1 [{"column_id":0,"path":"data.create"},{"column_id":1,"path":"data.geo.lat"},{"column_id":2,"path":"data.id"},{"column_id":3,"path":"data.likes"},{"column_id":4,"path":"data.replies"},{"column_id":5,"path":"data.tags"},{"column_id":6,"path":"data.text"},{"column_id":7,"path":"data.user.id"}]
-1968 1 [{"column_id":0,"path":"data.create"},{"column_id":1,"path":"data.geo"},{"column_id":2,"path":"data.geo.lat"},{"column_id":3,"path":"data.id"},{"column_id":4,"path":"data.replies"},{"column_id":5,"path":"data.text"},{"column_id":6,"path":"data.user.id"}]
+2138 1 [{"column_id":0,"path":"data.create"},{"column_id":1,"path":"data.geo.lat"},{"column_id":2,"path":"data.id"},{"column_id":3,"path":"data.likes"},{"column_id":4,"path":"data.replies"},{"column_id":5,"path":"data.tags"},{"column_id":6,"path":"data.text"},{"column_id":7,"path":"data.user.id"}]
+2012 1 [{"column_id":0,"path":"data.create"},{"column_id":1,"path":"data.geo"},{"column_id":2,"path":"data.geo.lat"},{"column_id":3,"path":"data.id"},{"column_id":4,"path":"data.replies"},{"column_id":5,"path":"data.text"},{"column_id":6,"path":"data.user.id"}]
 
 query IIBT
 select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 'tweets')
 ----
-2086 2 1 [{"column_id":0,"column_stat":{"in_memory_size":33,"max":"2/15","min":"2/14","null_count":0},"data_type":"String","len":40,"num_values":2,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":{"in_memory_size":17,"max":5.0,"min":4.2,"null_count":0},"data_type":"Decimal(18, 1)","len":40,"num_values":2,"offset":44,"path":"data.geo.lat"},{"column_id":2,"column_stat":{"in_memory_size":17,"max":10,"min":9,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":84,"path":"data.id"},{"column_id":3,"column_stat":{"in_memory_size":17,"max":25,"min":10,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":124,"path":"data.likes"},{"column_id":4,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":164,"path":"data.replies"},{"column_id":5,"column_stat":null,"data_type":"Variant","len":104,"num_values":2,"offset":204,"path":"data.tags"},{"column_id":6,"column_stat":{"in_memory_size":33,"max":"z","min":"y","null_count":0},"data_type":"String","len":34,"num_values":2,"offset":308,"path":"data.text"},{"column_id":7,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":342,"path":"data.user.id"}]
-1968 8 1 [{"column_id":0,"column_stat":{"in_memory_size":129,"max":"6/07","min":"1/08","null_count":0},"data_type":"String","len":78,"num_values":8,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":null,"data_type":"Variant","len":61,"num_values":8,"offset":82,"path":"data.geo"},{"column_id":2,"column_stat":{"in_memory_size":65,"max":3.5,"min":1.9,"null_count":5},"data_type":"Decimal(18, 1)","len":48,"num_values":8,"offset":143,"path":"data.geo.lat"},{"column_id":3,"column_stat":{"in_memory_size":65,"max":8,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":191,"path":"data.id"},{"column_id":4,"column_stat":{"in_memory_size":65,"max":9,"min":0,"null_count":3},"data_type":"UInt64","len":55,"num_values":8,"offset":254,"path":"data.replies"},{"column_id":5,"column_stat":{"in_memory_size":129,"max":"x","min":"a","null_count":0},"data_type":"String","len":60,"num_values":8,"offset":309,"path":"data.text"},{"column_id":6,"column_stat":{"in_memory_size":65,"max":7,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":369,"path":"data.user.id"}]
+2138 2 1 [{"column_id":0,"column_stat":{"in_memory_size":33,"max":"2/15","min":"2/14","null_count":0},"data_type":"String","len":40,"num_values":2,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":{"in_memory_size":17,"max":5.0,"min":4.2,"null_count":0},"data_type":"Decimal(18, 1)","len":40,"num_values":2,"offset":44,"path":"data.geo.lat"},{"column_id":2,"column_stat":{"in_memory_size":17,"max":10,"min":9,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":84,"path":"data.id"},{"column_id":3,"column_stat":{"in_memory_size":17,"max":25,"min":10,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":124,"path":"data.likes"},{"column_id":4,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":164,"path":"data.replies"},{"column_id":5,"column_stat":null,"data_type":"Variant","len":104,"num_values":2,"offset":204,"path":"data.tags"},{"column_id":6,"column_stat":{"in_memory_size":33,"max":"z","min":"y","null_count":0},"data_type":"String","len":34,"num_values":2,"offset":308,"path":"data.text"},{"column_id":7,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":342,"path":"data.user.id"}]
+2012 8 1 [{"column_id":0,"column_stat":{"in_memory_size":129,"max":"6/07","min":"1/08","null_count":0},"data_type":"String","len":78,"num_values":8,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":null,"data_type":"Variant","len":61,"num_values":8,"offset":82,"path":"data.geo"},{"column_id":2,"column_stat":{"in_memory_size":65,"max":3.5,"min":1.9,"null_count":5},"data_type":"Decimal(18, 1)","len":48,"num_values":8,"offset":143,"path":"data.geo.lat"},{"column_id":3,"column_stat":{"in_memory_size":65,"max":8,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":191,"path":"data.id"},{"column_id":4,"column_stat":{"in_memory_size":65,"max":9,"min":0,"null_count":3},"data_type":"UInt64","len":55,"num_values":8,"offset":254,"path":"data.replies"},{"column_id":5,"column_stat":{"in_memory_size":129,"max":"x","min":"a","null_count":0},"data_type":"String","len":60,"num_values":8,"offset":309,"path":"data.text"},{"column_id":6,"column_stat":{"in_memory_size":65,"max":7,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":369,"path":"data.user.id"}]
 
 statement ok
 UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
@@ -364,8 +364,8 @@ refresh virtual column on tweets
 query IIBT
 select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 'tweets')
 ----
-2086 2 1 [{"column_id":0,"column_stat":{"in_memory_size":33,"max":"2/15","min":"2/14","null_count":0},"data_type":"String","len":40,"num_values":2,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":{"in_memory_size":17,"max":5.0,"min":4.2,"null_count":0},"data_type":"Decimal(18, 1)","len":40,"num_values":2,"offset":44,"path":"data.geo.lat"},{"column_id":2,"column_stat":{"in_memory_size":17,"max":10,"min":9,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":84,"path":"data.id"},{"column_id":3,"column_stat":{"in_memory_size":17,"max":25,"min":10,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":124,"path":"data.likes"},{"column_id":4,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":164,"path":"data.replies"},{"column_id":5,"column_stat":null,"data_type":"Variant","len":104,"num_values":2,"offset":204,"path":"data.tags"},{"column_id":6,"column_stat":{"in_memory_size":33,"max":"z","min":"y","null_count":0},"data_type":"String","len":34,"num_values":2,"offset":308,"path":"data.text"},{"column_id":7,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":342,"path":"data.user.id"}]
-1974 8 1 [{"column_id":0,"column_stat":{"in_memory_size":129,"max":"6/07","min":"1/08","null_count":0},"data_type":"String","len":78,"num_values":8,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":null,"data_type":"Variant","len":61,"num_values":8,"offset":82,"path":"data.geo"},{"column_id":2,"column_stat":{"in_memory_size":65,"max":3.5,"min":1.9,"null_count":5},"data_type":"Decimal(18, 1)","len":48,"num_values":8,"offset":143,"path":"data.geo.lat"},{"column_id":3,"column_stat":{"in_memory_size":65,"max":8,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":191,"path":"data.id"},{"column_id":4,"column_stat":{"in_memory_size":65,"max":10,"min":0,"null_count":3},"data_type":"UInt64","len":55,"num_values":8,"offset":254,"path":"data.replies"},{"column_id":5,"column_stat":{"in_memory_size":129,"max":"x","min":"a","null_count":0},"data_type":"String","len":65,"num_values":8,"offset":309,"path":"data.text"},{"column_id":6,"column_stat":{"in_memory_size":65,"max":7,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":374,"path":"data.user.id"}]
+2138 2 1 [{"column_id":0,"column_stat":{"in_memory_size":33,"max":"2/15","min":"2/14","null_count":0},"data_type":"String","len":40,"num_values":2,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":{"in_memory_size":17,"max":5.0,"min":4.2,"null_count":0},"data_type":"Decimal(18, 1)","len":40,"num_values":2,"offset":44,"path":"data.geo.lat"},{"column_id":2,"column_stat":{"in_memory_size":17,"max":10,"min":9,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":84,"path":"data.id"},{"column_id":3,"column_stat":{"in_memory_size":17,"max":25,"min":10,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":124,"path":"data.likes"},{"column_id":4,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":164,"path":"data.replies"},{"column_id":5,"column_stat":null,"data_type":"Variant","len":104,"num_values":2,"offset":204,"path":"data.tags"},{"column_id":6,"column_stat":{"in_memory_size":33,"max":"z","min":"y","null_count":0},"data_type":"String","len":34,"num_values":2,"offset":308,"path":"data.text"},{"column_id":7,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":342,"path":"data.user.id"}]
+2018 8 1 [{"column_id":0,"column_stat":{"in_memory_size":129,"max":"6/07","min":"1/08","null_count":0},"data_type":"String","len":78,"num_values":8,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":null,"data_type":"Variant","len":61,"num_values":8,"offset":82,"path":"data.geo"},{"column_id":2,"column_stat":{"in_memory_size":65,"max":3.5,"min":1.9,"null_count":5},"data_type":"Decimal(18, 1)","len":48,"num_values":8,"offset":143,"path":"data.geo.lat"},{"column_id":3,"column_stat":{"in_memory_size":65,"max":8,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":191,"path":"data.id"},{"column_id":4,"column_stat":{"in_memory_size":65,"max":10,"min":0,"null_count":3},"data_type":"UInt64","len":55,"num_values":8,"offset":254,"path":"data.replies"},{"column_id":5,"column_stat":{"in_memory_size":129,"max":"x","min":"a","null_count":0},"data_type":"String","len":65,"num_values":8,"offset":309,"path":"data.text"},{"column_id":6,"column_stat":{"in_memory_size":65,"max":7,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":374,"path":"data.user.id"}]
 
 
 query IITTIITFIT
