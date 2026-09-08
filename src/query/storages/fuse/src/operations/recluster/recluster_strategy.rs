@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -48,7 +49,7 @@ use crate::statistics::prepare_cluster_key_exprs;
 pub enum ReclusterMode {
     /// Legacy one-window probing with tighter rewrite selection.
     Conservative,
-    /// Broader probing that groups mature blocks by level ranges.
+    /// Broader probing that mixes levels 1 through 3 while keeping other levels separate.
     Aggressive,
 }
 
@@ -217,48 +218,70 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReclusterGroup {
     /// A single level forms its own group.
     Level(i32),
-    /// Aggressive mode: a fixed maturity bin identified by its lower bound `lo`.
-    Range(i32),
+    /// Aggressive mode groups the low mature levels 1 through 3.
+    LowMaturity,
+}
+
+impl Ord for ReclusterGroup {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let key = |group: &Self| match group {
+            Self::Level(level) => (*level, 0),
+            Self::LowMaturity => (1, 1),
+        };
+        key(self).cmp(&key(other))
+    }
+}
+
+impl PartialOrd for ReclusterGroup {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl ReclusterGroup {
     /// Assign a block's recluster group for the given mode.
     pub(crate) fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
         match mode {
-            ReclusterMode::Conservative => ReclusterGroup::Level(level),
-            ReclusterMode::Aggressive if level == 0 => ReclusterGroup::Level(level),
-            ReclusterMode::Aggressive => {
-                debug_assert!(level > 0);
-                let lo = match level {
-                    1..=3 => 1,
-                    4..=8 => 4,
-                    _ => 9,
-                };
-                ReclusterGroup::Range(lo)
-            }
+            ReclusterMode::Aggressive if (1..=3).contains(&level) => ReclusterGroup::LowMaturity,
+            _ => ReclusterGroup::Level(level),
         }
     }
 
-    fn output_level(self, task_indices: &[usize], blocks: &[&ReclusterBlock]) -> i32 {
+    /// Return the base level consumed by the execution path, which writes blocks at `level + 1`.
+    fn base_level(self, task_indices: &[usize], blocks: &[&ReclusterBlock]) -> i32 {
         match self {
             ReclusterGroup::Level(level) => level,
-            ReclusterGroup::Range(lo) => {
-                let mut counts: BTreeMap<i32, usize> = BTreeMap::new();
-                for &idx in task_indices {
-                    let level = blocks[idx].stats().level;
-                    *counts.entry(level).or_default() += 1;
+            ReclusterGroup::LowMaturity => {
+                let max_level = task_indices
+                    .iter()
+                    .map(|idx| blocks[*idx].stats().level)
+                    .max()
+                    .expect("recluster task must contain blocks");
+                if max_level == 1 {
+                    return 1;
                 }
-                let mut best = (lo, 0usize);
-                for (level, count) in counts {
-                    if count > best.1 {
-                        best = (level, count);
+
+                let mut total_size = 0;
+                let mut max_level_size = 0;
+                for &idx in task_indices {
+                    let block = blocks[idx];
+                    total_size += block.meta.block_size;
+                    if block.stats().level == max_level {
+                        max_level_size += block.meta.block_size;
                     }
                 }
-                best.0
+
+                // The execution path adds one. Keep the final level at max_level unless the
+                // highest input level owns at least half of the selected logical bytes.
+                if max_level_size * 2 >= total_size {
+                    max_level
+                } else {
+                    max_level - 1
+                }
             }
         }
     }
@@ -268,10 +291,7 @@ impl fmt::Display for ReclusterGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReclusterGroup::Level(level) => write!(f, "{}", level),
-            ReclusterGroup::Range(1) => write!(f, "1-3"),
-            ReclusterGroup::Range(4) => write!(f, "4-8"),
-            ReclusterGroup::Range(9) => write!(f, "9+"),
-            ReclusterGroup::Range(lo) => unreachable!("unexpected FINAL bin lower bound: {lo}"),
+            ReclusterGroup::LowMaturity => write!(f, "1-3"),
         }
     }
 }
@@ -304,7 +324,8 @@ pub(crate) struct ReclusterTaskCandidate {
     pub(crate) score: CandidateScore,
     // Empty means a rebuild-only repack candidate.
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
-    pub(crate) output_level: i32,
+    pub(crate) base_level: i32,
+    pub(crate) input_level_stats: Vec<ClusterLevelLogStats>,
     pub(crate) all_ordered: bool,
 }
 
@@ -314,6 +335,16 @@ impl ReclusterTaskCandidate {
             .iter()
             .map(|(_, block_indices)| block_indices.len())
             .sum()
+    }
+
+    /// Requested output level for logs, or "null" for repack-only candidates.
+    /// Perfect output blocks may instead become -1.
+    pub(crate) fn requested_output_level(&self) -> String {
+        if self.is_repack_only() {
+            "null".to_string()
+        } else {
+            (self.base_level + 1).to_string()
+        }
     }
 
     /// Whether this candidate only repacks unchanged blocks into fewer segments.
@@ -326,8 +357,9 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "output_level={} max_depth={} avg_depth={} selected_count={} bytes={}",
-            self.output_level,
+            "requested_output_level={} repack_only={} max_depth={} avg_depth={} block_count={} block_size={}",
+            self.requested_output_level(),
+            self.is_repack_only(),
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
@@ -390,14 +422,30 @@ pub(crate) fn task_candidate(
         }
     }
 
-    let output_level = group.output_level(task_indices, blocks);
+    let base_level = group.base_level(task_indices, blocks);
+    let mut stats_by_level = BTreeMap::<i32, ClusterLevelLogStats>::new();
+    for &idx in task_indices {
+        let block = blocks[idx];
+        let level = block.stats().level;
+        let stats = stats_by_level
+            .entry(level)
+            .or_insert_with(|| ClusterLevelLogStats {
+                level: Some(level),
+                ..Default::default()
+            });
+        stats.block_count += 1;
+        stats.row_count = stats.row_count.saturating_add(block.meta.row_count);
+        stats.block_size = stats.block_size.saturating_add(block.meta.block_size);
+        stats.file_size = stats.file_size.saturating_add(block.meta.file_size);
+    }
     let all_ordered = task_indices
         .iter()
         .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original));
     ReclusterTaskCandidate {
         score,
         selected_blocks,
-        output_level,
+        base_level,
+        input_level_stats: stats_by_level.into_values().collect(),
         all_ordered,
     }
 }

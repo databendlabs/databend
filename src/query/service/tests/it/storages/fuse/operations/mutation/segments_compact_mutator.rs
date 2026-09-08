@@ -69,6 +69,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use databend_storages_common_table_meta::table::ClusterType;
 use futures_util::TryStreamExt;
 use rand::Rng;
@@ -867,7 +868,9 @@ impl CompactSegmentTestFixture {
                     );
 
                     collected_blocks.push(block_meta.clone());
-                    stats_acc.add_block(block_meta).unwrap();
+                    stats_acc
+                        .add_block(block_meta, VirtualBlockInput::None)
+                        .unwrap();
                 }
                 let cluster_key_info = cluster_key_id
                     .map(|id| ClusterKeyInfo::new((id, "(id)".to_string()), ClusterType::Linear));

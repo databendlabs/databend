@@ -56,13 +56,13 @@ statement ok
 REFRESH VIRTUAL COLUMN FOR vacuum_test;
 
 # Schema has 4 fields (a, b, c, d), 2 _vb_v2 files (one per block)
-query TTTITT
+query TTTTT
 show virtual columns from vacuum_test;
 ----
-test_vacuum_virtual_column vacuum_test v 3000000000 ['a'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000001 ['b'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000002 ['c'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000003 ['d'] UInt64
+test_vacuum_virtual_column vacuum_test v a UInt64
+test_vacuum_virtual_column vacuum_test v b UInt64
+test_vacuum_virtual_column vacuum_test v c UInt64
+test_vacuum_virtual_column vacuum_test v d UInt64
 
 query I
 select count() from list_stage(location=> '@vb_stage') where name like '%_vb_v2%';
@@ -78,13 +78,11 @@ DELETE FROM vacuum_test WHERE id >= 4;
 statement ok
 REFRESH VIRTUAL COLUMN FOR vacuum_test;
 
-query TTTITT
+query TTTTT
 show virtual columns from vacuum_test;
 ----
-test_vacuum_virtual_column vacuum_test v 3000000000 ['a'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000001 ['b'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000002 ['c'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000003 ['d'] UInt64
+test_vacuum_virtual_column vacuum_test v a UInt64
+test_vacuum_virtual_column vacuum_test v b UInt64
 
 # Purge old snapshots so orphan _vb_v2 files are no longer referenced.
 statement ok
@@ -97,11 +95,11 @@ VACUUM VIRTUAL COLUMN FROM vacuum_test;
 1
 
 # After vacuum: only a and b remain in schema
-query TTTITT
+query TTTTT
 show virtual columns from vacuum_test;
 ----
-test_vacuum_virtual_column vacuum_test v 3000000000 ['a'] UInt64
-test_vacuum_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+test_vacuum_virtual_column vacuum_test v a UInt64
+test_vacuum_virtual_column vacuum_test v b UInt64
 
 # Orphan _vb_v2 file removed, only 1 remains
 query I

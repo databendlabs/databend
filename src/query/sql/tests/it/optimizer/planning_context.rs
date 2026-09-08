@@ -68,6 +68,15 @@ FROM planning_left_rows AS l
 LEFT JOIN planning_right_rows AS r ON l.id = r.id
 WHERE r.id > 0",
         },
+        SqlTestCase {
+            name: "erroring_outer_join_predicate_does_not_panic",
+            description: "An expression error encountered while checking an outer-join predicate must not panic the optimizer.",
+            setup_sqls: &[BOOLEAN_ROWS_TABLE],
+            sql: "SELECT b.c0boolean
+FROM planning_boolean_rows AS a
+LEFT JOIN planning_boolean_rows AS b ON a.c0boolean = b.c0boolean
+WHERE LPAD(CASE WHEN b.c0boolean THEN '' ELSE '0.6' END, 1426755006, '') IS NULL",
+        },
     ];
 
     for case in &cases {
@@ -80,3 +89,4 @@ WHERE r.id > 0",
 const LEFT_ROWS_TABLE: &str = "CREATE TABLE planning_left_rows(id UInt64)";
 const RIGHT_ROWS_TABLE: &str =
     "CREATE TABLE planning_right_rows(id UInt64, ts Nullable(Timestamp))";
+const BOOLEAN_ROWS_TABLE: &str = "CREATE TABLE planning_boolean_rows(c0boolean BOOLEAN)";
