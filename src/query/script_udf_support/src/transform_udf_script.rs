@@ -189,9 +189,16 @@ if '{dir}' not in sys.path:
             }
             ScriptRuntime::WebAssembly(runtime) => {
                 let return_type = func.data_type.as_ref().clone();
+                let declared_return_type = return_type.to_string();
                 let f = DataField::new(&func.func_name, return_type);
                 let return_field = arrow_schema::Field::from(&f);
-                call_wasm_function(runtime, &func.func_name, input_batch, &return_field)?
+                call_wasm_function(
+                    runtime,
+                    &func.func_name,
+                    input_batch,
+                    &return_field,
+                    &declared_return_type,
+                )?
             }
         };
         Ok(result_batch)
@@ -300,6 +307,7 @@ fn call_wasm_function(
     name: &str,
     input_batch: &RecordBatch,
     return_field: &Field,
+    declared_return_type: &str,
 ) -> Result<RecordBatch> {
     let input_batch = wasm_compatible_record_batch(input_batch).map_err(|err| {
         ErrorCode::UDFRuntimeError(format!(
@@ -327,7 +335,7 @@ fn call_wasm_function(
     let result = runtime.call(&handle, &input_batch).map_err(|err| {
         ErrorCode::UDFRuntimeError(format!("WASM UDF {name:?} execution failed: {err}"))
     })?;
-    restore_wasm_result_batch(result, return_field, name)
+    restore_wasm_result_batch(result, return_field, name, declared_return_type)
 }
 
 fn wasm_compatible_field(field: &Field) -> Result<Field> {
@@ -426,6 +434,7 @@ fn restore_wasm_result_batch(
     batch: RecordBatch,
     return_field: &Field,
     name: &str,
+    declared_return_type: &str,
 ) -> Result<RecordBatch> {
     if batch.num_columns() == 0 {
         return Ok(batch);
@@ -448,26 +457,16 @@ fn restore_wasm_result_batch(
             ..Default::default()
         },
     )
-    .map_err(|_| {
+    .map_err(|err| {
         ErrorCode::UDFRuntimeError(format!(
             "WASM UDF {name:?} execution failed: return value cannot be converted to declared type {}; the value is invalid or out of range",
-            wasm_declared_type_name(return_field.data_type())
+            declared_return_type
         ))
+        .add_detail_back(format!("Arrow cast error: {err}"))
     })?;
 
     let schema = arrow_schema::Schema::new(fields).with_metadata(schema.metadata().clone());
     RecordBatch::try_new(Arc::new(schema), columns).map_err(Into::into)
-}
-
-fn wasm_declared_type_name(data_type: &ArrowDataType) -> String {
-    match data_type {
-        ArrowDataType::Decimal64(precision, scale)
-        | ArrowDataType::Decimal128(precision, scale)
-        | ArrowDataType::Decimal256(precision, scale) => {
-            format!("DECIMAL({precision}, {scale})")
-        }
-        _ => data_type.to_string(),
-    }
 }
 
 pub struct JsRuntimeBuilder {
@@ -1542,13 +1541,15 @@ mod tests {
             overflowing,
             &Field::new("result", ArrowDataType::Decimal128(28, 28), true),
             "wasm_decimal_overflow",
+            "Decimal(28, 28)",
         )
         .unwrap_err();
         assert_eq!(err.code(), 1810);
-        assert!(err.message().contains("wasm_decimal_overflow"));
-        assert!(err.message().contains("DECIMAL(28, 28)"));
-        assert!(err.message().contains("invalid or out of range"));
-        assert!(!err.message().contains("Decimal128(38, 10)"));
+        assert!(err.display_text().contains("wasm_decimal_overflow"));
+        assert!(err.display_text().contains("Decimal(28, 28)"));
+        assert!(err.display_text().contains("invalid or out of range"));
+        assert!(!err.display_text().contains("Decimal128"));
+        assert!(err.detail().contains("1.5"));
 
         let invalid = RecordBatch::try_new(
             Arc::new(Schema::new(vec![Field::new(
@@ -1563,13 +1564,16 @@ mod tests {
             invalid,
             &Field::new("result", ArrowDataType::Decimal128(10, 2), true),
             "wasm_bad_decimal",
+            "Decimal(10, 2)",
         )
         .unwrap_err();
         assert_eq!(err.code(), 1810);
-        assert!(err.message().contains("wasm_bad_decimal"));
-        assert!(err.message().contains("DECIMAL(10, 2)"));
-        assert!(err.message().contains("invalid or out of range"));
-        assert!(!err.message().contains("Decimal128(38, 10)"));
+        assert!(err.display_text().contains("wasm_bad_decimal"));
+        assert!(err.display_text().contains("Decimal(10, 2)"));
+        assert!(err.display_text().contains("invalid or out of range"));
+        assert!(!err.display_text().contains("Decimal128"));
+        assert!(err.detail().contains("not-a-decimal"));
+        assert!(err.detail().contains("Decimal128(38, 10)"));
 
         let valid = RecordBatch::try_new(
             Arc::new(Schema::new(vec![Field::new(
@@ -1588,6 +1592,7 @@ mod tests {
             valid,
             &Field::new("result", ArrowDataType::Decimal128(10, 2), true),
             "wasm_decimal_round",
+            "Decimal(10, 2)",
         )
         .unwrap();
         let values = restored.column(0).as_primitive::<Decimal128Type>();
@@ -1619,8 +1624,13 @@ mod tests {
                 .with_metadata([(EXTENSION_KEY.to_string(), extension.to_string())].into());
 
             let restored =
-                restore_wasm_result_batch(wasm_result, &return_field, "wasm_extension")
-                    .unwrap();
+                restore_wasm_result_batch(
+                    wasm_result,
+                    &return_field,
+                    "wasm_extension",
+                    extension,
+                )
+                .unwrap();
             assert_eq!(restored.schema().field(0).name(), "result");
             assert_eq!(restored.schema().field(0).metadata()[EXTENSION_KEY], extension);
             assert_eq!(restored.column(0).data_type(), &ArrowDataType::LargeBinary);
@@ -1665,8 +1675,13 @@ mod tests {
                 vec![wasm_batch.column(index).clone()],
             )
             .unwrap();
-            let restored =
-                restore_wasm_result_batch(wasm_result, return_field, "wasm_decimal").unwrap();
+            let restored = restore_wasm_result_batch(
+                wasm_result,
+                return_field,
+                "wasm_decimal",
+                "Decimal",
+            )
+            .unwrap();
             assert_eq!(
                 restored.schema().field(0).data_type(),
                 return_field.data_type()
@@ -1774,12 +1789,20 @@ mod tests {
             ),
         ];
         for (handler, data_type, array) in scalar_cases {
+            let declared_return_type = data_type.to_string();
             let field = Field::new("value", data_type, true);
             let input = RecordBatch::try_new(Arc::new(Schema::new(vec![field.clone()])), vec![
                 array.clone(),
             ])
             .unwrap();
-            let output = call_wasm_function(&runtime, handler, &input, &field).unwrap();
+            let output = call_wasm_function(
+                &runtime,
+                handler,
+                &input,
+                &field,
+                &declared_return_type,
+            )
+            .unwrap();
             assert_eq!(output.column(0).to_data(), array.to_data(), "{handler}");
         }
 
@@ -1794,6 +1817,7 @@ mod tests {
             "wasm_identity_string",
             &string_input,
             &Field::new("result", ArrowDataType::Utf8View, true),
+            "String",
         )
         .unwrap();
         let strings = string_output.column(0).as_string_view();
@@ -1828,6 +1852,7 @@ mod tests {
                 "wasm_identity_decimal",
                 &input,
                 &field.clone().with_name("result"),
+                "Decimal",
             )
             .unwrap();
             assert_eq!(output.schema().field(0).data_type(), field.data_type());
@@ -1841,6 +1866,7 @@ mod tests {
             "wasm_identity_decimal",
             &wide_input,
             &wide_field.clone().with_name("result"),
+            "Decimal(76, 30)",
         )
         .unwrap_err();
         assert!(err.message().contains("Decimal256(76, 30)"));
@@ -1853,6 +1879,7 @@ mod tests {
             "wasm_identity_int32",
             &int_input,
             &Field::new("result", ArrowDataType::Decimal256(76, 30), true),
+            "Decimal(76, 30)",
         )
         .unwrap_err();
         assert!(err.message().contains("Decimal256(76, 30)"));
@@ -1877,6 +1904,7 @@ mod tests {
             "wasm_array_sum_int32",
             &list_input,
             &Field::new("result", ArrowDataType::Int32, true),
+            "Int32",
         )
         .unwrap();
         let sums = list_output
