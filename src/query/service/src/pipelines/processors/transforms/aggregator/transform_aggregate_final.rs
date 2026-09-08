@@ -119,7 +119,9 @@ impl TransformFinalAggregate {
             ctx.clone(),
             SPILL_BUCKET_NUM,
             params.spill_schema(),
-            LocalPartitionStream::new(0, params.max_block_bytes, SPILL_BUCKET_NUM),
+            // Final processors own separate spill buffers, unlike partial aggregation,
+            // so halve the threshold to reduce per-processor memory usage.
+            LocalPartitionStream::new(0, params.max_block_bytes / 2, SPILL_BUCKET_NUM),
         )?;
 
         Ok(Box::new(TransformFinalAggregate {
