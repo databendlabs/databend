@@ -196,31 +196,24 @@ SELECT
 ----
 1 1
 
-statement ok
-CREATE OR REPLACE FUNCTION wasm_identity_decimal29 (DECIMAL(29, 0)) RETURNS DECIMAL(29, 0) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+statement error rust_decimal.*precision up to 28.*scale between 0 and 28
+CREATE OR REPLACE FUNCTION wasm_identity_decimal29 (DECIMAL(29, 0)) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
-query error rust_decimal.*precision up to 28.*scale between 0 and 28
-SELECT wasm_identity_decimal29(1::DECIMAL(29, 0))
+statement error rust_decimal.*precision up to 28.*scale between 0 and 28
+CREATE OR REPLACE FUNCTION wasm_identity_decimal76 (INT) RETURNS DECIMAL(76, 30) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
-statement ok
-CREATE OR REPLACE FUNCTION wasm_identity_decimal76 (DECIMAL(76, 30)) RETURNS DECIMAL(76, 30) LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+# Unsupported decimals are rejected recursively inside container types.
 
-query error rust_decimal.*precision up to 28.*scale between 0 and 28
-SELECT wasm_identity_decimal76('1234567890123456789012345678901234567890.123456789012345678901234567890'::DECIMAL(76, 30))
+statement error rust_decimal.*precision up to 28.*scale between 0 and 28
+CREATE OR REPLACE FUNCTION wasm_identity_decimal_array (ARRAY(DECIMAL(29, 0))) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
 # Interval and TimestampTz use Decimal128 as an internal Arrow representation, but they are not decimals.
 
-statement ok
-CREATE OR REPLACE FUNCTION wasm_identity_interval (INTERVAL) RETURNS INTERVAL LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+statement error WASM UDF type Interval is not supported
+CREATE OR REPLACE FUNCTION wasm_identity_interval (INTERVAL) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
-query error WASM UDF type Interval is not supported
-SELECT wasm_identity_interval(INTERVAL '1 day')
-
-statement ok
-CREATE OR REPLACE FUNCTION wasm_identity_timestamp_tz (TIMESTAMP_TZ) RETURNS TIMESTAMP_TZ LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
-
-query error WASM UDF type TimestampTz is not supported
-SELECT wasm_identity_timestamp_tz(TIMESTAMP_TZ '2026-09-08 10:11:12 +0800')
+statement error WASM UDF type TimestampTz is not supported
+CREATE OR REPLACE FUNCTION wasm_identity_timestamp_tz (INT) RETURNS TIMESTAMP_TZ LANGUAGE wasm HANDLER = 'wasm_identity_decimal' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 
 # Databend LargeList is converted to the WASM ABI's List recursively.
 

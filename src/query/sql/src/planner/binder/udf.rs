@@ -61,6 +61,53 @@ fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
     tys.iter().map(table_type_to_data_type).collect()
 }
 
+// arrow-udf represents decimals with rust_decimal, whose ABI cannot represent
+// Databend's full Decimal128/256 range. Keep this conservative limit aligned
+// with script_udf_support's execution-time compatibility check.
+const WASM_DECIMAL_MAX_PRECISION: u8 = 28;
+const WASM_DECIMAL_MAX_SCALE: u8 = 28;
+
+fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
+    match data_type {
+        TableDataType::Decimal(decimal) => {
+            let size = decimal.size();
+            if size.precision() > WASM_DECIMAL_MAX_PRECISION
+                || size.scale() > WASM_DECIMAL_MAX_SCALE
+            {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to 28 and scale between 0 and 28"
+                )));
+            }
+        }
+        TableDataType::Interval => {
+            return Err(ErrorCode::InvalidArgument(
+                "WASM UDF type Interval is not supported",
+            ));
+        }
+        TableDataType::TimestampTz => {
+            return Err(ErrorCode::InvalidArgument(
+                "WASM UDF type TimestampTz is not supported",
+            ));
+        }
+        TableDataType::Nullable(inner)
+        | TableDataType::Array(inner)
+        | TableDataType::Map(inner) => validate_wasm_udf_type(inner)?,
+        TableDataType::Tuple { fields_type, .. } => {
+            fields_type.iter().try_for_each(validate_wasm_udf_type)?;
+        }
+        TableDataType::AggregateState {
+            argument_types,
+            state_type,
+            ..
+        } => {
+            argument_types.iter().try_for_each(validate_wasm_udf_type)?;
+            validate_wasm_udf_type(state_type)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 impl Binder {
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
@@ -457,6 +504,11 @@ fn create_udf_definition_script(
 
     let return_type = resolve_type_name_udf(return_type)?;
 
+    if language == UDFLanguage::WebAssembly {
+        arg_types.iter().try_for_each(validate_wasm_udf_type)?;
+        validate_wasm_udf_type(&return_type)?;
+    }
+
     let mut runtime_version = runtime_version.to_string();
     if runtime_version.is_empty() && language == UDFLanguage::Python {
         runtime_version = "3.12.2".to_string();
@@ -506,5 +558,35 @@ fn create_udf_definition_script(
             runtime_version,
             immutable,
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::decimal::DecimalDataType;
+    use databend_common_expression::types::decimal::DecimalSize;
+
+    use super::*;
+
+    #[test]
+    fn test_validate_wasm_udf_decimal_types() {
+        let decimal64 =
+            TableDataType::Decimal(DecimalDataType::Decimal64(DecimalSize::new(18, 2).unwrap()));
+        assert!(validate_wasm_udf_type(&decimal64).is_ok());
+
+        let decimal128 = TableDataType::Decimal(DecimalDataType::Decimal128(
+            DecimalSize::new(28, 28).unwrap(),
+        ));
+        assert!(validate_wasm_udf_type(&decimal128).is_ok());
+
+        let wide_decimal = TableDataType::Decimal(DecimalDataType::Decimal256(
+            DecimalSize::new(76, 30).unwrap(),
+        ));
+        assert!(validate_wasm_udf_type(&wide_decimal).is_err());
+
+        let nested_wide_decimal = TableDataType::Array(Box::new(wide_decimal));
+        assert!(validate_wasm_udf_type(&nested_wide_decimal).is_err());
+        assert!(validate_wasm_udf_type(&TableDataType::Interval).is_err());
+        assert!(validate_wasm_udf_type(&TableDataType::TimestampTz).is_err());
     }
 }
