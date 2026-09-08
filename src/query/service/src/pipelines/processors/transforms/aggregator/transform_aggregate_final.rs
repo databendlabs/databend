@@ -211,6 +211,11 @@ impl TransformFinalAggregate {
         let bytes = payload.data_block.memory_size();
         self.statistics.record_block(rows, bytes);
 
+        self.merge_serialized(payload)?;
+        self.check_spill(need_check_spill)
+    }
+
+    fn merge_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
         let partitioned_payload = payload.convert_to_partitioned_payload(
             self.params.group_data_types.clone(),
             self.params.aggregate_functions.clone(),
@@ -223,7 +228,7 @@ impl TransformFinalAggregate {
             ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
         }
 
-        self.check_spill(need_check_spill)
+        Ok(())
     }
 
     fn handle_aggregate_payload(
@@ -243,7 +248,8 @@ impl TransformFinalAggregate {
     }
 
     fn check_spill(&mut self, need_check_spill: bool) -> Result<()> {
-        // If already trigger spilled for this task, we continue to spill the remaining part
+        // Once a task spills, all remaining input must follow it so a group cannot
+        // be finalized separately from its already spilled states.
         if self.spilled_occurred || (need_check_spill && self.settings.check_spill()) {
             self.spill_out()?;
         }
@@ -324,6 +330,25 @@ impl TransformFinalAggregate {
         tx: Sender<FinalAggregateTask>,
     ) -> Result<()> {
         if self.spilled_occurred {
+            self.spill_out()?;
+            // If no partition reached the stream threshold, merge the buffered
+            // states locally instead of writing another spill level.
+            if let Some(pending_blocks) = self.spiller.take_pending_if_unspilled() {
+                self.spilled_occurred = false;
+                for (bucket, data_block) in pending_blocks {
+                    check_interrupt()?;
+                    // These states were already counted as input. Do not check
+                    // spill again under the same sustained memory pressure.
+                    self.merge_serialized(SerializedPayload {
+                        bucket: bucket as isize,
+                        data_block,
+                        max_partition_count: SPILL_BUCKET_NUM,
+                    })?;
+                }
+            }
+        }
+
+        if self.spilled_occurred {
             let (output_rows, hash_index_resizes) = match &self.hashtable {
                 HashTable::AggregateHashTable(ht) => {
                     (ht.payload.len(), ht.hash_index_resize_count())
@@ -399,8 +424,6 @@ impl TransformFinalAggregate {
     }
 
     fn spill_finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
-        self.spill_out()?;
-
         let spilled_payload = self.spiller.spill_finish()?;
         let mut chunks = (0..SPILL_BUCKET_NUM).map(|_| vec![]).collect::<Vec<_>>();
         for payload in spilled_payload.into_iter() {
