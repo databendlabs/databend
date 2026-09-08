@@ -34,6 +34,8 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use chrono::Utc;
+use chrono_tz::Tz;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
@@ -156,8 +158,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
 use log::warn;
