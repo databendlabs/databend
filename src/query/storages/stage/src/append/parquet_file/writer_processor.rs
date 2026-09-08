@@ -55,8 +55,10 @@ struct ParquetEncoder {
 }
 
 const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
-// this is number of rows, not size
+// Maximum number of rows in a Parquet row group.
 const MAX_ROW_GROUP_SIZE: usize = 1024 * 1024;
+// Maximum estimated encoded size of a Parquet row group.
+const MAX_ROW_GROUP_BYTES: usize = 128 * 1024 * 1024;
 
 /// Return an Arrow schema with canonical names for Parquet map entries.
 ///
@@ -198,6 +200,7 @@ fn create_writer(
         .set_compression(compression)
         .set_created_by(create_by)
         .set_max_row_group_row_count(Some(MAX_ROW_GROUP_SIZE))
+        .set_max_row_group_bytes(Some(MAX_ROW_GROUP_BYTES))
         .set_statistics_enabled(EnabledStatistics::Chunk)
         // RLE_DICTIONARY was added in Parquet 2.0 even though arrow-rs may use it with
         // WriterVersion::PARQUET_1_0. Disable dictionaries to keep value encodings at 1.0.

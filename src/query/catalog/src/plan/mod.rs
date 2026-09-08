@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index;
 mod datasource;
 mod internal_column;
 mod partition;
@@ -22,7 +21,6 @@ mod pruning_statistics;
 mod pushdown;
 mod stream_column;
 
-pub use agg_index::*;
 pub use datasource::*;
 pub use internal_column::*;
 pub use partition::*;

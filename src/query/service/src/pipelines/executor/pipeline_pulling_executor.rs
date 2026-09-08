@@ -18,6 +18,8 @@ use std::sync::atomic::Ordering;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
@@ -99,15 +101,24 @@ pub struct PipelinePullingExecutor {
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut Pipeline, tx: Sender<DataBlock>) -> Result<()> {
+    fn wrap_pipeline(
+        pipeline: &mut Pipeline,
+        tx: Sender<DataBlock>,
+        progress: Option<Arc<Progress>>,
+    ) -> Result<()> {
         if !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));
         }
 
-        pipeline
-            .add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
+        pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(PullingSink::create(
+                tx.clone(),
+                progress.clone(),
+                input,
+            )))
+        })?;
 
         pipeline.set_on_finished(basic_callback(move |_info: &ExecutionInfo| {
             drop(tx);
@@ -126,7 +137,7 @@ impl PipelinePullingExecutor {
 
         let (sender, receiver) = async_channel::bounded(std::cmp::max(1, pipeline.output_len()));
 
-        Self::wrap_pipeline(&mut pipeline, sender)?;
+        Self::wrap_pipeline(&mut pipeline, sender, None)?;
         let executor = PipelineExecutor::create(pipeline, settings)?;
 
         Ok(PipelinePullingExecutor {
@@ -141,6 +152,17 @@ impl PipelinePullingExecutor {
         build_res: PipelineBuildResult,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
+        Self::from_pipelines_with_progress(build_res, settings, None)
+    }
+
+    /// Same as [`Self::from_pipelines`], but records the result progress as
+    /// blocks are produced. Used for top-level queries whose `result_rows` is
+    /// reported in the query log.
+    pub fn from_pipelines_with_progress(
+        build_res: PipelineBuildResult,
+        settings: ExecutorSettings,
+        result_progress: Option<Arc<Progress>>,
+    ) -> Result<PipelinePullingExecutor> {
         let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
 
@@ -148,7 +170,7 @@ impl PipelinePullingExecutor {
         let (sender, receiver) =
             async_channel::bounded(std::cmp::max(1, main_pipeline.output_len()));
 
-        Self::wrap_pipeline(&mut main_pipeline, sender)?;
+        Self::wrap_pipeline(&mut main_pipeline, sender, result_progress)?;
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(main_pipeline);
@@ -253,11 +275,25 @@ impl Drop for PipelinePullingExecutor {
 
 struct PullingSink {
     sender: Option<Sender<DataBlock>>,
+    /// Counts rows when they are produced into the channel, not when the
+    /// consumer pulls them out. The executor considers itself finished once the
+    /// last blocks are pushed into the bounded channel, and the query-finish log
+    /// is emitted from that callback. Counting on the consumer side would leave
+    /// the still-buffered blocks (up to the channel capacity, i.e. the pipeline
+    /// parallelism) permanently unaccounted for.
+    progress: Option<Arc<Progress>>,
 }
 
 impl PullingSink {
-    pub fn create(tx: Sender<DataBlock>, input: Arc<InputPort>) -> Box<dyn Processor> {
-        Sinker::create(input, PullingSink { sender: Some(tx) })
+    pub fn create(
+        tx: Sender<DataBlock>,
+        progress: Option<Arc<Progress>>,
+        input: Arc<InputPort>,
+    ) -> Box<dyn Processor> {
+        Sinker::create(input, PullingSink {
+            sender: Some(tx),
+            progress,
+        })
     }
 }
 
@@ -270,6 +306,13 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+        if let Some(progress) = &self.progress {
+            progress.incr(&ProgressValues {
+                rows: data_block.num_rows(),
+                bytes: data_block.memory_size(),
+            });
+        }
+
         if let Some(sender) = &self.sender {
             if let Err(cause) = sender.send_blocking(data_block) {
                 return Err(ErrorCode::Internal(format!(

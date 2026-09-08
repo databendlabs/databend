@@ -425,6 +425,59 @@ impl StorageParams {
         }
     }
 
+    /// Return a clone that retains the storage location but removes credentials
+    /// and user-provided encryption key material.
+    ///
+    /// This is suitable for persisting a provider table location in data-share
+    /// metadata. A share connection supplies the credentials at query time.
+    pub fn without_credentials(&self) -> Self {
+        let mut params = self.clone();
+        match &mut params {
+            StorageParams::Azblob(cfg) => {
+                cfg.account_name.clear();
+                cfg.account_key.clear();
+            }
+            StorageParams::Ftp(cfg) => {
+                cfg.username.clear();
+                cfg.password.clear();
+            }
+            StorageParams::Gcs(cfg) => cfg.credential.clear(),
+            StorageParams::Obs(cfg) => {
+                cfg.access_key_id.clear();
+                cfg.secret_access_key.clear();
+            }
+            StorageParams::Oss(cfg) => {
+                cfg.access_key_id.clear();
+                cfg.access_key_secret.clear();
+                cfg.role_arn.clear();
+                cfg.server_side_encryption.clear();
+                cfg.server_side_encryption_key_id.clear();
+            }
+            StorageParams::S3(cfg) => {
+                cfg.access_key_id.clear();
+                cfg.secret_access_key.clear();
+                cfg.security_token.clear();
+                cfg.master_key.clear();
+                cfg.role_arn.clear();
+                cfg.external_id.clear();
+                cfg.disable_credential_loader = false;
+                cfg.allow_credential_chain = None;
+            }
+            StorageParams::Webhdfs(cfg) => cfg.delegation.clear(),
+            StorageParams::Cos(cfg) => {
+                cfg.secret_id.clear();
+                cfg.secret_key.clear();
+            }
+            StorageParams::Huggingface(cfg) => cfg.token.clear(),
+            StorageParams::Fs(_)
+            | StorageParams::Hdfs(_)
+            | StorageParams::Http(_)
+            | StorageParams::Ipfs(_)
+            | StorageParams::Memory => {}
+        }
+        params
+    }
+
     /// Return true if this storage params has any user-provided encryption key material.
     pub fn has_encryption_key(&self) -> bool {
         match self {
@@ -1061,4 +1114,46 @@ pub struct StorageNetworkParams {
     pub connect_timeout: u64,
     pub pool_max_idle_per_host: usize,
     pub max_concurrent_io_requests: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn without_credentials_preserves_s3_location() {
+        let params = StorageParams::S3(StorageS3Config {
+            endpoint_url: "http://provider.example:9000".to_string(),
+            region: "provider-region".to_string(),
+            bucket: "provider-bucket".to_string(),
+            root: "provider/root".to_string(),
+            enable_virtual_host_style: true,
+            access_key_id: "provider-key".to_string(),
+            secret_access_key: "provider-secret".to_string(),
+            security_token: "provider-token".to_string(),
+            master_key: "provider-master-key".to_string(),
+            role_arn: "provider-role".to_string(),
+            external_id: "provider-external-id".to_string(),
+            disable_credential_loader: true,
+            allow_credential_chain: Some(true),
+            ..Default::default()
+        });
+
+        let StorageParams::S3(location) = params.without_credentials() else {
+            unreachable!("S3 params must remain S3");
+        };
+        assert_eq!("http://provider.example:9000", location.endpoint_url);
+        assert_eq!("provider-region", location.region);
+        assert_eq!("provider-bucket", location.bucket);
+        assert_eq!("provider/root", location.root);
+        assert!(location.enable_virtual_host_style);
+        assert!(location.access_key_id.is_empty());
+        assert!(location.secret_access_key.is_empty());
+        assert!(location.security_token.is_empty());
+        assert!(location.master_key.is_empty());
+        assert!(location.role_arn.is_empty());
+        assert!(location.external_id.is_empty());
+        assert!(!location.disable_credential_loader);
+        assert_eq!(None, location.allow_credential_chain);
+    }
 }

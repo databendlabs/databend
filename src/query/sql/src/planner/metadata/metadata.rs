@@ -75,7 +75,6 @@ pub struct Metadata {
     non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
-    agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
     /// Valid materialized-view rewrite candidates grouped by source table ID.
     materialized_view_candidates: HashMap<u64, Vec<MaterializedViewCandidate>>,
     max_column_position: usize, // for CSV
@@ -338,31 +337,6 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indices(&mut self, table: String, agg_indices: Vec<(u64, String, SExpr)>) {
-        match self.agg_indices.entry(table) {
-            Entry::Occupied(occupied) => occupied.into_mut().extend(agg_indices),
-            Entry::Vacant(vacant) => {
-                vacant.insert(agg_indices);
-            }
-        }
-    }
-
-    pub fn agg_indices(&self) -> &HashMap<String, Vec<(u64, String, SExpr)>> {
-        &self.agg_indices
-    }
-
-    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>) {
-        self.agg_indices = agg_indices
-    }
-
-    pub fn get_agg_indices(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
-        self.agg_indices.get(table).map(|v| v.as_slice())
-    }
-
-    pub fn has_agg_indices(&self) -> bool {
-        !self.agg_indices.is_empty()
-    }
-
     pub fn add_materialized_view_candidates(
         &mut self,
         source_table_id: u64,
@@ -389,6 +363,21 @@ impl Metadata {
             .map(Vec::as_slice)
     }
 
+    /// Replace candidate `read_plan`s after statistics have been collected.
+    /// `read_plans` must stay in the same order as the stored candidates.
+    pub fn replace_materialized_view_candidate_read_plans(
+        &mut self,
+        source_table_id: u64,
+        read_plans: Vec<SExpr>,
+    ) {
+        let Some(candidates) = self.materialized_view_candidates.get_mut(&source_table_id) else {
+            return;
+        };
+        for (candidate, read_plan) in candidates.iter_mut().zip(read_plans) {
+            candidate.read_plan = read_plan;
+        }
+    }
+
     pub fn has_materialized_view_candidates(&self) -> bool {
         !self.materialized_view_candidates.is_empty()
     }
@@ -411,7 +400,6 @@ impl Metadata {
         branch: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
-        source_of_index: bool,
         source_of_stage: bool,
         cte_suffix_name: Option<String>,
     ) -> IndexType {
@@ -429,7 +417,6 @@ impl Metadata {
             branch,
             alias_name: table_alias_name,
             source_of_view,
-            source_of_index,
             source_of_stage,
             stream_lineage_source: None,
         };
@@ -662,9 +649,6 @@ pub struct TableEntry {
     index: IndexType,
     source_of_view: bool,
 
-    /// If this table is bound to an index.
-    source_of_index: bool,
-
     source_of_stage: bool,
     /// Source relation for a transparent stream scan. Stream data columns are
     /// attributed to this relation; stream metadata columns are excluded.
@@ -743,11 +727,6 @@ impl TableEntry {
     /// Return true if it is source from stage.
     pub fn is_source_of_stage(&self) -> bool {
         self.source_of_stage
-    }
-
-    /// Return true if it is bound for an index.
-    pub fn is_source_of_index(&self) -> bool {
-        self.source_of_index
     }
 
     pub(crate) fn stream_lineage_source(&self) -> Option<&LineageSourceRelation> {

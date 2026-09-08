@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -453,7 +454,8 @@ impl PhysicalPlanBuilder {
                     .as_raw_expr()
                     .type_check(&metadata)?
                     .project_column_ref(|col| Ok(col.column_name.clone()))?;
-                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (folded, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote = folded.as_remote_expr();
                 serialized.push(serde_json::to_string(&remote).map_err(|e| {
                     ErrorCode::Internal(format!(
@@ -510,13 +512,6 @@ impl PhysicalPlanBuilder {
         source.scan_id = scan.scan_id;
         source.block_meta_options.reserve_block_index =
             need_reserve_block_info(self.ctx.clone(), scan.table_index).0;
-        if let Some(agg_index) = &scan.agg_index {
-            let source_schema = source.schema();
-            let push_down = source.push_downs.as_mut().unwrap();
-            let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
-            let agg_index = Self::build_agg_index(agg_index, &output_fields)?;
-            push_down.agg_index = Some(agg_index);
-        }
         let internal_column = if project_internal_columns.is_empty() {
             None
         } else {
@@ -567,8 +562,11 @@ impl PhysicalPlanBuilder {
                                 input_schema.index_of(&col.index.to_string())
                             })?;
                         let expr = cast_expr_to_non_null_boolean(expr)?;
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let (expr, _) = ConstantFolder::fold(
+                            Cow::Owned(expr),
+                            &self.func_ctx,
+                            &BUILTIN_FUNCTIONS,
+                        );
                         Ok(expr.as_remote_expr())
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -781,7 +779,8 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
-                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (filter, _) =
+                    ConstantFolder::fold(Cow::Owned(filter), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -855,7 +854,6 @@ impl PhysicalPlanBuilder {
             order_by,
             virtual_column,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
-            agg_index: None,
             change_type: scan.change_type.clone(),
             inverted_index: scan.inverted_index.clone(),
             vector_index: scan.vector_index.clone(),
@@ -891,7 +889,8 @@ impl PhysicalPlanBuilder {
             .unwrap();
 
         let expr = cast_expr_to_non_null_boolean(expr)?;
-        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let expr = expr.into_owned();
 
         let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
         let inverted_filter =
@@ -957,68 +956,6 @@ impl PhysicalPlanBuilder {
             virtual_column_fields,
         };
         Ok(Some(virtual_column_info))
-    }
-
-    pub fn build_agg_index(
-        agg: &databend_common_sql::plans::AggIndexInfo,
-        source_fields: &[DataField],
-    ) -> Result<databend_common_catalog::plan::AggIndexInfo> {
-        // Build projection
-        let used_columns = agg.used_columns();
-        let mut col_indices = Vec::with_capacity(used_columns.len());
-        for index in used_columns.iter() {
-            col_indices.push(agg.schema.index_of(&index.to_string())?);
-        }
-        let projection = Projection::Columns(col_indices);
-        let output_schema = projection.project_schema(&agg.schema);
-
-        let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
-            let return_type =
-                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&lhs, &rhs]);
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-                return_type: Box::new(return_type),
-            })
-        });
-        let filter = predicate
-            .map(|pred| -> Result<_> {
-                Ok(cast_expr_to_non_null_boolean(
-                    pred.as_expr()?
-                        .project_column_ref(|col| output_schema.index_of(&col.index.to_string()))?,
-                )?
-                .as_remote_expr())
-            })
-            .transpose()?;
-        let selection = agg
-            .selection
-            .iter()
-            .map(|sel| {
-                let offset = source_fields
-                    .iter()
-                    .position(|f| sel.index.to_string() == f.name().as_str());
-                Ok((
-                    sel.scalar
-                        .as_expr()?
-                        .project_column_ref(|col| output_schema.index_of(&col.index.to_string()))?
-                        .as_remote_expr(),
-                    offset,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(databend_common_catalog::plan::AggIndexInfo {
-            index_id: agg.index_id,
-            filter,
-            selection,
-            schema: agg.schema.clone(),
-            actual_table_field_len: source_fields.len(),
-            is_agg: agg.is_agg,
-            projection,
-            num_agg_funcs: agg.num_agg_funcs,
-        })
     }
 
     pub fn build_projection<'a>(

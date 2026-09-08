@@ -33,7 +33,6 @@ use databend_common_expression::types::F32;
 use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
 
-use super::AggIndexInfo;
 use crate::plan::InternalColumn;
 use crate::plan::Projection;
 
@@ -186,8 +185,6 @@ pub struct PushDownInfo {
     pub virtual_column: Option<VirtualColumnInfo>,
     /// If lazy materialization is enabled in this query.
     pub lazy_materialization: bool,
-    /// Aggregating index information.
-    pub agg_index: Option<AggIndexInfo>,
     /// Identifies the type of data change we are looking for
     pub change_type: Option<ChangeType>,
     /// Optional inverted index

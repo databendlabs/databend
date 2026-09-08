@@ -34,11 +34,8 @@ use dyn_clone::DynClone;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::physical_plans::EvalScalar;
 use crate::physical_plans::ExchangeSink;
-use crate::physical_plans::Filter;
 use crate::physical_plans::MutationSource;
-use crate::physical_plans::TableScan;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::SimplePhysicalFormat;
@@ -71,27 +68,6 @@ pub trait DeriveHandle: Send + Sync + 'static {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>>;
-}
-
-/// The scan a runtime scan filter (TopN boundary / limit early-stop) may
-/// attach to: only `Filter`/`EvalScalar` may sit in between; anything else
-/// (Sort, Join, Exchange, ...) stops the traversal. Guarded by
-/// `runtime_scan_data_source_only_crosses_row_preserving_wrappers`.
-#[recursive::recursive]
-pub fn runtime_scan_data_source(plan: &PhysicalPlan) -> Option<&DataSourcePlan> {
-    if let Some(scan) = plan.as_any().downcast_ref::<TableScan>() {
-        return Some(&scan.source);
-    }
-
-    if let Some(filter) = plan.as_any().downcast_ref::<Filter>() {
-        return runtime_scan_data_source(&filter.input);
-    }
-
-    if let Some(eval_scalar) = plan.as_any().downcast_ref::<EvalScalar>() {
-        return runtime_scan_data_source(&eval_scalar.input);
-    }
-
-    None
 }
 
 #[typetag::serde]

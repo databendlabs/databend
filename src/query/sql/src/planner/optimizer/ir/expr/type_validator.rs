@@ -16,7 +16,6 @@ use std::borrow::Cow;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
@@ -58,7 +57,7 @@ impl SExprVisitor for SExprTypeValidator<'_> {
             self.validate_scan_scalars(scan)?;
         } else {
             for scalar in s_expr.plan().scalar_expr_iter() {
-                self.validate_scalar(scalar, SymbolTypeSource::Metadata(self.metadata))?;
+                self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata))?;
             }
         }
 
@@ -160,7 +159,7 @@ impl SExprTypeValidator<'_> {
     fn validate_window_function(&self, function: &WindowFuncType) -> Result<()> {
         if let WindowFuncType::Aggregate(aggregate) = function {
             ScalarTypeValidator {
-                symbol_types: SymbolTypeSource::Metadata(self.metadata),
+                symbol_types: SymbolTypeSource::create(self.metadata),
             }
             .validate_aggregate_function(aggregate)?;
         }
@@ -168,7 +167,7 @@ impl SExprTypeValidator<'_> {
     }
 
     fn validate_scan_scalars(&self, scan: &crate::plans::Scan) -> Result<()> {
-        let metadata_symbols = SymbolTypeSource::Metadata(self.metadata);
+        let metadata_symbols = SymbolTypeSource::create(self.metadata);
         for scalar in scan
             .push_down_predicates
             .iter()
@@ -183,17 +182,6 @@ impl SExprTypeValidator<'_> {
             self.validate_scalar(scalar, metadata_symbols)?;
         }
 
-        if let Some(agg_index) = &scan.agg_index {
-            let index_symbols = SymbolTypeSource::Schema(&agg_index.schema);
-            for scalar in agg_index
-                .selection
-                .iter()
-                .map(|item| &item.scalar)
-                .chain(&agg_index.predicates)
-            {
-                self.validate_scalar(scalar, index_symbols)?;
-            }
-        }
         Ok(())
     }
 
@@ -203,47 +191,26 @@ impl SExprTypeValidator<'_> {
 }
 
 #[derive(Clone, Copy)]
-enum SymbolTypeSource<'a> {
-    Metadata(&'a MetadataRef),
-    Schema(&'a TableSchema),
+struct SymbolTypeSource<'a> {
+    metadata: &'a MetadataRef,
 }
 
-impl SymbolTypeSource<'_> {
+impl<'a> SymbolTypeSource<'a> {
+    fn create(metadata: &'a MetadataRef) -> SymbolTypeSource<'a> {
+        Self { metadata }
+    }
+
     fn validate(&self, index: Symbol, actual: &DataType) -> Result<()> {
-        let (expected, ignore_nullability) = match self {
-            SymbolTypeSource::Metadata(metadata) => {
-                let metadata = metadata.read();
-                (
-                    metadata
-                        .columns()
-                        .get(index.as_usize())
-                        .map(|column| column.data_type())
-                        .ok_or_else(|| {
-                            ErrorCode::Internal(format!(
-                                "SExpr references unknown metadata symbol {index}"
-                            ))
-                        })?,
-                    true,
-                )
-            }
-            SymbolTypeSource::Schema(schema) => (
-                schema
-                    .fields()
-                    .get(index.as_usize())
-                    .map(|field| DataType::from(field.data_type()))
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "SExpr references unknown local schema symbol {index}"
-                        ))
-                    })?,
-                false,
-            ),
-        };
-        let types_match = if ignore_nullability {
-            expected.remove_nullable() == actual.remove_nullable()
-        } else {
-            expected == *actual
-        };
+        let metadata = self.metadata.read();
+        let expected = metadata
+            .columns()
+            .get(index.as_usize())
+            .map(|column| column.data_type())
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!("SExpr references unknown metadata symbol {index}"))
+            })?;
+
+        let types_match = expected.remove_nullable() == actual.remove_nullable();
         if !types_match {
             return Err(ErrorCode::Internal(format!(
                 "SExpr bound column type mismatch for {index}: source declares {expected:?}, expression declares {actual:?}"

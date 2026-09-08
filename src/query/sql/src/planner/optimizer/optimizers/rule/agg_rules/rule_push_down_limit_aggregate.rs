@@ -28,6 +28,7 @@ use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::TopN;
@@ -59,6 +60,28 @@ impl RulePushDownRankLimitAggregate {
                 match_op!(TopN -> EvalScalar -> Aggregate -> *),
             ],
             max_limit,
+        }
+    }
+
+    fn push_down_scan_order(input: &SExpr, order_by: &[SortItem]) -> SExpr {
+        match input.plan() {
+            RelOperator::Scan(scan) => {
+                let mut scan: Scan = scan.clone();
+                if scan
+                    .order_by
+                    .as_ref()
+                    .is_some_and(|current| current != order_by)
+                {
+                    return input.clone();
+                }
+                scan.order_by = Some(order_by.to_vec());
+                input.replace_plan(RelOperator::Scan(scan))
+            }
+            RelOperator::Filter(_) | RelOperator::EvalScalar(_) => {
+                let child = Self::push_down_scan_order(input.unary_child(), order_by);
+                input.replace_children([Arc::new(child)])
+            }
+            _ => input.clone(),
         }
     }
 
@@ -189,9 +212,17 @@ impl RulePushDownRankLimitAggregate {
         }
         sort_items.extend(not_found_sort_items);
 
-        agg_limit.rank_limit = Some((sort_items, limit));
+        agg_limit.rank_limit = Some((sort_items.clone(), limit));
 
-        let agg = agg_limit_expr.unary_child_arc().ref_build_unary(agg_limit);
+        let aggregate_input = if sort_items.len() == 1 {
+            Arc::new(Self::push_down_scan_order(
+                agg_limit_expr.unary_child(),
+                &sort_items,
+            ))
+        } else {
+            agg_limit_expr.unary_child_arc()
+        };
+        let agg = aggregate_input.ref_build_unary(agg_limit);
         let mut result = if has_eval_scalar {
             let eval_scalar = s_expr.unary_child().replace_children(vec![Arc::new(agg)]);
             s_expr.replace_children(vec![Arc::new(eval_scalar)])

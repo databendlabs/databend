@@ -113,7 +113,6 @@ databend-common-storages-basic = { path = "src/query/storages/basic" }
 databend-common-storages-delta = { path = "src/query/storages/delta" }
 databend-common-storages-factory = { path = "src/query/storages/factory" }
 databend-common-storages-fuse = { path = "src/query/storages/fuse" }
-databend-common-storages-hive = { path = "src/query/storages/hive/hive" }
 databend-common-storages-iceberg = { path = "src/query/storages/iceberg" }
 databend-common-storages-information-schema = { path = "src/query/storages/information_schema" }
 databend-common-storages-orc = { path = "src/query/storages/orc" }
@@ -168,11 +167,11 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260629.2.0"
-databend-meta-test-harness = "260629.2.0"
+databend-meta = "260629.4.0"
+databend-meta-test-harness = "260629.4.0"
 
 # External meta client
-databend-meta-client = "260205.13.2"
+databend-meta-client = "260205.13.3"
 structkey = "0.1.1"
 
 # Crates.io dependencies
@@ -182,18 +181,18 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
 approx = "0.5.1"
-arrow = { version = "58.1.0" }
-arrow-array = { version = "58.1.0" }
-arrow-buffer = { version = "58.1.0" }
-arrow-cast = { version = "58.1.0", features = ["prettyprint"] }
-arrow-csv = { version = "58.1.0" }
-arrow-data = { version = "58.1.0" }
-arrow-flight = { version = "58.1.0", features = ["flight-sql-experimental", "tls-ring"] }
-arrow-ipc = { version = "58.1.0", features = ["lz4", "zstd"] }
-arrow-json = { version = "58.1.0" }
-arrow-ord = { version = "58.1.0" }
-arrow-schema = { version = "58.1.0", features = ["serde"] }
-arrow-select = { version = "58.1.0" }
+arrow = { version = "58.4.0" }
+arrow-array = { version = "58.4.0" }
+arrow-buffer = { version = "58.4.0" }
+arrow-cast = { version = "58.4.0", features = ["prettyprint"] }
+arrow-csv = { version = "58.4.0" }
+arrow-data = { version = "58.4.0" }
+arrow-flight = { version = "58.4.0", features = ["flight-sql-experimental", "tls-ring"] }
+arrow-ipc = { version = "58.4.0", features = ["lz4", "zstd"] }
+arrow-json = { version = "58.4.0" }
+arrow-ord = { version = "58.4.0" }
+arrow-schema = { version = "58.4.0", features = ["serde"] }
+arrow-select = { version = "58.4.0" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
@@ -231,8 +230,8 @@ bytes = "1.5.0"
 bytesize = "2"
 cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
-chrono = { version = "0.4.40", features = ["serde"] }
-chrono-tz = { version = "0.8", features = ["serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = { version = "0.10.4", features = ["serde"] }
 cidr = { version = "0.3.1" }
 clap = { version = "4.4.2", features = ["derive"] }
 codeq = { version = "0.5.2" }
@@ -295,7 +294,6 @@ hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
-hive_metastore = "0.2.0"
 hostname = "0.3.1"
 http = "1"
 humantime = "2.1.0"
@@ -345,6 +343,9 @@ lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
 limits-rs = "0.2.0"
+lindera = { version = "5.0.1", features = ["embed-ipadic"] }
+lindera-analysis = "5.0.1"
+lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
 logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main", features = [
     'json',
     'rolling-file',
@@ -369,9 +370,9 @@ num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
 object_store = "0.12.4"
-object_store_opendal = { version = "0.54.1" }
+object_store_opendal = { version = "0.55.0" }
 once_cell = "1.15.0"
-opendal = { version = "0.54.1", features = [
+opendal = { version = "0.55.0", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -413,7 +414,7 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 prost = { version = "0.14.3" }
 prost-build = { version = "0.14.3" }
 prqlc = "0.11.3"
-raft-log = "0.4.4"
+raft-log = "0.4.6"
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
 rayon = "1.9.0"
@@ -475,11 +476,11 @@ sub-cache = "0.2.1"
 syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = "0.26.0"
-tantivy-common = "0.10.0"
+tantivy = "0.27.0"
+tantivy-common = "0.11.0"
 tantivy-fst = "0.5"
-tantivy-jieba = "0.17.0"
-tantivy-query-grammar = "0.25.0"
+tantivy-jieba = "0.20.0"
+tantivy-query-grammar = "0.26.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 terminal_size = "0.4.2"
@@ -623,13 +624,13 @@ overflow-checks = true
 rpath = true
 
 [patch."https://github.com/datafuse-extras/arrow-rs.git"]
-arrow-array = { version = "=58.1.0" }
-arrow-buffer = { version = "=58.1.0" }
-arrow-cast = { version = "=58.1.0" }
-arrow-data = { version = "=58.1.0" }
-arrow-ipc = { version = "=58.1.0" }
-arrow-schema = { version = "=58.1.0" }
-arrow-select = { version = "=58.1.0" }
+arrow-array = { version = "=58.4.0" }
+arrow-buffer = { version = "=58.4.0" }
+arrow-cast = { version = "=58.4.0" }
+arrow-data = { version = "=58.4.0" }
+arrow-ipc = { version = "=58.4.0" }
+arrow-schema = { version = "=58.4.0" }
+arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
 arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
@@ -639,9 +640,9 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.2.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.2" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.2.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.4.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.3" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.4.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "a16344417d1fec6df4a62d8e77679211e909f86e" }
 lance-arrow = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
@@ -650,17 +651,18 @@ lance-encoding = { git = "https://github.com/datafuse-extras/lance", rev = "85f9
 lance-file = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lance-io = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
 lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401d3246d52a287bca21457dbae0466858ee" }
+lindera-tantivy = { git = "https://github.com/datafuse-extras/lindera-tantivy", rev = "a40ccd7" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
-parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "bbbe79543" }
+parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "68ab55c" }
-tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-query-grammar" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "3cda3c6" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

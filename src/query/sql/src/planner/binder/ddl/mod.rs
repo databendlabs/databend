@@ -29,6 +29,7 @@ mod procedure;
 mod role;
 mod row_access_policy;
 mod sequence;
+mod share;
 mod stage;
 mod stream;
 pub mod table;

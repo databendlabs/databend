@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt::Display;
 use std::hash::DefaultHasher;
 use std::hash::Hasher;
@@ -99,6 +101,68 @@ use crate::filters::Xor8Filter;
 use crate::statistics_to_domain;
 
 const NGRAM_HASH_SEED: u64 = 1575457558;
+const ROLLING_HASH_BASE: u64 = 0x9e3779b185ebca87;
+const ROLLING_HASH_MIX1: u64 = 0xbf58476d1ce4e5b9;
+const ROLLING_HASH_MIX2: u64 = 0x94d049bb133111eb;
+
+#[inline]
+fn wrapping_pow(mut base: u64, mut exponent: usize) -> u64 {
+    let mut result = 1_u64;
+    while exponent > 0 {
+        if exponent & 1 == 1 {
+            result = result.wrapping_mul(base);
+        }
+        base = base.wrapping_mul(base);
+        exponent >>= 1;
+    }
+    result
+}
+
+#[inline(always)]
+fn avalanche_rolling_hash(mut hash: u64) -> u64 {
+    hash ^= hash >> 30;
+    hash = hash.wrapping_mul(ROLLING_HASH_MIX1);
+    hash ^= hash >> 27;
+    hash = hash.wrapping_mul(ROLLING_HASH_MIX2);
+    hash ^ (hash >> 31)
+}
+
+#[inline(always)]
+fn finalize_rolling_hash(hash: u64, gram_size: usize) -> u64 {
+    avalanche_rolling_hash(
+        hash ^ NGRAM_HASH_SEED ^ (gram_size as u64).wrapping_mul(0x9e3779b97f4a7c15),
+    )
+}
+
+/// Default false-positive rate used when an ngram index does not specify one.
+/// This uses four Bloom filter probes per ngram.
+pub const DEFAULT_NGRAM_FALSE_POSITIVE_RATE: f64 = 0.1;
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum NgramHashAlgorithm {
+    #[default]
+    City64V0,
+    RollingV1,
+}
+
+impl NgramHashAlgorithm {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "city64_v0" => Ok(Self::City64V0),
+            "rolling_v1" => Ok(Self::RollingV1),
+            _ => Err(ErrorCode::IndexOptionInvalid(format!(
+                "invalid NGRAM hash algorithm `{value}`, must be one of: city64_v0, rolling_v1"
+            ))),
+        }
+    }
+
+    fn field_suffix(self) -> &'static str {
+        match self {
+            Self::City64V0 => "",
+            Self::RollingV1 => "_rolling_v1",
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BloomIndexType {
@@ -218,11 +282,55 @@ pub enum FilterEvalResult {
     Uncertain,
 }
 
+pub type NgramLikeScalarMap = HashMap<usize, HashMap<Scalar, Vec<u64>>>;
+
 pub struct BloomIndexResult {
     pub bloom_fields: Vec<TableField>,
     pub bloom_scalars: Vec<(usize, Scalar, DataType)>,
     pub ngram_fields: Vec<TableField>,
     pub ngram_scalars: Vec<(usize, Scalar)>,
+}
+
+/// A lowercase Unicode ngram window bounded by `gram_size` characters.
+struct UnicodeNgramWindow {
+    char_widths: VecDeque<u8>,
+    bytes: VecDeque<u8>,
+}
+
+impl UnicodeNgramWindow {
+    fn new() -> Self {
+        Self {
+            char_widths: VecDeque::new(),
+            bytes: VecDeque::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.char_widths.clear();
+        self.bytes.clear();
+    }
+
+    fn push(&mut self, c: char, gram_size: usize) -> Option<&str> {
+        if self.char_widths.len() == gram_size {
+            let width = self.char_widths.pop_front().unwrap();
+            for _ in 0..width {
+                self.bytes.pop_front();
+            }
+        }
+
+        let mut encoded = [0; 4];
+        let encoded = c.encode_utf8(&mut encoded).as_bytes();
+        self.char_widths.push_back(encoded.len() as u8);
+        self.bytes.extend(encoded);
+
+        if self.char_widths.len() < gram_size {
+            return None;
+        }
+
+        let bytes = self.bytes.make_contiguous();
+        // The window contains only complete UTF-8 encodings.
+        Some(unsafe { std::str::from_utf8_unchecked(bytes) })
+    }
 }
 
 impl BloomIndex {
@@ -265,7 +373,7 @@ impl BloomIndex {
         &self,
         expr: Expr<String>,
         eq_scalar_map: &HashMap<Scalar, u64>,
-        like_scalar_map: &HashMap<Scalar, Vec<u64>>,
+        like_scalar_map: &NgramLikeScalarMap,
         ngram_args: &[NgramArgs],
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
@@ -278,8 +386,14 @@ impl BloomIndex {
             column_stats,
             data_schema,
         )?;
-        match ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS)
-            .0
+        match ConstantFolder::fold_with_domain(
+            Cow::Owned(expr),
+            &domains,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        )
+        .0
+        .as_ref()
         {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
@@ -293,7 +407,7 @@ impl BloomIndex {
         &self,
         expr: Expr<String>,
         eq_scalar_map: &HashMap<Scalar, u64>,
-        like_scalar_map: &HashMap<Scalar, Vec<u64>>,
+        like_scalar_map: &NgramLikeScalarMap,
         ngram_args: &[NgramArgs],
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
@@ -452,50 +566,125 @@ impl BloomIndex {
         })
     }
 
-    pub fn calculate_ngram_nullable_column<'a, F, T>(
-        arg: Value<AnyType>,
-        gram_size: usize,
-        fn_call: F,
-    ) -> impl Iterator<Item = Vec<T>> + 'a
-    where
-        F: Fn(&str) -> T + 'a,
-    {
-        (0..arg.len()).filter_map(move |i| {
-            arg.index(i).and_then(|scalar| {
-                scalar.as_string().and_then(|text| {
-                    let text = text.to_lowercase();
-                    if text.is_empty() || gram_size > text.chars().count() {
-                        return None;
-                    }
+    /// Visits all ngrams while keeping row extraction and iteration inside one tight loop.
+    pub fn calculate_ngram_nullable_column<F>(arg: Value<AnyType>, gram_size: usize, mut visit: F)
+    where F: FnMut(&str) {
+        let mut lowercase_ascii = String::new();
+        let mut unicode_window = UnicodeNgramWindow::new();
 
-                    let indices: Vec<_> = text.char_indices().map(|(i, _)| i).collect();
-                    let char_count = indices.len();
+        for row_index in 0..arg.len() {
+            let Some(scalar) = arg.index(row_index) else {
+                continue;
+            };
+            let Some(text) = scalar.as_string() else {
+                continue;
+            };
 
-                    if gram_size > char_count {
-                        return None;
-                    }
+            if text.is_ascii() {
+                let bytes = if text.as_bytes().iter().any(u8::is_ascii_uppercase) {
+                    lowercase_ascii.clear();
+                    lowercase_ascii.extend(text.chars().map(|c| c.to_ascii_lowercase()));
+                    lowercase_ascii.as_bytes()
+                } else {
+                    text.as_bytes()
+                };
 
-                    let times = char_count - gram_size + 1;
-                    let mut words = Vec::with_capacity(times);
-                    for j in 0..times {
-                        let start = indices[j];
-                        let end = if j + gram_size < char_count {
-                            indices[j + gram_size]
-                        } else {
-                            text.len()
-                        };
-                        words.push(fn_call(&text[start..end]));
-                    }
-                    Some(words)
-                })
-            })
-        })
+                for ngram in bytes.windows(gram_size) {
+                    // The source and lowercase buffer contain only ASCII bytes.
+                    visit(unsafe { std::str::from_utf8_unchecked(ngram) });
+                }
+                continue;
+            }
+
+            unicode_window.clear();
+            for c in text.chars().flat_map(char::to_lowercase) {
+                if let Some(ngram) = unicode_window.push(c, gram_size) {
+                    visit(ngram);
+                }
+            }
+        }
     }
 
     pub fn ngram_hash(s: &str) -> u64 {
         let mut hasher = CityHasher64::with_seed(NGRAM_HASH_SEED);
         DFHash::hash(s, &mut hasher);
         hasher.finish()
+    }
+
+    fn calculate_ngram_rolling_column<F>(arg: Value<AnyType>, gram_size: usize, mut visit: F)
+    where F: FnMut(u64) {
+        debug_assert!(gram_size > 0);
+
+        let highest_power = wrapping_pow(ROLLING_HASH_BASE, gram_size - 1);
+        let mut ring = Vec::new();
+
+        for row_index in 0..arg.len() {
+            let Some(scalar) = arg.index(row_index) else {
+                continue;
+            };
+            let Some(text) = scalar.as_string() else {
+                continue;
+            };
+
+            ring.clear();
+            let mut hash = 0_u64;
+            let mut cursor = 0_usize;
+            let mut count = 0_usize;
+            let mut push = |symbol: u64| {
+                let symbol = symbol + 1;
+                if count < gram_size {
+                    ring.push(symbol);
+                    hash = hash.wrapping_mul(ROLLING_HASH_BASE).wrapping_add(symbol);
+                    count += 1;
+                    if count == gram_size {
+                        visit(finalize_rolling_hash(hash, gram_size));
+                    }
+                    return;
+                }
+
+                let outgoing = ring[cursor];
+                ring[cursor] = symbol;
+                cursor += 1;
+                if cursor == gram_size {
+                    cursor = 0;
+                }
+                hash = hash
+                    .wrapping_sub(outgoing.wrapping_mul(highest_power))
+                    .wrapping_mul(ROLLING_HASH_BASE)
+                    .wrapping_add(symbol);
+                visit(finalize_rolling_hash(hash, gram_size));
+            };
+
+            if text.is_ascii() {
+                for byte in text.bytes() {
+                    push(byte.to_ascii_lowercase() as u64);
+                }
+            } else {
+                for c in text.chars().flat_map(char::to_lowercase) {
+                    push(c as u64);
+                }
+            }
+        }
+    }
+
+    pub fn calculate_ngram_digests<F>(
+        arg: Value<AnyType>,
+        gram_size: usize,
+        hash_algorithm: NgramHashAlgorithm,
+        mut visit: F,
+    ) where
+        F: FnMut(u64),
+    {
+        match hash_algorithm {
+            NgramHashAlgorithm::City64V0 => {
+                Self::calculate_ngram_nullable_column(arg, gram_size, |ngram| {
+                    visit(Self::ngram_hash(ngram))
+                });
+            }
+            NgramHashAlgorithm::RollingV1 => {
+                Self::calculate_ngram_rolling_column(arg, gram_size, visit);
+            }
+        }
     }
 
     /// calculate digest for constant scalar
@@ -566,8 +755,12 @@ impl BloomIndex {
         column_id: ColumnId,
         gram_size: usize,
         bloom_size: u64,
+        hash_algorithm: NgramHashAlgorithm,
     ) -> String {
-        format!("Ngram({column_id})_{gram_size}_{bloom_size}")
+        format!(
+            "Ngram({column_id})_{gram_size}_{bloom_size}{}",
+            hash_algorithm.field_suffix()
+        )
     }
 
     fn find(
@@ -576,19 +769,26 @@ impl BloomIndex {
         target: &Scalar,
         ty: &DataType,
         eq_scalar_map: &HashMap<Scalar, u64>,
-        like_scalar_map: &HashMap<Scalar, Vec<u64>>,
+        like_scalar_map: &NgramLikeScalarMap,
         ngram_args: &[NgramArgs],
         is_like: bool,
     ) -> Result<FilterEvalResult> {
+        let mut ngram_arg_index = None;
         let filter_column = if is_like {
-            let Some(ngram_arg) = ngram_args.iter().find(|arg| &arg.field == table_field) else {
+            let Some((index, ngram_arg)) = ngram_args
+                .iter()
+                .enumerate()
+                .find(|(_, arg)| &arg.field == table_field)
+            else {
                 // The column doesn't have a Ngram Arg.
                 return Ok(FilterEvalResult::Uncertain);
             };
+            ngram_arg_index = Some(index);
             BloomIndex::build_filter_ngram_name(
                 table_field.column_id(),
                 ngram_arg.gram_size,
                 ngram_arg.bloom_size,
+                ngram_arg.hash_algorithm,
             )
         } else {
             BloomIndex::build_filter_bloom_name(self.version, table_field)?
@@ -609,8 +809,9 @@ impl BloomIndex {
             let data_value = scalar_to_datavalue(target);
             filter.contains(&data_value)
         } else if is_like {
-            like_scalar_map
-                .get(target)
+            ngram_arg_index
+                .and_then(|index| like_scalar_map.get(&index))
+                .and_then(|digests| digests.get(target))
                 .is_none_or(|digests| digests.iter().all(|digest| filter.contains_digest(*digest)))
         } else {
             eq_scalar_map
@@ -642,6 +843,7 @@ struct ColumnFilterBuilder {
     field: TableField,
     gram_size: usize,
     bloom_size: u64,
+    hash_algorithm: NgramHashAlgorithm,
     builder: FilterImplBuilder,
 }
 
@@ -651,15 +853,26 @@ pub struct NgramArgs {
     field: TableField,
     gram_size: usize,
     bloom_size: u64,
+    false_positive_rate: f64,
+    hash_algorithm: NgramHashAlgorithm,
 }
 
 impl NgramArgs {
-    pub fn new(index: FieldIndex, field: TableField, gram_size: usize, bloom_size: u64) -> Self {
+    pub fn new(
+        index: FieldIndex,
+        field: TableField,
+        gram_size: usize,
+        bloom_size: u64,
+        false_positive_rate: f64,
+        hash_algorithm: NgramHashAlgorithm,
+    ) -> Self {
         Self {
             index,
             field,
             gram_size,
             bloom_size,
+            false_positive_rate,
+            hash_algorithm,
         }
     }
 
@@ -678,6 +891,14 @@ impl NgramArgs {
     pub fn bloom_size(&self) -> u64 {
         self.bloom_size
     }
+
+    pub fn false_positive_rate(&self) -> f64 {
+        self.false_positive_rate
+    }
+
+    pub fn hash_algorithm(&self) -> NgramHashAlgorithm {
+        self.hash_algorithm
+    }
 }
 
 impl BloomIndexBuilder {
@@ -695,6 +916,7 @@ impl BloomIndexBuilder {
                 field: field.clone(),
                 gram_size: 0,
                 bloom_size: 0,
+                hash_algorithm: NgramHashAlgorithm::City64V0,
                 builder: match bloom_index_type {
                     BloomIndexType::Xor8 => FilterImplBuilder::Xor(Xor8Builder::create()),
                     BloomIndexType::BinaryFuse32 => {
@@ -709,8 +931,10 @@ impl BloomIndexBuilder {
                 field: arg.field.clone(),
                 gram_size: arg.gram_size,
                 bloom_size: arg.bloom_size,
+                hash_algorithm: arg.hash_algorithm,
                 builder: FilterImplBuilder::Ngram(BloomBuilder::create(
                     arg.bloom_size,
+                    arg.false_positive_rate,
                     NGRAM_HASH_SEED,
                 )),
             });
@@ -815,16 +1039,12 @@ impl BloomIndexBuilder {
                 .value()
                 .convert_to_full_column(field_type, 1);
 
-            for digests in BloomIndex::calculate_ngram_nullable_column(
+            BloomIndex::calculate_ngram_digests(
                 Value::Column(column),
                 index_column.gram_size,
-                BloomIndex::ngram_hash,
-            ) {
-                if digests.is_empty() {
-                    continue;
-                }
-                index_column.builder.add_digests(digests.iter())
-            }
+                index_column.hash_algorithm,
+                |digest| index_column.builder.add_digest(digest),
+            );
         }
         // reverse sorting.
         bloom_keys_to_remove.sort_by(|a, b| b.cmp(a));
@@ -834,11 +1054,11 @@ impl BloomIndexBuilder {
         Ok(())
     }
 
-    pub fn finalize(&mut self) -> Result<Option<BloomIndex>> {
+    pub fn finalize(self) -> Result<Option<BloomIndex>> {
         let mut column_distinct_count = HashMap::with_capacity(self.columns_len());
         let mut filters = Vec::with_capacity(self.columns_len());
         let mut filter_fields = Vec::with_capacity(self.columns_len());
-        for bloom_column in self.bloom_columns.iter_mut() {
+        for bloom_column in self.bloom_columns {
             let filter = bloom_column.builder.build()?;
             if let Some(len) = filter.len() {
                 if !matches!(
@@ -858,12 +1078,13 @@ impl BloomIndexBuilder {
             filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }
-        for ngram_column in self.ngram_columns.iter_mut() {
+        for ngram_column in self.ngram_columns {
             let filter = ngram_column.builder.build()?;
             let filter_name = BloomIndex::build_filter_ngram_name(
                 ngram_column.field.column_id(),
                 ngram_column.gram_size,
                 ngram_column.bloom_size,
+                ngram_column.hash_algorithm,
             );
             filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
@@ -1234,7 +1455,7 @@ struct RewriteVisitor<'a> {
     index: &'a BloomIndex,
     data_schema: TableSchemaRef,
     eq_scalar_map: &'a HashMap<Scalar, u64>,
-    like_scalar_map: &'a HashMap<Scalar, Vec<u64>>,
+    like_scalar_map: &'a NgramLikeScalarMap,
     ngram_args: &'a [NgramArgs],
     column_stats: &'a StatisticsOfColumns,
     domains: &'a mut HashMap<String, Domain>,
@@ -1337,7 +1558,7 @@ impl EqVisitor for RewriteVisitor<'_> {
 
         // check domain for possible overflow
         if ConstantFolder::<String>::fold_with_domain(
-            cast,
+            Cow::Borrowed(cast),
             self.domains,
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
@@ -1484,5 +1705,227 @@ impl EqVisitor for ShortListVisitor {
         }
 
         Ok(ControlFlow::Break(None))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+
+    use super::*;
+
+    fn calculate_ngrams(text: &str, gram_size: usize) -> Vec<String> {
+        let mut ngrams = Vec::new();
+        BloomIndex::calculate_ngram_nullable_column(
+            Value::Scalar(Scalar::String(text.to_owned())),
+            gram_size,
+            |ngram| ngrams.push(ngram.to_owned()),
+        );
+        ngrams
+    }
+
+    fn calculate_rolling_ngrams(text: &str, gram_size: usize) -> Vec<u64> {
+        let mut digests = Vec::new();
+        BloomIndex::calculate_ngram_digests(
+            Value::Scalar(Scalar::String(text.to_owned())),
+            gram_size,
+            NgramHashAlgorithm::RollingV1,
+            |digest| digests.push(digest),
+        );
+        digests
+    }
+
+    #[test]
+    fn test_rolling_ngram_hash_golden_vectors() {
+        // RollingV1 digests are persisted in index files. These vectors lock its wire format,
+        // including lowercase expansion, Unicode scalar encoding, window order and overflow.
+        assert_eq!(calculate_rolling_ngrams("AbCdEf", 3), [
+            0xd5fb34d10c8f306b,
+            0x3b8e872df22c1e2d,
+            0xaa6cd49f7bd9d02a,
+            0x108896d9ad7aef0e,
+        ]);
+        assert_eq!(calculate_rolling_ngrams("AİB", 2), [
+            0x732a4dd62c7b42bf,
+            0xd48959250a20864b,
+            0x7ec8f7e698faa1c6,
+        ]);
+        assert_eq!(calculate_rolling_ngrams("ΟΣ", 2), [0x4a68eeaccb8efba9]);
+        assert_eq!(calculate_rolling_ngrams("中文错误", 3), [
+            0xff6d280faa3759cb,
+            0x0881369a66c99826,
+        ]);
+        assert!(calculate_rolling_ngrams("xy", 3).is_empty());
+    }
+
+    #[test]
+    fn test_calculate_ngram_nullable_column_streams_lowercase_chars() {
+        assert_eq!(calculate_ngrams("abc", 2), ["ab", "bc"]);
+        assert_eq!(calculate_ngrams("AbC", 2), ["ab", "bc"]);
+        assert_eq!(calculate_ngrams("a-1", 2), ["a-", "-1"]);
+        assert_eq!(calculate_ngrams("AbCdEfGh", 3), [
+            "abc", "bcd", "cde", "def", "efg", "fgh"
+        ]);
+        assert_eq!(calculate_ngrams("AİB", 2), ["ai", "i\u{307}", "\u{307}b"]);
+        assert_eq!(calculate_ngrams("ΟΣ", 2), ["οσ"]);
+        assert!(calculate_ngrams("a", 2).is_empty());
+        assert!(calculate_ngrams("", 2).is_empty());
+    }
+
+    #[test]
+    fn test_unicode_ngram_window_capacity_is_bounded() {
+        const GRAM_SIZE: usize = 10;
+        let mut window = UnicodeNgramWindow::new();
+
+        for c in "İ界𐐀".chars().cycle().take(GRAM_SIZE * 4) {
+            for c in c.to_lowercase() {
+                window.push(c, GRAM_SIZE);
+            }
+        }
+        let char_capacity = window.char_widths.capacity();
+        let byte_capacity = window.bytes.capacity();
+
+        for c in "İ界𐐀".chars().cycle().take(100_000) {
+            for c in c.to_lowercase() {
+                window.push(c, GRAM_SIZE);
+            }
+            assert!(window.char_widths.len() <= GRAM_SIZE);
+            assert!(window.bytes.len() <= GRAM_SIZE * 4);
+        }
+
+        assert_eq!(window.char_widths.capacity(), char_capacity);
+        assert_eq!(window.bytes.capacity(), byte_capacity);
+    }
+
+    #[test]
+    fn test_large_unicode_value_streams_ngrams() {
+        const CHARS: usize = 100_000;
+        const GRAM_SIZE: usize = 4;
+        let text = "界".repeat(CHARS);
+        let mut count = 0;
+
+        BloomIndex::calculate_ngram_nullable_column(
+            Value::Scalar(Scalar::String(text)),
+            GRAM_SIZE,
+            |ngram| {
+                assert_eq!(ngram, "界界界界");
+                count += 1;
+            },
+        );
+
+        assert_eq!(count, CHARS - GRAM_SIZE + 1);
+    }
+
+    #[test]
+    fn test_calculate_ngram_nullable_column_keeps_row_boundaries() {
+        let column = StringType::from_opt_data(vec![Some("ab"), None, Some("cd")]);
+        let mut ngrams = Vec::new();
+        BloomIndex::calculate_ngram_nullable_column(Value::Column(column), 2, |ngram| {
+            ngrams.push(ngram.to_owned())
+        });
+
+        assert_eq!(ngrams, ["ab", "cd"]);
+    }
+
+    #[test]
+    fn test_calculate_ngram_nullable_column_switches_row_modes() {
+        let column = StringType::from_data(vec!["abc", "AbC", "AİB", "xyz", "XyZ"]);
+        let mut ngrams = Vec::new();
+        BloomIndex::calculate_ngram_nullable_column(Value::Column(column), 2, |ngram| {
+            ngrams.push(ngram.to_owned())
+        });
+
+        assert_eq!(ngrams, [
+            "ab", "bc", "ab", "bc", "ai", "i\u{307}", "\u{307}b", "xy", "yz", "xy", "yz"
+        ]);
+    }
+
+    #[test]
+    fn test_ngram_hash_algorithm_versioning() {
+        let field = TableField::new("content", TableDataType::String);
+        let legacy = NgramArgs::new(
+            0,
+            field.clone(),
+            4,
+            1024 * 1024,
+            0.1,
+            NgramHashAlgorithm::City64V0,
+        );
+        let rolling = NgramArgs::new(0, field, 4, 1024 * 1024, 0.1, NgramHashAlgorithm::RollingV1);
+
+        assert_eq!(legacy.hash_algorithm(), NgramHashAlgorithm::City64V0);
+        assert_eq!(rolling.hash_algorithm(), NgramHashAlgorithm::RollingV1);
+        assert_eq!(
+            BloomIndex::build_filter_ngram_name(
+                legacy.column_id(),
+                legacy.gram_size(),
+                legacy.bloom_size(),
+                legacy.hash_algorithm(),
+            ),
+            "Ngram(0)_4_1048576"
+        );
+        assert_eq!(
+            BloomIndex::build_filter_ngram_name(
+                rolling.column_id(),
+                rolling.gram_size(),
+                rolling.bloom_size(),
+                rolling.hash_algorithm(),
+            ),
+            "Ngram(0)_4_1048576_rolling_v1"
+        );
+    }
+
+    fn assert_folded_ngram_filter(hash_algorithm: NgramHashAlgorithm) {
+        let field = TableField::new("content", TableDataType::String);
+        let args = [NgramArgs::new(
+            0,
+            field,
+            3,
+            1024 * 1024,
+            0.01,
+            hash_algorithm,
+        )];
+        let mut builder = BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::default(),
+            BTreeMap::new(),
+            &args,
+        )
+        .unwrap();
+        builder
+            .add_block(&DataBlock::new_from_columns(vec![StringType::from_data(
+                vec!["abcabc"],
+            )]))
+            .unwrap();
+        builder
+            .add_block(&DataBlock::new_from_columns(vec![StringType::from_data(
+                vec!["abcde"],
+            )]))
+            .unwrap();
+
+        let index = builder.finalize().unwrap().unwrap();
+        assert!(index.filter_schema.has_field(&format!(
+            "Ngram(0)_3_1048576{}",
+            hash_algorithm.field_suffix()
+        )));
+        let FilterImpl::Ngram(filter) = index.filters[0].as_ref() else {
+            panic!("expected ngram filter");
+        };
+        assert!(filter.memory_usage_bytes() < 1024 * 1024);
+
+        for ngram in ["abc", "bca", "cab", "bcd", "cde"] {
+            BloomIndex::calculate_ngram_digests(
+                Value::Scalar(Scalar::String(ngram.to_owned())),
+                3,
+                hash_algorithm,
+                |digest| assert!(filter.contains_digest(digest)),
+            );
+        }
+    }
+
+    #[test]
+    fn test_ngram_filter_folds_across_blocks() {
+        assert_folded_ngram_filter(NgramHashAlgorithm::City64V0);
+        assert_folded_ngram_filter(NgramHashAlgorithm::RollingV1);
     }
 }

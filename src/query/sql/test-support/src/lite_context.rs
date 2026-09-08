@@ -441,22 +441,6 @@ impl Catalog for DummyCatalog {
         unsupported("catalog::undrop_database")
     }
 
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unsupported("catalog::create_index")
-    }
-
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
-        unsupported("catalog::drop_index")
-    }
-
-    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
-        unsupported("catalog::get_index")
-    }
-
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unsupported("catalog::update_index")
-    }
-
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         unsupported("catalog::rename_database")
     }
@@ -1938,6 +1922,15 @@ impl TableContextTableAccess for LiteTableContext {
         Ok(None)
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        Ok(None)
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         Ok("lite_temp".to_string())
     }
@@ -2042,12 +2035,6 @@ impl TableContextPartitionStats for LiteTableContext {
     fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
         Ok(())
     }
-
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        false
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {}
 
     fn get_enable_sort_spill(&self) -> bool {
         false

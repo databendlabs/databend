@@ -82,6 +82,15 @@ pub trait TableContextTableAccess: Send + Sync {
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
 
+    /// Acquire a persistent-table lock without resolving its potentially stale name.
+    /// Callers must already have validated that the table supports the lock protocol.
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        catalog_name: &str,
+        table_id: u64,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>>;
+
     fn get_temp_table_prefix(&self) -> Result<String>;
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;

@@ -96,7 +96,6 @@ static DELETES_FILE_PUSHDOWN_INFO: LazyLock<PushDownInfo> = LazyLock::new(|| Pus
     order_by: vec![],
     virtual_column: None,
     lazy_materialization: false,
-    agg_index: None,
     change_type: None,
     inverted_index: None,
     vector_index: None,

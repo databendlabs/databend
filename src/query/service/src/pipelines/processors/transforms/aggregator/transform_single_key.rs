@@ -19,11 +19,9 @@ use std::vec;
 use bumpalo::Bump;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ProjectedBlock;
@@ -102,58 +100,29 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             self.first_block_start = Some(Instant::now());
         }
 
-        let meta = block
-            .get_meta()
-            .and_then(AggIndexMeta::downcast_ref_from)
-            .copied();
-
-        if let Some(meta) = meta
-            && meta.is_agg
+        for ((place, columns), func) in self
+            .states_layout
+            .states_loc
+            .iter()
+            .map(|loc| AggrState::new(self.addr, loc))
+            .zip(
+                self.arg_indices
+                    .iter()
+                    .map(|indices| ProjectedBlock::project(indices.as_slice(), &block)),
+            )
+            .zip(self.funcs.iter())
         {
-            assert_eq!(self.states_layout.num_aggr_func(), meta.num_agg_funcs);
-            // Aggregation states are in the back of the block.
-            let start = block.num_columns() - self.states_layout.num_aggr_func();
-            let states_indices = (start..block.num_columns()).collect::<Vec<_>>();
-            let states = ProjectedBlock::project(&states_indices, &block);
-
-            for ((loc, func), state) in self
-                .states_layout
-                .states_loc
-                .iter()
-                .zip(self.funcs.iter())
-                .zip(states.iter())
-            {
-                func.merge_serialized(MergeSerializedInput {
-                    states: AggregateStateSet::new(std::slice::from_ref(&self.addr), loc),
-                    state,
-                    filter: None,
+            if columns.is_empty() {
+                func.accumulate_row_count(AccumulateRowCountInput {
+                    state: place,
+                    rows: block.num_rows(),
                 })?;
-            }
-        } else {
-            for ((place, columns), func) in self
-                .states_layout
-                .states_loc
-                .iter()
-                .map(|loc| AggrState::new(self.addr, loc))
-                .zip(
-                    self.arg_indices
-                        .iter()
-                        .map(|indices| ProjectedBlock::project(indices.as_slice(), &block)),
-                )
-                .zip(self.funcs.iter())
-            {
-                if columns.is_empty() {
-                    func.accumulate_row_count(AccumulateRowCountInput {
-                        state: place,
-                        rows: block.num_rows(),
-                    })?;
-                } else {
-                    func.accumulate(AccumulateInput {
-                        state: place,
-                        columns,
-                        validity: None,
-                    })?;
-                }
+            } else {
+                func.accumulate(AccumulateInput {
+                    state: place,
+                    columns,
+                    validity: None,
+                })?;
             }
         }
 

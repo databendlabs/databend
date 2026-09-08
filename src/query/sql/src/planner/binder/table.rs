@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
@@ -54,10 +55,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::IndexMeta;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
@@ -65,7 +63,6 @@ use databend_common_users::security_policy_cache::PolicyType;
 use databend_common_users::security_policy_cache::RawPolicyDef;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
-use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 
@@ -163,7 +160,6 @@ impl Binder {
             None,
             table_alias_name,
             false,
-            false,
             true,
             None,
         );
@@ -205,7 +201,6 @@ impl Binder {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            planning_agg_index: false,
             planning_materialized_view_rewrite: false,
             window_definitions: DashMap::new(),
         };
@@ -553,25 +548,19 @@ impl Binder {
             },
         )?;
 
-        let parameters = res
+        let args_map: HashMap<&str, &Expr> = res
             .args
             .iter()
-            .map(|arg| arg.0.to_string())
-            .collect::<Vec<_>>();
-        let mut args_map = HashMap::with_capacity(parameters.len());
-
-        arguments.iter().enumerate().for_each(|(idx, argument)| {
-            if let Some(parameter) = parameters.get(idx) {
-                args_map.insert(parameter.as_str(), (*argument).clone());
-            }
-        });
+            .map(|arg| arg.0.as_str())
+            .zip(arguments.iter())
+            .collect();
 
         let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match
                 if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
-                    return Ok(Some(arg.clone()));
+                    return Ok(Some((**arg).clone()));
                 }
             }
             Ok(None)
@@ -720,11 +709,11 @@ impl Binder {
         let box (scalar, _) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;
         let (new_expr, _) = ConstantFolder::fold(
-            &scalar_expr,
+            Cow::Owned(scalar_expr),
             &self.ctx.get_function_context()?,
             &BUILTIN_FUNCTIONS,
         );
-        Ok(new_expr)
+        Ok(new_expr.into_owned())
     }
 
     pub(crate) fn resolve_data_travel_point(
@@ -793,7 +782,7 @@ impl Binder {
                 let v: i64 = check_number(
                     None,
                     &FunctionContext::default(),
-                    &new_expr,
+                    new_expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
                 if v > 0 {
@@ -838,27 +827,5 @@ impl Binder {
             let info = stream.get_table_info().clone();
             Ok(NavigationPoint::StreamInfo(info))
         })
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn resolve_table_indexes(
-        &self,
-        tenant: &Tenant,
-        catalog_name: &str,
-        table_id: MetaId,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self
-            .catalogs
-            .get_catalog(
-                tenant.tenant_name(),
-                catalog_name,
-                self.ctx.session_state()?,
-            )
-            .await?;
-        let index_metas = catalog
-            .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
-            .await?;
-
-        Ok(index_metas)
     }
 }

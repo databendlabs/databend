@@ -282,10 +282,10 @@ impl TableContextSettings for QueryContext {
         let settings = self.get_settings();
 
         let tz_string = settings.get_timezone()?;
-        let tz = TimeZone::get(&tz_string).map_err(|e| {
+        let tz = tz_string.parse::<Tz>().map_err(|e| {
             ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
         })?;
-        let now = Zoned::now().with_time_zone(TimeZone::UTC);
+        let now = Utc::now();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;

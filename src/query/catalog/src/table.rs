@@ -447,6 +447,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn plan_can_be_cached(&self) -> bool {
+        true
+    }
+
     fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
@@ -472,11 +476,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _index_id: u64,
-    ) -> Result<u64> {
+    async fn remove_aggregating_index_files(&self, _ctx: Arc<dyn TableContext>) -> Result<u64> {
         Ok(0)
     }
 

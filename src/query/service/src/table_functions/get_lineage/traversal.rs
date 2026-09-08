@@ -19,11 +19,9 @@ use std::sync::Arc;
 use databend_common_ast::parser::parse_table_ref;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::timestamp::timestamp_from_micros;
+use databend_common_expression::types::timestamp::timestamp_to_rfc3339_utc;
 use databend_common_sql::planner::NameResolutionContext;
 use databend_common_sql::planner::normalize_identifier;
-use jiff::fmt::strtime;
-use jiff::tz::TimeZone;
 
 use super::GetLineageArgs;
 use super::LineageResultRow;
@@ -462,14 +460,7 @@ fn column_frontier_key(column: &ColumnFrontier) -> (String, String) {
 
 pub(super) fn process_json(edge: &RawLineageEdge) -> String {
     // Keep embedded JSON timestamps stable across session timezones and self-describing.
-    let updated_on = edge.updated_on.map(|timestamp| {
-        strtime::format(
-            "%Y-%m-%dT%H:%M:%S%.6fZ",
-            &timestamp_from_micros(timestamp, &TimeZone::UTC),
-        )
-        .expect("valid lineage process timestamp format")
-        .to_string()
-    });
+    let updated_on = edge.updated_on.map(timestamp_to_rfc3339_utc);
     serde_json::json!({
         "query_id": edge.query_info.query_id,
         "updated_on": updated_on,

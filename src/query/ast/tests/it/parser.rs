@@ -130,8 +130,6 @@ fn test_statement() {
         r#"explain analyze select * from t;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
-        r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
-        r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);"#,
         r#"CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b);"#,
         r#"create table a (c decimal(38, 0))"#,
@@ -439,7 +437,6 @@ SELECT * from s;"#,
         r#"SHOW CREATE DICTIONARY db.dict1;"#,
         r#"DROP DICTIONARY IF EXISTS db.dict1;"#,
         r#"RENAME DICTIONARY IF EXISTS db.dict1 TO db.dict2;"#,
-        r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
         r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
         r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
         r#"REFRESH LINEAGE FOR ALL VIEWS;"#,
@@ -480,6 +477,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';"#,
+        r#"DROP SHARE IF EXISTS share1;"#,
+        r#"ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE share1;"#,
+        r#"GRANT SELECT ON TABLE db1.t1 TO SHARE share1;"#,
         r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
@@ -497,6 +499,8 @@ SELECT * from s;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE share1;"#,
+        r#"REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;"#,
         r#"drop role 'role1';"#,
         r#"GRANT ROLE test TO ROLE 'test-user';"#,
         r#"GRANT ROLE test TO ROLE `test-user`;"#,
@@ -993,7 +997,6 @@ SELECT * from s;"#,
         r#"SHOW LOCKS IN ACCOUNT"#,
         r#"SHOW STATISTICS FROM TABLE test_db.test"#,
         r#"SHOW DICTIONARIES FROM db LIKE 'dict%'"#,
-        r#"DROP AGGREGATING INDEX IF EXISTS idx1"#,
         r#"DROP INVERTED INDEX IF EXISTS idx2 ON test_db.test"#,
         r#"SHOW VIRTUAL COLUMNS FROM test FROM test_db LIKE 'v%'"#,
         // pipes
@@ -1406,6 +1409,24 @@ fn test_create_table_options_before_partition_by() {
                 assert!(partition_pos < option_pos);
             }
         }
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
+fn test_ngram_index_accepts_float_options() {
+    let cases = [
+        "CREATE NGRAM INDEX idx ON t(a) false_positive_rate=0.02",
+        "CREATE TABLE t(a STRING, NGRAM INDEX idx(a) false_positive_rate=0.02)",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let displayed = stmt.to_string();
+        assert!(displayed.contains("false_positive_rate = '0.02'"));
 
         let tokens = tokenize_sql(&displayed).unwrap();
         parse_sql(&tokens, Dialect::PostgreSQL).unwrap();

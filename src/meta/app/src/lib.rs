@@ -26,6 +26,7 @@
 pub mod app_error;
 pub mod data_id;
 pub mod data_mask;
+pub mod data_share;
 pub mod principal;
 pub mod schema;
 pub mod storage;

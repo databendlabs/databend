@@ -52,7 +52,8 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 8c
+      - 16c
+      - on-demand
       - aws
     strategy:
       matrix:

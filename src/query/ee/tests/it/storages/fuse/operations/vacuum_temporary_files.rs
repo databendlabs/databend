@@ -40,6 +40,7 @@ mod unit {
     use opendal::raw::RpList;
     use opendal::raw::RpRead;
     use opendal::raw::RpStat;
+    use opendal::raw::Timestamp;
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
 
@@ -187,9 +188,8 @@ mod unit {
     fn file_meta(last_modified_millis: Option<i64>) -> Metadata {
         let mut meta = Metadata::new(EntryMode::FILE).with_content_length(0);
         if let Some(last_modified_millis) = last_modified_millis {
-            meta = meta.with_last_modified(
-                chrono::DateTime::<Utc>::from_timestamp_millis(last_modified_millis).unwrap(),
-            );
+            meta =
+                meta.with_last_modified(Timestamp::from_millisecond(last_modified_millis).unwrap());
         }
         meta
     }
@@ -197,9 +197,8 @@ mod unit {
     fn dir_meta(last_modified_millis: Option<i64>) -> Metadata {
         let mut meta = Metadata::new(EntryMode::DIR);
         if let Some(last_modified_millis) = last_modified_millis {
-            meta = meta.with_last_modified(
-                chrono::DateTime::<Utc>::from_timestamp_millis(last_modified_millis).unwrap(),
-            );
+            meta =
+                meta.with_last_modified(Timestamp::from_millisecond(last_modified_millis).unwrap());
         }
         meta
     }

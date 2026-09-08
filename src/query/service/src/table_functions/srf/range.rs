@@ -221,11 +221,11 @@ struct RangeSource<const INCLUSIVE: bool> {
     step: i64,
 }
 
-fn get_i64_number(scalar: &Scalar) -> Result<i64> {
+fn get_i64_number(scalar: Scalar) -> Result<i64> {
     check_number::<i64, usize>(
         None,
         &FunctionContext::default(),
-        &Expr::constant(scalar.clone(), None),
+        Expr::constant(scalar, None),
         &BUILTIN_FUNCTIONS,
     )
 }
@@ -239,9 +239,9 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
         end: Scalar,
         step: Scalar,
     ) -> Result<ProcessorPtr> {
-        let start = get_i64_number(&start)?;
-        let end = get_i64_number(&end)?;
-        let step = get_i64_number(&step)?;
+        let start = get_i64_number(start)?;
+        let end = get_i64_number(end)?;
+        let step = get_i64_number(step)?;
         let series_type = series_type_from_data_type(&data_type).ok_or_else(|| {
             ErrorCode::BadArguments(format!(
                 "Unsupported data type for generate_series: {:?}",

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
@@ -148,30 +150,28 @@ where A: TypeCheckAdapter
 
     pub(super) fn try_fold_constant<Index: ColumnIndex>(
         &self,
-        expr: &EExpr<Index>,
-        enable_shrink: bool,
-    ) -> Option<Box<(ScalarExpr, DataType)>> {
-        if expr.is_deterministic(&BUILTIN_FUNCTIONS) && enable_shrink {
-            if let (EExpr::Constant(expr::Constant { scalar, .. }), _) =
-                ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
-            {
-                let scalar = if enable_shrink {
-                    shrink_scalar(scalar)
-                } else {
-                    scalar
-                };
-                let ty = scalar.as_ref().infer_data_type();
-                return Some(Box::new((
-                    ConstantExpr {
-                        span: expr.span(),
-                        value: scalar,
-                    }
-                    .into(),
-                    ty,
-                )));
-            }
+        expr: EExpr<Index>,
+    ) -> std::result::Result<Box<(ScalarExpr, DataType)>, EExpr<Index>> {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            return Err(expr);
         }
 
-        None
+        let span = expr.span();
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let expr = expr.into_owned();
+        let EExpr::Constant(expr::Constant { scalar, .. }) = expr else {
+            return Err(expr);
+        };
+
+        let scalar = shrink_scalar(scalar);
+        let ty = scalar.as_ref().infer_data_type();
+        Ok(Box::new((
+            ConstantExpr {
+                span,
+                value: scalar,
+            }
+            .into(),
+            ty,
+        )))
     }
 }

@@ -25,7 +25,7 @@ use databend_meta_client::types::MetaAPIError;
 use databend_meta_client::types::MetaClientError;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::MetaNetworkError;
-use tonic_013::Status;
+use tonic::Status;
 
 use super::txn_error::MetaTxnError;
 

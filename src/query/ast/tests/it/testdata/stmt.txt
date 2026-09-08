@@ -1870,406 +1870,6 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
-CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
----------- Output ---------
-CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
----------- AST ------------
-CreateIndex(
-    CreateIndexStmt {
-        index_type: Aggregating,
-        create_option: Create,
-        index_name: Identifier {
-            span: Some(
-                25..29,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
-        query: Query {
-            span: Some(
-                33..80,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        33..80,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: FunctionCall {
-                                span: Some(
-                                    40..46,
-                                ),
-                                func: FunctionCall {
-                                    distinct: false,
-                                    name: Identifier {
-                                        span: Some(
-                                            40..43,
-                                        ),
-                                        name: "SUM",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                    args: [
-                                        ColumnRef {
-                                            span: Some(
-                                                44..45,
-                                            ),
-                                            column: ColumnRef {
-                                                database: None,
-                                                table: None,
-                                                column: Name(
-                                                    Identifier {
-                                                        span: Some(
-                                                            44..45,
-                                                        ),
-                                                        name: "a",
-                                                        quote: None,
-                                                        ident_type: None,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ],
-                                    params: [],
-                                    order_by: [],
-                                    filter: None,
-                                    window: None,
-                                    lambda: None,
-                                },
-                            },
-                            alias: None,
-                        },
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    48..49,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                48..49,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                55..57,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        55..57,
-                                    ),
-                                    name: "t1",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: Some(
-                        BinaryOp {
-                            span: Some(
-                                66..67,
-                            ),
-                            op: Gt,
-                            left: ColumnRef {
-                                span: Some(
-                                    64..65,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                64..65,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            right: Literal {
-                                span: Some(
-                                    68..69,
-                                ),
-                                value: UInt64(
-                                    3,
-                                ),
-                            },
-                        },
-                    ),
-                    group_by: Some(
-                        Normal(
-                            [
-                                ColumnRef {
-                                    span: Some(
-                                        79..80,
-                                    ),
-                                    column: ColumnRef {
-                                        database: None,
-                                        table: None,
-                                        column: Name(
-                                            Identifier {
-                                                span: Some(
-                                                    79..80,
-                                                ),
-                                                name: "b",
-                                                quote: None,
-                                                ident_type: None,
-                                            },
-                                        ),
-                                    },
-                                },
-                            ],
-                        ),
-                    ),
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-        sync_creation: true,
-    },
-)
-
-
----------- Input ----------
-CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
----------- Output ---------
-CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
----------- AST ------------
-CreateIndex(
-    CreateIndexStmt {
-        index_type: Aggregating,
-        create_option: CreateOrReplace,
-        index_name: Identifier {
-            span: Some(
-                36..40,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
-        query: Query {
-            span: Some(
-                44..91,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        44..91,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: FunctionCall {
-                                span: Some(
-                                    51..57,
-                                ),
-                                func: FunctionCall {
-                                    distinct: false,
-                                    name: Identifier {
-                                        span: Some(
-                                            51..54,
-                                        ),
-                                        name: "SUM",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                    args: [
-                                        ColumnRef {
-                                            span: Some(
-                                                55..56,
-                                            ),
-                                            column: ColumnRef {
-                                                database: None,
-                                                table: None,
-                                                column: Name(
-                                                    Identifier {
-                                                        span: Some(
-                                                            55..56,
-                                                        ),
-                                                        name: "a",
-                                                        quote: None,
-                                                        ident_type: None,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ],
-                                    params: [],
-                                    order_by: [],
-                                    filter: None,
-                                    window: None,
-                                    lambda: None,
-                                },
-                            },
-                            alias: None,
-                        },
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    59..60,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                59..60,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                66..68,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        66..68,
-                                    ),
-                                    name: "t1",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: Some(
-                        BinaryOp {
-                            span: Some(
-                                77..78,
-                            ),
-                            op: Gt,
-                            left: ColumnRef {
-                                span: Some(
-                                    75..76,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                75..76,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            right: Literal {
-                                span: Some(
-                                    79..80,
-                                ),
-                                value: UInt64(
-                                    3,
-                                ),
-                            },
-                        },
-                    ),
-                    group_by: Some(
-                        Normal(
-                            [
-                                ColumnRef {
-                                    span: Some(
-                                        90..91,
-                                    ),
-                                    column: ColumnRef {
-                                        database: None,
-                                        table: None,
-                                        column: Name(
-                                            Identifier {
-                                                span: Some(
-                                                    90..91,
-                                                ),
-                                                name: "b",
-                                                quote: None,
-                                                ident_type: None,
-                                            },
-                                        ),
-                                    },
-                                },
-                            ],
-                        ),
-                    ),
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-        sync_creation: true,
-    },
-)
-
-
----------- Input ----------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);
 ---------- Output ---------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b)
@@ -5382,6 +4982,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [],
     },
@@ -5416,6 +5017,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5443,6 +5045,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5470,6 +5073,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [
             SQLProperty {
@@ -5504,6 +5108,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: Some(
             Default,
         ),
@@ -5636,6 +5241,7 @@ CreateDatabase(
                 ident_type: None,
             },
         },
+        from_share: None,
         engine: None,
         options: [],
     },
@@ -20338,28 +19944,6 @@ RenameDictionary(
 
 
 ---------- Input ----------
-REFRESH AGGREGATING INDEX idx1 LIMIT 10;
----------- Output ---------
-REFRESH AGGREGATING INDEX idx1 LIMIT 10
----------- AST ------------
-RefreshIndex(
-    RefreshIndexStmt {
-        index: Identifier {
-            span: Some(
-                26..30,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
-        limit: Some(
-            10,
-        ),
-    },
-)
-
-
----------- Input ----------
 REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;
 ---------- Output ---------
 REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5
@@ -21513,6 +21097,165 @@ Grant(
 
 
 ---------- Input ----------
+CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';
+---------- Output ---------
+CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data'
+---------- AST ------------
+CreateShare(
+    CreateShareStmt {
+        create_option: Create,
+        name: Identifier {
+            span: Some(
+                13..19,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+        connection: Some(
+            Identifier {
+                span: Some(
+                    33..43,
+                ),
+                name: "share_conn",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        comment: Some(
+            "shared data",
+        ),
+    },
+)
+
+
+---------- Input ----------
+DROP SHARE IF EXISTS share1;
+---------- Output ---------
+DROP SHARE IF EXISTS share1
+---------- AST ------------
+DropShare(
+    DropShareStmt {
+        if_exists: true,
+        name: Identifier {
+            span: Some(
+                21..27,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';
+---------- Output ---------
+ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated'
+---------- AST ------------
+AlterShare(
+    AlterShareStmt {
+        if_exists: false,
+        name: Identifier {
+            span: Some(
+                12..18,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+        action: Set {
+            accounts: None,
+            connection: Some(
+                Identifier {
+                    span: Some(
+                        36..52,
+                    ),
+                    name: "replacement_conn",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            comment: Some(
+                "rotated",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+GRANT USAGE ON DATABASE db1 TO SHARE share1;
+---------- Output ---------
+GRANT USAGE ON DATABASE db1 TO SHARE share1
+---------- AST ------------
+GrantShare(
+    GrantShareStmt {
+        privilege: Usage,
+        object: Database(
+            Identifier {
+                span: Some(
+                    24..27,
+                ),
+                name: "db1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                37..43,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+GRANT SELECT ON TABLE db1.t1 TO SHARE share1;
+---------- Output ---------
+GRANT SELECT ON TABLE db1.t1 TO SHARE share1
+---------- AST ------------
+GrantShare(
+    GrantShareStmt {
+        privilege: Select,
+        object: Table(
+            Some(
+                Identifier {
+                    span: Some(
+                        22..25,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            Identifier {
+                span: Some(
+                    26..28,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                38..44,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 GRANT CREATE MASKING POLICY ON *.* TO USER a;
 ---------- Output ---------
 GRANT CREATE MASKING POLICY ON  *.* TO USER 'a'@'%'
@@ -21877,6 +21620,76 @@ Revoke(
         principal: Role(
             "role1",
         ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE USAGE ON DATABASE db1 FROM SHARE share1;
+---------- Output ---------
+REVOKE USAGE ON DATABASE db1 FROM SHARE share1
+---------- AST ------------
+RevokeShare(
+    RevokeShareStmt {
+        privilege: Usage,
+        object: Database(
+            Identifier {
+                span: Some(
+                    25..28,
+                ),
+                name: "db1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                40..46,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;
+---------- Output ---------
+REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1
+---------- AST ------------
+RevokeShare(
+    RevokeShareStmt {
+        privilege: Select,
+        object: Table(
+            Some(
+                Identifier {
+                    span: Some(
+                        23..26,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            Identifier {
+                span: Some(
+                    27..29,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        share: Identifier {
+            span: Some(
+                41..47,
+            ),
+            name: "share1",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 
@@ -31008,26 +30821,6 @@ ShowDictionaries(
                 pattern: "dict%",
             },
         ),
-    },
-)
-
-
----------- Input ----------
-DROP AGGREGATING INDEX IF EXISTS idx1
----------- Output ---------
-DROP AGGREGATING INDEX IF EXISTS idx1
----------- AST ------------
-DropIndex(
-    DropIndexStmt {
-        if_exists: true,
-        index: Identifier {
-            span: Some(
-                33..37,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
     },
 )
 

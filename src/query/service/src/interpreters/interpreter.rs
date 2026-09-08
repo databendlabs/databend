@@ -66,7 +66,6 @@ use crate::sessions::TableContextSession;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTelemetry;
 use crate::stream::DataBlockStream;
-use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
 
 #[async_trait::async_trait]
@@ -127,7 +126,7 @@ pub trait Interpreter: Sync + Send {
             }
         };
 
-        execute_built_pipeline(self, ctx, built_pipeline).await
+        execute_built_pipeline(self, built_pipeline).await
     }
 
     async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
@@ -229,7 +228,14 @@ async fn build_pipeline_before_execute(
         ctx.set_executor(complete_executor.get_inner())?;
         Ok(BuiltPipeline::Complete(complete_executor))
     } else {
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        // Record result progress as blocks are produced into the pulling
+        // channel. See `PullingSink::progress` for why counting on the consumer
+        // side undercounts `result_rows`.
+        let pulling_executor = PipelinePullingExecutor::from_pipelines_with_progress(
+            build_res,
+            settings,
+            Some(ctx.get_result_progress()),
+        )?;
 
         ctx.set_executor(pulling_executor.get_inner())?;
         Ok(BuiltPipeline::Pulling(pulling_executor))
@@ -238,7 +244,6 @@ async fn build_pipeline_before_execute(
 
 async fn execute_built_pipeline(
     interpreter: &(impl Interpreter + ?Sized),
-    ctx: Arc<QueryContext>,
     built_pipeline: BuiltPipeline,
 ) -> Result<SendableDataBlockStream> {
     match built_pipeline {
@@ -247,10 +252,11 @@ async fn execute_built_pipeline(
             complete_executor.execute().await?;
             interpreter.inject_result()
         }
-        BuiltPipeline::Pulling(pulling_executor) => Ok(Box::pin(ProgressStream::try_create(
-            Box::pin(PullingExecutorStream::create(pulling_executor)?),
-            ctx.get_result_progress(),
-        )?)),
+        // Result progress is recorded by `PullingSink` while blocks are
+        // produced, so no consumer-side wrapper is needed here.
+        BuiltPipeline::Pulling(pulling_executor) => {
+            Ok(Box::pin(PullingExecutorStream::create(pulling_executor)?))
+        }
     }
 }
 

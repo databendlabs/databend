@@ -137,8 +137,8 @@ impl BinaryFuse32Builder {
         Self::default()
     }
 
-    pub(super) fn take_digests(&mut self) -> Vec<u64> {
-        std::mem::take(&mut self.digests).into_iter().collect()
+    pub(super) fn into_digests(self) -> Vec<u64> {
+        self.digests.into_iter().collect()
     }
 
     pub(super) fn build_from_digests(
@@ -283,12 +283,16 @@ impl FilterBuilder for BinaryFuse32Builder {
         }
     }
 
+    fn add_digest(&mut self, digest: u64) {
+        self.digests.insert(digest);
+    }
+
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
         self.digests.extend(digests.into_iter().copied());
     }
 
-    fn build(&mut self) -> Result<Self::Filter, Self::Error> {
-        let digests = self.take_digests();
+    fn build(self) -> Result<Self::Filter, Self::Error> {
+        let digests = self.into_digests();
         Self::build_from_digests(digests.as_slice())
     }
 }

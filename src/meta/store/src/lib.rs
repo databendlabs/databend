@@ -89,11 +89,9 @@ impl MetaStore {
     }
 
     /// Create a local meta service for testing.
-    ///
-    /// It is required to assign a base port as the port number range.
     pub async fn new_local_testing<RT: RuntimeApi>() -> Self {
         MetaStore::L(Arc::new(
-            LocalMetaService::new::<RT>("MetaStore-new-local-testing")
+            LocalMetaService::new_testing::<RT>("MetaStore-new-local-testing")
                 .await
                 .unwrap(),
         ))
@@ -217,20 +215,24 @@ impl MetaStoreProvider {
 
     pub async fn create_meta_store<RT: RuntimeApi>(&self) -> Result<MetaStore, CreationError> {
         if self.rpc_conf.local_mode() {
-            info!(
-                conf :? =(&self.rpc_conf);
-                "use embedded meta, data will be removed when process exits"
-            );
-
-            // NOTE: This can only be used for test: data will be removed when program quit.
-            Ok(MetaStore::L(Arc::new(
-                LocalMetaService::new_with_fixed_dir::<RT>(
-                    self.rpc_conf.embedded_dir.clone(),
-                    "MetaStoreProvider-created",
-                )
-                .await
-                .unwrap(),
-            )))
+            let local = match &self.rpc_conf.embedded_dir {
+                Some(dir) => {
+                    info!(conf :? =(&self.rpc_conf), path = dir; "use persistent embedded meta");
+                    LocalMetaService::new_with_fixed_dir::<RT>(
+                        dir.clone(),
+                        "MetaStoreProvider-created",
+                    )
+                    .await
+                }
+                None => {
+                    info!(
+                        conf :? =(&self.rpc_conf);
+                        "use temporary embedded meta; data will be removed when the service exits"
+                    );
+                    LocalMetaService::new_testing::<RT>("MetaStoreProvider-created").await
+                }
+            };
+            Ok(MetaStore::L(Arc::new(local.unwrap())))
         } else {
             info!(conf :? =(&self.rpc_conf); "use remote meta");
             let client = MetaGrpcClient::try_new(&self.rpc_conf)?;

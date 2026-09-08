@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Write;
-use std::str::FromStr;
 
+use chrono::DateTime;
+use chrono::NaiveDate;
+use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
@@ -30,10 +34,6 @@ use databend_common_expression::utils::auto_detect_datetime::auto_detect_timesta
 use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
-use jiff::Timestamp;
-use jiff::Unit;
-use jiff::civil::date;
-use jiff::tz::TimeZone;
 
 use super::TestContext;
 use super::run_ast;
@@ -506,15 +506,18 @@ fn test_date_domain_overflow(file: &mut impl Write) {
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![100]).into()),
-            ("b", Int64Type::from_data(vec![2932897]).into()),
+            (
+                "b",
+                Int64Type::from_data(vec![i64::from(DATE_MAX) + 1]).into(),
+            ),
         ],
         input_domains: Some(&[
             ("a", Domain::Date(SimpleDomain { min: 100, max: 100 })),
             (
                 "b",
                 Domain::Number(NumberDomain::Int64(SimpleDomain {
-                    min: 2932897,
-                    max: 2932897,
+                    min: i64::from(DATE_MAX) + 1,
+                    max: i64::from(DATE_MAX) + 1,
                 })),
             ),
         ]),
@@ -582,7 +585,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
         strict_eval: true,
     });
 
-    // Date plus: i64 saturating_add actually triggers (DATE_MIN + i64::MIN wraps without saturating)
+    // Date plus: domain includes integer underflow, even though the row is valid.
     run_ast_with_context(file, "a + b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![DATE_MIN]).into()),
@@ -608,7 +611,7 @@ fn test_date_domain_overflow(file: &mut impl Write) {
         strict_eval: true,
     });
 
-    // Date minus: i64 saturating_sub triggers (DATE_MIN - i64::MAX wraps without saturating)
+    // Date minus: domain includes integer underflow, even though the row is valid.
     run_ast_with_context(file, "a - b", TestContext {
         entries: &[
             ("a", DateType::from_data(vec![DATE_MIN]).into()),
@@ -700,10 +703,10 @@ fn test_to_number(file: &mut impl Write) {
         DateType::from_data(vec![DATE_MIN, -100, 0, 100, DATE_MAX]),
     )]);
     let millennium_days = [999, 1000, 1001, 1999, 2000, 2001].map(|year| {
-        date(year, 1, 1)
-            .since((Unit::Day, date(1970, 1, 1)))
+        NaiveDate::from_ymd_opt(year, 1, 1)
             .unwrap()
-            .get_days()
+            .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
+            .num_days() as i32
     });
     run_ast(file, "millennium(a)", &[(
         "a",
@@ -1013,12 +1016,12 @@ fn test_date_date_diff(file: &mut impl Write) {
 }
 
 fn test_current_time(file: &mut impl Write) {
-    let tz = TimeZone::UTC;
-    let now = Timestamp::from_str("2024-02-03T04:05:06.789123Z")
+    let tz = Tz::UTC;
+    let now = DateTime::parse_from_rfc3339("2024-02-03T04:05:06.789123Z")
         .unwrap()
-        .to_zoned(tz.clone());
+        .with_timezone(&Utc);
     let func_ctx = FunctionContext {
-        tz: tz.clone(),
+        tz,
         now,
         ..FunctionContext::default()
     };
@@ -1107,76 +1110,82 @@ fn test_auto_detect_date() {
 
 #[test]
 fn test_auto_detect_timestamp() {
-    let tz = TimeZone::UTC;
+    let tz = Tz::UTC;
+
+    let detect = |value| auto_detect_timestamp(value, &tz).unwrap();
 
     // DD-MON-YYYY
-    assert!(auto_detect_timestamp("17-DEC-1980 10:30:00", &tz).is_some());
-    assert!(auto_detect_timestamp("01-JAN-2000 23:59:59.123456", &tz).is_some());
+    assert!(detect("17-DEC-1980 10:30:00").is_some());
+    assert!(detect("01-JAN-2000 23:59:59.123456").is_some());
 
     // DD-MON-YYYY lowercase
     assert_eq!(
-        auto_detect_timestamp("17-dec-1980 10:30:00", &tz),
-        auto_detect_timestamp("17-DEC-1980 10:30:00", &tz)
+        detect("17-dec-1980 10:30:00"),
+        detect("17-DEC-1980 10:30:00")
     );
 
     // MM/DD/YYYY
-    assert!(auto_detect_timestamp("12/17/1980 10:30:00", &tz).is_some());
-    assert!(auto_detect_timestamp("2/18/2008 02:36:48", &tz).is_some());
-    assert!(auto_detect_timestamp("2/18/2008 02:36:48.123", &tz).is_some());
+    assert!(detect("12/17/1980 10:30:00").is_some());
+    assert!(detect("2/18/2008 02:36:48").is_some());
+    assert!(detect("2/18/2008 02:36:48.123").is_some());
 
     // RFC 2822 (24h, with tz) — should convert +0200 to UTC
-    let ts = auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
-    let ts_no_tz = auto_detect_timestamp("Thu, 21 Dec 2000 14:01:07", &tz).unwrap();
+    let ts = detect("Thu, 21 Dec 2000 16:01:07 +0200").unwrap();
+    let ts_no_tz = detect("Thu, 21 Dec 2000 14:01:07").unwrap();
     assert_eq!(ts, ts_no_tz); // 16:01:07+0200 == 14:01:07 UTC
 
     // RFC 2822 (24h, no tz)
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07", &tz).is_some());
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07.999", &tz).is_some());
+    assert!(detect("Thu, 21 Dec 2000 16:01:07").is_some());
+    assert!(detect("Thu, 21 Dec 2000 16:01:07.999").is_some());
 
     // RFC 2822 (12h AM/PM, with tz)
-    let ts_12h = auto_detect_timestamp("Thu, 21 Dec 2000 04:01:07 PM +0200", &tz).unwrap();
+    let ts_12h = detect("Thu, 21 Dec 2000 04:01:07 PM +0200").unwrap();
     assert_eq!(ts_12h, ts); // same as 24h version
 
     // RFC 2822 (12h AM/PM, no tz)
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 04:01:07 PM", &tz).is_some());
-    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 11:30:00 AM", &tz).is_some());
+    assert!(detect("Thu, 21 Dec 2000 04:01:07 PM").is_some());
+    assert!(detect("Thu, 21 Dec 2000 11:30:00 AM").is_some());
 
     // AM/PM boundary: 12:00 AM = midnight, 12:00 PM = noon
-    let midnight = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00 AM", &tz).unwrap();
-    let noon = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00 PM", &tz).unwrap();
-    let zero_h = auto_detect_timestamp("Thu, 21 Dec 2000 00:00:00", &tz).unwrap();
-    let twelve_h = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00", &tz).unwrap();
+    let midnight = detect("Thu, 21 Dec 2000 12:00:00 AM").unwrap();
+    let noon = detect("Thu, 21 Dec 2000 12:00:00 PM").unwrap();
+    let zero_h = detect("Thu, 21 Dec 2000 00:00:00").unwrap();
+    let twelve_h = detect("Thu, 21 Dec 2000 12:00:00").unwrap();
     assert_eq!(midnight, zero_h);
     assert_eq!(noon, twelve_h);
 
     // Leap year
-    assert!(auto_detect_timestamp("29-FEB-2024 12:00:00", &tz).is_some());
-    assert!(auto_detect_timestamp("02/29/2024 12:00:00", &tz).is_some());
+    assert!(detect("29-FEB-2024 12:00:00").is_some());
+    assert!(detect("02/29/2024 12:00:00").is_some());
 
     // Unix date
-    assert!(auto_detect_timestamp("Mon Jul 08 18:09:51 +0000 2013", &tz).is_some());
+    assert!(detect("Mon Jul 08 18:09:51 +0000 2013").is_some());
 
     // Epoch is no longer handled by auto_detect_timestamp (caller's job)
-    assert_eq!(auto_detect_timestamp("1487654321", &tz), None);
-    assert_eq!(auto_detect_timestamp("1487654321321", &tz), None);
-    assert_eq!(auto_detect_timestamp("20240305", &tz), None);
-    assert_eq!(auto_detect_timestamp("-86400", &tz), None);
+    assert_eq!(detect("1487654321"), None);
+    assert_eq!(detect("1487654321321"), None);
+    assert_eq!(detect("20240305"), None);
+    assert_eq!(detect("-86400"), None);
 
     // Invalid
-    assert_eq!(auto_detect_timestamp("not-a-timestamp", &tz), None);
-    assert_eq!(auto_detect_timestamp("", &tz), None);
+    assert_eq!(detect("not-a-timestamp"), None);
+    assert_eq!(detect(""), None);
 }
 
 #[test]
 fn test_auto_detect_timestamp_tz_unit() {
-    let tz = TimeZone::UTC;
+    let tz = Tz::UTC;
 
     // RFC 2822 with offset — offset should be preserved
-    let ts_tz = auto_detect_timestamp_tz("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
+    let ts_tz = auto_detect_timestamp_tz("Thu, 21 Dec 2000 16:01:07 +0200", &tz)
+        .unwrap()
+        .unwrap();
     assert_eq!(ts_tz.seconds_offset(), 7200); // +0200 = 7200s
 
     // No offset — should use session tz (UTC → 0)
-    let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz).unwrap();
+    let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz)
+        .unwrap()
+        .unwrap();
     assert_eq!(ts_tz.seconds_offset(), 0);
 }
 
@@ -1186,7 +1195,7 @@ fn test_calendar_monotonicity_check() {
     // (02:31 UTC): a range straddling that transition sees the wall clock
     // rewind across a day (and month) boundary.
     let st_johns = FunctionContext {
-        tz: TimeZone::get("America/St_Johns").unwrap(),
+        tz: "America/St_Johns".parse::<Tz>().unwrap(),
         ..FunctionContext::default()
     };
     let utc = FunctionContext::default();
@@ -1289,7 +1298,7 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
     use databend_common_expression::type_check::check_function;
 
     let st_johns = FunctionContext {
-        tz: TimeZone::get("America/St_Johns").unwrap(),
+        tz: "America/St_Johns".parse::<Tz>().unwrap(),
         ..FunctionContext::default()
     };
     let utc = FunctionContext::default();
@@ -1301,8 +1310,8 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
     for (name, return_type) in [
         // Exact `calc_domain`, guarded by the session time zone.
         ("to_yyyymmdd", DataType::Number(NumberDataType::UInt32)),
-        // `Full` calc_domain: exercises the fold's monotonic end-point path,
-        // which consumes `monotonicity_check`.
+        // MayThrow calc_domain: exercises the fold's safe monotonic end-point
+        // path, which consumes monotonicity_check.
         ("to_start_of_day", DataType::Timestamp),
     ] {
         let expr = check_function(
@@ -1323,15 +1332,27 @@ fn test_calendar_domain_fails_open_across_tz_fallback() {
         // Both end points map to October 31, but the range internally touches
         // November 1: any domain narrower than `Full` would exclude reachable
         // outputs and let pruning drop live rows.
-        let (_, domain) =
-            ConstantFolder::fold_with_domain(&expr, &input, &st_johns, &BUILTIN_FUNCTIONS);
-        assert_eq!(domain, Some(Domain::full(&return_type)), "{name}");
+        let (_, domain) = ConstantFolder::fold_with_domain(
+            Cow::Borrowed(&expr),
+            &input,
+            &st_johns,
+            &BUILTIN_FUNCTIONS,
+        );
+        let expected_domain = if name == "to_start_of_day" {
+            // Rounders can now throw at SQL boundaries. Without a safe
+            // monotonic segment they must retain MayThrow, not just Full.
+            None
+        } else {
+            Some(Domain::full(&return_type))
+        };
+        assert_eq!(domain, expected_domain, "{name}");
 
         // Under a fixed offset the same range is a single segment: the
         // projection collapses to one day and folds to a constant.
-        let (folded, _) = ConstantFolder::fold_with_domain(&expr, &input, &utc, &BUILTIN_FUNCTIONS);
+        let (folded, _) =
+            ConstantFolder::fold_with_domain(Cow::Owned(expr), &input, &utc, &BUILTIN_FUNCTIONS);
         assert!(
-            matches!(folded, Expr::Constant(_)),
+            matches!(folded.as_ref(), Expr::Constant(_)),
             "{name}: expected constant fold under UTC, got {folded:?}"
         );
     }

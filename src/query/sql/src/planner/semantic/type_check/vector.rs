@@ -52,16 +52,16 @@ where A: TypeCheckAdapter
     fn try_fold_cast_to_vector(&self, expr: &ScalarExpr) -> Option<Vec<F32>> {
         if expr.evaluable() {
             let checked_expr = expr.as_expr().ok()?;
-            let folded = self.try_fold_constant(&checked_expr, true)?;
-            let constant = match &folded.0 {
+            let box (folded, _) = self.try_fold_constant(checked_expr).ok()?;
+            let constant = match folded {
                 ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _) => {
-                    constant.clone()
+                    constant
                 }
                 _ => return None,
             };
 
             if let Scalar::Vector(VectorScalar::Float32(values)) = constant.value {
-                return Some(values.clone());
+                return Some(values);
             }
         }
         None

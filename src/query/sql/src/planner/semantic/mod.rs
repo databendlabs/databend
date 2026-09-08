@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod aggregate_rewriter;
-mod aggregating_index_visitor;
 mod async_function_rewriter;
 mod count_set_ops;
 mod distinct_to_groupby;
@@ -28,9 +27,6 @@ mod view_rewriter;
 mod window_check;
 
 pub use aggregate_rewriter::AggregateRewriter;
-pub use aggregating_index_visitor::AggregatingIndexChecker;
-pub use aggregating_index_visitor::AggregatingIndexRewriter;
-pub use aggregating_index_visitor::RefreshAggregatingIndexRewriter;
 pub(crate) use async_function_rewriter::AsyncFunctionRewriter;
 pub use count_set_ops::CountSetOps;
 pub use distinct_to_groupby::DistinctToGroupBy;
@@ -65,6 +61,3 @@ pub use udf_rewriter::UDFArgVisitor;
 pub(crate) use udf_rewriter::UdfRewriter;
 pub use view_rewriter::ViewRewriter;
 pub use window_check::WindowChecker;
-
-pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 6] =
-    ["sum", "min", "max", "avg", "count", "approx_count_distinct"];

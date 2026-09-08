@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index_sink;
 mod analyze;
 mod append;
 mod changes;
@@ -41,7 +40,6 @@ mod util;
 mod vacuum;
 mod virtual_column;
 
-pub use agg_index_sink::AggIndexSink;
 pub use analyze::AnalyzeHistogramInfo;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
@@ -67,6 +65,7 @@ pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;
 pub use util::*;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;
+pub use vacuum::is_gc_candidate_segment_block;
 pub use vacuum::vacuum_tables_from_info;
 pub use virtual_column::VirtualColumnVacuumResult;
 pub use virtual_column::cleanup_vacuum_virtual_column_files;

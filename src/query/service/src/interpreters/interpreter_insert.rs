@@ -461,6 +461,12 @@ impl Interpreter for InsertInterpreter {
             TableMetaTimestamps::new(None, Duration::hours(1))
         };
 
+        let hook_lock_opt = if self.materialized_view_refresh_target.is_some() {
+            // Materialized-view refresh holds its lifecycle lock across this pipeline.
+            LockTableOption::NoLock
+        } else {
+            LockTableOption::LockNoRetry
+        };
         let mut build_res = PipelineBuildResult::create();
 
         match &self.plan.source {
@@ -509,7 +515,7 @@ impl Interpreter for InsertInterpreter {
                             self.plan.database.clone(),
                             self.plan.table.clone(),
                             MutationKind::Insert,
-                            LockTableOption::LockNoRetry,
+                            hook_lock_opt.clone(),
                         );
                         hook_operator.execute(&mut build_res.main_pipeline).await;
                     }
@@ -643,7 +649,7 @@ impl Interpreter for InsertInterpreter {
                         self.plan.database.clone(),
                         self.plan.table.clone(),
                         MutationKind::Insert,
-                        LockTableOption::LockNoRetry,
+                        hook_lock_opt.clone(),
                     );
                     hook_operator.execute(&mut build_res.main_pipeline).await;
                 }
@@ -713,7 +719,7 @@ impl Interpreter for InsertInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Insert,
-                LockTableOption::LockNoRetry,
+                hook_lock_opt,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

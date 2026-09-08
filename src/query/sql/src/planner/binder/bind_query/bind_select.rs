@@ -20,7 +20,6 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Expr::Array;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
@@ -39,7 +38,6 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::UnpivotName;
 use databend_common_ast::visit::VisitControl;
 use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
@@ -579,38 +577,6 @@ impl SelectRewriter {
             alias,
         }
     }
-
-    fn expr_literal_array_from_unpivot_names(names: &[UnpivotName]) -> Expr {
-        Array {
-            span: Span::default(),
-            exprs: names
-                .iter()
-                .map(|name| Expr::Literal {
-                    span: name.ident.span,
-                    value: Literal::String(
-                        name.alias.as_ref().unwrap_or(&name.ident.name).to_string(),
-                    ),
-                })
-                .collect(),
-        }
-    }
-
-    fn expr_column_ref_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
-        Array {
-            span: Span::default(),
-            exprs: exprs
-                .into_iter()
-                .map(|expr| Expr::ColumnRef {
-                    span: None,
-                    column: ColumnRef {
-                        database: None,
-                        table: None,
-                        column: ColumnID::Name(expr),
-                    },
-                })
-                .collect(),
-        }
-    }
 }
 
 impl SelectRewriter {
@@ -642,7 +608,6 @@ impl SelectRewriter {
 
     fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
         self.rewrite_pivot(stmt)?;
-        self.rewrite_unpivot(stmt)?;
         Ok(self.new_stmt.take())
     }
 
@@ -973,46 +938,6 @@ impl SelectRewriter {
         }
 
         Ok(source_query)
-    }
-
-    fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {
-        if stmt.from.len() != 1 {
-            return Ok(());
-        }
-        let Some(unpivot) = stmt.from[0].unpivot() else {
-            return Ok(());
-        };
-        let mut new_select_list = stmt.select_list.clone();
-        let columns = unpivot
-            .column_names
-            .iter()
-            .map(|name| name.ident.to_owned())
-            .collect::<Vec<_>>();
-        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(columns.clone());
-        };
-        new_select_list.push(Self::target_func_from_name_args(
-            Identifier::from_name(stmt.span, "unnest"),
-            vec![Self::expr_literal_array_from_unpivot_names(
-                &unpivot.column_names,
-            )],
-            Some(unpivot.unpivot_column.clone()),
-        ));
-        new_select_list.push(Self::target_func_from_name_args(
-            Identifier::from_name(stmt.span, "unnest"),
-            vec![Self::expr_column_ref_array_from_vec_ident(columns)],
-            Some(unpivot.value_column.clone()),
-        ));
-
-        if let Some(ref mut new_stmt) = self.new_stmt {
-            new_stmt.select_list = new_select_list;
-        } else {
-            self.new_stmt = Some(SelectStmt {
-                select_list: new_select_list,
-                ..stmt.clone()
-            });
-        };
-        Ok(())
     }
 }
 

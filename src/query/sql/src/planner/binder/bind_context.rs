@@ -243,10 +243,6 @@ pub struct BindContext {
 
     pub expr_context: ExprContext,
 
-    /// If true, the query is planning for aggregate index.
-    /// It's used to avoid infinite loop.
-    pub planning_agg_index: bool,
-
     /// If true, the query is binding materialized-view rewrite candidates.
     /// It's used to avoid recursively discovering candidates for candidate plans.
     pub planning_materialized_view_rewrite: bool,
@@ -334,7 +330,6 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            planning_agg_index: false,
             planning_materialized_view_rewrite: false,
             window_definitions: DashMap::new(),
         }
@@ -382,7 +377,6 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
-            planning_agg_index: false,
             planning_materialized_view_rewrite: parent.planning_materialized_view_rewrite,
             window_definitions: DashMap::new(),
         })

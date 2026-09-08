@@ -61,6 +61,9 @@ geo-index = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
+lindera = { workspace = true }
+lindera-analysis = { workspace = true }
+lindera-tantivy = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 opendal = { workspace = true }
@@ -68,6 +71,7 @@ parking_lot = { workspace = true }
 parquet = { workspace = true }
 paste = { workspace = true }
 rand = { workspace = true }
+rayon = { workspace = true }
 roaring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

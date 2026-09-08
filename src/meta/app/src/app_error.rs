@@ -150,6 +150,20 @@ impl CommitTableMetaError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "Cannot attach a row access or masking policy to shared table id {table_id}; revoke the table from all shares first"
+)]
+pub struct SharedTableSecurityPolicy {
+    table_id: u64,
+}
+
+impl SharedTableSecurityPolicy {
+    pub fn new(table_id: u64) -> Self {
+        Self { table_id }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("InvalidMaterializedView: {reason}")]
 pub struct InvalidMaterializedView {
     reason: String,
@@ -765,16 +779,18 @@ impl VirtualColumnTooMany {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("TableLockExpired: `{table_id}` while `{context}`")]
-pub struct TableLockExpired {
+#[error("LeaseExpired: lease `{lease_id}` for table `{table_id}` while `{context}`")]
+pub struct LeaseExpired {
     table_id: u64,
+    lease_id: u64,
     context: String,
 }
 
-impl TableLockExpired {
-    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+impl LeaseExpired {
+    pub fn new(table_id: u64, lease_id: u64, context: impl Into<String>) -> Self {
         Self {
             table_id,
+            lease_id,
             context: context.into(),
         }
     }
@@ -919,6 +935,9 @@ pub enum AppError {
     CommitTableMetaError(#[from] CommitTableMetaError),
 
     #[error(transparent)]
+    SharedTableSecurityPolicy(#[from] SharedTableSecurityPolicy),
+
+    #[error(transparent)]
     InvalidMaterializedView(#[from] InvalidMaterializedView),
 
     #[error(transparent)]
@@ -1003,7 +1022,7 @@ pub enum AppError {
     TxnRetryMaxTimes(#[from] TxnRetryMaxTimes),
 
     #[error(transparent)]
-    TableLockExpired(#[from] TableLockExpired),
+    LeaseExpired(#[from] LeaseExpired),
 
     #[error(transparent)]
     CreateIndexWithDropTime(#[from] CreateIndexWithDropTime),
@@ -1220,6 +1239,8 @@ impl AppErrorMessage for CommitTableMetaError {
     }
 }
 
+impl AppErrorMessage for SharedTableSecurityPolicy {}
+
 impl AppErrorMessage for InvalidMaterializedView {}
 
 impl AppErrorMessage for MaterializedViewAlreadyExists {
@@ -1269,11 +1290,11 @@ impl AppErrorMessage for UndropTableHasNoHistory {
     }
 }
 
-impl AppErrorMessage for TableLockExpired {
+impl AppErrorMessage for LeaseExpired {
     fn message(&self) -> String {
         format!(
-            "the acquired table lock in '{}' has been expired",
-            self.table_id
+            "lease '{}' for table '{}' expired while '{}'",
+            self.lease_id, self.table_id, self.context
         )
     }
 }
@@ -1442,6 +1463,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
+            AppError::SharedTableSecurityPolicy(err) => ErrorCode::AlterTableError(err.message()),
             AppError::InvalidMaterializedView(err) => {
                 ErrorCode::InvalidMaterializedView(err.message())
             }
@@ -1474,7 +1496,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::StreamVersionMismatched(err.message())
             }
             AppError::UnknownStreamId(err) => ErrorCode::UnknownStreamId(err.message()),
-            AppError::TableLockExpired(err) => ErrorCode::TableLockExpired(err.message()),
+            AppError::LeaseExpired(err) => ErrorCode::LeaseExpired(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
             AppError::CreateIndexWithDropTime(err) => {

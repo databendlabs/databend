@@ -23,7 +23,16 @@ struct MetaNodeUnitTestBuilder {}
 #[async_trait]
 impl kvapi::ApiBuilder<MetaStore> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> MetaStore {
-        MetaStore::new_local_testing::<TokioRuntime>().await
+        let store = MetaStore::new_local_testing::<TokioRuntime>().await;
+        let MetaStore::L(local) = &store else {
+            unreachable!("new_local_testing must return a local store")
+        };
+
+        assert_eq!(local.config.raft_config.raft_api_port, 0);
+        assert!(local.config.grpc.api_address().is_none());
+        assert_eq!(store.get_local_addr().await.unwrap(), "127.0.0.1:0");
+
+        store
     }
 
     async fn build_cluster(&self) -> Vec<MetaStore> {

@@ -17,6 +17,7 @@ use std::mem;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateType;
@@ -30,7 +31,6 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
-use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
@@ -141,7 +141,7 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let timezone = TimeZone::UTC;
+        let timezone = Tz::UTC;
         let mut items = Vec::with_capacity(self.values.len());
         let values = mem::take(&mut self.values);
         let data_type = builder.data_type();

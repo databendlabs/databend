@@ -595,10 +595,8 @@ impl TransformUdfScript {
     pub fn init_runtime(funcs: &[ScriptUdfFunctionDesc]) -> Result<RuntimeTimeRes> {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
-            let (code, code_str) = match &func.udf_type {
-                UDFType::Script(box script_code) => {
-                    (script_code, String::from_utf8(script_code.code.to_vec())?)
-                }
+            let code = match &func.udf_type {
+                UDFType::Script(box script_code) => script_code,
                 _ => continue,
             };
 
@@ -609,6 +607,7 @@ impl TransformUdfScript {
                     imports_stage_info,
                     ..
                 }) => {
+                    let code_str = String::from_utf8(code.code.to_vec())?;
                     let mut dependencies = Self::extract_deps(&code_str)?;
                     dependencies.extend_from_slice(packages.as_slice());
 

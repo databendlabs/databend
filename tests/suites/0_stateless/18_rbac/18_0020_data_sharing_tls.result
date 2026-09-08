@@ -1,0 +1,12 @@
+share management without GRANT denied
+consumer SHOW SHARES without GRANT exposed inbound share
+consumer DESC SHARE without GRANT described inbound share
+CREATE SHARE IF NOT EXISTS skipped unused Connection authorization
+ALTER SHARE IF EXISTS skipped unused Connection authorization
+account authorization without ACCESS CONNECTION denied
+account authorization with ACCESS CONNECTION succeeded
+account removal without ACCESS CONNECTION succeeded
+old-name table revoke is a no-op
+old-name database revoke is a no-op
+stale table grant cleanup ignored same-name replacement permissions
+stale database grant cleanup ignored same-name replacement permissions
