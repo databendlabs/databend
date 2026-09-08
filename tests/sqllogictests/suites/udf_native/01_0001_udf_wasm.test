@@ -3,6 +3,25 @@ select name from list_stage(location => '@data/udf/test10_udf_wasm_gcd.wasm.zst'
 ----
 udf/test10_udf_wasm_gcd.wasm.zst
 
+# Preserve the explicit row count of zero-column batches for zero-argument WASM UDFs.
+
+statement ok
+CREATE OR REPLACE FUNCTION wasm_constant () RETURNS INT LANGUAGE wasm HANDLER = 'wasm_constant' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
+
+query I
+SELECT wasm_constant()
+----
+42
+
+query II
+SELECT number, wasm_constant() FROM numbers(5) ORDER BY number
+----
+0 42
+1 42
+2 42
+3 42
+4 42
+
 statement ok
 CREATE OR REPLACE FUNCTION wasm_gcd (INT, INT) RETURNS INT LANGUAGE wasm HANDLER = 'wasm_gcd' AS $$@data/udf/test10_udf_wasm_gcd.wasm.zst$$
 

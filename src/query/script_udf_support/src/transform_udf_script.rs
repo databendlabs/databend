@@ -20,6 +20,7 @@ use std::sync::LazyLock;
 use std::sync::atomic::AtomicUsize;
 
 use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Fields;
@@ -189,7 +190,7 @@ if '{dir}' not in sys.path:
             }
             ScriptRuntime::WebAssembly(runtime) => {
                 let return_type = func.data_type.as_ref().clone();
-                let declared_return_type = return_type.to_string();
+                let declared_return_type = wasm_declared_return_type(&return_type);
                 let f = DataField::new(&func.func_name, return_type);
                 let return_field = arrow_schema::Field::from(&f);
                 call_wasm_function(
@@ -301,6 +302,10 @@ const ARROW_UDF_DECIMAL: &str = "arrowudf.decimal";
 // This is a conservative subset of rust_decimal's 96-bit coefficient domain.
 const ARROW_UDF_DECIMAL_MAX_PRECISION: u8 = 28;
 const ARROW_UDF_DECIMAL_MAX_SCALE: i8 = 28;
+
+fn wasm_declared_return_type(data_type: &DataType) -> String {
+    data_type.remove_nullable().to_string()
+}
 
 fn call_wasm_function(
     runtime: &arrow_udf_runtime::wasm::Runtime,
@@ -427,7 +432,12 @@ fn wasm_compatible_record_batch(batch: &RecordBatch) -> Result<RecordBatch> {
         .collect::<Result<Vec<_>>>()?;
     let schema = arrow_schema::Schema::new(fields).with_metadata(schema.metadata().clone());
 
-    RecordBatch::try_new(Arc::new(schema), columns).map_err(Into::into)
+    RecordBatch::try_new_with_options(
+        Arc::new(schema),
+        columns,
+        &RecordBatchOptions::default().with_row_count(Some(batch.num_rows())),
+    )
+    .map_err(Into::into)
 }
 
 fn restore_wasm_result_batch(
@@ -1418,6 +1428,30 @@ mod tests {
     }
 
     #[test]
+    fn test_wasm_compatible_record_batch_preserves_zero_column_row_count() {
+        let input = RecordBatch::try_new_with_options(
+            Arc::new(Schema::empty()),
+            vec![],
+            &RecordBatchOptions::default().with_row_count(Some(5)),
+        )
+        .unwrap();
+
+        let output = wasm_compatible_record_batch(&input).unwrap();
+
+        assert_eq!(output.num_columns(), 0);
+        assert_eq!(output.num_rows(), 5);
+    }
+
+    #[test]
+    fn test_wasm_declared_return_type_omits_implicit_nullable() {
+        let data_type = DataType::Nullable(Box::new(DataType::Decimal(
+            databend_common_expression::types::DecimalSize::new(28, 28).unwrap(),
+        )));
+
+        assert_eq!(wasm_declared_return_type(&data_type), "Decimal(28, 28)");
+    }
+
+    #[test]
     fn test_wasm_compatible_field_type_matrix() {
         let unchanged = [
             ArrowDataType::Null,
@@ -1709,6 +1743,26 @@ mod tests {
         ));
         let code = zstd::stream::decode_all(compressed.as_slice()).unwrap();
         let runtime = arrow_udf_runtime::wasm::Runtime::new(&code).unwrap();
+
+        let zero_argument_input = RecordBatch::try_new_with_options(
+            Arc::new(Schema::empty()),
+            vec![],
+            &RecordBatchOptions::default().with_row_count(Some(5)),
+        )
+        .unwrap();
+        let constant_output = call_wasm_function(
+            &runtime,
+            "wasm_constant",
+            &zero_argument_input,
+            &Field::new("result", ArrowDataType::Int32, true),
+            "Int32",
+        )
+        .unwrap();
+        assert_eq!(constant_output.num_rows(), 5);
+        assert_eq!(
+            constant_output.column(0).as_primitive::<Int32Type>().values(),
+            &[42, 42, 42, 42, 42]
+        );
 
         let scalar_cases: Vec<(&str, ArrowDataType, Arc<dyn Array>)> = vec![
             (
