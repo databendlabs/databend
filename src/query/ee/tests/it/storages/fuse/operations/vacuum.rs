@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::Utc;
 use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
@@ -62,6 +63,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::EntryMode;
+use opendal::ErrorKind;
 use opendal::Metadata;
 use opendal::OperatorBuilder;
 use opendal::raw::Access;
@@ -226,7 +228,7 @@ async fn test_vacuum_drop_clone_group_reclaims_only_authorized_leaf() -> anyhow:
             .await
             .unwrap_err()
             .kind(),
-        opendal::ErrorKind::NotFound
+        ErrorKind::NotFound
     );
 
     Ok(())
@@ -292,7 +294,7 @@ async fn test_vacuum_drop_clone_cleans_metadata() -> anyhow::Result<()> {
             .await
             .unwrap_err()
             .kind(),
-        opendal::ErrorKind::NotFound
+        ErrorKind::NotFound
     );
     source_fuse.get_operator_ref().stat(&source_marker).await?;
     assert!(meta.get_pb(&TableId::new(clone_id)).await?.is_none());
@@ -314,7 +316,7 @@ async fn test_vacuum_drop_clone_cleans_metadata() -> anyhow::Result<()> {
     let clone_lvt_ident = LeastVisibleTimeIdent::new(&tenant, batch_clone_id);
     for lvt_ident in [&source_lvt_ident, &clone_lvt_ident] {
         catalog
-            .set_table_lvt(lvt_ident, &LeastVisibleTime::new(chrono::Utc::now()))
+            .set_table_lvt(lvt_ident, &LeastVisibleTime::new(Utc::now()))
             .await?;
         assert!(meta.get_pb(lvt_ident).await?.is_some());
     }

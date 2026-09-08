@@ -15,10 +15,13 @@
 // Logs from this module will show up as "[VACUUM] ...".
 databend_common_tracing::register_module_tag!("[VACUUM]");
 
+use std::cmp::max;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono::DateTime;
@@ -52,6 +55,7 @@ use opendal::Operator;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
+use crate::io::MetaReaders;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 
@@ -93,7 +97,7 @@ fn retention_cutoff(
     latest_snapshot_timestamp: DateTime<Utc>,
     retention_period: TimeDelta,
 ) -> DateTime<Utc> {
-    std::cmp::min(now - retention_period, latest_snapshot_timestamp)
+    min(now - retention_period, latest_snapshot_timestamp)
 }
 
 fn flashback_gc_root_lvt(respect_flash_back: bool, lvt: DateTime<Utc>) -> Option<DateTime<Utc>> {
@@ -357,11 +361,11 @@ impl FuseTable {
         T: Fn(String),
     {
         let retention_policy = table.get_data_retention_policy(ctx.as_ref())?;
-        let reader = crate::io::MetaReaders::table_snapshot_reader(table.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(table.get_operator());
         let location_generator = table.meta_location_generator();
         let mut location = snapshot_location;
         let mut version = TableMetaLocationGenerator::snapshot_version(&location);
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let mut count = 0;
         let mut time_boundary = None;
 
@@ -449,9 +453,9 @@ impl FuseTable {
         T: Fn(String),
     {
         let retention_policy = table.get_data_retention_policy(ctx.as_ref())?;
-        let reader = crate::io::MetaReaders::table_snapshot_reader(table.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(table.get_operator());
         let location_generator = table.meta_location_generator();
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let mut location = snapshot_location;
         let version = TableMetaLocationGenerator::snapshot_version(&location);
         let mut snapshot = reader
@@ -576,7 +580,7 @@ impl FuseTable {
 
     async fn protect_table_tags(
         table: &FuseTable,
-        catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
+        catalog: &Arc<dyn Catalog>,
         segments: &mut HashSet<Location>,
     ) -> Result<()> {
         let tags = catalog
@@ -813,7 +817,7 @@ impl FuseTable {
             return Ok(None);
         };
 
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
         let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
 
@@ -1077,7 +1081,7 @@ impl FuseTable {
             .await?
             .map(|lvt| lvt.time);
         Ok(Some(current.map_or(lvt_point_candidate, |time| {
-            std::cmp::max(time, lvt_point_candidate)
+            max(time, lvt_point_candidate)
         })))
     }
 }

@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -625,7 +627,7 @@ impl FuseTable {
                             .unwrap_or_default(),
                     )
                 })
-                .collect::<std::collections::BTreeMap<_, _>>();
+                .collect::<BTreeMap<_, _>>();
 
             table_meta.schema = Arc::new(historical_schema);
             table_meta.field_comments = snapshot
@@ -840,7 +842,7 @@ impl FuseTable {
 
         let mut target = self.clone();
         target.table_info.meta = table_meta.clone();
-        let target: Arc<dyn databend_common_catalog::table::Table> = Arc::new(target);
+        let target: Arc<dyn Table> = Arc::new(target);
         if let Some(cluster_key) = table_meta.cluster_key_str() {
             analyze_cluster_keys(ctx.clone(), target.clone(), cluster_key).map_err(|err| {
                 ErrorCode::InvalidClusterKeys(format!(

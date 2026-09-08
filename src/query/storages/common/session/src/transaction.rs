@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -141,18 +142,16 @@ impl TxnBuffer {
                 .or_insert(req.base_snapshot_location);
 
             match self.lvt_check.entry(table_id) {
-                std::collections::hash_map::Entry::Vacant(entry) => {
+                Entry::Vacant(entry) => {
                     entry.insert(req.lvt_check);
                 }
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
-                    match (entry.get_mut(), req.lvt_check) {
-                        (slot @ None, Some(check)) => *slot = Some(check),
-                        (Some(existing), Some(check)) if check.time < existing.time => {
-                            *existing = check;
-                        }
-                        _ => {}
+                Entry::Occupied(mut entry) => match (entry.get_mut(), req.lvt_check) {
+                    (slot @ None, Some(check)) => *slot = Some(check),
+                    (Some(existing), Some(check)) if check.time < existing.time => {
+                        *existing = check;
                     }
-                }
+                    _ => {}
+                },
             }
         }
 

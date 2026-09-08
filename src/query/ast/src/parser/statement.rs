@@ -4785,7 +4785,7 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     );
     let clone = map(
         rule! {
-            CLONE ~ #dot_separated_idents_1_to_3 ~ (AT ~ ^#at_snapshot_or_ts)?
+            CLONE ~ #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)?
         },
         |(_, (catalog, database, table), travel_point)| CreateTableSource::Clone {
             catalog,

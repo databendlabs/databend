@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -44,8 +45,8 @@ use crate::plans::Plan;
 pub type TableOptions = BTreeMap<String, String>;
 
 #[derive(Clone, Debug)]
-pub struct CloneTablePlan {
-    pub source: databend_common_meta_app::schema::TableInfo,
+pub struct CloneTableSource {
+    pub table_info: TableInfo,
     pub navigation: Option<NavigationPoint>,
 }
 
@@ -71,7 +72,7 @@ pub struct CreateTablePlan {
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
-    pub clone: Option<CloneTablePlan>,
+    pub clone: Option<CloneTableSource>,
     pub attached_columns: Option<Vec<Identifier>>,
 }
 

@@ -1936,6 +1936,32 @@ impl AccessChecker for PrivilegeAccess {
                 if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
                     self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
                 }
+                if let Some(clone) = &plan.clone {
+                    // CLONE reads source snapshots directly rather than through as_select.
+                    // Anchor authorization to the captured source ID, not the destination.
+                    let source = &clone.table_info;
+                    let db_id = source.meta.options.get(OPT_KEY_DATABASE_ID)
+                        .ok_or_else(|| ErrorCode::Internal("Clone source database ID is missing"))?
+                        .parse::<u64>()?;
+                    let privilege = UserPrivilegeType::Select;
+                    match self.validate_access(
+                        &GrantObject::TableById(source.catalog().to_string(), db_id, source.ident.table_id),
+                        privilege, false, false,
+                    ).await {
+                        Ok(()) => {}
+                        Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
+                            // Legacy name-based grants still apply. Resolve the database by ID
+                            // rather than parsing TableInfo.desc (names may contain dots).
+                            let catalog = self.ctx.get_catalog(source.catalog()).await?;
+                            let database = catalog.get_db_name_by_id(db_id).await?;
+                            self.validate_access(
+                                &GrantObject::Table(source.catalog().to_string(), database, source.name.clone()),
+                                privilege, false, false,
+                            ).await?;
+                        }
+                        Err(err) => return Err(err),
+                    }
+                }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }

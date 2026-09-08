@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -21,6 +26,81 @@ use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_source_privileges() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for sql in [
+        "CREATE DATABASE `clone.source`",
+        "CREATE DATABASE clone_target",
+        "CREATE TABLE `clone.source`.secret(c INT)",
+        "INSERT INTO `clone.source`.secret VALUES (42)",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, "clone.source", "secret").await?;
+    let source_db = catalog
+        .get_database(&tenant, "clone.source")
+        .await?
+        .get_db_info()
+        .database_id
+        .db_id;
+    let target_db = catalog
+        .get_database(&tenant, "clone_target")
+        .await?
+        .get_db_info()
+        .database_id
+        .db_id;
+    let snapshot = FuseTable::try_from_table(source.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    let session = fixture.default_session();
+    let mut creator = UserInfo::new("clone_creator", "%", AuthInfo::None);
+    creator.grants.grant_privileges(
+        &GrantObject::DatabaseById("default".into(), target_db),
+        UserPrivilegeType::Create.into(),
+    );
+
+    for (name, point, grant) in [
+        (
+            "by_id",
+            String::new(),
+            GrantObject::TableById("default".into(), source_db, source.get_id()),
+        ),
+        (
+            "by_name",
+            format!(" AT (SNAPSHOT => '{}')", snapshot.snapshot_id.simple()),
+            GrantObject::Table("default".into(), "clone.source".into(), "secret".into()),
+        ),
+    ] {
+        let sql = format!("CREATE TABLE clone_target.{name} CLONE `clone.source`.secret{point}");
+        session.set_authed_user(creator.clone(), None).await?;
+        let err = fixture.execute_command(&sql).await.unwrap_err();
+        assert_eq!(err.code(), ErrorCode::PERMISSION_DENIED);
+        assert!(!catalog.exists_table(&tenant, "clone_target", name).await?);
+
+        let mut reader = UserInfo::new("clone_reader", "%", AuthInfo::None);
+        reader
+            .grants
+            .grant_privileges(&grant, UserPrivilegeType::Select.into());
+        session.set_authed_user(reader, None).await?;
+        let err = fixture.execute_command(&sql).await.unwrap_err();
+        assert_eq!(err.code(), ErrorCode::PERMISSION_DENIED);
+
+        let mut authorized = creator.clone();
+        authorized
+            .grants
+            .grant_privileges(&grant, UserPrivilegeType::Select.into());
+        session.set_authed_user(authorized, None).await?;
+        fixture.execute_command(&sql).await?;
+        assert!(catalog.exists_table(&tenant, "clone_target", name).await?);
+    }
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_empty_cross_database_clone_internal_metadata() -> anyhow::Result<()> {
@@ -98,10 +178,7 @@ async fn test_clone_rejects_missing_masking_policy_definition() -> anyhow::Resul
         ))
         .await
         .unwrap_err();
-    assert_eq!(
-        err.code(),
-        databend_common_exception::ErrorCode::UnknownDatamask("").code()
-    );
+    assert_eq!(err.code(), ErrorCode::UnknownDatamask("").code());
     assert!(err.message().contains(&missing_policy_id.to_string()));
     assert!(
         !catalog

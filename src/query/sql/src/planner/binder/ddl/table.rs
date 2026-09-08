@@ -157,7 +157,7 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTablePartitionByPlan;
 use crate::plans::AnalyzeTablePlan;
-use crate::plans::CloneTablePlan;
+use crate::plans::CloneTableSource;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
@@ -704,7 +704,7 @@ impl Binder {
                 catalog: catalog.name().clone(),
                 database,
                 table,
-                // CLONE metadata is built from CloneTablePlan::source. These fields only satisfy
+                // CLONE metadata is built from CloneTableSource::table_info. These fields only satisfy
                 // the common CreateTablePlan shape and must not become a second metadata source.
                 schema: source_info.meta.schema.clone(),
                 engine: Engine::Fuse,
@@ -719,8 +719,8 @@ impl Binder {
                 as_select: None,
                 table_indexes: None,
                 table_constraints: None,
-                clone: Some(CloneTablePlan {
-                    source: source_info,
+                clone: Some(CloneTableSource {
+                    table_info: source_info,
                     navigation,
                 }),
                 attached_columns: None,

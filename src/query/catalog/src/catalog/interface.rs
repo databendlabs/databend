@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::unimplemented;
@@ -729,7 +730,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn set_table_lvts(
         &self,
         _tenant: &Tenant,
-        _table_lvts: &std::collections::HashMap<u64, LeastVisibleTime>,
+        _table_lvts: &HashMap<u64, LeastVisibleTime>,
     ) -> Result<()> {
         unimplemented!()
     }

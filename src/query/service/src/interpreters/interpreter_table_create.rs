@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::Duration;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -418,7 +419,7 @@ impl CreateTableInterpreter {
         // Build the source from the TableInfo captured by the binder. Its snapshot location and
         // table sequence therefore describe the same source version that Meta will CAS below.
         let source =
-            FuseTable::create_without_refresh_table_info(clone.source.clone(), storage_class)?;
+            FuseTable::create_without_refresh_table_info(clone.table_info.clone(), storage_class)?;
         let source_snapshot_location = match &clone.navigation {
             Some(point) => source.navigate_to_location(self.ctx.clone(), point).await?,
             None => source.snapshot_loc(),
@@ -437,7 +438,7 @@ impl CreateTableInterpreter {
             })
             .transpose()?;
 
-        let source_table_id = clone.source.ident.table_id;
+        let source_table_id = clone.table_info.ident.table_id;
         let clone_group_id = source.clone_group_id()?;
 
         let target_database_id = self
@@ -476,7 +477,7 @@ impl CreateTableInterpreter {
         }
         req.clone = Some(CreateTableCloneMeta {
             source_table_id,
-            source_table_seq: MatchSeq::Exact(clone.source.ident.seq),
+            source_table_seq: MatchSeq::Exact(clone.table_info.ident.seq),
             clone_group_id,
             snapshot_timestamp,
         });
@@ -528,7 +529,7 @@ impl CreateTableInterpreter {
                 snapshot.segments.clone(),
                 cluster_key_info,
                 None,
-                TableMetaTimestamps::new(None, chrono::Duration::zero()),
+                TableMetaTimestamps::new(None, Duration::zero()),
             )?;
             anchor_gc_safe_time = anchor.timestamp;
             let anchor_location = target

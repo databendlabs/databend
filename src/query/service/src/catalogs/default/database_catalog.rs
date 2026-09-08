@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -1000,7 +1001,7 @@ impl Catalog for DatabaseCatalog {
     async fn set_table_lvts(
         &self,
         tenant: &Tenant,
-        table_lvts: &std::collections::HashMap<u64, LeastVisibleTime>,
+        table_lvts: &HashMap<u64, LeastVisibleTime>,
     ) -> Result<()> {
         self.mutable_catalog
             .set_table_lvts(tenant, table_lvts)
