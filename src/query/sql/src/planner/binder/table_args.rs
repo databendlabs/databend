@@ -41,6 +41,7 @@ pub(crate) fn contains_subquery(expr: &Expr) -> bool {
     match expr {
         Expr::Subquery { .. } => true,
         Expr::InSubquery { .. } => true,
+        Expr::LikeSubquery { .. } => true,
         Expr::Exists { .. } => true,
         Expr::Cast { expr, .. } => contains_subquery(expr),
         Expr::TryCast { expr, .. } => contains_subquery(expr),

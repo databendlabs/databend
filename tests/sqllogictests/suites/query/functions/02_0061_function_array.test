@@ -14,6 +14,22 @@ select number from numbers((select [1])[1])
 ----
 0
 
+# LIKE ANY/ALL/SOME subqueries in bracket keys also require the table-argument executor.
+query I
+select number from numbers(map([true], [1])['a' like any (select 'a')])
+----
+0
+
+query I
+select number from numbers(map([true], [1])['a' like all (select 'a')])
+----
+0
+
+query I
+select number from numbers(map([true], [1])['a' like some (select 'a')])
+----
+0
+
 # Array subscripts accept expressions and remain one-based, with NULL for missing elements.
 query T
 select array('a', 'b', 'c')[number % 2] from numbers(3) order by number
