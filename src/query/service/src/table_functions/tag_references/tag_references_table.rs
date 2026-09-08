@@ -531,7 +531,7 @@ async fn collect_tag_references(
                     .args_type
                     .iter()
                     .map(|t| {
-                        databend_common_sql::resolve_type_name(t, true).map(|dt| {
+                        databend_common_expression::resolve_type_name(t, true).map(|dt| {
                             databend_common_expression::types::DataType::from(&dt).to_string()
                         })
                     })
