@@ -281,7 +281,6 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
                         task_threshold_bytes: properties.memory_threshold,
                         // Filled in by `task_candidate`, which groups blocks by segment.
                         touched_segment_count: 0,
-                        depth_threshold: properties.depth_threshold,
                     },
                     &task_indices,
                     blocks,

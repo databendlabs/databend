@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_sql::ClusterKeys;
@@ -306,9 +307,6 @@ pub struct CandidateScore {
     /// Distinct segments the selected blocks come from. Each extra segment adds
     /// metadata read and commit work that raw rewrite bytes do not capture.
     pub touched_segment_count: usize,
-    /// Depth gate this candidate was probed against. Ranking uses it to tier
-    /// candidates by how far above the gate their worst hotspot sits.
-    pub depth_threshold: f64,
 }
 
 impl CandidateScore {
@@ -324,31 +322,6 @@ impl CandidateScore {
     /// rewrite bytes alone do not express. Kept well below a typical block so
     /// it only breaks ties between otherwise comparable candidates.
     const SEGMENT_COST_BYTES: usize = 4 * 1024 * 1024;
-    /// Multiple of `depth_threshold` at or above which a hotspot is treated as
-    /// tail work that must be drained before shallower rewrites, regardless of
-    /// how good their benefit density looks. Matches the mature gate used by
-    /// `passes_depth_gate`, so tiering agrees with admission.
-    const TAIL_DEPTH_GATE_FACTOR: f64 = 2.0;
-
-    /// Rank tier for tail protection. Lower sorts first.
-    ///
-    /// Benefit density alone leaves the deepest hotspots behind: a mid-depth
-    /// candidate that rewrites fewer bytes per removed depth keeps outranking
-    /// them, so a full FINAL can end with a worse p95/p99 than v1 even while
-    /// average depth improves. Tiering by how far the worst hotspot sits above
-    /// the depth gate drains the tail first and only then optimizes density.
-    pub fn depth_tier(&self) -> u8 {
-        if self.depth_threshold <= 0.0 {
-            return 1;
-        }
-        let tail_gate =
-            (Self::TAIL_DEPTH_GATE_FACTOR * self.depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
-        if (self.max_depth as f64) >= tail_gate {
-            0
-        } else {
-            1
-        }
-    }
 
     pub fn bytes_per_depth_gain(&self) -> f64 {
         if self.estimated_depth_gain == 0 {
@@ -377,7 +350,6 @@ impl CandidateScore {
     /// Benefit density discounted by how poorly the candidate fills a task
     /// slot. Higher is better. Replaces the previous fixed slot-cost term,
     /// which did not scale with the task byte budget.
-    ///
     /// Cost counts extra touched segments, so a task that rewrites the same
     /// bytes from fewer segments ranks ahead of one scattered across many.
     pub fn fill_adjusted_gain_density(&self) -> f64 {
@@ -412,24 +384,10 @@ impl CandidateScore {
     }
 
     /// Compare scores by the experimental benefit-density order.
-    ///
-    /// Ordering, highest priority first:
-    /// 1. deeper-than-gate hotspots, so the tail drains before shallow work,
-    /// 2. candidates filling at least `MIN_FILL_RATIO` of a task slot,
-    /// 3. fill-adjusted gain density,
-    /// 4. total estimated depth gain,
-    /// 5. less fragmented rewrites,
-    /// 6. larger rewrites.
-    ///
-    /// Tiering by depth comes first because density is a ratio: a mid-depth
-    /// candidate with a good bytes-per-gain ratio otherwise keeps outranking the
-    /// worst hotspots, which leaves p95/p99 worse at the end of a full FINAL
-    /// even when average depth improves.
     pub fn cmp_desc_v2(&self, other: &Self) -> cmp::Ordering {
         other
-            .depth_tier()
-            .cmp(&self.depth_tier())
-            .then_with(|| other.is_underfilled().cmp(&self.is_underfilled()))
+            .is_underfilled()
+            .cmp(&self.is_underfilled())
             .then_with(|| {
                 self.fill_adjusted_gain_density()
                     .partial_cmp(&other.fill_adjusted_gain_density())
@@ -454,9 +412,25 @@ pub(crate) struct ReclusterTaskCandidate {
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
     pub(crate) output_level: i32,
     pub(crate) all_ordered: bool,
+    pub(crate) key_span: Option<(Vec<Scalar>, Vec<Scalar>)>,
 }
 
 impl ReclusterTaskCandidate {
+    pub(crate) fn key_span_intersects(&self, other: &Self) -> bool {
+        let (Some((self_min, self_max)), Some((other_min, other_max))) =
+            (&self.key_span, &other.key_span)
+        else {
+            return true;
+        };
+        fn le(left: &[Scalar], right: &[Scalar]) -> bool {
+            left.iter()
+                .map(Scalar::as_ref)
+                .cmp(right.iter().map(Scalar::as_ref))
+                != cmp::Ordering::Greater
+        }
+        le(self_min, other_max) && le(other_min, self_max)
+    }
+
     pub(crate) fn selected_block_count(&self) -> usize {
         self.selected_blocks
             .iter()
@@ -548,11 +522,37 @@ pub(crate) fn task_candidate(
     let all_ordered = task_indices
         .iter()
         .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original));
+    let mut key_span: Option<(Vec<Scalar>, Vec<Scalar>)> = None;
+    for &idx in task_indices {
+        let stats = blocks[idx].stats();
+        if stats.min.is_empty() || stats.max.is_empty() {
+            key_span = None;
+            break;
+        }
+        match &mut key_span {
+            None => key_span = Some((stats.min.clone(), stats.max.clone())),
+            Some((span_min, span_max)) => {
+                let lt = |left: &[Scalar], right: &[Scalar]| {
+                    left.iter()
+                        .map(Scalar::as_ref)
+                        .cmp(right.iter().map(Scalar::as_ref))
+                        == cmp::Ordering::Less
+                };
+                if lt(&stats.min, span_min) {
+                    *span_min = stats.min.clone();
+                }
+                if lt(span_max, &stats.max) {
+                    *span_max = stats.max.clone();
+                }
+            }
+        }
+    }
     ReclusterTaskCandidate {
         score,
         selected_blocks,
         output_level,
         all_ordered,
+        key_span,
     }
 }
 
@@ -571,6 +571,8 @@ mod tests {
 
     use super::CandidateScore;
     use super::ReclusterMode;
+    use super::ReclusterTaskCandidate;
+    use super::Scalar;
     use super::enable_task_selection_v2_for_mode;
 
     const MIB: usize = 1024 * 1024;
@@ -579,8 +581,6 @@ mod tests {
         segment_score(bytes, threshold, gain, blocks, 1)
     }
 
-    /// Score with depth tiering disabled, so a test exercises only the fill and
-    /// density order. `depth_threshold = 0` puts every candidate in one tier.
     fn segment_score(
         bytes: usize,
         threshold: usize,
@@ -596,18 +596,10 @@ mod tests {
             estimated_depth_gain: gain,
             task_threshold_bytes: threshold,
             touched_segment_count: segments,
-            depth_threshold: 0.0,
         }
     }
 
-    /// Score carrying a real depth gate, for the tail-protection order.
-    fn tiered_score(
-        bytes: usize,
-        threshold: usize,
-        gain: u64,
-        max_depth: usize,
-        depth_threshold: f64,
-    ) -> CandidateScore {
+    fn tiered_score(bytes: usize, threshold: usize, gain: u64, max_depth: usize) -> CandidateScore {
         CandidateScore {
             selected_total_bytes: bytes,
             selected_block_count: max_depth,
@@ -616,7 +608,6 @@ mod tests {
             estimated_depth_gain: gain,
             task_threshold_bytes: threshold,
             touched_segment_count: 1,
-            depth_threshold,
         }
     }
 
@@ -669,39 +660,31 @@ mod tests {
         assert_eq!(compact.cmp_desc_v2(&scattered), Ordering::Greater);
     }
 
-    #[test]
-    fn test_v2_drains_deep_tail_before_better_density() {
-        // The shallow candidate has strictly better density and fills the slot,
-        // so without tiering it wins. The deep one sits at the mature gate and
-        // is the tail work that leaves p95/p99 worse if it keeps losing.
-        let deep = tiered_score(400 * MIB, 1024 * MIB, 100, 32, 16.0);
-        let shallow = tiered_score(1000 * MIB, 1024 * MIB, 900, 8, 16.0);
-
-        assert_eq!(deep.depth_tier(), 0);
-        assert_eq!(shallow.depth_tier(), 1);
-        assert!(shallow.fill_adjusted_gain_density() > deep.fill_adjusted_gain_density());
-        assert_eq!(deep.cmp_desc_v2(&shallow), Ordering::Greater);
+    fn spanned_candidate(min: i32, max: i32) -> ReclusterTaskCandidate {
+        ReclusterTaskCandidate {
+            score: tiered_score(MIB, 4 * MIB, 10, 8),
+            selected_blocks: vec![(0, vec![0])],
+            output_level: 0,
+            all_ordered: false,
+            key_span: Some((vec![Scalar::from(min)], vec![Scalar::from(max)])),
+        }
     }
 
     #[test]
-    fn test_v2_ranks_by_density_inside_one_depth_tier() {
-        // Tiering must not flatten the density order it wraps: two candidates on
-        // the same side of the gate still compare by fill-adjusted density.
-        let a = tiered_score(1000 * MIB, 1024 * MIB, 900, 32, 16.0);
-        let b = tiered_score(1000 * MIB, 1024 * MIB, 300, 32, 16.0);
-
-        assert_eq!(a.depth_tier(), b.depth_tier());
-        assert_eq!(a.cmp_desc_v2(&b), Ordering::Greater);
+    fn test_key_span_intersection_detects_overlapping_rewrites() {
+        let left = spanned_candidate(0, 100);
+        assert!(left.key_span_intersects(&spanned_candidate(50, 150)));
+        assert!(left.key_span_intersects(&spanned_candidate(100, 200)));
+        assert!(!left.key_span_intersects(&spanned_candidate(101, 200)));
+        assert!(!left.key_span_intersects(&spanned_candidate(-100, -1)));
     }
 
     #[test]
-    fn test_depth_tier_gate_tracks_configured_threshold() {
-        // The gate is relative, so a table with a lower depth setting treats a
-        // shallower hotspot as tail work.
-        assert_eq!(tiered_score(MIB, MIB, 1, 8, 4.0).depth_tier(), 0);
-        assert_eq!(tiered_score(MIB, MIB, 1, 7, 4.0).depth_tier(), 1);
-        // Capped at MAX_RECLUSTER_DEPTH so a high setting cannot disable tiering.
-        assert_eq!(tiered_score(MIB, MIB, 1, 32, 64.0).depth_tier(), 0);
+    fn test_unknown_key_span_is_treated_as_overlapping() {
+        let mut unknown = spanned_candidate(0, 10);
+        unknown.key_span = None;
+        assert!(unknown.key_span_intersects(&spanned_candidate(100, 200)));
+        assert!(spanned_candidate(100, 200).key_span_intersects(&unknown));
     }
 
     #[test]

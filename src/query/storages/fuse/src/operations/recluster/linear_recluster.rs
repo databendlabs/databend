@@ -210,7 +210,6 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 task_threshold_bytes: properties.memory_threshold,
                 // Filled in by `task_candidate`, which groups blocks by segment.
                 touched_segment_count: 0,
-                depth_threshold: properties.depth_threshold,
             };
             candidates.push(task_candidate(group, score, &task_indices, blocks));
         };
@@ -221,7 +220,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                          task_bytes: usize,
                          max_depth: usize| {
             let estimated_depth_gain =
-                estimate_selected_depth_gain(&local_indices, &open_pos, &close_pos, &point_depths);
+                estimate_selected_depth_gain(&local_indices, &open_pos, &close_pos, &seg);
             // Memory cap may have truncated the hotspot's full peak-depth set;
             // the actual overlap depth of what got selected cannot exceed how
             // many blocks made it into the task.
@@ -241,7 +240,6 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 estimated_depth_gain,
                 task_threshold_bytes: properties.memory_threshold,
                 touched_segment_count,
-                depth_threshold: properties.depth_threshold,
             };
             plans.push(CandidatePlan {
                 peak_pos,
@@ -432,40 +430,33 @@ fn estimate_selected_depth_gain(
     local_indices: &[usize],
     open_pos: &[usize],
     close_pos: &[usize],
-    point_depths: &[usize],
+    seg: &RangeMaxTree,
 ) -> u64 {
     if local_indices.len() < 2 {
         return 0;
     }
 
-    // Estimate how much overlap-depth area this rewrite can remove.
-    //
-    // At each folded cluster-key point, `point_depths[pos]` is the overlap depth
-    // of the whole candidate window, while `selected_depth` is the overlap depth
-    // contributed by the blocks selected for this task. Rewriting N selected
-    // blocks that overlap at the same point can reduce that point's depth by at
-    // most N - 1, because one rewritten output range may still cover it. Summing
-    // `selected_depth - 1` over all points gives an area-like benefit estimate:
-    // a task that fixes a wide moderate overlap can outrank a very deep but tiny
-    // peak if it removes more depth per byte rewritten.
-    let mut events = Vec::with_capacity(local_indices.len() * 2);
-    for &local_idx in local_indices {
-        events.push((open_pos[local_idx], 1i32));
-        events.push((close_pos[local_idx].saturating_add(1), -1i32));
-    }
-    events.sort_unstable_by_key(|(pos, _)| *pos);
-
     let mut gain = 0u64;
-    let mut selected_depth = 0i32;
-    let mut event_idx = 0usize;
-    for (pos, point_depth) in point_depths.iter().enumerate() {
-        while event_idx < events.len() && events[event_idx].0 == pos {
-            selected_depth += events[event_idx].1;
-            event_idx += 1;
+    for &local_idx in local_indices {
+        let open = open_pos[local_idx];
+        let close = close_pos[local_idx];
+        if open == usize::MAX || close == usize::MAX || close < open {
+            continue;
         }
-        if selected_depth > 1 && *point_depth > 1 {
-            gain += (selected_depth.min(*point_depth as i32) - 1) as u64;
-        }
+        let selected_stack = local_indices
+            .iter()
+            .filter(|&&other| {
+                let other_open = open_pos[other];
+                let other_close = close_pos[other];
+                other_open != usize::MAX
+                    && other_close != usize::MAX
+                    && other_close >= other_open
+                    && other_open <= close
+                    && other_close >= open
+            })
+            .count();
+        let current = seg.range_max(open, close);
+        gain = gain.saturating_add(current.min(selected_stack).saturating_sub(1) as u64);
     }
     gain
 }
@@ -648,4 +639,68 @@ fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) 
     }
 
     open_interval_count + start.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stacked(count: usize, span_end: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
+        ((0..count).collect(), vec![0; count], vec![span_end; count])
+    }
+
+    #[test]
+    fn test_gain_is_measured_per_block_not_per_key_point() {
+        let (idx, open, close) = stacked(3, 1);
+        let seg = RangeMaxTree::build(&[3, 3]);
+        let narrow = estimate_selected_depth_gain(&idx, &open, &close, &seg);
+        assert_eq!(narrow, 3 * (3 - 1));
+
+        let (widx, wopen, wclose) = stacked(3, 19);
+        let wide_seg = RangeMaxTree::build(&[3; 20]);
+        assert_eq!(
+            estimate_selected_depth_gain(&widx, &wopen, &wclose, &wide_seg),
+            narrow
+        );
+    }
+
+    #[test]
+    fn test_disjoint_selection_gains_nothing() {
+        let point_depths = vec![9; 6];
+        let seg = RangeMaxTree::build(&point_depths);
+        let gain = estimate_selected_depth_gain(&[0, 1, 2], &[0, 2, 4], &[1, 3, 5], &seg);
+        assert_eq!(gain, 0);
+    }
+
+    #[test]
+    fn test_gain_ignores_depth_from_unselected_blocks() {
+        let (idx, open, close) = stacked(4, 1);
+        let crowded = RangeMaxTree::build(&[10, 10]);
+        let alone = RangeMaxTree::build(&[4, 4]);
+        assert_eq!(
+            estimate_selected_depth_gain(&idx, &open, &close, &crowded),
+            estimate_selected_depth_gain(&idx, &open, &close, &alone)
+        );
+        assert_eq!(
+            estimate_selected_depth_gain(&idx, &open, &close, &alone),
+            4 * (4 - 1)
+        );
+    }
+
+    #[test]
+    fn test_gain_prefers_the_deeper_stack_at_equal_block_count() {
+        let (idx, open, close) = stacked(4, 1);
+        let deep = estimate_selected_depth_gain(&idx, &open, &close, &RangeMaxTree::build(&[8, 8]));
+        let shallow =
+            estimate_selected_depth_gain(&idx, &open, &close, &RangeMaxTree::build(&[2, 2]));
+        assert_eq!(deep, 4 * 3);
+        assert_eq!(shallow, 4);
+        assert!(deep > shallow);
+    }
+
+    #[test]
+    fn test_gain_needs_at_least_two_blocks() {
+        let seg = RangeMaxTree::build(&[5, 5]);
+        assert_eq!(estimate_selected_depth_gain(&[0], &[0], &[1], &seg), 0);
+    }
 }

@@ -40,6 +40,7 @@ use crate::SegmentLocation;
 use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
+use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
@@ -370,14 +371,31 @@ impl FuseTable {
                     ordering.then_with(|| left.2.output_level.cmp(&right.2.output_level))
                 });
 
+                let mut order: Vec<usize> = Vec::with_capacity(sorted_tasks.len());
+                if enable_task_selection_v2 {
+                    let mut overlapping = Vec::new();
+                    let mut chain: Vec<&ReclusterTaskCandidate> = Vec::new();
+                    for (idx, (_, _, task)) in sorted_tasks.iter().enumerate() {
+                        if chain.iter().any(|picked| picked.key_span_intersects(task)) {
+                            overlapping.push(idx);
+                        } else {
+                            chain.push(task);
+                            order.push(idx);
+                        }
+                    }
+                    order.extend(overlapping);
+                } else {
+                    order.extend(0..sorted_tasks.len());
+                }
+
                 let mut selected_task_indices = vec![Vec::new(); pending_windows.len()];
                 let mut selected_count = 0;
                 let mut selected_repack_only = false;
-                for (window_idx, task_idx, _) in sorted_tasks {
+                for idx in order {
                     if selected_count >= mutator.max_tasks {
                         break;
                     }
-                    let task = &pending_windows[window_idx].tasks[task_idx];
+                    let (window_idx, task_idx, task) = sorted_tasks[idx];
                     // Repack-only candidates rewrite no blocks, but each one
                     // consumes a whole window. Keep one per round so max_tasks
                     // does not repack multiple disjoint windows at once.
