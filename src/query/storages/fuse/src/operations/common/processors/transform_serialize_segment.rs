@@ -260,15 +260,15 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 self.current_partition = next_partition.map(<[Scalar]>::to_vec);
             }
 
-            let virtual_input = extended_block_meta
-                .draft_virtual_block_meta
-                .map(VirtualBlockInput::Draft)
-                .unwrap_or(VirtualBlockInput::None);
-
             ClusterLevelLogStats::accumulate(
                 &mut self.level_stats,
                 &extended_block_meta.block_meta,
             );
+
+            let virtual_input = extended_block_meta
+                .draft_virtual_block_meta
+                .map(VirtualBlockInput::Draft)
+                .unwrap_or(VirtualBlockInput::None);
 
             self.segment_builder
                 .add_block(extended_block_meta.block_meta, virtual_input)?;
