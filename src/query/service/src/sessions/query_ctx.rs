@@ -34,7 +34,6 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use chrono::Utc;
 use chrono_tz::Tz;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]

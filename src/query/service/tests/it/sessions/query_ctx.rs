@@ -76,11 +76,16 @@ async fn test_query_created_time_propagation() -> anyhow::Result<()> {
     use databend_query::sessions::QueryContext;
     use databend_query::sessions::TableContextCluster;
     use databend_query::sessions::TableContextQueryIdentity;
+    use databend_query::sessions::TableContextSettings;
 
     let fixture = TestFixture::setup().await?;
     let session = fixture.new_session_with_type(SessionType::MySQL).await?;
 
     let ctx = session.create_query_context(&BUILD_INFO).await?;
+    assert_eq!(
+        ctx.get_function_context()?.now,
+        chrono::DateTime::<chrono::Utc>::from(ctx.get_query_created_time())
+    );
     assert_eq!(
         session.process_info().created_time,
         ctx.get_query_created_time()
@@ -96,6 +101,8 @@ async fn test_query_created_time_propagation() -> anyhow::Result<()> {
         Some(query_created_time),
     )?;
     assert_eq!(ctx.get_query_created_time(), query_created_time);
+    let expected_now: chrono::DateTime<chrono::Utc> = query_created_time.into();
+    assert_eq!(ctx.get_function_context()?.now, expected_now);
 
     let env = QueryFragmentsActions::create(ctx.clone()).get_query_env()?;
     assert_eq!(env.query_created_time, query_created_time);
@@ -105,15 +112,22 @@ async fn test_query_created_time_propagation() -> anyhow::Result<()> {
     let worker = received.create_query_ctx().await?;
     assert_eq!(worker.get_id(), ctx.get_id());
     assert_eq!(worker.get_query_created_time(), query_created_time);
+    assert_eq!(worker.get_function_context()?.now, expected_now);
     let worker_info = worker.get_current_session().process_info();
     assert!(worker_info.created_time >= before_worker);
     assert_ne!(worker_info.created_time, query_created_time);
     let derived = QueryContext::create_from(&worker);
     assert_eq!(derived.get_query_created_time(), query_created_time);
+    assert_eq!(derived.get_function_context()?.now, expected_now);
+    assert_eq!(worker.get_function_context()?.now, expected_now);
 
     drop(ctx);
     let next_time = query_created_time + Duration::from_secs(60);
     let next = session.create_query_context_with_cluster(cluster, &BUILD_INFO, Some(next_time))?;
     assert_eq!(next.get_query_created_time(), next_time);
+    assert_eq!(
+        next.get_function_context()?.now,
+        chrono::DateTime::<chrono::Utc>::from(next_time)
+    );
     Ok(())
 }
