@@ -601,11 +601,21 @@ impl<'a> MaterializedViewRefresh<'a> {
             return Ok(RefreshStrategy::CheckpointOnly);
         }
 
-        let (checkpoint_seq, start_snapshot) = match checkpoint.clone() {
-            Some((checkpoint_seq, Some(start_snapshot))) => (checkpoint_seq, Some(start_snapshot)),
-            None | Some((_, None)) => (0, None),
+        // 3. With no previous data endpoint, scan the captured source snapshot directly. A changes
+        // scan would eagerly expand every block on the coordinator; a normal scan can distribute
+        // lazy segment partitions. Keep the captured table attached so later source commits cannot
+        // move the scan past the checkpoint we will persist.
+        let Some((checkpoint_seq, Some(start_snapshot))) = checkpoint else {
+            self.attach_source(
+                &self.catalog,
+                source_database,
+                source_table_name,
+                Arc::new(source_table.clone()),
+            )?;
+            return self.rebuild_strategy(physical_query);
         };
-        let starts_from_empty_endpoint = start_snapshot.is_none();
+        let checkpoint_seq = *checkpoint_seq;
+        let start_snapshot = Some(start_snapshot.clone());
         let changes_source_name =
             format!("_mv_changes_{}_{}", self.mv_table.get_id(), checkpoint_seq);
         let changes = source_table
@@ -622,12 +632,9 @@ impl<'a> MaterializedViewRefresh<'a> {
             )
             .await?;
 
-        // 3. Aggregate states cannot retract UPDATE/DELETE effects. Recompute globally merged states
+        // 4. Aggregate states cannot retract UPDATE/DELETE effects. Recompute globally merged states
         // from the current source and replace all persisted state rows.
-        if !starts_from_empty_endpoint
-            && self.is_aggregating
-            && changes.mode == StreamMode::Standard
-        {
+        if self.is_aggregating && changes.mode == StreamMode::Standard {
             self.attach_source(
                 &self.catalog,
                 source_database,
@@ -656,12 +663,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             "invalid materialized view physical query",
         )?;
         Self::apply_changes_query(&mut query, changes_query.clone(), "INSERT")?;
-        // 4. The first refresh consumes all tracked inserts with INSERT OVERWRITE. For aggregate MVs,
-        // this also establishes a globally merged baseline.
-        if starts_from_empty_endpoint {
-            return Ok(RefreshStrategy::Rebuild(self.target_insert(query, true)));
-        }
-
         // 5. Standard non-aggregate changes apply UPDATE/DELETE/INSERT through one internal MERGE.
         if changes.mode == StreamMode::Standard {
             let source = self.build_standard_refresh_source(physical_query, &changes_query)?;
