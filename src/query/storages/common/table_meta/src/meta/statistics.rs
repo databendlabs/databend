@@ -35,10 +35,12 @@ use uuid::Uuid;
 
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
+use crate::meta::CompactSegmentInfo;
 use crate::meta::SegmentStatistics;
 use crate::meta::SpatialStatistics;
 use crate::meta::VectorColumnStatistics;
 use crate::meta::VectorDistanceType;
+use crate::meta::format::MetaEncoding;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
@@ -75,6 +77,48 @@ impl ClusterKeyInfo {
     pub fn cluster_key_id(&self) -> u32 {
         self.cluster_key.0
     }
+}
+
+/// Read reusable cluster bounds from the existing named BlockMeta encoding without
+/// constructing unrelated metadata. `None` asks the caller to use the full decoder
+/// for legacy bincode or column-domain inference. No new persisted format is involved.
+pub fn read_cluster_stats(
+    segment: &CompactSegmentInfo,
+    key_id: u32,
+) -> Result<Option<Vec<ClusterStatistics>>> {
+    // Read only this field from the existing named encoding; skip unrelated metadata.
+    #[derive(Deserialize)]
+    struct ClusterStatsOpt {
+        cluster_stats: Option<ClusterStatistics>,
+    }
+
+    let raw = &segment.raw_block_metas;
+    if matches!(raw.encoding, MetaEncoding::Bincode)
+        || segment
+            .summary
+            .cluster_stats
+            .as_ref()
+            .is_none_or(|stats| stats.cluster_key_id != key_id)
+    {
+        return Ok(None);
+    }
+    let blocks: Vec<ClusterStatsOpt> = read_and_deserialize(
+        &mut raw.bytes.as_slice(),
+        raw.bytes.len() as u64,
+        &raw.encoding,
+        &raw.compression,
+    )?;
+    let mut stats = Vec::with_capacity(blocks.len());
+    for block in blocks {
+        let Some(value) = block.cluster_stats else {
+            return Ok(None);
+        };
+        if value.cluster_key_id != key_id {
+            return Ok(None);
+        }
+        stats.push(value);
+    }
+    Ok(Some(stats))
 }
 
 /// Return the trailing Hilbert MBR bounds when the persisted layout is valid.
