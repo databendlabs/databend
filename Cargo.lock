@@ -17783,8 +17783,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tokio"
 version = "1.52.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
+source = "git+https://github.com/datafuse-extras/tokio?rev=15daf43deb6e7104f21f5e37581fc3904eb4dab7#15daf43deb6e7104f21f5e37581fc3904eb4dab7"
 dependencies = [
  "bytes",
  "libc",
