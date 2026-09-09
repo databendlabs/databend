@@ -210,7 +210,7 @@ impl OutboundChannel for RemoteOutboundChannel {
 // RoundRobinChannel — round-robin across multiple OutboundChannels for one node
 // ---------------------------------------------------------------------------
 
-/// Wraps multiple OutboundChannels (one per thread on a remote node)
+/// Wraps multiple OutboundChannels (one per thread on a local or remote node)
 /// and distributes blocks across them in round-robin fashion.
 pub struct RoundRobinChannel {
     channels: Vec<Arc<dyn OutboundChannel>>,
@@ -244,7 +244,13 @@ impl OutboundChannel for RoundRobinChannel {
         }
 
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
-        self.channels[idx].add_block(block).await
+        let outcome = self.channels[idx].add_block(block).await?;
+        // A closed lane only discards this block. Keep the destination available
+        // for later blocks until all of its consumers have closed.
+        if outcome == StreamSendOutcome::ConsumerClosed && !self.is_closed() {
+            return Ok(StreamSendOutcome::Accepted);
+        }
+        Ok(outcome)
     }
 }
 
