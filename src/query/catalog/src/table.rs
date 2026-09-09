@@ -311,19 +311,6 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, num_snapshot_limit, dry_run);
-
-        Ok(None)
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
