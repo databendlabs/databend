@@ -91,10 +91,10 @@ impl Binder {
     /// Each statement is parsed once and checked in two layers:
     /// 1. Syntax: the statement (and, for `EXECUTE IMMEDIATE`, its script body) must parse.
     /// 2. Semantics (best-effort): the statement is bound (name/type resolution, logical
-    ///    plan), but only `SemanticError` is surfaced. Errors about missing objects
-    ///    (unknown table/column/database/function/...) are ignored on purpose, since the
-    ///    referenced objects may not exist yet when the task is created. The interpreter is
-    ///    never invoked, so this does not execute the task or cause any of its side effects.
+    ///    plan), but only `SemanticError` is surfaced. Other binding errors are ignored on
+    ///    purpose because task SQL is validated on a best-effort basis and referenced objects
+    ///    may not exist yet when the task is created. The interpreter is never invoked, so
+    ///    this does not execute the task or cause any of its side effects.
     async fn verify_task_sql(&self, sql: &TaskSql) -> Result<()> {
         match sql {
             TaskSql::SingleStatement(stmt) => self.verify_task_statement(stmt).await,
