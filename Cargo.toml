@@ -67,12 +67,10 @@ default-members = [
 databend-common-ast = { path = "src/query/ast" }
 databend-common-ast-visit-derive = { path = "src/query/ast/visit_derive" }
 databend-common-base = { path = "src/common/base" }
-databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }
 databend-common-cache = { path = "src/common/cache" }
 databend-common-catalog = { path = "src/query/catalog" }
 databend-common-cloud-control = { path = "src/common/cloud_control" }
-databend-common-codegen = { path = "src/query/codegen" }
 databend-common-column = { path = "src/common/column" }
 databend-common-component = { path = "src/query/common/component" }
 databend-common-compress = { path = "src/common/compress" }
@@ -96,7 +94,6 @@ databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
-databend-common-meta-schema-api-tests = { path = "src/meta/schema-api-tests" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-pipeline = { path = "src/query/pipeline" }
@@ -131,7 +128,6 @@ databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table"
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-materialized-view = { path = "src/query/ee_features/materialized_view" }
-databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }
 databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
 databend-enterprise-row-access-policy-feature = { path = "src/query/ee_features/row_access_policy" }
@@ -156,7 +152,6 @@ databend-query = { path = "src/query/service" }
 databend-query-script-udf-support = { path = "src/query/script_udf_support" }
 databend-query-storage-stage-support = { path = "src/query/storage_stage_support" }
 databend-query-task-support = { path = "src/query/task_support" }
-databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }
 databend-storages-common-index = { path = "src/query/storages/common/index" }
@@ -179,13 +174,12 @@ ahash = { version = "0.8", features = ["no-rng"] }
 aho-corasick = { version = "1.0.1" } #
 anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
-apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
+apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "bzip"] }
 approx = "0.5.1"
 arrow = { version = "58.4.0" }
 arrow-array = { version = "58.4.0" }
 arrow-buffer = { version = "58.4.0" }
 arrow-cast = { version = "58.4.0", features = ["prettyprint"] }
-arrow-csv = { version = "58.4.0" }
 arrow-data = { version = "58.4.0" }
 arrow-flight = { version = "58.4.0", features = ["flight-sql-experimental", "tls-ring"] }
 arrow-ipc = { version = "58.4.0", features = ["lz4", "zstd"] }
@@ -214,7 +208,6 @@ base2histogram = "0.2.3"
 base64 = "0.22"
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 bincode_v1 = { package = "bincode", version = "1.3.3" }
-bitpacking = "0.8.0"
 bitvec = "1.0.1"
 blake3 = "1.3.1"
 bollard = { version = "0.17" }
@@ -223,7 +216,6 @@ brotli = { version = "3.3", features = ["std"] }
 bstr = "1"
 buf-list = "1.0.3"
 bumpalo = "3.12.0"
-byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive", "extern_crate_alloc", "must_cast", "transparentwrapper_extra"] }
 byteorder = "1.5.0"
 bytes = "1.5.0"
@@ -262,16 +254,11 @@ enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.2", features = ["serde", "macros"] }
-event-listener = "5.4.0"
-faststr = "0.2"
-feature-set = { version = "0.1.1" }
 feistel-permutation-rs = "0.1.1"
 flatbuffers = "25" # Must use the same version with arrow-ipc
 foreign_vec = "0.1.0"
 form_urlencoded = { version = "1" }
-fs_extra = "1.3.0"
 futures = "0.3.24"
-futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
 geo = { version = "0.32.0", features = ["use-serde"] }
 geo-index = "0.3.4"
@@ -289,12 +276,10 @@ globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.9.4"
 hashbrown = { version = "0.15.2", default-features = false }
-hashbrown_v0_14 = { package = "hashbrown", version = "0.14.0", default-features = false, features = ["ahash"] }
 hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
-hostname = "0.3.1"
 http = "1"
 humantime = "2.1.0"
 hyper = "1"
@@ -314,20 +299,10 @@ iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/databendla
 iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
 paimon = { version = "=0.2.0", default-features = false, features = ["storage-fs", "storage-s3", "storage-oss"] }
 
-# Explicitly specify compatible AWS SDK versions
-aws-config = "1.5.18"
-aws-smithy-http = "0.61.1"
-aws-smithy-runtime = "1.7.8"
-aws-smithy-runtime-api = "1.7.3"
-aws-smithy-types = "1.2.13"
-
 indexmap = "2.0.0"
-indicatif = "0.17.5"
 itertools = "0.13.0"
 jaq-core = "3.1.0"
-jaq-interpret = "1.5.0"
 jaq-json = "2.0.1"
-jaq-parse = "1.0.3"
 jaq-std = "3.0.1"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.6"
@@ -352,7 +327,6 @@ logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main
     'opentelemetry',
     'fastrace',
 ] }
-lz4 = "1.24.0"
 maplit = "1.0.2"
 match-template = "0.0.1"
 md-5 = "0.10.5"
@@ -413,7 +387,7 @@ proj4rs = { version = "0.1.10", features = ["geo-types", "crs-definitions"] }
 proptest = { version = "1", default-features = false, features = ["std"] }
 prost = { version = "0.14.3" }
 prost-build = { version = "0.14.3" }
-prqlc = "0.11.3"
+prqlc = { version = "0.11.3", default-features = false }
 raft-log = "0.4.6"
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
@@ -430,7 +404,6 @@ reqwest = { version = "0.12", default-features = false, features = [
     "cookies",
 ] }
 reqwest-hickory-resolver = "0.2"
-ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
 roaring = { version = "^0.10", features = ["serde"] }
 rust_decimal = "1.26"
@@ -439,7 +412,6 @@ rustix = { version = "0.38.37", features = ["fs"] }
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
-rustyline = "14"
 scroll = "0.12.0"
 self_cell = "1.2.0"
 semver = "1.0.14"
@@ -466,8 +438,7 @@ smallvec = "1.13.2"
 snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
-sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
-stacker = "0.1"
+sqlx = { version = "0.8", default-features = false, features = ["mysql", "runtime-tokio"] }
 state = "0.6.0"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
@@ -496,10 +467,8 @@ tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
 tonic = { version = "0.14.5", features = ["transport", "codegen", "tls-native-roots"] }
-tonic-build = { version = "0.14.5" }
 tonic-prost = { version = "0.14.5" }
 tonic-prost-build = { version = "0.14.5" }
-tonic-reflection = { version = "0.14.5" }
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
 twox-hash = "1.6.3"
@@ -509,7 +478,6 @@ unicode-segmentation = "1.10.1"
 unindent = "0.2"
 url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
-volo-thrift = "0.10"
 walkdir = "2.3.2"
 wiremock = "0.6"
 wkt = "0.14.0"
@@ -556,8 +524,6 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
 opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 # Databend Integration Test
 quickcheck = "1.0"
@@ -637,7 +603,6 @@ arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", 
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
-color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
 databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.4.0" }
