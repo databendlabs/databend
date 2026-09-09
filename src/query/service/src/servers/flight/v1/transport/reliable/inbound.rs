@@ -157,16 +157,25 @@ impl ReliableInboundSource {
         }
 
         let accepted = self.deliver(data).await;
-        *next_sequence += 1;
         if let Some(response) = self.terminal_response() {
             return Ok(response);
         }
 
-        match accepted? {
-            DeliveryOutcome::Accepted => Ok(DoExchangeResponse::ack(sequence)),
-            DeliveryOutcome::ConsumerClosed => {
+        match accepted {
+            Ok(DeliveryOutcome::Accepted) => {
+                *next_sequence += 1;
+                Ok(DoExchangeResponse::ack(sequence))
+            }
+            Ok(DeliveryOutcome::ConsumerClosed) => {
                 // No downstream consumer can accept more data, so tell the sender to stop.
                 Ok(self.terminate(InboundTerminal::Completed).response())
+            }
+            Err(cause) => {
+                // A batch may already be partially delivered. Make the failure permanent before
+                // releasing the sequence lock so another attachment cannot ACK or redeliver it.
+                Ok(self
+                    .terminate(InboundTerminal::ReceiverFailed(cause))
+                    .response())
             }
         }
     }
