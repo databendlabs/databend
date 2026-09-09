@@ -47,7 +47,9 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::read_cluster_stats;
+use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use jsonb::Value as JsonbValue;
@@ -327,7 +329,8 @@ impl ClusteringInformationImpl<'_> {
             metadata.constant_block_count = block_count;
             return Ok(metadata);
         }
-        let hilbert_key_id = key.default_key_id.filter(|_| key.is_hilbert);
+        let is_hilbert = key.is_hilbert;
+        let cluster_key_id = key.default_key_id;
         let prepared_exprs = Arc::new(prepare_cluster_key_exprs(
             &key.stats_exprs,
             self.table.schema().as_ref(),
@@ -353,17 +356,10 @@ impl ClusteringInformationImpl<'_> {
                 let schema = self.table.schema();
                 let types = key_types.clone();
                 let exprs = prepared_exprs.clone();
-                let default_key_id = key.default_key_id;
                 tasks.pending.push(runtime.spawn(async move {
                     let segment =
                         SegmentsIO::read_compact_segment(operator, location, schema, true).await?;
-                    collect_segment_endpoints(
-                        &segment,
-                        &types,
-                        &exprs,
-                        default_key_id,
-                        hilbert_key_id,
-                    )
+                    collect_segment_endpoints(&segment, &types, &exprs, cluster_key_id, is_hilbert)
                 }));
             }
             let Some(result) = tasks.pending.next().await else {
@@ -580,8 +576,8 @@ fn collect_segment_endpoints(
     segment: &CompactSegmentInfo,
     key_types: &[DataType],
     prepared_exprs: &[PreparedClusterKeyExpr],
-    default_key_id: Option<u32>,
-    hilbert_key_id: Option<u32>,
+    cluster_key_id: Option<u32>,
+    is_hilbert: bool,
 ) -> Result<SegmentEndpoints> {
     debug_assert!(!key_types.is_empty());
     let mut builders = key_types
@@ -589,10 +585,21 @@ fn collect_segment_endpoints(
         .map(|ty| ColumnBuilder::with_capacity(ty, segment.summary.block_count as usize * 2))
         .collect::<Vec<_>>();
     let mut constant_block_count = 0;
-    let projected = match default_key_id {
+    let projected = match cluster_key_id {
         Some(id) => read_cluster_stats(segment, id)?,
         _ => None,
     };
+    // Match hilbert_bounds_for_diagnostics before appending any endpoints. Invalid or
+    // prefixed bounds must use column-domain inference, not truncate to the first two values.
+    let projected = projected.filter(|stats| {
+        !is_hilbert
+            || stats.iter().all(|stats| {
+                stats.min().len() == HILBERT_CLUSTER_DIMENSIONS
+                    && stats.max().len() == HILBERT_CLUSTER_DIMENSIONS
+                    && valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS)
+                        .is_some()
+            })
+    });
     if let Some(stats) = projected {
         for stats in stats {
             constant_block_count += u64::from(stats.min() == stats.max());
@@ -604,7 +611,7 @@ fn collect_segment_endpoints(
         // existing domain inference. Full metadata is released on this worker, not the consumer.
         let segment = SegmentInfo::try_from(segment)?;
         for block in segment.blocks {
-            if let Some(id) = hilbert_key_id {
+            if let (true, Some(id)) = (is_hilbert, cluster_key_id) {
                 let bounds = hilbert_bounds_for_diagnostics(
                     prepared_exprs,
                     &block.col_stats,
@@ -621,7 +628,7 @@ fn collect_segment_endpoints(
                     prepared_exprs,
                     &block.col_stats,
                     block.cluster_stats.as_ref(),
-                    default_key_id,
+                    cluster_key_id,
                 );
                 constant_block_count += u64::from(min == max);
                 push_endpoint(&mut builders, &min);
