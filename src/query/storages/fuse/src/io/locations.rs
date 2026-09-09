@@ -256,8 +256,16 @@ impl TableMetaLocationGenerator {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2)
     }
 
+    /// Generates an immutable location for one virtual-column sidecar generation.
+    /// Rebuilding the same source block must never overwrite a sidecar referenced
+    /// by an older snapshot.
     pub fn gen_virtual_block_location(location: &str) -> String {
-        location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
+        let location = location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX);
+        let generation = Uuid::now_v7();
+        match location.rsplit_once('/') {
+            Some((prefix, _)) => format!("{}/{}.parquet", prefix, generation.as_simple()),
+            None => format!("{}.parquet", generation.as_simple()),
+        }
     }
 
     pub fn is_legacy_virtual_block_location(location: &str) -> bool {
@@ -430,5 +438,25 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
             TableSnapshotStatisticsVersion::V3(_) => "_ts_v3.json".to_string(),
             TableSnapshotStatisticsVersion::V4(_) => "_ts_v4.json".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_virtual_block_locations_are_generation_specific() {
+        let block_location = "table/_b/block_v4.parquet";
+        let first = TableMetaLocationGenerator::gen_virtual_block_location(block_location);
+        let second = TableMetaLocationGenerator::gen_virtual_block_location(block_location);
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("table/_vb_v2/"));
+        let file_name = first.rsplit('/').next().unwrap();
+        let generation = file_name.strip_suffix(".parquet").unwrap();
+        assert_eq!(generation.len(), 32);
+        assert!(generation.chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert!(!first.contains("block_v4"));
     }
 }

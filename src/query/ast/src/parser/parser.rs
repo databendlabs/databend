@@ -156,6 +156,7 @@ pub fn parse_raw_replace_stmt(tokens: &[Token], dialect: Dialect) -> Result<Stat
     )
 }
 
+#[recursive::recursive]
 pub fn run_parser<O>(
     tokens: &[Token],
     dialect: Dialect,

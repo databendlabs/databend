@@ -650,8 +650,15 @@ impl FuseTable {
         )?;
 
         let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
+        let pruning_ctx = pruner.pruning_ctx.clone();
         prune_pipeline.add_transform(|input, output| {
-            ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
+            ExtractSegmentTransform::create(
+                input,
+                output,
+                true,
+                pruning_ctx.clone(),
+                pruning_cost.clone(),
+            )
         })?;
         let sample_probability = table_sample(&pruner.push_down)?;
         if let Some(probability) = sample_probability {

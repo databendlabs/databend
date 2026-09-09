@@ -25,7 +25,6 @@ use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FuseTable;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -70,8 +69,6 @@ impl FuseTable {
                     table_id: self.get_id(),
                     logical_updated_rows: 0,
                     logical_deleted_rows: 0,
-                    virtual_schema: None,
-                    virtual_schema_mode: VirtualSchemaMode::Merge,
                     hll: HashMap::new(),
                     top_n: HashMap::new(),
                 };

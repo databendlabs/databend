@@ -13,5 +13,8 @@
 // limitations under the License.
 
 mod fuse_vacuum2_table;
+mod vacuum2;
 
 pub use fuse_vacuum2_table::FuseVacuum2Table;
+pub(crate) use vacuum2::vacuum_table;
+pub(crate) use vacuum2::vacuum_tables;

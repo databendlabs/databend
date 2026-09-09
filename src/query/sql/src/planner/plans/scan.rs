@@ -46,6 +46,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::optimizer::ir::TopNSet;
@@ -307,7 +308,7 @@ impl Operator for Scan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
         let num_rows = self
@@ -381,7 +382,7 @@ impl Operator for Scan {
                 )
                 .with_top_n(std::mem::take(&mut output_top_n))
                 .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
-                let cardinality = sb.apply(&prewhere.predicates)?;
+                let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
                 column_stats = sb.into_column_stats();
                 cardinality
             }
@@ -413,7 +414,7 @@ impl Operator for Scan {
                     SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
                         .with_count_min_sketch(output_count_min_sketch)
-                        .apply(preds)?
+                        .apply(preds, &stat_ctx.function_context)?
                 }
                 _ => cardinality,
             };
@@ -546,7 +547,7 @@ mod tests {
         };
         let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
         let rel_expr = RelExpr::with_s_expr(&s_expr);
-        let stats = scan.derive_stats(&rel_expr)?;
+        let stats = scan.derive_stats(&rel_expr, &StatContext::default())?;
         assert!(stats.statistics.top_n.contains_key(&column));
         assert_eq!(stats.statistics.precise_cardinality, Some(100));
 
@@ -559,7 +560,8 @@ mod tests {
         };
         let sampled_s_expr = SExpr::create_leaf(RelOperator::Scan(sampled_scan.clone()));
         let sampled_rel_expr = RelExpr::with_s_expr(&sampled_s_expr);
-        let sampled_stats = sampled_scan.derive_stats(&sampled_rel_expr)?;
+        let sampled_stats =
+            sampled_scan.derive_stats(&sampled_rel_expr, &StatContext::default())?;
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 

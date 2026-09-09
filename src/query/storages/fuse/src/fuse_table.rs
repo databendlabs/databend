@@ -126,11 +126,12 @@ use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
-use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
 
+use crate::DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use crate::DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -142,9 +143,10 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
-use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -153,6 +155,7 @@ use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
@@ -446,6 +449,19 @@ impl FuseTable {
 
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
+    }
+
+    pub fn virtual_column_layout_policy(&self) -> VirtualColumnLayoutPolicy {
+        VirtualColumnLayoutPolicy {
+            max_direct_columns: self.get_option(
+                FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS,
+                DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS,
+            ),
+            max_path_statistics: self.get_option(
+                FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS,
+                DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS,
+            ),
+        }
     }
 
     pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
@@ -1173,29 +1189,6 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
-    }
-
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => {
-                table
-                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
-                    .await
-            }
-            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
-                warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
-            }
-            Err(e) => Err(e),
-        }
     }
 
     async fn table_statistics(

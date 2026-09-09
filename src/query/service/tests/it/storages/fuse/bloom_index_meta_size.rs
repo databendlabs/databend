@@ -344,6 +344,7 @@ fn build_test_segment_info(
         spatial_index_location: None,
         spatial_stats: None,
         vector_stats: None,
+        virtual_path_statistics: None,
         virtual_block_meta: None,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
@@ -372,6 +373,7 @@ fn build_test_segment_info(
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 

@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -48,7 +49,9 @@ async fn main() -> Result<()> {
     let raw_plan = ctx.bind_sql(&sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan).await?;
     let plan = match args.explain_kind {
-        ExplainKind::Optimized => optimized_plan.format_indent(FormatOptions::default())?,
+        ExplainKind::Optimized => {
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?
+        }
         ExplainKind::Join => format_join_explain(optimized_plan)?,
     };
     println!("{plan}");

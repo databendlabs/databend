@@ -33,7 +33,6 @@ storage-hdfs = [
 ]
 
 [dependencies]
-anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-cast = { workspace = true }
@@ -143,7 +142,6 @@ hex = { workspace = true }
 http = { workspace = true }
 humantime = { workspace = true }
 itertools = { workspace = true }
-jiff = { workspace = true }
 jsonb = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
@@ -187,28 +185,22 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 databend-common-sql-test-support = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
-geo = { workspace = true }
 goldenfile = { workspace = true }
-hex = { workspace = true }
 hyper-util = { workspace = true }
-jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
 p256 = { workspace = true }
 paimon = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }
-reqwest = { workspace = true }
-serde_json.workspace = true
 serde_yaml = { workspace = true }
 tantivy = { workspace = true }
 temp-env = { workspace = true }
-tempfile = { workspace = true }
 tower = { workspace = true }
-url = { workspace = true }
 wiremock = { workspace = true }
 
 [build-dependencies]
