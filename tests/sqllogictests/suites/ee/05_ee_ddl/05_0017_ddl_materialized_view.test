@@ -112,13 +112,23 @@ statement ok
 CREATE MATERIALIZED VIEW test_mv_batch AS SELECT id FROM mv_batch_source WHERE 1 = 1
 
 statement ok
-INSERT INTO mv_batch_source VALUES (1)
+INSERT INTO mv_batch_source
+SELECT number::INT FROM numbers(10000)
 
 statement ok
-INSERT INTO mv_batch_source VALUES (2)
+INSERT INTO mv_batch_source
+SELECT (number + 10000)::INT FROM numbers(10000)
 
 statement ok
-REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 1
+INSERT INTO mv_batch_source
+SELECT (number + 20000)::INT FROM numbers(10000)
+
+statement ok
+INSERT INTO mv_batch_source
+SELECT (number + 30000)::INT FROM numbers(10000)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
 
 query I
 SELECT row_count
@@ -126,10 +136,10 @@ FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
 ORDER BY timestamp DESC
 LIMIT 1
 ----
-1
+10000
 
 statement ok
-REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 1
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
 
 query I
 SELECT row_count
@@ -137,7 +147,29 @@ FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
 ORDER BY timestamp DESC
 LIMIT 1
 ----
-2
+20000
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+30000
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+40000
 
 statement ok
 DROP MATERIALIZED VIEW test_mv_batch
