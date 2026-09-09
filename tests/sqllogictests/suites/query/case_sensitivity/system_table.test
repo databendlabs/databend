@@ -14,5 +14,5 @@ RANDOM
 STREAM
 VIEW
 
-statement error 1065
+statement error 1058
 select engine from system.engines order by engine

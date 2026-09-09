@@ -95,7 +95,7 @@ matrix: group_by_alias
 key: G1N2G0_2_2
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k), (abs(k)))
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__cube_generated_set_does_not_share_prior_alias ===
@@ -103,7 +103,7 @@ matrix: group_by_alias
 key: G3N2G0_3_
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY CUBE(k, abs(k))
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__combined_grouping_sets_uses_prior_group_alias ===
@@ -294,7 +294,7 @@ matrix: group_by_alias
 key: G0N1G0_12_
 sql: SELECT i AS k, count(*) FROM t GROUP BY k, t.k
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
@@ -302,7 +302,7 @@ matrix: group_by_alias
 key: G0N3S1_12_
 sql: SELECT i AS k, count(*) FROM t GROUP BY t.k + 1
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__grouping_sets_qualified_name_does_not_fallback_to_select_alias ===
@@ -310,7 +310,7 @@ matrix: group_by_alias
 key: G1N1S1_12_
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__grouping_sets_complex_select_alias_does_not_fallback ===
@@ -318,7 +318,7 @@ matrix: group_by_alias
 key: G1N2S1_12_
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((abs(k)))
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__rollup_complex_select_alias_does_not_fallback ===
@@ -326,7 +326,7 @@ matrix: group_by_alias
 key: G2N2S1_12_
 sql: SELECT i AS k, count(*) FROM t GROUP BY ROLLUP(abs(k))
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__cube_complex_select_alias_does_not_fallback ===
@@ -334,7 +334,7 @@ matrix: group_by_alias
 key: G3N2S1_12_
 sql: SELECT i AS k, count(*) FROM t GROUP BY CUBE(abs(k))
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === group_by_alias__combined_normal_complex_select_alias_fallback ===

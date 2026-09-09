@@ -593,11 +593,11 @@ impl BindContext {
             Ok(result)
         } else {
             let err = if column.is_quoted() {
-                ErrorCode::SemanticError(format!(
+                ErrorCode::UnknownColumn(format!(
                     "column {name} doesn't exist, do you mean '{name}'?"
                 ))
             } else {
-                ErrorCode::SemanticError(format!("column {name} doesn't exist"))
+                ErrorCode::UnknownColumn(format!("column {name} doesn't exist"))
             };
             Err(err.set_span(column.span))
         }
@@ -624,7 +624,7 @@ impl BindContext {
 
         if result.is_empty() {
             Err(
-                ErrorCode::SemanticError(format!("column position {column} doesn't exist"))
+                ErrorCode::UnknownColumn(format!("column position {column} doesn't exist"))
                     .set_span(span),
             )
         } else {

@@ -23,7 +23,7 @@ SELECT 't'  FROM test.t
 ----
 t
 
-statement error (?s)1065.*column x doesn't exist, do you mean 'x'?
+statement error (?s)1058.*column x doesn't exist, do you mean 'x'?
 SELECT "x"  FROM test.t
 
 query T
@@ -31,7 +31,7 @@ SELECT 'x'  FROM test.t
 ----
 x
 
-statement error (?s)1065.*column t doesn't exist, do you mean 't'?
+statement error (?s)1058.*column t doesn't exist, do you mean 't'?
 SELECT "t"
 
 query T

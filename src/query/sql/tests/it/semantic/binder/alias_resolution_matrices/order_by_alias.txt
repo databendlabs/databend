@@ -94,6 +94,6 @@ matrix: order_by_alias
 key: O0N1S1_5_
 sql: SELECT i AS k FROM t ORDER BY t.k
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 

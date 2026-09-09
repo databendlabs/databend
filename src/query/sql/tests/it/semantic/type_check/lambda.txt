@@ -2,7 +2,7 @@
 description: Non-lambda functions should interpret an ambiguous trailing arrow as a JSON expression.
 sql: abs(number, x -> x)
 status: error
-code: 1065
+code: 1058
 message: column x doesn't exist
 
 === lambda_function_requires_lambda_expression ===

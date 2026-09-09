@@ -554,7 +554,7 @@ async fn test_unpivot_binds_as_table_reference_output() -> Result<()> {
         .bind_sql("SELECT game_cnt FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp))")
         .await
         .unwrap_err();
-    assert_eq!(err.code(), 1065, "unexpected error: {err:?}");
+    assert_eq!(err.code(), 1058, "unexpected error: {err:?}");
     Ok(())
 }
 
