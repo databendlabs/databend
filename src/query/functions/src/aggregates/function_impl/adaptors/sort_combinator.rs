@@ -174,6 +174,10 @@ impl<I> SortEval<I> {
         let args = (0..block.num_columns())
             .filter(|index| !skip_offsets.contains(index))
             .collect_vec();
+        // The inner slot is initialized by init_state and rebuilt for each result.
+        // In particular, window read-only results can leave heap allocations in it.
+        // Drop the previous state before overwriting it, even after finalization.
+        unsafe { self.nested.drop_state(inner_state) };
         self.nested.init_state(inner_state);
         self.nested.accumulate(AccumulateInput {
             state: inner_state,
