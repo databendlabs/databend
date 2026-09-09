@@ -12,6 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+macro_rules! with_simple_no_number_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                String => StringType,
+                Boolean => BooleanType,
+                Timestamp => TimestampType,
+                Null => NullType,
+                EmptyArray => EmptyArrayType,
+                EmptyMap => EmptyMapType,
+                Date => DateType,
+            ],
+            $($tail)*
+        }
+    }
+}
+
 mod adaptors;
 mod approx_count_distinct;
 mod arg_min_max;

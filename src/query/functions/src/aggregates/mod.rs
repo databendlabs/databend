@@ -16,7 +16,6 @@ pub use common::eval_aggr;
 pub use databend_common_expression::aggregate::*;
 pub use registry::AGGR_REGISTRY;
 
-pub mod aggregate_function_v1_impl;
 mod common;
 mod function_impl;
 pub mod registry;

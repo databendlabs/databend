@@ -1059,3 +1059,88 @@ fn sort_states(states: Vec<AggrStateType>) -> (Layout, Vec<AggrStateLoc>) {
 
     (layout, locs)
 }
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestRunner;
+
+    use super::*;
+
+    prop_compose! {
+        fn arb_state_type()(size in 1..100_usize, align in 0..5_u8) -> AggrStateType {
+            let layout = Layout::from_size_align(size, 1 << align).unwrap();
+            AggrStateType::Custom(layout)
+        }
+    }
+
+    #[test]
+    fn test_sort_states_empty_and_boolean_fields() {
+        let (layout, locs) = sort_states(vec![]);
+        assert_eq!(layout.size(), 0);
+        assert_eq!(layout.align(), 1);
+        assert!(locs.is_empty());
+
+        let (layout, locs) = sort_states(vec![
+            AggrStateType::Bool,
+            AggrStateType::Custom(Layout::new::<u64>()),
+            AggrStateType::Bool,
+        ]);
+        assert_eq!(layout.align(), 8);
+        assert_eq!(layout.size(), 10);
+        assert_eq!(locs[0].offset(), 8);
+        assert_eq!(locs[1].offset(), 0);
+        assert_eq!(locs[2].offset(), 9);
+        assert_eq!(
+            locs.iter().map(AggrStateLoc::index).collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+    }
+
+    #[test]
+    fn test_sort_states() {
+        let mut runner = TestRunner::default();
+        let input_s = prop::collection::vec(arb_state_type(), 1..20);
+
+        for _ in 0..100 {
+            let input = input_s.new_tree(&mut runner).unwrap().current();
+            run_sort_states(input);
+        }
+    }
+
+    fn check_offset(layout: &Layout, offset: usize) -> bool {
+        let align = layout.align();
+        offset & (align - 1) == 0
+    }
+
+    fn run_sort_states(input: Vec<AggrStateType>) {
+        let (layout, locs) = sort_states(input.clone());
+
+        let is_aligned = input
+            .iter()
+            .zip(locs.iter())
+            .all(|(state, loc)| match state {
+                AggrStateType::Custom(layout) => check_offset(layout, loc.offset()),
+                _ => unreachable!(),
+            });
+
+        assert!(is_aligned, "states are not aligned, input: {input:?}");
+
+        let size = layout.size();
+        let mut memory = vec![false; size];
+        for (state, loc) in input.iter().zip(locs.iter()) {
+            match state {
+                AggrStateType::Custom(layout) => {
+                    let start = loc.offset();
+                    let end = start + layout.size();
+                    for memory in &mut memory[start..end] {
+                        assert!(!*memory, "layout is overlap, input: {input:?}");
+                        *memory = true;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}

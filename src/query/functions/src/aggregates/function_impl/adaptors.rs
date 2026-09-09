@@ -30,8 +30,6 @@ mod combinator;
 mod distinct_combinator;
 pub(crate) mod if_combinator;
 mod input_rows;
-#[cfg(test)]
-pub(crate) mod legacy_adapter;
 pub(super) mod merge_combinator;
 pub(crate) mod multi_arg_nullable;
 mod name_route;
@@ -208,19 +206,15 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
-    use bumpalo::Bump;
     use databend_common_exception::Result;
     use databend_common_expression::FromData;
     use databend_common_expression::ScalarRef;
     use databend_common_expression::aggregate::AggrStateType;
-    use databend_common_expression::aggregate::StateAddr;
-    use databend_common_expression::get_states_layout;
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::UInt64Type;
 
-    use super::legacy_adapter::LegacyAggregateCallAdapter;
     use super::sort_combinator::AggregateSortState;
     use super::sort_combinator::SortEval;
     use super::*;
@@ -598,67 +592,6 @@ mod tests {
         }
 
         assert_eq!(drop_count.load(Ordering::SeqCst), 2);
-        Ok(())
-    }
-
-    #[test]
-    fn test_legacy_adapter_runs_v2_function_through_old_state_framework() -> Result<()> {
-        let drop_count = Arc::new(AtomicUsize::new(0));
-        let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
-        let entries = full_modifier_entries();
-        let direct_result = direct_full_modifier_result(&function, &entries)?;
-
-        let legacy = LegacyAggregateCallAdapter::create(function.clone());
-        let legacy_functions: Vec<
-            databend_common_expression::aggregate_function_v1::AggregateFunctionRef,
-        > = vec![legacy.clone()];
-        let layout = get_states_layout(&legacy_functions)?;
-        let loc = &layout.states_loc[0];
-
-        let result_arena = Bump::new();
-        let result_addr: StateAddr = result_arena.alloc_layout(layout.layout).into();
-        legacy.init_state(AggrState::new(result_addr, loc));
-        legacy.accumulate(
-            AggrState::new(result_addr, loc),
-            (&entries).into(),
-            None,
-            entries[0].len(),
-        )?;
-        let mut builder = ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-        legacy.merge_result(AggrState::new(result_addr, loc), false, &mut builder)?;
-        assert_eq!(builder.build(), direct_result);
-
-        let serialize_arena = Bump::new();
-        let source_addr: StateAddr = serialize_arena.alloc_layout(layout.layout).into();
-        legacy.init_state(AggrState::new(source_addr, loc));
-        legacy.accumulate(
-            AggrState::new(source_addr, loc),
-            (&entries).into(),
-            None,
-            entries[0].len(),
-        )?;
-        let mut serialize_builders = layout.serialize_builders(1);
-        {
-            let builders = serialize_builders[0].as_tuple_mut().unwrap().as_mut_slice();
-            legacy.batch_serialize(&[source_addr], loc, builders)?;
-        }
-        let serialized_state: BlockEntry = serialize_builders.pop().unwrap().build().into();
-
-        let merge_arena = Bump::new();
-        let merged_addr: StateAddr = merge_arena.alloc_layout(layout.layout).into();
-        legacy.init_state(AggrState::new(merged_addr, loc));
-        legacy.batch_merge(&[merged_addr], loc, &serialized_state, None)?;
-        let mut builder = ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-        legacy.merge_result(AggrState::new(merged_addr, loc), false, &mut builder)?;
-        assert_eq!(builder.build(), direct_result);
-
-        unsafe {
-            legacy.drop_state(AggrState::new(result_addr, loc));
-            legacy.drop_state(AggrState::new(source_addr, loc));
-            legacy.drop_state(AggrState::new(merged_addr, loc));
-        }
-
-        assert_eq!(drop_count.load(Ordering::SeqCst), 4);
         Ok(())
     }
 

@@ -55,7 +55,6 @@ use rand::thread_rng;
 
 use super::AggregateRegistration;
 use super::adaptors::*;
-use crate::with_simple_no_number_mapped_type;
 
 struct RangeBoundBuilder;
 
