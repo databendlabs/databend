@@ -32,7 +32,7 @@ pub(crate) async fn vacuum_table(
     database_name: &str,
     table_name: &str,
     respect_flash_back: bool,
-) -> Result<Vec<String>> {
+) -> Result<()> {
     let table = catalog
         .get_table(&ctx.get_tenant(), database_name, table_name)
         .await?;
