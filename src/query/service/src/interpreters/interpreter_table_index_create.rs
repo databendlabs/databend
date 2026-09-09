@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
@@ -56,11 +55,6 @@ impl Interpreter for CreateTableIndexInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let index_type = match self.plan.index_type {
-            ast::TableIndexType::Aggregating => {
-                return Err(ErrorCode::InvalidArgument(
-                    "Aggregating Index does not belong to Table Index",
-                ));
-            }
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,

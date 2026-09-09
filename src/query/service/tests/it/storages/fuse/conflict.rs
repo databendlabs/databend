@@ -107,6 +107,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -136,6 +137,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -158,6 +160,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -180,6 +183,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -225,6 +229,7 @@ fn test_resolvable_delete_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
     assert_eq!(actual, expected);
@@ -267,6 +272,7 @@ fn test_resolvable_replace_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -296,6 +302,7 @@ fn test_resolvable_replace_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -318,6 +325,7 @@ fn test_resolvable_replace_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -340,6 +348,7 @@ fn test_resolvable_replace_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -390,6 +399,7 @@ fn test_resolvable_replace_conflict() {
         cluster_stats: None,
         partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
     assert_eq!(actual, expected);

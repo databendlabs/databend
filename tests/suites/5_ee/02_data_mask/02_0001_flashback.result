@@ -33,11 +33,11 @@ true
 >>>> CREATE TABLE ee_flashback_metadata.t_idx(a INT, c INT) STORAGE_FORMAT = 'parquet'
 >>>> INSERT INTO ee_flashback_metadata.t_idx VALUES (1, 1), (2, 2)
 2
->>>> ALTER TABLE ee_flashback_metadata.t_idx ADD COLUMN b INT
->>>> INSERT INTO ee_flashback_metadata.t_idx VALUES (1, 1, 4), (1, 2, 1), (1, 2, 4), (2, 2, 5)
+>>>> ALTER TABLE ee_flashback_metadata.t_idx ADD COLUMN b STRING
+>>>> INSERT INTO ee_flashback_metadata.t_idx VALUES (1, 1, 'x'), (1, 2, 'y'), (1, 2, 'z'), (2, 2, 'w')
 4
-#### create and refresh aggregating index
-#### flashback should reject aggregating indexes bound to dropped columns
+#### create inverted index
+#### flashback should reject inverted indexes bound to dropped columns
 #### flashback indexed table to saved snapshot should fail
 >>>> ALTER TABLE ee_flashback_metadata.t_idx FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')
 <<<< expected failure happened

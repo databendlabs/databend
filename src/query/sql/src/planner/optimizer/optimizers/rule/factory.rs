@@ -62,7 +62,6 @@ use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
 use crate::optimizer::optimizers::rule::RuleSplitAggregate;
-use crate::optimizer::optimizers::rule::RuleTryApplyAggIndex;
 use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
@@ -72,7 +71,7 @@ impl RuleFactory {
         let metadata = ctx.get_metadata();
         match id {
             RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(metadata))),
-            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(metadata))),
+            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
             ))),
@@ -124,7 +123,6 @@ impl RuleFactory {
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
-            RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
             RuleID::TryApplyMaterializedView => {
                 Ok(Box::new(RuleTryApplyMaterializedView::new(ctx)))
             }

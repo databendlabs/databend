@@ -143,10 +143,11 @@ impl Processor for RangeAndGranulePruneTransform {
             meta.segment_location,
             meta.block_metas,
             runtime_stats_pruner,
+            meta.projected_virtual_schema.clone(),
         )?;
         if !blocks.is_empty() {
             let output_meta = if self.has_async_block_pruner {
-                GranulePruneResult::create(blocks)
+                GranulePruneResult::create(blocks, meta.projected_virtual_schema)
             } else {
                 BlockPruneResult::create(
                     blocks

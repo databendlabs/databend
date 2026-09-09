@@ -2374,7 +2374,6 @@ impl Binder {
                         self.validate_bloom_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Bloom, column_ids, options)
                 }
-                AstTableIndexType::Aggregating => unreachable!(),
             };
 
             let table_index = TableIndex {

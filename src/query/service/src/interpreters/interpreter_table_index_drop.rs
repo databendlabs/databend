@@ -55,11 +55,6 @@ impl Interpreter for DropTableIndexInterpreter {
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let index_type = match self.plan.index_type {
-            ast::TableIndexType::Aggregating => {
-                return Err(ErrorCode::InvalidArgument(
-                    "Aggregating Index does not belong to Table Index",
-                ));
-            }
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,

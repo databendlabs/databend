@@ -51,12 +51,14 @@ impl AsyncAccumulatingTransform for AsyncBlockIndexPruneTransform {
     const NAME: &'static str = "AsyncBlockIndexPruneTransform";
 
     async fn transform(&mut self, mut data: DataBlock) -> Result<Option<DataBlock>> {
-        let blocks = data
+        let meta = data
             .take_meta()
             .and_then(GranulePruneResult::downcast_from)
-            .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to GranulePruneResult"))?
-            .blocks;
-        let result = self.block_pruner.async_block_index_pruning(blocks).await?;
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to GranulePruneResult"))?;
+        let result = self
+            .block_pruner
+            .async_block_index_pruning(meta.blocks, meta.projected_virtual_schema)
+            .await?;
         Ok((!result.is_empty())
             .then(|| DataBlock::empty_with_meta(BlockPruneResult::create(result))))
     }

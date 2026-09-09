@@ -71,6 +71,7 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             spatial_stats: None,
             granule_index: None,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta: None,
             compression: value.compression.into(),
             create_on: None,

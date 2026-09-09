@@ -58,6 +58,7 @@ impl From<Statistics> for crate::meta::Statistics {
             cluster_stats: None,
             partition_stats: None,
             virtual_block_count: None,
+            virtual_segment_schema: None,
             additional_stats_meta: None,
         }
     }

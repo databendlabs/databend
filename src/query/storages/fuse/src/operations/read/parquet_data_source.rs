@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_expression::BlockMetaInfo;
 
 use crate::io::BlockReadResult;
@@ -20,7 +19,6 @@ use crate::io::VirtualBlockReadResult;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
 pub(crate) enum ParquetDataSource {
-    AggIndex((PartInfoPtr, BlockReadResult)),
     Normal((Vec<BlockReadResult>, Option<VirtualBlockReadResult>)),
     Granule(Vec<Vec<std::ops::Range<usize>>>),
 }

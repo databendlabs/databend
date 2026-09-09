@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
+
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,8 +48,8 @@ use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use log::debug;
 use log::error;
+use log::info;
 use log::warn;
 use rand::Rng;
 
@@ -80,6 +82,23 @@ use crate::sessions::TableContextTableManagement;
 use crate::sessions::TableContextTelemetry;
 
 const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
+
+#[derive(Debug, PartialEq, Eq)]
+enum ReclusterRoundOutcome {
+    Committed(usize),
+    NoParts,
+    ClaimRetriesExhausted,
+}
+
+impl ReclusterRoundOutcome {
+    fn stop_reason(&self) -> Option<&'static str> {
+        match self {
+            Self::Committed(_) => None,
+            Self::NoParts => Some("no_recluster_parts"),
+            Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
+        }
+    }
+}
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -131,7 +150,7 @@ impl Interpreter for ReclusterTableInterpreter {
         let ctx = self.ctx.clone();
         let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 
-        let mut times = 0;
+        let mut rounds = 0;
         let mut push_downs = None;
         // FINAL carry is scoped to this fixed-scan statement loop.
         // A new FINAL statement starts from the table head again.
@@ -148,18 +167,20 @@ impl Interpreter for ReclusterTableInterpreter {
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
         let is_final = self.plan.is_final;
-        let mut committed = false;
-        let result = loop {
+        let mut committed_rounds = 0;
+        let (result, stop_reason) = loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
-                    "recluster: statement aborted, server is shutting down or the query was killed, round={}",
-                    times + 1
+                    event = "recluster.aborted",
+                    rounds;
+                    "Recluster aborted before next round"
                 );
-                break Err(err.with_context("failed to execute"));
+                break (Err(err.with_context("failed to execute")), "aborted");
             }
 
             // A successful commit advances this phase. On retryable conflicts,
             // keep the phase unchanged and rebuild it against the fresh snapshot.
+            rounds += 1;
             let res = self
                 .execute_recluster(
                     &mut push_downs,
@@ -171,11 +192,16 @@ impl Interpreter for ReclusterTableInterpreter {
 
             let mut continue_vertical_phase = false;
             match res {
-                Ok(task_count) => {
-                    // A `Some` round has built and committed recluster tasks; remember it so
-                    // the deferred table-history vacuum runs after the loop finishes.
+                Ok(outcome) => {
+                    if outcome == ReclusterRoundOutcome::ClaimRetriesExhausted {
+                        break (Ok(()), outcome.stop_reason().unwrap());
+                    }
+                    let task_count = match outcome {
+                        ReclusterRoundOutcome::Committed(count) => Some(count),
+                        _ => None,
+                    };
                     if task_count.is_some() {
-                        committed = true;
+                        committed_rounds += 1;
                     }
                     if is_vertical {
                         match vertical_round {
@@ -202,12 +228,8 @@ impl Interpreter for ReclusterTableInterpreter {
                         linear_final_carry = ReclusterFinalCarry::default();
                     }
                     if task_count.is_none() && !continue_vertical_phase {
-                        debug!(
-                            "recluster: final loop stop reason=no_recluster_parts round={}",
-                            times + 1,
-                        );
                         if !is_final || !vertical_cycle_progress {
-                            break Ok(());
+                            break (Ok(()), "no_recluster_parts");
                         }
                     }
                 }
@@ -225,40 +247,38 @@ impl Interpreter for ReclusterTableInterpreter {
                         // a bounded fixed scan and does not restart from table
                         // head to chase concurrent snapshot drift.
                         warn!(
-                            "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
-                            times + 1,
-                            e.code(),
-                            e,
+                            event = "recluster.retry",
+                            reason = "retryable_conflict",
+                            round = rounds,
+                            code = e.code(),
+                            error :? = e;
+                            "Recluster round failed with retryable conflict"
                         );
                     } else {
                         error!(
-                            "recluster: final loop stop reason=error round={} code={} error={:?}",
-                            times + 1,
-                            e.code(),
-                            e,
+                            event = "recluster.failed",
+                            round = rounds,
+                            code = e.code(),
+                            error :? = e;
+                            "Recluster round failed"
                         );
-                        break Err(e);
+                        break (Err(e), "error");
                     }
                 }
             }
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
-            times += 1;
-            // Status.
-            {
-                let status = format!(
-                    "[FUSE-RECLUSTER] Run recluster tasks:{} times, cost:{:?}",
-                    times, elapsed_time
-                );
-                ctx.set_status_info(&status);
-            }
+            ctx.set_status_info(&format!(
+                "[FUSE-RECLUSTER] Executed rounds={} committed_rounds={} elapsed={:?}",
+                rounds, committed_rounds, elapsed_time,
+            ));
 
             if continue_vertical_phase {
                 continue;
             }
 
             if !is_final {
-                break Ok(());
+                break (Ok(()), "single_round_completed");
             }
 
             if is_vertical && vertical_round == VerticalRound::MergeBlocks {
@@ -267,14 +287,30 @@ impl Interpreter for ReclusterTableInterpreter {
 
             if elapsed_time >= timeout {
                 warn!(
-                    "recluster: final loop stop reason=timeout round={} timeout={:?}",
-                    times, timeout,
+                    event = "recluster.timeout",
+                    rounds,
+                    timeout_secs = recluster_timeout_secs;
+                    "Recluster stopped at time limit"
                 );
-                break Ok(());
+                break (Ok(()), "timeout");
             }
         };
 
-        if committed {
+        info!(
+            event = "recluster.finished",
+            catalog = self.plan.catalog.as_str(),
+            database = self.plan.database.as_str(),
+            table = self.plan.table.as_str(),
+            is_final,
+            rounds,
+            committed_rounds,
+            stop_reason,
+            success = result.is_ok(),
+            elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
+            "Recluster finished"
+        );
+
+        if committed_rounds > 0 {
             self.vacuum_table_history().await;
         }
 
@@ -353,7 +389,7 @@ impl ReclusterTableInterpreter {
         linear_final_carry: &mut ReclusterFinalCarry,
         vertical_round: VerticalRound,
         vertical_max_tasks: usize,
-    ) -> Result<Option<usize>> {
+    ) -> Result<ReclusterRoundOutcome> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
         let settings = self.ctx.get_settings();
@@ -412,7 +448,7 @@ impl ReclusterTableInterpreter {
                 )
                 .await?;
             let Some((parts, snapshot, segments)) = candidate else {
-                return Ok(None);
+                return Ok(ReclusterRoundOutcome::NoParts);
             };
             let Some(claim_manager) = &claim_manager else {
                 break (parts, snapshot, None);
@@ -428,10 +464,12 @@ impl ReclusterTableInterpreter {
             metrics_inc_segment_claim_conflicts();
             if claim_retries >= MAX_SEGMENT_CLAIM_RETRIES {
                 warn!(
-                    "recluster: stop after {} segment claim retries",
-                    MAX_SEGMENT_CLAIM_RETRIES
+                    event = "recluster.claim_retries_exhausted",
+                    table_id = tbl.get_id(),
+                    claim_retries;
+                    "Recluster stopped at segment claim retry limit"
                 );
-                return Ok(None);
+                return Ok(ReclusterRoundOutcome::ClaimRetriesExhausted);
             }
             claim_retries += 1;
 
@@ -506,7 +544,7 @@ impl ReclusterTableInterpreter {
         drop(complete_executor);
 
         execution_result?;
-        Ok(Some(task_count))
+        Ok(ReclusterRoundOutcome::Committed(task_count))
     }
 
     async fn build_linear_candidate(

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
+
 mod hilbert_recluster;
 mod linear_recluster;
 mod recluster_mutator;

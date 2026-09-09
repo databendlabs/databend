@@ -132,7 +132,8 @@ impl VerticalReclusterSource {
             &self.table,
             MutationKind::Recluster,
             self.table_meta_timestamps,
-        )?;
+        )?
+        .with_virtual_column_layout(self.task.virtual_column_layout.clone());
 
         let outputs = match kind {
             VerticalReclusterKind::SortBlocks => {
@@ -244,6 +245,7 @@ impl VerticalReclusterSource {
                 granule_index: part.granule_index.clone(),
                 vector_stats: None,
                 virtual_block_meta: None,
+                virtual_path_statistics: None,
                 compression: part.compression,
                 create_on: part.create_on,
             };

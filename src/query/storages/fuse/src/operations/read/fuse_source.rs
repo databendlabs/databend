@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-SOURCE]");
+
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -34,7 +36,6 @@ use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::DeserializeDataTransform;
@@ -53,10 +54,10 @@ pub fn build_fuse_source_pipeline(
     mut max_threads: usize,
     plan: &DataSourcePlan,
     mut max_io_requests: usize,
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
     receiver: Option<Receiver<Result<PartInfoPtr>>>,
 ) -> Result<()> {
+    let original_max_io_requests = max_io_requests;
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
     let waker = pipeline.get_waker();
@@ -100,7 +101,6 @@ pub fn build_fuse_source_pipeline(
         storage_format,
         block_reader.read_context(),
         block_format,
-        index_reader.clone(),
         virtual_reader.clone(),
     )?;
 
@@ -116,18 +116,20 @@ pub fn build_fuse_source_pipeline(
         )
     })?;
 
-    info!(
-        "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
-        max_io_requests
-    );
-
+    let original_output_streams = pipeline.output_len();
     pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    let output_streams = pipeline.output_len();
 
-    info!(
-        "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
-        max_io_requests,
-        pipeline.output_len()
-    );
+    if output_streams != original_output_streams {
+        info!(
+            event = "fuse_source.configured",
+            original_max_io_requests,
+            max_io_requests,
+            original_output_streams,
+            output_streams;
+            "Block read pipeline configuration adjusted"
+        );
+    }
 
     match storage_format {
         FuseStorageFormat::Parquet => {
@@ -139,7 +141,6 @@ pub fn build_fuse_source_pipeline(
                     plan,
                     transform_input,
                     transform_output,
-                    index_reader.clone(),
                     virtual_reader.clone(),
                 )
             })?;

@@ -50,7 +50,6 @@ use super::read_block_context::ReadBlockContext;
 use super::read_state::ReadState;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::AggIndexReader;
 use crate::io::BlockReadResult;
 use crate::io::BlockReader;
 use crate::io::GranuleDataReader;
@@ -114,7 +113,6 @@ pub struct DeserializeDataTransform {
     chunks: Vec<ParquetDataSource>,
     active_granule_read: Option<ActiveGranuleRead>,
 
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
@@ -137,7 +135,6 @@ impl DeserializeDataTransform {
         plan: &DataSourcePlan,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -179,7 +176,6 @@ impl DeserializeDataTransform {
             parts: vec![],
             chunks: vec![],
             active_granule_read: None,
-            index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
             block_meta_options: plan.block_meta_options.clone(),
@@ -536,12 +532,6 @@ impl Processor for DeserializeDataTransform {
         let source = self.chunks.pop();
         if let Some((part, source)) = part.zip(source) {
             match source {
-                ParquetDataSource::AggIndex((actual_part, data)) => {
-                    let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize_parquet_data(actual_part, data)?;
-                    self.record_block_progress(&block);
-                    self.output_data.push_back(block);
-                }
                 ParquetDataSource::Normal((results, virtual_data)) => {
                     self.process_normal(&part, results, virtual_data)?;
                 }

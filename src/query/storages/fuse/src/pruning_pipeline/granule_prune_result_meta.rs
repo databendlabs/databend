@@ -14,20 +14,29 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::local_block_meta_serde;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 
 use crate::pruning::GranulePrunedBlock;
 
 pub struct GranulePruneResult {
     pub blocks: Vec<GranulePrunedBlock>,
+    pub projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
 }
 
 impl GranulePruneResult {
-    pub fn create(blocks: Vec<GranulePrunedBlock>) -> BlockMetaInfoPtr {
-        Box::new(Self { blocks })
+    pub fn create(
+        blocks: Vec<GranulePrunedBlock>,
+        projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(Self {
+            blocks,
+            projected_virtual_schema,
+        })
     }
 }
 

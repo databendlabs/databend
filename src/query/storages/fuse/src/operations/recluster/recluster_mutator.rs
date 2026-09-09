@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
@@ -62,6 +61,8 @@ use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
+use crate::io::VirtualColumnLayoutPlanner;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
@@ -203,6 +204,7 @@ pub struct ReclusterMutator {
     pub(crate) max_tasks: usize,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
+    virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
 /// Caps the selected block bytes of one recluster task.
@@ -316,6 +318,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
     }
 
@@ -357,6 +360,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: Default::default(),
         }
     }
 
@@ -457,7 +461,8 @@ impl ReclusterMutator {
                     },
                     kind: ReclusterCandidateKind::Repack,
                     selected_blocks: Vec::new(),
-                    output_level: 0,
+                    base_level: 0,
+                    input_level_stats: Vec::new(),
                     all_ordered: false,
                     vertical_kind: None,
                 });
@@ -586,7 +591,7 @@ impl ReclusterMutator {
                     && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
                 if defer {
                     debug!(
-                        "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
+                        "recluster: defer candidate group={} block_size={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
                         group,
                         candidate.score.selected_total_bytes,
                         candidate.score.max_depth,
@@ -817,16 +822,30 @@ impl ReclusterMutator {
                     None,
                     None,
                 );
+                let mut planner =
+                    VirtualColumnLayoutPlanner::create(self.virtual_column_layout_policy);
+                for (window_pos, block_indices) in &candidate.selected_blocks {
+                    let segment_info = window.segments[*window_pos].1.as_ref().unwrap();
+                    planner.add_blocks(
+                        segment_info.summary.virtual_segment_schema.as_ref(),
+                        block_indices
+                            .iter()
+                            .map(|block_idx| segment_info.blocks[*block_idx].as_ref()),
+                    );
+                }
+                let virtual_column_layout = planner.build();
                 tasks.push(ReclusterTask {
                     parts,
                     stats,
                     total_rows,
                     total_bytes,
                     total_compressed,
-                    level: candidate.output_level,
+                    level: candidate.base_level,
+                    input_level_stats: candidate.input_level_stats.clone(),
                     all_ordered: candidate.all_ordered,
                     vertical_kind: candidate.vertical_kind,
                     memory_budget: self.properties.memory_threshold,
+                    virtual_column_layout,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -896,6 +915,8 @@ impl ReclusterMutator {
         }))
     }
 
+    // Capture group selection time in tracing without duplicating strategy summaries.
+    #[fastrace::trace]
     fn build_recluster_task_candidates_for_indices(
         &self,
         group: ReclusterGroup,
@@ -904,7 +925,6 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
-        let group_start = Instant::now();
         let block_count = indices.len();
         if block_count < 2 {
             return Ok(Vec::new());
@@ -954,23 +974,8 @@ impl ReclusterMutator {
             )]);
         }
 
-        let candidates = self.strategy.fetch_task_candidates(
-            &self.properties,
-            group,
-            indices,
-            blocks,
-            task_budget,
-        )?;
-
-        debug!(
-            "recluster: candidate selection group={} block_count={} task_count={} elapsed={:?}",
-            group,
-            block_count,
-            candidates.len(),
-            group_start.elapsed(),
-        );
-
-        Ok(candidates)
+        self.strategy
+            .fetch_task_candidates(&self.properties, group, indices, blocks, task_budget)
     }
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.

@@ -989,6 +989,7 @@ mod tests {
             granule_index: None,
             vector_stats: None,
             virtual_block_meta: None,
+            virtual_path_statistics: None,
             compression: Compression::None,
             create_on: None,
         })

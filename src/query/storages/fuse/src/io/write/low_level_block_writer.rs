@@ -658,6 +658,7 @@ impl FuseLowLevelBlockWriter {
             granule_index,
             vector_stats: data.vector_stats,
             virtual_block_meta: None,
+            virtual_path_statistics: None,
             compression: Compression::from(self.options.write_settings.table_compression),
             create_on: Some(Utc::now()),
         };
@@ -961,11 +962,13 @@ impl FuseLowLevelDataWriter {
                     &parent.options.block_location,
                 )?;
                 let meta = state.draft_virtual_block_meta;
-                if meta.virtual_column_size > 0 {
+                if let Some(columns) = &meta.virtual_columns
+                    && columns.virtual_column_size > 0
+                {
                     let write_started = Instant::now();
-                    parent.write_file(state.data, &meta.virtual_location)?;
+                    parent.write_file(state.data, &columns.virtual_location)?;
                     metrics_inc_block_virtual_column_write_nums(1);
-                    metrics_inc_block_virtual_column_write_bytes(meta.virtual_column_size);
+                    metrics_inc_block_virtual_column_write_bytes(columns.virtual_column_size);
                     metrics_inc_block_virtual_column_write_milliseconds(
                         write_started.elapsed().as_millis() as u64,
                     );

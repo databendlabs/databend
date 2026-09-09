@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index_sink;
 mod analyze;
 mod append;
 mod changes;
@@ -42,7 +41,6 @@ mod vacuum;
 mod vertical_recluster;
 mod virtual_column;
 
-pub use agg_index_sink::AggIndexSink;
 pub use analyze::AnalyzeHistogramInfo;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;

@@ -85,19 +85,12 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 let mut names = virtual_column
                     .virtual_column_fields
                     .iter()
-                    .map(|c| c.name.clone())
+                    .map(|column| column.name.clone())
                     .collect::<Vec<_>>();
                 names.sort();
                 names.iter().join(", ")
             })
         });
-
-        let agg_index = self
-            .inner
-            .source
-            .push_downs
-            .as_ref()
-            .and_then(|extras| extras.agg_index.as_ref());
 
         let mut children = vec![
             FormatTreeNode::new(format!("table: {table_name}")),
@@ -139,37 +132,6 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 let virtual_columns = format!("virtual columns: [{virtual_columns}]");
                 children.push(FormatTreeNode::new(virtual_columns));
             }
-        }
-
-        // Aggregating index
-        if let Some(agg_index) = agg_index {
-            let (_, agg_index_sql, _) = ctx
-                .metadata
-                .get_agg_indices(&table_name)
-                .unwrap()
-                .iter()
-                .find(|(index, _, _)| *index == agg_index.index_id)
-                .unwrap();
-
-            children.push(FormatTreeNode::new(format!(
-                "aggregating index: [{agg_index_sql}]"
-            )));
-
-            let agg_sel = agg_index
-                .selection
-                .iter()
-                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(", ");
-            let agg_filter = agg_index
-                .filter
-                .as_ref()
-                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).sql_display());
-            let text = if let Some(f) = agg_filter {
-                format!("rewritten query: [selection: [{agg_sel}], filter: {f}]")
-            } else {
-                format!("rewritten query: [selection: [{agg_sel}]]")
-            };
-            children.push(FormatTreeNode::new(text));
         }
 
         if let Some(info) = &self.inner.stat_info {

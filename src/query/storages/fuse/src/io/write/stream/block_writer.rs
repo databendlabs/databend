@@ -58,6 +58,7 @@ use crate::FuseTable;
 use crate::io::BlockSerialization;
 use crate::io::FuseLowLevelBlockWriteOptions;
 use crate::io::InvertedIndexBuilder;
+use crate::io::JsonPathStatisticsBuilder;
 use crate::io::PendingBlockSerialization;
 use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
@@ -102,6 +103,7 @@ pub struct FuseBlockWriter {
     block_writer: Option<ParquetBlockWriter>,
     block_index_writers: Vec<Box<dyn BlockIndexWriter>>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
+    json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     column_sketches_builder: BlockColumnSketchesBuilder,
 
     cluster_stats_state: ClusterStatisticsState,
@@ -162,6 +164,7 @@ impl FuseBlockWriter {
         }
 
         let virtual_column_builder = properties.virtual_column_builder.clone();
+        let json_path_statistics_builder = properties.json_path_statistics_builder.clone();
         let top_n = properties
             .top_n
             .as_ref()
@@ -181,6 +184,7 @@ impl FuseBlockWriter {
             block_writer: None,
             block_index_writers,
             virtual_column_builder,
+            json_path_statistics_builder,
             column_sketches_builder,
             row_count: 0,
             block_size: 0,
@@ -223,6 +227,8 @@ impl FuseBlockWriter {
         self.column_sketches_builder.add_block(&block)?;
         if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
             virtual_column_builder.add_block(&block)?;
+        } else if let Some(builder) = self.json_path_statistics_builder.as_mut() {
+            builder.add_block(&block)?;
         }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size(block.num_columns());
@@ -347,6 +353,15 @@ impl FuseBlockWriter {
             } else {
                 None
             };
+        let path_statistics = self
+            .json_path_statistics_builder
+            .as_mut()
+            .map(JsonPathStatisticsBuilder::finalize)
+            .or_else(|| {
+                virtual_column_state
+                    .as_ref()
+                    .and_then(|state| state.draft_virtual_block_meta.path_statistics.clone())
+            });
         let (vector_index_size, vector_index_location, vector_stats) = match &block_indexes.vector {
             Some(index) => (
                 index.file.as_ref().map(PendingIndexFile::size),
@@ -429,12 +444,14 @@ impl FuseBlockWriter {
             create_on: Some(Utc::now()),
             ngram_filter_index_size,
             virtual_block_meta: None,
+            virtual_path_statistics: None,
         };
         let serialized = BlockSerialization::Pending(PendingBlockSerialization {
             block_raw_data,
             block_meta,
             block_indexes,
             virtual_column_state,
+            path_statistics,
             granule_index_state: granule_index,
             granule_index_payloads: granule_payloads,
             column_hlls: match column_hlls {
@@ -498,6 +515,7 @@ pub struct FuseBlockWriteOptions {
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
+    json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
     vector_index_builder: Option<VectorIndexBuilder>,
     spatial_index_builder: Option<SpatialIndexBuilder>,
@@ -564,11 +582,32 @@ impl FuseBlockWriteOptions {
             &table.table_info.meta.schema,
         )?;
 
-        let virtual_column_builder = if table.enable_virtual_column() {
-            VirtualColumnBuilder::try_create(source_schema.clone()).ok()
-        } else {
-            None
-        };
+        // Recluster/compact/refresh materialize virtual columns and reuse the
+        // path frequencies collected by VirtualColumnBuilder. Other mutations
+        // only collect JSON path statistics.
+        let (virtual_column_builder, json_path_statistics_builder) =
+            if table.enable_virtual_column() {
+                match kind {
+                    MutationKind::Recluster | MutationKind::Compact | MutationKind::Refresh => (
+                        VirtualColumnBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                        None,
+                    ),
+                    _ => (
+                        None,
+                        JsonPathStatisticsBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                    ),
+                }
+            } else {
+                (None, None)
+            };
 
         let cluster_stats_builder =
             ClusterStatisticsBuilder::try_create(table, ctx.clone(), &source_schema)?;
@@ -604,6 +643,7 @@ impl FuseBlockWriteOptions {
             write_settings,
             cluster_stats_builder,
             virtual_column_builder,
+            json_path_statistics_builder,
             stats_columns,
             distinct_columns,
             bloom_columns_map,
@@ -620,6 +660,20 @@ impl FuseBlockWriteOptions {
             cluster_stats_override: None,
             partition_stats_override: None,
         }))
+    }
+
+    pub fn with_virtual_column_layout(
+        mut self: Arc<Self>,
+        layout: Option<databend_common_catalog::plan::VirtualColumnLayout>,
+    ) -> Arc<Self> {
+        if let Some(layout) = layout {
+            let options = Arc::get_mut(&mut self).expect("write options are not shared yet");
+            options.virtual_column_builder = options
+                .virtual_column_builder
+                .take()
+                .map(|builder| builder.with_adaptive_layout(Arc::new(layout)));
+        }
+        self
     }
 
     pub fn source_schema(&self) -> &TableSchemaRef {
@@ -758,6 +812,7 @@ impl FuseBlockWriteOptions {
         ngram_args: Vec<NgramArgs>,
         inverted_index_builders: Vec<InvertedIndexBuilder>,
         virtual_column_builder: Option<VirtualColumnBuilder>,
+        json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
         vector_index_builder: Option<VectorIndexBuilder>,
         spatial_index_builder: Option<SpatialIndexBuilder>,
         granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
@@ -800,6 +855,7 @@ impl FuseBlockWriteOptions {
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,
+            json_path_statistics_builder,
             table_meta_timestamps,
             vector_index_builder,
             spatial_index_builder,

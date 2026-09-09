@@ -178,6 +178,7 @@ impl GranuleIndex {
 
         let mut visitor = RewriteVisitor {
             input_domains,
+            virtual_column_types: None,
             func_ctx: &self.func_ctx,
             fn_registry: &BUILTIN_FUNCTIONS,
         };

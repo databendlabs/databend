@@ -51,6 +51,8 @@ use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -66,6 +68,7 @@ use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::materialize_cluster_key_columns;
 use crate::io::write::GranuleIndexState;
 use crate::io::write::InvertedIndexBuilder;
+use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexBuilder;
@@ -137,6 +140,7 @@ pub struct PendingBlockSerialization {
     pub(crate) block_meta: BlockMeta,
     pub(crate) block_indexes: crate::io::write::block_index::PendingBlockIndexOutput,
     pub(crate) virtual_column_state: Option<VirtualColumnState>,
+    pub(crate) path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
     pub(crate) granule_index_state: Option<GranuleIndexState>,
     pub(crate) granule_index_payloads: Vec<crate::io::granule_index::PendingGranuleIndexPayload>,
     pub(crate) column_hlls: Option<BlockHLLState>,
@@ -152,12 +156,19 @@ impl PendingBlockSerialization {
         for payload in self.granule_index_payloads {
             write_data(payload.data, dal, &payload.location.0).await?;
         }
-        let draft_virtual_block_meta = if let Some(state) = self.virtual_column_state {
-            let meta = state.draft_virtual_block_meta.clone();
+        let virtual_columns = if let Some(state) = self.virtual_column_state {
+            let meta = state.draft_virtual_block_meta.virtual_columns.clone();
             BlockWriter::write_down_virtual_column_state(dal, Some(state)).await?;
-            Some(meta)
+            meta
         } else {
             None
+        };
+        let draft_virtual_block_meta = match (virtual_columns, self.path_statistics) {
+            (None, None) => None,
+            (virtual_columns, path_statistics) => Some(DraftVirtualBlockMeta {
+                virtual_columns,
+                path_statistics,
+            }),
         };
 
         Ok(ExtendedBlockMeta {
@@ -197,6 +208,7 @@ pub struct BlockBuilder {
     pub granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
+    pub json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     pub vector_index_builder: Option<VectorIndexBuilder>,
     pub spatial_index_builder: Option<SpatialIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
@@ -238,6 +250,7 @@ impl BlockBuilder {
             self.ngram_args.clone(),
             self.inverted_index_builders.clone(),
             self.virtual_column_builder.clone(),
+            self.json_path_statistics_builder.clone(),
             self.vector_index_builder.clone(),
             self.spatial_index_builder.clone(),
             self.granule_index_specs.clone(),
@@ -385,22 +398,19 @@ impl BlockWriter {
         virtual_column_state: Option<VirtualColumnState>,
     ) -> Result<()> {
         if let Some(virtual_column_state) = virtual_column_state {
-            if virtual_column_state
+            let Some(virtual_columns) = &virtual_column_state
                 .draft_virtual_block_meta
-                .virtual_column_size
-                == 0
-            {
+                .virtual_columns
+            else {
+                return Ok(());
+            };
+            if virtual_columns.virtual_column_size == 0 {
                 return Ok(());
             }
             let start = Instant::now();
 
-            let index_size = virtual_column_state
-                .draft_virtual_block_meta
-                .virtual_column_size;
-            let location = &virtual_column_state
-                .draft_virtual_block_meta
-                .virtual_location
-                .0;
+            let index_size = virtual_columns.virtual_column_size;
+            let location = &virtual_columns.virtual_location.0;
             write_data(virtual_column_state.data, dal, location).await?;
             metrics_inc_block_virtual_column_write_nums(1);
             metrics_inc_block_virtual_column_write_bytes(index_size);
