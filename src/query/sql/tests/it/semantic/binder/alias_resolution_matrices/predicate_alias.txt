@@ -145,7 +145,7 @@ matrix: predicate_alias
 key: P0N1S1_7_
 sql: SELECT i > 0 AS ok FROM t AS t WHERE t.ok
 status: error
-code: 1065
+code: 1058
 message: column ok doesn't exist
 
 === predicate_alias__having_qualified_name_does_not_consume_aggregate_alias ===
@@ -153,7 +153,7 @@ matrix: predicate_alias
 key: P1N1S2_7_
 sql: SELECT sum(number) > 0 AS ok FROM t AS t HAVING t.ok
 status: error
-code: 1065
+code: 1058
 message: column ok doesn't exist
 
 === predicate_alias__qualify_qualified_name_does_not_consume_window_alias ===
@@ -161,7 +161,7 @@ matrix: predicate_alias
 key: P2N1S3_7_
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t AS t QUALIFY t.rn = 1
 status: error
-code: 1065
+code: 1058
 message: column rn doesn't exist
 
 === predicate_alias__where_duplicate_scalar_alias_is_ambiguous ===

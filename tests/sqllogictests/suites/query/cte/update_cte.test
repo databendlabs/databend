@@ -76,7 +76,7 @@ select * from t2;
 105 106 107 108 109
 110 111 112 113 114
 
-statement error (?s)1065.*?column a doesn't exist
+statement error (?s)1058.*?column a doesn't exist
 with tt1 as (select * from t1) update t2 set a = tt1.a;
 
 
