@@ -347,7 +347,10 @@ impl Visitor for AggregateFieldCounter {
 
     fn visit_function_call(&mut self, call: &FunctionCall) -> VisitResult {
         let name = call.name.name.to_ascii_lowercase();
-        if AGGR_REGISTRY.contains(&name) {
+        if AGGR_REGISTRY
+            .descriptor(&name)
+            .is_some_and(|descriptor| descriptor.features().supports_state)
+        {
             self.count += if name == "avg" { 2 } else { 1 };
             return Ok(VisitControl::SkipChildren);
         }
@@ -484,7 +487,9 @@ impl VisitorMut for AggregateExprRewriter<'_> {
                     && !func.has_explicit_lambda()
                     && func.order_by.is_empty()
                     && func.params.is_empty()
-                    && AGGR_REGISTRY.contains(&func.name.name) =>
+                    && AGGR_REGISTRY
+                        .descriptor(&func.name.name)
+                        .is_some_and(|descriptor| descriptor.features().supports_state) =>
             {
                 let original = expr.clone();
                 let Expr::FunctionCall { func, .. } = &original else {
@@ -630,9 +635,10 @@ impl Visitor for MaterializedViewChecker {
         if call.window.is_some() || call.filter.is_some() || !call.order_by.is_empty() {
             self.not_supported = true;
         }
-        if AGGR_REGISTRY.contains(&name) {
+        if let Some(descriptor) = AGGR_REGISTRY.descriptor(&name) {
             self.has_aggregate = true;
-            if call.distinct
+            if !descriptor.features().supports_state
+                || call.distinct
                 || call.filter.is_some()
                 || call.window.is_some()
                 || !call.order_by.is_empty()
@@ -752,6 +758,30 @@ mod tests {
         ] {
             let checker = check_query(sql)?;
             assert!(!checker.is_supported(), "should reject: {sql}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_materialized_view_checker_requires_state_capability() -> Result<()> {
+        for expression in [
+            "sum_if(amount, active)",
+            "sum_state(amount)",
+            "count_distinct(amount)",
+        ] {
+            let sql = format!("SELECT {expression} AS result FROM t");
+            assert!(!check_query(&sql)?.is_supported(), "should reject: {sql}");
+        }
+        for expression in [
+            "sum(amount)",
+            "count(amount)",
+            "avg(amount)",
+            "stddev(amount)",
+        ] {
+            let sql = format!("SELECT {expression} AS result FROM t");
+            assert!(check_query(&sql)?.is_supported(), "should support: {sql}");
+            let (query, _) = rewrite(&sql)?;
+            assert!(query.to_string().contains("_state("));
         }
         Ok(())
     }

@@ -51,6 +51,7 @@ impl AggregateMetadata {
             definition: self.documentation.definition,
             example: self.documentation.example,
             supports_filter: false,
+            supports_state: false,
             distinct_policy: DistinctPolicy::Unsupported,
         }
     }
