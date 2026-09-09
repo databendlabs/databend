@@ -263,7 +263,10 @@ impl<'a> MaterializedViewRefresh<'a> {
                     checkpoint
                         .as_ref()
                         .and_then(|(_, location)| location.as_ref()),
+                    &StreamMode::Standard,
                     batch_limit,
+                    ctx.get_settings()
+                        .get_enable_stream_batch_snapshot_forward_scan()?,
                     ctx.get_settings().get_s3_storage_class()?,
                 )
                 .await?

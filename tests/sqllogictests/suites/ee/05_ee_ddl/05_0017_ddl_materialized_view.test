@@ -146,6 +146,58 @@ statement ok
 DROP TABLE mv_batch_source
 
 statement ok
+CREATE TABLE mv_batch_update_source (id INT, value INT)
+
+statement ok
+CREATE MATERIALIZED VIEW test_mv_batch_update AS
+SELECT id, value FROM mv_batch_update_source WHERE 1 = 1
+
+statement ok
+INSERT INTO mv_batch_update_source VALUES (1, 10)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch_update LIMIT 10
+
+statement ok
+UPDATE mv_batch_update_source SET value = 20 WHERE id = 1
+
+statement ok
+INSERT INTO mv_batch_update_source VALUES (2, 30)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch_update LIMIT 1
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch_update')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+1
+
+query I
+SELECT value FROM test_mv_batch_update WHERE id = 1
+----
+20
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch_update LIMIT 1
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch_update')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+2
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_batch_update
+
+statement ok
+DROP TABLE mv_batch_update_source
+
+statement ok
 CREATE TABLE mv_base_t (id INT, val VARCHAR, amount INT)
 
 statement ok
