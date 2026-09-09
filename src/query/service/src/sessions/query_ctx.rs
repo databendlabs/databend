@@ -614,8 +614,8 @@ impl QueryContext {
         self.attach_query_lineage((!lineage.targets.is_empty()).then_some(lineage));
     }
 
-    pub fn get_created_time(&self) -> SystemTime {
-        self.shared.created_time
+    pub fn get_query_created_time(&self) -> SystemTime {
+        self.shared.query_created_time
     }
 
     pub fn set_finish_time(&self, time: SystemTime) {

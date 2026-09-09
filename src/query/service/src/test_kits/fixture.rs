@@ -318,6 +318,7 @@ impl TestFixture {
             self.default_session.clone(),
             Cluster::create(nodes, local_id),
             &BUILD_INFO,
+            None,
         )?);
 
         dummy_query_context.get_settings().set_max_threads(8)?;

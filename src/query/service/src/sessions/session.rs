@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
@@ -162,16 +163,17 @@ impl Session {
         } else {
             ClusterDiscovery::instance().discover(&config).await?
         };
-        self.create_query_context_with_cluster(cluster, version)
+        self.create_query_context_with_cluster(cluster, version, None)
     }
 
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
         version: BuildInfoRef,
+        query_created_time: Option<SystemTime>,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
-        let shared = QueryContextShared::try_create(session, cluster, version)?;
+        let shared = QueryContextShared::try_create(session, cluster, version, query_created_time)?;
 
         if let Some(mem_stat) = ThreadTracker::mem_stat() {
             let settings = self.get_settings();
