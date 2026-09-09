@@ -37,8 +37,6 @@ use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::FileFormatOptionsReader;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_storages_common_table_meta::table::is_stream_name;
 
@@ -52,6 +50,7 @@ use crate::TypeChecker;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::bind_query::ExpressionScanContext;
+use crate::binder::parse_file_format;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::normalize_identifier;
@@ -560,15 +559,11 @@ impl Binder {
                         "[SQL-BINDER] File format '{name}' is reserved and cannot be used"
                     )));
                 }
-                let file_format_params = FileFormatParams::try_from_reader(
-                    FileFormatOptionsReader::from_ast(file_format_options),
-                    false,
+                let file_format_params = parse_file_format(
+                    databend_common_meta_app::principal::FileFormatOptionsReader::from_ast(
+                        file_format_options,
+                    ),
                 )?;
-                if matches!(file_format_params, FileFormatParams::Lance(_)) {
-                    return Err(ErrorCode::IllegalFileFormat(
-                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
-                    ));
-                }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
