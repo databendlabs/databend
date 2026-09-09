@@ -17,6 +17,7 @@ mod processor_merge_into_matched_and_split;
 mod processor_merge_into_not_matched;
 mod processor_merge_into_split;
 mod processor_merge_into_split_row_number_and_log;
+mod transform_matched_block_mutation;
 mod transform_matched_mutation_aggregator;
 
 pub use block_id_partition_exchange::BlockIdPartitionExchange;
@@ -28,3 +29,4 @@ pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_not_matched::UnMatchedExprs;
 pub use processor_merge_into_split::MutationSplitProcessor;
 pub use processor_merge_into_split_row_number_and_log::RowNumberAndLogSplitProcessor;
+pub use transform_matched_block_mutation::TransformMatchedBlockMutation;

@@ -2358,7 +2358,6 @@ impl Binder {
                         self.validate_spatial_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Spatial, column_ids, options)
                 }
-                AstTableIndexType::Aggregating => unreachable!(),
             };
 
             let table_index = TableIndex {

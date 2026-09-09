@@ -77,7 +77,6 @@ use crate::binder::Binder;
 use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
-use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::planner::semantic::MaterializedViewChecker;
 use crate::planner::semantic::MaterializedViewRewriter;
 use crate::planner::semantic::ViewRewriter;
@@ -170,10 +169,7 @@ impl Binder {
         bind_context: &mut BindContext,
         metadata: &MetadataRef,
     ) -> Result<()> {
-        if bind_context.planning_agg_index
-            || bind_context.planning_materialized_view_rewrite
-            || !self.ctx.get_can_scan_from_agg_index()
-            || !self.enable_materialized_view_rewrite
+        if bind_context.planning_materialized_view_rewrite || !self.enable_materialized_view_rewrite
         {
             return Ok(());
         }
@@ -181,10 +177,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let source_entries = metadata.read().tables().to_vec();
         for source_entry in source_entries {
-            if source_entry.is_source_of_view()
-                || source_entry.is_source_of_index()
-                || source_entry.is_source_of_stage()
-            {
+            if source_entry.is_source_of_view() || source_entry.is_source_of_stage() {
                 continue;
             }
             let source_table = source_entry.table();
@@ -487,11 +480,7 @@ impl Binder {
         let checker = MaterializedViewChecker::check_query(query);
         if !checker.is_supported() {
             return Err(ErrorCode::SemanticError(format!(
-                "Materialized View only support simple query, like: \
-                    `SELECT ... FROM ... WHERE ... GROUP BY ...`, \
-                     and these aggregate funcs: {}, \
-                     non-deterministic functions are not support like: NOW()",
-                SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
+                "Materialized View only supports simple SELECT queries over one table, with optional WHERE/GROUP BY clauses, registered aggregate functions, and deterministic expressions",
             )));
         }
 

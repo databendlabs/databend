@@ -18,6 +18,7 @@ use databend_common_sql::optimizer::ir::Distribution;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
@@ -52,12 +53,16 @@ async fn write_optimized_case(
 
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;
-    writeln!(file, "{}", raw_plan.format_indent(Default::default())?)?;
+    writeln!(
+        file,
+        "{}",
+        raw_plan.format_indent(Default::default(), &StatContext::default())?
+    )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default())?
+        optimized_plan.format_indent(Default::default(), &StatContext::default())?
     )?;
     writeln!(file)?;
 

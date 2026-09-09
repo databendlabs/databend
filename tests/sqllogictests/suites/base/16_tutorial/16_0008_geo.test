@@ -1,0 +1,68 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/006-geo.sql
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE TABLE frame_geo_points (
+    frame_id        STRING,
+    video_id        STRING,
+    position_wgs84  GEOMETRY,
+    created_at      TIMESTAMP
+)
+
+statement ok
+INSERT INTO frame_geo_points VALUES
+                                 ('FRAME-0101','VID-001',TO_GEOMETRY('SRID=4326;POINT(114.0579 22.5431)'), '2025-01-01 08:15:21'),
+                                 ('FRAME-0102','VID-001',TO_GEOMETRY('SRID=4326;POINT(114.0610 22.5460)'), '2025-01-01 08:33:54'),
+                                 ('FRAME-0201','VID-002',TO_GEOMETRY('SRID=4326;POINT(114.1040 22.5594)'), '2025-01-01 11:12:02')
+
+query I
+WITH hq AS (
+    SELECT TO_GEOMETRY('SRID=4326;POINT(114.0600 22.5450)') AS center
+)
+SELECT COUNT(*) AS frames_within_400m
+FROM frame_geo_points, hq
+WHERE ST_DISTANCE(
+              ST_TRANSFORM(position_wgs84, 3857),
+              ST_TRANSFORM(center, 3857)
+      ) <= 400
+----
+2
+
+query TTR
+WITH hq AS (
+    SELECT TO_GEOMETRY('SRID=4326;POINT(114.0600 22.5450)') AS center
+)
+SELECT frame_id,
+       video_id,
+       ST_DISTANCE(
+               ST_TRANSFORM(position_wgs84, 3857),
+               ST_TRANSFORM(center, 3857)
+       ) AS meters_from_hq
+FROM frame_geo_points, hq
+WHERE ST_DISTANCE(
+              ST_TRANSFORM(position_wgs84, 3857),
+              ST_TRANSFORM(center, 3857)
+      ) <= 400
+ORDER BY meters_from_hq
+----
+FRAME-0102 VID-001 164.072420697
+FRAME-0101 VID-001 327.250441998
+
+query II
+SELECT GEO_TO_H3(ST_X(position_wgs84), ST_Y(position_wgs84), 8) AS h3_cell,
+       COUNT(*) AS frame_count
+FROM frame_geo_points
+GROUP BY h3_cell
+ORDER BY h3_cell
+----
+613635011200942079 1
+613635011238690815 1
+613635011540680703 1
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo

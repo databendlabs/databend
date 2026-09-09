@@ -12,153 +12,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::num::NonZeroUsize;
 
 use rand::Rng;
 use reservoir_sampling::AlgoL;
 
-use crate::BlockIndex;
-use crate::DataBlock;
-
-pub struct FixedSizeSampler<R: Rng> {
-    columns: Vec<usize>,
+/// A fixed-capacity owning reservoir sampler using Vitter's Algorithm L.
+///
+/// Like Spark's `reservoirSampleAndCount`, the reservoir owns at most `k` values and also tracks
+/// the input cardinality. Algorithm L replaces Spark's per-row Algorithm R decision with an exact
+/// skip calculation, avoiding work for rows that cannot enter the reservoir. Input block boundaries
+/// do not affect the resulting sample.
+pub struct FixedSizeSampler<T, R: Rng> {
+    samples: Vec<T>,
     k: usize,
-    block_size: usize,
-
-    blocks: Vec<DataBlock>,
-    indices: Vec<BlockIndex>,
+    rows_seen: usize,
+    // Zero-based global stream index selected next by Algorithm L.
+    next_sample: Option<usize>,
     core: AlgoL<R>,
-
-    s: usize,
 }
 
-impl<R: Rng> FixedSizeSampler<R> {
-    pub fn new(columns: Vec<usize>, block_size: usize, k: usize, rng: R) -> Self {
-        let core = AlgoL::new(k.try_into().unwrap(), rng);
+impl<T, R: Rng> FixedSizeSampler<T, R> {
+    pub fn new(k: usize, rng: R) -> Self {
+        let k = NonZeroUsize::new(k).expect("sample size must be greater than zero");
         Self {
-            columns,
-            blocks: Vec::new(),
-            indices: Vec::with_capacity(k),
-            k,
-            block_size,
-            core,
-            s: usize::MAX,
+            samples: Vec::with_capacity(k.get()),
+            k: k.get(),
+            rows_seen: 0,
+            next_sample: None,
+            core: AlgoL::new(k, rng),
         }
     }
 
-    pub fn add_block(&mut self, data: DataBlock) -> bool {
-        let rows = data.num_rows();
-        assert!(rows > 0);
-        let block_idx = self.blocks.len() as u32;
-        let change = self.add_indices(rows, block_idx);
-        if change {
-            let columns = self
-                .columns
-                .iter()
-                .map(|&offset| data.get_by_offset(offset).to_owned())
-                .collect::<Vec<_>>();
+    /// Consider one logical block while preserving the same result as one continuous row stream.
+    ///
+    /// `value_at` is evaluated only for rows entering the reservoir: every row during the initial
+    /// fill, then only the rows selected by Algorithm L.
+    pub fn add_block<F>(&mut self, rows: usize, mut value_at: F)
+    where F: FnMut(usize) -> T {
+        let start = self.rows_seen;
+        let end = start.checked_add(rows).expect("sample row count overflow");
+        let mut row = 0;
 
-            self.blocks.push(DataBlock::new(columns, rows));
-            if self.blocks.len() > self.k {
-                self.compact_blocks()
+        if self.samples.len() < self.k {
+            let take = (self.k - self.samples.len()).min(rows);
+            self.samples.extend((0..take).map(&mut value_at));
+            row = take;
+
+            if self.samples.len() == self.k {
+                self.next_sample = (self.k - 1).checked_add(self.core.search());
             }
         }
-        change
-    }
 
-    fn add_indices(&mut self, rows: usize, block_idx: u32) -> bool {
-        let mut change = false;
-        let mut cur: usize = 0;
-        if self.indices.len() < self.k {
-            if rows + self.indices.len() <= self.k {
-                for i in 0..rows {
-                    self.indices.push((block_idx, i as u32));
-                }
-                if self.indices.len() == self.k {
-                    self.s = self.core.search()
-                }
-                return true;
+        while let Some(sample_index) = self.next_sample {
+            if sample_index >= end {
+                break;
             }
-            while self.indices.len() < self.k {
-                self.indices.push((block_idx, cur as u32));
-                cur += 1;
-            }
-            self.s = self.core.search();
-            change = true;
-        }
+            debug_assert!(sample_index >= start + row);
+            row = sample_index - start;
+            let slot = self.core.pos();
+            self.samples[slot] = value_at(row);
 
-        while rows - cur > self.s {
-            change = true;
-            cur += self.s;
-            self.indices[self.core.pos()] = (block_idx, cur as u32);
             self.core.update_w();
-            self.s = self.core.search();
+            self.next_sample = sample_index.checked_add(self.core.search());
         }
 
-        self.s -= rows - cur;
-        change
+        self.rows_seen = end;
     }
 
-    pub fn compact_indices(&mut self) {
-        compact_indices(&mut self.indices, &mut self.blocks)
+    pub fn rows_seen(&self) -> usize {
+        self.rows_seen
     }
 
-    pub fn compact_blocks(&mut self) {
-        self.blocks = self
-            .indices
-            .chunks_mut(self.block_size)
-            .enumerate()
-            .map(|(i, indices)| {
-                let block = DataBlock::take_blocks(&self.blocks, indices);
-
-                for (j, (b, r)) in indices.iter_mut().enumerate() {
-                    *b = i as u32;
-                    *r = j as u32;
-                }
-
-                block
-            })
-            .collect::<Vec<_>>();
+    pub fn into_samples(self) -> Vec<T> {
+        self.samples
     }
-
-    pub fn memory_size(self) -> usize {
-        self.blocks.iter().map(|b| b.memory_size()).sum()
-    }
-
-    pub fn take_blocks(&mut self) -> Vec<DataBlock> {
-        std::mem::take(&mut self.blocks)
-    }
-
-    pub fn k(&self) -> usize {
-        self.k
-    }
-}
-
-fn compact_indices(indices: &mut Vec<BlockIndex>, blocks: &mut Vec<DataBlock>) {
-    let used_set: HashSet<_> = indices.iter().map(|&(b, _)| b).collect();
-    if used_set.len() == blocks.len() {
-        return;
-    }
-
-    let mut used: Vec<_> = used_set.iter().cloned().collect();
-    used.sort();
-
-    *indices = indices
-        .drain(..)
-        .map(|(b, r)| (used.binary_search(&b).unwrap() as u32, r))
-        .collect();
-
-    *blocks = blocks
-        .drain(..)
-        .enumerate()
-        .filter_map(|(i, block)| {
-            if used_set.contains(&(i as u32)) {
-                Some(block)
-            } else {
-                None
-            }
-        })
-        .collect();
 }
 
 mod reservoir_sampling {
@@ -206,73 +134,98 @@ mod reservoir_sampling {
             self.r.sample(rand::distributions::Open01)
         }
     }
-
-    #[cfg(test)]
-    mod tests {
-        use rand::SeedableRng;
-        use rand::rngs::StdRng;
-
-        use super::*;
-
-        #[test]
-        fn test_algo_l() {
-            let rng = StdRng::seed_from_u64(0);
-            let mut sample = vec![0_u64; 10];
-
-            let mut al = AlgoL::new(10.try_into().unwrap(), rng);
-            for (i, v) in sample.iter_mut().enumerate() {
-                *v = i as u64
-            }
-
-            let mut i = 9;
-            loop {
-                i += al.search();
-                if i < 100 {
-                    sample[al.pos()] = i as u64;
-                    al.update_w()
-                } else {
-                    break;
-                }
-            }
-
-            let want: Vec<u64> = vec![69, 49, 53, 83, 4, 72, 88, 38, 45, 27];
-            assert_eq!(want, sample)
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
     use super::*;
 
+    fn sample_in_blocks(block_sizes: &[usize]) -> FixedSizeSampler<usize, StdRng> {
+        let mut sampler = FixedSizeSampler::new(10, StdRng::seed_from_u64(0));
+        let mut offset = 0;
+        for &rows in block_sizes {
+            sampler.add_block(rows, |row| offset + row);
+            offset += rows;
+        }
+        sampler
+    }
+
     #[test]
-    fn test_add_indices() {
-        let rng = StdRng::seed_from_u64(0);
-        let k = 5;
-        let core = AlgoL::new(k.try_into().unwrap(), rng);
-        let mut sampler = FixedSizeSampler {
-            columns: vec![0],
-            k,
-            block_size: 65536,
-            blocks: Vec::new(),
-            indices: Vec::new(),
-            core,
-            s: usize::MAX,
-        };
+    fn test_algorithm_l_known_sample() {
+        let sampler = sample_in_blocks(&[100]);
+        assert_eq!(sampler.samples, [69, 49, 53, 83, 4, 72, 88, 38, 45, 27]);
+        assert_eq!(sampler.rows_seen(), 100);
+    }
 
-        sampler.add_indices(15, 0);
+    #[test]
+    fn test_algorithm_l_block_adapter_matches_stream_reference() {
+        const ROWS: usize = 4096;
+        const CHUNK_PATTERN: [usize; 8] = [0, 1, 2, 17, 0, 31, 127, 509];
 
-        let want: Vec<BlockIndex> = vec![(0, 10), (0, 1), (0, 2), (0, 8), (0, 12)];
-        assert_eq!(&want, &sampler.indices);
-        assert_eq!(0, sampler.s);
+        for seed in 0..32 {
+            for k in [1, 2, 5, 64] {
+                let mut expected = (0..k).collect::<Vec<_>>();
+                let mut core = AlgoL::new(k.try_into().unwrap(), StdRng::seed_from_u64(seed));
+                let mut sample_index = k - 1;
+                loop {
+                    let Some(next) = sample_index.checked_add(core.search()) else {
+                        break;
+                    };
+                    sample_index = next;
+                    if sample_index >= ROWS {
+                        break;
+                    }
+                    expected[core.pos()] = sample_index;
+                    core.update_w();
+                }
 
-        sampler.add_indices(20, 1);
+                let mut partitioned = FixedSizeSampler::new(k, StdRng::seed_from_u64(seed));
+                let mut offset = 0;
+                for chunk in CHUNK_PATTERN.into_iter().cycle() {
+                    let rows = chunk.min(ROWS - offset);
+                    partitioned.add_block(rows, |row| offset + row);
+                    offset += rows;
+                    if offset == ROWS {
+                        break;
+                    }
+                }
 
-        let want: Vec<BlockIndex> = vec![(1, 0), (0, 1), (1, 6), (0, 8), (1, 9)];
-        assert_eq!(&want, &sampler.indices);
-        assert_eq!(1, sampler.s);
+                assert_eq!(partitioned.rows_seen(), ROWS, "seed={seed}, k={k}");
+                assert_eq!(partitioned.samples, expected, "seed={seed}, k={k}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_reservoir_capacity_is_strict() {
+        let mut sampler = FixedSizeSampler::new(5, StdRng::seed_from_u64(11));
+        sampler.add_block(10_000, |row| row);
+        assert_eq!(sampler.samples.len(), 5);
+        assert!(sampler.samples.iter().all(|value| *value < 10_000));
+    }
+
+    #[test]
+    fn test_input_smaller_than_reservoir_is_preserved() {
+        let mut sampler = FixedSizeSampler::new(5, StdRng::seed_from_u64(11));
+        sampler.add_block(3, |row| row);
+        assert_eq!(sampler.samples, [0, 1, 2]);
+        assert_eq!(sampler.rows_seen(), 3);
+    }
+
+    #[test]
+    fn test_skipped_rows_are_not_materialized() {
+        let materialized = Cell::new(0);
+        let mut sampler = FixedSizeSampler::new(5, StdRng::seed_from_u64(19));
+        sampler.add_block(10_000, |row| {
+            materialized.set(materialized.get() + 1);
+            row
+        });
+        assert_eq!(sampler.samples.len(), 5);
+        assert!(materialized.get() < 100);
     }
 }

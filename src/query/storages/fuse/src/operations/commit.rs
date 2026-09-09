@@ -127,6 +127,7 @@ impl FuseTable {
                 prev_snapshot_id,
                 deduplicated_label.clone(),
                 table_meta_timestamps,
+                false,
             )
         })?;
 

@@ -33,6 +33,7 @@ use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::SExprVisitor;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::ir::VisitAction;
@@ -60,6 +61,7 @@ pub struct DPhpyOptimizer {
 struct DPhypJoinOrderModel<'a> {
     join_relations: &'a [JoinRelation],
     join_conditions: &'a [(ScalarExpr, ScalarExpr)],
+    stat_context: &'a StatContext,
 }
 
 impl DPhypJoinOrderModel<'_> {
@@ -121,7 +123,7 @@ impl JoinOrderModel for DPhypJoinOrderModel<'_> {
 
     fn base_node(&self, relation: RelationId) -> Result<(f64, Self::NodeState)> {
         Ok((
-            self.join_relations[relation].cardinality()?,
+            self.join_relations[relation].cardinality(self.stat_context)?,
             self.join_relations[relation].s_expr(),
         ))
     }
@@ -134,7 +136,7 @@ impl JoinOrderModel for DPhypJoinOrderModel<'_> {
     ) -> Result<(f64, Self::NodeState)> {
         let s_expr = self.join_s_expr(left, right, edge_refs);
         let cardinality = RelExpr::with_s_expr(&s_expr)
-            .derive_cardinality()
+            .derive_cardinality(self.stat_context)
             .map(|stat| stat.cardinality)?;
         Ok((cardinality, s_expr))
     }
@@ -352,7 +354,11 @@ impl DPhpyOptimizer {
         let left_expr = left_dphyp.optimize_async(s_expr.left_child()).await?;
 
         let mut cte_stats = HashMap::new();
-        Self::collect_materialized_cte_stats(&left_expr, &mut cte_stats)?;
+        Self::collect_materialized_cte_stats(
+            &left_expr,
+            &mut cte_stats,
+            self.opt_ctx.get_stat_context(),
+        )?;
         let (right_child, _) =
             Self::sync_materialized_cte_ref_stats(s_expr.right_child(), &cte_stats)?;
 
@@ -373,16 +379,18 @@ impl DPhpyOptimizer {
     fn collect_materialized_cte_stats(
         s_expr: &SExpr,
         cte_stats: &mut HashMap<String, Arc<StatInfo>>,
+        stat_context: &StatContext,
     ) -> Result<()> {
         struct StatsCollector<'a> {
             cte_stats: &'a mut HashMap<String, Arc<StatInfo>>,
+            stat_context: &'a StatContext,
         }
 
         impl SExprVisitor for StatsCollector<'_> {
             fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
                 if let RelOperator::MaterializedCTE(cte) = expr.plan() {
-                    let stat_info =
-                        RelExpr::with_s_expr(expr.unary_child()).derive_cardinality()?;
+                    let stat_info = RelExpr::with_s_expr(expr.unary_child())
+                        .derive_cardinality(self.stat_context)?;
                     self.cte_stats.insert(cte.cte_name.clone(), stat_info);
                 }
 
@@ -390,7 +398,12 @@ impl DPhpyOptimizer {
             }
         }
 
-        s_expr.accept(&mut StatsCollector { cte_stats }).map(|_| ())
+        s_expr
+            .accept(&mut StatsCollector {
+                cte_stats,
+                stat_context,
+            })
+            .map(|_| ())
     }
 
     fn remap_materialized_cte_ref_stat_info(
@@ -464,12 +477,16 @@ impl DPhpyOptimizer {
         Ok((result, visitor.changed))
     }
 
-    fn sync_materialized_cte_ref_stats_in_sequences(s_expr: &SExpr) -> Result<(SExpr, bool)> {
-        struct InSequencesStatsSyncer {
+    fn sync_materialized_cte_ref_stats_in_sequences(
+        s_expr: &SExpr,
+        stat_context: &StatContext,
+    ) -> Result<(SExpr, bool)> {
+        struct InSequencesStatsSyncer<'a> {
             changed: bool,
+            stat_context: &'a StatContext,
         }
 
-        impl SExprVisitor for InSequencesStatsSyncer {
+        impl SExprVisitor for InSequencesStatsSyncer<'_> {
             fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
                 if !matches!(expr.plan(), RelOperator::Sequence(_)) {
                     return Ok(VisitAction::Continue);
@@ -478,16 +495,24 @@ impl DPhpyOptimizer {
                 let (left_expr, left_changed) =
                     DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(
                         expr.left_child(),
+                        self.stat_context,
                     )?;
 
                 let mut cte_stats = HashMap::new();
-                DPhpyOptimizer::collect_materialized_cte_stats(&left_expr, &mut cte_stats)?;
+                DPhpyOptimizer::collect_materialized_cte_stats(
+                    &left_expr,
+                    &mut cte_stats,
+                    self.stat_context,
+                )?;
                 let (right_expr, right_synced) = DPhpyOptimizer::sync_materialized_cte_ref_stats(
                     expr.right_child(),
                     &cte_stats,
                 )?;
                 let (right_expr, right_changed) =
-                    DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(&right_expr)?;
+                    DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(
+                        &right_expr,
+                        self.stat_context,
+                    )?;
 
                 let changed = left_changed || right_synced || right_changed;
                 self.changed |= changed;
@@ -503,7 +528,10 @@ impl DPhpyOptimizer {
             }
         }
 
-        let mut visitor = InSequencesStatsSyncer { changed: false };
+        let mut visitor = InSequencesStatsSyncer {
+            changed: false,
+            stat_context,
+        };
         let result = s_expr
             .accept(&mut visitor)?
             .unwrap_or_else(|| s_expr.clone());
@@ -668,7 +696,10 @@ impl DPhpyOptimizer {
     /// The output plan will have optimal join order theoretically
     pub async fn optimize_async(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         if !self.opt_ctx.get_enable_dphyp() || !self.opt_ctx.get_enable_join_reorder() {
-            let (s_expr, _) = Self::sync_materialized_cte_ref_stats_in_sequences(s_expr)?;
+            let (s_expr, _) = Self::sync_materialized_cte_ref_stats_in_sequences(
+                s_expr,
+                self.opt_ctx.get_stat_context(),
+            )?;
             return Ok(s_expr);
         }
 
@@ -692,6 +723,7 @@ impl DPhpyOptimizer {
         let model = DPhypJoinOrderModel {
             join_relations: &self.join_relations,
             join_conditions: &join_conditions,
+            stat_context: self.opt_ctx.get_stat_context(),
         };
         let mut hyper_dp = HyperDp::new(self.join_relations.len(), &model);
 
@@ -941,7 +973,12 @@ mod tests {
         );
 
         let mut cte_stats = HashMap::new();
-        DPhpyOptimizer::collect_materialized_cte_stats(&producer, &mut cte_stats).unwrap();
+        DPhpyOptimizer::collect_materialized_cte_stats(
+            &producer,
+            &mut cte_stats,
+            &StatContext::default(),
+        )
+        .unwrap();
 
         let (optimized, changed) =
             DPhpyOptimizer::sync_materialized_cte_ref_stats(&query, &cte_stats).unwrap();
@@ -979,8 +1016,11 @@ mod tests {
         }));
         let root = SExpr::create_binary(Sequence, Arc::new(producer), Arc::new(consumer));
 
-        let (optimized, changed) =
-            DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(&root).unwrap();
+        let (optimized, changed) = DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(
+            &root,
+            &StatContext::default(),
+        )
+        .unwrap();
 
         assert!(changed);
         let consumer = optimized.child(1).unwrap();
@@ -1008,7 +1048,12 @@ mod tests {
         }));
 
         let mut cte_stats = HashMap::new();
-        DPhpyOptimizer::collect_materialized_cte_stats(&producer, &mut cte_stats).unwrap();
+        DPhpyOptimizer::collect_materialized_cte_stats(
+            &producer,
+            &mut cte_stats,
+            &StatContext::default(),
+        )
+        .unwrap();
 
         let (optimized, changed) =
             DPhpyOptimizer::sync_materialized_cte_ref_stats(&consumer, &cte_stats).unwrap();

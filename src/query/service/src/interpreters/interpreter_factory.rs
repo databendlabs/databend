@@ -29,8 +29,6 @@ use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_dictionary_create::CreateDictionaryInterpreter;
 use super::interpreter_dictionary_drop::DropDictionaryInterpreter;
 use super::interpreter_dictionary_show_create::ShowCreateDictionaryInterpreter;
-use super::interpreter_index_create::CreateIndexInterpreter;
-use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
@@ -486,7 +484,7 @@ impl InterpreterFactory {
             Plan::ReclusterTable(recluster) => Ok(Arc::new(ReclusterTableInterpreter::try_create(
                 ctx,
                 *recluster.clone(),
-                LockTableOption::LockWithRetry,
+                true,
             )?)),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
@@ -599,18 +597,6 @@ impl InterpreterFactory {
             Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
 
             // Indexes
-            Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
-            Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
-            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
             Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),

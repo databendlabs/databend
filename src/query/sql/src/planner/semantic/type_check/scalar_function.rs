@@ -25,7 +25,6 @@ use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr;
@@ -488,8 +487,6 @@ where A: TypeCheckAdapter
             Self::rewrite_substring(&mut args);
         }
 
-        self.adjust_date_interval_function_args(func_name, &mut args)?;
-
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         // inject the params
@@ -502,12 +499,8 @@ where A: TypeCheckAdapter
                 let scalar_expr = &arguments[1];
                 let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
 
-                let scale: i64 = check_number(
-                    expr.span(),
-                    &FunctionContext::default(),
-                    expr,
-                    &BUILTIN_FUNCTIONS,
-                )?;
+                let scale: i64 =
+                    check_number(expr.span(), &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?;
                 scale.clamp(-76, 76)
             } else {
                 0
@@ -533,12 +526,8 @@ where A: TypeCheckAdapter
                 let param_args = arguments.split_off(1);
                 for arg in param_args.into_iter() {
                     let expr = type_check::check(&arg, &BUILTIN_FUNCTIONS)?;
-                    let param: u8 = check_number(
-                        expr.span(),
-                        &FunctionContext::default(),
-                        expr,
-                        &BUILTIN_FUNCTIONS,
-                    )?;
+                    let param: u8 =
+                        check_number(expr.span(), &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?;
                     params.push(Scalar::Number(NumberScalar::UInt8(param)));
                 }
             }

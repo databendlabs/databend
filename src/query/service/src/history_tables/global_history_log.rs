@@ -458,7 +458,7 @@ impl GlobalHistoryLog {
                         // only around every 30 seconds; this check enables faster failover.
                         if e.code() == ErrorCode::DUPLICATED_UPSERT_FILES
                             || e.code() == ErrorCode::TABLE_ALREADY_LOCKED
-                            || e.code() == ErrorCode::TABLE_LOCK_EXPIRED
+                            || e.code() == ErrorCode::LEASE_EXPIRED
                             || e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
                         {
                             if let Ok(valid) =

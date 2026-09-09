@@ -96,7 +96,6 @@ impl Interpreter for RefreshTableIndexInterpreter {
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
             ast::TableIndexType::Spatial => TableIndexType::Spatial,
-            ast::TableIndexType::Aggregating => unreachable!(),
         };
 
         let mut build_res = PipelineBuildResult::create();

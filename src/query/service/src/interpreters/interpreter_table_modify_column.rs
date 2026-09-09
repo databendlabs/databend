@@ -45,7 +45,6 @@ use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::binder::validate_constraints_by_schema;
-use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -286,14 +285,6 @@ impl ModifyTableColumnInterpreter {
         let catalog_name = table_info.catalog();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        validate_table_indexes_not_referencing_columns(
-            self.ctx.clone(),
-            catalog.as_ref(),
-            &self.ctx.get_tenant(),
-            table.get_id(),
-            &modified_column_ids,
-        )
-        .await?;
         validate_constraints_by_schema(
             self.ctx.clone(),
             &table_info.meta.constraints,

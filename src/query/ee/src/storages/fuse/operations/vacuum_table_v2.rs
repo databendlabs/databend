@@ -24,7 +24,6 @@ use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -38,7 +37,6 @@ use databend_storages_common_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
-use opendal::Scheme;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
@@ -81,8 +79,6 @@ struct BlockGcContext<'a> {
     gc_root_meta_ts: DateTime<Utc>,
     /// Protected data block paths that are still referenced by the gc root or refs.
     gc_root_blocks: &'a HashSet<String>,
-    /// Aggregating index ids used to derive index object paths from data blocks.
-    table_agg_index_ids: &'a [u64],
     /// Inverted index metadata used to derive index object paths from data blocks.
     inverted_indexes: &'a BTreeMap<String, TableIndex>,
     /// Start time of the block GC phase, used only for status reporting.
@@ -223,13 +219,6 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
-    let catalog = ctx.get_default_catalog()?;
-    let table_agg_index_ids = catalog
-        .list_index_ids_by_table_id(ListIndexesByIdReq::new(
-            ctx.get_tenant(),
-            fuse_table.get_id(),
-        ))
-        .await?;
     let inverted_indexes = &table_info.meta.indexes;
 
     // order is important
@@ -244,7 +233,6 @@ pub async fn do_vacuum2(
         gc_root_timestamp,
         gc_root_meta_ts,
         gc_root_blocks: &gc_root_blocks,
-        table_agg_index_ids: &table_agg_index_ids,
         inverted_indexes,
         start,
     };
@@ -311,7 +299,9 @@ async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<Bl
     info!("Listing block files until prefix: {}", block_gc.until);
 
     match block_gc.dal.info().scheme() {
-        Scheme::Fs => purge_blocks_before_gc_root_fs(block_gc).await,
+        scheme if scheme == opendal::Scheme::Fs.into_static() => {
+            purge_blocks_before_gc_root_fs(block_gc).await
+        }
         _ => purge_blocks_before_gc_root_object_store_streaming(block_gc).await,
     }
 }
@@ -452,11 +442,7 @@ async fn purge_block_chunk(
     }
 
     let chunk_idx = stats.removed_blocks / VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 1;
-    let indexes_to_gc = collect_block_index_locations(
-        block_chunk,
-        block_gc.table_agg_index_ids,
-        block_gc.inverted_indexes,
-    );
+    let indexes_to_gc = collect_block_index_locations(block_chunk, block_gc.inverted_indexes);
     block_gc.ctx.set_status_info(&format!(
         "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}, blocks in chunk: {}, indexes_to_gc: {:?}",
         block_gc.table_desc,
@@ -490,20 +476,10 @@ async fn purge_block_chunk(
 
 fn collect_block_index_locations(
     blocks_to_gc: &[String],
-    table_agg_index_ids: &[u64],
     inverted_indexes: &BTreeMap<String, TableIndex>,
 ) -> Vec<String> {
-    let mut indexes_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
-    );
+    let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len() * (inverted_indexes.len() + 1));
     for loc in blocks_to_gc {
-        for index_id in table_agg_index_ids {
-            indexes_to_gc.push(
-                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                    loc, *index_id,
-                ),
-            );
-        }
         for idx in inverted_indexes.values() {
             indexes_to_gc.push(
                 TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
@@ -601,17 +577,15 @@ mod tests {
             options: BTreeMap::new(),
         });
 
-        let indexes = collect_block_index_locations(&blocks, &[7], &inverted_indexes);
+        let indexes = collect_block_index_locations(&blocks, &inverted_indexes);
 
         assert_eq!(indexes, vec![
-            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[0], 7),
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                 &blocks[0],
                 "idx",
                 "123456789",
             ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
-            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[1], 7),
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                 &blocks[1],
                 "idx",
@@ -622,6 +596,8 @@ mod tests {
     }
 
     mod memory {
+        use opendal::Scheme;
+
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
@@ -668,11 +644,10 @@ mod tests {
                 gc_root_timestamp,
                 gc_root_meta_ts: gc_root_timestamp,
                 gc_root_blocks: &protected_blocks,
-                table_agg_index_ids: &[],
                 inverted_indexes: &inverted_indexes,
                 start: std::time::Instant::now(),
             };
-            assert_ne!(dal.info().scheme(), Scheme::Fs);
+            assert_ne!(dal.info().scheme(), Scheme::Fs.into_static());
 
             let stats = purge_blocks_before_gc_root(&block_gc).await?;
 
@@ -691,6 +666,7 @@ mod tests {
     }
 
     mod real_s3 {
+        use opendal::Scheme;
         use opendal::services::S3;
 
         use super::*;
@@ -774,11 +750,13 @@ mod tests {
                     gc_root_timestamp,
                     gc_root_meta_ts: gc_root_timestamp,
                     gc_root_blocks: &protected_blocks,
-                    table_agg_index_ids: &[],
                     inverted_indexes: &inverted_indexes,
                     start: std::time::Instant::now(),
                 };
-                anyhow::ensure!(dal.info().scheme() == Scheme::S3, "expected an S3 operator");
+                anyhow::ensure!(
+                    dal.info().scheme() == Scheme::S3.into_static(),
+                    "expected an S3 operator"
+                );
 
                 let stats = purge_blocks_before_gc_root(&block_gc).await?;
 

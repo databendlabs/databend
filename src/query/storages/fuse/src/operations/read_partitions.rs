@@ -60,6 +60,7 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_index::NgramHashAlgorithm;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -649,8 +650,15 @@ impl FuseTable {
         )?;
 
         let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
+        let pruning_ctx = pruner.pruning_ctx.clone();
         prune_pipeline.add_transform(|input, output| {
-            ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
+            ExtractSegmentTransform::create(
+                input,
+                output,
+                true,
+                pruning_ctx.clone(),
+                pruning_cost.clone(),
+            )
         })?;
         let sample_probability = table_sample(&pruner.push_down)?;
         if let Some(probability) = sample_probability {
@@ -1027,6 +1035,10 @@ impl FuseTable {
                 None => DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
                 Some(s) => s.parse::<f64>()?,
             };
+            let hash_algorithm = match index.options.get("hash_algorithm") {
+                None => NgramHashAlgorithm::City64V0,
+                Some(s) => NgramHashAlgorithm::parse(s)?,
+            };
 
             for column_id in &index.column_ids {
                 let Some((pos, field)) = table_schema
@@ -1042,6 +1054,7 @@ impl FuseTable {
                     gram_size,
                     bloom_size,
                     false_positive_rate,
+                    hash_algorithm,
                 ));
             }
         }

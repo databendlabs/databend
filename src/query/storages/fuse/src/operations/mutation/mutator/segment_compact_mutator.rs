@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use log::info;
 use opendal::Operator;
 
@@ -34,8 +35,10 @@ use crate::TableContext;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::build_virtual_segment_schema;
 use crate::io::read::read_segment_stats_in_parallel;
 use crate::operations::CompactOptions;
+use crate::statistics::reducers::generate_virtual_column_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
@@ -387,6 +390,7 @@ impl<'a> SegmentCompactor<'a> {
         // 2. build (and write down the compacted segment
         // 2.1 merge fragmented segments into new segment, and update the statistics
         let mut blocks = Vec::with_capacity(self.threshold as usize);
+        let mut virtual_inputs = Vec::with_capacity(self.threshold as usize);
         let mut new_statistics = Statistics::default();
         let mut stats_locations = Vec::with_capacity(fragments.len());
         let mut hlls_has_none = false;
@@ -400,12 +404,41 @@ impl<'a> SegmentCompactor<'a> {
                 &segment.summary,
                 self.cluster_key_info.as_ref(),
             );
+            let virtual_schema = segment.summary.virtual_segment_schema.clone().map(Arc::new);
+            virtual_inputs.extend(
+                (0..segment.blocks.len()).map(|_| VirtualBlockInput::Existing {
+                    schema: virtual_schema.clone(),
+                }),
+            );
             blocks.append(&mut segment.blocks.clone());
             match segment.summary.additional_stats_meta.map(|m| m.location) {
                 Some(loc) => stats_locations.push(loc),
                 None => hlls_has_none = true,
             }
         }
+
+        let virtual_segment_schema =
+            build_virtual_segment_schema(&mut blocks, &mut virtual_inputs)?;
+        new_statistics.virtual_col_stats = if blocks
+            .iter()
+            .all(|block| block.virtual_block_meta.is_some())
+        {
+            Some(generate_virtual_column_statistics(
+                &blocks
+                    .iter()
+                    .map(|block| {
+                        &block
+                            .virtual_block_meta
+                            .as_ref()
+                            .unwrap()
+                            .virtual_column_metas
+                    })
+                    .collect::<Vec<_>>(),
+            ))
+        } else {
+            None
+        };
+        new_statistics.virtual_segment_schema = virtual_segment_schema;
 
         merge_statistics_mut(
             &mut self.compacted_state.removed_statistics,

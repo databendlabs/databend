@@ -36,6 +36,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_basic::ResultCacheReader;
 use databend_common_storages_basic::gen_result_cache_key;
@@ -117,8 +118,14 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
-                Plan::Insert(insert_plan) => insert_plan.explain(options).await?,
-                Plan::Replace(replace_plan) => replace_plan.explain(options).await?,
+                Plan::Insert(insert_plan) => {
+                    let stat_context = StatContext::new(self.ctx.get_function_context()?);
+                    insert_plan.explain(options, &stat_context).await?
+                }
+                Plan::Replace(replace_plan) => {
+                    let stat_context = StatContext::new(self.ctx.get_function_context()?);
+                    replace_plan.explain(options, &stat_context).await?
+                }
                 Plan::CreateTable(plan) => match &plan.as_select {
                     Some(box Plan::Query {
                         s_expr,
@@ -353,7 +360,8 @@ impl ExplainInterpreter {
         let options = FormatOptions {
             verbose: self.config.verbose,
         };
-        let result = plan.format_indent(options)?;
+        let stat_context = StatContext::new(self.ctx.get_function_context()?);
+        let result = plan.format_indent(options, &stat_context)?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
