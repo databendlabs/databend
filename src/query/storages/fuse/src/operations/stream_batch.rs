@@ -16,7 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -28,6 +30,8 @@ use opendal::EntryMode;
 
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
+use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 
@@ -158,6 +162,77 @@ impl StreamBatchSelector {
 }
 
 impl FuseTable {
+    /// Select a complete source snapshot whose change rows stay within the requested batch size.
+    ///
+    /// The limit is a hint: a single commit larger than the limit is selected so that refresh can
+    /// always make progress. `None` means snapshot navigation was unavailable, in which case the
+    /// caller should use the latest snapshot.
+    pub async fn find_stream_batch_snapshot(
+        &self,
+        base_location: Option<&String>,
+        batch_limit: u64,
+        s3_storage_class: S3StorageClass,
+    ) -> Result<Option<(Arc<FuseTable>, u64)>> {
+        let base_snapshot = match base_location {
+            Some(location) => Some(self.changes_read_offset_snapshot(location).await?),
+            None => None,
+        };
+
+        if let Some((snapshot, format_version)) = self
+            .try_find_stream_batch_snapshot_v4(base_snapshot.as_deref(), batch_limit)
+            .await?
+        {
+            let source_seq = snapshot
+                .prev_table_seq
+                .map_or(self.get_table_info().ident.seq, |seq| seq + 1);
+            let table =
+                self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)?;
+            return Ok(Some((table, source_seq)));
+        }
+
+        let Some(latest_location) = self.snapshot_loc() else {
+            return Ok(None);
+        };
+        let Some(_) = self.read_table_snapshot().await? else {
+            return Ok(None);
+        };
+        let base_row_count = base_snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.summary.row_count);
+        let base_timestamp = base_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.timestamp);
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(&latest_location);
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let mut snapshot_stream = reader.snapshot_history(
+            latest_location,
+            snapshot_version,
+            self.meta_location_generator().clone(),
+        );
+        let mut selected = None;
+        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
+            if snapshot_with_version.0.timestamp <= base_timestamp {
+                break;
+            }
+            let snapshot = snapshot_with_version.0.clone();
+            let change_row_count = snapshot.summary.row_count.abs_diff(base_row_count);
+            selected = Some(snapshot_with_version);
+            if change_row_count <= batch_limit {
+                break;
+            }
+        }
+
+        selected
+            .map(|(snapshot, format_version)| {
+                let source_seq = snapshot
+                    .prev_table_seq
+                    .map_or(self.get_table_info().ident.seq, |seq| seq + 1);
+                self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
+                    .map(|table| (table, source_seq))
+            })
+            .transpose()
+    }
+
     /// Find a committed V4 snapshot after `base_snapshot` by listing UUID-v7 snapshot keys in
     /// chronological order. Returns `None` when the fast path is unavailable or cannot establish
     /// a boundary; callers should fall back to traversing `prev_snapshot_id` from the latest.

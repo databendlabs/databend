@@ -62,6 +62,7 @@ use databend_query::interpreters::QueryFinishHooks;
 use databend_query::interpreters::execute_commit_statement;
 use databend_query::schedulers::ServiceQueryExecutor;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -102,6 +103,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         catalog: &str,
         database: &str,
         view_name: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<Option<Self>> {
         let mv_meta = &mv_table.get_table_info().meta;
         let source_table_id = mv_meta
@@ -172,8 +174,8 @@ impl<'a> MaterializedViewRefresh<'a> {
                 database, view_name, source_table_id
             )));
         }
-        let source_seq = source_meta.seq;
-        let source_snapshot_location = source_meta
+        let mut source_seq = source_meta.seq;
+        let mut source_snapshot_location = source_meta
             .data
             .options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -249,10 +251,27 @@ impl<'a> MaterializedViewRefresh<'a> {
             DatabaseType::NormalDB,
         );
         let source_table = catalog_obj.get_table_by_info(&source_table_info)?;
-        let source_table = FuseTable::try_from_table(source_table.as_ref())?;
+        let mut source_table = FuseTable::try_from_table(source_table.as_ref())?.clone();
         if let Some((mv_source_seq, Some(_))) = &checkpoint {
             source_table
                 .check_changes_valid(&source_table.get_table_info().desc, *mv_source_seq)?;
+        }
+
+        if let Some(batch_limit) = max_batch_size {
+            if let Some((batch_table, batch_seq)) = source_table
+                .find_stream_batch_snapshot(
+                    checkpoint
+                        .as_ref()
+                        .and_then(|(_, location)| location.as_ref()),
+                    batch_limit,
+                    ctx.get_settings().get_s3_storage_class()?,
+                )
+                .await?
+            {
+                source_seq = batch_seq;
+                source_snapshot_location = batch_table.snapshot_loc();
+                source_table = batch_table.as_ref().clone();
+            }
         }
 
         Ok(Some(Self {
@@ -261,7 +280,7 @@ impl<'a> MaterializedViewRefresh<'a> {
             catalog: catalog.to_string(),
             database: database.to_string(),
             view_name: view_name.to_string(),
-            source_table: source_table.clone(),
+            source_table,
             physical_query: definition.data.query.clone(),
             source_database,
             source_table_name,
