@@ -21,6 +21,11 @@ use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Query;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitResult;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,42 +42,18 @@ use crate::plans::ConstantExpr;
 
 /// Check if an AST expression contains a subquery
 pub(crate) fn contains_subquery(expr: &Expr) -> bool {
-    match expr {
-        Expr::Subquery { .. } => true,
-        Expr::InSubquery { .. } => true,
-        Expr::Exists { .. } => true,
-        Expr::Cast { expr, .. } => contains_subquery(expr),
-        Expr::TryCast { expr, .. } => contains_subquery(expr),
-        Expr::FunctionCall { func, .. } => func.args.iter().any(contains_subquery),
-        Expr::BinaryOp { left, right, .. } => contains_subquery(left) || contains_subquery(right),
-        Expr::UnaryOp { expr, .. } => contains_subquery(expr),
-        Expr::IsNull { expr, .. } => contains_subquery(expr),
-        Expr::IsDistinctFrom { left, right, .. } => {
-            contains_subquery(left) || contains_subquery(right)
+    struct SubqueryFinder;
+
+    impl Visitor for SubqueryFinder {
+        fn visit_query(&mut self, _query: &Query) -> VisitResult {
+            Ok(VisitControl::Break(()))
         }
-        Expr::InList { expr, list, .. } => {
-            contains_subquery(expr) || list.iter().any(contains_subquery)
-        }
-        Expr::Between {
-            expr, low, high, ..
-        } => contains_subquery(expr) || contains_subquery(low) || contains_subquery(high),
-        Expr::Case {
-            operand,
-            conditions,
-            results,
-            else_result,
-            ..
-        } => {
-            operand.as_ref().is_some_and(|e| contains_subquery(e))
-                || conditions.iter().any(contains_subquery)
-                || results.iter().any(contains_subquery)
-                || else_result.as_ref().is_some_and(|e| contains_subquery(e))
-        }
-        Expr::MapAccess { expr, .. } => contains_subquery(expr),
-        Expr::Array { exprs, .. } => exprs.iter().any(contains_subquery),
-        Expr::Tuple { exprs, .. } => exprs.iter().any(contains_subquery),
-        _ => false,
     }
+
+    matches!(
+        expr.walk(&mut SubqueryFinder).unwrap(),
+        VisitControl::Break(())
+    )
 }
 
 /// Execute a subquery and extract a single scalar value from the result
@@ -225,4 +206,60 @@ pub fn bind_table_args(
         positioned: positioned_args,
         named: named_args,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::contains_subquery;
+
+    #[test]
+    fn test_contains_like_subquery_in_bracket_key() {
+        for modifier in ["any", "all", "some"] {
+            let sql = format!("map([true], [1])['a' like {modifier} (select 'a')]");
+            let tokens = tokenize_sql(&sql).unwrap();
+            let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+            assert!(contains_subquery(&expr), "{sql}");
+        }
+    }
+
+    #[test]
+    fn test_contains_subquery_through_expression_children() {
+        let wrappers = [
+            "substring({value} from 1)",
+            "substring('1' from {value})",
+            "substring('1' from 1 for {value})",
+            "trim({value})",
+            "trim(both {value} from '1')",
+            "position({value} in '1')",
+            "position('1' in {value})",
+            "{value} -> 'a'",
+            "parse_json('{}') -> {value}",
+            "extract(day from {value})",
+            "date_part(day, {value})",
+            "date_add(day, {value}, '2026-01-01'::date)",
+            "date_add(day, 1, {value})",
+            "date_sub(day, {value}, '2026-01-01'::date)",
+            "date_sub(day, 1, {value})",
+            "date_diff(day, {value}, '2026-01-01'::date)",
+            "date_diff(day, '2026-01-01'::date, {value})",
+            "date_trunc(day, {value})",
+            "{'a': {value}}",
+            "[1][{value}]",
+            "{value}[1]",
+            "coalesce({value}, 1)",
+            "array_transform([1], x -> {value})",
+        ];
+        for wrapper in wrappers {
+            for (value, expected) in [("(select 1)", true), ("1", false)] {
+                let sql = wrapper.replace("{value}", value);
+                let tokens = tokenize_sql(&sql).unwrap();
+                let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+                assert_eq!(contains_subquery(&expr), expected, "{sql}");
+            }
+        }
+    }
 }

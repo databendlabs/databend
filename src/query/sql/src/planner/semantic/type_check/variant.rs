@@ -61,7 +61,7 @@ impl<'a> CoreExprArena<'a> {
         &mut self,
         root_span: Span,
         root_expr: &'a Expr,
-        root_accessor: &MapAccessor,
+        root_accessor: &'a MapAccessor,
     ) -> Result<CoreExprId> {
         let mut current_span = root_span;
         let mut expr = root_expr;
@@ -83,12 +83,18 @@ impl<'a> CoreExprArena<'a> {
                 }
                 MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                 MapAccessor::DotNumber { key } => Literal::UInt64(*key),
-                _ => {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Unsupported accessor: {:?}",
-                        accessor
-                    ))
-                    .set_span(current_span));
+                MapAccessor::Bracket { key } => {
+                    let expr = self.lower_call_expr(current_span, "get", [expr, key.as_ref()])?;
+                    return Ok(if paths.is_empty() {
+                        expr
+                    } else {
+                        self.alloc(CoreExpr::MapAccess {
+                            span: root_span,
+                            expr_span: current_span,
+                            expr,
+                            paths,
+                        })
+                    });
                 }
             };
             paths.push_front((current_span, path));
