@@ -20,12 +20,10 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::StringType;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
@@ -87,7 +85,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
         LicenseManagerSwitch::instance().check_enterprise_enabled(ctx.get_license_key(), Vacuum)?;
 
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
-        let result = match &self.args {
+        match &self.args {
             Vacuum2TableArgs::SingleTable {
                 arg_database_name,
                 arg_table_name,
@@ -102,14 +100,9 @@ impl SimpleTableFunc for FuseVacuum2Table {
                 )
                 .await?
             }
-            Vacuum2TableArgs::All => {
-                vacuum_tables(ctx, catalog.as_ref(), None).await?;
-                vec![]
-            }
+            Vacuum2TableArgs::All => vacuum_tables(ctx, catalog.as_ref(), None).await?,
         };
-        Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(result),
-        ])))
+        Ok(None)
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>

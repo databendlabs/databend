@@ -34,7 +34,7 @@ pub trait VacuumHandler: Sync + Send {
         table: &dyn Table,
         ctx: Arc<dyn TableContext>,
         respect_flash_back: bool,
-    ) -> Result<Vec<String>>;
+    ) -> Result<()>;
 
     async fn do_vacuum_drop_tables(
         &self,
@@ -74,7 +74,7 @@ impl VacuumHandlerWrapper {
         table: &dyn Table,
         ctx: Arc<dyn TableContext>,
         respect_flash_back: bool,
-    ) -> Result<Vec<String>> {
+    ) -> Result<()> {
         self.handler
             .do_vacuum2(table, ctx, respect_flash_back)
             .await
