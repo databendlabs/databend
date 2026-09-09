@@ -486,24 +486,6 @@ mod tests {
         ]
     }
 
-    fn direct_full_modifier_result(
-        function: &AggregateCallRef,
-        entries: &[BlockEntry],
-    ) -> Result<Column> {
-        let owner = AggregateStateOwner::new(vec![function.clone()])?;
-        function.accumulate(AccumulateInput {
-            state: owner.state(0),
-            columns: entries.into(),
-            validity: None,
-        })?;
-        let mut builder = ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-        function.merge_result(MergeResultInput {
-            state: owner.state(0),
-            builder: &mut builder,
-        })?;
-        Ok(builder.build())
-    }
-
     #[test]
     fn test_or_null_emits_null_without_input_rows() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
@@ -701,7 +683,44 @@ mod tests {
             );
         }
 
-        assert_eq!(drop_count.load(Ordering::SeqCst), 5);
+        assert_eq!(drop_count.load(Ordering::SeqCst), 8);
+        Ok(())
+    }
+
+    #[test]
+    fn test_sorted_window_results_drop_previous_inner_state() -> Result<()> {
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
+        let owner = AggregateStateOwner::new(vec![function.clone()])?;
+        let entries = full_modifier_entries();
+        let mut builder =
+            ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 12);
+
+        let expected = [2, 2, 7, 16, 16, 17];
+        for (row, expected) in expected.into_iter().enumerate() {
+            function.accumulate_row(AccumulateRowInput {
+                state: owner.state(0),
+                columns: (&entries).into(),
+                row,
+            })?;
+            // Repeated reads must preserve the sort buffer while releasing each
+            // previous inner state, including the initial empty state.
+            for read in 0..2 {
+                function.merge_result_read_only(MergeResultInput {
+                    state: owner.state(0),
+                    builder: &mut builder,
+                })?;
+                assert_eq!(drop_count.load(Ordering::SeqCst), row * 2 + read + 1);
+            }
+            let column = builder.clone().build();
+            assert_eq!(
+                column.index(row * 2),
+                Some(ScalarRef::Number(NumberScalar::UInt64(expected)))
+            );
+            assert_eq!(column.index(row * 2), column.index(row * 2 + 1));
+        }
+        drop(owner);
+        assert_eq!(drop_count.load(Ordering::SeqCst), 13);
         Ok(())
     }
 }
