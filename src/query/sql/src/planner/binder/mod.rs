@@ -54,7 +54,6 @@ mod set_priority;
 mod show;
 mod sort;
 mod stage_location;
-mod statement_settings;
 mod stream_column_factory;
 mod system;
 mod table;

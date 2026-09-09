@@ -19,7 +19,6 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Window;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -413,7 +412,7 @@ where A: TypeCheckAdapter
         {
             let max_num_buckets: u64 = check_number(
                 None,
-                &FunctionContext::default(),
+                &self.func_ctx,
                 arguments[1].as_expr()?,
                 &BUILTIN_FUNCTIONS,
             )?;

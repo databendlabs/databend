@@ -15,7 +15,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
@@ -111,15 +110,7 @@ impl SelectivityEstimator {
         merged
     }
 
-    pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
-        // FunctionContext::default() initializes `now` to the Unix epoch. Folding relative-time
-        // predicates with that value can place the cutoff outside the column statistics range and
-        // distort the selectivity estimate. Use the current UTC instant for this estimation path;
-        // other context fields keep their existing defaults.
-        let func_ctx = FunctionContext {
-            now: Utc::now(),
-            ..FunctionContext::default()
-        };
+    pub fn apply(&mut self, predicates: &[ScalarExpr], func_ctx: &FunctionContext) -> Result<f64> {
         if self.cardinality == StatCardinality::Exact(0) {
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
@@ -140,7 +131,7 @@ impl SelectivityEstimator {
         let (expr, output_domain) = ConstantFolder::fold_with_domain(
             Cow::Owned(expr),
             &input_domains,
-            &func_ctx,
+            func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
@@ -184,6 +175,7 @@ impl SelectivityEstimator {
             top_n: &self.top_n,
             count_min_sketch: &self.count_min_sketch,
             column_row_scales: None,
+            func_ctx,
             constraints: ValueConstraintState::default(),
         };
         visitor.visit_expr(&expr)?;
@@ -578,6 +570,7 @@ pub(crate) struct SelectivityVisitor<'a> {
     top_n: &'a TopNSet,
     count_min_sketch: &'a CountMinSketchSet,
     column_row_scales: Option<&'a HashMap<Symbol, StatCardinality>>,
+    func_ctx: &'a FunctionContext,
     constraints: ValueConstraintState,
 }
 
@@ -699,6 +692,7 @@ impl SelectivityVisitor<'_> {
         top_n: &TopNSet,
         count_min_sketch: &CountMinSketchSet,
         column_row_scales: &HashMap<Symbol, StatCardinality>,
+        func_ctx: &FunctionContext,
     ) -> Result<Selectivity> {
         if cardinality.is_zero() {
             return Ok(Selectivity::Zero);
@@ -708,14 +702,10 @@ impl SelectivityVisitor<'_> {
         // SelectivityEstimator::apply. Fold here so domain contradictions and tautologies retain
         // their deterministic Zero/All semantics instead of becoming probability estimates.
         let input_domains = build_input_domains(&expr, column_stats)?;
-        let func_ctx = FunctionContext {
-            now: Utc::now(),
-            ..FunctionContext::default()
-        };
         let (expr, output_domain) = ConstantFolder::fold_with_domain(
             Cow::Owned(expr),
             &input_domains,
-            &func_ctx,
+            func_ctx,
             &BUILTIN_FUNCTIONS,
         );
         if let Some(selectivity) = deterministic_folded_selectivity(&expr, output_domain.as_ref()) {
@@ -729,6 +719,7 @@ impl SelectivityVisitor<'_> {
             top_n,
             count_min_sketch,
             column_row_scales: Some(column_row_scales),
+            func_ctx,
             constraints: ValueConstraintState::default(),
         };
         visitor.visit_expr(expr.as_ref())?;
@@ -1099,7 +1090,7 @@ impl SelectivityVisitor<'_> {
 
         let Some(stat) = StatEvaluator::run(
             &expr,
-            &FunctionContext::default(),
+            self.func_ctx,
             &BUILTIN_FUNCTIONS,
             stat_cardinality,
             &input_stats,
@@ -1188,6 +1179,7 @@ impl SelectivityVisitor<'_> {
             top_n: self.top_n,
             count_min_sketch: self.count_min_sketch,
             column_row_scales: self.column_row_scales,
+            func_ctx: self.func_ctx,
             constraints: self.constraints.clone(),
         }
     }

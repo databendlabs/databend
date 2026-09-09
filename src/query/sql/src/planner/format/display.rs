@@ -24,6 +24,7 @@ use crate::Symbol;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::RelOperator;
 
@@ -34,6 +35,8 @@ pub trait IdHumanizer {
     fn humanize_table_id(&self, id: IndexType) -> String;
 
     fn options(&self) -> &FormatOptions;
+
+    fn stat_context(&self) -> &StatContext;
 }
 
 /// A trait for humanizing operators.
@@ -73,11 +76,20 @@ pub struct DefaultOperatorHumanizer;
 pub struct MetadataIdHumanizer<'a> {
     metadata: &'a Metadata,
     options: FormatOptions,
+    stat_context: &'a StatContext,
 }
 
 impl<'a> MetadataIdHumanizer<'a> {
-    pub fn new(metadata: &'a Metadata, options: FormatOptions) -> Self {
-        Self { metadata, options }
+    pub fn new(
+        metadata: &'a Metadata,
+        options: FormatOptions,
+        stat_context: &'a StatContext,
+    ) -> Self {
+        Self {
+            metadata,
+            options,
+            stat_context,
+        }
     }
 }
 
@@ -120,6 +132,10 @@ impl IdHumanizer for MetadataIdHumanizer<'_> {
     fn options(&self) -> &FormatOptions {
         &self.options
     }
+
+    fn stat_context(&self) -> &StatContext {
+        self.stat_context
+    }
 }
 
 /// A humanizer for `SExpr`.
@@ -151,7 +167,7 @@ where
         if self.id_humanizer.options().verbose {
             let rel_expr = RelExpr::with_s_expr(s_expr);
             let prop = rel_expr.derive_relational_prop()?;
-            let stat = rel_expr.derive_cardinality()?;
+            let stat = rel_expr.derive_cardinality(self.id_humanizer.stat_context())?;
             let properties = self.humanize_property(&prop);
             let stats = self.humanize_stat(&stat)?;
             tree.children.extend(properties);

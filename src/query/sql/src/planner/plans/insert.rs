@@ -39,6 +39,7 @@ use tokio::sync::mpsc::Receiver;
 
 use super::Plan;
 use crate::INSERT_NAME;
+use crate::optimizer::ir::StatContext;
 use crate::planner::format::FormatOptions;
 use crate::planner::format::MetadataIdHumanizer;
 use crate::plans::CopyIntoTablePlan;
@@ -119,6 +120,7 @@ impl Insert {
     pub async fn explain(
         &self,
         options: FormatOptions,
+        stat_context: &StatContext,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
         let mut result = vec![];
 
@@ -154,7 +156,8 @@ impl Insert {
             FormatTreeNode::new(format!("overwrite: {overwrite}")),
         ];
 
-        let formatted_plan = format_insert_source("InsertPlan", source, options, children)?;
+        let formatted_plan =
+            format_insert_source("InsertPlan", source, options, stat_context, children)?;
 
         let line_split_result: Vec<&str> = formatted_plan.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -174,6 +177,7 @@ pub(crate) fn format_insert_source(
     plan_name: &str,
     source: &InsertInputSource,
     options: FormatOptions,
+    stat_context: &StatContext,
     mut children: Vec<FormatTreeNode>,
 ) -> databend_common_exception::Result<String> {
     match source {
@@ -183,7 +187,7 @@ pub(crate) fn format_insert_source(
             } = &**plan
             {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 let sub_tree = s_expr.to_format_tree(&humanizer)?;
                 children.push(sub_tree);
 
