@@ -373,6 +373,8 @@ pub enum DistinctPolicy {
 pub struct AggregateFeatures {
     pub is_decomposable: bool,
     pub supports_filter: bool,
+    /// Whether this name supports a corresponding `<name>_state` call.
+    pub supports_state: bool,
     pub sort_policy: SortPolicy,
     pub distinct_policy: DistinctPolicy,
     pub category: &'static str,

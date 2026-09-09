@@ -51,6 +51,10 @@ impl AggregateCallBuilder for RegisteredAggregate {
 impl NameRoute {
     pub(crate) fn into_descriptors(self) -> Vec<AggregateDescriptor> {
         let route = Arc::new(self);
+        let supports_state = route
+            .routes
+            .iter()
+            .any(|node| node.suffix() == Some("state"));
         let supports_filter = route.routes.iter().any(|node| node.suffix() == Some("if"));
         let routed_distinct = route.routes.iter().find_map(|node| {
             node.distinct_target(route.names[0]).map(|target| {
@@ -100,6 +104,7 @@ impl NameRoute {
                     .collect::<Vec<_>>();
                 let mut features = node.metadata(&route.metadata).into_features();
                 features.supports_filter = suffix.is_none() && supports_filter;
+                features.supports_state = suffix.is_none() && supports_state;
                 if suffix.is_none() {
                     features.distinct_policy = distinct_policy.clone();
                 }
@@ -321,6 +326,7 @@ mod tests {
         assert_eq!(descriptors[0].arguments(), &base_arguments);
         assert!(descriptors[0].features().is_decomposable);
         assert!(descriptors[0].features().supports_filter);
+        assert!(!descriptors[0].features().supports_state);
         assert_eq!(descriptors[1].name, "test_if");
         assert_eq!(descriptors[1].aliases, ["test_alias_if"]);
         assert_eq!(descriptors[1].arguments(), &if_arguments);
@@ -364,6 +370,7 @@ mod tests {
         assert!(registry.contains("test_alias_state"));
         assert!(!registry.contains("test_distinct"));
         for name in ["test", "test_alias"] {
+            assert!(registry.descriptor(name).unwrap().features().supports_state);
             assert!(
                 registry
                     .descriptor(name)
@@ -373,6 +380,7 @@ mod tests {
             );
         }
         for name in ["test_if", "test_alias_if", "test_state", "test_alias_state"] {
+            assert!(!registry.descriptor(name).unwrap().features().supports_state);
             assert!(
                 !registry
                     .descriptor(name)

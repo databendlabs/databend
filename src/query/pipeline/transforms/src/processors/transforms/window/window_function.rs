@@ -369,6 +369,7 @@ mod tests {
             static FEATURES: AggregateFeatures = AggregateFeatures {
                 is_decomposable: false,
                 supports_filter: false,
+                supports_state: false,
                 sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
                 distinct_policy: databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Unsupported,
                 category: "",
