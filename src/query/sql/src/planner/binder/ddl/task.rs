@@ -24,18 +24,20 @@ use databend_common_ast::ast::DescribeTaskStmt;
 use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TaskSql;
-use databend_common_ast::parser::ParseMode;
 use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::run_parser;
-use databend_common_ast::parser::script::script_block_or_stmt;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_script::compile_block;
+use databend_common_script::ir::ScriptIR;
 use parking_lot::RwLock;
 
 use crate::Binder;
@@ -47,6 +49,27 @@ use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
+
+/// Stop at a runtime script variable rather than passing an unbound template to SQL binding.
+struct ScriptVariableFinder;
+
+impl Visitor for ScriptVariableFinder {
+    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
+        Ok(if matches!(expr, Expr::Hole { .. }) {
+            VisitControl::Break(())
+        } else {
+            VisitControl::Continue
+        })
+    }
+
+    fn visit_identifier(&mut self, ident: &Identifier) -> std::result::Result<VisitControl, !> {
+        Ok(if ident.is_hole() {
+            VisitControl::Break(())
+        } else {
+            VisitControl::Continue
+        })
+    }
+}
 
 fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()> {
     if schedule_opts.is_none() {
@@ -88,13 +111,12 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
 impl Binder {
     /// Validate the SQL carried by a task at CREATE/ALTER time.
     ///
-    /// Each statement is parsed once and checked in two layers:
-    /// 1. Syntax: the statement (and, for `EXECUTE IMMEDIATE`, its script body) must parse.
-    /// 2. Semantics (best-effort): the statement is bound (name/type resolution, logical
-    ///    plan), but only `SemanticError` is surfaced. Errors about missing objects
-    ///    (unknown table/column/database/function/...) are ignored on purpose, since the
-    ///    referenced objects may not exist yet when the task is created. The interpreter is
-    ///    never invoked, so this does not execute the task or cause any of its side effects.
+    /// Bind statements and compile constant `EXECUTE IMMEDIATE` blocks, including binding
+    /// their static SQL and expressions. Surface syntax, semantic, argument and script
+    /// semantic errors. Other binding failures remain best-effort, since referenced objects
+    /// may not exist yet.
+    /// Statements depending on script variables still require runtime binding. No script
+    /// instructions or task statements are executed during validation.
     async fn verify_task_sql(&self, sql: &TaskSql) -> Result<()> {
         match sql {
             TaskSql::SingleStatement(stmt) => self.verify_task_statement(stmt).await,
@@ -122,65 +144,56 @@ impl Binder {
             ))
         })?;
 
-        // `EXECUTE IMMEDIATE $$ ... $$` keeps its script body as a raw string literal,
-        // so parsing the outer statement does not validate the script itself. Check its
-        // syntax here too.
-        if let Statement::ExecuteImmediate(execute) = &stmt {
-            self.verify_execute_immediate_script(&execute.script)?;
-        }
-
         self.verify_statement_semantic(stmt).await
     }
 
-    fn verify_execute_immediate_script(&self, script: &Expr) -> Result<()> {
-        // Only a constant string literal can be syntax-checked ahead of time.
-        let Expr::Literal {
-            value: Literal::String(script),
-            ..
-        } = script
-        else {
-            return Ok(());
-        };
-
-        let tokens = tokenize_sql(script).map_err(|e| {
-            ErrorCode::SyntaxException(format!(
-                "syntax error for task execute immediate script: {}, error: {:?}",
-                script, e
-            ))
-        })?;
-        run_parser(
-            &tokens,
-            self.dialect,
-            ParseMode::Template,
-            false,
-            script_block_or_stmt,
-        )
-        .map_err(|e| {
-            ErrorCode::SyntaxException(format!(
-                "syntax error for task execute immediate script: {}, error: {:?}",
-                script, e
-            ))
-        })?;
-        Ok(())
-    }
-
     async fn verify_statement_semantic(&self, stmt: Statement) -> Result<()> {
-        // Use a fresh binder with isolated metadata so the outer CREATE/ALTER TASK
-        // binding is not polluted. Disable materialized-view rewrite to avoid extra
-        // catalog work irrelevant to validation.
-        let binder = Binder::new(
-            self.ctx.clone(),
-            self.catalogs.clone(),
-            self.name_resolution_ctx.clone(),
-            Arc::new(RwLock::new(Metadata::default())),
-        )
-        .with_materialized_view_rewrite(false);
+        let mut pending = vec![stmt];
+        while let Some(stmt) = pending.pop() {
+            // Isolate metadata from both the outer CREATE/ALTER TASK and other script
+            // statements. Avoid materialized-view catalog work irrelevant to validation.
+            let binder = Binder::new(
+                self.ctx.clone(),
+                self.catalogs.clone(),
+                self.name_resolution_ctx.clone(),
+                Arc::new(RwLock::new(Metadata::default())),
+            )
+            .with_materialized_view_rewrite(false);
 
-        if let Err(e) = binder.bind(&stmt).await {
-            // Only reject on semantic errors (e.g. unsupported accessor, type mismatch).
-            // Missing objects and other error kinds are tolerated on purpose.
-            if e.code() == ErrorCode::SEMANTIC_ERROR {
-                return Err(e);
+            match binder.bind(&stmt).await {
+                Ok(Plan::ExecuteImmediate(plan)) => {
+                    // Compilation checks script scopes/control flow and lowers expressions
+                    // and SQL in every branch to Query instructions. Do not run the IR.
+                    let compiled = compile_block(plan.script_block)
+                        .map_err(|e| e.display_with_sql(&plan.script))?;
+                    for instruction in compiled.into_iter().rev() {
+                        if let ScriptIR::Query { stmt, .. } = instruction {
+                            // Holes need runtime values (including dynamic identifiers).
+                            // Substituting dummy values could reject valid scripts or hide
+                            // type errors, so only bind fully static templates here.
+                            if matches!(
+                                stmt.stmt.walk(&mut ScriptVariableFinder)?,
+                                VisitControl::Continue
+                            ) {
+                                pending.push(stmt.stmt);
+                            }
+                        }
+                    }
+                }
+                Err(e)
+                    if matches!(
+                        e.code(),
+                        ErrorCode::SYNTAX_EXCEPTION
+                            | ErrorCode::SEMANTIC_ERROR
+                            | ErrorCode::INVALID_ARGUMENT
+                            | ErrorCode::BAD_ARGUMENTS
+                            | ErrorCode::SCRIPT_SEMANTIC_ERROR
+                    ) =>
+                {
+                    return Err(e);
+                }
+                // Other binding errors, including missing objects, remain best-effort.
+                _ => {}
             }
         }
         Ok(())

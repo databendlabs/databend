@@ -17,5 +17,4 @@ mod expr;
 mod materialized_cte_spill;
 mod planner;
 mod recursive_cte;
-mod task_sql_validation;
 mod top_n;

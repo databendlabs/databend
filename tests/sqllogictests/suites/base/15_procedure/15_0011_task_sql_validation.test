@@ -1,0 +1,60 @@
+# Invalid task SQL must fail during CREATE/ALTER binding, before task-service access
+# or execution. These cases do not require a cloud-control server.
+
+statement error 2004
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 1
+
+statement error 2004
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE 1
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT CAST(NULL AS VECTOR(0))
+
+statement error 1006
+ALTER TASK static_validation_task MODIFY AS SELECT CAST(NULL AS VECTOR(0))
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT CAST(NULL AS VECTOR(0)); END; $$
+
+statement error 1006
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE $$ BEGIN SELECT CAST(NULL AS VECTOR(0)); END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT [1, 2][true]; END; $$
+
+statement error 1065
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE $$ BEGIN SELECT [1, 2][true]; END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT plus(1, [2]); END; $$
+
+statement error 1065
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE $$ BEGIN SELECT plus(1, [2]); END; $$
+
+statement error 3128
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN RETURN unknown_variable; END; $$
+
+statement error 3128
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ DECLARE x := CAST(NULL AS VECTOR(0)); BEGIN RETURN x; END; $$
+
+statement error 1006
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT CAST(NULL AS VECTOR(0)); END IF; END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN WHILE FALSE DO SELECT [1][true]; END WHILE; END; $$
+
+statement error 1006
+ALTER TASK static_validation_task MODIFY AS EXECUTE IMMEDIATE $$ BEGIN EXECUTE IMMEDIATE 'BEGIN SELECT CAST(NULL AS VECTOR(0)); END;'; END; $$
+
+# A tolerated catalog error in one statement must not suppress validation of later SQL.
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT * FROM task_table_not_created_yet; SELECT [1][true]; END; $$
+
+statement error 2004
+ALTER TASK static_validation_task MODIFY AS BEGIN SELECT 1; EXECUTE IMMEDIATE 1; END;
+
+statement error 1005
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT FROM; END; $$
