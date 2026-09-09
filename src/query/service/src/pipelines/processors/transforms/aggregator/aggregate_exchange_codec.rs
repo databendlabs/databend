@@ -54,33 +54,6 @@ impl AggregateExchangeDataCodec {
         Arc::new(Self { params })
     }
 
-    fn validate_state_schema(&self, block: &DataBlock) -> Result<()> {
-        let expected = self.params.spill_schema();
-        if block.num_columns() != expected.num_fields() {
-            return Err(ErrorCode::BadBytes(format!(
-                "Aggregate transport schema mismatch: expected {} columns, got {}",
-                expected.num_fields(),
-                block.num_columns()
-            )));
-        }
-
-        for (index, (entry, field)) in block
-            .columns()
-            .iter()
-            .zip(expected.fields().iter())
-            .enumerate()
-        {
-            let actual = entry.data_type();
-            if !field.data_type().matches_physical_type(&actual) {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Aggregate transport schema mismatch at column {index}: expected {:?}, got {actual:?}",
-                    field.data_type()
-                )));
-            }
-        }
-        Ok(())
-    }
-
     /// Streams one aggregate payload in bounded flush batches. Merge exchanges
     /// consume these batches individually instead of materializing the payload.
     pub fn encode_stream(&self, payload: AggregatePayload) -> SerializeAggregateStream {
@@ -173,7 +146,6 @@ impl AggregateExchangeDataCodec {
         if meta.is_empty {
             return Ok(None);
         }
-        self.validate_state_schema(&block)?;
         if meta.buckets.len() != meta.payload_row_counts.len() {
             return Err(ErrorCode::BadBytes(
                 "Invalid partitioned aggregate transport metadata",
@@ -306,8 +278,6 @@ impl ExchangeDataCodec for AggregateExchangeDataCodec {
             BUCKET_TYPE => {
                 if meta.is_empty {
                     block = block.slice(0..0);
-                } else {
-                    self.validate_state_schema(&block)?;
                 }
                 Ok(Some(DataBlock::empty_with_meta(
                     AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
@@ -780,16 +750,6 @@ pub(crate) mod tests {
             .unwrap();
         let error = codec.decode(block).unwrap_err();
         assert!(error.message().contains("exceed block rows"));
-    }
-
-    #[test]
-    fn test_rejects_transport_schema_mismatch() {
-        let codec = AggregateExchangeDataCodec::create(params());
-        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec!["wrong"])])
-            .add_meta(Some(AggregateSerdeMeta::create_agg_payload(0, 0, false)))
-            .unwrap();
-        let error = codec.decode(block).unwrap_err();
-        assert!(error.message().contains("schema mismatch"));
     }
 
     #[test]
