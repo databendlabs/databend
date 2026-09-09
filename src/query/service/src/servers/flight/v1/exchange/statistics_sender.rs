@@ -44,6 +44,32 @@ use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextTelemetry;
 
+/// Preserve the statistics error policy of the transport chosen during exchange setup.
+pub enum StatisticsStream {
+    Legacy(OutboundStreamRef),
+    Reliable(OutboundStreamRef),
+}
+
+impl StatisticsStream {
+    fn outbound(&self) -> &OutboundStreamRef {
+        match self {
+            Self::Legacy(tx) | Self::Reliable(tx) => tx,
+        }
+    }
+
+    /// Legacy profile and final-statistics failures are warnings. Reliable streams must
+    /// propagate them so the producer can terminate the logical stream with its cause.
+    fn check_best_effort_send(&self, kind: &str, result: Result<()>) -> Result<()> {
+        match (self, result) {
+            (Self::Legacy(_), Err(cause)) => {
+                warn!("{} send has error, cause: {:?}.", kind, cause);
+                Ok(())
+            }
+            (_, result) => result,
+        }
+    }
+}
+
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
     shutdown_flag_sender: Sender<Option<ErrorCode>>,
@@ -54,7 +80,7 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        tx: OutboundStreamRef,
+        stream: StatisticsStream,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
@@ -67,6 +93,7 @@ impl StatisticsSender {
                 let query_id = query_id.to_string();
 
                 async move {
+                    let tx = stream.outbound();
                     let mut cnt = 0;
                     let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                     let mut notified = Box::pin(shutdown_flag_receiver.recv());
@@ -82,7 +109,7 @@ impl StatisticsSender {
                                 break;
                             }
                             Either::Right((Ok(Some(error_code)), _recv)) => {
-                                if let Err(error) = Self::send_io_stats(&tx).await {
+                                if let Err(error) = Self::send_io_stats(tx).await {
                                     warn!("IoStats send has error, cause: {:?}.", error);
                                 }
 
@@ -93,11 +120,14 @@ impl StatisticsSender {
                                 notified = right;
                                 sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                                if let Err(cause) = Self::send_progress(&ctx, &mem_stat, &tx).await
-                                {
+                                if let Err(cause) = Self::send_progress(&ctx, &mem_stat, tx).await {
                                     ctx.get_exchange_manager()
                                         .shutdown_query(&query_id, Some(cause.clone()));
-                                    tx.fail(cause).await;
+                                    // Legacy progress failures already stop the query, but
+                                    // only reliable streams need the failure handshake.
+                                    if matches!(&stream, StatisticsStream::Reliable(_)) {
+                                        tx.fail(cause).await;
+                                    }
                                     return;
                                 }
 
@@ -105,9 +135,10 @@ impl StatisticsSender {
 
                                 if cnt % 5 == 0 {
                                     // send profiles per 500 millis
-                                    if let Err(cause) =
-                                        Self::send_profile(&executor, &tx, false).await
-                                    {
+                                    if let Err(cause) = stream.check_best_effort_send(
+                                        "Profiles",
+                                        Self::send_profile(&executor, tx, false).await,
+                                    ) {
                                         ctx.get_exchange_manager()
                                             .shutdown_query(&query_id, Some(cause.clone()));
                                         tx.fail(cause).await;
@@ -119,14 +150,35 @@ impl StatisticsSender {
                     }
 
                     let final_result = async {
-                        Self::send_final_profile(profile_rx, &tx).await?;
-                        Self::send_copy_status(&ctx, &tx).await?;
-                        Self::send_mutation_status(&ctx, &tx).await?;
-                        Self::send_progress(&ctx, &mem_stat, &tx).await?;
-                        Self::send_perf(&perf_guard, &tx).await?;
-                        Self::send_perf_counters(&ctx, &executor, &tx).await?;
-                        Self::send_part_statistics(&ctx, &tx).await?;
-                        Self::send_io_stats(&tx).await
+                        stream.check_best_effort_send(
+                            "Final profiles",
+                            Self::send_final_profile(profile_rx, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "CopyStatus",
+                            Self::send_copy_status(&ctx, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "MutationStatus",
+                            Self::send_mutation_status(&ctx, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "Statistics",
+                            Self::send_progress(&ctx, &mem_stat, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "Perf",
+                            Self::send_perf(&perf_guard, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "PerfCounters",
+                            Self::send_perf_counters(&ctx, &executor, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "PartStatistics",
+                            Self::send_part_statistics(&ctx, tx).await,
+                        )?;
+                        stream.check_best_effort_send("IoStats", Self::send_io_stats(tx).await)
                     }
                     .await;
 

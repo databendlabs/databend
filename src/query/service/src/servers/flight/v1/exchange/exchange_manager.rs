@@ -61,6 +61,7 @@ use super::packet_receiver::PacketReceiver;
 use super::reliable_delivery::StatisticsDelivery;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
+use super::statistics_sender::StatisticsStream;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::physical_plans::PhysicalPlan;
@@ -124,7 +125,7 @@ enum QueryExchange {
     },
     StatisticsSender {
         target: String,
-        sender: OutboundStreamRef,
+        sender: StatisticsStream,
     },
     NewFlightFragmentOutbound {
         exchange_id: String,
@@ -464,7 +465,7 @@ impl DataExchangeManager {
                                     as OutboundStreamRef;
                             Ok::<QueryExchange, ErrorCode>(QueryExchange::StatisticsSender {
                                 target: target_id,
-                                sender,
+                                sender: StatisticsStream::Reliable(sender),
                             })
                         }));
                         continue;
@@ -588,7 +589,7 @@ impl DataExchangeManager {
                     HashMap::<String, HashMap<String, PendingReliableOutbound>>::new();
                 let mut ping_pong_exchanges =
                     HashMap::<String, HashMap<String, PingPongExchange>>::new();
-                let mut statistics_senders = HashMap::<String, OutboundStreamRef>::new();
+                let mut statistics_senders = HashMap::<String, StatisticsStream>::new();
 
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
@@ -1243,7 +1244,7 @@ pub(crate) struct QueryCoordinator {
     /// so execute_pipeline() must not start a second one.
     is_request_server: bool,
 
-    statistics_senders: HashMap<String, OutboundStreamRef>,
+    statistics_senders: HashMap<String, StatisticsStream>,
     statistics_receivers: HashMap<String, PacketReceiver>,
     fragment_outbounds: HashMap<String, Vec<OutboundStreamRef>>,
     fragment_receivers: HashMap<String, Vec<PacketReceiver>>,
@@ -1279,7 +1280,7 @@ impl QueryCoordinator {
         let (tx, rx) = async_channel::bounded(8);
         match self
             .statistics_senders
-            .insert(target, LegacyOutbound::create(tx))
+            .insert(target, StatisticsStream::Legacy(LegacyOutbound::create(tx)))
         {
             None => Ok(rx),
             Some(_) => Err(ErrorCode::Internal(
@@ -1309,7 +1310,7 @@ impl QueryCoordinator {
 
     pub fn add_statistics_senders(
         &mut self,
-        senders: HashMap<String, OutboundStreamRef>,
+        senders: HashMap<String, StatisticsStream>,
     ) -> Result<()> {
         for (target, sender) in senders {
             if self.statistics_senders.insert(target, sender).is_some() {
