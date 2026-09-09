@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -22,10 +20,6 @@ use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_api::GarbageCollectionApi;
@@ -46,8 +40,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
-
-const DRY_RUN_LIMIT: usize = 1000;
 
 pub struct VacuumDropTablesInterpreter {
     ctx: Arc<QueryContext>,
@@ -150,24 +142,18 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let retention_time = chrono::Utc::now() - duration;
 
-        // Set vacuum timestamp before starting the vacuum operation (only in non-dry-run mode)
-        // This ensures undrop operations after this point will be blocked
-        if self.plan.option.dry_run.is_none() {
-            let tenant = ctx.get_tenant();
-            let meta_api = UserApiProvider::instance().get_meta_store_client();
-
-            // CRITICAL: Must succeed in setting vacuum timestamp before proceeding
-            // If this fails, vacuum operation should not proceed to prevent data loss
-            meta_api
-                .fetch_set_vacuum_timestamp(&tenant, retention_time)
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaStorageError(format!(
-                        "Failed to set vacuum timestamp before vacuum operation: {}. Vacuum aborted to prevent data inconsistency.",
-                        e
-                    ))
-                })?;
-        }
+        // Set the vacuum timestamp before cleanup so later undrop operations are blocked.
+        let tenant = ctx.get_tenant();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        meta_api
+            .fetch_set_vacuum_timestamp(&tenant, retention_time)
+            .await
+            .map_err(|e| {
+                ErrorCode::MetaStorageError(format!(
+                    "Failed to set vacuum timestamp before vacuum operation: {}. Vacuum aborted to prevent data inconsistency.",
+                    e
+                ))
+            })?;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
             "=== VACUUM DROP TABLE STARTED === db: {:?}, retention_days: {}, retention_time: {:?}",
@@ -188,7 +174,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 &tenant,
                 database_name,
                 Some(retention_time),
-                self.plan.option.limit,
+                None,
             ))
             .await?;
 
@@ -248,16 +234,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-        let (files_opt, failed_tables) = handler
-            .do_vacuum_drop_tables(
-                threads_nums,
-                tables,
-                if self.plan.option.dry_run.is_some() {
-                    Some(DRY_RUN_LIMIT)
-                } else {
-                    None
-                },
-            )
+        let (_, failed_tables) = handler
+            .do_vacuum_drop_tables(threads_nums, tables, None)
             .await?;
 
         let failed_db_ids = failed_tables
@@ -266,39 +244,34 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .map(|id| *containing_db.get(id).unwrap())
             .collect::<HashSet<_>>();
 
-        let mut num_meta_keys_removed = 0;
-        // gc metadata only when not dry run
-        if self.plan.option.dry_run.is_none() {
-            let mut success_dropped_ids = vec![];
-            // Since drop_ids contains view IDs, any views (if present) will be added to
-            // the success_dropped_id list, with removal from the meta-server attempted later.
-            for drop_id in drop_ids {
-                match &drop_id {
-                    DroppedId::Db { db_id, db_name: _ } => {
-                        if !failed_db_ids.contains(db_id) {
-                            success_dropped_ids.push(drop_id);
-                        }
+        let mut success_dropped_ids = vec![];
+        // Since drop_ids contains view IDs, any views (if present) will be added to
+        // the success_dropped_id list, with removal from the meta-server attempted later.
+        for drop_id in drop_ids {
+            match &drop_id {
+                DroppedId::Db { db_id, db_name: _ } => {
+                    if !failed_db_ids.contains(db_id) {
+                        success_dropped_ids.push(drop_id);
                     }
-                    DroppedId::Table { name: _, id } => {
-                        if !failed_tables.contains(&id.table_id) {
-                            success_dropped_ids.push(drop_id);
-                        }
+                }
+                DroppedId::Table { name: _, id } => {
+                    if !failed_tables.contains(&id.table_id) {
+                        success_dropped_ids.push(drop_id);
                     }
                 }
             }
-            info!(
-                "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
-                failed_db_ids.len(),
-                failed_tables.len(),
-                success_dropped_ids.len()
-            );
-            if !failed_tables.is_empty() {
-                info!("failed table ids: {:?}", failed_tables);
-            }
-
-            num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
+        }
+        info!(
+            "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
+            failed_db_ids.len(),
+            failed_tables.len(),
+            success_dropped_ids.len()
+        );
+        if !failed_tables.is_empty() {
+            info!("failed table ids: {:?}", failed_tables);
         }
 
+        let num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
         let success_count = tables_count as u64 - failed_tables.len() as u64;
         let failed_count = failed_tables.len() as u64;
 
@@ -307,65 +280,6 @@ impl Interpreter for VacuumDropTablesInterpreter {
             success_count, failed_count, tables_count, num_meta_keys_removed
         );
 
-        match files_opt {
-            None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                UInt64Type::from_data(vec![success_count]),
-                UInt64Type::from_data(vec![failed_count]),
-            ])]),
-            Some(purge_files) => {
-                let mut len = min(purge_files.len(), DRY_RUN_LIMIT);
-                if let Some(limit) = self.plan.option.limit {
-                    len = min(len, limit);
-                }
-                let purge_files = &purge_files[0..len];
-                let mut table_file_sizes = HashMap::new();
-                for (table_name, file, file_size) in purge_files {
-                    table_file_sizes
-                        .entry(table_name)
-                        .and_modify(|file_sizes: &mut Vec<(String, u64)>| {
-                            file_sizes.push((file.to_string(), *file_size))
-                        })
-                        .or_insert(vec![(file.to_string(), *file_size)]);
-                }
-
-                if let Some(summary) = self.plan.option.dry_run {
-                    if summary {
-                        let mut tables = vec![];
-                        let mut total_files = vec![];
-                        let mut total_size = vec![];
-                        for (table, file_sizes) in table_file_sizes {
-                            tables.push(table.to_string());
-                            total_files.push(file_sizes.len() as u64);
-                            total_size.push(file_sizes.into_iter().map(|(_, num)| num).sum());
-                        }
-
-                        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                            StringType::from_data(tables),
-                            UInt64Type::from_data(total_files),
-                            UInt64Type::from_data(total_size),
-                        ])])
-                    } else {
-                        let mut tables = Vec::with_capacity(len);
-                        let mut files = Vec::with_capacity(len);
-                        let mut file_size = Vec::with_capacity(len);
-                        for (table, file_sizes) in table_file_sizes {
-                            for (file, size) in file_sizes {
-                                tables.push(table.to_string());
-                                files.push(file);
-                                file_size.push(size);
-                            }
-                        }
-
-                        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                            StringType::from_data(tables),
-                            StringType::from_data(files),
-                            UInt64Type::from_data(file_size),
-                        ])])
-                    }
-                } else {
-                    unreachable!();
-                }
-            }
-        }
+        Ok(PipelineBuildResult::create())
     }
 }

@@ -87,7 +87,7 @@ fn join_with_null_ratio(is_null_equal: bool) -> SExpr {
 }
 
 fn apply_filter_nulls(s_expr: &SExpr) -> Result<SExpr> {
-    let rule = RuleFilterNulls::new(true);
+    let rule = RuleFilterNulls::new(true, Default::default());
     let mut result = TransformResult::default();
     rule.apply(s_expr, &mut result)?;
 

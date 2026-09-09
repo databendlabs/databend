@@ -82,7 +82,7 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
         .iter()
         .map(|(name, (_, column_index))| (name.key_name.as_str(), column_index.as_usize()))
         .collect::<Vec<_>>();
-    assert_eq!(virtual_columns, vec![("v['a'][0]", 2), ("v['b']['c']", 3)]);
+    assert_eq!(virtual_columns, vec![("a[0]", 2), ("b.c", 3)]);
 
     let metadata = metadata.read();
     assert_eq!(metadata.columns().len(), 4);
@@ -134,13 +134,13 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
             virtual_schema: Some(VirtualDataSchema {
                 fields: vec![
                     VirtualDataField {
-                        name: "v['a'][0]".to_string(),
+                        name: "v.a[0]".to_string(),
                         data_types: vec![VariantDataType::Jsonb],
                         source_column_id: 1,
                         column_id: 100,
                     },
                     VirtualDataField {
-                        name: "v['b']['c']".to_string(),
+                        name: "v.b.c".to_string(),
                         data_types: vec![VariantDataType::Jsonb],
                         source_column_id: 1,
                         column_id: 101,

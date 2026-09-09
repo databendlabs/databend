@@ -14,18 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::VirtualDataSchema;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::Statistics;
 
-use super::VirtualSchemaMode;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
@@ -48,6 +47,7 @@ pub enum MutationLogEntry {
         summary: Statistics,
         hll: BlockHLL,
         top_n: BlockTopN,
+        level_stats: Vec<ClusterLevelLogStats>,
     },
     AppendBlock {
         block_meta: Arc<ExtendedBlockMeta>,
@@ -65,10 +65,6 @@ pub enum MutationLogEntry {
     },
     CompactExtras {
         extras: CompactExtraInfo,
-    },
-    AppendVirtualSchema {
-        virtual_schema: Option<VirtualDataSchema>,
-        mode: VirtualSchemaMode,
     },
     DoNothing,
 }

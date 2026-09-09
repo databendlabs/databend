@@ -154,6 +154,77 @@ async fn test_join_statistics_boundaries_golden() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_equal_pair_estimates_are_order_independent() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "join_cardinality/equal_pair_estimates.txt")?;
+    for (name, join_type, queries) in [
+        ("inner", JoinType::Inner, [
+            "SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l INNER JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("left_semi", JoinType::LeftSemi, [
+            "SELECT * FROM l LEFT SEMI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l LEFT SEMI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("right_semi", JoinType::LeftSemi, [
+            "SELECT * FROM l RIGHT SEMI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l RIGHT SEMI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("left_anti", JoinType::LeftAnti, [
+            "SELECT * FROM l LEFT ANTI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l LEFT ANTI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("right_anti", JoinType::LeftAnti, [
+            "SELECT * FROM l RIGHT ANTI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l RIGHT ANTI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("left_outer", JoinType::Left, [
+            "SELECT * FROM l LEFT JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l LEFT JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("right_outer", JoinType::Left, [
+            "SELECT * FROM l RIGHT JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l RIGHT JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+        ("full_outer", JoinType::Full, [
+            "SELECT * FROM l FULL JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
+            "SELECT * FROM l FULL JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1",
+        ]),
+    ] {
+        let mut estimates = Vec::new();
+        for sql in queries {
+            let case = SqlJoinStatisticsCase {
+                name,
+                description: "Equal pair estimates with opposite side coverage combine all conditions independently of ON order.",
+                sql,
+                expected_join_type: join_type,
+                left: sql_join_table("CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)", 100, [
+                    (
+                        "k1",
+                        r#"{"min": 1, "max": 100, "ndv": 100, "null_count": 0}"#,
+                    ),
+                    ("k2", r#"{"min": 1, "max": 10, "ndv": 10, "null_count": 0}"#),
+                ])?,
+                right: sql_join_table("CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)", 100, [
+                    ("k1", r#"{"min": 1, "max": 10, "ndv": 10, "null_count": 0}"#),
+                    (
+                        "k2",
+                        r#"{"min": 1, "max": 100, "ndv": 100, "null_count": 0}"#,
+                    ),
+                ])?,
+            };
+            let mut output = Vec::new();
+            write_sql_join_statistics_case(&mut output, &case).await?;
+            file.write_all(&output)?;
+            let output = String::from_utf8(output).unwrap();
+            estimates.push(output.split_once("join          :").unwrap().1.to_owned());
+        }
+        // Compare both cardinality and every propagated column statistic.
+        assert_eq!(estimates[0], estimates[1], "condition order changed {name}");
+    }
+    Ok(())
+}
+
 fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
     Ok(vec![
         SqlJoinStatisticsCase {
@@ -439,7 +510,7 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
         },
         SqlJoinStatisticsCase {
             name: "inner_two_key_equality",
-            description: "Multiple equality keys are applied cumulatively; a disjoint second key eliminates matches after the first key has narrowed statistics.",
+            description: "A disjoint equality key eliminates matches even when other keys overlap.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)", 100, [
@@ -452,8 +523,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             ])?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_three_key_combined_decay",
-            description: "Three non-zero equality estimates use exponential backoff, then retain and scale every estimated equality-key histogram to the combined cardinality.",
+            name: "inner_three_key_strongest_condition",
+            description: "Three non-zero equality estimates use the strongest condition, then retain and scale every estimated equality-key histogram to the output cardinality.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2 AND l.k3 = r.k3",
             expected_join_type: JoinType::Inner,
             left: sql_join_table(
@@ -476,7 +547,7 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_three_key_combined_decay_reordered",
+            name: "inner_three_key_strongest_condition_reordered",
             description: "Reordering the same three equality conditions leaves the combined cardinality and propagated column distributions unchanged.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k3 = r.k3 AND l.k1 = r.k1 AND l.k2 = r.k2",
             expected_join_type: JoinType::Inner,
@@ -562,8 +633,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_unknown_non_equi_uses_default_decay",
-            description: "A residual comparison between varying columns uses the default 0.5 selectivity in exponential-backoff cardinality and NDV scaling while leaving equality histogram propagation intact.",
+            name: "inner_unknown_non_equi_strongest_condition",
+            description: "A residual comparison between varying columns uses the default 0.5 selectivity; the strongest condition determines cardinality while equality histogram propagation remains intact.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2 AND l.k1 > r.k2",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)", 100, [
@@ -579,8 +650,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             ])?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_modeled_non_equi_joins_combined_decay",
-            description: "A cross-side residual comparison with a singleton operand has numeric selectivity, so it joins the equality estimate in exponential-backoff cardinality and NDV scaling while leaving equality histogram propagation intact.",
+            name: "inner_modeled_non_equi_preserves_ndv",
+            description: "A weaker residual comparison does not further reduce equality-key or non-key NDVs when backoff is disabled; equality histograms retain the strongest-condition row count.",
             sql: "SELECT * FROM l INNER JOIN r ON l.id = r.id AND l.k > r.c",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(id INT NOT NULL, k INT NOT NULL)", 100, [
@@ -861,8 +932,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )?,
         },
         SqlJoinStatisticsCase {
-            name: "left_semi_two_key_combined_decay",
-            description: "Multiple equality keys apply exponential backoff to preserved-side matched rows, then retain and scale every estimated equality-key histogram on that side.",
+            name: "left_semi_two_key_strongest_condition",
+            description: "Multiple equality keys combine preserved-side coverage using its minimum estimate, then scale equality-key histograms to the output.",
             sql: "SELECT * FROM l LEFT SEMI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
             expected_join_type: JoinType::LeftSemi,
             left: sql_join_table("CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)", 10, [
@@ -875,8 +946,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             ])?,
         },
         SqlJoinStatisticsCase {
-            name: "left_anti_two_key_combines_histogram_uncertainty",
-            description: "ANTI combines matched rows and histogram uncertainty from every equality key before applying its conservative overlap reserve.",
+            name: "left_anti_two_key_combined_histogram_uncertainty",
+            description: "ANTI combines matched and confirmed rows from all equality conditions before applying its conservative overlap reserve.",
             sql: "SELECT * FROM l LEFT ANTI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2",
             expected_join_type: JoinType::LeftAnti,
             left: sql_join_table_with_histograms(

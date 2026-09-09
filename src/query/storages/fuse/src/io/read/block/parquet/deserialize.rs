@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use arrow_array::RecordBatch;
+use arrow_array::RecordBatchReader;
 use arrow_schema::Schema;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
@@ -75,7 +76,14 @@ pub fn column_chunks_to_record_batch(
         num_rows,
         selection,
     )?;
-    let record = record_reader.next().unwrap()?;
+    let record = match record_reader.next() {
+        Some(record) => record?,
+        // The reader yields nothing when `selection` keeps no rows, e.g. a prewhere
+        // predicate filtered out every row of the block while the block itself
+        // survived min/max pruning. Return an empty batch with the projected schema
+        // so callers can build zero-row columns without special casing.
+        None => RecordBatch::new_empty(record_reader.schema()),
+    };
     assert!(record_reader.next().is_none());
     Ok(record)
 }

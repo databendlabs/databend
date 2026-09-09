@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_expression::BlockThresholds;
@@ -478,6 +479,55 @@ async fn materialize_segments_by_level_with_mode(
         max_tasks,
         1000,
         mode,
+    )
+    .await?;
+    Ok((block_num, parts))
+}
+
+async fn materialize_segments_by_level_and_size(
+    level_sizes: &[(i32, u64)],
+    thresholds: BlockThresholds,
+) -> anyhow::Result<(u64, ReclusterParts)> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let mut segment_locations = Vec::with_capacity(level_sizes.len());
+    for &(level, block_size) in level_sizes {
+        let block = make_recluster_block(
+            cluster_key_id,
+            1,
+            100,
+            level,
+            1000,
+            block_size,
+            block_size / 2,
+        );
+        segment_locations.push(
+            write_recluster_segment(
+                &data_accessor,
+                &location_generator,
+                vec![block],
+                thresholds,
+                cluster_key_id,
+            )
+            .await?,
+        );
+    }
+
+    let ctx: Arc<dyn TableContext> = ctx;
+    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        1,
+        1000,
+        ReclusterMode::Aggressive,
     )
     .await?;
     Ok((block_num, parts))
@@ -1539,99 +1589,6 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_accumulates_tasks_across_windows() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_recluster_block_size(1000)?;
-
-    let data_accessor = ctx.get_application_level_data_operator()?.operator();
-    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
-    let cluster_key_id = 0;
-    let thresholds = BlockThresholds::new(1000, 100, 100, 2);
-
-    // Two overlapping clusters that are far apart in key space. With a window cap
-    // of 2 they fall into two separate, segment-disjoint windows, so reaching
-    // the budget of 2 requires accumulating tasks across both windows.
-    let segment_locations = gen_recluster_segments_by_ranges(
-        &data_accessor,
-        &location_generator,
-        &[vec![(1, 10)], vec![(2, 9)], vec![(100, 110)], vec![(
-            101, 109,
-        )]],
-        1000,
-        100,
-        100,
-        thresholds,
-        cluster_key_id,
-    )
-    .await?;
-
-    let schema = test_cluster_schema();
-    let ctx: Arc<dyn TableContext> = ctx.clone();
-    let segment_locations = create_segment_location_vector(segment_locations, None);
-    let compact_segments = segment_pruning(
-        &ctx,
-        schema.clone(),
-        data_accessor.clone(),
-        segment_locations,
-    )
-    .await?;
-
-    let max_tasks = 2;
-    let select_mutator = new_test_mutator(
-        ctx.clone(),
-        data_accessor.clone(),
-        schema.clone(),
-        thresholds,
-        cluster_key_id,
-        max_tasks,
-        ReclusterMode::Aggressive,
-    );
-    let mutator = new_test_mutator(
-        ctx.clone(),
-        data_accessor.clone(),
-        schema.clone(),
-        thresholds,
-        cluster_key_id,
-        max_tasks,
-        ReclusterMode::Conservative,
-    );
-
-    let segment_windows = select_mutator.select_segments(&compact_segments, 2)?;
-    // The two far-apart clusters produce two disjoint windows.
-    assert_eq!(segment_windows.len(), 2);
-
-    // Disjoint windows can each materialize work, so a full budget may be filled
-    // from multiple windows.
-    let mut parts = ReclusterParts::default();
-    for selected_segs in segment_windows {
-        let task_budget = max_tasks.saturating_sub(parts.tasks.len());
-        if task_budget == 0 {
-            break;
-        }
-        let (_, candidate_parts) =
-            materialize_candidate_window(&mutator, selected_segs, task_budget).await?;
-        parts.tasks.extend(candidate_parts.tasks);
-        parts
-            .removed_segment_indexes
-            .extend(candidate_parts.removed_segment_indexes);
-    }
-
-    // One task per window, accumulated to the full budget of 2.
-    assert_eq!(parts.tasks.len(), 2);
-    // The four overlapping segments are all scheduled for removal, with no
-    // duplicates across windows.
-    let removed = parts
-        .removed_segment_indexes
-        .iter()
-        .copied()
-        .collect::<HashSet<_>>();
-    assert_eq!(removed.len(), 4);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -2081,25 +2038,6 @@ async fn test_defers_after_empty_group() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_keeps_low_level_small_task() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(0, 3)],
-        thresholds,
-        1,
-        ReclusterMode::Conservative,
-    )
-    .await?;
-
-    assert_eq!(block_num, 3);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(parts.tasks[0].level, 0);
-    assert_eq!(task_part_counts(&parts), vec![3]);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     let (block_num, parts) = materialize_segments_by_level_with_mode(
@@ -2126,10 +2064,9 @@ async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
+async fn test_final_groups_only_low_maturity_levels() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 1 and 2 share the {1-3} bin; level 0 stays isolated, so only the
-    // two mature blocks overlap and form one rewrite task.
+    // Levels 1 and 2 share the low-maturity group; level 0 stays isolated.
     let (block_num, parts) = materialize_segments_by_level_with_mode(
         &[(0, 1), (1, 1), (2, 1)],
         thresholds,
@@ -2140,96 +2077,106 @@ async fn test_final_groups_mature_level_bands() -> anyhow::Result<()> {
 
     assert_eq!(block_num, 2);
     assert_eq!(parts.tasks.len(), 1);
-    // {1-3} bin: majority tie between level 1 and 2 picks the lower level.
-    assert_eq!(parts.tasks[0].level, 1);
+    // Level 2 owns exactly half of the logical bytes, so the actual output is level 3.
+    assert_eq!(parts.tasks[0].level + 1, 3);
     assert_eq!(task_part_counts(&parts), vec![2]);
 
-    // Two high-level blocks alone do not produce rewrite tasks (both are at or
-    // above MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS), but they can still be repacked
-    // when that reduces segment count.
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(2, 2)],
-        thresholds,
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_low_maturity_level_uses_block_size_ratio() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    for (level_sizes, expected_output_level) in [
+        ([(1, 100), (1, 100), (3, 100)], 3),
+        ([(1, 100), (3, 100), (3, 100)], 4),
+        ([(1, 100), (2, 100), (3, 100)], 3),
+        // Below half versus exactly half; block count is unchanged.
+        ([(1, 100), (1, 100), (3, 199)], 3),
+        ([(1, 100), (1, 100), (3, 200)], 4),
+    ] {
+        let (block_num, parts) =
+            materialize_segments_by_level_and_size(&level_sizes, thresholds).await?;
+        assert_eq!(block_num, 3);
+        assert_eq!(parts.tasks.len(), 1);
+        assert_eq!(
+            parts.tasks[0].level + 1,
+            expected_output_level,
+            "{level_sizes:?}"
+        );
+
+        // One representative check is enough for the input IO distribution.
+        if level_sizes == [(1, 100), (1, 100), (3, 200)] {
+            assert_eq!(parts.tasks[0].input_level_stats, vec![
+                ClusterLevelLogStats {
+                    level: Some(1),
+                    block_count: 2,
+                    row_count: 2000,
+                    block_size: 200,
+                    file_size: 100
+                },
+                ClusterLevelLogStats {
+                    level: Some(3),
+                    block_count: 1,
+                    row_count: 1000,
+                    block_size: 200,
+                    file_size: 100
+                },
+            ]);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_low_maturity_gets_candidate_budget_before_high_levels() -> anyhow::Result<()> {
+    let (_, parts) = materialize_segments_by_level_with_mode(
+        &[(1, 8), (4, 8)],
+        BlockThresholds::new(1000, 100, 100, 10),
         1,
         ReclusterMode::Aggressive,
     )
     .await?;
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].level + 1, 2);
+    Ok(())
+}
 
-    assert_eq!(block_num, 2);
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_two_mature_blocks_still_stop() -> anyhow::Result<()> {
+    let (_, parts) = materialize_segments_by_level_with_mode(
+        &[(2, 2)],
+        BlockThresholds::new(1000, 100, 100, 10),
+        1,
+        ReclusterMode::Aggressive,
+    )
+    .await?;
     assert!(parts.tasks.is_empty());
     assert_eq!(parts.remained_blocks.len(), 2);
-    assert_eq!(parts.removed_segment_indexes.len(), 2);
-
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_final_wide_bin_merges_mature_levels() -> anyhow::Result<()> {
+async fn test_final_high_level_boundaries() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 4 and 8 sit at the edges of the {4-8} bin; the fixed wide bin packs
-    // them into a single task even though they are four levels apart.
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(4, 1), (8, 1), (8, 1)],
-        thresholds,
-        1,
-        ReclusterMode::Aggressive,
-    )
-    .await?;
-
-    assert_eq!(block_num, 3);
-    assert_eq!(parts.tasks.len(), 1);
-    // Majority level in {4-8} is 8 (two blocks vs one at level 4).
-    assert_eq!(parts.tasks[0].level, 8);
-    assert_eq!(task_part_counts(&parts), vec![3]);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_final_high_maturity_bin_majority_level() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 9 and above all fall in the {9+} bin and merge into one task; the
-    // output level follows the majority, picking the smaller level on a tie.
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(9, 1), (10, 2), (12, 1)],
-        thresholds,
-        1,
-        ReclusterMode::Aggressive,
-    )
-    .await?;
-
-    assert_eq!(block_num, 4);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(parts.tasks[0].level, 10);
-    assert_eq!(task_part_counts(&parts), vec![4]);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_final_bin_boundary_is_a_hard_split() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Levels 3 and 4 fall in different bins ({1-3} vs {4-8}). The fixed bins do
-    // not merge across that boundary, so the two level bands form two separate
-    // tasks rather than one merged overlap.
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(3, 3), (4, 3)],
-        thresholds,
-        2,
-        ReclusterMode::Aggressive,
-    )
-    .await?;
-
-    assert_eq!(block_num, 6);
-    assert_eq!(parts.tasks.len(), 2);
-    let mut levels = parts
-        .tasks
-        .iter()
-        .map(|task| task.level)
-        .collect::<Vec<_>>();
-    levels.sort_unstable();
-    assert_eq!(levels, vec![3, 4]);
-
+    for levels in [[3, 4], [4, 8]] {
+        let (block_num, parts) = materialize_segments_by_level_with_mode(
+            &[(levels[0], 3), (levels[1], 3)],
+            thresholds,
+            2,
+            ReclusterMode::Aggressive,
+        )
+        .await?;
+        assert_eq!(block_num, 6);
+        assert_eq!(parts.tasks.len(), 2);
+        let mut output_levels = parts
+            .tasks
+            .iter()
+            .map(|task| task.level + 1)
+            .collect::<Vec<_>>();
+        output_levels.sort_unstable();
+        assert_eq!(output_levels, levels.map(|level| level + 1));
+    }
     Ok(())
 }
 

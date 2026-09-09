@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
+
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -173,13 +175,12 @@ impl IPhysicalPlan for Recluster {
                     metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
                     metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
 
+                    // Keep all effective input levels in one event per task pipeline build.
                     log::info!(
-                        "recluster: scheduled blocks level={} block_count={} rows={} bytes={} compressed={}",
-                        task.level,
-                        recluster_block_nums,
-                        task.total_rows,
-                        task.total_bytes,
-                        task.total_compressed,
+                        event = "recluster.input_planned",
+                        table_id = table.get_id(),
+                        input_levels :serde = task.input_level_stats;
+                        "Recluster input planned"
                     );
                 }
 
@@ -278,19 +279,35 @@ impl IPhysicalPlan for Recluster {
                     }
                 }
 
+                let virtual_column_layout = task.virtual_column_layout.clone();
+                let query_ctx = builder.ctx.clone();
                 // All layouts share the ordinary block statistics and serialization path after
                 // they have formed output blocks and removed layout-only temporary columns.
                 builder.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        let proc = TransformSerializeBlock::try_create(
-                            builder.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            table,
-                            cluster_stats_gen.clone(),
-                            MutationKind::Recluster,
-                            self.table_meta_timestamps,
-                        )?;
+                    move |transform_input_port, transform_output_port| {
+                        let proc = match &virtual_column_layout {
+                            Some(layout) => {
+                                TransformSerializeBlock::try_create_with_virtual_layout(
+                                    query_ctx.clone(),
+                                    transform_input_port,
+                                    transform_output_port,
+                                    table,
+                                    cluster_stats_gen.clone(),
+                                    MutationKind::Recluster,
+                                    Arc::new(layout.clone()),
+                                    self.table_meta_timestamps,
+                                )?
+                            }
+                            None => TransformSerializeBlock::try_create(
+                                query_ctx.clone(),
+                                transform_input_port,
+                                transform_output_port,
+                                table,
+                                cluster_stats_gen.clone(),
+                                MutationKind::Recluster,
+                                self.table_meta_timestamps,
+                            )?,
+                        };
                         proc.into_processor()
                     },
                 )

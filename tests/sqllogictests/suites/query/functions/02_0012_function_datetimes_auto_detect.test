@@ -178,6 +178,7 @@ settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) 
 ----
 2611-05-23 18:58:43.456000
 
+# numeric date strings are epoch days, not YYYYMMDD; out-of-range values clamp to DATE_MIN
 query T
 settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('20240305');
 ----
@@ -189,6 +190,7 @@ settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) 
 ----
 2127-09-15
 
+# out-of-range epoch days retain the legacy DATE_MIN fallback
 query T
 settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('1487654321');
 ----

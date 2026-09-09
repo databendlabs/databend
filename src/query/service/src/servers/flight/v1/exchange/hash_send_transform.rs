@@ -101,6 +101,7 @@ impl Processor for HashSendTransform {
                     self.channels.handle_send_results(results)?;
                     if self.no_active_downstream() {
                         self.input.finish();
+                        self.channels.close_all();
                         return Ok(Event::Finished);
                     }
                 }
@@ -113,6 +114,7 @@ impl Processor for HashSendTransform {
 
         if self.no_active_downstream() {
             self.input.finish();
+            self.channels.close_all();
             return Ok(Event::Finished);
         }
 
@@ -161,6 +163,7 @@ impl Processor for HashSendTransform {
                             self.channels.handle_send_results(results)?;
                             if self.no_active_downstream() {
                                 self.input.finish();
+                                self.channels.close_all();
                                 return Ok(Event::Finished);
                             }
                         }
