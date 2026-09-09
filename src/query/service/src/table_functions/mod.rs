@@ -15,7 +15,7 @@
 mod async_crash_me;
 mod billing_usage_daily;
 mod copy_history;
-mod fuse_vacuum2;
+pub(crate) mod fuse_vacuum2;
 mod get_lineage;
 #[cfg(feature = "storage-stage")]
 pub(crate) mod infer_schema;

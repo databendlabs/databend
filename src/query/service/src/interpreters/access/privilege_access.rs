@@ -2143,9 +2143,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::TruncateTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false, false).await?
             }
-            Plan::OptimizePurge(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
-            }
             Plan::OptimizeCompactSegment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
@@ -2156,8 +2153,22 @@ impl AccessChecker for PrivilegeAccess {
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            Plan::VacuumTables(plan) => {
+                if let Some(database) = &plan.database {
+                    self.validate_db_access(&plan.catalog, database, UserPrivilegeType::Super, false).await?
+                } else {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+                }
+            }
+            Plan::VacuumAll(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+            }
             Plan::VacuumDropTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
+                if plan.database.is_empty() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+                } else {
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
+                }
             }
             Plan::VacuumTemporaryFiles(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
