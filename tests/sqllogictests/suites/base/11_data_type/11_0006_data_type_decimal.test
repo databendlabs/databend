@@ -571,7 +571,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1058
+statement error 1065
 insert into t_decimal_4_2 values (a);
 
 statement ok
@@ -725,7 +725,7 @@ insert into t_decimal_76_2 values (-);
 statement error 1303
 insert into t_decimal_76_2 values ();
 
-statement error 1058
+statement error 1065
 insert into t_decimal_76_2 values (a);
 
 query R

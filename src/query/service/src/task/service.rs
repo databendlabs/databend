@@ -30,8 +30,6 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
-use databend_common_ast::ast::DeclareItem;
-use databend_common_ast::ast::ScriptStatement;
 use databend_common_ast::parser::ParseMode;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
@@ -60,7 +58,7 @@ use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_script::Executor;
-use databend_common_script::compile;
+use databend_common_script::compile_block;
 use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
@@ -1210,28 +1208,20 @@ WHERE ta.task_name = {task_name}
         let sql_dialect = context.get_settings().get_sql_dialect()?;
         let script = Self::script_sql_to_block(sqls);
         let tokens = tokenize_sql(&script)?;
-        let mut ast = run_parser(
+        let ast = run_parser(
             &tokens,
             sql_dialect,
             ParseMode::Template,
             false,
             script_block,
         )?;
-
-        let mut src = vec![];
-        for declare in ast.declares {
-            match declare {
-                DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
-                DeclareItem::Set(declare) => src.push(ScriptStatement::LetStatement { declare }),
-            }
-        }
-        src.append(&mut ast.body);
-        let compiled = compile(&src)?;
+        let span = ast.span;
+        let compiled = compile_block(ast)?;
 
         let client = ScriptClient {
             ctx: context.clone(),
         };
-        let mut executor = Executor::load(ast.span, client, compiled);
+        let mut executor = Executor::load(span, client, compiled);
         let settings = context.get_settings();
         let script_max_steps = settings.get_script_max_steps()?;
         executor.run(script_max_steps as usize).await?;
