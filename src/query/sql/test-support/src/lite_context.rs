@@ -1460,6 +1460,7 @@ impl LiteTableContext {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
         let metadata = Metadata::default_ref();
+        databend_common_sql::apply_statement_settings(self.clone(), &extras.statement)?;
         let name_resolution_ctx = NameResolutionContext::try_from(self.get_settings().as_ref())?;
         let binder = databend_common_sql::Binder::new(
             self.clone(),
@@ -1476,7 +1477,7 @@ impl LiteTableContext {
             _ => Metadata::default_ref(),
         };
         let settings = self.get_settings();
-        let opt_ctx = OptimizerContext::new(self.clone(), metadata)
+        let opt_ctx = OptimizerContext::new(self.clone(), metadata, self.get_function_context()?)
             .with_settings(&settings)?
             .set_enable_distributed_optimization(true)
             .clone();
@@ -2132,6 +2133,7 @@ impl TableContextVariables for LiteTableContext {
 mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_sql::FormatOptions;
+    use databend_common_sql::optimizer::ir::StatContext;
 
     use super::*;
 
@@ -2318,7 +2320,8 @@ $$
 
         let raw_plan = ctx.bind_sql("SELECT a FROM t").await?;
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let formatted = optimized_plan.format_indent(FormatOptions::default())?;
+        let formatted =
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             formatted.contains("ROW ACCESS POLICY APPLIED"),
             "formatted plan:\n{formatted}"
@@ -2360,14 +2363,16 @@ $$
             SELECT a FROM c UNION ALL SELECT a FROM c
         "#;
         let raw_plan = ctx.bind_sql(sql).await?;
-        let raw_formatted = raw_plan.format_indent(FormatOptions::default())?;
+        let raw_formatted =
+            raw_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             raw_formatted.contains("MaterializedCTE"),
             "formatted plan:\n{raw_formatted}"
         );
 
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+        let optimized =
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             optimized.contains("Scan") && optimized.contains("default.t"),
             "formatted plan:\n{optimized}"

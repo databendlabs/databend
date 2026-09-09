@@ -30,6 +30,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -89,11 +90,11 @@ impl Operator for MaterializedCTERef {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         if let Some(stat_info) = &self.stat_info {
             return Ok(stat_info.clone());
         }
-        RelExpr::with_s_expr(&self.def).derive_cardinality()
+        RelExpr::with_s_expr(&self.def).derive_cardinality(stat_ctx)
     }
 
     /// Derive relational property

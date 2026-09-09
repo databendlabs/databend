@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
@@ -38,12 +39,14 @@ fn contains_recursive_cte(expr: &SExpr) -> bool {
 pub struct RuleCommuteJoin {
     id: RuleID,
     matchers: Vec<Matcher>,
+    stat_context: StatContext,
 }
 
 impl RuleCommuteJoin {
-    pub fn new() -> Self {
+    pub fn new(stat_context: StatContext) -> Self {
         Self {
             id: RuleID::CommuteJoin,
+            stat_context,
 
             // LogicalJoin
             // | \
@@ -79,8 +82,12 @@ impl Rule for RuleCommuteJoin {
 
         let left_rel_expr = RelExpr::with_s_expr(left_child);
         let right_rel_expr = RelExpr::with_s_expr(right_child);
-        let left_card = left_rel_expr.derive_cardinality()?.cardinality;
-        let right_card = right_rel_expr.derive_cardinality()?.cardinality;
+        let left_card = left_rel_expr
+            .derive_cardinality(&self.stat_context)?
+            .cardinality;
+        let right_card = right_rel_expr
+            .derive_cardinality(&self.stat_context)?
+            .cardinality;
 
         let need_commute = if left_card < right_card {
             matches!(
@@ -132,6 +139,6 @@ impl Rule for RuleCommuteJoin {
 
 impl Default for RuleCommuteJoin {
     fn default() -> Self {
-        Self::new()
+        Self::new(StatContext::default())
     }
 }

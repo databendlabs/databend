@@ -89,6 +89,7 @@ impl Processor for BroadcastSendTransform {
                     self.channels.handle_send_results(results)?;
                     if self.no_active_downstream() {
                         self.input.finish();
+                        self.channels.close_all();
                         return Ok(Event::Finished);
                     }
                 }
@@ -101,6 +102,7 @@ impl Processor for BroadcastSendTransform {
 
         if self.no_active_downstream() {
             self.input.finish();
+            self.channels.close_all();
             return Ok(Event::Finished);
         }
 
@@ -141,6 +143,7 @@ impl Processor for BroadcastSendTransform {
                         self.channels.handle_send_results(results)?;
                         if self.no_active_downstream() {
                             self.input.finish();
+                            self.channels.close_all();
                             return Ok(Event::Finished);
                         }
                     }

@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::IndexType;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::expr::MExpr;
 use crate::optimizer::ir::expr::SExpr;
@@ -95,25 +96,29 @@ impl<'a> RelExpr<'a> {
 
     // Derive cardinality and statistics
     #[recursive::recursive]
-    pub fn derive_cardinality(&self) -> Result<Arc<StatInfo>> {
+    pub fn derive_cardinality(&self, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         match self {
             RelExpr::SExpr { expr } => {
                 let stat_info = expr
                     .stat_info
-                    .get_or_try_init(|| expr.plan.derive_stats(self))?;
+                    .get_or_try_init(|| expr.plan.derive_stats(self, stat_ctx))?;
                 Ok(stat_info.clone())
             }
-            RelExpr::MExpr { expr, .. } => expr.plan.derive_stats(self),
-            RelExpr::OptContext { expr, .. } => expr.plan.derive_stats(self),
+            RelExpr::MExpr { expr, .. } => expr.plan.derive_stats(self, stat_ctx),
+            RelExpr::OptContext { expr, .. } => expr.plan.derive_stats(self, stat_ctx),
         }
     }
 
-    pub(crate) fn derive_cardinality_child(&self, index: IndexType) -> Result<Arc<StatInfo>> {
+    pub(crate) fn derive_cardinality_child(
+        &self,
+        index: IndexType,
+        stat_ctx: &StatContext,
+    ) -> Result<Arc<StatInfo>> {
         match self {
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
                 let rel_expr = RelExpr::with_s_expr(child);
-                rel_expr.derive_cardinality()
+                rel_expr.derive_cardinality(stat_ctx)
             }
             RelExpr::MExpr { expr, memo } => Ok(memo.group(expr.group_index)?.stat_info.clone()),
             RelExpr::OptContext { expr, memo, .. } => {

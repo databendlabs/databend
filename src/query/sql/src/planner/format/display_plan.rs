@@ -22,6 +22,7 @@ use super::display::IdHumanizer;
 use super::display::MetadataIdHumanizer;
 use super::display::TreeHumanizer;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
 
@@ -37,17 +38,21 @@ impl SExpr {
 }
 
 impl Plan {
-    pub fn format_indent(&self, options: FormatOptions) -> Result<String> {
+    pub fn format_indent(
+        &self,
+        options: FormatOptions,
+        stat_context: &StatContext,
+    ) -> Result<String> {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 Ok(s_expr.to_format_tree(&humanizer)?.format_pretty()?)
             }
             Plan::Explain { kind, plan, .. } => {
-                let result = plan.format_indent(options)?;
+                let result = plan.format_indent(options, stat_context)?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
@@ -83,7 +88,9 @@ impl Plan {
             Plan::DescShare(_) => Ok("DescShare".to_string()),
 
             // Tables
-            Plan::CreateTable(create_table) => format_create_table(create_table, options),
+            Plan::CreateTable(create_table) => {
+                format_create_table(create_table, options, stat_context)
+            }
             Plan::ShowCreateTable(_) => Ok("ShowCreateTable".to_string()),
             Plan::DropTable(_) => Ok("DropTable".to_string()),
             Plan::UndropTable(_) => Ok("UndropTable".to_string()),
@@ -164,7 +171,7 @@ impl Plan {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 Ok(format!(
                     "MergeInto:\n{}",
                     s_expr.to_format_tree(&humanizer)?.format_pretty()?
@@ -312,14 +319,18 @@ impl Plan {
     }
 }
 
-fn format_create_table(create_table: &CreateTablePlan, options: FormatOptions) -> Result<String> {
+fn format_create_table(
+    create_table: &CreateTablePlan,
+    options: FormatOptions,
+    stat_context: &StatContext,
+) -> Result<String> {
     match &create_table.as_select {
         Some(plan) => match plan.as_ref() {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 let res = s_expr.to_format_tree(&humanizer)?;
                 Ok(
                     FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])

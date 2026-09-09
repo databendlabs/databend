@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleCommuteJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
@@ -101,12 +102,12 @@ async fn write_optimizer_commuted_right_single(
         None => {
             let left_single = find_join(&s_expr, JoinType::LeftSingle)
                 .ok_or_else(|| ErrorCode::Internal("optimizer did not derive SINGLE from SQL"))?;
-            RuleCommuteJoin::new().apply(left_single, &mut state)?;
+            RuleCommuteJoin::new(StatContext::default()).apply(left_single, &mut state)?;
             let left_cardinality = RelExpr::with_s_expr(left_single.child(0)?)
-                .derive_cardinality()?
+                .derive_cardinality(&StatContext::default())?
                 .cardinality;
             let right_cardinality = RelExpr::with_s_expr(left_single.child(1)?)
-                .derive_cardinality()?
+                .derive_cardinality(&StatContext::default())?
                 .cardinality;
             let right_single = state
                 .results()

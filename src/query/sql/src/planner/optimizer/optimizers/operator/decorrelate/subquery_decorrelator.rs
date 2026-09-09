@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -25,9 +24,8 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
 
 use crate::Binder;
-use crate::MetadataRef;
+use crate::ColumnBindingBuilder;
 use crate::Symbol;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::binder::wrap_cast;
 use crate::optimizer::Optimizer;
@@ -137,16 +135,14 @@ pub struct FlattenInfo {
 ///     ├── TableScan: employees AS e
 ///     └── TableScan: departments AS d
 pub struct SubqueryDecorrelatorOptimizer {
-    pub(crate) ctx: Arc<dyn TableContext>,
-    pub(crate) metadata: MetadataRef,
+    pub(crate) ctx: Arc<OptimizerContext>,
     pub(crate) binder: Option<Binder>,
 }
 
 impl SubqueryDecorrelatorOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>, binder: Option<Binder>) -> Self {
         Self {
-            ctx: opt_ctx.get_table_ctx(),
-            metadata: opt_ctx.get_metadata(),
+            ctx: opt_ctx,
             binder,
         }
     }
@@ -597,8 +593,8 @@ impl SubqueryDecorrelatorOptimizer {
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let count_type = UInt64Type::data_type();
-                let count_func_index = self
-                    .metadata
+                let metadata = self.ctx.get_metadata();
+                let count_func_index = metadata
                     .write()
                     .add_derived_column("count(*)".to_string(), count_type.clone());
 
@@ -659,7 +655,7 @@ impl SubqueryDecorrelatorOptimizer {
                     // └── Aggregate: COUNT(*)
                     agg_s_expr.ref_build_unary(filter)
                 } else {
-                    let column_index = self.metadata.write().add_derived_column(
+                    let column_index = self.ctx.get_metadata().write().add_derived_column(
                         "_exists_scalar_subquery".to_string(),
                         DataType::Boolean,
                     );
@@ -730,7 +726,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
-                    self.metadata.write().add_derived_column(
+                    self.ctx.get_metadata().write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
                     )

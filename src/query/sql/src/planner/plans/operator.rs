@@ -30,6 +30,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
@@ -81,7 +82,7 @@ pub trait Operator {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo::default()))
     }
 
@@ -224,8 +225,8 @@ impl Operator for RelOperator {
         match_rel_op!(self, derive_physical_prop(rel_expr))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        match_rel_op!(self, derive_stats(rel_expr))
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        match_rel_op!(self, derive_stats(rel_expr, stat_ctx))
     }
 
     fn compute_required_prop_child(
