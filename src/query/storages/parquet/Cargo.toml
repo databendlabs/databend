@@ -15,6 +15,7 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -32,7 +33,6 @@ databend-storages-common-pruner = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 futures = { workspace = true }
-jiff = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }

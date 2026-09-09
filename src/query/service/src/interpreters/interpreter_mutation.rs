@@ -163,11 +163,14 @@ impl MutationInterpreter {
         mutation: &databend_common_sql::plans::Mutation,
         build_res: &mut PipelineBuildResult,
     ) {
-        let hook_lock_opt = if mutation.lock_guard.is_some() {
-            LockTableOption::NoLock
-        } else {
-            LockTableOption::LockNoRetry
-        };
+        let hook_lock_opt =
+            if self.materialized_view_refresh_target.is_some() || mutation.lock_guard.is_some() {
+                // Materialized-view refresh already owns its lifecycle lock. Mutations with an
+                // attached lock guard likewise keep that guard for the complete pipeline.
+                LockTableOption::NoLock
+            } else {
+                LockTableOption::LockNoRetry
+            };
 
         let mutation_kind = match mutation.mutation_type {
             MutationType::Update => MutationKind::Update,

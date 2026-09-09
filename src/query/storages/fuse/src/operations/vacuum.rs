@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[VACUUM]");
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use chrono::DateTime;
 use chrono::Duration;
@@ -45,7 +46,6 @@ use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
-use opendal::Scheme;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
@@ -189,7 +189,7 @@ pub async fn is_gc_candidate_segment_block(
             ))
         })?
     };
-
+    let last_modified = DateTime::<Utc>::from(SystemTime::from(last_modified));
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
@@ -314,9 +314,7 @@ impl FuseTable {
         let dal = self.get_operator_ref();
 
         match dal.info().scheme() {
-            Scheme::Fs => {
-                fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await
-            }
+            "fs" => fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
             _ => general_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
         }
     }
@@ -664,6 +662,7 @@ impl FuseTable {
                 };
             }
         };
+        let gc_root_meta_ts = DateTime::<Utc>::from(SystemTime::from(gc_root_meta_ts));
 
         match gc_root {
             Ok((gc_root, _)) => {
@@ -688,6 +687,7 @@ impl FuseTable {
                             })?,
                             Some(v) => v,
                         };
+                        let last_modified = DateTime::<Utc>::from(SystemTime::from(last_modified));
                         if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
                             gc_candidates.push(path.to_owned());
                         }

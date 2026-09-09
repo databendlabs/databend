@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use databend_common_ast::Span;
 use databend_common_expression::ConstantFolder;
@@ -33,13 +34,98 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 pub(super) struct RewriteVisitor<'a> {
     pub input_domains: HashMap<String, Domain>,
+    /// Optional block-local physical types for virtual column references.
+    pub virtual_column_types: Option<&'a HashMap<String, DataType>>,
     pub func_ctx: &'a FunctionContext,
     pub fn_registry: &'a FunctionRegistry,
 }
 
 type RewriteResult = std::result::Result<Option<Expr<String>>, !>;
 
+/// Return virtual column references whose every occurrence is the direct input
+/// of a Cast/TryCast. Only these references can safely use a physical typed
+/// domain while the expression is rewritten for range pruning.
+pub(super) fn cast_input_columns(expr: &Expr<String>) -> HashSet<String> {
+    fn visit(
+        expr: &Expr<String>,
+        direct_cast_input: bool,
+        cast_inputs: &mut HashSet<String>,
+        other_inputs: &mut HashSet<String>,
+    ) {
+        match expr {
+            Expr::ColumnRef(column) => {
+                if direct_cast_input {
+                    cast_inputs.insert(column.id.clone());
+                } else {
+                    other_inputs.insert(column.id.clone());
+                }
+            }
+            Expr::Cast(cast) => {
+                visit(
+                    &cast.expr,
+                    matches!(cast.expr.as_ref(), Expr::ColumnRef(_)),
+                    cast_inputs,
+                    other_inputs,
+                );
+            }
+            Expr::FunctionCall(call) => {
+                for arg in &call.args {
+                    visit(arg, false, cast_inputs, other_inputs);
+                }
+            }
+            Expr::LambdaFunctionCall(call) => {
+                for arg in &call.args {
+                    visit(arg, false, cast_inputs, other_inputs);
+                }
+            }
+            Expr::Constant(_) => {}
+        }
+    }
+
+    let mut cast_inputs = HashSet::new();
+    let mut other_inputs = HashSet::new();
+    visit(expr, false, &mut cast_inputs, &mut other_inputs);
+    cast_inputs.retain(|name| !other_inputs.contains(name));
+    cast_inputs
+}
+
 impl ExprVisitor<String> for RewriteVisitor<'_> {
+    fn enter_column_ref(&mut self, _column: &ColumnRef<String>) -> RewriteResult {
+        // A virtual column's physical type may differ from its logical Variant type.
+        // Rewriting an arbitrary column reference can make its parent function invalid;
+        // if re-type-checking that parent then fails, the original expression is kept
+        // while the physical domain remains in `input_domains`. Restrict the rewrite
+        // to direct Cast/TryCast inputs, where the physical type is needed for pruning.
+        Ok(None)
+    }
+
+    fn enter_cast(&mut self, cast: &Cast<String>) -> RewriteResult {
+        let Expr::ColumnRef(column) = cast.expr.as_ref() else {
+            return Self::visit_cast(cast, self);
+        };
+        let Some(data_type) = self
+            .virtual_column_types
+            .and_then(|column_types| column_types.get(&column.id))
+        else {
+            return Ok(None);
+        };
+        if data_type == &column.data_type {
+            return Ok(None);
+        }
+
+        let mut column = column.clone();
+        column.data_type = data_type.clone();
+        Ok(Some(
+            Cast {
+                span: cast.span,
+                is_try: cast.is_try,
+                expr: Box::new(column.into()),
+                dest_type: cast.dest_type.clone(),
+            }
+            .into(),
+        ))
+    }
+
     fn enter_function_call(&mut self, call: &FunctionCall<String>) -> RewriteResult {
         if call.id.name() == "eq" {
             let result = match call.args.as_slice() {
@@ -133,7 +219,7 @@ impl RewriteVisitor<'_> {
         column: &ColumnRef<String>,
         expr: &Expr<String>,
     ) -> RewriteResult {
-        let Some(constant) = self.constant_from_expr(expr) else {
+        let Some(constant) = constant_from_expr(self.func_ctx, expr) else {
             return Ok(None);
         };
         let Some(scalar) = cast_integer_string_constant(
@@ -170,24 +256,6 @@ impl RewriteVisitor<'_> {
             .0
             .into_owned(),
         ))
-    }
-
-    fn constant_from_expr(&self, expr: &Expr<String>) -> Option<Constant> {
-        match expr {
-            Expr::Constant(constant) => Some(constant.clone()),
-            Expr::Cast(cast) if !cast.is_try => {
-                let Expr::Constant(constant) = cast.expr.as_ref() else {
-                    return None;
-                };
-                let scalar = cast_const(self.func_ctx, cast.dest_type.clone(), constant.clone())?;
-                Some(Constant {
-                    span: None,
-                    scalar,
-                    data_type: cast.dest_type.clone(),
-                })
-            }
-            _ => None,
-        }
     }
 
     fn check_no_throw(&self, cast: &Cast<String>) -> bool {
@@ -231,6 +299,81 @@ pub(super) fn cast_const(
     domain.as_singleton()
 }
 
+fn constant_from_expr(func_ctx: &FunctionContext, expr: &Expr<String>) -> Option<Constant> {
+    match expr {
+        Expr::Constant(constant) => Some(constant.clone()),
+        Expr::Cast(cast) if !cast.is_try => {
+            let Expr::Constant(constant) = cast.expr.as_ref() else {
+                return None;
+            };
+            let scalar = cast_const(func_ctx, cast.dest_type.clone(), constant.clone())?;
+            Some(Constant {
+                span: None,
+                scalar,
+                data_type: cast.dest_type.clone(),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Statically detect whether `expr` contains any pattern that
+/// [`RewriteVisitor`] could rewrite, so that per-block pruning can skip the
+/// rewrite pass when there is provably nothing to rewrite.
+///
+/// This mirrors the domain-independent prefix of the rewrite rules:
+/// - `eq(cast(..), constant)` (either order) with a non-try cast counts as a
+///   candidate; the remaining conditions (`check_no_throw`) depend on
+///   per-block domains, so any such pair is conservatively kept.
+/// - `eq(integer_column, string_constant)` (either order) is a candidate only
+///   when the constant parses as the column's integer type; those conditions
+///   are all domain-independent and are replayed here exactly.
+///
+/// `true` means "the visitor must run per block". False positives merely lose
+/// the optimization, while a false negative would change pruning results, so
+/// every domain-dependent condition is treated as potentially satisfied.
+pub(super) fn has_rewrite_candidates(func_ctx: &FunctionContext, expr: &Expr<String>) -> bool {
+    let mut stack = vec![expr];
+    while let Some(expr) = stack.pop() {
+        match expr {
+            Expr::FunctionCall(call) => {
+                if call.id.name() == "eq" && is_rewrite_candidate_eq(func_ctx, call) {
+                    return true;
+                }
+                stack.extend(call.args.iter());
+            }
+            Expr::Cast(cast) => stack.push(&cast.expr),
+            // The rewrite visitor only walks lambda arguments, not the lambda body.
+            Expr::LambdaFunctionCall(lambda) => stack.extend(lambda.args.iter()),
+            Expr::Constant(_) | Expr::ColumnRef(_) => {}
+        }
+    }
+    false
+}
+
+fn is_rewrite_candidate_eq(func_ctx: &FunctionContext, call: &FunctionCall<String>) -> bool {
+    match call.args.as_slice() {
+        [Expr::Cast(cast), Expr::Constant(_)] | [Expr::Constant(_), Expr::Cast(cast)] => {
+            // Both `check_no_throw` and `try_rewrite` bail out on try-casts
+            // before consulting domains.
+            !cast.is_try
+        }
+        [Expr::ColumnRef(column), expr] | [expr, Expr::ColumnRef(column)] => {
+            match constant_from_expr(func_ctx, expr) {
+                Some(constant) => cast_integer_string_constant(
+                    func_ctx,
+                    &column.data_type,
+                    &constant.data_type,
+                    &constant.scalar,
+                )
+                .is_some(),
+                None => false,
+            }
+        }
+        _ => false,
+    }
+}
+
 fn cast_integer_string_constant(
     func_ctx: &FunctionContext,
     column_type: &DataType,
@@ -270,10 +413,12 @@ fn string_scalar_parses_as_integer_type(scalar: &Scalar, num_ty: &NumberDataType
 pub fn eliminate_cast(
     expr: &Expr<String>,
     input_domains: HashMap<String, Domain>,
+    func_ctx: &FunctionContext,
 ) -> Option<Expr<String>> {
     let mut visitor = RewriteVisitor {
         input_domains,
-        func_ctx: &FunctionContext::default(),
+        virtual_column_types: None,
+        func_ctx,
         fn_registry: &BUILTIN_FUNCTIONS,
     };
 

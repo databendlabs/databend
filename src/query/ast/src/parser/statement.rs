@@ -1897,53 +1897,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_index = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ ASYNC?
-            ~ AGGREGATING ~ INDEX
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident
-            ~ AS ~ #query
-        },
-        |(_, opt_or_replace, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateIndex(CreateIndexStmt {
-                index_type: TableIndexType::Aggregating,
-                create_option,
-                index_name,
-                query: Box::new(query),
-                sync_creation: opt_async.is_none(),
-            }))
-        },
-    );
-
-    let drop_index = map(
-        rule! {
-            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
-        },
-        |(_, _, _, opt_if_exists, index)| {
-            Statement::DropIndex(DropIndexStmt {
-                if_exists: opt_if_exists.is_some(),
-                index,
-            })
-        },
-    );
-
-    let refresh_index = map(
-        rule! {
-            REFRESH ~ AGGREGATING ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, _, index, opt_limit)| {
-            Statement::RefreshIndex(RefreshIndexStmt {
-                index,
-                limit: opt_limit.map(|(_, limit)| limit),
-            })
-        },
-    );
-
     let create_table_index = map_res(
         rule! {
             CREATE
@@ -3266,7 +3219,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         REFRESH => rule!(
             #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
             | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view>`"
-            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),
@@ -3334,7 +3286,6 @@ AS
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
                 | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] [CLUSTER BY [LINEAR] (...)] [COMMENT = '<string_literal>'] AS SELECT ...`"
-                | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
             | (
@@ -3384,7 +3335,6 @@ AS
                 | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
                 | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
                 | #drop_materialized_view : "`DROP MATERIALIZED VIEW [IF EXISTS] [<database>.]<view>`"
-                | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
                 | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             )
             | (

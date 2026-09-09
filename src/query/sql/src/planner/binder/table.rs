@@ -45,7 +45,6 @@ use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::TableField;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
@@ -55,10 +54,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::IndexMeta;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
@@ -66,7 +62,6 @@ use databend_common_users::security_policy_cache::PolicyType;
 use databend_common_users::security_policy_cache::RawPolicyDef;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
-use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 
@@ -164,7 +159,6 @@ impl Binder {
             None,
             table_alias_name,
             false,
-            false,
             true,
             None,
         );
@@ -206,7 +200,6 @@ impl Binder {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            planning_agg_index: false,
             planning_materialized_view_rewrite: false,
             window_definitions: DashMap::new(),
         };
@@ -787,7 +780,7 @@ impl Binder {
 
                 let v: i64 = check_number(
                     None,
-                    &FunctionContext::default(),
+                    &self.ctx.get_function_context()?,
                     new_expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
@@ -833,27 +826,5 @@ impl Binder {
             let info = stream.get_table_info().clone();
             Ok(NavigationPoint::StreamInfo(info))
         })
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn resolve_table_indexes(
-        &self,
-        tenant: &Tenant,
-        catalog_name: &str,
-        table_id: MetaId,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self
-            .catalogs
-            .get_catalog(
-                tenant.tenant_name(),
-                catalog_name,
-                self.ctx.session_state()?,
-            )
-            .await?;
-        let index_metas = catalog
-            .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
-            .await?;
-
-        Ok(index_metas)
     }
 }

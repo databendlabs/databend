@@ -20,6 +20,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
@@ -36,16 +37,20 @@ fn is_precise_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInf
     matches!(stat_info.statistics.precise_cardinality, Some(1))
 }
 
-fn single_join_scalar_side_is_precise_single_row(join: &Join, s_expr: &SExpr) -> Result<bool> {
+fn single_join_scalar_side_is_precise_single_row(
+    join: &Join,
+    s_expr: &SExpr,
+    stat_context: &StatContext,
+) -> Result<bool> {
     match join.single_to_inner {
         Some(JoinType::LeftSingle) => {
             let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
-            let right_stat_info = right_rel_expr.derive_cardinality()?;
+            let right_stat_info = right_rel_expr.derive_cardinality(stat_context)?;
             Ok(is_precise_single_row(&right_stat_info))
         }
         Some(JoinType::RightSingle) => {
             let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
-            let left_stat_info = left_rel_expr.derive_cardinality()?;
+            let left_stat_info = left_rel_expr.derive_cardinality(stat_context)?;
             Ok(is_precise_single_row(&left_stat_info))
         }
         _ => Ok(false),
@@ -79,7 +84,11 @@ fn asof_hash_join_type(join_type: JoinType) -> JoinType {
 }
 
 // Choose physical join type by join conditions
-fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
+fn physical_join(
+    join: &Join,
+    s_expr: &SExpr,
+    stat_context: &StatContext,
+) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
         return Err(ErrorCode::SemanticError(
             "ANY JOIN only supports equality-based hash joins",
@@ -88,8 +97,8 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
-    let left_stat_info = left_rel_expr.derive_cardinality()?;
-    let right_stat_info = right_rel_expr.derive_cardinality()?;
+    let left_stat_info = left_rel_expr.derive_cardinality(stat_context)?;
+    let right_stat_info = right_rel_expr.derive_cardinality(stat_context)?;
 
     if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
@@ -234,7 +243,8 @@ impl PhysicalPlanBuilder {
             )
             .await
         } else {
-            match physical_join(join, s_expr)? {
+            let stat_context = StatContext::new(self.func_ctx.clone());
+            match physical_join(join, s_expr, &stat_context)? {
                 PhysicalJoinType::Hash => {
                     // When a LeftSingle/RightSingle join (scalar subquery) has no
                     // equi-conditions, the hash join executes as a cross join + filter.
@@ -245,8 +255,11 @@ impl PhysicalPlanBuilder {
                     // does not prove that.
                     let join = if join.equi_conditions.is_empty()
                         && join.single_to_inner.is_some()
-                        && single_join_scalar_side_is_precise_single_row(join, s_expr)?
-                    {
+                        && single_join_scalar_side_is_precise_single_row(
+                            join,
+                            s_expr,
+                            &stat_context,
+                        )? {
                         let mut j = join.clone();
                         j.single_to_inner = None;
                         j

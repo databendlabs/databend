@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
@@ -32,7 +31,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_sql::ClusterKeys;
+use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -45,6 +44,7 @@ use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
@@ -60,6 +60,8 @@ use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
+use crate::io::VirtualColumnLayoutPlanner;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
@@ -84,7 +86,10 @@ const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
 /// Blocks that reach this level have already been rewritten many times, so
 /// keep them out of future recluster tasks to avoid unbounded level growth.
 const MAX_RECLUSTER_LEVEL: i32 = 32;
-const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = 128;
+const MAX_RECLUSTER_WINDOW_SEGMENTS: usize = MAX_SEGMENT_LOCATIONS_PER_CLAIM;
+/// Hilbert MBR overlap is conservative, so execution never uses a threshold below 8.
+const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
+/// Maximum block count for applying the Linear small-table depth threshold.
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 
 /// Candidate tasks plus cached segment metadata for one scanned window.
@@ -109,6 +114,23 @@ impl ReclusterCandidateWindow {
     /// Score of one task candidate by index.
     pub fn task_score(&self, task_idx: usize) -> CandidateScore {
         self.tasks[task_idx].score
+    }
+
+    /// Unique segment paths removed when the task is materialized.
+    pub(crate) fn task_segment_locations(&self, task_idx: usize) -> HashSet<&str> {
+        let task = &self.tasks[task_idx];
+        if task.is_repack_only() {
+            self.segments
+                .iter()
+                .filter(|(_, segment_info)| segment_info.is_some())
+                .map(|(location, _)| location.0.as_str())
+                .collect()
+        } else {
+            task.selected_blocks
+                .iter()
+                .map(|(window_pos, _)| self.segments[*window_pos].0.0.as_str())
+                .collect()
+        }
     }
 }
 
@@ -149,6 +171,7 @@ pub struct ReclusterMutator {
     pub(crate) max_tasks: usize,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
+    virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
 /// Caps the selected block bytes of one recluster task.
@@ -201,18 +224,28 @@ impl ReclusterMutator {
             .expect("recluster requires cluster key metadata");
         let block_thresholds = table.get_block_thresholds();
 
-        let depth_threshold = table
+        let configured_depth = table
             .get_table_info()
             .options()
             .get(FUSE_OPT_KEY_RECLUSTER_DEPTH)
-            .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or({
-                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT {
-                    MIN_RECLUSTER_DEPTH
-                } else {
-                    DEFAULT_RECLUSTER_DEPTH
-                }
-            }) as f64;
+            .map(|value| {
+                value.parse::<u64>().map_err(|error| {
+                    ErrorCode::InvalidArgument(format!(
+                        "invalid {FUSE_OPT_KEY_RECLUSTER_DEPTH} value {value}: {error}"
+                    ))
+                })
+            })
+            .transpose()?;
+        let depth_threshold = match (configured_depth, cluster_key_info.cluster_type) {
+            (Some(depth), ClusterType::Hilbert) => depth.max(MIN_HILBERT_RECLUSTER_DEPTH),
+            (Some(depth), ClusterType::Linear) => depth,
+            (None, ClusterType::Linear)
+                if snapshot.summary.block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT =>
+            {
+                MIN_RECLUSTER_DEPTH
+            }
+            _ => DEFAULT_RECLUSTER_DEPTH,
+        } as f64;
 
         let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
@@ -226,19 +259,12 @@ impl ReclusterMutator {
                 "recluster requires cluster key expressions",
             ));
         };
-        let cluster_key_exprs =
-            match parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)? {
-                ClusterKeys::Linear(keys) | ClusterKeys::Vector { keys, .. } => keys,
-                ClusterKeys::Hilbert(_) => {
-                    return Err(ErrorCode::Unimplemented(
-                        "Hilbert reclustering is not supported yet",
-                    ));
-                }
-            };
+        let parsed_cluster_keys =
+            parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)?;
         let (properties, strategy) = ReclusterProperties::try_create(
             table,
             &schema,
-            cluster_key_exprs,
+            parsed_cluster_keys,
             mode,
             depth_threshold,
             block_thresholds,
@@ -253,6 +279,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
     }
 
@@ -294,6 +321,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: Default::default(),
         }
     }
 
@@ -378,7 +406,8 @@ impl ReclusterMutator {
                         average_depth: 0.0,
                     },
                     selected_blocks: Vec::new(),
-                    output_level: 0,
+                    base_level: 0,
+                    input_level_stats: Vec::new(),
                     all_ordered: false,
                 });
             } else {
@@ -465,7 +494,7 @@ impl ReclusterMutator {
                     && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
                 if defer {
                     debug!(
-                        "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
+                        "recluster: defer candidate group={} block_size={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
                         group,
                         candidate.score.selected_total_bytes,
                         candidate.score.max_depth,
@@ -560,14 +589,28 @@ impl ReclusterMutator {
                     None,
                     None,
                 );
+                let mut planner =
+                    VirtualColumnLayoutPlanner::create(self.virtual_column_layout_policy);
+                for (window_pos, block_indices) in &candidate.selected_blocks {
+                    let segment_info = window.segments[*window_pos].1.as_ref().unwrap();
+                    planner.add_blocks(
+                        segment_info.summary.virtual_segment_schema.as_ref(),
+                        block_indices
+                            .iter()
+                            .map(|block_idx| segment_info.blocks[*block_idx].as_ref()),
+                    );
+                }
+                let virtual_column_layout = planner.build();
                 tasks.push(ReclusterTask {
                     parts,
                     stats,
                     total_rows,
                     total_bytes,
                     total_compressed,
-                    level: candidate.output_level,
+                    level: candidate.base_level,
+                    input_level_stats: candidate.input_level_stats.clone(),
                     all_ordered: candidate.all_ordered,
+                    virtual_column_layout,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -637,6 +680,8 @@ impl ReclusterMutator {
         }))
     }
 
+    // Capture group selection time in tracing without duplicating strategy summaries.
+    #[fastrace::trace]
     fn build_recluster_task_candidates_for_indices(
         &self,
         group: ReclusterGroup,
@@ -645,7 +690,6 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
-        let group_start = Instant::now();
         let block_count = indices.len();
         if block_count < 2 {
             return Ok(Vec::new());
@@ -685,23 +729,8 @@ impl ReclusterMutator {
             return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }
 
-        let candidates = self.strategy.fetch_task_candidates(
-            &self.properties,
-            group,
-            &indices,
-            blocks,
-            task_budget,
-        )?;
-
-        debug!(
-            "recluster: candidate selection group={} block_count={} task_count={} elapsed={:?}",
-            group,
-            block_count,
-            candidates.len(),
-            group_start.elapsed(),
-        );
-
-        Ok(candidates)
+        self.strategy
+            .fetch_task_candidates(&self.properties, group, &indices, blocks, task_budget)
     }
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.

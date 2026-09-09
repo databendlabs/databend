@@ -15,19 +15,18 @@
 use std::cmp::Ordering;
 use std::result::Result;
 
-use jiff::Unit;
-use jiff::civil::Date;
+use chrono::NaiveDate;
 
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalSize;
 
 pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
 
+/// Day offset of `date` from 1970-01-01.
 #[inline]
-pub fn uniform_date(date: Date) -> i32 {
-    date.since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-        .unwrap()
-        .get_days()
+pub fn uniform_date(date: NaiveDate) -> i32 {
+    date.signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).expect("epoch date is valid"))
+        .num_days() as i32
 }
 
 // Used in function, so we don't want to return ErrorCode with backtrace

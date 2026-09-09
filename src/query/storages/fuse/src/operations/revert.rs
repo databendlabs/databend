@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::NavigationPoint;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,7 +24,6 @@ use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::binder::validate_constraints_by_schema;
-use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_meta_client::types::MatchSeq;
 
 use crate::FuseTable;
@@ -136,25 +134,6 @@ impl FuseTable {
         let target_schema = target_meta.schema.as_ref();
         let target_column_ids: HashSet<ColumnId> =
             target_schema.to_column_ids().into_iter().collect();
-        let dropped_column_ids: HashSet<ColumnId> = self
-            .table_info
-            .meta
-            .schema
-            .to_column_ids()
-            .into_iter()
-            .filter(|id| !target_column_ids.contains(id))
-            .collect();
-        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
-        let tenant = ctx.get_tenant();
-
-        validate_table_indexes_not_referencing_columns(
-            ctx.clone(),
-            catalog.as_ref(),
-            &tenant,
-            self.get_id(),
-            &dropped_column_ids,
-        )
-        .await?;
 
         validate_constraints_by_schema(
             ctx.clone(),

@@ -1078,7 +1078,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:CAST(t3.a (#1) AS Decimal(38, 5) NULL), probe targets:[CAST(t1.a (#0) AS Decimal(38, 5) NULL)@scan0], filter type:inlist
-├── estimated rows: 12.00
+├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t3
 │   ├── scan id: 1

@@ -20,6 +20,7 @@ mod limiter_pruner;
 pub mod partition_prunner;
 mod range_pruner;
 mod topn_pruner;
+mod virtual_segment_schema;
 
 pub use block_meta::BlockMetaIndex;
 pub use block_meta::VirtualBlockMetaIndex;
@@ -33,3 +34,6 @@ pub use range_pruner::RangeIndexInput;
 pub use range_pruner::RangePruner;
 pub use range_pruner::RangePrunerCreator;
 pub use topn_pruner::TopNPruner;
+pub use virtual_segment_schema::ProjectedVirtualPath;
+pub use virtual_segment_schema::ProjectedVirtualSegmentField;
+pub use virtual_segment_schema::ProjectedVirtualSegmentSchema;

@@ -560,26 +560,6 @@ impl WalkMut for CreateDynamicTableStmt {
     }
 }
 
-impl Walk for RefreshIndexStmt {
-    fn walk<V: Visitor + ?Sized>(
-        &self,
-        visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.index.walk(visitor));
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl WalkMut for RefreshIndexStmt {
-    fn walk_mut<V: VisitorMut + ?Sized>(
-        &mut self,
-        visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.index.walk_mut(visitor));
-        Ok(VisitControl::Continue)
-    }
-}
-
 impl Walk for RefreshTableIndexStmt {
     fn walk<V: Visitor + ?Sized>(
         &self,

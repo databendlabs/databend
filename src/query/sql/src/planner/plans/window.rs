@@ -47,6 +47,7 @@ use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::cap_stat_info_by_rows;
 use crate::plans::EvalScalar;
@@ -190,7 +191,11 @@ impl Window {
         Ok(col_set)
     }
 
-    fn derive_output_stat(&self, stat_info: &StatInfo) -> Result<Option<ColumnStat>> {
+    fn derive_output_stat(
+        &self,
+        stat_info: &StatInfo,
+        func_ctx: &FunctionContext,
+    ) -> Result<Option<ColumnStat>> {
         if stat_info.cardinality == 0.0 {
             return Ok(None);
         }
@@ -201,7 +206,9 @@ impl Window {
                 Ok(Some(self.derive_rank_stat(stat_info)))
             }
             WindowFuncType::Ntile(ntile) => Ok(Some(self.derive_ntile_stat(stat_info, ntile.n))),
-            WindowFuncType::LagLead(lag_lead) => self.derive_lag_lead_stat(stat_info, lag_lead),
+            WindowFuncType::LagLead(lag_lead) => {
+                self.derive_lag_lead_stat(stat_info, lag_lead, func_ctx)
+            }
             _ => Ok(None),
         }
     }
@@ -247,10 +254,11 @@ impl Window {
         &self,
         stat_info: &StatInfo,
         lag_lead: &LagLeadFunction,
+        func_ctx: &FunctionContext,
     ) -> Result<Option<ColumnStat>> {
         let cardinality = stat_cardinality(stat_info);
         let Some(mut output) =
-            self.derive_scalar_stat(lag_lead.arg.as_ref(), stat_info, cardinality)?
+            self.derive_scalar_stat(lag_lead.arg.as_ref(), stat_info, func_ctx, cardinality)?
         else {
             return Ok(None);
         };
@@ -267,7 +275,7 @@ impl Window {
         let expected_nulls_from_argument = argument_null_rate * source_rows;
 
         let (expected_null_count, default_may_be_null) = if let Some(default) = &lag_lead.default {
-            match self.derive_default_stat(default.as_ref(), stat_info, cardinality)? {
+            match self.derive_default_stat(default.as_ref(), stat_info, func_ctx, cardinality)? {
                 Some(FoldedConstantStat::Value(default_stat)) => {
                     let default_may_be_null = default_stat.null_count().upper() > 0.0;
                     let default_null_rate =
@@ -305,22 +313,23 @@ impl Window {
         &self,
         scalar: &ScalarExpr,
         stat_info: &StatInfo,
+        func_ctx: &FunctionContext,
         cardinality: StatCardinality,
     ) -> Result<Option<ColumnStat>> {
         if let Some(stat) =
-            EvalScalar::derive_item_stat(scalar, &stat_info.statistics, cardinality)?
+            EvalScalar::derive_item_stat(scalar, &stat_info.statistics, func_ctx, cardinality)?
         {
             return Ok(Some(stat));
         }
 
         let source = self.scalar_source(scalar);
         if let Some(stat) =
-            EvalScalar::derive_item_stat(source, &stat_info.statistics, cardinality)?
+            EvalScalar::derive_item_stat(source, &stat_info.statistics, func_ctx, cardinality)?
         {
             return Ok(Some(stat));
         }
 
-        Ok(match fold_constant_stat(source)? {
+        Ok(match fold_constant_stat(source, func_ctx)? {
             Some(FoldedConstantStat::Value(stat)) => Some(stat),
             Some(FoldedConstantStat::Null) | None => None,
         })
@@ -330,22 +339,23 @@ impl Window {
         &self,
         scalar: &ScalarExpr,
         stat_info: &StatInfo,
+        func_ctx: &FunctionContext,
         cardinality: StatCardinality,
     ) -> Result<Option<FoldedConstantStat>> {
         if let Some(stat) =
-            EvalScalar::derive_item_stat(scalar, &stat_info.statistics, cardinality)?
+            EvalScalar::derive_item_stat(scalar, &stat_info.statistics, func_ctx, cardinality)?
         {
             return Ok(Some(FoldedConstantStat::Value(stat)));
         }
 
         let source = self.scalar_source(scalar);
         if let Some(stat) =
-            EvalScalar::derive_item_stat(source, &stat_info.statistics, cardinality)?
+            EvalScalar::derive_item_stat(source, &stat_info.statistics, func_ctx, cardinality)?
         {
             return Ok(Some(FoldedConstantStat::Value(stat)));
         }
 
-        fold_constant_stat(source)
+        fold_constant_stat(source, func_ctx)
     }
 
     fn scalar_source<'a>(&'a self, scalar: &'a ScalarExpr) -> &'a ScalarExpr {
@@ -400,13 +410,12 @@ enum FoldedConstantStat {
     Value(ColumnStat),
 }
 
-fn fold_constant_stat(expr: &ScalarExpr) -> Result<Option<FoldedConstantStat>> {
+fn fold_constant_stat(
+    expr: &ScalarExpr,
+    func_ctx: &FunctionContext,
+) -> Result<Option<FoldedConstantStat>> {
     let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(
-        Cow::Owned(expr),
-        &FunctionContext::default(),
-        &BUILTIN_FUNCTIONS,
-    );
+    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
     let Ok(constant) = expr.into_owned().into_constant() else {
         return Ok(None);
     };
@@ -546,19 +555,22 @@ impl Operator for WindowGroup {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let input = rel_expr.derive_cardinality_child(0)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         let mut stat_info = input.as_ref().clone();
         let cardinality = stat_cardinality(&stat_info);
         for item in &self.scalar_items {
-            if let Some(stat) =
-                EvalScalar::derive_item_stat(&item.scalar, &stat_info.statistics, cardinality)?
-            {
+            if let Some(stat) = EvalScalar::derive_item_stat(
+                &item.scalar,
+                &stat_info.statistics,
+                &stat_ctx.function_context,
+                cardinality,
+            )? {
                 stat_info.statistics.column_stats.insert(item.index, stat);
             }
         }
         for window in &self.windows {
-            if let Some(stat) = window.derive_output_stat(&stat_info)? {
+            if let Some(stat) = window.derive_output_stat(&stat_info, &stat_ctx.function_context)? {
                 stat_info.statistics.column_stats.insert(window.index, stat);
             }
         }
@@ -646,10 +658,10 @@ impl Operator for Window {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let input = rel_expr.derive_cardinality_child(0)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         let mut stat_info = input.as_ref().clone();
-        if let Some(stat) = self.derive_output_stat(&stat_info)? {
+        if let Some(stat) = self.derive_output_stat(&stat_info, &stat_ctx.function_context)? {
             stat_info.statistics.column_stats.insert(self.index, stat);
         }
         if let Some(limit) = self.limit {

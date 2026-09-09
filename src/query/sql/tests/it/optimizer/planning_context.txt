@@ -110,3 +110,48 @@ EvalScalar
         └── limit: NONE
 
 
+=== erroring_outer_join_predicate_does_not_panic ===
+description: An expression error encountered while checking an outer-join predicate must not panic the optimizer.
+sql: SELECT b.c0boolean
+FROM planning_boolean_rows AS a
+LEFT JOIN planning_boolean_rows AS b ON a.c0boolean = b.c0boolean
+WHERE LPAD(CASE WHEN b.c0boolean THEN '' ELSE '0.6' END, 1426755006, '') IS NULL
+raw_plan:
+EvalScalar
+├── scalars: [planning_boolean_rows.c0boolean (#1) AS (#1)]
+└── Filter
+    ├── filters: [not(is_not_null(lpad(if(planning_boolean_rows.c0boolean (#1), '', '0.6'), 1426755006, '')))]
+    └── Join(Left)
+        ├── build keys: [planning_boolean_rows.c0boolean (#1)]
+        ├── probe keys: [planning_boolean_rows.c0boolean (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.planning_boolean_rows (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.planning_boolean_rows (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Filter
+├── filters: [not(is_not_null(lpad(if(planning_boolean_rows.c0boolean (#1), '', '0.6'), 1426755006, '')))]
+└── Join(Left)
+    ├── build keys: [planning_boolean_rows.c0boolean (#1)]
+    ├── probe keys: [planning_boolean_rows.c0boolean (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.planning_boolean_rows (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.planning_boolean_rows (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+

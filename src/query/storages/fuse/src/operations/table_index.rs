@@ -285,6 +285,7 @@ pub async fn do_refresh_table_index(
             Some(prev_snapshot_id),
             None,
             table_meta_timestamps,
+            false,
         )
     })?;
 
@@ -317,6 +318,7 @@ fn build_refresh_index_arg(
                         arg.column_id(),
                         arg.gram_size(),
                         arg.bloom_size(),
+                        arg.hash_algorithm(),
                     )
                 })
                 .collect::<Vec<_>>();
