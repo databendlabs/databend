@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::types::DataType;
-use databend_common_expression::aggregate::aggregate_function::AggregateFunctionRef;
 use databend_common_sql::plans::UDFScriptCode;
 
 pub fn create_udaf_script_function(
@@ -28,7 +26,7 @@ pub fn create_udaf_script_function(
     _state_fields: Vec<DataField>,
     _arguments: Vec<DataField>,
     _output_type: DataType,
-) -> Result<AggregateFunctionRef> {
+) -> Result<AggregateCallRef> {
     Err(ErrorCode::Unimplemented(
         "Script UDF runtime is disabled, rebuild with cargo feature 'script-udf'",
     ))
