@@ -13,10 +13,10 @@ set enable_compact_after_write = 0;
 statement ok
 insert into t values(1),(2)
 
-statement error 1065
+statement error 1058
 select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 
-statement error 1065
+statement error 1058
 select change$row_id from t
 
 statement ok
@@ -122,7 +122,7 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 5 0 0 0
 6 0 0 0
 
-statement error 1065
+statement error 1058
 select change$is_update from t
 
 statement ok
