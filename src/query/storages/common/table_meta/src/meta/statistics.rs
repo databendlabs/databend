@@ -740,10 +740,171 @@ pub fn merge_column_count_min_sketch_mut(lhs: &mut BlockCountMinSketch, rhs: Blo
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use databend_common_expression::types::NumberScalar;
 
     use super::*;
+    use crate::meta::BlockMeta;
     use crate::meta::ClusterStatistics;
+    use crate::meta::SegmentInfo;
+    use crate::meta::Statistics;
+    use crate::meta::format::MetaCompression;
+    use crate::meta::v3::frozen;
+    use crate::meta::v4::RawBlockMeta;
+
+    // Use the actual frozen type so the bincode fixture has its historical positional layout.
+    fn cluster_stats_test_blocks() -> Vec<frozen::BlockMeta> {
+        [
+            (uint_scalar(1), uint_scalar(3), 0),
+            (uint_scalar(2), uint_scalar(2), -1),
+            (Scalar::Null, Scalar::Null, -1),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, (min, max, level))| frozen::BlockMeta {
+            row_count: 10,
+            block_size: 80,
+            file_size: 40,
+            col_stats: HashMap::from([(0, frozen::ColumnStatistics {
+                min: min.clone().into(),
+                max: max.clone().into(),
+                null_count: if min == Scalar::Null { 10 } else { 0 },
+                in_memory_size: 80,
+                distinct_of_values: Some(1),
+            })]),
+            col_metas: HashMap::from([(
+                0,
+                frozen::ColumnMeta::Parquet(frozen::ParquetColumnMeta {
+                    offset: 0,
+                    len: 40,
+                    num_values: 10,
+                }),
+            )]),
+            cluster_stats: Some(frozen::ClusterStatistics {
+                cluster_key_id: 7,
+                min: vec![min.into()],
+                max: vec![max.into()],
+                level,
+                pages: None,
+            }),
+            location: (format!("block-{i}.parquet"), 0),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            compression: frozen::Compression::Lz4Raw,
+        })
+        .collect()
+    }
+
+    fn encode_cluster_stats_segment(
+        blocks: &[impl Serialize],
+        summary: Option<ClusterStatistics>,
+        encoding: MetaEncoding,
+        compression: MetaCompression,
+    ) -> Result<CompactSegmentInfo> {
+        use crate::meta::Versioned;
+
+        Ok(CompactSegmentInfo {
+            format_version: SegmentInfo::VERSION,
+            summary: Statistics {
+                block_count: blocks.len() as u64,
+                cluster_stats: summary,
+                ..Default::default()
+            },
+            raw_block_metas: RawBlockMeta {
+                bytes: compress(&compression, encode(&encoding, &blocks)?)?,
+                encoding,
+                compression,
+            },
+        })
+    }
+
+    #[test]
+    fn read_cluster_stats_named_encoding_matches_full_decode() -> Result<()> {
+        let blocks = cluster_stats_test_blocks()
+            .into_iter()
+            .map(|block| Arc::new(BlockMeta::from(block)))
+            .collect::<Vec<_>>();
+        let expected = blocks
+            .iter()
+            .map(|block| block.cluster_stats.clone().unwrap())
+            .collect::<Vec<_>>();
+        for encoding in [MetaEncoding::MessagePack, MetaEncoding::Json] {
+            for compression in [MetaCompression::None, MetaCompression::Zstd] {
+                let compact = encode_cluster_stats_segment(
+                    &blocks,
+                    Some(expected[0].clone()),
+                    encoding.clone(),
+                    compression,
+                )?;
+                let actual = read_cluster_stats(&compact, 7)?.expect("reusable block statistics");
+                // Exact equality covers endpoint order, NULLs, constant ranges and levels.
+                assert_eq!(actual, expected);
+                assert_eq!(compact.block_metas()?, blocks);
+                assert_eq!(
+                    actual
+                        .iter()
+                        .filter(|stats| stats.min() == stats.max())
+                        .count(),
+                    2
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn read_cluster_stats_fallback_preserves_full_metadata() -> Result<()> {
+        let legacy_blocks = cluster_stats_test_blocks();
+        // Encode real frozen bincode blocks, rather than changing a named encoding's tag.
+        let legacy = encode_cluster_stats_segment(
+            &legacy_blocks,
+            Some(ClusterStatistics::new(
+                7,
+                vec![uint_scalar(1)],
+                vec![Scalar::Null],
+                0,
+            )),
+            MetaEncoding::Bincode,
+            MetaCompression::Zstd,
+        )?;
+        let blocks = legacy_blocks
+            .into_iter()
+            .map(|block| Arc::new(BlockMeta::from(block)))
+            .collect::<Vec<_>>();
+        assert!(read_cluster_stats(&legacy, 7)?.is_none());
+        assert_eq!(legacy.block_metas()?, blocks);
+
+        let current = blocks[0].cluster_stats.clone();
+        let mut stale = current.clone();
+        stale.as_mut().unwrap().cluster_key_id = 6;
+        for encoding in [MetaEncoding::MessagePack, MetaEncoding::Json] {
+            // Matching summary must not hide missing or stale statistics in an individual block.
+            for (case, summary, block_stats, requested_key) in [
+                ("summary missing", None, current.clone(), 7),
+                ("summary stale", stale.clone(), current.clone(), 7),
+                ("block missing", current.clone(), None, 7),
+                ("block stale", current.clone(), stale.clone(), 7),
+                ("different key", current.clone(), current.clone(), 8),
+            ] {
+                let mut source = blocks.clone();
+                Arc::make_mut(&mut source[0]).cluster_stats = block_stats;
+                let compact = encode_cluster_stats_segment(
+                    &source,
+                    summary,
+                    encoding.clone(),
+                    MetaCompression::Zstd,
+                )?;
+                assert!(
+                    read_cluster_stats(&compact, requested_key)?.is_none(),
+                    "{encoding:?}: {case}"
+                );
+                // Fallback preserves the column statistics required for range inference.
+                assert_eq!(compact.block_metas()?, source, "{encoding:?}: {case}");
+            }
+        }
+        Ok(())
+    }
 
     fn uint_scalar(value: u64) -> Scalar {
         Scalar::Number(NumberScalar::UInt64(value))
