@@ -44,7 +44,6 @@ match-template = { workspace = true }
 md-5 = { workspace = true }
 naive-cityhash = { workspace = true }
 num-traits = { workspace = true }
-proptest = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
@@ -67,6 +66,7 @@ databend-common-ast = { workspace = true }
 databend-common-expression-test-support = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
+proptest = { workspace = true }
 
 [[bench]]
 name = "bench"
