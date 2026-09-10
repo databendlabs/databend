@@ -467,7 +467,7 @@ mod tests {
             },
             FunctionInputLayout::Identity,
             AggregateFeatures {
-                is_decomposable: false,
+                eager_aggregation: EagerAggregation::Unsupported,
                 supports_filter: false,
                 sort_policy: SortPolicy::Required,
                 distinct_policy: DistinctPolicy::Unsupported,

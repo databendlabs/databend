@@ -211,7 +211,7 @@ impl GeographicBuilder {
 
     const ST_COLLECT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -223,7 +223,7 @@ impl GeographicBuilder {
 
     const ST_UNION_AGG_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -235,7 +235,7 @@ impl GeographicBuilder {
 
     const ST_INTERSECTION_AGG_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -247,7 +247,7 @@ impl GeographicBuilder {
 
     const ST_ENVELOPE_AGG_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

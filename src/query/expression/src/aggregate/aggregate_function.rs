@@ -369,9 +369,25 @@ pub enum DistinctPolicy {
     },
 }
 
+/// How the eager aggregation optimizer combines finalized results below a join.
+/// This is not the ability to merge intermediate aggregate states.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EagerAggregation {
+    #[default]
+    Unsupported,
+    /// Sum local sums, compensating for join multiplicity.
+    Sum,
+    /// Sum local counts, compensating for join multiplicity and returning zero
+    /// for empty input.
+    Count,
+    /// Apply the same minimum/maximum aggregate to local extrema. Repeating a
+    /// value does not affect the result, so no multiplicity compensation is needed.
+    MinMax,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AggregateFeatures {
-    pub is_decomposable: bool,
+    pub eager_aggregation: EagerAggregation,
     pub supports_filter: bool,
     /// Whether this name supports a corresponding `<name>_state` call.
     pub supports_state: bool,

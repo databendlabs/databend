@@ -61,7 +61,7 @@ impl UniqBuilder {
 
     const UNIQ_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

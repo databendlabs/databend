@@ -98,7 +98,7 @@ impl QuantileTDigestWeightedBuilder {
 
     const QUANTILE_TDIGEST_WEIGHTED_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -110,7 +110,7 @@ impl QuantileTDigestWeightedBuilder {
 
     const MEDIAN_TDIGEST_WEIGHTED_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

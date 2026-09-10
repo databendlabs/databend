@@ -97,7 +97,7 @@ impl BitmapBuilder {
 
     const BITMAP_CONSTRUCT_AGG_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -109,7 +109,7 @@ impl BitmapBuilder {
 
     const BITMAP_AND_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -121,7 +121,7 @@ impl BitmapBuilder {
 
     const BITMAP_NOT_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -133,7 +133,7 @@ impl BitmapBuilder {
 
     const BITMAP_OR_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -145,7 +145,7 @@ impl BitmapBuilder {
 
     const BITMAP_XOR_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -157,7 +157,7 @@ impl BitmapBuilder {
 
     const BITMAP_UNION_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -169,7 +169,7 @@ impl BitmapBuilder {
 
     const BITMAP_INTERSECT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -181,7 +181,7 @@ impl BitmapBuilder {
 
     const BITMAP_XOR_AGG_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -193,7 +193,7 @@ impl BitmapBuilder {
 
     const INTERSECT_COUNT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

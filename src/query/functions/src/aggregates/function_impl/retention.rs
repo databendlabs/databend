@@ -88,7 +88,7 @@ impl RetentionBuilder {
 
     const RETENTION_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -100,7 +100,7 @@ impl RetentionBuilder {
 
     const RETENTION_STATE_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

@@ -65,7 +65,7 @@ impl StringAggBuilder {
 
     const STRING_AGG_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Optional,
         documentation: AggregateDocumentation {
             category: "Aggregate",

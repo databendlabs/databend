@@ -184,7 +184,7 @@ impl SumBuilder {
 
     const SUM_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Sum,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -196,7 +196,7 @@ impl SumBuilder {
 
     const SUM_DISTINCT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -208,7 +208,7 @@ impl SumBuilder {
 
     const SUM_ZERO_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -220,7 +220,7 @@ impl SumBuilder {
 
     const SUM_IF_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -232,7 +232,7 @@ impl SumBuilder {
 
     const STATE_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

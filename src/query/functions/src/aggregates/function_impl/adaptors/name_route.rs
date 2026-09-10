@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::types::DataType;
 
 use super::AggregateCallRef;
@@ -287,6 +288,13 @@ impl MergeRoute {
 }
 
 impl RouteNode for MergeRoute {
+    fn metadata(&self, base: &AggregateMetadata) -> AggregateMetadata {
+        AggregateMetadata {
+            eager_aggregation: EagerAggregation::Unsupported,
+            ..*base
+        }
+    }
+
     fn suffix(&self) -> Option<&'static str> {
         Some(if self.returns_state {
             "merge_state"
@@ -447,7 +455,10 @@ impl RouteNode for IfRoute {
     }
 
     fn metadata(&self, base: &AggregateMetadata) -> AggregateMetadata {
-        self.metadata.unwrap_or(*base)
+        AggregateMetadata {
+            eager_aggregation: EagerAggregation::Unsupported,
+            ..self.metadata.unwrap_or(*base)
+        }
     }
 
     fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
@@ -489,7 +500,7 @@ impl RouteNode for IfRoute {
                 .map(DataType::remove_nullable)
                 .collect()
         };
-        let metadata = self.metadata.unwrap_or(*context.metadata);
+        let metadata = self.metadata(context.metadata);
         let request = context.request.clone();
         let function = self
             .build
@@ -555,7 +566,10 @@ impl RouteNode for StateRoute {
     }
 
     fn metadata(&self, base: &AggregateMetadata) -> AggregateMetadata {
-        self.metadata.unwrap_or(*base)
+        AggregateMetadata {
+            eager_aggregation: EagerAggregation::Unsupported,
+            ..self.metadata.unwrap_or(*base)
+        }
     }
 
     fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
@@ -585,7 +599,7 @@ impl RouteNode for StateRoute {
                 nullable_input_result_flag: false,
             }
         };
-        let metadata = self.metadata.unwrap_or(*context.metadata);
+        let metadata = self.metadata(context.metadata);
         let args_type = state_plan.strip_nullable_input.then(|| {
             context
                 .request
@@ -686,6 +700,13 @@ impl<const SKIP_NULLS: bool> DistinctRoute<SKIP_NULLS> {
 }
 
 impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
+    fn metadata(&self, base: &AggregateMetadata) -> AggregateMetadata {
+        AggregateMetadata {
+            eager_aggregation: EagerAggregation::Unsupported,
+            ..*base
+        }
+    }
+
     fn suffix(&self) -> Option<&'static str> {
         Some("distinct")
     }
@@ -707,7 +728,7 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
         {
             return Ok(Some(function));
         }
-        let metadata = *context.metadata;
+        let metadata = self.metadata(context.metadata);
         let args_type = context
             .request
             .args_type

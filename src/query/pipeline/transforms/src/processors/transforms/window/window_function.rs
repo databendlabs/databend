@@ -327,6 +327,7 @@ mod tests {
     use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
     use databend_common_expression::aggregate::aggregate_function::MergeStatesInput;
     use databend_common_expression::aggregate::aggregate_function::SerializeInput;
+    use databend_common_expression::aggregate_function::EagerAggregation;
     use databend_common_expression::aggregate_function::FunctionInputLayout;
 
     use super::*;
@@ -367,7 +368,7 @@ mod tests {
 
         fn features(&self) -> &AggregateFeatures {
             static FEATURES: AggregateFeatures = AggregateFeatures {
-                is_decomposable: false,
+                eager_aggregation: EagerAggregation::Unsupported,
                 supports_filter: false,
                 supports_state: false,
                 sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,

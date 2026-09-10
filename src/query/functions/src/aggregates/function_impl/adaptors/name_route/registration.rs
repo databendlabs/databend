@@ -298,7 +298,7 @@ mod tests {
         let base_arguments = ArgumentsPattern::fixed(vec![]);
         let if_arguments = ArgumentsPattern::if_condition(base_arguments.clone());
         let base_metadata = AggregateMetadata {
-            is_decomposable: true,
+            eager_aggregation: EagerAggregation::Sum,
             ..Default::default()
         };
 
@@ -324,13 +324,19 @@ mod tests {
         assert_eq!(descriptors[0].name, "test");
         assert_eq!(descriptors[0].aliases, ["test_alias"]);
         assert_eq!(descriptors[0].arguments(), &base_arguments);
-        assert!(descriptors[0].features().is_decomposable);
+        assert_eq!(
+            descriptors[0].features().eager_aggregation,
+            EagerAggregation::Sum
+        );
         assert!(descriptors[0].features().supports_filter);
         assert!(!descriptors[0].features().supports_state);
         assert_eq!(descriptors[1].name, "test_if");
         assert_eq!(descriptors[1].aliases, ["test_alias_if"]);
         assert_eq!(descriptors[1].arguments(), &if_arguments);
-        assert!(descriptors[1].features().is_decomposable);
+        assert_eq!(
+            descriptors[1].features().eager_aggregation,
+            EagerAggregation::Sum
+        );
         assert!(!descriptors[1].features().supports_filter);
     }
 
@@ -434,7 +440,7 @@ mod tests {
     #[test]
     fn test_descriptor_override_does_not_reconfigure_internal_route() -> Result<()> {
         let intrinsic = AggregateMetadata {
-            is_decomposable: true,
+            eager_aggregation: EagerAggregation::Sum,
             documentation: super::super::super::AggregateDocumentation {
                 description: "intrinsic aggregate",
                 ..Default::default()
@@ -455,7 +461,7 @@ mod tests {
         let arguments = descriptor.arguments().clone();
         let mut declared = descriptor.features().clone();
         declared.description = "external declaration";
-        declared.is_decomposable = false;
+        declared.eager_aggregation = EagerAggregation::Unsupported;
         let mut registry = AggregateRegistry::empty();
         registry.register(descriptor.with_metadata(arguments, declared.clone()));
 
@@ -471,7 +477,7 @@ mod tests {
             order_by: &[],
         })?;
         assert_eq!(call.features().description, "intrinsic aggregate");
-        assert!(call.features().is_decomposable);
+        assert_eq!(call.features().eager_aggregation, EagerAggregation::Sum);
         Ok(())
     }
 
