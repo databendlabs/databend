@@ -58,6 +58,7 @@ tempfile = { workspace = true }
 anyhow = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 jsonb = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
 
