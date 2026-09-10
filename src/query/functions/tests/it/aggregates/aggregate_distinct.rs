@@ -3,6 +3,7 @@ use std::io::Write;
 use databend_common_exception::Result;
 use databend_common_expression::FromData;
 use databend_common_expression::aggregate_function::DistinctPolicy;
+use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -155,5 +156,52 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         order_by: &[],
     })?;
     assert_eq!(count_multiple_args.signature().name, "count_distinct");
+    Ok(())
+}
+
+#[test]
+fn test_eager_aggregation_strategies() -> Result<()> {
+    for (name, strategy) in [
+        ("sum", EagerAggregation::Sum),
+        ("count", EagerAggregation::Count),
+        ("min", EagerAggregation::MinMax),
+        ("max", EagerAggregation::MinMax),
+        ("min_distinct", EagerAggregation::MinMax),
+        ("max_distinct", EagerAggregation::MinMax),
+        ("sum_distinct", EagerAggregation::Unsupported),
+        ("count_distinct", EagerAggregation::Unsupported),
+        ("avg_distinct", EagerAggregation::Unsupported),
+        ("uniq", EagerAggregation::Unsupported),
+        ("avg", EagerAggregation::Unsupported),
+        ("stddev_pop", EagerAggregation::Unsupported),
+        ("std", EagerAggregation::Unsupported),
+        ("sum0", EagerAggregation::Unsupported),
+        ("sum_zero", EagerAggregation::Unsupported),
+        ("sum_state", EagerAggregation::Unsupported),
+        ("count_if", EagerAggregation::Unsupported),
+    ] {
+        assert_eq!(
+            AGGR_REGISTRY
+                .descriptor(name)
+                .unwrap()
+                .features()
+                .eager_aggregation,
+            strategy,
+            "{name}"
+        );
+        let args_type = if name == "count_if" {
+            DataType::Boolean
+        } else {
+            DataType::Number(NumberDataType::UInt64)
+        };
+        let call = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name,
+            params: &[],
+            args_type: &[args_type],
+            distinct: false,
+            order_by: &[],
+        })?;
+        assert_eq!(call.features().eager_aggregation, strategy, "{name}");
+    }
     Ok(())
 }

@@ -104,7 +104,7 @@ impl MinMaxAnyBuilder {
 
     const MIN_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::MinMax,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -116,7 +116,7 @@ impl MinMaxAnyBuilder {
 
     const MAX_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::MinMax,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -128,7 +128,7 @@ impl MinMaxAnyBuilder {
 
     const ANY_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::Null,
-        is_decomposable: false,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",

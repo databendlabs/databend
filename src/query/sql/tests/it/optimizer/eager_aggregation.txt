@@ -170,3 +170,339 @@ EvalScalar
                     └── limit: NONE
 
 
+=== sum_distinct_is_not_eager ===
+description: Distinct sums cannot combine finalized local sums.
+sql: SELECT o_orderkey, sum_distinct(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), sum_distinct(l_extendedprice) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [sum_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#26)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== count_distinct_is_not_eager ===
+description: Distinct counts cannot combine finalized local counts.
+sql: SELECT o_orderkey, count_distinct(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), count_distinct(l_extendedprice) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [count_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [count_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [count_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#26)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== semantic_distinct_is_not_eager ===
+description: Semantic DISTINCT must resolve to an unsupported eager strategy.
+sql: SELECT o_orderkey, sum(DISTINCT l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), sum(DISTINCT l_extendedprice) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [sum_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum_distinct(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#26)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== stddev_is_not_eager ===
+description: Mergeable variance state does not make finalized standard deviations composable.
+sql: SELECT o_orderkey, stddev_pop(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), stddev_pop(l_extendedprice) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [stddev_pop(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [stddev_pop(lineitem.l_extendedprice (#5)) AS (#25)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [stddev_pop(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#26)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== uniq_is_not_eager ===
+description: Distinct counts with a dedicated name must not be eager.
+sql: SELECT o_orderkey, uniq(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), uniq(l_extendedprice) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [uniq(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [uniq(lineitem.l_extendedprice (#5)) AS (#25)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [uniq(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#26)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== min_max_can_preaggregate ===
+description: Extrema combine finalized local extrema without multiplicity compensation.
+sql: SELECT o_orderkey, min(l_extendedprice), max(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), min(l_extendedprice) (#25) AS (#25), max(l_extendedprice) (#26) AS (#26)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [min(lineitem.l_extendedprice (#5)) AS (#25), max(lineitem.l_extendedprice (#5)) AS (#26)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [min(lineitem.l_extendedprice (#5)) AS (#25), max(lineitem.l_extendedprice (#5)) AS (#26)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [min(lineitem.l_extendedprice (#5)) AS (#25), max(lineitem.l_extendedprice (#5)) AS (#26)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#27)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+

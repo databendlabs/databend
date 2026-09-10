@@ -1,0 +1,47 @@
+# The same value occurs under different join keys. Combining finalized local
+# DISTINCT sums/counts loses the overlap; ordinary sum/count/min/max remain valid.
+statement ok
+CREATE TABLE eager_strategy_left (k INT, v INT);
+
+statement ok
+CREATE TABLE eager_strategy_right (k INT, g INT);
+
+statement ok
+INSERT INTO eager_strategy_left VALUES (1, 10), (1, 20), (2, 10), (2, 30);
+
+statement ok
+INSERT INTO eager_strategy_right VALUES (1, 0), (1, 0), (2, 0), (2, 0);
+
+query IIII
+SELECT r.g, sum_distinct(l.v), count_distinct(l.v), uniq(l.v)
+FROM eager_strategy_left l JOIN eager_strategy_right r ON l.k = r.k
+GROUP BY r.g;
+----
+0 60 3 3
+
+query III
+SELECT r.g, sum(DISTINCT l.v), count(DISTINCT l.v)
+FROM eager_strategy_left l JOIN eager_strategy_right r ON l.k = r.k
+GROUP BY r.g;
+----
+0 60 3
+
+query IIII
+SELECT r.g, sum(l.v), min(l.v), max(l.v)
+FROM eager_strategy_left l JOIN eager_strategy_right r ON l.k = r.k
+GROUP BY r.g;
+----
+0 140 10 30
+
+query II
+SELECT r.g, count(l.v)
+FROM eager_strategy_left l JOIN eager_strategy_right r ON l.k = r.k
+GROUP BY r.g;
+----
+0 8
+
+statement ok
+DROP TABLE eager_strategy_left;
+
+statement ok
+DROP TABLE eager_strategy_right;

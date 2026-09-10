@@ -15,6 +15,7 @@
 use databend_common_expression::Scalar;
 use databend_common_expression::aggregate_function::AggregateFeatures;
 use databend_common_expression::aggregate_function::DistinctPolicy;
+use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::aggregate_function::SortPolicy;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -25,7 +26,7 @@ use databend_common_expression::types::NumberScalar;
 /// so they cannot be specified here.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct AggregateMetadata {
-    pub is_decomposable: bool,
+    pub eager_aggregation: EagerAggregation,
     pub sort_policy: SortPolicy,
     /// Result for the pure NULL argument shortcut, not an empty-input policy.
     pub null_argument_result: NullArgumentResult,
@@ -44,7 +45,7 @@ impl AggregateMetadata {
     /// Publish intrinsic metadata at the external descriptor or call boundary.
     pub(in super::super) fn into_features(self) -> AggregateFeatures {
         AggregateFeatures {
-            is_decomposable: self.is_decomposable,
+            eager_aggregation: self.eager_aggregation,
             sort_policy: self.sort_policy,
             category: self.documentation.category,
             description: self.documentation.description,

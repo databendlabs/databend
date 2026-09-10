@@ -38,6 +38,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::SerializedPayload;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::aggregate_function::*;
+use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
@@ -153,7 +154,7 @@ impl AggregateCall for TrackedHeapAggregateFunction {
 
     fn features(&self) -> &AggregateFeatures {
         static FEATURES: AggregateFeatures = AggregateFeatures {
-            is_decomposable: false,
+            eager_aggregation: EagerAggregation::Unsupported,
             supports_filter: false,
             supports_state: false,
             sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,

@@ -407,7 +407,7 @@ mod tests {
                 description: "intrinsic aggregate",
                 ..Default::default()
             },
-            is_decomposable: true,
+            eager_aggregation: EagerAggregation::Sum,
             ..Default::default()
         };
         let descriptors = NameRoute::new(
@@ -419,6 +419,7 @@ mod tests {
         .then(PlainRoute::unary(build_probe))
         .then(
             IfRoute::unary(build_probe).with_metadata(AggregateMetadata {
+                eager_aggregation: EagerAggregation::Sum,
                 documentation: AggregateDocumentation {
                     description: "intrinsic IF variant",
                     ..Default::default()
@@ -428,6 +429,7 @@ mod tests {
         )
         .then(
             StateRoute::unary(build_probe).with_metadata(AggregateMetadata {
+                eager_aggregation: EagerAggregation::Sum,
                 documentation: AggregateDocumentation {
                     description: "intrinsic STATE variant",
                     ..Default::default()
@@ -462,6 +464,20 @@ mod tests {
                 "intrinsic aggregate"
             };
             assert_eq!(call.features().description, expected_description);
+            let expected_strategy = if name == "contract_probe" {
+                EagerAggregation::Sum
+            } else {
+                EagerAggregation::Unsupported
+            };
+            assert_eq!(call.features().eager_aggregation, expected_strategy);
+            assert_eq!(
+                registry
+                    .descriptor(name)
+                    .unwrap()
+                    .features()
+                    .eager_aggregation,
+                expected_strategy
+            );
             if name.ends_with("_merge") || name.ends_with("_merge_state") {
                 assert_eq!(call.features().distinct_policy, DistinctPolicy::Unsupported);
             }

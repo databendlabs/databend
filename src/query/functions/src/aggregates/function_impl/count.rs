@@ -125,7 +125,7 @@ impl CountBuilder {
 
     const COUNT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Count,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -137,7 +137,7 @@ impl CountBuilder {
 
     const COUNT_DISTINCT_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -149,7 +149,7 @@ impl CountBuilder {
 
     const COUNT_IF_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
@@ -161,7 +161,7 @@ impl CountBuilder {
 
     const COUNT_STATE_METADATA: AggregateMetadata = AggregateMetadata {
         null_argument_result: NullArgumentResult::UInt64Zero,
-        is_decomposable: true,
+        eager_aggregation: EagerAggregation::Unsupported,
         sort_policy: SortPolicy::Unsupported,
         documentation: AggregateDocumentation {
             category: "Aggregate",
