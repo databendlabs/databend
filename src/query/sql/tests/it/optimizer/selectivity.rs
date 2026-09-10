@@ -121,7 +121,10 @@ fn run_scalar_case_with_predicates(
     if let Some(count_min_sketch) = count_min_sketch {
         estimator = estimator.with_count_min_sketch(count_min_sketch);
     }
-    let estimated_rows = estimator.apply(predicates)?;
+    let estimated_rows = estimator.apply(
+        predicates,
+        &databend_common_expression::FunctionContext::default(),
+    )?;
     let out_stats = estimator.into_column_stats();
 
     writeln!(

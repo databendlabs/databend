@@ -155,7 +155,6 @@ impl Client for ScriptClient {
         Self::inherit_query_ctx(&self.ctx, &ctx);
 
         let mut planner = Planner::new(ctx.clone());
-        // In script ignore query level settings.
         let extras = planner.parse_sql(query)?;
         auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
         let plan = planner.plan_stmt(&extras.statement, false).await?;

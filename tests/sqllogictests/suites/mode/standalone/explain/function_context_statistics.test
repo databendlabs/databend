@@ -1,0 +1,452 @@
+## Planner statistics must use the query FunctionContext rather than
+## FunctionContext::default(). The fixed timestamp is 2022-02-01 20:00:00 UTC
+## and 2022-02-02 04:00:00 Asia/Shanghai.
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_filter
+
+statement ok
+CREATE TABLE function_context_default_filter AS
+SELECT 1643745600000000::TIMESTAMP AS ts FROM numbers(10)
+
+## SelectivityEstimator::apply folds the predicate with the query context.
+## All ten timestamps have local date 2022-02-02 in Asia/Shanghai.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT * FROM function_context_default_filter
+WHERE to_date(ts) = DATE '2022-02-02'
+----
+Scan
+├── table: default.function_context_default_filter (#0)
+├── filters: [eq(CAST(function_context_default_filter.ts (#0) AS Date NULL), '2022-02-02')]
+├── order by: []
+├── limit: NONE
+├── output columns: [function_context_default_filter.ts (#0)]
+├── outer columns: []
+├── used columns: [function_context_default_filter.ts (#0)]
+├── cardinality: 10.000
+├── precise cardinality: N/A
+└── statistics
+    └── function_context_default_filter.ts (#0): { min: 1643745600000000, max: 1643745600000000, ndv: 1, null count: 0 }
+
+statement ok
+DROP TABLE function_context_default_filter
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_join_l
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_join_r
+
+statement ok
+CREATE TABLE function_context_default_join_l AS
+SELECT 1643745600000000::TIMESTAMP AS ts, number AS k FROM numbers(10)
+
+statement ok
+CREATE TABLE function_context_default_join_r AS
+SELECT 1643709600000000::TIMESTAMP AS ts, number AS k FROM numbers(10)
+
+## Join residual selectivity uses its query context. In Asia/Shanghai the left
+## timestamp is on February 2 and the right timestamp is on February 1.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT *
+FROM function_context_default_join_l AS l
+JOIN function_context_default_join_r AS r
+  ON l.k = r.k AND to_date(l.ts) > to_date(r.ts)
+----
+Join(Inner)
+├── build keys: [function_context_default_join_r.k (#3)]
+├── probe keys: [function_context_default_join_l.k (#1)]
+├── other filters: [gt(CAST(function_context_default_join_l.ts (#0) AS Date NULL), CAST(function_context_default_join_r.ts (#2) AS Date NULL))]
+├── output columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0), function_context_default_join_r.k (#3), function_context_default_join_r.ts (#2)]
+├── outer columns: []
+├── used columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0), function_context_default_join_r.k (#3), function_context_default_join_r.ts (#2)]
+├── cardinality: 10.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── function_context_default_join_l.k (#1): { min: 0, max: 9, ndv: 10, null count: 0 }
+│   ├── function_context_default_join_l.ts (#0): { min: 1643745600000000, max: 1643745600000000, ndv: 1, null count: 0 }
+│   ├── function_context_default_join_r.k (#3): { min: 0, max: 9, ndv: 10, null count: 0 }
+│   └── function_context_default_join_r.ts (#2): { min: 1643709600000000, max: 1643709600000000, ndv: 1, null count: 0 }
+├── Scan
+│   ├── table: default.function_context_default_join_r (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [function_context_default_join_r.k (#3), function_context_default_join_r.ts (#2)]
+│   ├── outer columns: []
+│   ├── used columns: [function_context_default_join_r.k (#3), function_context_default_join_r.ts (#2)]
+│   ├── cardinality: 10.000
+│   ├── precise cardinality: 10
+│   └── statistics
+│       ├── function_context_default_join_r.k (#3): { min: 0, max: 9, ndv: 10, null count: 0 }
+│       └── function_context_default_join_r.ts (#2): { min: 1643709600000000, max: 1643709600000000, ndv: 1, null count: 0 }
+└── Scan
+    ├── table: default.function_context_default_join_l (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0)]
+    ├── outer columns: []
+    ├── used columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0)]
+    ├── cardinality: 10.000
+    ├── precise cardinality: 10
+    └── statistics
+        ├── function_context_default_join_l.k (#1): { min: 0, max: 9, ndv: 10, null count: 0 }
+        └── function_context_default_join_l.ts (#0): { min: 1643745600000000, max: 1643745600000000, ndv: 1, null count: 0 }
+
+statement ok
+DROP TABLE function_context_default_join_l
+
+statement ok
+DROP TABLE function_context_default_join_r
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_eval
+
+statement ok
+CREATE TABLE function_context_default_eval AS
+SELECT DATE '2022-02-02' AS d FROM numbers(10)
+
+## EvalScalar::derive_item_stat uses the query timezone when deriving the
+## Date-to-Timestamp output bounds. Shanghai midnight is 1643731200000000 UTC.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT to_timestamp(d) AS ts FROM function_context_default_eval
+----
+EvalScalar
+├── scalars: [CAST(function_context_default_eval.d (#0) AS Timestamp NULL) AS (#1)]
+├── output columns: [function_context_default_eval.d (#0), ts (#1)]
+├── outer columns: []
+├── used columns: [function_context_default_eval.d (#0), ts (#1)]
+├── cardinality: 10.000
+├── precise cardinality: 10
+├── statistics
+│   ├── function_context_default_eval.d (#0): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   └── ts (#1): { min: 1643731200000000, max: 1643731200000000, ndv: 1, null count: 0 }
+└── Scan
+    ├── table: default.function_context_default_eval (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [function_context_default_eval.d (#0)]
+    ├── outer columns: []
+    ├── used columns: [function_context_default_eval.d (#0)]
+    ├── cardinality: 10.000
+    ├── precise cardinality: 10
+    └── statistics
+        └── function_context_default_eval.d (#0): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+
+## SelectivityVisitor's StatEvaluator uses the query timezone while deriving
+## statistics for the lossless Date-to-Timestamp cast inside a predicate.
+## Shanghai midnight is before the fixed UTC timestamp; default UTC midnight
+## is after it, which would incorrectly estimate zero rows.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT * FROM function_context_default_eval
+WHERE to_timestamp(d) < 1643745600000000::TIMESTAMP
+----
+Scan
+├── table: default.function_context_default_eval (#0)
+├── filters: [lt(CAST(function_context_default_eval.d (#0) AS Timestamp NULL), '2022-02-01 20:00:00.000000')]
+├── order by: []
+├── limit: NONE
+├── output columns: [function_context_default_eval.d (#0)]
+├── outer columns: []
+├── used columns: [function_context_default_eval.d (#0)]
+├── cardinality: 10.000
+├── precise cardinality: N/A
+└── statistics
+    └── function_context_default_eval.d (#0): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+
+statement ok
+DROP TABLE function_context_default_eval
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_equi_l
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_equi_r
+
+statement ok
+CREATE TABLE function_context_default_equi_l AS
+SELECT DATE '2022-02-02' AS d FROM numbers(10)
+
+statement ok
+CREATE TABLE function_context_default_equi_r AS
+SELECT 1643731200000000::TIMESTAMP AS ts FROM numbers(10)
+
+## EquiCondition derives statistics for expression join keys with the query
+## context. In Shanghai the Date-to-Timestamp key equals the right key, so all
+## 100 row pairs match; the default UTC key would make the domains disjoint.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT *
+FROM function_context_default_equi_l AS l
+JOIN function_context_default_equi_r AS r
+  ON to_timestamp(l.d) = r.ts
+----
+Join(Inner)
+├── build keys: [function_context_default_equi_r.ts (#1)]
+├── probe keys: [CAST(function_context_default_equi_l.d (#0) AS Timestamp NULL)]
+├── other filters: []
+├── output columns: [function_context_default_equi_l.d (#0), function_context_default_equi_r.ts (#1)]
+├── outer columns: []
+├── used columns: [function_context_default_equi_l.d (#0), function_context_default_equi_r.ts (#1)]
+├── cardinality: 100.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── function_context_default_equi_l.d (#0): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   └── function_context_default_equi_r.ts (#1): { min: 1643731200000000, max: 1643731200000000, ndv: 1, null count: 0 }
+├── Scan
+│   ├── table: default.function_context_default_equi_r (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [function_context_default_equi_r.ts (#1)]
+│   ├── outer columns: []
+│   ├── used columns: [function_context_default_equi_r.ts (#1)]
+│   ├── cardinality: 10.000
+│   ├── precise cardinality: 10
+│   └── statistics
+│       └── function_context_default_equi_r.ts (#1): { min: 1643731200000000, max: 1643731200000000, ndv: 1, null count: 0 }
+└── Scan
+    ├── table: default.function_context_default_equi_l (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [function_context_default_equi_l.d (#0)]
+    ├── outer columns: []
+    ├── used columns: [function_context_default_equi_l.d (#0)]
+    ├── cardinality: 10.000
+    ├── precise cardinality: 10
+    └── statistics
+        └── function_context_default_equi_l.d (#0): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+
+statement ok
+DROP TABLE function_context_default_equi_l
+
+statement ok
+DROP TABLE function_context_default_equi_r
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_union_date
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_union_ts
+
+statement ok
+CREATE TABLE function_context_default_union_date AS
+SELECT DATE '2022-02-02' AS v FROM numbers(10)
+
+statement ok
+CREATE TABLE function_context_default_union_ts AS
+SELECT 1643731200000000::TIMESTAMP AS v FROM numbers(10)
+
+## UnionAll derives statistics for its type-alignment expressions with the
+## query context. Shanghai converts the Date input to the same timestamp as the
+## right input; default UTC would produce max 1643760000000000 and NDV 2.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT v FROM function_context_default_union_date
+UNION ALL
+SELECT v FROM function_context_default_union_ts
+----
+UnionAll
+├── output: [v (#2)]
+├── left: [CAST(function_context_default_union_date.v (#0) AS Timestamp NULL)]
+├── right: [function_context_default_union_ts.v (#1)]
+├── cte_scan_names: []
+├── logical_recursive_cte_id: None
+├── output columns: [v (#2)]
+├── outer columns: []
+├── used columns: [function_context_default_union_date.v (#0), function_context_default_union_ts.v (#1)]
+├── cardinality: 20.000
+├── precise cardinality: 20
+├── statistics
+│   └── v (#2): { min: 1643731200000000, max: 1643731200000000, ndv: 1, null count: 0 }
+├── Scan
+│   ├── table: default.function_context_default_union_date (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [function_context_default_union_date.v (#0)]
+│   ├── outer columns: []
+│   ├── used columns: [function_context_default_union_date.v (#0)]
+│   ├── cardinality: 10.000
+│   ├── precise cardinality: 10
+│   └── statistics
+│       └── function_context_default_union_date.v (#0): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+└── Scan
+    ├── table: default.function_context_default_union_ts (#1)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [function_context_default_union_ts.v (#1)]
+    ├── outer columns: []
+    ├── used columns: [function_context_default_union_ts.v (#1)]
+    ├── cardinality: 10.000
+    ├── precise cardinality: 10
+    └── statistics
+        └── function_context_default_union_ts.v (#1): { min: 1643731200000000, max: 1643731200000000, ndv: 1, null count: 0 }
+
+statement ok
+DROP TABLE function_context_default_union_date
+
+statement ok
+DROP TABLE function_context_default_union_ts
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_window
+
+statement ok
+CREATE TABLE function_context_default_window AS
+SELECT number AS k FROM numbers(10)
+
+## Window lag/default statistics fold both constants with the query context.
+## Their Date domain is 19025 (2022-02-02), so the outer predicate keeps all rows.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT *
+FROM (
+    SELECT lag(
+        to_date(1643745600000000::TIMESTAMP),
+        1,
+        to_date(1643745600000000::TIMESTAMP)
+    ) OVER (ORDER BY k) AS d
+    FROM function_context_default_window
+)
+WHERE d = DATE '2022-02-02'
+----
+Filter
+├── filters: [eq(lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3), '2022-02-02')]
+├── output columns: [function_context_default_window.k (#0), lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3), lag_arg (#1), lag_default_value (#2)]
+├── outer columns: []
+├── used columns: [function_context_default_window.k (#0), lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3), lag_arg (#1), lag_default_value (#2)]
+├── cardinality: 10.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+│   ├── lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   ├── lag_arg (#1): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   └── lag_default_value (#2): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+└── Window
+    ├── aggregate function: lag
+    ├── partition items: []
+    ├── order by items: [function_context_default_window.k (#0) AS (#0)]
+    ├── frame: [Rows: Preceding(Some(Number(1_u64))) ~ Preceding(Some(Number(1_u64)))]
+    ├── output columns: [function_context_default_window.k (#0), lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3), lag_arg (#1), lag_default_value (#2)]
+    ├── outer columns: []
+    ├── used columns: [function_context_default_window.k (#0), lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3), lag_arg (#1), lag_default_value (#2)]
+    ├── cardinality: 10.000
+    ├── precise cardinality: 10
+    ├── statistics
+    │   ├── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+    │   ├── lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (ORDER BY k) (#3): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+    │   ├── lag_arg (#1): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+    │   └── lag_default_value (#2): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+    └── Sort
+        ├── sort keys: [function_context_default_window.k (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── output columns: [function_context_default_window.k (#0), lag_arg (#1), lag_default_value (#2)]
+        ├── outer columns: []
+        ├── used columns: [function_context_default_window.k (#0), lag_arg (#1), lag_default_value (#2)]
+        ├── cardinality: 10.000
+        ├── precise cardinality: 10
+        ├── statistics
+        │   ├── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+        │   ├── lag_arg (#1): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+        │   └── lag_default_value (#2): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+        └── EvalScalar
+            ├── scalars: [function_context_default_window.k (#0) AS (#0), '2022-02-02' AS (#1), CAST('2022-02-02' AS Date) AS (#2)]
+            ├── output columns: [function_context_default_window.k (#0), lag_arg (#1), lag_default_value (#2)]
+            ├── outer columns: []
+            ├── used columns: [function_context_default_window.k (#0), lag_arg (#1), lag_default_value (#2)]
+            ├── cardinality: 10.000
+            ├── precise cardinality: 10
+            ├── statistics
+            │   ├── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+            │   ├── lag_arg (#1): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+            │   └── lag_default_value (#2): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+            └── Scan
+                ├── table: default.function_context_default_window (#0)
+                ├── filters: []
+                ├── order by: [function_context_default_window.k (#0) ASC]
+                ├── limit: NONE
+                ├── output columns: [function_context_default_window.k (#0)]
+                ├── outer columns: []
+                ├── used columns: [function_context_default_window.k (#0)]
+                ├── cardinality: 10.000
+                ├── precise cardinality: 10
+                └── statistics
+                    └── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+
+## WindowGroup derives argument, default, and output statistics with the same
+## query context as a standalone Window. The second window with the same
+## partition key forces the grouped operator; default UTC would derive 19024.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+EXPLAIN(verbose, logical, optimized)
+SELECT
+    lag(
+        to_date(1643745600000000::TIMESTAMP),
+        1,
+        to_date(1643745600000000::TIMESTAMP)
+    ) OVER (PARTITION BY k % 2 ORDER BY k) AS d,
+    row_number() OVER (PARTITION BY k % 2 ORDER BY k) AS rn
+FROM function_context_default_window
+----
+WindowGroup
+├── Window
+│   ├── aggregate function: lag
+│   ├── partition items: [modulo(function_context_default_window.k (#0), 2) AS (#3)]
+│   ├── order by items: [function_context_default_window.k (#0) AS (#0)]
+│   └── frame: [Rows: Preceding(Some(Number(1_u64))) ~ Preceding(Some(Number(1_u64)))]
+├── Window
+│   ├── aggregate function: row_number
+│   ├── partition items: [modulo(function_context_default_window.k (#0), 2) AS (#3)]
+│   ├── order by items: [function_context_default_window.k (#0) AS (#0)]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+├── output columns: [function_context_default_window.k (#0), lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (PARTITION BY k % 2 ORDER BY k) (#4), lag_arg (#1), lag_default_value (#2), lag_part_0 (#3), row_number() OVER (PARTITION BY k % 2 ORDER BY k) (#6)]
+├── outer columns: []
+├── used columns: [function_context_default_window.k (#0), lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (PARTITION BY k % 2 ORDER BY k) (#4), lag_arg (#1), lag_default_value (#2), lag_part_0 (#3), row_number() OVER (PARTITION BY k % 2 ORDER BY k) (#6)]
+├── cardinality: 10.000
+├── precise cardinality: 10
+├── statistics
+│   ├── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+│   ├── lag(to_date(1643745600000000::TIMESTAMP), 1, to_date(1643745600000000::TIMESTAMP)) OVER (PARTITION BY k % 2 ORDER BY k) (#4): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   ├── lag_arg (#1): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   ├── lag_default_value (#2): { min: 19025, max: 19025, ndv: 1, null count: 0 }
+│   ├── lag_part_0 (#3): { min: 0, max: 1, ndv: 2, null count: 0 }
+│   └── row_number() OVER (PARTITION BY k % 2 ORDER BY k) (#6): { min: 1, max: 10, ndv: 5, null count: 0 }
+└── Scan
+    ├── table: default.function_context_default_window (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [function_context_default_window.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [function_context_default_window.k (#0)]
+    ├── cardinality: 10.000
+    ├── precise cardinality: 10
+    └── statistics
+        └── function_context_default_window.k (#0): { min: 0, max: 9, ndv: 10, null count: 0 }
+
+statement ok
+DROP TABLE function_context_default_window

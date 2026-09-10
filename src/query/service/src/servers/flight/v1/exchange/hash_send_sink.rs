@@ -90,6 +90,7 @@ impl Processor for HashSendSink {
                     self.channels.handle_send_results(results)?;
                     if self.channels.all_closed() {
                         self.input.finish();
+                        self.channels.close_all();
                         return Ok(Event::Finished);
                     }
                 }
@@ -131,6 +132,7 @@ impl Processor for HashSendSink {
                             self.channels.handle_send_results(results)?;
                             if self.channels.all_closed() {
                                 self.input.finish();
+                                self.channels.close_all();
                                 return Ok(Event::Finished);
                             }
                         }

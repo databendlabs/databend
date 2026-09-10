@@ -501,7 +501,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'view_definition'                 | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'view_query'                      | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'view_query'                      | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'virtual_column_id'               | 'system'             | 'virtual_columns'         | 'UInt32'              | 'INT UNSIGNED'      | ''       | ''       | 'NO'     | ''       |
 | 'virtual_column_name'             | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'virtual_column_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'virtual_column_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |

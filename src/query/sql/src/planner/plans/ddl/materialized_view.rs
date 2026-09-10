@@ -60,4 +60,5 @@ pub struct RefreshMaterializedViewPlan {
     pub catalog: String,
     pub database: String,
     pub view_name: String,
+    pub max_batch_size: Option<u64>,
 }

@@ -27,6 +27,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
@@ -201,7 +202,7 @@ fn format_node(metadata: &MetadataRef, expr: &SExpr) -> Result<String> {
         formatted_ast: None,
         ignore_result: false,
     }
-    .format_indent(FormatOptions::default())
+    .format_indent(FormatOptions::default(), &StatContext::default())
 }
 
 fn write_derived_stats(
@@ -239,7 +240,7 @@ fn write_derived_stats(
     writeln!(file, "path: {:?}", target.path)?;
     writeln!(file, "node:")?;
     writeln!(file, "{}", format_node(metadata, expr)?)?;
-    let stat_info = RelExpr::with_s_expr(expr).derive_cardinality()?;
+    let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
     write_stat_info(file, &metadata.read(), &stat_info)?;
     Ok(())
 }

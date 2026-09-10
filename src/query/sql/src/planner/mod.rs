@@ -18,6 +18,7 @@ mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
 mod semantic;
+mod statement_settings;
 
 pub mod binder;
 pub mod dataframe;
@@ -51,3 +52,4 @@ pub use plans::InsertInputSource;
 pub use plans::ScalarExpr;
 pub use plans::UPDATE_NAME;
 pub use semantic::*;
+pub use statement_settings::apply_statement_settings;

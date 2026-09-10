@@ -111,7 +111,7 @@ clean:
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_meta*/ ./_logs*/ ./src/query/service_logs*/ ./src/meta/service/_logs*/ ./stateless_test_data/
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
-	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
+	rm -rf ./.databend ./src/query/service/.databend ./src/meta/service/.databend ./src/query/ee/.databend
 
 genproto:
 	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/task.proto

@@ -70,11 +70,10 @@ impl OutboundSendChannels {
     }
 
     pub(super) fn close(&mut self, idx: usize) {
-        if !self.channels[idx].is_closed() {
-            let mut closed = DummyOutboundChannel::create();
-            std::mem::swap(&mut self.channels[idx], &mut closed);
-            closed.close();
-        }
+        // Closed destinations still own the shared send buffer. Release their
+        // references so other destinations can receive EOF before the graph drops.
+        let closed = std::mem::replace(&mut self.channels[idx], DummyOutboundChannel::create());
+        closed.close();
     }
 
     pub(super) fn close_all(&mut self) {

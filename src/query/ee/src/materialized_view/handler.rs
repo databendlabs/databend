@@ -79,6 +79,7 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
         catalog: &str,
         database: &str,
         view_name: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<()> {
         let query_ctx = ctx
             .downcast::<databend_query::sessions::QueryContext>()
@@ -104,8 +105,15 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
         }
 
         let table = FuseTable::try_from_table(table.as_ref())?;
-        if let Some(refresh) =
-            MaterializedViewRefresh::create(table, query_ctx, catalog, database, view_name).await?
+        if let Some(refresh) = MaterializedViewRefresh::create(
+            table,
+            query_ctx,
+            catalog,
+            database,
+            view_name,
+            max_batch_size,
+        )
+        .await?
         {
             refresh.execute().await?;
         }

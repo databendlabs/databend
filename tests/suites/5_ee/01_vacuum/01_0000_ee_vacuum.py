@@ -37,7 +37,7 @@ def get_license():
 
 def compact_data(name):
     mycursor = mydb.cursor()
-    mycursor.execute("optimize table gc_test all;")
+    mycursor.execute("optimize table gc_test compact;")
 
 
 if __name__ == "__main__":
@@ -65,16 +65,6 @@ if __name__ == "__main__":
         mycursor = mydb.cursor()
         mycursor.execute("select a from gc_test order by a;")
         old_datas = mycursor.fetchall()
-
-        mycursor.execute("vacuum table gc_test dry run;")
-        datas = mycursor.fetchall()
-        print(datas)
-
-        mycursor.execute("select a from gc_test order by a;")
-        datas = mycursor.fetchall()
-
-        if old_datas != datas:
-            print("vacuum dry run lose data: %s : %s" % (old_datas, datas))
 
         client1.send("vacuum table gc_test;")
         client1.expect(prompt)

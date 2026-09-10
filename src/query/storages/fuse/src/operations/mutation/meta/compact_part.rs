@@ -22,6 +22,7 @@ use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::BlockMeta;
@@ -145,11 +146,20 @@ impl CompactExtraInfo {
 pub struct CompactTaskInfo {
     pub blocks: Vec<Arc<BlockMeta>>,
     pub index: BlockMetaIndex,
+    pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
 impl CompactTaskInfo {
-    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> Self {
-        CompactTaskInfo { blocks, index }
+    pub fn create(
+        blocks: Vec<Arc<BlockMeta>>,
+        index: BlockMetaIndex,
+        virtual_column_layout: Option<VirtualColumnLayout>,
+    ) -> Self {
+        CompactTaskInfo {
+            blocks,
+            index,
+            virtual_column_layout,
+        }
     }
 
     fn hash(&self) -> u64 {

@@ -128,6 +128,8 @@ pub struct RowGroupReader {
 
     pub(super) table_schema: TableSchemaRef,
     pub(super) schema_desc: SchemaDescPtr,
+    pub(super) schema_desc_from: Option<String>,
+    pub(super) schema_desc_from_arrow_fallback: bool,
     pub(super) arrow_schema: Option<arrow_schema::Schema>,
     pub(super) partition_columns: Vec<String>,
     pub(super) transformer: Option<RecordBatchTransformer>,
@@ -142,6 +144,14 @@ impl RowGroupReader {
 
     pub fn schema_desc(&self) -> &SchemaDescPtr {
         &self.schema_desc
+    }
+
+    pub fn schema_desc_from(&self) -> Option<&str> {
+        self.schema_desc_from.as_deref()
+    }
+
+    pub fn schema_desc_from_arrow_fallback(&self) -> bool {
+        self.schema_desc_from_arrow_fallback
     }
 
     /// Read a row group and return a reader with certain policy.

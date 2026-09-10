@@ -188,6 +188,7 @@ impl RecursiveRuleOptimizer {
                 before_expr,
                 result_expr,
                 metadata,
+                self.ctx.get_stat_context(),
             )?;
         }
 

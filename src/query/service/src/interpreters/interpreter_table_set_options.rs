@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
@@ -84,6 +85,7 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -234,6 +236,7 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check enable_virtual_column
         is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
+        is_valid_virtual_column_layout_options(&self.plan.set_options)?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 
@@ -330,8 +333,15 @@ async fn set_segment_format(
                     .await?;
                 for segment in segments {
                     let segment = segment?;
+                    let virtual_schema =
+                        segment.summary.virtual_segment_schema.clone().map(Arc::new);
                     for block in segment.blocks {
-                        segment_builder.add_block(block.as_ref().clone())?;
+                        segment_builder.add_block(
+                            block.as_ref().clone(),
+                            VirtualBlockInput::Existing {
+                                schema: virtual_schema.clone(),
+                            },
+                        )?;
                     }
                     let additional_stats_meta = segment.summary.additional_stats_meta;
                     let cluster_key_info = fuse_table.cluster_key_info();

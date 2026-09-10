@@ -36,11 +36,11 @@ futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
-rand = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]
+rand = { workspace = true }
 tokio = { workspace = true }
 
 [lints]

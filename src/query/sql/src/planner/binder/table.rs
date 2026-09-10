@@ -45,7 +45,6 @@ use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::TableField;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
@@ -781,7 +780,7 @@ impl Binder {
 
                 let v: i64 = check_number(
                     None,
-                    &FunctionContext::default(),
+                    &self.ctx.get_function_context()?,
                     new_expr,
                     &BUILTIN_FUNCTIONS,
                 )?;
