@@ -34,6 +34,7 @@ use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 
@@ -85,6 +86,13 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
                 self.args.table_name.as_str(),
             )
             .await?;
+        check_shared_table_select(
+            ctx.as_ref(),
+            CATALOG_DEFAULT,
+            &self.args.database_name,
+            tbl.as_ref(),
+        )
+        .await?;
 
         let table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::StorageOther(

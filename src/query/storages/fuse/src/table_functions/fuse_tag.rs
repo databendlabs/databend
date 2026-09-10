@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use crate::operations::check_table_ref_access;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 
@@ -80,6 +81,13 @@ impl SimpleTableFunc for FuseTagFunc {
             .await?
             .get_table(&tenant, &self.args.database_name, &self.args.table_name)
             .await?;
+        check_shared_table_select(
+            ctx.as_ref(),
+            &catalog,
+            &self.args.database_name,
+            tbl.as_ref(),
+        )
+        .await?;
         if tbl.engine() != "FUSE" {
             return Err(ErrorCode::TableEngineNotSupported(
                 "Invalid table engine, only FUSE table supports fuse_tag",

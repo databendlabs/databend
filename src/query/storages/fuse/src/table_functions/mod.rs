@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod authorization;
 mod clustering_information;
 mod clustering_statistics;
 mod function_template;
@@ -34,6 +35,7 @@ mod fuse_virtual_column;
 mod fuse_virtual_column_build;
 mod set_cache_capacity;
 
+pub use authorization::check_shared_table_select;
 pub use clustering_information::ClusteringInformationFunc;
 pub use clustering_information::ClusteringInformationResponse;
 pub use clustering_information::get_clustering_information;

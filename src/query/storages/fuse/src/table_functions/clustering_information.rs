@@ -61,6 +61,7 @@ use crate::statistics::sort_endpoints;
 use crate::statistics::with_request_pool;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
 
@@ -157,6 +158,13 @@ impl SimpleArgFunc for ClusteringInformation {
                 branch_name.as_deref(),
             )
             .await?;
+        check_shared_table_select(
+            ctx.as_ref(),
+            &current_catalog,
+            &args.database_name,
+            tbl.as_ref(),
+        )
+        .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         let info = get_clustering_information(ctx.clone(), tbl, &args.cluster_key).await?;
         Ok(DataBlock::new(

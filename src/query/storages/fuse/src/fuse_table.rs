@@ -207,8 +207,13 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
+        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
+            return Err(ErrorCode::Internal(
+                "Shared table requires resolved provider storage parameters",
+            ));
+        }
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
+            DatabaseType::NormalDB | DatabaseType::SharedDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
@@ -1034,7 +1039,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        true
+        !self.table_info.is_shared()
     }
 
     fn support_column_projection(&self) -> bool {
@@ -1545,11 +1550,19 @@ impl Table for FuseTable {
     }
 
     fn result_can_be_cached(&self) -> bool {
-        true
+        !self.table_info.is_shared()
+    }
+
+    fn plan_can_be_cached(&self) -> bool {
+        // A new statement or transaction must resolve the share again, even
+        // when the provider's snapshot has not changed.
+        !self.table_info.is_shared()
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly() || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+        self.table_info.is_shared()
+            || self.table_type.is_readonly()
+            || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
     }
 
     fn use_own_sample_block(&self) -> bool {

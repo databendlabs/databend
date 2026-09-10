@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod shared_database;
-mod shared_table;
 
 pub use shared_database::SharedDatabase;
-pub use shared_table::SharedTable;

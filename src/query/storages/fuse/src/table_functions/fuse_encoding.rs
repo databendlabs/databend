@@ -65,6 +65,7 @@ use crate::io::read::meta::read_thrift_file_metadata;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::string_literal;
 
 pub struct FuseEncodingArgs {
@@ -142,13 +143,30 @@ impl SimpleArgFunc for FuseEncoding {
             .list_tables()
             .await?;
 
-        let fuse_tables = tbls
-            .iter()
-            .map(|tbl| {
-                let tbl = FuseTable::try_from_table(tbl.as_ref()).unwrap();
-                tbl
-            })
-            .collect::<Vec<_>>();
+        let mut fuse_tables = Vec::new();
+        for tbl in &tbls {
+            if args
+                .table_name
+                .as_ref()
+                .is_some_and(|name| name != tbl.name())
+            {
+                continue;
+            }
+            if let Err(err) = check_shared_table_select(
+                ctx.as_ref(),
+                CATALOG_DEFAULT,
+                &args.database_name,
+                tbl.as_ref(),
+            )
+            .await
+            {
+                if args.table_name.is_none() && err.code() == ErrorCode::PERMISSION_DENIED {
+                    continue;
+                }
+                return Err(err);
+            }
+            fuse_tables.push(FuseTable::try_from_table(tbl.as_ref())?);
+        }
 
         let filters = plan.push_downs.as_ref().and_then(|x| x.filters.clone());
         FuseEncodingImpl::new(

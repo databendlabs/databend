@@ -386,7 +386,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(&Self::format_table_options(table_info.options()));
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" {
+        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
