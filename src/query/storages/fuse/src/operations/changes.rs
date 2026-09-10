@@ -437,6 +437,26 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    pub async fn has_non_append_changes(&self, base_location: Option<&String>) -> Result<bool> {
+        let latest = self.read_table_snapshot().await?;
+        let base = match base_location {
+            Some(location) => Some(self.changes_read_offset_snapshot(location).await?),
+            None => None,
+        };
+
+        let Some(latest) = latest else {
+            return Ok(false);
+        };
+
+        Ok(
+            match logical_change_delta(base.as_deref(), Some(&latest))? {
+                Some((updated, deleted)) => updated > 0 || deleted > 0,
+                // Without logical counters we cannot prove that the interval is append-only.
+                None => true,
+            },
+        )
+    }
+
     pub async fn stream_backlog(
         &self,
         ctx: Arc<dyn TableContext>,

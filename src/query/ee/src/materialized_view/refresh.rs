@@ -258,22 +258,29 @@ impl<'a> MaterializedViewRefresh<'a> {
         }
 
         if let Some(batch_limit) = max_batch_size {
-            if let Some((batch_table, batch_seq)) = source_table
-                .find_stream_batch_snapshot(
-                    checkpoint
-                        .as_ref()
-                        .and_then(|(_, location)| location.as_ref()),
-                    &StreamMode::Standard,
-                    batch_limit,
-                    ctx.get_settings()
-                        .get_enable_stream_batch_snapshot_forward_scan()?,
-                    ctx.get_settings().get_s3_storage_class()?,
-                )
-                .await?
+            let base_location = checkpoint
+                .as_ref()
+                .and_then(|(_, location)| location.as_ref());
+            if !source_table.has_non_append_changes(base_location).await?
+                && let Some((batch_table, batch_seq)) = source_table
+                    .find_stream_batch_snapshot(
+                        base_location,
+                        &StreamMode::Standard,
+                        batch_limit,
+                        ctx.get_settings()
+                            .get_enable_stream_batch_snapshot_forward_scan()?,
+                        ctx.get_settings().get_s3_storage_class()?,
+                    )
+                    .await?
             {
                 source_seq = batch_seq;
                 source_snapshot_location = batch_table.snapshot_loc();
                 source_table = batch_table.as_ref().clone();
+            } else {
+                info!(
+                    "materialized view {}.{} refresh LIMIT ignored because the source checkpoint range contains non-append changes or lacks logical change counters",
+                    database, view_name
+                );
             }
         }
 
