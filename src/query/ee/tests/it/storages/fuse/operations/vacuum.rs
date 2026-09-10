@@ -832,8 +832,8 @@ async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
         .execute_command(format!("drop table {db_name}.{tbl_name}").as_str())
         .await?;
 
-    // 8. Vacuum dropped tables
-    fixture.execute_command("vacuum drop table").await?;
+    // 8. Vacuum dropped tables through the compatibility alias.
+    fixture.execute_command("vacuum dropped objects").await?;
 
     // 9. Ensure that table auto increment sequence is cleaned up
     let v = meta.get_pb(&sequence_storage_ident_0).await?;

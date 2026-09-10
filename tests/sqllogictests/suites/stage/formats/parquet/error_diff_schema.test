@@ -1,11 +1,17 @@
-query error diff schema
+query error 1303.*Parquet schema mismatch at '<root>': file 'parquet/complex[.]parquet' has 31 fields, while schema inferred from 'parquet/tuple[.]parquet' has 2 fields[.] File-only fields: \[resourceType, meta, implicitRules, language, text, [.][.][.] [(]25 more[)]\]; inferred-only fields: \[t\]
 select id from @data/parquet/ (files=>('tuple.parquet', 'complex.parquet'))
+
+query error 1303.*Parquet schema mismatch at '<root>': file 'parquet/tuple[.]parquet' has 2 fields, while schema inferred from 'parquet/complex[.]parquet' has 31 fields[.] File-only fields: \[t\]; inferred-only fields: \[resourceType, meta, implicitRules, language, text, [.][.][.] [(]25 more[)]\]
+select id from @data/parquet/ (files=>('complex.parquet', 'tuple.parquet'))
+
+query error 1303.*Parquet schema mismatch at '<root>': file 'parquet/diff_schema/f2[.]parquet' has 4 fields, while schema inferred from 'parquet/diff_schema/f1[.]parquet' has 3 fields[.] File-only fields: \[c6, c5, c4\]; inferred-only fields: \[c1, c3\]
+select c2 from @data/parquet/diff_schema/ (files=>('f1.parquet', 'f2.parquet'))
 
 statement ok
 create or replace table t1 (id int, t TUPLE(A INT32, B STRING));
 
-query error diff schema
+query error Parquet schema mismatch
 copy into t1 from @data/parquet/ files=('tuple.parquet', 'complex.parquet')
 
-query error diff schema
+query error Parquet schema mismatch
 copy /*+ set_var(parquet_fast_read_bytes=0) */ into t1 from @data/parquet/ files=('tuple.parquet', 'complex.parquet')

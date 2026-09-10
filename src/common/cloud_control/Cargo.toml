@@ -12,7 +12,6 @@ databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
-hyper-util = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 tonic = { workspace = true }
@@ -26,6 +25,7 @@ tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+hyper-util = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 

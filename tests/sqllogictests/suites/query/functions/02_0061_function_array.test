@@ -1,3 +1,121 @@
+# Table-argument subquery detection must inspect bracket keys, including nested expressions.
+query I
+select number from numbers([1][(select 1)])
+----
+0
+
+query I
+select number from numbers([[1]][1][(select 0) + 1])
+----
+0
+
+query I
+select number from numbers((select [1])[1])
+----
+0
+
+# LIKE ANY/SOME subqueries in bracket keys also require the table-argument executor.
+query I
+select number from numbers(map([true], [1])['a' like any (select 'a')])
+----
+0
+
+# LIKE ALL subqueries are parsed but their comparison rewrite is not supported yet.
+statement error Converting LIKE to its contrary is not currently supported
+select number from numbers(map([true], [1])['a' like all (select 'a')])
+
+query I
+select number from numbers(map([true], [1])['a' like some (select 'a')])
+----
+0
+
+# Subqueries wrapped in other expression forms must also reach the table-argument executor.
+query I
+select number from numbers(map(['1'], [1])[substring((select '1') from 1)])
+----
+0
+
+query I
+select number from numbers(map(['1'], [1])[trim((select ' 1 '))])
+----
+0
+
+query I
+select number from numbers([1][position((select 'a') in 'a')])
+----
+0
+
+query I
+select number from numbers(map(['1'], [1])[(parse_json('{"a":"1"}') ->> (select 'a'))])
+----
+0
+
+query I
+select number from numbers([1][extract(day from (select '2026-01-01'::date))])
+----
+0
+
+query I
+select number from numbers([1][date_diff(day, '2026-01-01'::date, (select '2026-01-02'::date))])
+----
+0
+
+query I
+select number from numbers({'a': (select 1)}['a'])
+----
+0
+
+# Array subscripts accept expressions and remain one-based, with NULL for missing elements.
+query T
+select array('a', 'b', 'c')[number % 2] from numbers(3) order by number
+----
+NULL
+a
+NULL
+
+query TT
+select array('a', 'b', 'c')[number], array('a', 'b', 'c')[4] from numbers(5) order by number
+----
+NULL NULL
+a NULL
+b NULL
+c NULL
+NULL NULL
+
+query T
+select array('a', 'b', 'c')[if(number = 1, NULL, number + 1)] from numbers(3) order by number
+----
+a
+NULL
+c
+
+query II
+select [10, NULL, 30][number + 1], [][number + 1] from numbers(3) order by number
+----
+10 NULL
+NULL NULL
+30 NULL
+
+query III
+select [[10, 20], [30, 40]][number + 1][2], [[10, 20], [30, 40]][1][number + 1], [[10, 20], [30, 40]][number + 1][number + 1] from numbers(2) order by number
+----
+20 10 10
+40 20 40
+
+query I
+select {'k0': 10, 'k1': 20}[concat('k', to_string(number))] from numbers(3) order by number
+----
+10
+20
+NULL
+
+query T
+select parse_json('{"a":[10,20]}')[concat('a', '')][number] from numbers(3) order by number
+----
+10
+20
+NULL
+
 query T
 select range(10, 20)
 ----

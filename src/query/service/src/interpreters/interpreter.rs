@@ -21,8 +21,6 @@ use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
-use databend_common_ast::ast::OptimizeTableAction;
-use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
 use databend_common_catalog::query_kind::QueryKind;
@@ -395,11 +393,8 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         | Statement::MergeInto(_)
         | Statement::Update(_)
         | Statement::Delete(_)
-        | Statement::TruncateTable(_) => true,
-        Statement::OptimizeTable(OptimizeTableStmt { action, .. }) => matches!(
-            action,
-            OptimizeTableAction::All | OptimizeTableAction::Compact { .. }
-        ),
+        | Statement::TruncateTable(_)
+        | Statement::OptimizeTable(_) => true,
         Statement::AlterTable(AlterTableStmt { action, .. }) => matches!(
             action,
             AlterTableAction::ReclusterTable { .. }

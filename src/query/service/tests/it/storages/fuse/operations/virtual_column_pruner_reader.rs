@@ -48,6 +48,8 @@ use jsonb::OwnedJsonb;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use jsonb::keypath::parse_key_paths;
+use parquet::arrow::arrow_reader::RowSelection;
+use parquet::arrow::arrow_reader::RowSelector;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
@@ -341,6 +343,33 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         &result_block.get_by_offset(16).to_column(),
         &expected_root_array_k,
     );
+
+    // A prewhere predicate can reject every row of a block that survived
+    // min/max pruning. The deserializer then receives an empty data block and
+    // a row selection that keeps nothing; the virtual column reader must still
+    // produce zero-row columns instead of failing on the empty parquet batch.
+    let virtual_data = reader
+        .read_parquet_data_by_merge_io(
+            &read_settings,
+            &Some(&virtual_block_meta_index),
+            block.num_rows(),
+        )
+        .await
+        .expect("virtual block read result");
+    let empty_selection = RowSelection::from(vec![RowSelector::skip(block.num_rows())]);
+    let empty_block = reader.deserialize_virtual_columns(
+        block.slice(0..0),
+        Some(virtual_data),
+        Some(empty_selection),
+    )?;
+    assert_eq!(empty_block.num_rows(), 0);
+    assert_eq!(
+        empty_block.num_columns(),
+        block.num_columns() + column_ids.len()
+    );
+    for entry in empty_block.columns() {
+        assert_eq!(entry.to_column().len(), 0);
+    }
 
     Ok(())
 }

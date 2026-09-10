@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -353,7 +354,7 @@ impl JoinStatsEstimator {
         }
     }
 
-    pub(crate) fn evaluate_join(&mut self, join: &Join) -> Result<()> {
+    pub(crate) fn evaluate_join(&mut self, join: &Join, func_ctx: &FunctionContext) -> Result<()> {
         let left_stat_cardinality = self
             .left_input
             .statistics
@@ -375,6 +376,7 @@ impl JoinStatsEstimator {
                 &self.right_input.statistics,
                 left_stat_cardinality,
                 right_stat_cardinality,
+                func_ctx,
             )?;
             self.contributions
                 .push(JoinConditionContribution::from_equi(
@@ -406,6 +408,7 @@ impl JoinStatsEstimator {
                     &input,
                     input_cardinality,
                     &column_row_scales,
+                    func_ctx,
                 )?;
                 self.contributions
                     .push(JoinConditionContribution::from_non_equi(&evaluated));

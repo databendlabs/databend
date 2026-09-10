@@ -1,0 +1,7 @@
+Exchange
+├── output columns: [value (#0)]
+├── exchange type: Merge
+└── ConstantTableScan
+    ├── output columns: [value (#0)]
+    └── column 0: [1, 2]
+

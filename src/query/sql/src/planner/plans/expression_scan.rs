@@ -23,6 +23,7 @@ use crate::ScalarExpr;
 use crate::Symbol;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -90,7 +91,7 @@ impl Operator for ExpressionScan {
         }))
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: self.values.len() as f64,
             statistics: Statistics {

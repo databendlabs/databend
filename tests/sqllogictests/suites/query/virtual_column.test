@@ -782,6 +782,128 @@ FROM test2;
 9 "Richard" 33 "Austin" NULL "109" "10.9"
 10 "Lisa" 26 "Chicago" NULL NULL "10.10"
 
+# A prewhere predicate on a regular column may keep no rows of a block that
+# still survives min/max pruning. Reading the materialized virtual columns of
+# such a block must yield zero rows instead of failing. Each insert below
+# forms its own segment with a different virtual schema (paths, physical
+# types, missing paths), so the empty-selection path is exercised against
+# every schema shape with several projections.
+statement ok
+drop table if exists t_empty_prewhere
+
+statement ok
+create table t_empty_prewhere(id int, val json) storage_format = 'parquet' enable_virtual_column = true
+
+# segment 1: a is UInt64, b is String
+statement ok
+insert into t_empty_prewhere values (1, '{"a":1,"b":"x"}'), (3, '{"a":3,"b":"z"}')
+
+# segment 2: a is String, plus Boolean c and nested d.e
+statement ok
+insert into t_empty_prewhere values (11, '{"a":"s1","c":true,"d":{"e":1}}'), (13, '{"a":"s3","c":false,"d":{"e":3}}')
+
+# segment 3: a is missing, f stays Variant
+statement ok
+insert into t_empty_prewhere values (21, '{"d":{"e":21},"f":[1,2]}'), (23, '{"d":{"e":23},"b":"w"}')
+
+statement ok
+refresh virtual column on t_empty_prewhere
+
+# segment 4: materialized by a second refresh, only a
+statement ok
+insert into t_empty_prewhere values (31, '{"a":31}'), (33, '{"a":33}')
+
+statement ok
+refresh virtual column on t_empty_prewhere
+
+query IT
+select virtual_column_count, virtual_schema from fuse_virtual_column_segment_schema('test_virtual_column', 't_empty_prewhere') order by virtual_schema
+----
+1 [{"column_id":0,"path":"val.a"}]
+1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.b"}]
+1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.c"},{"column_id":2,"path":"val.d.e"}]
+1 [{"column_id":0,"path":"val.b"},{"column_id":1,"path":"val.d.e"},{"column_id":2,"path":"val.f"}]
+
+query TTTTT
+show virtual columns from t_empty_prewhere
+----
+test_virtual_column t_empty_prewhere val a UInt64, String
+test_virtual_column t_empty_prewhere val b String
+test_virtual_column t_empty_prewhere val c Boolean
+test_virtual_column t_empty_prewhere val d.e UInt64
+test_virtual_column t_empty_prewhere val f Variant
+
+# `id % 2 = 0` cannot prune any block by statistics, yet matches no row, so
+# every block reaches the reader with an empty row selection.
+query T
+select val['a'] from t_empty_prewhere where id % 2 = 0
+----
+
+query TT
+select val['b'], val['c'] from t_empty_prewhere where id % 2 = 0
+----
+
+query TT
+select val['d']['e'], val['f'][0] from t_empty_prewhere where id % 2 = 0
+----
+
+query ITT
+select id, val, val['a'] from t_empty_prewhere where id % 2 = 0
+----
+
+query TI
+select val['a']::string, val['d']['e']::int from t_empty_prewhere where id % 2 = 0
+----
+
+query ITT
+select count(), max(val['a']), min(val['d']['e']) from t_empty_prewhere where id % 2 = 0
+----
+0 NULL NULL
+
+query I
+select count() from t_empty_prewhere where id % 2 = 0 and val['a'] = 2
+----
+0
+
+# Range predicates that only keep a single block, then reject all of its rows.
+query T
+select val['a'] from t_empty_prewhere where id > 1 and id < 3
+----
+
+query TT
+select val['a'], val['c'] from t_empty_prewhere where id > 11 and id < 13
+----
+
+query TT
+select val['a'], val['d']['e'] from t_empty_prewhere where id > 21 and id < 23
+----
+
+query TT
+select val['a'], val['b'] from t_empty_prewhere where id > 31 and id < 33
+----
+
+# Blocks with zero selected rows mixed with blocks that keep some rows.
+query ITT
+select id, val['a'], val['d']['e'] from t_empty_prewhere where id >= 3 and id < 13 and id != 11 order by id
+----
+3 3 NULL
+
+query ITTT
+select id, val['a'], val['b'], val['d']['e'] from t_empty_prewhere where id >= 3 and id < 33 and id % 10 != 1 order by id
+----
+3 3 "z" NULL
+13 "s3" NULL 3
+23 NULL "w" 23
+
+query I
+select id from t_empty_prewhere where id % 2 = 1 and val['d']['e'] > 20 order by id
+----
+21
+23
+
+statement ok
+drop table t_empty_prewhere
+
 statement ok
 set enable_experimental_virtual_column = 0;
 

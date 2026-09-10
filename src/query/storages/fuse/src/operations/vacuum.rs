@@ -23,10 +23,12 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::TimeDelta;
 use chrono::Utc;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -34,6 +36,7 @@ use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTime
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
@@ -85,6 +88,25 @@ use crate::io::TableMetaLocationGenerator;
 ///   If the entire cluster is upgraded to the new version that includes the vacuum2 logic,
 ///   the above risks will not exist.
 pub const ASSUMPTION_MAX_TXN_DURATION: Duration = Duration::days(3);
+
+fn retention_cutoff(
+    now: DateTime<Utc>,
+    latest_snapshot_timestamp: DateTime<Utc>,
+    retention_period: TimeDelta,
+) -> DateTime<Utc> {
+    std::cmp::min(now - retention_period, latest_snapshot_timestamp)
+}
+
+fn flashback_gc_root_lvt(respect_flash_back: bool, lvt: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    respect_flash_back.then_some(lvt)
+}
+
+fn is_snapshot_at_or_before_lvt(
+    snapshot_timestamp: Option<DateTime<Utc>>,
+    lvt: DateTime<Utc>,
+) -> bool {
+    snapshot_timestamp.is_some_and(|timestamp| timestamp <= lvt)
+}
 
 pub struct SnapshotGcSelection {
     pub gc_root: Arc<TableSnapshot>,
@@ -200,16 +222,16 @@ fn granule_payload_block_id(path: &str) -> Option<Uuid> {
 }
 
 impl FuseTable {
-    /// List granule-index payloads whose block is no longer protected and whose object is old
-    /// enough to cross the caller's GC safety boundary.
-    ///
-    /// The granule Bloom layout is index-first, so this is intentionally one recursive sweep of
-    /// the table's `_i_gb` prefix rather than one LIST request per block.
-    pub async fn list_orphan_granule_index_payloads(
+    /// Remove old orphan granule payloads in bounded batches, including payloads
+    /// from dropped index specs and interrupted writes. The index-first layout
+    /// requires one recursive scan rather than one LIST request per block.
+    pub async fn vacuum_orphan_granule_index_payloads(
         &self,
+        ctx: Arc<dyn TableContext>,
         protected_block_locations: &HashSet<String>,
-        retention_time: DateTime<Utc>,
-    ) -> Result<Vec<String>> {
+        gc_root_timestamp: DateTime<Utc>,
+        gc_root_meta_ts: DateTime<Utc>,
+    ) -> Result<usize> {
         let protected_block_ids = protected_block_locations
             .iter()
             .map(|location| {
@@ -225,10 +247,16 @@ impl FuseTable {
             .meta_location_generator()
             .block_granule_bloom_index_prefix();
         let op = self.get_operator_ref();
+        let file_remover = Files::create(ctx.clone(), op.clone());
+        let cutoff_id = uuid_from_date_time(gc_root_timestamp);
         let mut lister = op.lister_with(&prefix).recursive(true).await?;
-        let mut orphan_payloads = Vec::new();
+        let mut orphan_payloads = Vec::with_capacity(1000);
+        let mut removed = 0;
 
         while let Some(entry) = lister.try_next().await? {
+            ctx.check_aborting().map_err(|err| {
+                err.with_context("aborted while vacuuming orphan granule payloads")
+            })?;
             if !entry.metadata().is_file() {
                 continue;
             }
@@ -239,7 +267,9 @@ impl FuseTable {
                 );
                 continue;
             };
-            if protected_block_ids.contains(&block_id) {
+            if protected_block_ids.contains(&block_id)
+                || (is_uuid_v7(&block_id) && block_id.as_bytes()[..6] >= cutoff_id.as_bytes()[..6])
+            {
                 continue;
             }
             let modified = match entry.metadata().last_modified() {
@@ -256,12 +286,78 @@ impl FuseTable {
                 },
             };
             let modified = DateTime::<Utc>::from(SystemTime::from(modified));
-            if modified <= retention_time {
+            // Payload names strip the block's vacuum2 marker. Use the legacy
+            // transaction grace period as well as the v7 block timestamp cutoff.
+            if modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
                 orphan_payloads.push(entry.path().to_string());
+                if orphan_payloads.len() == 1000 {
+                    file_remover.remove_file_in_batch(&orphan_payloads).await?;
+                    removed += orphan_payloads.len();
+                    orphan_payloads.clear();
+                }
+            }
+        }
+        if !orphan_payloads.is_empty() {
+            file_remover.remove_file_in_batch(&orphan_payloads).await?;
+            removed += orphan_payloads.len();
+        }
+
+        Ok(removed)
+    }
+
+    /// Protect live table-tag references from VACUUM2 and remove expired tags.
+    pub async fn protect_table_tag_references(
+        &self,
+        catalog: &Arc<dyn Catalog>,
+        root_snapshot_location: &str,
+        snapshot_files_to_gc: &mut Vec<String>,
+        protected_segments: &mut HashSet<Location>,
+    ) -> Result<()> {
+        let now = Utc::now();
+        let tags = catalog
+            .list_table_tags(ListTableTagsReq {
+                table_id: self.get_id(),
+                include_expired: true,
+            })
+            .await?;
+
+        let mut protected_snapshot_locs = HashSet::new();
+        for (tag_name, seq_tag) in tags {
+            if seq_tag
+                .data
+                .expire_at
+                .is_some_and(|expire_at| expire_at <= now)
+            {
+                if let Err(error) = catalog
+                    .drop_table_tag(DropTableTagReq {
+                        table_id: self.get_id(),
+                        tag_name,
+                        seq: Some(seq_tag.seq),
+                    })
+                    .await
+                {
+                    warn!(
+                        "drop expired tag failed, ignored, table: {}, err: {}",
+                        self.table_info.desc, error
+                    );
+                }
+                continue;
+            }
+
+            let tag_snapshot_loc = seq_tag.data.snapshot_loc;
+            if tag_snapshot_loc.as_str() < root_snapshot_location {
+                if let Some(snapshot) =
+                    SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &tag_snapshot_loc)
+                        .await?
+                {
+                    protected_segments.extend(snapshot.segments.iter().cloned());
+                }
+                protected_snapshot_locs.insert(tag_snapshot_loc);
             }
         }
 
-        Ok(orphan_payloads)
+        snapshot_files_to_gc.retain(|path| !protected_snapshot_locs.contains(path));
+        Ok(())
     }
 
     pub async fn vacuum_table(
@@ -301,7 +397,7 @@ impl FuseTable {
     /// List files until a specific timestamp
     ///
     /// This implementation uses UUID v7 timestamp extraction for precise filtering.
-    /// Used by both do_vacuum and do_vacuum2.
+    /// Used by vacuum2.
     pub async fn list_files_until_timestamp(
         &self,
         path: &str,
@@ -506,9 +602,7 @@ impl FuseTable {
                     return Ok(None);
                 };
 
-                if respect_flash_back {
-                    respect_flash_back_with_lvt = Some(lvt);
-                }
+                respect_flash_back_with_lvt = flashback_gc_root_lvt(respect_flash_back, lvt);
 
                 ctx.set_status_info(&format!(
                     "Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
@@ -625,7 +719,7 @@ impl FuseTable {
             let latest_location = self.snapshot_loc().unwrap();
             let gc_root = self
                 .find_location(ctx, latest_location, |snapshot| {
-                    snapshot.timestamp.is_some_and(|ts| ts <= lvt)
+                    is_snapshot_at_or_before_lvt(snapshot.timestamp, lvt)
                 })
                 .await
                 .ok();
@@ -749,7 +843,7 @@ impl FuseTable {
         let catalog = ctx.get_default_catalog()?;
         // safe to unwrap, as we have checked the version is v4
         let latest_ts = latest_snapshot.timestamp.unwrap();
-        let lvt_point_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
+        let lvt_point_candidate = retention_cutoff(Utc::now(), latest_ts, retention_period);
 
         let lvt_point = catalog
             .set_table_lvt(
@@ -800,7 +894,9 @@ pub fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::granule_payload_block_id;
+    use chrono::TimeZone;
+
+    use super::*;
 
     #[test]
     fn test_granule_payload_block_id() {
@@ -820,5 +916,45 @@ mod tests {
             granule_payload_block_id("1/2/_i_gb/idx/version/not-a-uuid_7.gbloom"),
             None
         );
+    }
+
+    #[test]
+    fn test_retention_cutoff_is_bounded_by_latest_snapshot() {
+        let now = Utc.with_ymd_and_hms(2025, 1, 10, 12, 0, 0).unwrap();
+        let retention_period = TimeDelta::days(2);
+
+        // When the latest snapshot is newer than the retention boundary, use
+        // now - retention as the cutoff.
+        let latest_after_cutoff = Utc.with_ymd_and_hms(2025, 1, 9, 12, 0, 0).unwrap();
+        assert_eq!(
+            retention_cutoff(now, latest_after_cutoff, retention_period),
+            Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap()
+        );
+
+        // The cutoff must not move past the latest snapshot. This also keeps
+        // the result valid when the host clock is ahead of snapshot time.
+        let latest_before_cutoff = Utc.with_ymd_and_hms(2025, 1, 7, 12, 0, 0).unwrap();
+        assert_eq!(
+            retention_cutoff(now, latest_before_cutoff, retention_period),
+            latest_before_cutoff
+        );
+    }
+
+    #[test]
+    fn test_snapshot_at_or_before_lvt_boundary() {
+        let lvt = Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap();
+
+        assert_eq!(flashback_gc_root_lvt(false, lvt), None);
+        assert_eq!(flashback_gc_root_lvt(true, lvt), Some(lvt));
+        assert!(!is_snapshot_at_or_before_lvt(None, lvt));
+        assert!(!is_snapshot_at_or_before_lvt(
+            Some(lvt + TimeDelta::microseconds(1)),
+            lvt
+        ));
+        assert!(is_snapshot_at_or_before_lvt(Some(lvt), lvt));
+        assert!(is_snapshot_at_or_before_lvt(
+            Some(lvt - TimeDelta::microseconds(1)),
+            lvt
+        ));
     }
 }
