@@ -14,6 +14,9 @@
 
 // Stream table options.
 pub const OPT_KEY_SOURCE_DATABASE_ID: &str = "source_db_id";
+// Consumer database binding for a stream on a shared table. The source database/table IDs
+// still identify the provider objects; reads must go through this consumer database.
+pub const OPT_KEY_SOURCE_SHARED_DATABASE_ID: &str = "source_shared_db_id";
 pub const OPT_KEY_SOURCE_TABLE_ID: &str = "table_id";
 pub const OPT_KEY_TABLE_VER: &str = "table_version";
 pub const OPT_KEY_MODE: &str = "mode";

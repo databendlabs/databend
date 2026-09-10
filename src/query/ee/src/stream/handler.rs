@@ -41,6 +41,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_SHARED_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
@@ -57,8 +58,19 @@ impl StreamHandler for RealStreamHandler {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
 
-        let table = catalog
-            .get_table(&tenant, &plan.table_database, &plan.table_name)
+        let target_database = catalog.get_database(&tenant, &plan.database).await?;
+        if target_database.engine().eq_ignore_ascii_case("share") {
+            return Err(ErrorCode::IllegalStream(
+                "Create the stream in a local database, not in a shared database",
+            ));
+        }
+        let source_database = catalog.get_database(&tenant, &plan.table_database).await?;
+        let shared_database_id = source_database
+            .engine()
+            .eq_ignore_ascii_case("share")
+            .then_some(source_database.get_db_info().database_id.db_id);
+        let table = ctx
+            .get_table(&plan.catalog, &plan.table_database, &plan.table_name)
             .await?;
         let table_info = table.get_table_info();
         if table_info.options().contains_key("TRANSIENT") {
@@ -82,13 +94,21 @@ impl StreamHandler for RealStreamHandler {
             )));
         }
 
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        if shared_database_id.is_some() && !fuse_table.change_tracking_enabled() {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Change tracking is not enabled on shared table {}. The provider must enable change_tracking before creating a stream",
+                table_info.desc
+            )));
+        }
         let table_id = table_info.ident.table_id;
         let table_seq = table_info.ident.seq;
         // Keep the stream offset at this data boundary. The atomic option update advances the
         // source metadata seq but does not create a new snapshot; the first later data mutation
         // uses the advanced seq as its origin version and remains visible to this stream.
         let source_table_option =
-            (!table.change_tracking_enabled()).then(|| UpsertTableOptionReq {
+            (!fuse_table.change_tracking_enabled()).then(|| UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(table_seq),
                 options: HashMap::from([
@@ -103,8 +123,7 @@ impl StreamHandler for RealStreamHandler {
                 ]),
             });
 
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let change_desc = table
+        let change_desc = fuse_table
             .get_change_descriptor(
                 &ctx,
                 plan.append_only,
@@ -113,7 +132,7 @@ impl StreamHandler for RealStreamHandler {
             )
             .await?;
         if source_table_option.is_none() {
-            table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;
+            fuse_table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;
         } else if table_seq > change_desc.seq {
             return Err(ErrorCode::IllegalStream(format!(
                 "Change tracking has been missing for the time range requested on table {}",
@@ -133,6 +152,12 @@ impl StreamHandler for RealStreamHandler {
             })?;
 
         let mut options = BTreeMap::new();
+        if let Some(id) = shared_database_id {
+            options.insert(
+                OPT_KEY_SOURCE_SHARED_DATABASE_ID.to_string(),
+                id.to_string(),
+            );
+        }
         options.insert(OPT_KEY_MODE.to_string(), change_desc.mode.to_string());
         options.insert(OPT_KEY_SOURCE_DATABASE_ID.to_owned(), db_id.to_string());
         options.insert(OPT_KEY_SOURCE_TABLE_ID.to_string(), table_id.to_string());

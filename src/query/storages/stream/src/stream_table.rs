@@ -51,6 +51,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_SHARED_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use databend_storages_common_table_meta::table::StreamMode;
@@ -109,7 +110,9 @@ impl StreamTable {
         } else {
             let catalog = ctx.get_catalog(self.info.catalog()).await?;
             let source_table_name = self.source_table_name(catalog.as_ref()).await?;
-            let source_database_name = self.source_database_name(catalog.as_ref()).await?;
+            let source_database_name = self
+                .source_database_name(catalog.as_ref(), &ctx.get_tenant())
+                .await?;
             ctx.get_table(
                 self.info.catalog(),
                 &source_database_name,
@@ -307,7 +310,18 @@ impl StreamTable {
             })
     }
 
+    pub fn source_shared_database_id(&self) -> Result<Option<u64>> {
+        self.info
+            .options()
+            .get(OPT_KEY_SOURCE_SHARED_DATABASE_ID)
+            .map(|id| id.parse::<u64>().map_err(ErrorCode::from))
+            .transpose()
+    }
+
     pub async fn source_database_id(&self, catalog: &dyn Catalog) -> Result<u64> {
+        if let Some(id) = self.source_shared_database_id()? {
+            return Ok(id);
+        }
         let source_db_id_opt = self
             .info
             .options()
@@ -339,9 +353,25 @@ impl StreamTable {
         Ok(source_db_id)
     }
 
-    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
+    pub async fn source_database_name(
+        &self,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+    ) -> Result<String> {
         let source_db_id = self.source_database_id(catalog).await?;
-        catalog.get_db_name_by_id(source_db_id).await
+        let name = catalog.get_db_name_by_id(source_db_id).await?;
+        if self.source_shared_database_id()?.is_some() {
+            // Dropped database IDs retain their name mapping. A same-name replacement
+            // can expose the same provider table, so checking the table ID is insufficient.
+            let database = catalog.get_database(tenant, &name).await?;
+            if database.get_db_info().database_id.db_id != source_db_id {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Base database '{}' (id: {}) dropped, cannot read from stream {}",
+                    name, source_db_id, self.info.desc,
+                )));
+            }
+        }
+        Ok(name)
     }
 
     #[async_backtrace::framed]
