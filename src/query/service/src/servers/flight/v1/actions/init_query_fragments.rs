@@ -32,7 +32,11 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     tracking_payload.query_id = Some(fragments.query_id.clone());
     tracking_payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
 
-    debug!("init query fragments with {:?}", fragments);
+    debug!(
+        "init query fragments query_id={} fragment_count={}",
+        fragments.query_id,
+        fragments.fragments.len()
+    );
 
     // Avoid blocking runtime.
     let query_id = fragments.query_id.clone();

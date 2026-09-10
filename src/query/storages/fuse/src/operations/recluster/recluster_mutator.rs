@@ -96,6 +96,7 @@ pub struct ReclusterCandidateWindow {
     // Window locations plus cached SegmentInfo for positions touched by candidates.
     pub(crate) segments: Vec<(Location, Option<Arc<SegmentInfo>>)>,
     pub(crate) tasks: Vec<ReclusterTaskCandidate>,
+    pub(crate) decoded_blocks: Arc<Vec<ReclusterBlock>>,
 }
 
 impl ReclusterCandidateWindow {
@@ -307,8 +308,41 @@ impl ReclusterMutator {
         }
     }
 
-    /// Decode one selected segment window and build candidate tasks from it.
-    #[async_backtrace::framed]
+    /// Keep normalized block views with their window; both scoring and materialization reuse them.
+    pub(crate) async fn decode_candidate_window(
+        &self,
+        compact_segments: Vec<SelectedReclusterSegment>,
+        decode_runtime: Arc<Runtime>,
+        decode_semaphore: Arc<Semaphore>,
+    ) -> Result<ReclusterCandidateWindow> {
+        let selected_segments = compact_segments
+            .iter()
+            .enumerate()
+            .map(|(idx, segment)| (idx, segment.loc.location.clone(), segment.info.clone()))
+            .collect();
+        let blocks_by_segment = self
+            .gather_blocks(selected_segments, decode_runtime, decode_semaphore)
+            .await?;
+        let segments = compact_segments
+            .into_iter()
+            .zip(&blocks_by_segment)
+            .map(|(segment, blocks)| {
+                let info = SegmentInfo {
+                    format_version: segment.info.format_version,
+                    blocks: blocks.iter().map(|block| block.meta.clone()).collect(),
+                    summary: segment.info.summary.clone(),
+                };
+                (segment.loc.location, Some(Arc::new(info)))
+            })
+            .collect();
+        Ok(ReclusterCandidateWindow {
+            segments,
+            tasks: Vec::new(),
+            decoded_blocks: Arc::new(blocks_by_segment.into_iter().flatten().collect()),
+        })
+    }
+
+    /// Legacy one-window entry point; v2 Linear defers selection until all windows are decoded.
     pub async fn probe_candidate_window(
         &self,
         compact_segments: Vec<SelectedReclusterSegment>,
@@ -316,120 +350,96 @@ impl ReclusterMutator {
         decode_runtime: Arc<Runtime>,
         decode_semaphore: Arc<Semaphore>,
     ) -> Result<ReclusterCandidateWindow> {
-        debug_assert!(task_budget > 0);
-        let mut window_segments = Vec::with_capacity(compact_segments.len());
-        let mut window_segment_infos = Vec::with_capacity(compact_segments.len());
-        let mut selected_segments = Vec::with_capacity(compact_segments.len());
-        let mut total_block_count = 0usize;
-        for (window_pos, segment) in compact_segments.into_iter().enumerate() {
-            total_block_count += segment.info.summary.block_count as usize;
-            selected_segments.push((
-                window_pos,
-                segment.loc.location.clone(),
-                segment.info.clone(),
-            ));
-            window_segments.push((segment.loc.location, None));
-            window_segment_infos.push(segment.info);
-        }
-
-        // Read blocks once; materialization reuses cached selected SegmentInfo.
-        let mut blocks_by_segment = self
-            .gather_blocks(selected_segments, decode_runtime, decode_semaphore)
+        let mut window = self
+            .decode_candidate_window(compact_segments, decode_runtime, decode_semaphore)
             .await?;
-        let mut blocks = Vec::with_capacity(total_block_count);
-        for segment_blocks in &blocks_by_segment {
-            blocks.extend(segment_blocks.iter());
-        }
-
-        let mut candidate_window = ReclusterCandidateWindow {
-            segments: window_segments,
-            tasks: Vec::new(),
-        };
-        let mut selected_window_positions = vec![false; window_segment_infos.len()];
-
-        let tasks = self.build_tasks(&blocks, task_budget)?;
-
-        for candidate in &tasks {
-            for (window_pos, _) in &candidate.selected_blocks {
-                selected_window_positions[*window_pos] = true;
+        self.build_window_tasks(&mut window, task_budget, None)?;
+        for (idx, (_, segment)) in window.segments.iter_mut().enumerate() {
+            if !window.tasks.iter().any(|task| {
+                task.is_repack_only() || task.selected_blocks.iter().any(|(pos, _)| *pos == idx)
+            }) {
+                *segment = None;
             }
         }
-        candidate_window.tasks = tasks;
-
-        if candidate_window.tasks.is_empty() {
-            let all_original_stats = blocks
-                .iter()
-                .all(|block| matches!(block.stats, ReclusterBlockStats::Original));
-            let unordered = || {
-                blocks.windows(2).any(|window| {
-                    sort_by_cluster_stats(
-                        Some(window[0].stats()),
-                        Some(window[1].stats()),
-                        self.properties.cluster_key_info.cluster_key_id(),
-                    ) == cmp::Ordering::Greater
-                })
-            };
-            let selected_segment_count = window_segment_infos.len();
-            let target_segment_count =
-                total_block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
-            let compactable_repack = total_block_count > 0
-                && selected_segment_count > 1
-                && target_segment_count < selected_segment_count;
-            let unordered_repack = self.properties.mode == ReclusterMode::Conservative
-                && all_original_stats
-                && unordered();
-            if compactable_repack || unordered_repack {
-                // Repack-only candidate removes segments without rewrite tasks.
-                selected_window_positions.fill(true);
-                candidate_window.tasks.push(ReclusterTaskCandidate {
-                    score: CandidateScore {
-                        selected_total_bytes: 0,
-                        selected_block_count: 0,
-                        max_depth: 0,
-                        average_depth: 0.0,
-                        estimated_depth_gain: 0,
-                        task_threshold_bytes: self.properties.memory_threshold,
-                        // Repack-only candidate rewrites no blocks.
-                        touched_segment_count: 0,
-                    },
-                    selected_blocks: Vec::new(),
-                    output_level: 0,
-                    all_ordered: false,
-                    key_span: None,
-                });
-            } else {
-                return Ok(candidate_window);
-            }
-        }
-
-        for (window_pos, selected) in selected_window_positions.into_iter().enumerate() {
-            if !selected {
-                continue;
-            }
-            let info = &window_segment_infos[window_pos];
-            let blocks = blocks_by_segment[window_pos]
-                .drain(..)
-                .map(|block| block.meta)
-                .collect::<Vec<_>>();
-            candidate_window.segments[window_pos].1 = Some(Arc::new(SegmentInfo {
-                format_version: info.format_version,
-                blocks,
-                summary: info.summary.clone(),
-            }));
-        }
-
-        Ok(candidate_window)
+        window.decoded_blocks = Arc::new(Vec::new());
+        Ok(window)
     }
 
-    /// Bin block indices into recluster groups and build rewrite-task
-    /// candidates. This reuses the already decoded block metas in this window;
-    /// it only builds in-memory groups and runs candidate selection, without
-    /// extra pruning or IO.
-    fn build_tasks(
+    pub(crate) fn builds_tasks_after_decode(&self) -> bool {
+        self.properties.enable_task_selection_v2
+            && self.properties.cluster_key_info.cluster_type == ClusterType::Linear
+    }
+
+    pub(crate) fn build_decoded_window_tasks(
+        &self,
+        windows: &mut [ReclusterCandidateWindow],
+    ) -> Result<()> {
+        if !self.builds_tasks_after_decode() || windows.is_empty() {
+            return Ok(());
+        }
+        let stats = super::ReclusterDepthStats::create(
+            windows
+                .iter()
+                .flat_map(|window| window.decoded_blocks.iter()),
+            &self.properties.scalar_cluster_key_types,
+        )?;
+        for window in windows {
+            self.build_window_tasks(window, self.max_tasks, Some(&stats))?;
+        }
+        Ok(())
+    }
+
+    fn build_window_tasks(
+        &self,
+        window: &mut ReclusterCandidateWindow,
+        task_budget: usize,
+        depth_stats: Option<&super::ReclusterDepthStats>,
+    ) -> Result<()> {
+        let blocks = window.decoded_blocks.iter().collect::<Vec<_>>();
+        window.tasks = self.build_tasks(&blocks, task_budget, depth_stats)?;
+        if !window.tasks.is_empty() {
+            return Ok(());
+        }
+        let block_count = blocks.len();
+        let segment_count = window.segments.len();
+        let target_segments =
+            block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
+        let compactable = block_count > 0 && segment_count > 1 && target_segments < segment_count;
+        let unordered = self.properties.mode == ReclusterMode::Conservative
+            && blocks
+                .iter()
+                .all(|block| matches!(block.stats, ReclusterBlockStats::Original))
+            && blocks.windows(2).any(|pair| {
+                sort_by_cluster_stats(
+                    Some(pair[0].stats()),
+                    Some(pair[1].stats()),
+                    self.properties.cluster_key_info.cluster_key_id(),
+                ) == cmp::Ordering::Greater
+            });
+        if compactable || unordered {
+            window.tasks.push(ReclusterTaskCandidate {
+                score: CandidateScore {
+                    selected_total_bytes: 0,
+                    selected_block_count: 0,
+                    max_depth: 0,
+                    average_depth: 0.0,
+                    estimated_depth_gain: 0,
+                    task_threshold_bytes: self.properties.memory_threshold,
+                    touched_segment_count: 0,
+                },
+                selected_blocks: Vec::new(),
+                output_level: 0,
+                all_ordered: false,
+                key_span: None,
+            });
+        }
+        Ok(())
+    }
+
+    fn bin_blocks_into_groups(
         &self,
         blocks: &[&ReclusterBlock],
-        task_budget: usize,
-    ) -> Result<Vec<ReclusterTaskCandidate>> {
+    ) -> BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> {
         let mut blocks_map: BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
             let level = block.stats().level;
@@ -460,6 +470,20 @@ impl ReclusterMutator {
                 .or_default()
                 .push(idx);
         }
+        blocks_map
+    }
+
+    /// Bin block indices into recluster groups and build rewrite-task
+    /// candidates. This reuses the already decoded block metas in this window;
+    /// it only builds in-memory groups and runs candidate selection, without
+    /// extra pruning or IO.
+    fn build_tasks(
+        &self,
+        blocks: &[&ReclusterBlock],
+        task_budget: usize,
+        depth_stats: Option<&super::ReclusterDepthStats>,
+    ) -> Result<Vec<ReclusterTaskCandidate>> {
+        let blocks_map = self.bin_blocks_into_groups(blocks);
 
         if !self.properties.enable_task_selection_v2 {
             let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
@@ -475,6 +499,7 @@ impl ReclusterMutator {
                     indices,
                     blocks,
                     remaining_task_budget,
+                    depth_stats,
                 )?;
 
                 for candidate in candidates {
@@ -518,6 +543,7 @@ impl ReclusterMutator {
                 indices,
                 blocks,
                 task_budget,
+                depth_stats,
             )?);
         }
 
@@ -528,7 +554,6 @@ impl ReclusterMutator {
                 .then_with(|| left.output_level.cmp(&right.output_level))
         });
         candidates.truncate(task_budget);
-
         Ok(candidates)
     }
 
@@ -682,6 +707,7 @@ impl ReclusterMutator {
         indices: Vec<usize>,
         blocks: &[&ReclusterBlock],
         task_budget: usize,
+        depth_stats: Option<&super::ReclusterDepthStats>,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
         let group_start = Instant::now();
@@ -716,16 +742,21 @@ impl ReclusterMutator {
             .check_for_compact(total_rows as usize, total_bytes as usize)
             && total_bytes as usize <= self.properties.memory_threshold
         {
-            let score = CandidateScore {
+            let mut score = CandidateScore {
                 selected_total_bytes: total_bytes as usize,
                 selected_block_count: block_count,
                 max_depth: block_count,
                 average_depth: block_count as f64,
-                estimated_depth_gain: block_count.saturating_sub(1) as u64,
+                estimated_depth_gain: block_count.saturating_sub(1) as i64,
                 task_threshold_bytes: self.properties.memory_threshold,
                 // Filled in by `task_candidate`, which groups by segment.
                 touched_segment_count: 0,
             };
+            if let Some(stats) = depth_stats {
+                let gain =
+                    stats.gain([indices.iter().map(|&idx| blocks[idx])], &self.properties)?;
+                score.estimated_depth_gain = gain;
+            }
             return Ok(vec![task_candidate(group, score, &indices, blocks)]);
         }
 
@@ -735,6 +766,7 @@ impl ReclusterMutator {
             &indices,
             blocks,
             task_budget,
+            depth_stats,
         )?;
 
         debug!(

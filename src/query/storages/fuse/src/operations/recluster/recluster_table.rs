@@ -105,12 +105,8 @@ impl FuseTable {
         let chunk_size = segment_limit.max(max_threads * 4);
         // LIMIT also caps one candidate window; select_segments treats this as
         // a soft upper bound when hotspot blocks are inseparable.
-        let max_seg_num = if mutator.properties.enable_task_selection_v2 {
-            // Keep v2 candidate selection stable across executor parallelism.
-            segment_limit.min(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW)
-        } else {
-            segment_limit.min((max_threads * 2).max(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW))
-        };
+        let max_seg_num =
+            segment_limit.min((max_threads * 2).max(DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW));
 
         // Snapshot index for carry validation and task materialization.
         let live_segments = snapshot
@@ -298,14 +294,24 @@ impl FuseTable {
                             let decode_runtime = decode_runtime.clone();
                             let decode_semaphore = decode_semaphore.clone();
                             async move {
-                                mutator
-                                    .probe_candidate_window(
-                                        selected_segs,
-                                        remaining_task_budget,
-                                        decode_runtime,
-                                        decode_semaphore,
-                                    )
-                                    .await
+                                if mutator.builds_tasks_after_decode() {
+                                    mutator
+                                        .decode_candidate_window(
+                                            selected_segs,
+                                            decode_runtime,
+                                            decode_semaphore,
+                                        )
+                                        .await
+                                } else {
+                                    mutator
+                                        .probe_candidate_window(
+                                            selected_segs,
+                                            remaining_task_budget,
+                                            decode_runtime,
+                                            decode_semaphore,
+                                        )
+                                        .await
+                                }
                             }
                         });
 
@@ -342,6 +348,8 @@ impl FuseTable {
                     );
                 }
             }
+
+            mutator.build_decoded_window_tasks(&mut pending_windows)?;
 
             let (block_count, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())

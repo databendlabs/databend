@@ -465,7 +465,8 @@ impl ReclusterParts {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ReclusterInfoSideCar {
-    pub merged_blocks: Vec<BlockMetaWithHLL>,
+    // Share immutable metadata (including serialized HLL) across physical-plan clones.
+    pub merged_blocks: Vec<Arc<BlockMetaWithHLL>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
 }

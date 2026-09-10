@@ -280,6 +280,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         indices: &[usize],
         blocks: &[&ReclusterBlock],
         task_budget: usize,
+        _depth_stats: Option<&super::ReclusterDepthStats>,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let block_count = indices.len();
         if block_count < 2 || task_budget == 0 {
@@ -356,7 +357,8 @@ impl ReclusterStrategy for VectorReclusterStrategy {
             if selected.len() < 2 {
                 continue;
             }
-            let estimated_depth_gain = selector.estimate_depth_gain(&selected);
+            let estimated_depth_gain =
+                selector.estimate_depth_gain(&selected).min(i64::MAX as u64) as i64;
             for &local_idx in &selected {
                 used[local_idx] = true;
             }

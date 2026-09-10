@@ -203,6 +203,7 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         indices: &[usize],
         blocks: &[&ReclusterBlock],
         task_budget: usize,
+        depth_stats: Option<&super::ReclusterDepthStats>,
     ) -> Result<Vec<ReclusterTaskCandidate>>;
 
     fn can_reuse_cluster_stats(
@@ -300,7 +301,7 @@ pub struct CandidateScore {
     pub selected_block_count: usize,
     pub max_depth: usize,
     pub average_depth: f64,
-    pub estimated_depth_gain: u64,
+    pub estimated_depth_gain: i64,
     /// Task byte budget this candidate was packed against. Used to express how
     /// well the candidate fills one distributed task slot.
     pub task_threshold_bytes: usize,
@@ -310,21 +311,13 @@ pub struct CandidateScore {
 }
 
 impl CandidateScore {
-    /// Candidates filling less than this share of a task slot are ranked behind
-    /// all better-filled candidates, so they are effectively deferred until no
-    /// higher-value rewrite is left.
+    /// Fill diagnostics; v2 ranking uses total estimated gain instead.
     pub const MIN_FILL_RATIO: f64 = 0.25;
-    /// Weight of fill ratio relative to raw benefit density. `0.0` reduces to
-    /// pure density, `1.0` reduces to ranking by total estimated gain.
+    /// Fill exponent for the diagnostic density metric, not candidate ranking.
     const FILL_RATIO_EXPONENT: f64 = 0.5;
-    /// Bytes charged per extra segment a task spans. A multi-segment rewrite
-    /// reads and rewrites more segment metadata and enlarges the commit, which
-    /// rewrite bytes alone do not express. Kept well below a typical block so
-    /// it only breaks ties between otherwise comparable candidates.
-    const SEGMENT_COST_BYTES: usize = 4 * 1024 * 1024;
 
     pub fn bytes_per_depth_gain(&self) -> f64 {
-        if self.estimated_depth_gain == 0 {
+        if self.estimated_depth_gain <= 0 {
             f64::INFINITY
         } else {
             self.selected_total_bytes as f64 / self.estimated_depth_gain as f64
@@ -339,19 +332,12 @@ impl CandidateScore {
         (self.selected_total_bytes as f64 / self.task_threshold_bytes as f64).clamp(0.0, 1.0)
     }
 
-    /// Rewrite bytes plus the metadata cost of spanning multiple segments.
-    /// A single-segment task is charged nothing extra.
+    /// Rewrite bytes without an additional segment penalty.
     pub fn effective_cost_bytes(&self) -> usize {
-        let extra_segments = self.touched_segment_count.saturating_sub(1);
         self.selected_total_bytes
-            .saturating_add(extra_segments.saturating_mul(Self::SEGMENT_COST_BYTES))
     }
 
-    /// Benefit density discounted by how poorly the candidate fills a task
-    /// slot. Higher is better. Replaces the previous fixed slot-cost term,
-    /// which did not scale with the task byte budget.
-    /// Cost counts extra touched segments, so a task that rewrites the same
-    /// bytes from fewer segments ranks ahead of one scattered across many.
+    /// Diagnostic benefit density; v2 ranking compares total gain directly.
     pub fn fill_adjusted_gain_density(&self) -> f64 {
         if self.estimated_depth_gain == 0 || self.selected_total_bytes == 0 {
             return 0.0;
@@ -360,7 +346,7 @@ impl CandidateScore {
         density * self.fill_ratio().powf(Self::FILL_RATIO_EXPONENT)
     }
 
-    /// Whether this candidate is too small to spend a task slot on right now.
+    /// Diagnostic flag for candidates below the fill threshold; not a ranking gate.
     pub fn is_underfilled(&self) -> bool {
         self.fill_ratio() < Self::MIN_FILL_RATIO
     }
@@ -383,24 +369,17 @@ impl CandidateScore {
             .then_with(|| self.selected_total_bytes.cmp(&other.selected_total_bytes))
     }
 
-    /// Compare scores by the experimental benefit-density order.
+    /// Prefer total estimated progress; use rewrite cost only to break ties.
     pub fn cmp_desc_v2(&self, other: &Self) -> cmp::Ordering {
-        other
-            .is_underfilled()
-            .cmp(&self.is_underfilled())
-            .then_with(|| {
-                self.fill_adjusted_gain_density()
-                    .partial_cmp(&other.fill_adjusted_gain_density())
-                    .unwrap_or(cmp::Ordering::Equal)
-            })
-            .then_with(|| self.estimated_depth_gain.cmp(&other.estimated_depth_gain))
+        self.estimated_depth_gain
+            .cmp(&other.estimated_depth_gain)
+            .then_with(|| other.selected_total_bytes.cmp(&self.selected_total_bytes))
             .then_with(|| {
                 other
                     .fragmentation_ratio()
                     .partial_cmp(&self.fragmentation_ratio())
                     .unwrap_or(cmp::Ordering::Equal)
             })
-            .then_with(|| self.selected_total_bytes.cmp(&other.selected_total_bytes))
     }
 }
 
@@ -577,14 +556,14 @@ mod tests {
 
     const MIB: usize = 1024 * 1024;
 
-    fn score(bytes: usize, threshold: usize, gain: u64, blocks: usize) -> CandidateScore {
+    fn score(bytes: usize, threshold: usize, gain: i64, blocks: usize) -> CandidateScore {
         segment_score(bytes, threshold, gain, blocks, 1)
     }
 
     fn segment_score(
         bytes: usize,
         threshold: usize,
-        gain: u64,
+        gain: i64,
         blocks: usize,
         segments: usize,
     ) -> CandidateScore {
@@ -599,7 +578,7 @@ mod tests {
         }
     }
 
-    fn tiered_score(bytes: usize, threshold: usize, gain: u64, max_depth: usize) -> CandidateScore {
+    fn tiered_score(bytes: usize, threshold: usize, gain: i64, max_depth: usize) -> CandidateScore {
         CandidateScore {
             selected_total_bytes: bytes,
             selected_block_count: max_depth,
@@ -638,26 +617,41 @@ mod tests {
     }
 
     #[test]
-    fn test_v2_defers_underfilled_candidates() {
+    fn test_v2_gain_precedes_fill_ratio() {
         let underfilled = score(10 * MIB, 1024 * MIB, 5000, 4);
         let filled = score(900 * MIB, 1024 * MIB, 10, 100);
 
         assert!(underfilled.is_underfilled());
         assert!(!filled.is_underfilled());
-        // Even with a far better density, an underfilled candidate waits.
         assert!(underfilled.fill_adjusted_gain_density() > filled.fill_adjusted_gain_density());
-        assert_eq!(filled.cmp_desc_v2(&underfilled), Ordering::Greater);
+        assert_eq!(underfilled.cmp_desc_v2(&filled), Ordering::Greater);
     }
 
     #[test]
-    fn test_v2_prefers_fewer_touched_segments() {
-        // Same bytes and same removable depth, but one rewrite is scattered
-        // across many segments, so it costs more metadata and commit work.
+    fn test_v2_gain_precedes_density() {
+        let cheap = score(100 * MIB, 1024 * MIB, 400, 20);
+        let productive = score(900 * MIB, 1024 * MIB, 500, 20);
+        assert!(cheap.fill_adjusted_gain_density() > productive.fill_adjusted_gain_density());
+        assert_eq!(productive.cmp_desc_v2(&cheap), Ordering::Greater);
+    }
+
+    #[test]
+    fn test_v2_uses_cost_for_equal_gain() {
+        let cheap = score(100 * MIB, 1024 * MIB, 500, 20);
+        let expensive = score(900 * MIB, 1024 * MIB, 500, 20);
+        assert_eq!(cheap.cmp_desc_v2(&expensive), Ordering::Greater);
+        assert_eq!(cheap.cmp_desc_v2(&cheap), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_v2_segment_cost_is_disabled() {
         let compact = segment_score(400 * MIB, 1024 * MIB, 500, 40, 1);
         let scattered = segment_score(400 * MIB, 1024 * MIB, 500, 40, 9);
-
-        assert!(compact.effective_cost_bytes() < scattered.effective_cost_bytes());
-        assert_eq!(compact.cmp_desc_v2(&scattered), Ordering::Greater);
+        assert_eq!(
+            compact.effective_cost_bytes(),
+            scattered.effective_cost_bytes()
+        );
+        assert_eq!(compact.cmp_desc_v2(&scattered), Ordering::Equal);
     }
 
     fn spanned_candidate(min: i32, max: i32) -> ReclusterTaskCandidate {

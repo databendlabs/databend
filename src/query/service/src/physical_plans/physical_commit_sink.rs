@@ -171,11 +171,11 @@ impl IPhysicalPlan for CommitSink {
 
                             // extract re-cluster related mutations from physical plan
                             let recluster_info = self.recluster_info.clone().unwrap_or_default();
-
                             let extended_merged_blocks = recluster_info
                                 .merged_blocks
                                 .into_iter()
-                                .map(|(block_meta, column_hlls)| {
+                                .map(|block| {
+                                    let (block_meta, column_hlls) = Arc::unwrap_or_clone(block);
                                     Arc::new(ExtendedBlockMeta {
                                         block_meta: Arc::unwrap_or_clone(block_meta),
                                         draft_virtual_block_meta: None,
@@ -183,7 +183,7 @@ impl IPhysicalPlan for CommitSink {
                                         column_top_n: None,
                                     })
                                 })
-                                .collect::<Vec<Arc<ExtendedBlockMeta>>>();
+                                .collect::<Vec<_>>();
 
                             TableMutationAggregator::create(
                                 table,
