@@ -60,6 +60,25 @@ SELECT count(*) FROM fuse_snapshot('vacuum2_flashback_live_chain', 't')
 ----
 3
 
+# Once the live chain exceeds retention, vacuum must actually collect history safely.
+statement ok
+ALTER TABLE vacuum2_flashback_live_chain.t SET OPTIONS(DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP = 2)
+
+statement ok
+VACUUM TABLE vacuum2_flashback_live_chain.t
+
+query I
+SELECT c FROM vacuum2_flashback_live_chain.t ORDER BY c
+----
+1
+4
+5
+
+query I
+SELECT count(*) FROM fuse_snapshot('vacuum2_flashback_live_chain', 't')
+----
+2
+
 statement ok
 UNSET data_retention_time_in_days
 

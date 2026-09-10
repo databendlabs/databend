@@ -54,7 +54,9 @@ pub(crate) fn trim_timestamp_to_milli_second(ts: DateTime<Utc>) -> DateTime<Utc>
     .unwrap()
 }
 
-pub(crate) fn monotonically_increased_timestamp(
+/// Returns a millisecond timestamp strictly newer than `previous_timestamp`, even if the clock
+/// has not advanced. Callers must serialize updates to the previous timestamp.
+pub fn monotonically_increased_timestamp(
     timestamp: DateTime<Utc>,
     previous_timestamp: &Option<DateTime<Utc>>,
 ) -> DateTime<Utc> {
@@ -198,6 +200,22 @@ mod tests {
     use crate::meta::VACUUM2_OBJECT_KEY_PREFIX;
     use crate::meta::trim_object_prefix;
     use crate::meta::try_extract_uuid_str_from_path;
+
+    #[test]
+    fn test_monotonic_timestamp_survives_clock_rollback() {
+        let now = chrono::DateTime::from_timestamp_millis(1_000).unwrap();
+        let first = super::monotonically_increased_timestamp(now, &None);
+        let second = super::monotonically_increased_timestamp(now, &Some(first));
+        let third =
+            super::monotonically_increased_timestamp(now - Duration::days(1), &Some(second));
+        assert_eq!(second, first + Duration::milliseconds(1));
+        assert_eq!(third, second + Duration::milliseconds(1));
+        let serialized = third.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        assert_eq!(
+            chrono::DateTime::parse_from_rfc3339(&serialized).unwrap(),
+            third
+        );
+    }
 
     #[test]
     fn test_trim_vacuum2_object_prefix() {

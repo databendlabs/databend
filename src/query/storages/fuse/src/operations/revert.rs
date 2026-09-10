@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::DateTime;
 use chrono::SecondsFormat;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationDescriptor;
@@ -27,8 +26,10 @@ use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::meta::monotonically_increased_timestamp;
 use databend_storages_common_table_meta::table::OPT_KEY_VACUUM2_FLASHBACK_BARRIER;
 
 use crate::FuseTable;
@@ -65,28 +66,21 @@ impl FuseTable {
             .read_table_snapshot()
             .await?
             .ok_or_else(|| ErrorCode::Internal("table being flashed back has no snapshot"))?;
-        let existing_barrier = self
-            .table_info
-            .meta
-            .options
-            .get(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
-            .map(|value| {
-                DateTime::parse_from_rfc3339(value)
-                    .map(|v| v.with_timezone(&Utc))
-                    .map_err(|e| {
-                        ErrorCode::TableOptionInvalid(format!(
-                            "invalid {} value '{}': {}",
-                            OPT_KEY_VACUUM2_FLASHBACK_BARRIER, value, e
-                        ))
-                    })
-            })
-            .transpose()?;
-        let barrier = existing_barrier
+        let table_id = self.table_info.ident.table_id;
+        let tenant = ctx.get_tenant();
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
+        let lvt = catalog
+            .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, table_id))
+            .await?;
+        // LVT also fences generations after a previous barrier has been cleared: successful
+        // cleanup has already advanced LVT beyond that barrier's transaction safety window.
+        let previous_timestamp = self
+            .vacuum2_flashback_barrier()?
             .into_iter()
             .chain(current_snapshot.timestamp)
-            .chain([Utc::now()])
-            .max()
-            .unwrap();
+            .chain(lvt.map(|value| value.time))
+            .max();
+        let barrier = monotonically_increased_timestamp(Utc::now(), &previous_timestamp);
 
         let mut table_meta_to_be_committed = table_reverting_to.table_info.meta.clone();
         table_meta_to_be_committed.options.insert(
@@ -97,9 +91,6 @@ impl FuseTable {
         // 3. prepare the request
         //  using the CURRENT version as the base table version
         let base_version = self.table_info.ident.seq;
-        let table_id = self.table_info.ident.table_id;
-        let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(base_version),

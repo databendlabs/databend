@@ -45,7 +45,7 @@ pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub use utils::TableMetaTimestamps;
 pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
 pub use utils::is_uuid_v7;
-pub(crate) use utils::monotonically_increased_timestamp;
+pub use utils::monotonically_increased_timestamp;
 pub use utils::parse_storage_prefix;
 pub use utils::trim_object_prefix;
 pub(crate) use utils::trim_timestamp_to_milli_second;

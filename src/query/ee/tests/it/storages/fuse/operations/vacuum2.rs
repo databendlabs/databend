@@ -439,7 +439,6 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     // Start with S4 -> S3 -> S2 -> S1, then flash back to S2. Object
     // listing still sees S4 and S3, but the current chain is S2 -> S1.
     let lvt_snapshot = &snapshots[0].0;
-    let abandoned_gc_root = &snapshots[1].0;
     let flashback_snapshot = &snapshots[2].0;
     fixture
         .execute_command(&format!(
@@ -456,8 +455,7 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     assert_eq!(current_snapshot.snapshot_id, flashback_snapshot.snapshot_id);
 
-    // Fix LVT at S4. The persisted LVT is monotonic, so set_lvt() keeps this
-    // value even though the current snapshot is S2.
+    // Fix LVT at S4. Publishing LVT must not lower it even though the current snapshot is S2.
     catalog
         .set_table_lvt(
             &LeastVisibleTimeIdent::new(table_ctx.get_tenant(), fuse_table.get_id()),
@@ -465,25 +463,19 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
         )
         .await?;
 
-    // Without flashback protection, object listing uses S4 as the anchor and
-    // selects its predecessor S3, which belongs to the abandoned branch.
-    let selection = fuse_table
-        .prepare_snapshot_gc_selection(&table_ctx, false)
-        .await?
-        .expect("S3 should be selected as the GC root");
-    assert_eq!(selection.gc_root.snapshot_id, abandoned_gc_root.snapshot_id);
-
-    // With flashback protection, vacuum walks the current committed chain from
-    // S2. It selects S2 and does not use a snapshot from the abandoned branch.
-    let selection = fuse_table
-        .prepare_snapshot_gc_selection(&table_ctx, true)
-        .await?
-        .expect("S2 should be selected as the GC root");
-    assert_eq!(
-        selection.gc_root.snapshot_id,
-        flashback_snapshot.snapshot_id
-    );
-    assert_eq!(selection.gc_root.timestamp, flashback_snapshot.timestamp);
+    // The barrier forces live-chain selection even when the caller opts out of flashback
+    // retention. Without it, directory listing would select S4's abandoned predecessor S3.
+    for respect_flash_back in [false, true] {
+        let selection = fuse_table
+            .prepare_snapshot_gc_selection(&table_ctx, respect_flash_back)
+            .await?
+            .expect("S2 should be selected as the GC root");
+        assert_eq!(
+            selection.gc_root.snapshot_id,
+            flashback_snapshot.snapshot_id
+        );
+        assert_eq!(selection.gc_root.timestamp, flashback_snapshot.timestamp);
+    }
 
     Ok(())
 }
@@ -863,7 +855,7 @@ async fn test_flashback_rejects_snapshot_before_lvt() -> anyhow::Result<()> {
 }
 
 /// Once the selected live GC root is beyond the three-day transaction window, a successful
-/// vacuum should remove the barrier with a table-sequence CAS.
+/// vacuum should remove the barrier generation it observed.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum2_clears_expired_flashback_barrier() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
@@ -919,6 +911,365 @@ async fn test_vacuum2_clears_expired_flashback_barrier() -> anyhow::Result<()> {
         "an expired barrier should be cleared after vacuum succeeds"
     );
 
+    Ok(())
+}
+
+/// Successful cleanup should compare the barrier generation, not the table version from selection.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_barrier_cleanup_allows_writes_but_not_flashback() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.create_default_database().await?;
+    let database = fixture.default_db_name();
+    let name = "t_barrier_generation";
+    fixture
+        .execute_command(&format!("create table {database}.{name} (c int)"))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {database}.{name} values (1)"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    let target = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    // A future barrier makes strict monotonicity independent of wall-clock progress.
+    let barrier = chrono::Utc::now() + chrono::Duration::days(1);
+    let barrier = chrono::DateTime::from_timestamp_millis(barrier.timestamp_millis()).unwrap();
+    catalog
+        .upsert_table_option(
+            &ctx.get_tenant(),
+            &database,
+            UpsertTableOptionReq::new(
+                &table.get_table_info().ident,
+                OPT_KEY_VACUUM2_FLASHBACK_BARRIER,
+                barrier.to_rfc3339(),
+            ),
+        )
+        .await?;
+    let before_write = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    let stale_fuse = FuseTable::try_from_table(before_write.as_ref())?;
+    fixture
+        .execute_command(&format!("insert into {database}.{name} values (2)"))
+        .await?;
+    stale_fuse
+        .clear_vacuum2_flashback_barrier(ctx.as_ref(), barrier)
+        .await?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    assert!(
+        !table
+            .get_table_info()
+            .meta
+            .options
+            .contains_key(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
+    );
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .summary
+            .row_count,
+        2
+    );
+
+    // LVT is another generation lower bound when no barrier remains in table options.
+    let lvt = target.timestamp.unwrap();
+    catalog
+        .set_table_lvt(
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), table.get_id()),
+            &LeastVisibleTime::new(lvt),
+        )
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {database}.{name} flashback to (snapshot => '{}')",
+            target.snapshot_id.simple()
+        ))
+        .await?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    let first_barrier = chrono::DateTime::parse_from_rfc3339(
+        &table.get_table_info().meta.options[OPT_KEY_VACUUM2_FLASHBACK_BARRIER],
+    )?
+    .with_timezone(&chrono::Utc);
+    assert!(first_barrier > lvt);
+
+    // Install a future generation, then perform another flashback without waiting for the clock.
+    catalog
+        .upsert_table_option(
+            &ctx.get_tenant(),
+            &database,
+            UpsertTableOptionReq::new(
+                &table.get_table_info().ident,
+                OPT_KEY_VACUUM2_FLASHBACK_BARRIER,
+                barrier.to_rfc3339(),
+            ),
+        )
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {database}.{name} values (3)"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {database}.{name} flashback to (snapshot => '{}')",
+            target.snapshot_id.simple()
+        ))
+        .await?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    let new_barrier = chrono::DateTime::parse_from_rfc3339(
+        &table.get_table_info().meta.options[OPT_KEY_VACUUM2_FLASHBACK_BARRIER],
+    )?
+    .with_timezone(&chrono::Utc);
+    assert!(new_barrier > barrier);
+    stale_fuse
+        .clear_vacuum2_flashback_barrier(ctx.as_ref(), barrier)
+        .await?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    assert_eq!(
+        chrono::DateTime::parse_from_rfc3339(
+            &table.get_table_info().meta.options[OPT_KEY_VACUUM2_FLASHBACK_BARRIER]
+        )?,
+        new_barrier
+    );
+    Ok(())
+}
+
+/// Old tagged branches survive cleanup, but increasing retention must not select them below LVT.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_retention_increase_after_barrier_cleanup() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    RealTableRefHandler::init()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    let database = "vacuum_barrier_tags";
+    let name = "t";
+    for statement in [
+        "set enable_experimental_table_ref=1".to_string(),
+        format!("create database {database}"),
+        format!("create table {database}.{name} (c int) data_retention_num_snapshots_to_keep=1"),
+        format!("insert into {database}.{name} values (1)"),
+        format!("alter table {database}.{name} create tag a"),
+        format!("truncate table {database}.{name}"),
+        format!("alter table {database}.{name} create tag b"),
+        format!("insert into {database}.{name} values (2)"),
+        format!("alter table {database}.{name} create tag c"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog.get_table(&ctx.get_tenant(), database, name).await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let old_head = fuse.read_table_snapshot().await?.unwrap();
+    let a = catalog
+        .list_table_tags(databend_common_meta_app::schema::ListTableTagsReq {
+            table_id: table.get_id(),
+            include_expired: false,
+        })
+        .await?
+        .into_iter()
+        .find(|(name, _)| name == "a")
+        .unwrap()
+        .1
+        .data
+        .snapshot_loc;
+    let (target, _) =
+        databend_common_storages_fuse::io::SnapshotsIO::read_snapshot(a, fuse.get_operator(), true)
+            .await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {database}.{name} flashback to (snapshot => '{}')",
+            target.snapshot_id.simple()
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {database}.{name} values (4)"))
+        .await?;
+    let table = catalog.get_table(&ctx.get_tenant(), database, name).await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let live_root = fuse.read_table_snapshot().await?.unwrap();
+    assert!(live_root.timestamp > old_head.timestamp);
+    // Model an expired safety window without sleeping. All old branch files are already written.
+    let expired = live_root.timestamp.unwrap() - chrono::Duration::days(4);
+    catalog
+        .upsert_table_option(
+            &ctx.get_tenant(),
+            database,
+            UpsertTableOptionReq::new(
+                &table.get_table_info().ident,
+                OPT_KEY_VACUUM2_FLASHBACK_BARRIER,
+                expired.to_rfc3339(),
+            ),
+        )
+        .await?;
+    fixture
+        .execute_command(&format!("vacuum table {database}.{name}"))
+        .await?;
+    let table = catalog.get_table(&ctx.get_tenant(), database, name).await?;
+    assert!(
+        !table
+            .get_table_info()
+            .meta
+            .options
+            .contains_key(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
+    );
+
+    for statement in [
+        format!("insert into {database}.{name} values (5)"),
+        format!("insert into {database}.{name} values (6)"),
+        format!(
+            "alter table {database}.{name} set options(data_retention_num_snapshots_to_keep=5)"
+        ),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+    let table = catalog.get_table(&ctx.get_tenant(), database, name).await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let selection_ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    // Directory A,B,C,D,E,F would choose C.prev=B. The live chain only has A,D,E,F,
+    // so fallback must stop instead of using B's empty protection set.
+    assert!(
+        fuse.prepare_snapshot_gc_selection(&selection_ctx, false)
+            .await?
+            .is_none()
+    );
+    fixture
+        .execute_command(&format!("vacuum table {database}.{name}"))
+        .await?;
+    let blocks: Vec<DataBlock> = fixture
+        .execute_query(&format!("select c from {database}.{name}"))
+        .await?
+        .try_collect()
+        .await?;
+    assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 4);
+    Ok(())
+}
+
+/// Snapshot-count retention must count the live chain, not the abandoned truncate branch.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_flashback_live_chain_retention() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let database = fixture.default_db_name();
+    let name = "t_live_chain_retention";
+    fixture
+        .execute_command(&format!(
+            "create table {database}.{name} (c int) data_retention_num_snapshots_to_keep=4"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {database}.{name} values (1)"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    let target = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    for statement in [
+        format!("truncate table {database}.{name}"),
+        format!("insert into {database}.{name} values (2)"),
+        format!(
+            "alter table {database}.{name} flashback to (snapshot => '{}')",
+            target.snapshot_id.simple()
+        ),
+        format!("insert into {database}.{name} values (4)"),
+        format!("insert into {database}.{name} values (5)"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let selection_ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    assert!(
+        fuse.prepare_snapshot_gc_selection(&selection_ctx, false)
+            .await?
+            .is_none()
+    );
+    fixture
+        .execute_command(&format!("vacuum table {database}.{name}"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {database}.{name} set options(data_retention_num_snapshots_to_keep=2)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("vacuum table {database}.{name}"))
+        .await?;
+    let blocks: Vec<DataBlock> = fixture
+        .execute_query(&format!("select c from {database}.{name}"))
+        .await?
+        .try_collect()
+        .await?;
+    assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 3);
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &database, name)
+        .await?;
+    // A successful vacuum must not clear a barrier still inside its safety window.
+    assert!(
+        table
+            .get_table_info()
+            .meta
+            .options
+            .contains_key(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
+    );
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_prefix = fuse.meta_location_generator().snapshot_location_prefix();
+    let files = fuse.get_operator().list(snapshot_prefix).await?;
+    assert_eq!(
+        files
+            .iter()
+            .filter(|entry| entry.metadata().is_file())
+            .count(),
+        2
+    );
+
+    catalog
+        .upsert_table_option(
+            &ctx.get_tenant(),
+            &database,
+            UpsertTableOptionReq::new(
+                &table.get_table_info().ident,
+                OPT_KEY_VACUUM2_FLASHBACK_BARRIER,
+                "invalid".to_string(),
+            ),
+        )
+        .await?;
+    let err = fixture
+        .execute_command(&format!("vacuum table {database}.{name}"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::TABLE_OPTION_INVALID);
+    assert_eq!(
+        fuse.get_operator().list(snapshot_prefix).await?.len(),
+        files.len()
+    );
     Ok(())
 }
 

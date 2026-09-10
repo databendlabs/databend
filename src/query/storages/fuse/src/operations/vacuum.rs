@@ -15,6 +15,7 @@
 // Logs from this module will show up as "[VACUUM] ...".
 databend_common_tracing::register_module_tag!("[VACUUM]");
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -32,8 +33,10 @@ use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
@@ -112,10 +115,8 @@ pub struct SnapshotGcSelection {
     pub snapshots_to_gc: Vec<String>,
     pub gc_root_meta_ts: DateTime<Utc>,
     pub gc_root_path: String,
-    /// Remove the barrier only after this selection has been fully vacuumed.
-    pub clear_flashback_barrier: bool,
-    /// Table sequence observed together with the barrier, used for CAS removal.
-    pub table_seq: u64,
+    /// The exact barrier generation to remove only after this selection has been fully vacuumed.
+    pub flashback_barrier_to_clear: Option<DateTime<Utc>>,
 }
 
 /// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
@@ -475,6 +476,101 @@ impl FuseTable {
         Ok(Some(segments))
     }
 
+    pub(crate) fn vacuum2_flashback_barrier(&self) -> Result<Option<DateTime<Utc>>> {
+        self.table_info
+            .meta
+            .options
+            .get(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
+            .map(|value| {
+                DateTime::parse_from_rfc3339(value)
+                    .map(|timestamp| timestamp.with_timezone(&Utc))
+                    .map_err(|err| {
+                        ErrorCode::TableOptionInvalid(format!(
+                            "invalid {OPT_KEY_VACUUM2_FLASHBACK_BARRIER} value '{value}': {err}"
+                        ))
+                    })
+            })
+            .transpose()
+    }
+
+    /// Remove only the barrier generation whose live root was successfully vacuumed.
+    /// Ordinary writes during vacuum are allowed; a later flashback must keep its new barrier.
+    pub async fn clear_vacuum2_flashback_barrier(
+        &self,
+        ctx: &dyn TableContext,
+        expected_barrier: DateTime<Utc>,
+    ) -> Result<()> {
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
+        for _ in 0..3 {
+            let refreshed = self.refresh(ctx).await?;
+            let fuse = FuseTable::try_from_table(refreshed.as_ref())?;
+            if fuse.vacuum2_flashback_barrier()? != Some(expected_barrier) {
+                return Ok(());
+            }
+
+            let req = UpsertTableOptionReq {
+                table_id: self.get_id(),
+                seq: MatchSeq::Exact(fuse.table_info.ident.seq),
+                options: HashMap::from([(OPT_KEY_VACUUM2_FLASHBACK_BARRIER.to_owned(), None)]),
+            };
+            match catalog
+                .upsert_table_option(&ctx.get_tenant(), fuse.table_info.database_name()?, req)
+                .await
+            {
+                Err(err) if err.code() == ErrorCode::TABLE_VERSION_MISMATCHED => continue,
+                result => return result.map(|_| ()),
+            }
+        }
+        // Keeping the barrier is safe; a busy table can retry cleanup in its next vacuum.
+        info!(
+            "Concurrent updates prevented flashback barrier cleanup for table {}",
+            self.get_id()
+        );
+        Ok(())
+    }
+
+    async fn live_chain_gc_root(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        retention_policy: &RetentionPolicy,
+        lvt: DateTime<Utc>,
+    ) -> Result<Option<String>> {
+        let latest_location = self.snapshot_loc().unwrap();
+        match retention_policy {
+            RetentionPolicy::ByTimePeriod(_) => {
+                match self
+                    .find_location(ctx, latest_location, |snapshot| {
+                        is_snapshot_at_or_before_lvt(snapshot.timestamp, lvt)
+                    })
+                    .await
+                {
+                    Ok(location) => Ok(Some(location)),
+                    Err(err) if err.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
+                        Ok(None)
+                    }
+                    Err(err) => Err(err),
+                }
+            }
+            RetentionPolicy::ByNumOfSnapshotsToKeep(keep) => {
+                let snapshots = SnapshotsIO::create(ctx.clone(), self.get_operator())
+                    .read_chained_snapshot_lites(
+                        self.get_operator(),
+                        self.meta_location_generator().clone(),
+                        latest_location,
+                        Some(keep + 1),
+                    )
+                    .await?;
+                if snapshots.len() <= *keep {
+                    return Ok(None);
+                }
+                let root = &snapshots[keep - 1];
+                self.meta_location_generator()
+                    .gen_snapshot_location(&root.snapshot_id, root.format_version)
+                    .map(Some)
+            }
+        }
+    }
+
     pub async fn prepare_snapshot_gc_selection(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -483,7 +579,7 @@ impl FuseTable {
         // Observe the fence before refreshing the table head. A flashback that
         // commits before or during refresh changes this sequence, while refresh
         // ensures selection never starts from a stale pre-flashback head.
-        let catalog = ctx.get_default_catalog()?;
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let lvt_ident = LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id());
         let observed_lvt = catalog.get_table_lvt_with_seq(&lvt_ident).await?;
         let refreshed = self.refresh(ctx.as_ref()).await?;
@@ -516,29 +612,14 @@ impl FuseTable {
         let start = std::time::Instant::now();
         let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
         let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
-        let catalog = ctx.get_default_catalog()?;
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let observed_lvt_seq = observed_lvt.as_ref().map(|v| v.seq).unwrap_or(0);
         let observed_lvt_value = observed_lvt.map(|v| v.data).unwrap_or_default();
 
         let mut is_vacuum_all = false;
         let mut lvt_to_publish = None;
         let mut live_chain_gc_root = None;
-        let flashback_barrier = self
-            .table_info
-            .meta
-            .options
-            .get(OPT_KEY_VACUUM2_FLASHBACK_BARRIER)
-            .map(|value| {
-                DateTime::parse_from_rfc3339(value)
-                    .map(|v| v.with_timezone(&Utc))
-                    .map_err(|e| {
-                        ErrorCode::TableOptionInvalid(format!(
-                            "invalid {} value '{}': {}",
-                            OPT_KEY_VACUUM2_FLASHBACK_BARRIER, value, e
-                        ))
-                    })
-            })
-            .transpose()?;
+        let flashback_barrier = self.vacuum2_flashback_barrier()?;
         let must_follow_live_chain = respect_flash_back || flashback_barrier.is_some();
 
         let snapshots_before_lvt = match retention_policy {
@@ -570,14 +651,9 @@ impl FuseTable {
                 lvt_to_publish = Some(LeastVisibleTime::new(lvt));
 
                 if let Some(lvt) = flashback_gc_root_lvt(must_follow_live_chain, lvt) {
-                    let latest_location = self.snapshot_loc().unwrap();
-                    let gc_root = self
-                        .find_location(ctx, latest_location, |snapshot| {
-                            is_snapshot_at_or_before_lvt(snapshot.timestamp, lvt)
-                        })
-                        .await
-                        .ok();
-                    let Some(gc_root) = gc_root else {
+                    let Some(gc_root) =
+                        self.live_chain_gc_root(ctx, &retention_policy, lvt).await?
+                    else {
                         info!("no gc_root found on live snapshot chain, stop vacuuming");
                         return Ok(None);
                     };
@@ -585,7 +661,7 @@ impl FuseTable {
                 }
 
                 ctx.set_status_info(&format!(
-                    "Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
+                    "Prepared LVT for table {}, elapsed: {:?}, LVT: {:?}",
                     self.table_info.desc,
                     start.elapsed(),
                     lvt
@@ -617,22 +693,12 @@ impl FuseTable {
                 // List the snapshot order by timestamp asc, till the current snapshot(inclusively).
                 let need_one_more = true;
                 if must_follow_live_chain {
-                    let snapshots_io = SnapshotsIO::create(ctx.clone(), self.get_operator());
-                    let chained = snapshots_io
-                        .read_chained_snapshot_lites(
-                            self.get_operator(),
-                            self.meta_location_generator().clone(),
-                            self.snapshot_loc().unwrap(),
-                            Some(num_snapshots_to_keep + 1),
-                        )
-                        .await?;
-                    if chained.len() <= num_snapshots_to_keep {
+                    let Some(root_path) = self
+                        .live_chain_gc_root(ctx, &retention_policy, observed_lvt_value.time)
+                        .await?
+                    else {
                         return Ok(None);
-                    }
-                    let root = &chained[num_snapshots_to_keep - 1];
-                    let root_path = self
-                        .meta_location_generator()
-                        .gen_snapshot_location(&root.snapshot_id, root.format_version)?;
+                    };
                     live_chain_gc_root = Some(root_path.clone());
                     self.list_files_until_prefix(
                         snapshot_location_prefix,
@@ -683,19 +749,40 @@ impl FuseTable {
             slice_summary(&snapshots_before_lvt)
         ));
 
-        let Some(selection) = self
-            .select_gc_root(&snapshots_before_lvt, is_vacuum_all, live_chain_gc_root)
-            .await?
-        else {
+        let directory_selection = !is_vacuum_all && live_chain_gc_root.is_none();
+        let mut selection = self
+            .select_gc_root(
+                &snapshots_before_lvt,
+                is_vacuum_all,
+                live_chain_gc_root,
+                directory_selection.then_some(observed_lvt_value.time),
+            )
+            .await?;
+        if selection.is_none() && directory_selection {
+            // Old tagged snapshots may survive barrier cleanup. Increasing retention must not
+            // let directory counting select their abandoned branch below the published LVT.
+            let lvt = lvt_to_publish
+                .as_ref()
+                .map_or(observed_lvt_value.time, |value| value.time);
+            let Some(root_path) = self.live_chain_gc_root(ctx, &retention_policy, lvt).await?
+            else {
+                return Ok(None);
+            };
+            let candidates = self
+                .list_files_until_prefix(snapshot_location_prefix, &root_path, true, None)
+                .await?;
+            selection = self
+                .select_gc_root(&candidates, false, Some(root_path), None)
+                .await?;
+        }
+        let Some(mut selection) = selection else {
             return Ok(None);
         };
-
-        let mut selection = selection;
-        selection.clear_flashback_barrier = flashback_barrier.is_some_and(|barrier| {
+        selection.flashback_barrier_to_clear = flashback_barrier.filter(|barrier| {
             selection
                 .gc_root
                 .timestamp
-                .is_some_and(|timestamp| timestamp > barrier + ASSUMPTION_MAX_TXN_DURATION)
+                .is_some_and(|timestamp| timestamp > *barrier + ASSUMPTION_MAX_TXN_DURATION)
         });
 
         let lvt_to_publish = lvt_to_publish.unwrap_or_else(|| {
@@ -733,10 +820,11 @@ impl FuseTable {
         snapshots_before_lvt: &[Entry],
         is_vacuum_all: bool,
         live_chain_gc_root: Option<String>,
+        directory_lvt: Option<DateTime<Utc>>,
     ) -> Result<Option<SnapshotGcSelection>> {
         let op = self.get_operator();
         let gc_root_path = if is_vacuum_all {
-            // safe to unwrap, or we should have stopped vacuuming in set_lvt()
+            // The current snapshot is always on the live chain.
             self.snapshot_loc().unwrap()
         } else if let Some(gc_root) = live_chain_gc_root {
             gc_root
@@ -767,6 +855,22 @@ impl FuseTable {
 
         let dal = self.get_operator_ref();
         let gc_root = SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await;
+        if let Ok((root, _)) = &gc_root {
+            if !is_uuid_v7(&root.snapshot_id) || root.timestamp.is_none() {
+                info!(
+                    "gc_root {} has no Vacuum2 timestamp, stopping vacuum",
+                    gc_root_path
+                );
+                return Ok(None);
+            }
+            if directory_lvt.is_some_and(|lvt| root.timestamp.unwrap() < lvt) {
+                info!(
+                    "Directory gc_root {} is older than LVT {:?}, use the live chain",
+                    gc_root_path, directory_lvt
+                );
+                return Ok(None);
+            }
+        }
         let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
             Ok(v) => v.last_modified().ok_or_else(|| {
                 ErrorCode::StorageOther(format!(
@@ -827,8 +931,7 @@ impl FuseTable {
                     snapshots_to_gc,
                     gc_root_meta_ts,
                     gc_root_path,
-                    clear_flashback_barrier: false,
-                    table_seq: self.table_info.ident.seq,
+                    flashback_barrier_to_clear: None,
                 }))
             }
             Err(e) => {
