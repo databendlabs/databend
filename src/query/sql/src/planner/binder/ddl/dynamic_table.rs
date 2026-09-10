@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use databend_common_ast::ast::CreateDynamicTableStmt;
 use databend_common_ast::ast::CreateTableSource;
@@ -29,6 +30,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::is_fuse_engine;
@@ -219,6 +221,24 @@ impl Binder {
             current_database: database.clone(),
         })?;
         options.insert(OPT_KEY_AS_QUERY.to_owned(), canonical_query.to_string());
+        let source_table_ids = self
+            .metadata
+            .read()
+            .tables()
+            .iter()
+            .map(|entry| entry.table().get_id())
+            .collect::<BTreeSet<_>>();
+        if source_table_ids.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "Dynamic Table definition must reference at least one source table",
+            ));
+        }
+        let source_table_ids = source_table_ids
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        options.insert(OPT_KEY_SOURCE_TABLE_IDS.to_owned(), source_table_ids);
 
         // Dynamic Table initialization is performed by its dedicated interpreter so that the
         // first successful refresh also publishes the source endpoint checkpoint.

@@ -249,6 +249,12 @@ SELECT id FROM drop_src_dt
 ----
 1
 
+statement ok
+CREATE TABLE drop_src(id INT NOT NULL)
+
+statement ok
+INSERT INTO drop_src VALUES (2)
+
 statement error
 REFRESH DYNAMIC TABLE drop_src_dt
 

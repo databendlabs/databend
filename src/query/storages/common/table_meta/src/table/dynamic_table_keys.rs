@@ -14,6 +14,8 @@
 
 /// Canonical defining query of a Dynamic Table.
 pub const OPT_KEY_AS_QUERY: &str = "as_query";
+/// Comma-separated, sorted source table IDs captured when the Dynamic Table is created.
+pub const OPT_KEY_SOURCE_TABLE_IDS: &str = "source_table_ids";
 pub const OPT_KEY_TARGET_LAG: &str = "target_lag";
 pub const OPT_KEY_REFRESH_MODE: &str = "refresh_mode";
 pub const OPT_KEY_INITIALIZE: &str = "initialize";

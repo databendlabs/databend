@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
@@ -24,6 +25,7 @@ use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -102,10 +104,39 @@ impl Interpreter for RefreshDynamicTableInterpreter {
         // which the system itself serialized, is parsed here.
         let mut planner = Planner::new(self.ctx.clone());
         let (select_plan, _) = planner.plan_sql(&query).await?;
-        if !matches!(select_plan, Plan::Query { .. }) {
+        let Plan::Query { metadata, .. } = &select_plan else {
             return Err(ErrorCode::InvalidOperation(
                 "dynamic table definition must be a query",
             ));
+        };
+        let current_source_table_ids = metadata
+            .read()
+            .tables()
+            .iter()
+            .map(|entry| entry.table().get_id())
+            .collect::<BTreeSet<_>>();
+        let expected_source_table_ids = table
+            .get_table_info()
+            .meta
+            .options
+            .get(OPT_KEY_SOURCE_TABLE_IDS)
+            .ok_or_else(|| {
+                ErrorCode::InvalidOperation("dynamic table source table IDs are missing")
+            })?
+            .split(',')
+            .map(|id| {
+                id.parse::<u64>().map_err(|error| {
+                    ErrorCode::InvalidOperation(format!(
+                        "invalid dynamic table source table ID '{id}': {error}"
+                    ))
+                })
+            })
+            .collect::<Result<BTreeSet<_>>>()?;
+        if expected_source_table_ids != current_source_table_ids {
+            return Err(ErrorCode::InvalidOperation(format!(
+                "dynamic table source tables changed: expected {:?}, got {:?}",
+                expected_source_table_ids, current_source_table_ids
+            )));
         }
 
         let insert = Insert {
