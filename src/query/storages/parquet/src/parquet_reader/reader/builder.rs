@@ -19,6 +19,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
@@ -54,6 +55,7 @@ pub struct ParquetReaderBuilder<'a> {
     table_schema: TableSchemaRef,
     schema_desc: SchemaDescPtr,
     schema_desc_from: Option<String>,
+    schema_desc_from_arrow_fallback: bool,
     arrow_schema: Option<arrow_schema::Schema>,
 
     push_downs: Option<&'a PushDownInfo>,
@@ -77,6 +79,15 @@ pub struct ParquetReaderBuilder<'a> {
 }
 
 impl<'a> ParquetReaderBuilder<'a> {
+    fn validate_schema_source(&self, source_type: ParquetSourceType) -> Result<()> {
+        if source_type == ParquetSourceType::StageTable && self.schema_desc_from.is_none() {
+            return Err(ErrorCode::Internal(
+                "Parquet StageTable reader requires the source of its inferred schema",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn create(
         ctx: Arc<dyn TableContext>,
         op_registry: Arc<dyn OperatorRegistry>,
@@ -93,6 +104,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             schema_desc,
             Some(arrow_schema),
             None,
+            false,
         ))
     }
 
@@ -103,6 +115,7 @@ impl<'a> ParquetReaderBuilder<'a> {
         schema_desc: SchemaDescPtr,
         arrow_schema: Option<arrow_schema::Schema>,
         schema_desc_from: Option<String>,
+        schema_desc_from_arrow_fallback: bool,
     ) -> ParquetReaderBuilder<'a> {
         ParquetReaderBuilder {
             ctx,
@@ -111,6 +124,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             schema_desc,
             arrow_schema,
             schema_desc_from,
+            schema_desc_from_arrow_fallback,
             push_downs: None,
             delete_files: None,
             options: Default::default(),
@@ -236,6 +250,7 @@ impl<'a> ParquetReaderBuilder<'a> {
         need_file_row_number: bool,
         batch_size: usize,
     ) -> Result<ParquetWholeFileReader> {
+        self.validate_schema_source(source_type)?;
         if !need_file_row_number {
             self.build_predicate()?;
         }
@@ -256,10 +271,13 @@ impl<'a> ParquetReaderBuilder<'a> {
         };
         Ok(ParquetWholeFileReader {
             op_registry: self.op_registry.clone(),
-            expect_file_schema: self
-                .schema_desc_from
-                .as_ref()
-                .map(|p| (self.schema_desc.clone(), p.clone())),
+            expect_file_schema: self.schema_desc_from.as_ref().map(|p| {
+                (
+                    self.schema_desc.clone(),
+                    p.clone(),
+                    self.schema_desc_from_arrow_fallback,
+                )
+            }),
             output_schema: output_schema.clone(),
             predicate,
             projection,
@@ -276,6 +294,7 @@ impl<'a> ParquetReaderBuilder<'a> {
         source_type: ParquetSourceType,
         need_file_row_number: bool,
     ) -> Result<RowGroupReader> {
+        self.validate_schema_source(source_type)?;
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         if !need_file_row_number {
@@ -330,6 +349,8 @@ impl<'a> ParquetReaderBuilder<'a> {
             op_registry: self.op_registry.clone(),
             batch_size,
             schema_desc: self.schema_desc.clone(),
+            schema_desc_from: self.schema_desc_from.clone(),
+            schema_desc_from_arrow_fallback: self.schema_desc_from_arrow_fallback,
             arrow_schema: self.arrow_schema.clone(),
             policy_builders,
             default_policy,
