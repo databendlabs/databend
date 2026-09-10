@@ -55,6 +55,7 @@ impl PacketReceiver {
         }
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn recv(&self) -> Result<Option<DataPacket>> {
         let data = match &self.input {
             PacketInput::Legacy(input) => input.recv().await?,

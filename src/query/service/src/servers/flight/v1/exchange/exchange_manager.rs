@@ -444,6 +444,10 @@ impl DataExchangeManager {
                                 source_id.clone(),
                                 reconnect.receiver_lease_secs(),
                             );
+                            let stream_label = format!(
+                                "query_id={}, channel_id={}",
+                                params.query_id, params.exchange_id
+                            );
                             let connector = create_do_exchange_connector(
                                 target_id.clone(),
                                 address,
@@ -457,6 +461,7 @@ impl DataExchangeManager {
                                 reconnect,
                                 source_id,
                                 target_id.clone(),
+                                stream_label,
                             )
                             .await?;
                             let slots = Arc::new(Semaphore::new(STATISTICS_QUEUE_CAPACITY));
@@ -557,6 +562,10 @@ impl DataExchangeManager {
                                         "statistics streams are installed before fragment streams"
                                     ),
                                 };
+                                let stream_label = format!(
+                                    "query_id={}, channel_id={}",
+                                    params.query_id, params.exchange_id
+                                );
                                 let connector = create_do_exchange_connector(
                                     target_id.clone(),
                                     address,
@@ -570,6 +579,7 @@ impl DataExchangeManager {
                                     reconnect,
                                     local_node_id,
                                     target_id.clone(),
+                                    stream_label,
                                 )
                                 .await?;
                                 Ok::<QueryExchange, ErrorCode>(
@@ -903,6 +913,7 @@ impl DataExchangeManager {
             .entry(query_id.to_string())
             .or_insert_with(QueryCoordinator::create)
             .open_new_flight_inbound_connection(
+                query_id,
                 channel_id,
                 source_id,
                 num_threads,
@@ -1413,6 +1424,7 @@ impl QueryCoordinator {
     /// created only on first attach.
     fn open_new_flight_inbound_connection(
         &mut self,
+        query_id: &str,
         channel_id: &str,
         source_id: &str,
         num_threads: usize,
@@ -1494,7 +1506,10 @@ impl QueryCoordinator {
                     .insert(Arc::new(ReliableInboundSource::new(
                         delivery,
                         receiver_lease,
-                        format!("channel_id={}, source_id={}", channel_id, source_id),
+                        format!(
+                            "query_id={}, channel_id={}, source_id={}",
+                            query_id, channel_id, source_id
+                        ),
                     )))
                     .clone()
             }

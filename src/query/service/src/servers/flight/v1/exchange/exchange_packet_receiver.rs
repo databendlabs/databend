@@ -69,6 +69,7 @@ impl ExchangePacketReceiver {
         self.closed_notified.notify_waiters();
     }
 
+    #[async_backtrace::framed]
     pub async fn recv_raw(&self) -> Result<Option<QueueItem>, ErrorCode> {
         if let Ok(item) = self.receiver.try_recv() {
             return Ok(Some(item));
@@ -321,6 +322,7 @@ impl InboundChannel for NetworkInboundReceiver {
         self.channel.receiver.is_empty() && self.channel.receiver.is_closed()
     }
 
+    #[async_backtrace::framed]
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
         match self.channel.recv_raw().await? {
             None => Ok(None),

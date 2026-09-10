@@ -62,6 +62,7 @@ pub struct ReliableInboundConnection {
     source: Arc<ReliableInboundSource>,
     runtime: Arc<Runtime>,
     disconnect_error: Option<ErrorCode>,
+    attachment_id: u64,
 }
 
 impl ReliableInboundSource {
@@ -90,10 +91,10 @@ impl ReliableInboundSource {
         runtime: Arc<Runtime>,
         disconnect_error: ErrorCode,
     ) -> ReliableInboundConnection {
-        let (disconnect_error, consumer_closed) = {
+        let (disconnect_error, consumer_closed, attachment_id) = {
             let mut lifecycle = self.lifecycle.lock();
             if lifecycle.terminal.is_some() {
-                (None, None)
+                (None, None, lifecycle.generation)
             } else {
                 let reconnect = lifecycle.generation != 0;
                 lifecycle.attachments += 1;
@@ -110,35 +111,44 @@ impl ReliableInboundSource {
                         self.source_label
                     );
                 }
-                (Some(disconnect_error), consumer_closed)
+                (
+                    Some(disconnect_error),
+                    consumer_closed,
+                    lifecycle.generation,
+                )
             }
         };
 
         if let Some(consumer_closed) = consumer_closed {
             let source = self.clone();
-            runtime.spawn(async move {
-                tokio::select! {
-                    _ = consumer_closed => {
-                        source.terminate(InboundTerminal::Completed);
+            runtime.spawn_named(
+                async move {
+                    tokio::select! {
+                        _ = async_backtrace::frame!(consumer_closed) => {
+                            source.terminate(InboundTerminal::Completed);
+                        }
+                        _ = source.terminal_notified.notified() => {}
                     }
-                    _ = source.terminal_notified.notified() => {}
-                }
-            });
+                },
+                format!("New Flight consumer monitor: {}", self.source_label),
+            );
         }
 
         ReliableInboundConnection {
             source: self.clone(),
             runtime,
             disconnect_error,
+            attachment_id,
         }
     }
 
+    #[async_backtrace::framed]
     async fn add_data(
         &self,
         sequence: u64,
         data: FlightData,
     ) -> Result<DoExchangeResponse, ErrorCode> {
-        let mut next_sequence = self.next_sequence.lock().await;
+        let mut next_sequence = async_backtrace::frame!(self.next_sequence.lock()).await;
         if let Some(response) = self.terminal_response() {
             return Ok(response);
         }
@@ -180,6 +190,7 @@ impl ReliableInboundSource {
         }
     }
 
+    #[async_backtrace::framed]
     async fn deliver(&self, data: FlightData) -> Result<DeliveryOutcome, ErrorCode> {
         if !batch::is_batch(&data) {
             let (lane, data) = take_lane(data)?;
@@ -195,16 +206,18 @@ impl ReliableInboundSource {
         Ok(DeliveryOutcome::Accepted)
     }
 
+    #[async_backtrace::framed]
     async fn finish(&self) -> Result<DoExchangeResponse, ErrorCode> {
-        let _next_sequence = self.next_sequence.lock().await;
+        let _next_sequence = async_backtrace::frame!(self.next_sequence.lock()).await;
         if let Some(response) = self.terminal_response() {
             return Ok(response);
         }
         Ok(self.terminate(InboundTerminal::Completed).response())
     }
 
+    #[async_backtrace::framed]
     async fn sender_fail(&self, cause: ErrorCode) -> DoExchangeResponse {
-        let _next_sequence = self.next_sequence.lock().await;
+        let _next_sequence = async_backtrace::frame!(self.next_sequence.lock()).await;
         self.terminate(InboundTerminal::SenderFailed(cause))
             .response()
     }
@@ -264,12 +277,18 @@ impl ReliableInboundSource {
             self.source_label, reconnect_lease, generation
         );
         let source = Arc::downgrade(self);
-        runtime.spawn(async move {
-            tokio::time::sleep(reconnect_lease).await;
-            if let Some(source) = source.upgrade() {
-                source.expire_lease(generation, cause);
-            }
-        });
+        runtime.spawn_named(
+            async move {
+                async_backtrace::frame!(tokio::time::sleep(reconnect_lease)).await;
+                if let Some(source) = source.upgrade() {
+                    source.expire_lease(generation, cause);
+                }
+            },
+            format!(
+                "New Flight reconnect lease: {}, generation={}, lease={:?}",
+                self.source_label, generation, reconnect_lease
+            ),
+        );
     }
 
     fn expire_lease(&self, generation: u64, cause: ErrorCode) {
@@ -354,6 +373,19 @@ impl ReliableInboundConnection {
 
     pub async fn serve(
         self,
+        stream: Streaming<FlightData>,
+        tx: async_channel::Sender<std::result::Result<FlightData, Status>>,
+    ) {
+        async_backtrace::location!(format!(
+            "New Flight inbound: {}, attachment_id={}",
+            self.source.source_label, self.attachment_id
+        ))
+        .frame(self.serve_inner(stream, tx))
+        .await;
+    }
+
+    async fn serve_inner(
+        self,
         mut stream: Streaming<FlightData>,
         tx: async_channel::Sender<std::result::Result<FlightData, Status>>,
     ) {
@@ -362,16 +394,16 @@ impl ReliableInboundConnection {
                 "do_exchange receiver serving terminal response to a late connection: {}",
                 self.source.source_label
             );
-            let _ = tx.send(Ok(response.encode())).await;
+            let _ = async_backtrace::frame!(tx.send(Ok(response.encode()))).await;
             return;
         }
 
         loop {
             let result = tokio::select! {
-                result = stream.next() => result,
+                result = async_backtrace::frame!(stream.next()) => result,
                 _ = self.source.terminal_notified.notified() => {
                     if let Some(response) = self.source.terminal_response() {
-                        let _ = tx.send(Ok(response.encode())).await;
+                        let _ = async_backtrace::frame!(tx.send(Ok(response.encode()))).await;
                         return;
                     }
                     continue;
@@ -394,7 +426,7 @@ impl ReliableInboundConnection {
                 Ok(request) => request,
                 Err(cause) => {
                     let response = self.fail(cause);
-                    let _ = tx.send(Ok(response.encode())).await;
+                    let _ = async_backtrace::frame!(tx.send(Ok(response.encode()))).await;
                     return;
                 }
             };
@@ -406,7 +438,11 @@ impl ReliableInboundConnection {
                 response,
                 DoExchangeResponse::ReceiverClosed | DoExchangeResponse::Fail(_)
             );
-            if tx.send(Ok(response.encode())).await.is_err() || terminal {
+            if async_backtrace::frame!(tx.send(Ok(response.encode())))
+                .await
+                .is_err()
+                || terminal
+            {
                 return;
             }
         }

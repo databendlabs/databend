@@ -62,6 +62,7 @@ impl OutboundChannel for LocalOutboundChannel {
         self.sender.is_closed()
     }
 
+    #[async_backtrace::framed]
     async fn add_block(&self, block: DataBlock) -> Result<StreamSendOutcome> {
         let size = block.memory_size();
         let size = std::cmp::min(size, self.max_bytes_local_channel);
@@ -71,7 +72,9 @@ impl OutboundChannel for LocalOutboundChannel {
             Ok(permit) => permit,
             Err(_) => {
                 let semaphore = self.semaphore.clone();
-                let Ok(permit) = semaphore.acquire_many_owned(size as u32).await else {
+                let Ok(permit) =
+                    async_backtrace::frame!(semaphore.acquire_many_owned(size as u32)).await
+                else {
                     return Err(ErrorCode::Internal(
                         "Logical error, inbound quota semaphore is closed.",
                     ));

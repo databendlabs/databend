@@ -53,7 +53,12 @@ impl StatisticsReceiver {
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
         for (source_target, rx) in statistics_receivers {
-            exchange_handler.push(runtime.spawn({
+            let task_name = format!(
+                "Flight statistics receiver: query_id={}, source_id={}",
+                ctx.get_id(),
+                source_target
+            );
+            let task = {
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
                 let node_memory_updater = ctx.get_node_memory_updater(&source_target);
@@ -122,7 +127,8 @@ impl StatisticsReceiver {
                         }
                     }
                 }
-            }));
+            };
+            exchange_handler.push(runtime.spawn_named(task, task_name));
         }
 
         Ok(StatisticsReceiver {
@@ -224,7 +230,7 @@ impl StatisticsReceiver {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
             while let Some(exchange_handler) = exchanges_handler.pop() {
-                exchange_handler.await??;
+                async_backtrace::frame!(exchange_handler).await??;
             }
 
             Ok(())

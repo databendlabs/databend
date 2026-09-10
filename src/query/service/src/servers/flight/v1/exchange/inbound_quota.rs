@@ -88,7 +88,7 @@ impl SubQueue {
         }
 
         let semaphore = self.semaphore.clone();
-        let Ok(x) = semaphore.acquire_many_owned(size as u32).await else {
+        let Ok(x) = async_backtrace::frame!(semaphore.acquire_many_owned(size as u32)).await else {
             log::error!("Logical error, inbound quota semaphore is closed.");
             return Err(());
         };

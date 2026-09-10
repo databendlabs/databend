@@ -406,6 +406,7 @@ impl FlightClient {
         }
     }
 
+    #[async_backtrace::framed]
     pub fn do_exchange(
         &mut self,
         request_rx: Receiver<FlightData>,

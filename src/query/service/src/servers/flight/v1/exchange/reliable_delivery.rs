@@ -44,6 +44,7 @@ impl StatisticsDelivery {
 
 #[async_trait::async_trait]
 impl InboundDelivery for StatisticsDelivery {
+    #[async_backtrace::framed]
     async fn deliver(&self, _lane: usize, data: FlightData) -> Result<DeliveryOutcome> {
         match self.sender.send(Ok(data)).await {
             Ok(()) => Ok(DeliveryOutcome::Accepted),

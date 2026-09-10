@@ -352,6 +352,7 @@ impl TransportHarness {
             reconnect,
             "test sender".to_string(),
             "test receiver".to_string(),
+            "test stream".to_string(),
         )
         .await
         .unwrap();

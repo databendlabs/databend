@@ -120,6 +120,7 @@ impl CompletionState {
         self.notified.notify_waiters();
     }
 
+    #[async_backtrace::framed]
     async fn wait(&self) -> Result<StreamSendOutcome> {
         if let Some(result) = self.current() {
             return result;
@@ -180,6 +181,7 @@ pub struct ReliableOutbound {
 
 pub struct PendingReliableOutbound {
     num_threads: usize,
+    stream_label: String,
     physical: PhysicalConnection,
 }
 
@@ -190,11 +192,23 @@ impl PendingReliableOutbound {
         reconnect: FlightReconnectPolicy,
         local_node_id: String,
         remote_node_id: String,
+        stream_label: String,
     ) -> Result<Self> {
+        let physical = async_backtrace::location!(format!(
+            "New Flight connect: {}, client={}, service={}",
+            stream_label, local_node_id, remote_node_id
+        ))
+        .frame(PhysicalConnection::open(
+            connector,
+            reconnect,
+            local_node_id,
+            remote_node_id,
+        ))
+        .await?;
         Ok(Self {
             num_threads,
-            physical: PhysicalConnection::open(connector, reconnect, local_node_id, remote_node_id)
-                .await?,
+            stream_label,
+            physical,
         })
     }
     pub fn start(
@@ -219,9 +233,16 @@ impl PendingReliableOutbound {
             },
         };
         let task_completion = completion.clone();
-        runtime.spawn(async move {
-            task_completion.complete(driver.run().await);
-        });
+        let task_name = format!(
+            "New Flight outbound: {}, client={}, service={}",
+            self.stream_label, driver.physical.local_node_id, driver.physical.remote_node_id
+        );
+        runtime.spawn_named(
+            async move {
+                task_completion.complete(driver.run().await);
+            },
+            task_name,
+        );
 
         ReliableOutbound {
             num_threads: self.num_threads,
@@ -235,6 +256,7 @@ impl PendingReliableOutbound {
 
 #[async_trait::async_trait]
 impl OutboundStream for ReliableOutbound {
+    #[async_backtrace::framed]
     async fn send(&self, lane: usize, data: FlightData) -> Result<StreamSendOutcome> {
         debug_assert!(lane < self.num_threads, "too many channels");
         let data = frame_lane(lane, data)?;
@@ -242,7 +264,7 @@ impl OutboundStream for ReliableOutbound {
             return result;
         }
         let permit = tokio::select! {
-            permit = self.slots.clone().acquire_owned() => permit.unwrap(),
+            permit = async_backtrace::frame!(self.slots.clone().acquire_owned()) => permit.unwrap(),
             result = self.completion.wait() => return result,
         };
         if let Some(result) = self.completion.current() {
@@ -264,6 +286,7 @@ impl OutboundStream for ReliableOutbound {
     }
 
     /// Drains all accepted DATA before sending FINISH, then waits for ReceiverClosed.
+    #[async_backtrace::framed]
     async fn finish(&self) -> Result<()> {
         if self.completion.current().is_none() {
             let _ = self.commands.send(OutboundCommand::Finish).await;
@@ -273,6 +296,7 @@ impl OutboundStream for ReliableOutbound {
 
     /// Keeps the transport alive for the bounded failure handshake. This is cleanup and must not
     /// delay returning the producer's original error to the query.
+    #[async_backtrace::framed]
     async fn fail(&self, cause: ErrorCode) {
         if self.completion.current().is_none() {
             let _ = self.commands.send(OutboundCommand::SenderFail(cause)).await;
@@ -305,6 +329,7 @@ impl OutboundDriver {
         }
     }
 
+    #[async_backtrace::framed]
     async fn drive(&mut self) -> OutboundTerminal {
         loop {
             enum Event {
@@ -315,8 +340,8 @@ impl OutboundDriver {
 
             let event = tokio::select! {
                 _ = self.cancellation.cancelled() => Event::Cancelled,
-                command = self.commands.recv() => Event::Command(command),
-                response = self.physical.response_stream().next() => Event::Response(
+                command = async_backtrace::frame!(self.commands.recv()) => Event::Command(command),
+                response = self.physical.next_response(self.logical.in_flight.is_some()) => Event::Response(
                     response.unwrap_or_else(|| Err(Status::unavailable(
                         "do_exchange response stream ended before a terminal packet",
                     )))
@@ -479,6 +504,7 @@ impl OutboundDriver {
         });
     }
 
+    #[async_backtrace::framed]
     async fn reconnect_transport(&mut self, status: Status) -> Result<()> {
         let (replay, attempts) = match &self.logical.in_flight {
             Some(packet) => (Some(packet.encoded.clone()), packet.reconnect_attempts),
@@ -529,6 +555,25 @@ impl PhysicalConnection {
             .response_stream
     }
 
+    async fn next_response(
+        &mut self,
+        has_in_flight: bool,
+    ) -> Option<std::result::Result<FlightData, Status>> {
+        if has_in_flight {
+            self.wait_for_ack_or_terminal().await
+        } else {
+            // An idle stream still listens for a consumer close or receiver failure.
+            async_backtrace::frame!(self.response_stream().next()).await
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn wait_for_ack_or_terminal(
+        &mut self,
+    ) -> Option<std::result::Result<FlightData, Status>> {
+        self.response_stream().next().await
+    }
+
     fn send(&self, encoded: &FlightData) {
         let send_tx = &self
             .transport
@@ -543,6 +588,7 @@ impl PhysicalConnection {
         }
     }
 
+    #[async_backtrace::framed]
     async fn reconnect(
         &mut self,
         status: Status,
@@ -588,10 +634,15 @@ impl PhysicalConnection {
             let attempts = attempts.remaining();
             for attempt in 0..attempts {
                 if attempt > 0 {
-                    tokio::time::sleep(reconnect.retry_interval).await;
+                    async_backtrace::frame!(tokio::time::sleep(reconnect.retry_interval)).await;
                 }
 
-                let failure = match tokio::time::timeout(reconnect.timeout, (connector)()).await {
+                let failure = match tokio::time::timeout(
+                    reconnect.timeout,
+                    async_backtrace::frame!((connector)()),
+                )
+                .await
+                {
                     Ok(Ok(transport)) => {
                         let Some(encoded) = &replay else {
                             return Ok((transport, attempt + 1));
