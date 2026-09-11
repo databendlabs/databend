@@ -537,8 +537,18 @@ impl Operator for WindowGroup {
             output_columns.insert(window.index);
         }
 
+        let mut available_columns = input_prop.output_columns.clone();
+        for item in &self.scalar_items {
+            available_columns.insert(item.index);
+        }
+        for window in &self.windows {
+            available_columns.insert(window.index);
+            available_columns.extend(window.arguments.iter().map(|item| item.index));
+            available_columns.extend(window.partition_by.iter().map(|item| item.index));
+            available_columns.extend(window.order_by.iter().map(|item| item.order_by_item.index));
+        }
         let outer_columns =
-            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &available_columns);
 
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns.clone());
@@ -632,8 +642,13 @@ impl Operator for Window {
         output_columns.insert(self.index);
 
         // Derive outer columns
+        let mut available_columns = input_prop.output_columns.clone();
+        available_columns.insert(self.index);
+        available_columns.extend(self.arguments.iter().map(|item| item.index));
+        available_columns.extend(self.partition_by.iter().map(|item| item.index));
+        available_columns.extend(self.order_by.iter().map(|item| item.order_by_item.index));
         let outer_columns =
-            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &available_columns);
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
