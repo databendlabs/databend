@@ -175,9 +175,17 @@ function install_openssl {
 function install_protobuf {
 	PACKAGE_MANAGER=$1
 
-	if protoc --version; then
-		echo "==> protoc is already installed"
-		return
+	protoc_bin=$(command -v protoc || true)
+	if [[ -n "${protoc_bin}" ]]; then
+		protoc_prefix=$(cd "$(dirname "${protoc_bin}")/.." && pwd)
+		protobuf_include_dirs=("${protoc_prefix}/include" /usr/local/include /usr/include)
+		for protobuf_include in "${protobuf_include_dirs[@]}"; do
+			if [[ -f "${protobuf_include}/google/protobuf/timestamp.proto" ]]; then
+				protoc --version
+				echo "==> protoc and protobuf includes are already installed"
+				return
+			fi
+		done
 	fi
 	echo "==> installing protobuf compiler..."
 

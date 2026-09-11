@@ -14,7 +14,9 @@
 
 use std::str::FromStr;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::tenant::Tenant;
@@ -25,11 +27,28 @@ pub async fn resolve_file_format(
     user_api: &UserApiProvider,
     name: &str,
 ) -> Result<FileFormatParams> {
-    match StageFileFormatType::from_str(name) {
+    let params = match StageFileFormatType::from_str(name) {
         Ok(typ) => FileFormatParams::default_by_type(typ),
         Err(_) => Ok(user_api
             .get_file_format(tenant, name)
             .await?
             .file_format_params),
+    }?;
+    ensure_query_file_format_supported(&params)?;
+    Ok(params)
+}
+
+pub fn parse_file_format(reader: FileFormatOptionsReader) -> Result<FileFormatParams> {
+    let params = FileFormatParams::try_from_reader(reader, false)?;
+    ensure_query_file_format_supported(&params)?;
+    Ok(params)
+}
+
+pub(crate) fn ensure_query_file_format_supported(params: &FileFormatParams) -> Result<()> {
+    if matches!(params, FileFormatParams::Lance(_)) {
+        return Err(ErrorCode::IllegalFileFormat(
+            "LANCE file format is unsupported".to_string(),
+        ));
     }
+    Ok(())
 }

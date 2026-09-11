@@ -39,11 +39,6 @@ encoding_rs = { workspace = true }
 enum-as-inner = { workspace = true }
 futures = { workspace = true }
 jsonb = { workspace = true }
-lance-core = { workspace = true }
-lance-encoding = { workspace = true }
-lance-file = { workspace = true, features = ["protoc"] }
-lance-io = { workspace = true }
-lance-table = { workspace = true, features = ["protoc"] }
 lexical-core = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
@@ -70,4 +65,4 @@ workspace = true
 bytes = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["match-template", "lance-encoding"]
+ignored = ["match-template"]

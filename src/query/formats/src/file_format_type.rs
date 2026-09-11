@@ -107,7 +107,6 @@ impl FileFormatTypeExt for StageFileFormatType {
             StageFileFormatType::Parquet | StageFileFormatType::Orc => "application/octet-stream",
             StageFileFormatType::NdJson => "application/x-ndjson; charset=UTF-8",
             StageFileFormatType::Json => "application/json; charset=UTF-8",
-            StageFileFormatType::Lance => "application/octet-stream",
             StageFileFormatType::Arrow | StageFileFormatType::ArrowStream => {
                 "application/vnd.apache.arrow.stream"
             }

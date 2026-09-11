@@ -68,6 +68,7 @@ use crate::binder::Binder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
+use crate::binder::parse_file_format;
 use crate::binder::validate_stage_files_path_traversal;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
@@ -166,21 +167,18 @@ impl Binder {
         let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) = StageResolver::from_table_context(
+        let file_format = if stmt.file_format.is_empty() {
+            None
+        } else {
+            Some(self.try_resolve_file_format(&stmt.file_format).await?)
+        };
+        let (stage_info, path) = StageResolver::from_table_context(
             self.ctx.clone(),
             UserApiProvider::instance(),
             GlobalConfig::instance().storage.allow_insecure,
         )?
-        .resolve_file_location(location, StagePathAccess::Read)
+        .resolve_data_file_location(location, StagePathAccess::Read, file_format)
         .await?;
-        if !stmt.file_format.is_empty() {
-            stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
-        }
-        if matches!(stage_info.file_format_params, FileFormatParams::Lance(_)) {
-            return Err(ErrorCode::IllegalFileFormat(
-                "LANCE file format is only supported in COPY INTO <location>".to_string(),
-            ));
-        }
         let mut options = stmt.options.clone();
         stage_info
             .file_format_params
@@ -330,24 +328,8 @@ impl Binder {
         &mut self,
         attachment: StageAttachment,
     ) -> Result<(StageInfo, StageFilesInfo, CopyIntoTableOptions)> {
-        let (mut stage_info, path) = StageResolver::from_table_context(
-            self.ctx.clone(),
-            UserApiProvider::instance(),
-            GlobalConfig::instance().storage.allow_insecure,
-        )?
-        .resolve_stage_location(&attachment.location[1..], StagePathAccess::Read)
-        .await?;
-
-        if let Some(ref options) = attachment.file_format_options {
-            let mut params = FileFormatParams::try_from_reader(
-                FileFormatOptionsReader::from_map(options.clone()),
-                false,
-            )?;
-            if matches!(params, FileFormatParams::Lance(_)) {
-                return Err(ErrorCode::IllegalFileFormat(
-                    "LANCE file format is only supported in COPY INTO <location>".to_string(),
-                ));
-            }
+        let file_format = if let Some(ref options) = attachment.file_format_options {
+            let mut params = parse_file_format(FileFormatOptionsReader::from_map(options.clone()))?;
             if let FileFormatParams::Csv(fmt) = &mut params {
                 // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
                 // CSV attachment is mainly used in Drivers for insert.
@@ -358,8 +340,21 @@ impl Binder {
                     fmt.empty_field_as = EmptyFieldAs::FieldDefault;
                 }
             }
-            stage_info.file_format_params = params;
-        }
+            Some(params)
+        } else {
+            None
+        };
+        let (stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_data_stage_location(
+            &attachment.location[1..],
+            StagePathAccess::Read,
+            file_format,
+        )
+        .await?;
         let mut copy_options = CopyIntoTableOptions::default();
         if let Some(ref options) = attachment.copy_options {
             copy_options.apply(options, true)?;

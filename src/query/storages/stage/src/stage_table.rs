@@ -189,13 +189,9 @@ impl Table for StageTable {
             | FileFormatParams::Arrow(_)
             | FileFormatParams::ArrowStream(_)
             | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
-            FileFormatParams::Lance(_) => Err(ErrorCode::Unimplemented(
-                "LANCE stage table read is not supported".to_string(),
-            )),
-            _ => unreachable!(
-                "unexpected format {} in StageTable::read_partition",
-                stage_table_info.stage_info.file_format_params
-            ),
+            format => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported file format in stage table read: {format}"
+            ))),
         }
     }
 
@@ -268,13 +264,9 @@ impl Table for StageTable {
                 }
                 .read_data(ctx, plan, pipeline, internal_columns)
             }
-            FileFormatParams::Lance(_) => Err(ErrorCode::Unimplemented(
-                "LANCE stage table read is not supported".to_string(),
-            )),
-            _ => unreachable!(
-                "unexpected format {} in StageTable::read_partition",
-                stage_table_info.stage_info.file_format_params
-            ),
+            format => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported file format in stage table read: {format}"
+            ))),
         }
     }
     // Truncate the stage file.

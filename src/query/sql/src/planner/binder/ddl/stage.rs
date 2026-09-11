@@ -31,6 +31,7 @@ use crate::binder::Binder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::insert::STAGE_PLACEHOLDER;
+use crate::binder::parse_file_format;
 use crate::binder::resolve_file_format;
 use crate::plans::AlterStageActionPlan;
 use crate::plans::AlterStagePlan;
@@ -122,11 +123,6 @@ impl Binder {
         if !file_format_options.is_empty() {
             stage_info.file_format_params =
                 self.try_resolve_file_format(file_format_options).await?;
-            if matches!(stage_info.file_format_params, FileFormatParams::Lance(_)) {
-                return Err(ErrorCode::IllegalStageFileFormat(
-                    "LANCE file format is only supported in COPY INTO <location>".to_string(),
-                ));
-            }
         }
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
@@ -182,12 +178,6 @@ impl Binder {
                 if let Some(file_format) = options.file_format.as_ref() {
                     if !file_format.is_empty() {
                         let file_format_params = self.try_resolve_file_format(file_format).await?;
-                        if matches!(file_format_params, FileFormatParams::Lance(_)) {
-                            return Err(ErrorCode::IllegalStageFileFormat(
-                                "LANCE file format is only supported in COPY INTO <location>"
-                                    .to_string(),
-                            ));
-                        }
                         set_plan.file_format = Some(file_format_params);
                     }
                 }
@@ -233,7 +223,7 @@ impl Binder {
             let user_api = UserApiProvider::instance();
             resolve_file_format(&tenant, &user_api, name).await
         } else {
-            FileFormatParams::try_from_reader(reader, false)
+            parse_file_format(reader)
         }
     }
 }

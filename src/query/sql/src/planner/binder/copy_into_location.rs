@@ -110,28 +110,29 @@ impl Binder {
             }
         }
 
-        let (mut stage_info, path) = StageResolver::from_table_context(
+        let file_format = if stmt.file_format.is_empty() {
+            None
+        } else {
+            Some(self.try_resolve_file_format(&stmt.file_format).await?)
+        };
+        let (stage_info, path) = StageResolver::from_table_context(
             self.ctx.clone(),
             databend_common_users::UserApiProvider::instance(),
             databend_common_config::GlobalConfig::instance()
                 .storage
                 .allow_insecure,
         )?
-        .resolve_file_location(&stmt.dst, StagePathAccess::Write)
+        .resolve_data_file_location(&stmt.dst, StagePathAccess::Write, file_format)
         .await?;
         let allow_path_traversal = databend_common_config::GlobalConfig::instance()
             .storage
             .stage_path_traversal_policy
             .allows_write();
 
-        if !stmt.file_format.is_empty() {
-            stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
-        }
-        let is_lance = matches!(stage_info.file_format_params, FileFormatParams::Lance(_));
-        let options = check_options(&stmt.options, is_lance, stmt.partition_by.is_some())?;
+        let options = check_options(&stmt.options, stmt.partition_by.is_some())?;
 
         if options.use_raw_path {
-            if path.ends_with("/") && !is_lance {
+            if path.ends_with("/") {
                 return Err(ErrorCode::BadArguments(
                     "when use_raw_path is set to true, url path can not end with '/'",
                 ));
@@ -239,7 +240,6 @@ impl Binder {
 
 fn check_options(
     raw_options: &CopyIntoLocationOptionsRaw,
-    is_lance: bool,
     has_partition: bool,
 ) -> Result<CopyIntoLocationOptions> {
     let mut options = raw_options.with_defaults();
@@ -269,30 +269,16 @@ fn check_options(
         (_, _) => {}
     }
 
-    if !is_lance {
-        if options.overwrite && (!options.single || !options.use_raw_path) {
-            return Err(ErrorCode::InvalidArgument(
-                "overwrite=true can only be set when single=true and use_raw_path=true for now",
-            ));
-        }
+    if options.overwrite && (!options.single || !options.use_raw_path) {
+        return Err(ErrorCode::InvalidArgument(
+            "overwrite=true can only be set when single=true and use_raw_path=true for now",
+        ));
+    }
 
-        if options.use_raw_path && !options.single {
-            return Err(ErrorCode::InvalidArgument(
-                "use_raw_path=true can only be set when single=true",
-            ));
-        }
-    } else {
-        if raw_options.single.is_some() {
-            return Err(ErrorCode::InvalidArgument(
-                "copy option single can not be used with Lance format",
-            ));
-        }
-
-        if has_partition {
-            return Err(ErrorCode::InvalidArgument(
-                "PARTITION BY cannot be used together with LANCE file format",
-            ));
-        }
+    if options.use_raw_path && !options.single {
+        return Err(ErrorCode::InvalidArgument(
+            "use_raw_path=true can only be set when single=true",
+        ));
     }
 
     if has_partition {
