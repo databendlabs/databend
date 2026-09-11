@@ -214,6 +214,7 @@ impl LocalMetaService {
         let grpc_impl = MetaServiceImpl::create(
             *databend_meta::version::version(),
             Arc::downgrade(&meta_handle),
+            &config.grpc,
         );
         let max_msg_size = config.grpc.max_message_size();
         let grpc_service = MetaServiceServer::new(grpc_impl)
