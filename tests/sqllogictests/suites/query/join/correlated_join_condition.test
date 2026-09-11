@@ -1,0 +1,72 @@
+# Correlated references in a subquery JOIN ON condition must be materialized
+# before decorrelation.
+
+statement ok
+use default
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE EXISTS (
+    SELECT 1
+    FROM (VALUES (1), (2)) t2(a)
+    JOIN (VALUES (1)) t3(c) ON t2.a = t1.a
+)
+----
+1
+2
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE EXISTS (
+    SELECT 1
+    FROM (VALUES (1), (2)) t2(a)
+    JOIN (VALUES (1)) t3(c) ON t2.a > t1.a
+)
+----
+1
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE EXISTS (
+    SELECT 1
+    FROM (VALUES (1), (2)) t2(a)
+    LEFT JOIN (VALUES (1)) t3(c) ON t2.a = t1.a
+)
+----
+1
+2
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE t1.a IN (
+    SELECT t2.a
+    FROM (VALUES (1), (2)) t2(a)
+    JOIN (VALUES (1)) t3(c) ON t2.a = t1.a
+)
+----
+1
+2
+
+query I rowsort
+SELECT (SELECT count(*)
+        FROM (VALUES (1), (2)) t2(a)
+        JOIN (VALUES (1)) t3(c) ON t2.a = t1.a)
+FROM (VALUES (1), (2)) t1(a)
+----
+1
+1
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE EXISTS (
+    SELECT 1
+    FROM (VALUES (1)) t2(a)
+    JOIN (VALUES (1)) t3(c) ON t1.a = 1
+)
+----
+1

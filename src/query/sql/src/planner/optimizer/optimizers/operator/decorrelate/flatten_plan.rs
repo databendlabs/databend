@@ -479,6 +479,12 @@ impl SubqueryDecorrelatorOptimizer {
                         left_need_cross_join = true;
                     } else if right_prop.output_columns.contains(&col) {
                         right_need_cross_join = true;
+                    } else {
+                        // The correlated column is only referenced by the join condition. It
+                        // must still be materialized on one side of the join before the
+                        // condition can be evaluated. Use the left side for outer-only
+                        // predicates, which also preserves LEFT JOIN semantics.
+                        left_need_cross_join = true;
                     }
                 }
             }

@@ -491,6 +491,9 @@ impl Operator for Join {
             condition.left.collect_used_columns(&mut outer_columns);
             condition.right.collect_used_columns(&mut outer_columns);
         }
+        for condition in &self.non_equi_conditions {
+            condition.collect_used_columns(&mut outer_columns);
+        }
         outer_columns.retain(|column| !output_columns.contains(column));
 
         // Derive used columns
@@ -925,6 +928,39 @@ mod tests {
         let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, right_distribution);
+        Ok(())
+    }
+
+    #[test]
+    fn test_non_equi_join_predicate_tracks_outer_columns() -> Result<()> {
+        let join = Join {
+            // `#2 = #0`, where #0 comes from an enclosing query block.
+            non_equi_conditions: vec![function_call(
+                "eq",
+                vec![
+                    column(2, DataType::Number(NumberDataType::Int32)),
+                    column(0, DataType::Number(NumberDataType::Int32)),
+                ],
+                DataType::Boolean,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_binary(
+            join,
+            SExpr::create_leaf(Scan {
+                columns: column_set(&[2]),
+                ..Default::default()
+            }),
+            SExpr::create_leaf(Scan {
+                columns: column_set(&[4]),
+                ..Default::default()
+            }),
+        );
+
+        let prop = RelExpr::with_s_expr(&s_expr).derive_relational_prop()?;
+
+        assert_eq!(prop.outer_columns, column_set(&[0]));
         Ok(())
     }
 

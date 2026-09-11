@@ -66,3 +66,51 @@ async fn correlated_exists_subquery_over_union_all_regression() -> anyhow::Resul
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn correlated_join_condition_subquery_regression() -> anyhow::Result<()> {
+    let cases = [
+        (
+            r"
+                SELECT *
+                FROM (VALUES (1), (2)) t1(a)
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM (VALUES (1), (2)) t2(a)
+                    JOIN (VALUES (1)) t3(c) ON t2.a = t1.a
+                )
+            ",
+            2,
+        ),
+        (
+            r"
+                SELECT *
+                FROM (VALUES (1), (2)) t1(a)
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM (VALUES (1), (2)) t2(a)
+                    JOIN (VALUES (1)) t3(c) ON t2.a > t1.a
+                )
+            ",
+            1,
+        ),
+        (
+            r"
+                SELECT *
+                FROM (VALUES (1), (2)) t1(a)
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM (VALUES (1), (2)) t2(a)
+                    LEFT JOIN (VALUES (1)) t3(c) ON t2.a = t1.a
+                )
+            ",
+            2,
+        ),
+    ];
+
+    for (sql, expected_rows) in cases {
+        assert_eq!(execute_query_rows(sql).await?, expected_rows);
+    }
+
+    Ok(())
+}
