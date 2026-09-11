@@ -432,6 +432,12 @@ impl StealablePartitions {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum VerticalReclusterKind {
+    SortBlocks,
+    MergeBlocks,
+}
+
 /// Per-level block counts, rows and sizes for insert/recluster diagnostic logs, not table statistics.
 /// `None` means no cluster statistics; -1 denotes a perfect block.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -470,6 +476,12 @@ pub struct ReclusterTask {
     // All input blocks in this task are already ordered by the current cluster key.
     #[serde(default)]
     pub all_ordered: bool,
+    /// Absent preserves the existing horizontal pipeline and wire compatibility.
+    #[serde(default)]
+    pub vertical_kind: Option<VerticalReclusterKind>,
+    /// Hard admission budget for the independent vertical executor.
+    #[serde(default)]
+    pub memory_budget: usize,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
@@ -497,4 +509,51 @@ pub struct ReclusterInfoSideCar {
     /// Acquire the table lock only around refresh, sequence validation, and CAS publish.
     #[serde(default)]
     pub acquire_commit_lock: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vertical_recluster_task_serde_roundtrip() {
+        let task = ReclusterTask {
+            parts: Partitions::default(),
+            stats: PartStatistics::default(),
+            total_rows: 42,
+            total_bytes: 1024,
+            total_compressed: 512,
+            level: 3,
+            input_level_stats: vec![],
+            virtual_column_layout: None,
+            all_ordered: true,
+            vertical_kind: Some(VerticalReclusterKind::MergeBlocks),
+            memory_budget: 64 * 1024 * 1024,
+        };
+
+        let encoded = serde_json::to_vec(&task).unwrap();
+        let decoded: ReclusterTask = serde_json::from_slice(&encoded).unwrap();
+
+        assert_eq!(decoded.vertical_kind, task.vertical_kind);
+        assert_eq!(decoded.memory_budget, task.memory_budget);
+    }
+
+    #[test]
+    fn test_old_recluster_task_defaults_vertical_fields() {
+        let encoded = serde_json::json!({
+            "parts": { "kind": "Seq", "partitions": [] },
+            "stats": PartStatistics::default(),
+            "total_rows": 0,
+            "total_bytes": 0,
+            "total_compressed": 0,
+            "level": 0,
+            "all_ordered": false
+        });
+        let decoded: ReclusterTask = serde_json::from_value(encoded).unwrap();
+
+        assert_eq!(decoded.vertical_kind, None);
+        assert_eq!(decoded.memory_budget, 0);
+        assert!(decoded.input_level_stats.is_empty());
+        assert!(decoded.virtual_column_layout.is_none());
+    }
 }

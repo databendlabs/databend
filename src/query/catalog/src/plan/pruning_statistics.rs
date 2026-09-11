@@ -32,6 +32,10 @@ pub struct PruningStatistics {
     /// Block range pruning cost in microseconds.
     pub blocks_range_pruning_cost: u64,
 
+    /// Granule pruning stats across retained blocks.
+    pub granules_pruning_before: usize,
+    pub granules_pruning_after: usize,
+
     /// Block bloom filter pruning stats.
     pub blocks_bloom_pruning_before: usize,
     pub blocks_bloom_pruning_after: usize,
@@ -75,6 +79,8 @@ impl PruningStatistics {
         self.blocks_range_pruning_before += other.blocks_range_pruning_before;
         self.blocks_range_pruning_after += other.blocks_range_pruning_after;
         self.blocks_range_pruning_cost += other.blocks_range_pruning_cost;
+        self.granules_pruning_before += other.granules_pruning_before;
+        self.granules_pruning_after += other.granules_pruning_after;
         self.blocks_bloom_pruning_before += other.blocks_bloom_pruning_before;
         self.blocks_bloom_pruning_after += other.blocks_bloom_pruning_after;
         self.blocks_bloom_pruning_cost += other.blocks_bloom_pruning_cost;

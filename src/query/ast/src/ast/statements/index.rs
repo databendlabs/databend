@@ -35,6 +35,7 @@ pub enum TableIndexType {
     Ngram,
     Vector,
     Spatial,
+    Bloom,
 }
 
 impl Display for TableIndexType {
@@ -51,6 +52,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Spatial => {
                 write!(f, "SPATIAL")
+            }
+            TableIndexType::Bloom => {
+                write!(f, "BLOOM")
             }
         }
     }

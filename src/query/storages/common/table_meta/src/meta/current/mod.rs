@@ -15,6 +15,7 @@
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v2::AdditionalStatsMeta;
 pub use v2::BlockMeta;
+pub use v2::BytesRange;
 pub use v2::ClusterStatistics;
 pub use v2::ColumnMeta;
 pub use v2::ColumnStatistics;
@@ -23,6 +24,8 @@ pub use v2::DraftVirtualColumnBlockMeta;
 pub use v2::DraftVirtualColumnMeta;
 pub use v2::DraftVirtualColumnPathStatistics;
 pub use v2::ExtendedBlockMeta;
+pub use v2::GranuleIndexFileLayout;
+pub use v2::GranuleIndexLayout;
 pub use v2::PartitionStatistics;
 pub use v2::SegmentStatistics;
 pub use v2::SpatialStatistics;

@@ -340,6 +340,7 @@ mod tests {
 
     use crate::ChangeValue;
     use crate::DefaultSettings;
+    use crate::ReclusterMethod;
     use crate::ScopeLevel;
     use crate::Settings;
 
@@ -364,6 +365,22 @@ mod tests {
 
         assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
         assert_eq!(settings.changes.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_recluster_method_default_and_parser() -> Result<()> {
+        assert_eq!(DefaultSettings::try_get_string("recluster_method")?, "auto");
+        assert_eq!("auto".parse::<ReclusterMethod>()?, ReclusterMethod::Auto);
+        assert_eq!(
+            "HORIZONTAL".parse::<ReclusterMethod>()?,
+            ReclusterMethod::Horizontal
+        );
+        assert_eq!(
+            "vertical".parse::<ReclusterMethod>()?,
+            ReclusterMethod::Vertical
+        );
+        assert!("diagonal".parse::<ReclusterMethod>().is_err());
         Ok(())
     }
 

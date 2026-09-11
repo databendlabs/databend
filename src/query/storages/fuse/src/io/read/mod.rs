@@ -29,8 +29,19 @@ pub use block::BlockReadContext;
 pub use block::BlockReadResult;
 pub use block::BlockReader;
 pub use block::DataItem;
+pub use block::FuseLowLevelBlockReadOptions;
+pub use block::FuseLowLevelBlockReader;
+pub use block::FuseLowLevelClusterKeyReader;
+pub use block::FuseLowLevelColumnBatchReader;
+pub use block::FuseLowLevelColumnReader;
+pub use block::FuseLowLevelDataReader;
+pub(crate) use block::GranuleDataReader;
 pub use block::RowSelection;
 pub use block::column_chunks_to_record_batch;
+#[cfg(test)]
+pub(crate) use block::parquet::ArrayCacheContext;
+#[cfg(test)]
+pub(crate) use block::parquet::deserialize_column_chunks;
 pub use bloom::BloomBlockFilterReader;
 pub use inverted_index::InvertedIndexReader;
 pub use meta::CompactSegmentInfoReader;

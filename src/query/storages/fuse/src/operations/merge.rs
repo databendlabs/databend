@@ -33,6 +33,7 @@ use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::create_inverted_index_builders;
+use crate::io::granule_index::build_granule_index_specs;
 use crate::statistics::ClusterStatsGenerator;
 
 impl FuseTable {
@@ -104,6 +105,8 @@ impl FuseTable {
             true,
         )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+        let granule_index_specs =
+            build_granule_index_specs(&self.table_info.meta.indexes, &self.table_info.meta.schema)?;
         let vector_index_builder =
             VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
         let spatial_index_builder = SpatialIndexBuilder::try_create(
@@ -124,6 +127,7 @@ impl FuseTable {
 
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
+            operator: self.get_operator(),
             meta_locations: self.meta_location_generator().clone(),
             source_schema: new_schema,
             write_settings: self.get_write_settings(),
@@ -132,6 +136,7 @@ impl FuseTable {
             ndv_columns_map,
             top_n: None,
             ngram_args,
+            granule_index_specs,
             inverted_index_builders,
             vector_index_builder,
             spatial_index_builder,

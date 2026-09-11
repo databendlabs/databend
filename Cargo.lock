@@ -4595,6 +4595,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
+ "databend-common-settings",
  "databend-common-sql",
  "databend-common-statistics",
  "databend-common-storage",
@@ -6405,17 +6406,22 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-channel",
  "bytes",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
+ "databend-storages-common-blocks",
+ "databend-storages-common-cache",
  "fastrace",
  "futures",
  "log",
  "opendal",
  "parquet 58.4.0",
+ "tempfile",
 ]
 
 [[package]]

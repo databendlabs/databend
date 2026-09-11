@@ -32,6 +32,7 @@ use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterGroup;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
@@ -365,6 +366,8 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 .map(|local_idx| indices[local_idx])
                 .collect::<Vec<_>>();
             candidates.push(task_candidate(
+                properties,
+                ReclusterCandidateKind::Depth,
                 group,
                 CandidateScore {
                     selected_total_bytes: task_bytes,

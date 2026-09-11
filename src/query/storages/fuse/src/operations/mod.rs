@@ -37,6 +37,7 @@ mod table_index;
 mod truncate;
 mod util;
 mod vacuum;
+mod vertical_recluster;
 mod virtual_column;
 
 pub use analyze::AnalyzeHistogramInfo;
@@ -66,6 +67,7 @@ pub use util::*;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;
 pub use vacuum::is_gc_candidate_segment_block;
 pub use vacuum::vacuum_tables_from_info;
+pub use vertical_recluster::VerticalReclusterSource;
 pub use virtual_column::VirtualColumnVacuumResult;
 pub use virtual_column::cleanup_vacuum_virtual_column_files;
 pub use virtual_column::commit_refresh_virtual_column;

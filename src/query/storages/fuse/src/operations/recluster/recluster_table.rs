@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -28,6 +29,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
+use databend_common_settings::ReclusterMethod;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -40,15 +42,33 @@ use tokio::sync::Semaphore;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
+use crate::operations::recluster::ReclusterSelectionStats;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
+
+fn preferred_candidate_kind(
+    depth_candidates: usize,
+    reduction_candidates: usize,
+    repack_candidates: usize,
+) -> Option<ReclusterCandidateKind> {
+    if depth_candidates > 0 {
+        Some(ReclusterCandidateKind::Depth)
+    } else if reduction_candidates > 0 {
+        Some(ReclusterCandidateKind::BlockReduction)
+    } else if repack_candidates > 0 {
+        Some(ReclusterCandidateKind::Repack)
+    } else {
+        None
+    }
+}
 
 type RankedTaskCandidate = (usize, usize, CandidateScore, bool);
 
@@ -117,6 +137,8 @@ impl FuseTable {
         limit: Option<usize>,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
+        vertical_kind_override: Option<VerticalReclusterKind>,
+        max_tasks_override: Option<usize>,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
@@ -137,11 +159,20 @@ impl FuseTable {
             return Ok(None);
         };
 
+        let method = ctx.get_settings().get_recluster_method()?;
+        let vertical_kind = match method {
+            ReclusterMethod::Auto | ReclusterMethod::Horizontal => None,
+            ReclusterMethod::Vertical => {
+                vertical_kind_override.or(Some(VerticalReclusterKind::MergeBlocks))
+            }
+        };
         let mutator = Arc::new(ReclusterMutator::try_create(
             self,
             ctx.clone(),
             snapshot.as_ref(),
             mode,
+            vertical_kind,
+            max_tasks_override,
         )?);
 
         // Carry is tied to the current cluster key because cached block metas
@@ -400,26 +431,80 @@ impl FuseTable {
             let (_, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
-                // Step 3: choose task candidates. Preserve score-only ranking unless
-                // early accepts fill the task budget. In that case early candidates
-                // rank first, while other probed tasks remain available to fill budget
-                // left by candidates skipped due to the segment-claim limit.
+                // Step 3: choose one candidate class for this round. Depth always
+                // wins; block reduction only uses rounds with no depth work.
                 let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
+                let mut depth_candidates = 0usize;
+                let mut reduction_candidates = 0usize;
+                let mut repack_candidates = 0usize;
+                let mut selection_stats = ReclusterSelectionStats::default();
+                for window in &pending_windows {
+                    selection_stats += window.selection_stats;
+                    for task in &window.tasks {
+                        match task.kind {
+                            ReclusterCandidateKind::Depth => depth_candidates += 1,
+                            ReclusterCandidateKind::BlockReduction => reduction_candidates += 1,
+                            ReclusterCandidateKind::Repack => repack_candidates += 1,
+                        }
+                    }
+                }
+                let selected_kind = preferred_candidate_kind(
+                    depth_candidates,
+                    reduction_candidates,
+                    repack_candidates,
+                );
+
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
-                        sorted_tasks.push((
-                            window_idx,
-                            task_idx,
-                            task.score,
-                            prioritize_early_accept && mutator.passes_early_accept(task),
-                        ));
+                        if Some(task.kind) == selected_kind {
+                            sorted_tasks.push((
+                                window_idx,
+                                task_idx,
+                                task.score,
+                                prioritize_early_accept && mutator.passes_early_accept(task),
+                            ));
+                        }
                     }
                 }
                 sort_task_candidates(&mut sorted_tasks);
 
                 let mut selected_task_indices =
                     select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks);
+                let mut selected_count = 0;
+                let mut selected_blocks = 0;
+                for (window_idx, indices) in selected_task_indices.iter().enumerate() {
+                    selected_count += indices.len();
+                    for &task_idx in indices {
+                        selected_blocks +=
+                            pending_windows[window_idx].tasks[task_idx].selected_block_count();
+                    }
+                }
+
+                info!(
+                    "recluster: candidate selection summary block_reduction_enabled={} scanned_blocks={} eligible_blocks={} depth_candidates={} reduction_candidates={} repack_candidates={} selected_kind={} selected_tasks={} selected_blocks={} max_tasks={} skipped_negative_level_blocks={} skipped_terminal_level_blocks={} skipped_terminal_level_bytes={}",
+                    mutator.properties.enable_block_reduction,
+                    selection_stats.scanned_blocks,
+                    selection_stats.eligible_blocks,
+                    depth_candidates,
+                    reduction_candidates,
+                    repack_candidates,
+                    selected_kind.map_or("none".to_string(), |kind| kind.to_string()),
+                    selected_count,
+                    selected_blocks,
+                    mutator.max_tasks,
+                    selection_stats.skipped_negative_level_blocks,
+                    selection_stats.skipped_terminal_level_blocks,
+                    selection_stats.skipped_terminal_level_bytes,
+                );
+                debug!(
+                    "recluster: candidate level distribution level_0={} level_1_3={} level_4_8={} level_9_31={} level_ge_32={}",
+                    selection_stats.level_0,
+                    selection_stats.level_1_3,
+                    selection_stats.level_4_8,
+                    selection_stats.level_9_31,
+                    selection_stats.level_ge_32,
+                );
 
                 let mut selected = Vec::new();
                 let mut remaining_windows = Vec::with_capacity(pending_windows.len());
@@ -545,9 +630,12 @@ impl FuseTable {
             schema.clone(),
             push_down,
             None,
+            None,
+            vec![],
             BloomIndexColumns::None,
             vec![],
             HashSet::new(),
+            std::collections::BTreeMap::new(),
             max_concurrency,
             None,
         )?;
@@ -627,6 +715,8 @@ mod tests {
             base_level: 0,
             input_level_stats: Vec::new(),
             all_ordered: false,
+            kind: ReclusterCandidateKind::Depth,
+            vertical_kind: None,
         }
     }
 
@@ -636,6 +726,7 @@ mod tests {
                 .map(|index| ((format!("{}-{}", prefix, index), 0), None))
                 .collect(),
             tasks: vec![candidate(0..segment_count)],
+            selection_stats: ReclusterSelectionStats::default(),
         }
     }
 
@@ -725,5 +816,22 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 2);
 
         assert_eq!(selected, vec![vec![0, 1]]);
+    }
+
+    #[test]
+    fn test_preferred_candidate_kind() {
+        assert_eq!(
+            preferred_candidate_kind(1, 10, 10),
+            Some(ReclusterCandidateKind::Depth)
+        );
+        assert_eq!(
+            preferred_candidate_kind(0, 10, 10),
+            Some(ReclusterCandidateKind::BlockReduction)
+        );
+        assert_eq!(
+            preferred_candidate_kind(0, 0, 10),
+            Some(ReclusterCandidateKind::Repack)
+        );
+        assert_eq!(preferred_candidate_kind(0, 0, 0), None);
     }
 }

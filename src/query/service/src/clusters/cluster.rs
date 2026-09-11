@@ -823,6 +823,7 @@ impl ClusterDiscovery {
                 "table_bloom_index_meta_count": cfg.cache.table_bloom_index_meta_count,
                 "table_bloom_index_filter_count": cfg.cache.table_bloom_index_filter_count,
                 "table_bloom_index_filter_size": cfg.cache.table_bloom_index_filter_size,
+                "granule_index_file_bytes": cfg.cache.granule_index_file_bytes,
                 "table_prune_partitions_count": cfg.cache.table_prune_partitions_count,
                 "inverted_index_meta_count": cfg.cache.inverted_index_meta_count,
                 "inverted_index_filter_size": cfg.cache.inverted_index_filter_size,

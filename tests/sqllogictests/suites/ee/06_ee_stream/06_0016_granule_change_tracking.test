@@ -1,0 +1,57 @@
+# Change-tracking mutation reads must preserve `_origin_block_row_num` when Granule Index pruning
+# selects non-zero, disjoint ranges from one parquet block. The Granule reader keeps each range
+# separate when stream metadata is requested because StreamColumnMeta stores one contiguous base.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_07
+
+statement ok
+CREATE DATABASE db_09_0009_07
+
+statement ok
+USE db_09_0009_07
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+CREATE TABLE t(a int, b int) CLUSTER BY(a) change_tracking=true index_granularity=100
+
+statement ok
+INSERT INTO t SELECT number, number FROM numbers(1000)
+
+statement ok
+SET max_block_size = 100
+
+statement ok
+UPDATE t SET b = -1 WHERE (a >= 100 AND a < 110) OR (a >= 700 AND a < 710)
+
+statement ok
+UNSET max_block_size
+
+query II rowsort
+SELECT a, _origin_block_row_num FROM t WHERE b = -1
+----
+100 100
+101 101
+102 102
+103 103
+104 104
+105 105
+106 106
+107 107
+108 108
+109 109
+700 700
+701 701
+702 702
+703 703
+704 704
+705 705
+706 706
+707 707
+708 708
+709 709
+
+statement ok
+DROP DATABASE db_09_0009_07

@@ -28,6 +28,9 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::granule_index::GranuleIndexSpec;
+use databend_common_storages_fuse::io::granule_index::build_granule_index_specs;
+use databend_common_storages_fuse::io::granule_index::collect_granule_index_payload_locations;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -81,6 +84,7 @@ struct BlockGcContext<'a> {
     gc_root_blocks: &'a HashSet<String>,
     /// Inverted index metadata used to derive index object paths from data blocks.
     inverted_indexes: &'a BTreeMap<String, TableIndex>,
+    granule_index_specs: &'a [Arc<dyn GranuleIndexSpec>],
     /// Start time of the block GC phase, used only for status reporting.
     start: std::time::Instant,
 }
@@ -224,6 +228,7 @@ pub async fn do_vacuum2(
     // order is important
     // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
+    let granule_index_specs = build_granule_index_specs(inverted_indexes, &fuse_table.schema())?;
     let block_gc_ctx = BlockGcContext {
         dal: fuse_table.get_operator_ref(),
         ctx: &ctx,
@@ -234,8 +239,17 @@ pub async fn do_vacuum2(
         gc_root_meta_ts,
         gc_root_blocks: &gc_root_blocks,
         inverted_indexes,
+        granule_index_specs: &granule_index_specs,
         start,
     };
+    let orphan_granule_files = fuse_table
+        .vacuum_orphan_granule_index_payloads(
+            ctx.clone(),
+            &gc_root_blocks,
+            gc_root_timestamp,
+            gc_root_meta_ts,
+        )
+        .await?;
     let block_gc_stats = purge_blocks_before_gc_root(&block_gc_ctx).await?;
     ctx.set_status_info(&format!(
         "Filtered and removed blocks for table {}, elapsed: {:?}, blocks scanned: {}, blocks removed: {}, files removed: {}",
@@ -282,6 +296,7 @@ pub async fn do_vacuum2(
     let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
     let removed_files = block_gc_stats.removed_files
+        + orphan_granule_files
         + stats_to_gc.len()
         + segments_to_gc.len()
         + snapshots_to_gc.len();
@@ -442,7 +457,11 @@ async fn purge_block_chunk(
     }
 
     let chunk_idx = stats.removed_blocks / VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 1;
-    let indexes_to_gc = collect_block_index_locations(block_chunk, block_gc.inverted_indexes);
+    let indexes_to_gc = collect_block_index_locations(
+        block_chunk,
+        block_gc.inverted_indexes,
+        block_gc.granule_index_specs,
+    );
     block_gc.ctx.set_status_info(&format!(
         "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}, blocks in chunk: {}, indexes_to_gc: {:?}",
         block_gc.table_desc,
@@ -477,6 +496,7 @@ async fn purge_block_chunk(
 fn collect_block_index_locations(
     blocks_to_gc: &[String],
     inverted_indexes: &BTreeMap<String, TableIndex>,
+    granule_index_specs: &[Arc<dyn GranuleIndexSpec>],
 ) -> Vec<String> {
     let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len() * (inverted_indexes.len() + 1));
     for loc in blocks_to_gc {
@@ -491,6 +511,13 @@ fn collect_block_index_locations(
         }
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
+        indexes_to_gc.extend(collect_granule_index_payload_locations(
+            granule_index_specs,
+            std::slice::from_ref(loc),
+        ));
+        indexes_to_gc.extend(
+            TableMetaLocationGenerator::gen_granule_index_locations_from_block_location(loc),
+        );
     }
     indexes_to_gc
 }
@@ -576,7 +603,7 @@ mod tests {
             options: BTreeMap::new(),
         });
 
-        let indexes = collect_block_index_locations(&blocks, &inverted_indexes);
+        let indexes = collect_block_index_locations(&blocks, &inverted_indexes, &[]);
 
         assert_eq!(indexes, vec![
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
@@ -585,12 +612,22 @@ mod tests {
                 "123456789",
             ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
+            TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(&blocks[0]).0,
+            TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
+                &blocks[0]
+            )
+            .0,
             TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                 &blocks[1],
                 "idx",
                 "123456789",
             ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
+            TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(&blocks[1]).0,
+            TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
+                &blocks[1]
+            )
+            .0,
         ]);
     }
 
@@ -644,6 +681,7 @@ mod tests {
                 gc_root_meta_ts: gc_root_timestamp,
                 gc_root_blocks: &protected_blocks,
                 inverted_indexes: &inverted_indexes,
+                granule_index_specs: &[],
                 start: std::time::Instant::now(),
             };
             assert_ne!(dal.info().scheme(), Scheme::Fs.into_static());
@@ -652,8 +690,8 @@ mod tests {
 
             assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS);
             assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
-            // Each removed block also contributes its derived bloom-index path.
-            assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 2);
+            // Each removed block contributes bloom, mins and offsets paths.
+            assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 4);
             assert!(dal.exists(&protected_block).await?);
             assert!(dal.exists(&after_cutoff_block).await?);
             for path in candidates.iter().skip(1) {
@@ -750,6 +788,7 @@ mod tests {
                     gc_root_meta_ts: gc_root_timestamp,
                     gc_root_blocks: &protected_blocks,
                     inverted_indexes: &inverted_indexes,
+                    granule_index_specs: &[],
                     start: std::time::Instant::now(),
                 };
                 anyhow::ensure!(
@@ -761,7 +800,7 @@ mod tests {
 
                 anyhow::ensure!(stats.scanned_blocks == CANDIDATE_BLOCKS);
                 anyhow::ensure!(stats.removed_blocks == CANDIDATE_BLOCKS - 1);
-                anyhow::ensure!(stats.removed_files == (CANDIDATE_BLOCKS - 1) * 2);
+                anyhow::ensure!(stats.removed_files == (CANDIDATE_BLOCKS - 1) * 4);
                 anyhow::ensure!(dal.exists(&protected_block).await?);
                 anyhow::ensure!(dal.exists(&after_cutoff_block).await?);
                 for path in candidates.iter().take(CANDIDATE_BLOCKS - 1) {

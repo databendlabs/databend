@@ -6940,6 +6940,7 @@ fn index_type(i: Input) -> IResult<TableIndexType> {
         value(TableIndexType::Ngram, rule! { NGRAM }),
         value(TableIndexType::Vector, rule! { VECTOR }),
         value(TableIndexType::Spatial, rule! { SPATIAL }),
+        value(TableIndexType::Bloom, rule! { BLOOM }),
     ))
     .parse(i)
 }

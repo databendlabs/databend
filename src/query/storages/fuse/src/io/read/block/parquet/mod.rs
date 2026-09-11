@@ -14,24 +14,17 @@
 
 use std::collections::HashMap;
 
-use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
-use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FilterVisitor;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
-use databend_common_expression::types::DataType;
-use databend_common_expression::visitor::ValueVisitor;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
@@ -39,7 +32,9 @@ mod deserialize;
 mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
+pub(crate) use deserialize::ArrayCacheContext;
 pub use deserialize::column_chunks_to_record_batch;
+pub(crate) use deserialize::deserialize_column_chunks;
 pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
@@ -53,13 +48,27 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks(
-            part.nums_rows,
+        self.deserialize_part_with_num_rows(part, part.nums_rows, column_chunks, selection)
+    }
+
+    /// Like [`deserialize_part`], but with an explicit row count. Used by sparse-granule-index
+    /// narrowed reads, where the reconstructed partial column chunks contain fewer rows than the
+    /// block's `nums_rows`.
+    pub fn deserialize_part_with_num_rows(
+        &self,
+        part: &FuseBlockPartInfo,
+        num_rows: usize,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_inner(
+            num_rows,
             &part.columns_meta,
             column_chunks,
             &part.compression,
             &part.location,
             selection,
+            num_rows == part.nums_rows,
         )
     }
 
@@ -72,6 +81,28 @@ impl BlockReader {
         block_path: &str,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_inner(
+            num_rows,
+            column_metas,
+            column_chunks,
+            compression,
+            block_path,
+            selection,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn deserialize_parquet_chunks_inner(
+        &self,
+        num_rows: usize,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        block_path: &str,
+        selection: Option<&RowSelection>,
+        complete_column_chunks: bool,
+    ) -> databend_common_exception::Result<DataBlock> {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
         if self.projected_schema.fields.is_empty() {
@@ -82,32 +113,28 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        let has_selection = selection.is_some();
-        let parquet_selection = selection.map(|s| s.selection.clone());
-        let record_batch = column_chunks_to_record_batch(
+        let array_cache = match self.put_cache {
+            true => CacheManager::instance().get_table_data_array_cache(),
+            false => None,
+        };
+        let record_batch = deserialize_column_chunks(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
-            parquet_selection,
+            selection.map(|s| s.selection.clone()),
+            array_cache.as_ref().map(|cache| ArrayCacheContext {
+                cache,
+                location: block_path,
+                column_metas,
+                complete_column_chunks,
+            }),
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache && !has_selection {
-            CacheManager::instance().get_table_data_array_cache()
-        } else {
-            None
-        };
-
-        for ((i, field), column_node) in self
-            .projected_schema
-            .fields
-            .iter()
-            .enumerate()
-            .zip(self.project_column_nodes.iter())
-        {
-            let data_type: DataType = field.data_type().into();
+        for (i, field) in self.projected_schema.fields.iter().enumerate() {
+            let data_type = field.data_type().into();
 
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
@@ -123,41 +150,10 @@ impl BlockReader {
             //
             //  Yes, it is too obscure, we need to polish it later.
 
-            let value = match column_chunks.get(&field.column_id) {
-                Some(DataItem::RawData(_)) => {
-                    // get the deserialized arrow array, which may be a nested array
-                    let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                    if !column_node.is_nested {
-                        if let Some(cache) = &array_cache {
-                            let meta = column_metas.get(&field.column_id).unwrap();
-                            let (offset, len) = meta.offset_length();
-                            let key = TableDataCacheKey::new(
-                                block_path,
-                                field.column_id,
-                                offset,
-                                len,
-                                &data_type.to_string(),
-                            );
-                            let array_memory_size = arrow_array.get_array_memory_size();
-                            cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
-                        }
-                    }
-                    Value::from_arrow_rs(arrow_array, &data_type)?
-                }
-                Some(DataItem::ColumnArray(cached)) => {
-                    if column_node.is_nested {
-                        // a defensive check, should never happen
-                        return Err(ErrorCode::StorageOther(
-                            "unexpected nested field: nested leaf field hits cached",
-                        ));
-                    }
-                    let mut value = Value::from_arrow_rs(cached.0.clone(), &data_type)?;
-                    if let Some(selection) = selection {
-                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
-                        filter_visitor.visit_value(value)?;
-                        value = filter_visitor.take_result().unwrap();
-                    }
-                    value
+            let data_item = column_chunks.get(&field.column_id);
+            let value = match data_item {
+                Some(_) => {
+                    Value::from_arrow_rs(column_by_name(&record_batch, &name_paths[i]), &data_type)?
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };

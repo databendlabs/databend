@@ -53,7 +53,7 @@ use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::StackHashMap;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnIdMap;
@@ -84,6 +84,8 @@ use parquet::file::metadata::ParquetMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use super::granule_index_writer::virtual_offset_marks;
+use super::parquet_block_writer::ParquetBlockWriter;
 use crate::MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS;
 use crate::MAX_VIRTUAL_COLUMN_PATH_STATISTICS;
 use crate::index::VIRTUAL_COLUMN_NODES_KEY;
@@ -93,6 +95,7 @@ use crate::index::encode_compact_virtual_column_shared_ids;
 use crate::index::encode_compact_virtual_column_string_table;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnLayoutPolicy;
+use crate::io::granule_index::GranuleMark;
 use crate::io::write::WriteSettings;
 use crate::statistics::gen_columns_statistics;
 
@@ -101,6 +104,7 @@ const DEFAULT_VIRTUAL_COLUMN_NUMBER: usize = 32;
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
     pub data: opendal::Buffer,
+    pub(crate) granule_marks: Vec<GranuleMark>,
     pub draft_virtual_block_meta: DraftVirtualBlockMeta,
 }
 
@@ -134,7 +138,9 @@ pub struct VirtualColumnBuilder {
     virtual_paths: Vec<HashMap<OwnedKeyPaths, usize>>,
     // Store virtual values across multiple blocks
     virtual_values: Vec<Vec<JsonbScalarValue>>,
-    // Total number of rows processed
+    // Total number of rows processed for each Variant source in column-oriented writes.
+    variant_rows: Vec<usize>,
+    // Total logical rows processed across all source columns.
     total_rows: usize,
     // Explicit Auto/Exact/Adaptive build semantics.
     mode: VirtualColumnBuildMode,
@@ -165,12 +171,14 @@ impl VirtualColumnBuilder {
         for _ in 0..variant_fields.len() {
             virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
         }
+        let variant_count = variant_fields.len();
         let virtual_values = Vec::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER);
         Ok(VirtualColumnBuilder {
             variant_offsets,
             variant_fields,
             virtual_paths,
             virtual_values,
+            variant_rows: vec![0; variant_count],
             total_rows: 0,
             mode: VirtualColumnBuildMode::Auto,
             max_path_statistics: if policy.max_path_statistics == 0 {
@@ -188,6 +196,71 @@ impl VirtualColumnBuilder {
                     .min(MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS)
             },
         })
+    }
+
+    pub fn add_column(&mut self, field_index: usize, column: &Column) -> Result<()> {
+        let Some(variant_index) = self
+            .variant_offsets
+            .iter()
+            .position(|offset| *offset == field_index)
+        else {
+            return Ok(());
+        };
+        let mut hash_to_index: StackHashMap<u128, usize, 16> =
+            StackHashMap::with_capacity(self.virtual_paths[variant_index].len());
+        for (virtual_path, index) in &self.virtual_paths[variant_index] {
+            let mut hasher = SipHasher24::new();
+            virtual_path.as_key_paths().hash(&mut hasher);
+            let hash_value = hasher.finish128().into();
+            unsafe {
+                match hash_to_index.insert_and_entry(hash_value) {
+                    Ok(entry) | Err(entry) => *entry.get_mut() = *index,
+                }
+            }
+        }
+
+        let base_row = self.variant_rows[variant_index];
+        for row in 0..column.len() {
+            let ScalarRef::Variant(jsonb_bytes) = (unsafe { column.index_unchecked(row) }) else {
+                continue;
+            };
+            let raw_jsonb = RawJsonb::new(jsonb_bytes);
+            raw_jsonb
+                .visit_scalar_key_values(true, |key_paths, jsonb_value| {
+                    let scalar_value = JsonbScalarValue {
+                        row: base_row + row,
+                        scalar: Self::jsonb_value_to_scalar(jsonb_value),
+                    };
+                    let mut hasher = SipHasher24::new();
+                    key_paths.hash(&mut hasher);
+                    let hash_value = hasher.finish128().into();
+                    if let Some(index) = hash_to_index.get(&hash_value) {
+                        self.virtual_values[*index].push(scalar_value);
+                    } else {
+                        let index = self.virtual_values.len();
+                        let owned_key_paths = jsonb::keypath::KeyPaths {
+                            paths: key_paths.to_vec(),
+                        }
+                        .to_owned();
+                        unsafe {
+                            match hash_to_index.insert_and_entry(hash_value) {
+                                Ok(entry) | Err(entry) => *entry.get_mut() = index,
+                            }
+                        }
+                        self.virtual_paths[variant_index].insert(owned_key_paths, index);
+                        self.virtual_values.push(vec![scalar_value]);
+                    }
+                    Ok(())
+                })
+                .map_err(|error| {
+                    ErrorCode::VirtualColumnError(format!(
+                        "failed to extract virtual column values: {error}"
+                    ))
+                })?;
+        }
+        self.variant_rows[variant_index] += column.len();
+        self.total_rows = self.total_rows.max(self.variant_rows[variant_index]);
+        Ok(())
     }
 
     pub fn with_exact_layout(mut self, layout: Arc<VirtualColumnLayout>) -> Self {
@@ -235,6 +308,9 @@ impl VirtualColumnBuilder {
         self.extract_virtual_values(block, 0, num_rows, &mut hash_to_index)?;
 
         self.total_rows += num_rows;
+        for rows in &mut self.variant_rows {
+            *rows += num_rows;
+        }
 
         Ok(())
     }
@@ -704,6 +780,16 @@ impl VirtualColumnBuilder {
         write_settings: &WriteSettings,
         location: &Location,
     ) -> Result<VirtualColumnState> {
+        // Standalone refresh cannot change the immutable parent offsets file.
+        self.finalize_with_granules(write_settings, location, None)
+    }
+
+    pub(crate) fn finalize_with_granules(
+        &mut self,
+        write_settings: &WriteSettings,
+        location: &Location,
+        granule_rows: Option<usize>,
+    ) -> Result<VirtualColumnState> {
         let mut virtual_paths = Vec::with_capacity(self.variant_fields.len());
         for _ in 0..self.variant_fields.len() {
             virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
@@ -715,6 +801,7 @@ impl VirtualColumnBuilder {
 
         let total_rows = self.total_rows;
         self.total_rows = 0;
+        self.variant_rows.fill(0);
         let extracted_path_count = virtual_paths.iter().map(HashMap::len).sum::<usize>();
         let extracted_value_count = virtual_values.iter().map(Vec::len).sum::<usize>();
         if total_rows == 0 || extracted_value_count == 0 {
@@ -739,6 +826,7 @@ impl VirtualColumnBuilder {
 
             return Ok(VirtualColumnState {
                 data: opendal::Buffer::new(),
+                granule_marks: vec![],
                 draft_virtual_block_meta,
             });
         }
@@ -949,19 +1037,44 @@ impl VirtualColumnBuilder {
             HashMap::new(),
         )?;
 
+        // Capture aligned pages without serializing a separate offsets file. The
+        // parent writer merges these marks with its own before publishing the block.
+        let props = Arc::new(build_parquet_writer_properties(
+            write_settings.table_compression,
+            write_settings.enable_parquet_dictionary && granule_rows.is_none(),
+            Some(&columns_statistics),
+            metadata,
+            virtual_block.num_rows(),
+            virtual_block_schema.as_ref(),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
+        ));
+        let mut writer = ParquetBlockWriter::new(props, virtual_block_schema.clone(), None)
+            .with_page_rows(granule_rows)?;
+        writer.write(virtual_block)?;
         let SerializedParquet {
             payload,
             metadata: file_meta,
-        } = blocks_to_parquet_with_stats(
-            virtual_block_schema.as_ref(),
-            vec![virtual_block],
-            write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
-            metadata,
-            Some(&columns_statistics),
-            write_settings.data_page_rows,
-            write_settings.data_page_bytes,
-        )?;
+            page_layout,
+        } = writer.finish_plain()?;
+        let virtual_column_location =
+            TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
+        let granule_marks = match granule_rows {
+            Some(rows) => virtual_offset_marks(
+                rows,
+                total_rows,
+                &virtual_column_location,
+                page_layout
+                    .as_deref()
+                    .ok_or_else(|| ErrorCode::Internal("virtual granule page layout is missing"))?,
+                file_meta
+                    .row_group(0)
+                    .columns()
+                    .iter()
+                    .map(|meta| meta.byte_range().0),
+            )?,
+            None => vec![],
+        };
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
             file_meta,
@@ -970,8 +1083,6 @@ impl VirtualColumnBuilder {
         )?;
         let data = opendal::Buffer::from(payload);
         let data_size = data.len() as u64;
-        let virtual_column_location =
-            TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
 
         info!(
             "Generated virtual column data for block {}: virtual_columns={}, extracted_paths={}, rows={}, bytes={}",
@@ -993,6 +1104,7 @@ impl VirtualColumnBuilder {
 
         Ok(VirtualColumnState {
             data,
+            granule_marks,
             draft_virtual_block_meta,
         })
     }
@@ -1401,5 +1513,394 @@ mod type_inference_tests {
                 DecimalDataType::Decimal64(size)
             )
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::VariantType;
+
+    use super::*;
+
+    fn variant_column(values: &[&str]) -> Column {
+        VariantType::from_data(
+            values
+                .iter()
+                .map(|value| jsonb::parse_value(value.as_bytes()).unwrap().to_vec())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
+    fn test_column_writes_preserve_adaptive_layout_and_path_statistics() {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("left", TableDataType::Variant),
+            TableField::new("right", TableDataType::Variant),
+        ]));
+        let layout = Arc::new(VirtualColumnLayout {
+            direct_paths: vec![VirtualColumnPath {
+                source_column_id: schema.fields()[0].column_id,
+                path: "a".to_string(),
+            }],
+        });
+        let mut column_builder =
+            VirtualColumnBuilder::try_create(schema.clone(), Default::default())
+                .unwrap()
+                .with_adaptive_layout(layout.clone());
+        let mut block_builder = VirtualColumnBuilder::try_create(schema, Default::default())
+            .unwrap()
+            .with_adaptive_layout(layout);
+        let left = variant_column(&[r#"{"a":1,"b":null}"#, r#"{"a":2}"#, r#"{"b":3}"#]);
+        let right = variant_column(&[r#"{"x":"one"}"#, r#"{}"#, r#"{"x":"three"}"#]);
+        column_builder.add_column(0, &left.slice(0..1)).unwrap();
+        column_builder.add_column(0, &left.slice(1..3)).unwrap();
+        column_builder.add_column(1, &right.slice(0..2)).unwrap();
+        column_builder.add_column(1, &right.slice(2..3)).unwrap();
+        block_builder
+            .add_block(&DataBlock::new_from_columns(vec![left, right]))
+            .unwrap();
+
+        let settings = WriteSettings::default();
+        let location = ("table/_b/block.parquet".to_string(), 0);
+        let column_state = column_builder.finalize(&settings, &location).unwrap();
+        let block_state = block_builder.finalize(&settings, &location).unwrap();
+        assert_eq!(
+            column_state.draft_virtual_block_meta.path_statistics,
+            block_state.draft_virtual_block_meta.path_statistics
+        );
+        let mut column_meta = column_state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .unwrap();
+        let mut block_meta = block_state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .unwrap();
+        // Each materialization has a fresh generation-specific location.
+        assert_ne!(column_meta.virtual_location, block_meta.virtual_location);
+        column_meta.virtual_location.0.clear();
+        block_meta.virtual_location.0.clear();
+        assert_eq!(column_meta, block_meta);
+        // Footer JSON maps have randomized iteration order; compare decoded data,
+        // not the byte order of otherwise equivalent metadata.
+        let decode = |data| {
+            parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+                databend_storages_common_io::BufferReader(data),
+            )
+            .unwrap()
+            .build()
+            .unwrap()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap()
+        };
+        assert_eq!(decode(column_state.data), decode(block_state.data));
+        assert_eq!(column_builder.variant_rows, vec![0, 0]);
+        assert_eq!(column_builder.total_rows, 0);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_granule_offsets_roundtrip_direct_and_shared() {
+        use arrow_array::RecordBatch;
+        use databend_storages_common_io::BufferReader;
+        use databend_storages_common_io::ReadSettings;
+        use databend_storages_common_table_meta::meta::ColumnMeta;
+        use databend_storages_common_table_meta::meta::SingleColumnMeta;
+        use opendal::Operator;
+        use opendal::services::Memory;
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+        use super::super::granule_index_writer::GranuleIndexFileWriter;
+        use super::super::granule_index_writer::OffsetsIndex;
+        use super::super::granule_index_writer::virtual_offset_mark;
+        use crate::io::DataItem;
+        use crate::io::read::column_chunks_to_record_batch;
+
+        crate::test_utils::init_test_globals().unwrap();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "v",
+            TableDataType::Variant,
+        )]));
+        let block = DataBlock::new_from_columns(vec![variant_column(&[
+            r#"{"a":1,"b":"one","c":null}"#,
+            r#"{"a":2,"b":"two"}"#,
+            r#"{}"#,
+            r#"{"a":4,"b":"four","c":4}"#,
+            r#"{"a":5,"b":"five"}"#,
+        ])]);
+        // One direct path and typed shared maps, including empty rows and JSON null.
+        let mut builder = VirtualColumnBuilder::try_create(schema, Default::default())
+            .unwrap()
+            .with_exact_layout(Arc::new(VirtualColumnLayout {
+                direct_paths: vec![VirtualColumnPath {
+                    source_column_id: 0,
+                    path: "a".to_string(),
+                }],
+            }));
+        builder.add_block(&block).unwrap();
+        let settings = WriteSettings {
+            enable_parquet_dictionary: true,
+            index_granularity: Some(2),
+            data_page_rows: Some(1),
+            ..Default::default()
+        };
+        let location = ("table/_b/block.parquet".to_string(), 0);
+        let state = builder
+            .finalize_with_granules(&settings, &location, Some(2))
+            .unwrap();
+        let virtual_location = &state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_location
+            .0;
+        let reader =
+            ParquetRecordBatchReaderBuilder::try_new(BufferReader(state.data.clone())).unwrap();
+        let read_schema = TableSchema::try_from(reader.schema().as_ref()).unwrap();
+        let leaf_ids = read_schema.to_leaf_column_ids();
+        let metas = leaf_ids
+            .iter()
+            .zip(reader.metadata().row_group(0).columns())
+            .map(|(id, chunk)| {
+                let (offset, len) = chunk.byte_range();
+                (
+                    *id,
+                    ColumnMeta::Parquet(SingleColumnMeta {
+                        offset,
+                        len,
+                        num_values: chunk.num_values() as u64,
+                    }),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        assert_eq!(state.granule_marks.len(), metas.len());
+        assert!(metas.len() > 1);
+        let mut reader = reader.with_batch_size(5).build().unwrap();
+        let expected = reader.next().unwrap().unwrap();
+        assert!(reader.next().is_none());
+        let op = Operator::new(Memory::default()).unwrap().finish();
+        // Virtual marks use the existing offsets serializer, not a separate index.
+        let marks_writer = GranuleIndexFileWriter::new(2, vec![], None, ("offsets".to_string(), 0));
+        let marks = marks_writer
+            .serialize_offsets(&[], 3, state.granule_marks)
+            .unwrap();
+        op.write("offsets", marks.data).await.unwrap();
+        let read_settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 1024 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+        let offsets = OffsetsIndex::load_named_with_stats(
+            &op,
+            &read_settings,
+            &marks.layout,
+            2,
+            5,
+            &metas,
+            metas.iter().map(|(id, meta)| {
+                (
+                    *id,
+                    virtual_offset_mark(virtual_location, meta.offset_length().0),
+                )
+            }),
+            None,
+        )
+        .unwrap();
+        // Simulate segment-local/query ids unrelated to the file's leaf ordinals.
+        let remapped = metas
+            .iter()
+            .map(|(id, meta)| (*id + 100, meta.clone()))
+            .collect::<HashMap<_, _>>();
+        let remapped_offsets = OffsetsIndex::load_named_with_stats(
+            &op,
+            &read_settings,
+            &marks.layout,
+            2,
+            5,
+            &remapped,
+            remapped.iter().map(|(id, meta)| {
+                (
+                    *id,
+                    virtual_offset_mark(virtual_location, meta.offset_length().0),
+                )
+            }),
+            None,
+        )
+        .unwrap();
+        for (id, meta) in &metas {
+            let range = 1..3;
+            assert_eq!(
+                offsets
+                    .column_byte_ranges(*id, meta, std::slice::from_ref(&range))
+                    .unwrap(),
+                remapped_offsets
+                    .column_byte_ranges(*id + 100, meta, std::slice::from_ref(&range))
+                    .unwrap(),
+            );
+        }
+        for (range, rows) in [(1..2, 2..4), (2..3, 4..5)] {
+            let mut chunks = HashMap::new();
+            let mut selected_bytes = 0;
+            for (id, meta) in &metas {
+                let (dictionary, ranges) = offsets
+                    .column_byte_ranges(*id, meta, std::slice::from_ref(&range))
+                    .unwrap();
+                assert!(!dictionary);
+                let byte_range = ranges[0].clone();
+                let mut bytes = Vec::new();
+                for range in ranges {
+                    selected_bytes += range.end - range.start;
+                    bytes.extend_from_slice(
+                        &state
+                            .data
+                            .slice(range.start as usize..range.end as usize)
+                            .to_vec(),
+                    );
+                }
+                chunks.insert(*id, DataItem::GranuleData(bytes.into(), byte_range));
+            }
+            assert!(
+                selected_bytes
+                    < metas
+                        .values()
+                        .map(|meta| meta.offset_length().1)
+                        .sum::<u64>()
+            );
+            let actual: RecordBatch = column_chunks_to_record_batch(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                None,
+            )
+            .unwrap();
+            assert_eq!(actual, expected.slice(rows.start, rows.len()));
+            use databend_storages_common_cache::CacheAccessor;
+            use databend_storages_common_cache::InMemoryLruCache;
+            use databend_storages_common_cache::TableDataCacheKey;
+
+            use crate::io::read::ArrayCacheContext;
+            use crate::io::read::deserialize_column_chunks;
+
+            // A direct column can be cached while the shared Map leaves remain raw.
+            let cache = InMemoryLruCache::with_bytes_capacity("virtual-mixed".into(), 1024 * 1024);
+            let context = ArrayCacheContext {
+                cache: &cache,
+                location: virtual_location,
+                column_metas: &metas,
+                complete_column_chunks: false,
+            };
+            let decoded = deserialize_column_chunks(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                None,
+                Some(context),
+            )
+            .unwrap();
+            assert_eq!(decoded, actual);
+            let column_types: HashMap<_, _> = read_schema
+                .leaf_fields()
+                .into_iter()
+                .map(|field| {
+                    (
+                        field.column_id,
+                        DataType::from(field.data_type()).to_string(),
+                    )
+                })
+                .collect();
+            let mut hits = Vec::new();
+            for (id, item) in &chunks {
+                let DataItem::GranuleData(_, range) = item else {
+                    unreachable!()
+                };
+                let key = TableDataCacheKey::new(
+                    virtual_location,
+                    *id,
+                    range.start,
+                    range.end - range.start,
+                    &column_types[id],
+                );
+                if let Some(array) = cache.get(&key) {
+                    hits.push((*id, array));
+                }
+            }
+            assert_eq!(hits.len(), 1);
+            for (id, array) in &hits {
+                chunks.insert(*id, DataItem::ColumnArray(array));
+            }
+            let mixed = deserialize_column_chunks(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                None,
+                None,
+            )
+            .unwrap();
+            assert_eq!(mixed, actual);
+            use parquet::arrow::arrow_reader::RowSelection;
+            use parquet::arrow::arrow_reader::RowSelector;
+            let empty = deserialize_column_chunks(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                Some(RowSelection::from(vec![RowSelector::skip(rows.len())])),
+                None,
+            )
+            .unwrap();
+            assert_eq!(empty.num_rows(), 0);
+        }
+        builder.add_block(&block).unwrap();
+        let refreshed = builder.finalize(&settings, &location).unwrap();
+        assert!(refreshed.granule_marks.is_empty());
+        let refreshed_location = &refreshed
+            .draft_virtual_block_meta
+            .virtual_columns
+            .unwrap()
+            .virtual_location
+            .0;
+        assert_ne!(virtual_location, refreshed_location);
+        assert!(
+            metas.values().all(
+                |meta| !marks.layout.columns.contains_key(&virtual_offset_mark(
+                    refreshed_location,
+                    meta.offset_length().0
+                ))
+            )
+        );
+    }
+
+    #[test]
+    fn test_add_column_tracks_rows_per_variant_source() {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("left", TableDataType::Variant),
+            TableField::new("right", TableDataType::Variant),
+        ]));
+        let mut builder = VirtualColumnBuilder::try_create(schema, Default::default()).unwrap();
+        let left = variant_column(&[r#"{"a":1}"#, r#"{"a":2}"#, r#"{"a":3}"#]);
+        let right = variant_column(&[r#"{"b":4}"#, r#"{"b":5}"#, r#"{"b":6}"#]);
+
+        builder.add_column(0, &left.slice(0..1)).unwrap();
+        builder.add_column(0, &left.slice(1..3)).unwrap();
+        builder.add_column(1, &right.slice(0..2)).unwrap();
+        builder.add_column(1, &right.slice(2..3)).unwrap();
+
+        assert_eq!(builder.variant_rows, vec![3, 3]);
+        assert_eq!(builder.total_rows, 3);
+        for paths in &builder.virtual_paths {
+            assert_eq!(paths.len(), 1);
+            let value_index = *paths.values().next().unwrap();
+            let rows = builder.virtual_values[value_index]
+                .iter()
+                .map(|value| value.row)
+                .collect::<Vec<_>>();
+            assert_eq!(rows, vec![0, 1, 2]);
+        }
     }
 }

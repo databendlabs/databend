@@ -76,6 +76,7 @@ pub enum ColumnStatisticsBuilder {
 #[enum_dispatch]
 pub trait ColumnStatsOps {
     fn update_column(&mut self, column: &Column);
+    fn update_column_streaming(&mut self, column: &Column);
     fn update_scalar(&mut self, scalar: &ScalarRef, num_rows: usize, data_type: &DataType);
     fn finalize(self) -> Result<ColumnStatistics>;
 }
@@ -88,7 +89,11 @@ where
     for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
     fn update_column(&mut self, column: &Column) {
-        GenericColumnStatisticsBuilder::update_column(self, column);
+        GenericColumnStatisticsBuilder::update_column(self, column, false);
+    }
+
+    fn update_column_streaming(&mut self, column: &Column) {
+        GenericColumnStatisticsBuilder::update_column(self, column, true);
     }
 
     fn update_scalar(&mut self, scalar: &ScalarRef, num_rows: usize, data_type: &DataType) {
@@ -222,6 +227,10 @@ where
     max: Option<A::Value>,
     null_count: usize,
     in_memory_size: usize,
+    streaming_fragments: usize,
+    streaming_single_size: usize,
+    streaming_payload_size: usize,
+    streaming_nullable_rows: usize,
     data_type: DataType,
     string_col_len: Option<usize>,
 
@@ -241,6 +250,10 @@ where
             max: None,
             null_count: 0,
             in_memory_size: 0,
+            streaming_fragments: 0,
+            streaming_single_size: 0,
+            streaming_payload_size: 0,
+            streaming_nullable_rows: 0,
             data_type,
             string_col_len: None,
             _phantom: PhantomData,
@@ -253,6 +266,10 @@ where
             max: None,
             null_count: 0,
             in_memory_size: 0,
+            streaming_fragments: 0,
+            streaming_single_size: 0,
+            streaming_payload_size: 0,
+            streaming_nullable_rows: 0,
             data_type,
             string_col_len,
             _phantom: PhantomData,
@@ -292,10 +309,27 @@ where
         }
     }
 
-    fn update_column(&mut self, column: &Column) {
-        self.in_memory_size += column.memory_size(false);
+    fn update_column(&mut self, column: &Column, streaming: bool) {
         if column.len() == 0 {
             return;
+        }
+        if streaming {
+            if self.streaming_fragments == 0 {
+                self.streaming_single_size = column.memory_size(false);
+            }
+            self.streaming_fragments += 1;
+            match column {
+                Column::Nullable(inner) => {
+                    self.streaming_payload_size += inner.column.memory_size(true);
+                    self.streaming_nullable_rows += inner.len();
+                }
+                Column::Null { .. } => {
+                    self.streaming_payload_size = std::mem::size_of::<usize>();
+                }
+                column => self.streaming_payload_size += column.memory_size(true),
+            }
+        } else {
+            self.in_memory_size += column.memory_size(false);
         }
         let (column, validity) = match column {
             Column::Nullable(box inner) => {
@@ -368,11 +402,16 @@ where
                 )
             })?;
 
+        let streaming_size = match self.streaming_fragments {
+            0 => 0,
+            1 => self.streaming_single_size,
+            _ => self.streaming_payload_size + self.streaming_nullable_rows.div_ceil(8),
+        };
         Ok(ColumnStatistics::new(
             min,
             max,
             self.null_count as u64,
-            self.in_memory_size as u64,
+            (self.in_memory_size + streaming_size) as u64,
             None,
         ))
     }

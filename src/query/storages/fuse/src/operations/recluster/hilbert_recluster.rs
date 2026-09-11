@@ -28,6 +28,7 @@ use log::debug;
 use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterGroup;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
@@ -268,6 +269,8 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
                     .map(|local_idx| ordered_indices[local_idx])
                     .collect::<Vec<_>>();
                 tasks.push(task_candidate(
+                    properties,
+                    ReclusterCandidateKind::Depth,
                     group,
                     CandidateScore {
                         selected_total_bytes: task_bytes,

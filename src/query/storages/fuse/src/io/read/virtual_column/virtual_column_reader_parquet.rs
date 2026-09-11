@@ -39,6 +39,9 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
@@ -53,7 +56,8 @@ use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
-use crate::io::read::block::parquet::column_chunks_to_record_batch;
+use crate::io::read::block::parquet::ArrayCacheContext;
+use crate::io::read::block::parquet::deserialize_column_chunks;
 
 pub struct VirtualBlockReadResult {
     pub num_rows: usize,
@@ -86,18 +90,8 @@ impl VirtualBlockReadResult {
 }
 
 impl VirtualColumnReader {
-    pub async fn read_parquet_data_by_merge_io(
-        &self,
-        read_settings: &ReadSettings,
-        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
-        num_rows: usize,
-    ) -> Option<VirtualBlockReadResult> {
-        let Some(virtual_block_meta) = virtual_block_meta else {
-            return None;
-        };
-
+    pub(crate) fn read_schema(virtual_block_meta: &VirtualBlockMetaIndex) -> TableSchemaRef {
         let mut schema = TableSchema::empty();
-        let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
         let mut shared_value_ids = HashSet::new();
         let mut base_id_to_shared = HashMap::new();
         for ((source_column_id, data_type), base_id) in
@@ -107,8 +101,6 @@ impl VirtualColumnReader {
             base_id_to_shared.insert(*base_id, (*source_column_id, *data_type));
         }
         for (column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
-            let (offset, len) = virtual_column_meta.offset_length();
-            ranges.push((*column_id, offset..(offset + len)));
             if shared_value_ids.contains(column_id) {
                 continue;
             }
@@ -129,7 +121,44 @@ impl VirtualColumnReader {
             }
         }
 
+        Arc::new(schema)
+    }
+
+    pub async fn read_parquet_data_by_merge_io(
+        &self,
+        read_settings: &ReadSettings,
+        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
+        num_rows: usize,
+    ) -> Option<VirtualBlockReadResult> {
+        let virtual_block_meta = (*virtual_block_meta)?;
+        let schema = Self::read_schema(virtual_block_meta);
         let virtual_loc = &virtual_block_meta.virtual_block_location;
+        let cache = CacheManager::instance().get_table_data_array_cache();
+        let mut cached_arrays = Vec::new();
+        let mut column_ranges = HashMap::new();
+        let column_types: HashMap<_, _> = schema
+            .leaf_fields()
+            .into_iter()
+            .map(|field| {
+                let data_type = DataType::from(field.data_type()).to_string();
+                (field.column_id, data_type)
+            })
+            .collect();
+        let mut ranges = Vec::new();
+        for (id, meta) in &virtual_block_meta.virtual_column_metas {
+            let (offset, len) = meta.offset_length();
+            let key = TableDataCacheKey::new(virtual_loc, *id, offset, len, &column_types[id]);
+            let cached = cache
+                .get_sized(&key, len)
+                .filter(|array| array.0.len() == num_rows);
+            match cached {
+                Some(array) => cached_arrays.push((*id, array)),
+                None => {
+                    column_ranges.insert(*id, offset..offset + len);
+                    ranges.push((*id, offset..offset + len));
+                }
+            }
+        }
         let merge_io_result = if ranges.is_empty() {
             MergeIOReadResult::create(
                 OwnerMemory::create(vec![]),
@@ -142,7 +171,12 @@ impl VirtualColumnReader {
                 .ok()?
         };
 
-        let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
+        let block_read_res = BlockReadResult::create_with_row_range(
+            merge_io_result,
+            cached_arrays,
+            column_ranges,
+            0..num_rows,
+        );
         let ignore_column_ids =
             self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
 
@@ -150,7 +184,7 @@ impl VirtualColumnReader {
             num_rows,
             self.compression.into(),
             block_read_res,
-            Arc::new(schema),
+            schema,
             virtual_block_meta.virtual_column_read_plan.clone(),
             ignore_column_ids,
         ))
@@ -174,12 +208,20 @@ impl VirtualColumnReader {
             .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
-                column_chunks_to_record_batch(
+                let cache = CacheManager::instance().get_table_data_array_cache();
+                let column_metas = HashMap::new();
+                deserialize_column_chunks(
                     &virtual_data.schema,
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
+                    cache.as_ref().map(|cache| ArrayCacheContext {
+                        cache,
+                        location: virtual_data.data.location(),
+                        column_metas: &column_metas,
+                        complete_column_chunks: false,
+                    }),
                 )
             })
             .transpose()?;

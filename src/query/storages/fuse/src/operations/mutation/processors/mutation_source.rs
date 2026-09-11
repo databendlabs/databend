@@ -234,7 +234,7 @@ impl Processor for MutationSource {
                                     );
                                 } else {
                                     if self.update_stream_columns {
-                                        let row_num = build_origin_block_row_num(rows);
+                                        let row_num = build_origin_block_row_num(0, rows);
                                         data_block.add_entry(row_num);
                                     }
 
@@ -332,7 +332,7 @@ impl Processor for MutationSource {
                         deleted_rows,
                     )));
                 let meta: BlockMetaInfoPtr = if self.update_stream_columns {
-                    Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
+                    Box::new(gen_mutation_stream_meta(Some(inner_meta), &path, 0)?)
                 } else {
                     inner_meta
                 };

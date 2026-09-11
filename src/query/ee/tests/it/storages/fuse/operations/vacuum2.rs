@@ -88,6 +88,101 @@ async fn assert_only_current_snapshot_files(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_orphan_granule_payloads_preserves_safety_boundaries() -> anyhow::Result<()> {
+    use chrono::Utc;
+    use databend_storages_common_table_meta::meta::uuid_from_date_time;
+
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("create table {db}.granule_gc (c int)"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&fixture.default_tenant(), &db, "granule_gc")
+        .await?;
+    let table = FuseTable::try_from_table(table.as_ref())?;
+    let op = table.get_operator();
+    let root = Utc::now() - chrono::Duration::hours(1);
+    let old = root - chrono::Duration::days(4);
+    let block_path = |time| {
+        format!(
+            "{}h{}_v2.parquet",
+            table.meta_location_generator().block_location_prefix(),
+            uuid_from_date_time(time).simple()
+        )
+    };
+    let payload_path = |block: &str| {
+        TableMetaLocationGenerator::gen_granule_bloom_location_from_block_location(
+            block,
+            "dropped_index",
+            "old_version",
+            0,
+        )
+    };
+    let protected_block = block_path(old);
+    let protected_payload = payload_path(&protected_block);
+    let cutoff_payload = payload_path(&block_path(root));
+    let future_payload = payload_path(&block_path(root + chrono::Duration::seconds(1)));
+    let recent_payload = payload_path(&block_path(old + chrono::Duration::seconds(1)));
+    let invalid_payload = format!(
+        "{}dropped_index/old_version/not-a-uuid_0.gbloom",
+        table
+            .meta_location_generator()
+            .block_granule_bloom_index_prefix()
+    );
+    let mut orphans = Vec::new();
+    // Cross the deletion batch boundary. No data blocks or current index specs exist.
+    for i in 0..1001 {
+        orphans.push(payload_path(&block_path(
+            old + chrono::Duration::seconds(i + 2),
+        )));
+    }
+    for path in orphans.iter().chain([
+        &protected_payload,
+        &cutoff_payload,
+        &future_payload,
+        &invalid_payload,
+    ]) {
+        op.write(path, vec![1]).await?;
+        std::fs::File::options()
+            .write(true)
+            .open(Path::new(fixture.storage_root()).join(path))?
+            .set_modified(old.into())?;
+    }
+    op.write(&recent_payload, vec![1]).await?;
+    let protected = HashSet::from([protected_block]);
+    let ctx: Arc<dyn TableContext> = ctx;
+    assert_eq!(
+        table
+            .vacuum_orphan_granule_index_payloads(ctx.clone(), &protected, root, root)
+            .await?,
+        1001
+    );
+    for path in &orphans {
+        assert!(!op.exists(path).await?, "orphan remains: {path}");
+    }
+    for path in [
+        &protected_payload,
+        &cutoff_payload,
+        &future_payload,
+        &recent_payload,
+        &invalid_payload,
+    ] {
+        assert!(op.exists(path).await?, "protected payload removed: {path}");
+    }
+    assert_eq!(
+        table
+            .vacuum_orphan_granule_index_payloads(ctx, &protected, root, root)
+            .await?,
+        0
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_table_command() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture

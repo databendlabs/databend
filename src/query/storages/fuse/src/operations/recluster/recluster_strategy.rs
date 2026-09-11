@@ -18,6 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::ClusterLevelLogStats;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -32,6 +33,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION;
 use crate::FuseTable;
 use crate::MAX_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
@@ -64,6 +66,8 @@ pub(crate) struct ReclusterProperties {
     pub(crate) memory_threshold: usize,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
+    pub(crate) vertical_kind: Option<VerticalReclusterKind>,
+    pub(crate) enable_block_reduction: bool,
 }
 
 impl ReclusterProperties {
@@ -77,7 +81,13 @@ impl ReclusterProperties {
         block_thresholds: BlockThresholds,
         cluster_key_info: ClusterKeyInfo,
         memory_threshold: usize,
+        vertical_kind: Option<VerticalReclusterKind>,
     ) -> Result<(Self, Arc<dyn ReclusterStrategy>)> {
+        if vertical_kind.is_some() && !matches!(&cluster_keys, ClusterKeys::Linear(_)) {
+            return Err(ErrorCode::Unimplemented(
+                "vertical recluster supports linear scalar cluster keys only",
+            ));
+        }
         let (cluster_key_exprs, strategy): (Vec<Expr<usize>>, Arc<dyn ReclusterStrategy>) =
             match cluster_keys {
                 ClusterKeys::Linear(keys) => {
@@ -110,6 +120,8 @@ impl ReclusterProperties {
         };
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
+        let enable_block_reduction =
+            table.get_option(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION, 0u32) != 0;
         let properties = Self {
             mode,
             depth_threshold,
@@ -119,6 +131,8 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vertical_kind,
+            enable_block_reduction,
         };
         Ok((properties, strategy))
     }
@@ -164,6 +178,8 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vertical_kind: None,
+            enable_block_reduction: false,
         };
         (properties, strategy)
     }
@@ -318,18 +334,42 @@ impl CandidateScore {
     }
 }
 
+/// The selector class that produced a recluster task candidate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReclusterCandidateKind {
+    Repack,
+    BlockReduction,
+    Depth,
+}
+
+impl fmt::Display for ReclusterCandidateKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Repack => write!(f, "repack"),
+            Self::BlockReduction => write!(f, "block_reduction"),
+            Self::Depth => write!(f, "depth"),
+        }
+    }
+}
+
 /// In-memory rewrite candidate produced from one probed window.
 #[derive(Clone)]
 pub(crate) struct ReclusterTaskCandidate {
     pub(crate) score: CandidateScore,
+    pub(crate) kind: ReclusterCandidateKind,
     // Empty means a rebuild-only repack candidate.
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
     pub(crate) base_level: i32,
     pub(crate) input_level_stats: Vec<ClusterLevelLogStats>,
     pub(crate) all_ordered: bool,
+    pub(crate) vertical_kind: Option<VerticalReclusterKind>,
 }
 
 impl ReclusterTaskCandidate {
+    /// Whether this candidate only repacks unchanged blocks into fewer segments.
+    pub(crate) fn is_repack_only(&self) -> bool {
+        self.selected_blocks.is_empty()
+    }
     pub(crate) fn selected_block_count(&self) -> usize {
         self.selected_blocks
             .iter()
@@ -346,20 +386,17 @@ impl ReclusterTaskCandidate {
             (self.base_level + 1).to_string()
         }
     }
-
-    /// Whether this candidate only repacks unchanged blocks into fewer segments.
-    pub(crate) fn is_repack_only(&self) -> bool {
-        self.selected_blocks.is_empty()
-    }
 }
 
 impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "requested_output_level={} repack_only={} max_depth={} avg_depth={} block_count={} block_size={}",
+            "requested_output_level={} repack_only={} candidate_kind={} executor_kind={:?} max_depth={} avg_depth={} block_count={} block_size={}",
             self.requested_output_level(),
             self.is_repack_only(),
+            self.kind,
+            self.vertical_kind,
             self.score.max_depth,
             self.score.average_depth,
             self.selected_block_count(),
@@ -402,6 +439,8 @@ pub struct SelectedReclusterSegment {
 }
 
 pub(crate) fn task_candidate(
+    properties: &ReclusterProperties,
+    kind: ReclusterCandidateKind,
     group: ReclusterGroup,
     score: CandidateScore,
     task_indices: &[usize],
@@ -443,10 +482,12 @@ pub(crate) fn task_candidate(
         .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original));
     ReclusterTaskCandidate {
         score,
+        kind,
         selected_blocks,
         base_level,
         input_level_stats: stats_by_level.into_values().collect(),
         all_ordered,
+        vertical_kind: properties.vertical_kind,
     }
 }
 
@@ -457,4 +498,38 @@ pub(crate) fn passes_depth_gate(
 ) -> bool {
     let mature_gate = (2.0 * depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
     average_depth > depth_threshold || max_depth as f64 >= mature_gate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ReclusterGroup;
+    use super::ReclusterMode;
+
+    #[test]
+    fn test_aggressive_groups_only_low_maturity_blocks() {
+        for level in 1..=3 {
+            assert_eq!(
+                ReclusterGroup::assign(level, ReclusterMode::Aggressive),
+                ReclusterGroup::LowMaturity
+            );
+        }
+        for level in [0, 4, 8, 9, 15] {
+            assert_eq!(
+                ReclusterGroup::assign(level, ReclusterMode::Aggressive),
+                ReclusterGroup::Level(level)
+            );
+        }
+    }
+
+    #[test]
+    fn test_conservative_keeps_exact_level_groups() {
+        assert_eq!(
+            ReclusterGroup::assign(0, ReclusterMode::Conservative),
+            ReclusterGroup::Level(0)
+        );
+        assert_eq!(
+            ReclusterGroup::assign(1, ReclusterMode::Conservative),
+            ReclusterGroup::Level(1)
+        );
+    }
 }

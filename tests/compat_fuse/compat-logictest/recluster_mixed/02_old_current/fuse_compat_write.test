@@ -1,0 +1,28 @@
+statement ok
+USE compat_recluster_mixed
+
+query II
+SELECT count(),sum(value) FROM mixed_t
+----
+10 550
+
+statement ok
+INSERT INTO mixed_t VALUES (5,500,'old-overlap'),(11,110,'old-write-3'),(12,120,'old-write-3')
+
+statement ok
+UPDATE mixed_t SET value = 220, source = 'old-update' WHERE id = 2
+
+statement ok
+ALTER TABLE mixed_t RECLUSTER FINAL
+
+query II
+SELECT count(),sum(value) FROM mixed_t
+----
+13 1480
+
+query TBI rowsort
+SELECT change$action,change$is_update,count() FROM mixed_s GROUP BY change$action,change$is_update
+----
+DELETE 1 1
+INSERT 0 7
+INSERT 1 1

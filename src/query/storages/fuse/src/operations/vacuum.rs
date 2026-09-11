@@ -36,9 +36,11 @@ use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTime
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::TryStreamExt;
 use log::info;
@@ -46,6 +48,7 @@ use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
+use uuid::Uuid;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
@@ -212,7 +215,96 @@ pub async fn is_gc_candidate_segment_block(
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
+fn granule_payload_block_id(path: &str) -> Option<Uuid> {
+    try_extract_uuid_str_from_path(path)
+        .ok()
+        .and_then(|block_id| Uuid::parse_str(block_id).ok())
+}
+
 impl FuseTable {
+    /// Remove old orphan granule payloads in bounded batches, including payloads
+    /// from dropped index specs and interrupted writes. The index-first layout
+    /// requires one recursive scan rather than one LIST request per block.
+    pub async fn vacuum_orphan_granule_index_payloads(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        protected_block_locations: &HashSet<String>,
+        gc_root_timestamp: DateTime<Utc>,
+        gc_root_meta_ts: DateTime<Utc>,
+    ) -> Result<usize> {
+        let protected_block_ids = protected_block_locations
+            .iter()
+            .map(|location| {
+                granule_payload_block_id(location).ok_or_else(|| {
+                    ErrorCode::StorageOther(format!(
+                        "Failed to extract protected block UUID from object key '{}'",
+                        location
+                    ))
+                })
+            })
+            .collect::<Result<HashSet<_>>>()?;
+        let prefix = self
+            .meta_location_generator()
+            .block_granule_bloom_index_prefix();
+        let op = self.get_operator_ref();
+        let file_remover = Files::create(ctx.clone(), op.clone());
+        let cutoff_id = uuid_from_date_time(gc_root_timestamp);
+        let mut lister = op.lister_with(&prefix).recursive(true).await?;
+        let mut orphan_payloads = Vec::with_capacity(1000);
+        let mut removed = 0;
+
+        while let Some(entry) = lister.try_next().await? {
+            ctx.check_aborting().map_err(|err| {
+                err.with_context("aborted while vacuuming orphan granule payloads")
+            })?;
+            if !entry.metadata().is_file() {
+                continue;
+            }
+            let Some(block_id) = granule_payload_block_id(entry.path()) else {
+                warn!(
+                    "Skipping granule-index payload with an invalid block UUID: {}",
+                    entry.path()
+                );
+                continue;
+            };
+            if protected_block_ids.contains(&block_id)
+                || (is_uuid_v7(&block_id) && block_id.as_bytes()[..6] >= cutoff_id.as_bytes()[..6])
+            {
+                continue;
+            }
+            let modified = match entry.metadata().last_modified() {
+                Some(modified) => modified,
+                None => match op.stat(entry.path()).await?.last_modified() {
+                    Some(modified) => modified,
+                    None => {
+                        warn!(
+                            "Skipping granule-index payload without last_modified: {}",
+                            entry.path()
+                        );
+                        continue;
+                    }
+                },
+            };
+            let modified = DateTime::<Utc>::from(SystemTime::from(modified));
+            // Payload names strip the block's vacuum2 marker. Use the legacy
+            // transaction grace period as well as the v7 block timestamp cutoff.
+            if modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
+                orphan_payloads.push(entry.path().to_string());
+                if orphan_payloads.len() == 1000 {
+                    file_remover.remove_file_in_batch(&orphan_payloads).await?;
+                    removed += orphan_payloads.len();
+                    orphan_payloads.clear();
+                }
+            }
+        }
+        if !orphan_payloads.is_empty() {
+            file_remover.remove_file_in_batch(&orphan_payloads).await?;
+            removed += orphan_payloads.len();
+        }
+
+        Ok(removed)
+    }
+
     /// Protect live table-tag references from VACUUM2 and remove expired tags.
     pub async fn protect_table_tag_references(
         &self,
@@ -805,6 +897,26 @@ mod tests {
     use chrono::TimeZone;
 
     use super::*;
+
+    #[test]
+    fn test_granule_payload_block_id() {
+        let expected = uuid::Uuid::parse_str("0191114d30fd78b89fae8e5c88327725").unwrap();
+
+        assert_eq!(
+            granule_payload_block_id(
+                "1/2/_i_gb/idx/version/0191114d30fd78b89fae8e5c88327725_7.gbloom"
+            ),
+            Some(expected)
+        );
+        assert_eq!(
+            granule_payload_block_id("1/2/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet"),
+            Some(expected)
+        );
+        assert_eq!(
+            granule_payload_block_id("1/2/_i_gb/idx/version/not-a-uuid_7.gbloom"),
+            None
+        );
+    }
 
     #[test]
     fn test_retention_cutoff_is_bounded_by_latest_snapshot() {

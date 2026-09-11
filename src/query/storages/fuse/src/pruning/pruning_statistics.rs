@@ -40,6 +40,10 @@ pub struct FusePruningStatistics {
     /// Block range pruning cost in nanoseconds.
     pub blocks_range_pruning_cost: AtomicU64,
 
+    /// Granule pruning stats across retained blocks.
+    pub granules_pruning_before: AtomicU64,
+    pub granules_pruning_after: AtomicU64,
+
     /// Block bloom filter pruning stats.
     pub blocks_bloom_pruning_before: AtomicU64,
     pub blocks_bloom_pruning_after: AtomicU64,
@@ -144,6 +148,22 @@ impl FusePruningStatistics {
 
     pub fn get_blocks_range_pruning_cost(&self) -> u64 {
         nanos_to_display_micros(self.blocks_range_pruning_cost.load(Ordering::Relaxed))
+    }
+
+    pub fn add_granules_pruning_before(&self, v: u64) {
+        self.granules_pruning_before.fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_granules_pruning_before(&self) -> u64 {
+        self.granules_pruning_before.load(Ordering::Relaxed)
+    }
+
+    pub fn add_granules_pruning_after(&self, v: u64) {
+        self.granules_pruning_after.fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_granules_pruning_after(&self) -> u64 {
+        self.granules_pruning_after.load(Ordering::Relaxed)
     }
 
     pub fn set_blocks_bloom_pruning_before(&self, v: u64) {
