@@ -212,8 +212,10 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::UInt64Type;
 
+    use super::super::uniq::TypedUniqSet;
     use super::sort_combinator::AggregateSortState;
     use super::sort_combinator::SortEval;
+    use super::unary_distinct::UnaryDistinctEval;
     use super::*;
 
     struct SumState {
@@ -347,8 +349,9 @@ mod tests {
     }
 
     fn distinct_sum(drop_count: Arc<AtomicUsize>) -> impl AggregateEval {
-        unary_distinct::UnaryDistinctEval::<super::super::uniq::TypedUniqSet<UInt64Type>, false>::new(
-            Box::new(plain_sum(drop_count)), UInt64Type::data_type(),
+        UnaryDistinctEval::<TypedUniqSet<UInt64Type>, false>::new(
+            Box::new(plain_sum(drop_count)),
+            UInt64Type::data_type(),
         )
     }
 
