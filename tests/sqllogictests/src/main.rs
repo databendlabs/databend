@@ -22,6 +22,7 @@ use client::TTCClient;
 use futures_util::StreamExt;
 use futures_util::stream;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 use sqllogictest::DBOutput;
 use sqllogictest::Location;
 use sqllogictest::QueryExpect;
@@ -223,9 +224,25 @@ async fn run_hybrid_client(
     Ok(())
 }
 
+// Allocate once per file execution, not per connection or derived from its path.
+// Re-running the same file in another CI job also gets an independent random name.
+fn new_sandbox_name(enabled: bool) -> Option<String> {
+    enabled.then(|| {
+        rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect()
+    })
+}
+
 // Create new databend with client type
 #[async_recursion::async_recursion(#[recursive::recursive])]
-async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Databend> {
+async fn create_databend(
+    client_type: &ClientType,
+    filename: &str,
+    sandbox_name: Option<&str>,
+) -> Result<Databend> {
     let mut client: Client;
     let args = SqlLogicTestArgs::parse();
     match client_type {
@@ -259,14 +276,14 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
                 acc += s;
 
                 if acc >= r {
-                    return create_databend(t.as_ref(), filename).await;
+                    return create_databend(t.as_ref(), filename, sandbox_name).await;
                 }
             }
             unreachable!()
         }
     }
-    if args.enable_sandbox {
-        client.create_sandbox().await?;
+    if let Some(sandbox_name) = sandbox_name {
+        client.init_sandbox(sandbox_name).await?;
     }
     if args.debug {
         client.enable_debug();
@@ -318,8 +335,10 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 
             let col_separator = " ";
             let validator = default_validator;
-            let mut runner =
-                Runner::new(|| async { create_databend(&client_type, &file_name).await });
+            let sandbox_name = new_sandbox_name(args.enable_sandbox);
+            let mut runner = Runner::new(|| async {
+                create_databend(&client_type, &file_name, sandbox_name.as_deref()).await
+            });
             // todo: The behavior of normalizer for multi line string is incorrect
             runner
                 .update_test_file(
@@ -421,11 +440,15 @@ async fn run_file_async(
     let start = Instant::now();
 
     let mut error_records = vec![];
-    let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
+    let args = SqlLogicTestArgs::parse();
+    let no_fail_fast = args.no_fail_fast;
+    let sandbox_name = new_sandbox_name(args.enable_sandbox);
     let records = parse_file(&filename).unwrap();
     let filename = filename.as_ref().to_str().unwrap();
 
-    let mut runner = Runner::new(|| async { create_databend(client_type, filename).await });
+    let mut runner = Runner::new(|| async {
+        create_databend(client_type, filename, sandbox_name.as_deref()).await
+    });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;

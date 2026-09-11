@@ -328,6 +328,9 @@ async fn try_rebuild_req(
             None,
             table_meta_timestamps,
         )?;
+        // Missing/overflowed bookkeeping must not become a trusted zero. This
+        // fallback protects epoch-aware readers, not unrestricted old-reader
+        // mixed mode: an older writer may recreate zero counters afterward.
         match logical_delta {
             Some((updated, deleted)) => merged_snapshot.add_logical_change_delta(updated, deleted),
             None => merged_snapshot.invalidate_logical_change_counters(),

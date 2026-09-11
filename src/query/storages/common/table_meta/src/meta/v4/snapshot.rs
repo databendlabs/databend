@@ -349,6 +349,9 @@ impl TableSnapshot {
                 counters.deleted_rows_total = deleted;
             }
             _ => {
+                // Compatibility boundary: old counter-aware readers ignore epoch.
+                // Ordinary, non-overflowing writer handoffs preserve their totals;
+                // overflow resets are NOT safe for unrestricted mixed-version reads.
                 let epoch = self.prev_table_seq.filter(|seq| {
                     counters
                         .epoch
