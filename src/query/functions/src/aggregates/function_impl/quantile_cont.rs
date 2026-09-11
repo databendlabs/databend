@@ -59,6 +59,7 @@ impl QuantileContBuilder {
         .then(PlainRoute::unary(Self::create))
         .then(IfRoute::unary(Self::create))
         .then(StateRoute::unary(Self::create))
+        .then(DistinctRoute::<true>::unary(Self::create))
         .register(registry);
         NameRoute::new(
             &["median"],
@@ -71,6 +72,7 @@ impl QuantileContBuilder {
         .then(PlainRoute::unary(Self::create_median))
         .then(IfRoute::unary(Self::create_median))
         .then(StateRoute::unary(Self::create_median))
+        .then(DistinctRoute::<true>::unary(Self::create_median))
         .register(registry);
     }
 }

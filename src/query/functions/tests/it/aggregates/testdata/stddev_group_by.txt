@@ -64,7 +64,7 @@ evaluation (internal):
 | Column   | Data                                                                            |
 +----------+---------------------------------------------------------------------------------+
 | all_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0000] }) |
-| Output   | NullableColumn { column: Float64([NaN, NaN]), validity: [0b______11] }          |
+| Output   | NullableColumn { column: Float64([0, 0]), validity: [0b______00] }              |
 +----------+---------------------------------------------------------------------------------+
 
 
