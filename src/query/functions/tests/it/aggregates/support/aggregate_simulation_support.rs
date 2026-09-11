@@ -100,22 +100,25 @@ pub fn write_aggregate_expr_case(
             .collect::<Result<_>>()
             .unwrap();
 
-        // Convert the delimiter of string_agg to params
-        let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {
-            let val = args[1].0.as_scalar().unwrap();
-            let params = vec![val.clone()];
-            let _ = args.pop();
-            params
-        } else {
-            params
-        };
-
-        // Convert the num_buckets of histogram to params
-        let params = if name.eq_ignore_ascii_case("histogram") && args.len() == 2 {
-            let val = args[1].0.as_scalar().unwrap();
-            let params = vec![val.clone()];
-            let _ = args.pop();
-            params
+        // Match SQL's legacy configuration argument normalization for aliases
+        // and explicit combinators. IF retains its trailing condition.
+        let (base_name, expected_args) = ["_if", "_distinct", "_state"]
+            .iter()
+            .find_map(|suffix| {
+                let split = name.len().checked_sub(suffix.len())?;
+                name.get(split..)?
+                    .eq_ignore_ascii_case(suffix)
+                    .then(|| (&name[..split], if *suffix == "_if" { 3 } else { 2 }))
+            })
+            .unwrap_or((name.as_str(), 2));
+        let params = if ["string_agg", "listagg", "group_concat", "histogram"]
+            .iter()
+            .any(|base| base_name.eq_ignore_ascii_case(base))
+            && args.len() == expected_args
+            && params.is_empty()
+        {
+            let value = args.remove(1).0;
+            vec![value.as_scalar().unwrap().clone()]
         } else {
             params
         };

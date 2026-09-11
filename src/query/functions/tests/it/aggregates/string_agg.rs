@@ -89,6 +89,15 @@ fn run_string_agg_cases(file: &mut impl Write, simulator: impl AggregationSimula
     write_aggregate_expr_case(file, "string_agg(s_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "string_agg(s_all_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "string_agg(s, '|')", columns, simulator, vec![]);
+    for expression in [
+        "listagg(s, '|')",
+        "group_concat(s, '|')",
+        "string_agg_if(s, '|', event)",
+        "listagg_if(s, '|', event)",
+        "group_concat_if(s, '|', event)",
+    ] {
+        write_aggregate_expr_case(file, expression, columns, simulator, vec![]);
+    }
     write_aggregate_expr_case(file, "string_agg(a, '|')", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "string_agg(event)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "string_agg(dec)", columns, simulator, vec![]);

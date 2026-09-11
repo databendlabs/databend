@@ -55,12 +55,7 @@ inventory::submit! {
 
 impl StringAggBuilder {
     fn string_agg_arguments() -> ArgumentsPattern {
-        ArgumentsPattern::variadic(
-            vec![ArgumentPattern::any()],
-            ArgumentPattern::exact(DataType::String),
-            0,
-            Some(1),
-        )
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const STRING_AGG_METADATA: AggregateMetadata = AggregateMetadata {

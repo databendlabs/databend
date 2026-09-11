@@ -385,11 +385,23 @@ where A: TypeCheckAdapter
     ) -> Result<(AggregateFunction, DataType)> {
         // Convert the delimiter of string_agg to params
         let base_func_name = aggregate_base_name(func_name);
-        let expected_string_agg_args = if base_func_name == func_name { 2 } else { 3 };
+        let expected_config_args = if base_func_name == func_name { 2 } else { 3 };
+        // DISTINCT and STATE keep the same legacy configuration argument.
+        // Only IF adds a trailing data argument (its condition).
+        let base_func_name = ["_distinct", "_state"]
+            .iter()
+            .find_map(|suffix| {
+                let split = base_func_name.len().checked_sub(suffix.len())?;
+                base_func_name
+                    .get(split..)?
+                    .eq_ignore_ascii_case(suffix)
+                    .then(|| &base_func_name[..split])
+            })
+            .unwrap_or(base_func_name);
         let params = if (base_func_name.eq_ignore_ascii_case("string_agg")
             || base_func_name.eq_ignore_ascii_case("listagg")
             || base_func_name.eq_ignore_ascii_case("group_concat"))
-            && arguments.len() == expected_string_agg_args
+            && arguments.len() == expected_config_args
             && params.is_empty()
         {
             let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
@@ -407,9 +419,8 @@ where A: TypeCheckAdapter
         };
 
         // Convert the num_buckets of histogram to params
-        let expected_histogram_args = if base_func_name == func_name { 2 } else { 3 };
         let params = if base_func_name.eq_ignore_ascii_case("histogram")
-            && arguments.len() == expected_histogram_args
+            && arguments.len() == expected_config_args
             && params.is_empty()
         {
             let max_num_buckets: u64 = check_number(
