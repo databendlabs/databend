@@ -120,3 +120,9 @@ select string_agg_distinct(x, '|'), listagg_distinct(x, '|'),
 from (values ('a', 1), ('a', 1), ('a', 2)) t(x, n);
 ----
 a a a true
+
+query TT
+select json_agg(distinct x), json_array_agg(distinct x)
+from (values (null::int), (null::int)) t(x);
+----
+[] []

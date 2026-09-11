@@ -226,6 +226,7 @@ impl JsonArrayAggBuilder {
             .then(PlainRoute::new(JsonArrayAggBuilder::create))
             .then(IfRoute::direct(JsonArrayAggBuilder::create))
             .then(StateRoute::direct(JsonArrayAggBuilder::create))
+            .then(DistinctRoute::<true>::direct(JsonArrayAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

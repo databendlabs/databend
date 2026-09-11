@@ -85,6 +85,25 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
             .into(),
         ),
     ];
+    for name in ["json_agg", "json_array_agg"] {
+        for arg in ["n", "all_null", "NULL", "s"] {
+            write_aggregate_expr_case(
+                file,
+                &format!("{name}_distinct({arg})"),
+                &columns,
+                simulator,
+                vec![],
+            );
+        }
+        let empty = [("n", Int64Type::from_data(vec![]).into())];
+        write_aggregate_expr_case(
+            file,
+            &format!("{name}_distinct(n)"),
+            &empty,
+            simulator,
+            vec![],
+        );
+    }
     let empty = [("n", Int64Type::from_data(vec![]).into())];
     for name in [
         "quantile",
@@ -190,6 +209,8 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("stddev_samp", "stddev_samp_distinct"),
         ("skewness", "skewness_distinct"),
         ("histogram", "histogram_distinct"),
+        ("json_agg", "json_agg_distinct"),
+        ("json_array_agg", "json_array_agg_distinct"),
         ("st_collect", "st_collect_distinct"),
     ] {
         let args_type = if base == "st_collect" {
