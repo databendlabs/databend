@@ -38,6 +38,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
@@ -369,14 +370,14 @@ where O: GeoAggOp
 }
 
 struct AggregateGeometryCollectState<O> {
-    values: Vec<Vec<u8>>,
+    values: BinaryColumnBuilder,
     _p: PhantomData<fn(O)>,
 }
 
 impl<O> Default for AggregateGeometryCollectState<O> {
     fn default() -> Self {
         Self {
-            values: Vec::new(),
+            values: BinaryColumnBuilder::with_capacity(0, 0),
             _p: PhantomData,
         }
     }
@@ -395,18 +396,20 @@ impl<O> AggregateGeometryCollectState<O>
 where O: GeoAggOp
 {
     fn add(&mut self, value: &[u8]) {
-        self.values.push(value.to_vec());
+        self.values.put_slice(value);
+        self.values.commit_row();
     }
 
     fn append(&mut self, rhs: &mut Self) {
-        self.values.append(&mut rhs.values);
+        let values = std::mem::replace(&mut rhs.values, BinaryColumnBuilder::with_capacity(0, 0));
+        self.values.append_column(&values.build());
     }
 
     // Keep each EWKB value in a typed array, as in v1. There is no second
     // binary container format around the geometry payloads.
     fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = ArrayType::<GeometryType>::downcast_builder(builder);
-        for value in &self.values {
+        for value in self.iter_values() {
             builder.put_item(value);
         }
         builder.commit_row();
@@ -418,15 +421,21 @@ where O: GeoAggOp
             unreachable!()
         };
         let values = GeometryType::try_downcast_column(&values).unwrap();
-        self.values
-            .extend(GeometryType::iter_column(&values).map(<[u8]>::to_vec));
+        self.values.append_column(&values);
         Ok(())
+    }
+
+    fn iter_values(&self) -> impl Iterator<Item = &[u8]> {
+        self.values
+            .offsets
+            .windows(2)
+            .map(|offsets| &self.values.data[offsets[0] as usize..offsets[1] as usize])
     }
 
     fn compute_result(&self) -> Result<Option<(Geometry<f64>, Option<i32>)>> {
         let mut srid = None;
         let mut geos = Vec::with_capacity(self.values.len());
-        for value in &self.values {
+        for value in self.iter_values() {
             let (geo, geo_srid) = ewkb_to_geo(&mut Ewkb(value))?;
             let geo_srid = geo_srid.unwrap_or_default();
             if let Some(srid) = srid {
@@ -461,7 +470,7 @@ where O: GeoAggOp
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
         self.push_result(builder)?;
-        self.values.clear();
+        self.values = BinaryColumnBuilder::with_capacity(0, 0);
         Ok(())
     }
 
@@ -793,5 +802,45 @@ fn normalize_output_srid(srid: Option<i32>) -> Option<i32> {
     match srid {
         Some(0) => None,
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_state_roundtrip_and_drain() -> Result<()> {
+        let first = geo_to_ewkb(Geometry::Point(geo::Point::new(1.0, 2.0)), Some(4326))?;
+        let second = geo_to_ewkb(Geometry::Point(geo::Point::new(3.0, 4.0)), Some(4326))?;
+        let mut state = AggregateGeometryCollectState::<CollectAggOp>::default();
+        state.add(&first);
+        let mut rhs = AggregateGeometryCollectState::<CollectAggOp>::default();
+        rhs.add(&second);
+        state.append(&mut rhs);
+        assert!(rhs.values.is_empty());
+        assert_eq!(state.iter_values().collect::<Vec<_>>(), vec![
+            first.as_slice(),
+            second.as_slice()
+        ]);
+
+        let mut serialized =
+            ColumnBuilder::with_capacity(&ArrayType::<GeometryType>::data_type(), 1);
+        state.serialize(&mut serialized)?;
+        let serialized = serialized.build();
+        let mut restored = AggregateGeometryCollectState::<CollectAggOp>::default();
+        restored.merge_serialized(serialized.index(0).unwrap())?;
+        assert_eq!(state.compute_result()?, restored.compute_result()?);
+
+        let mut output = ColumnBuilder::with_capacity(&DataType::Geometry.wrap_nullable(), 3);
+        restored.merge_result_read_only(&mut output)?;
+        assert_eq!(restored.values.len(), 2);
+        restored.merge_result(&mut output)?;
+        assert!(restored.values.is_empty());
+        restored.merge_result(&mut output)?;
+        let output = output.build();
+        assert_eq!(output.index(0), output.index(1));
+        assert_eq!(output.index(2), Some(ScalarRef::Null));
+        Ok(())
     }
 }

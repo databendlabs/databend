@@ -18,11 +18,13 @@ use std::marker::PhantomData;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
@@ -200,19 +202,32 @@ where
         validity: Option<&Bitmap>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        match validity {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        self.add(value, function_info)?;
-                    }
-                }
+        // Keep candidates borrowed until the batch winner is known.
+        let choose = |current, value| {
+            if should_change::<T, CMP_TYPE>(&current, &value) {
+                value
+            } else {
+                current
             }
-            None => {
-                for value in values.iter() {
-                    self.add(value, function_info)?;
-                }
+        };
+        let candidate = match validity {
+            Some(validity)
+                if (validity.true_count() as f64 / validity.len() as f64)
+                    < SELECTIVITY_THRESHOLD =>
+            {
+                TrueIdxIter::new(validity.len(), Some(validity))
+                    .map(|index| unsafe { values.index_unchecked(index) })
+                    .reduce(choose)
             }
+            Some(validity) => values
+                .iter()
+                .zip(validity.iter())
+                .filter_map(|(value, valid)| valid.then_some(value))
+                .reduce(choose),
+            None => values.iter().reduce(choose),
+        };
+        if let Some(value) = candidate {
+            self.add(value, function_info)?;
         }
         Ok(())
     }
@@ -575,5 +590,52 @@ fn need_manual_drop_state(data_type: &DataType) -> bool {
         | DataType::Opaque(_)
         | DataType::Generic(_)
         | DataType::StageLocation => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::ReturnType;
+
+    use super::*;
+
+    fn check_batch<const CMP: u8>() -> Result<()> {
+        for bits in [
+            vec![true; 10],
+            vec![
+                false, true, false, false, false, false, false, false, true, false,
+            ],
+            vec![false; 10],
+            vec![],
+        ] {
+            let values: Vec<String> = (0..bits.len()).rev().map(|i| i.to_string()).collect();
+            let mut expected = AggregateMinMaxAnyState::<StringType, CMP>::default();
+            expected.add("5", &())?;
+            for (value, valid) in values.iter().zip(&bits) {
+                if *valid {
+                    expected.add(value, &())?;
+                }
+            }
+            let validity: Bitmap = bits.into_iter().collect();
+            let mut actual = AggregateMinMaxAnyState::<StringType, CMP>::default();
+            actual.add("5", &())?;
+            actual.add_batch(
+                ColumnView::Column(StringType::column_from_iter(values.into_iter(), &[])),
+                Some(&validity),
+                &(),
+            )?;
+            assert_eq!(actual.value, expected.value);
+            actual.add_batch(ColumnView::Const("3".to_owned(), 2), None, &())?;
+            expected.add("3", &())?;
+            assert_eq!(actual.value, expected.value);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn batch_selection() -> Result<()> {
+        check_batch::<TYPE_MIN>()?;
+        check_batch::<TYPE_MAX>()?;
+        check_batch::<TYPE_ANY>()
     }
 }
