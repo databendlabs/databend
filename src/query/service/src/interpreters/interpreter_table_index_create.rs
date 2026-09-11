@@ -73,7 +73,7 @@ impl Interpreter for CreateTableIndexInterpreter {
                 options: self.plan.index_options.clone(),
             };
 
-            let _ = catalog.create_table_index(create_index_req).await?;
+            catalog.create_table_index(create_index_req).await?;
             Ok(PipelineBuildResult::create())
         })
     }

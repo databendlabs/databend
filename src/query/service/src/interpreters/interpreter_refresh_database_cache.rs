@@ -49,7 +49,7 @@ impl Interpreter for RefreshDatabaseCacheInterpreter {
             let plan = &self.plan;
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-            let _ = catalog
+            catalog
                 .get_database(&plan.tenant, &plan.database)
                 .await?
                 .refresh_database()

@@ -60,7 +60,7 @@ impl Interpreter for CreateUserUDFScript {
             let plan = self.plan.clone();
             let tenant = self.ctx.get_tenant();
             let udf = plan.udf;
-            let _ = UserApiProvider::instance()
+            UserApiProvider::instance()
                 .add_udf(&tenant, udf, &plan.create_option)
                 .await?;
 

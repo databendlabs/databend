@@ -76,7 +76,7 @@ impl Interpreter for DropTableIndexInterpreter {
                 name: index_name,
             };
 
-            let _ = catalog.drop_table_index(drop_index_req).await?;
+            catalog.drop_table_index(drop_index_req).await?;
 
             Ok(PipelineBuildResult::create())
         })

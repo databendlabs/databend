@@ -113,7 +113,7 @@ impl Interpreter for CreateUserStageInterpreter {
             let mut user_stage = user_stage;
             user_stage.creator = Some(self.ctx.get_current_user()?.identity());
             user_stage.created_on = Utc::now();
-            let _ = user_mgr
+            user_mgr
                 .add_stage(tenant, user_stage.clone(), &plan.create_option)
                 .await?;
 
