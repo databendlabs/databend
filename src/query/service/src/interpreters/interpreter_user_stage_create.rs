@@ -61,82 +61,84 @@ impl Interpreter for CreateUserStageInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_stage_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_stage_execute");
 
-        let plan = self.plan.clone();
-        let user_mgr = UserApiProvider::instance();
-        let user_stage = plan.stage_info;
+            let plan = self.plan.clone();
+            let user_mgr = UserApiProvider::instance();
+            let user_stage = plan.stage_info;
 
-        // Check user stage.
-        if user_stage.stage_type == StageType::User {
-            return Err(ErrorCode::StagePermissionDenied(
-                "user stage is not allowed to be created",
-            ));
-        }
-
-        let tenant = &plan.tenant;
-
-        let quota_api = user_mgr.tenant_quota_api(tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        let stages = user_mgr.get_stages(tenant).await?;
-        if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
-            return Err(ErrorCode::TenantQuotaExceeded(format!(
-                "Max stages quota exceeded {}",
-                quota.max_stages
-            )));
-        };
-
-        let tenant = &plan.tenant;
-
-        let old_stage = match plan.create_option {
-            CreateOption::CreateOrReplace => user_mgr
-                .get_stage(tenant, &user_stage.stage_name)
-                .await
-                .ok(),
-            _ => None,
-        };
-
-        // when create or replace stage success, if old stage is not External stage, remove stage files
-        if let Some(stage) = old_stage {
-            if stage.stage_type != StageType::External {
-                let op = init_stage_operator(&stage)?;
-                DropUserStageInterpreter::remove_all(self.ctx.clone(), op).await?;
-                info!(
-                    "create or replace stage {:?} with all objects removed in stage",
-                    user_stage.stage_name
-                );
+            // Check user stage.
+            if user_stage.stage_type == StageType::User {
+                return Err(ErrorCode::StagePermissionDenied(
+                    "user stage is not allowed to be created",
+                ));
             }
-        }
 
-        let mut user_stage = user_stage;
-        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
-        user_stage.created_on = Utc::now();
-        let _ = user_mgr
-            .add_stage(tenant, user_stage.clone(), &plan.create_option)
-            .await?;
+            let tenant = &plan.tenant;
 
-        // create dir if new stage if not external stage
-        if user_stage.stage_type != StageType::External {
-            let op = self.ctx.get_application_level_data_operator()?.operator();
-            op.create_dir(&user_stage.stage_prefix()).await?
-        }
+            let quota_api = user_mgr.tenant_quota_api(tenant);
+            let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+            let stages = user_mgr.get_stages(tenant).await?;
+            if quota.max_stages != 0 && stages.len() >= quota.max_stages as usize {
+                return Err(ErrorCode::TenantQuotaExceeded(format!(
+                    "Max stages quota exceeded {}",
+                    quota.max_stages
+                )));
+            };
 
-        // Grant ownership as the current role
-        let tenant = self.ctx.get_tenant();
-        if let Some(current_role) = self.ctx.get_current_role() {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Stage {
-                        name: self.plan.stage_info.stage_name.clone(),
-                    },
-                    &current_role.name,
-                )
+            let tenant = &plan.tenant;
+
+            let old_stage = match plan.create_option {
+                CreateOption::CreateOrReplace => user_mgr
+                    .get_stage(tenant, &user_stage.stage_name)
+                    .await
+                    .ok(),
+                _ => None,
+            };
+
+            // when create or replace stage success, if old stage is not External stage, remove stage files
+            if let Some(stage) = old_stage {
+                if stage.stage_type != StageType::External {
+                    let op = init_stage_operator(&stage)?;
+                    DropUserStageInterpreter::remove_all(self.ctx.clone(), op).await?;
+                    info!(
+                        "create or replace stage {:?} with all objects removed in stage",
+                        user_stage.stage_name
+                    );
+                }
+            }
+
+            let mut user_stage = user_stage;
+            user_stage.creator = Some(self.ctx.get_current_user()?.identity());
+            user_stage.created_on = Utc::now();
+            let _ = user_mgr
+                .add_stage(tenant, user_stage.clone(), &plan.create_option)
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
 
-        Ok(PipelineBuildResult::create())
+            // create dir if new stage if not external stage
+            if user_stage.stage_type != StageType::External {
+                let op = self.ctx.get_application_level_data_operator()?.operator();
+                op.create_dir(&user_stage.stage_prefix()).await?
+            }
+
+            // Grant ownership as the current role
+            let tenant = self.ctx.get_tenant();
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Stage {
+                            name: self.plan.stage_info.stage_name.clone(),
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

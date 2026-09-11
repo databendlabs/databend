@@ -51,23 +51,25 @@ impl Interpreter for RenameWorkloadGroupInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+            let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
 
-        workload_mgr
-            .rename(self.plan.name.clone(), self.plan.new_name.clone())
-            .await?;
+            workload_mgr
+                .rename(self.plan.name.clone(), self.plan.new_name.clone())
+                .await?;
 
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "rename_workload", &self.plan))?
-        );
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "rename_workload", &self.plan))?
+            );
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

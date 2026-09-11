@@ -48,27 +48,29 @@ impl Interpreter for DropDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        // actual drop database
-        let rep = catalog.drop_database(self.plan.clone().into()).await?;
+            // actual drop database
+            let rep = catalog.drop_database(self.plan.clone().into()).await?;
 
-        let db_id = rep.db_id;
-        // Cleanup after successful drop
-        // iceberg db do not need to generate ownership and tag.
-        if !catalog.is_external() {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::Database {
-                catalog_name: self.plan.catalog.clone(),
-                db_id,
-            };
+            let db_id = rep.db_id;
+            // Cleanup after successful drop
+            // iceberg db do not need to generate ownership and tag.
+            if !catalog.is_external() {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                let owner_object = OwnershipObject::Database {
+                    catalog_name: self.plan.catalog.clone(),
+                    db_id,
+                };
 
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

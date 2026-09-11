@@ -46,25 +46,27 @@ impl Interpreter for RevertTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
+            let table = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
+                .await?;
 
-        // check mutability
-        table.check_mutable()?;
+            // check mutability
+            table.check_mutable()?;
 
-        let navigation_descriptor = NavigationDescriptor {
-            database_name: self.plan.database.clone(),
-            point: self.plan.point.clone(),
-        };
-        table
-            .revert_to(self.ctx.clone(), navigation_descriptor)
-            .await?;
+            let navigation_descriptor = NavigationDescriptor {
+                database_name: self.plan.database.clone(),
+                point: self.plan.point.clone(),
+            };
+            table
+                .revert_to(self.ctx.clone(), navigation_descriptor)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

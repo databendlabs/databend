@@ -92,50 +92,52 @@ impl Interpreter for ReplaceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            self.ctx.attach_query_lineage(None);
-            return Ok(PipelineBuildResult::create());
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
 
-        self.check_on_conflicts()?;
+            self.check_on_conflicts()?;
 
-        // replace
-        let (physical_plan, purge_info) = self.build_physical_plan().await?;
-        let mut pipeline =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        let lock_guard = self
-            .plan
-            .lock_guard
-            .as_ref()
-            .and_then(|holder| holder.try_take());
-        pipeline.main_pipeline.add_lock_guard(lock_guard);
+            // replace
+            let (physical_plan, purge_info) = self.build_physical_plan().await?;
+            let mut pipeline =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+            let lock_guard = self
+                .plan
+                .lock_guard
+                .as_ref()
+                .and_then(|holder| holder.try_take());
+            pipeline.main_pipeline.add_lock_guard(lock_guard);
 
-        // purge
-        if let Some((files, stage_info, options)) = purge_info {
-            PipelineBuilder::set_purge_files_on_finished(
-                self.ctx.clone(),
-                files.into_iter().map(|v| v.path).collect(),
-                &options,
-                stage_info,
-                &mut pipeline.main_pipeline,
-            )?;
-        }
+            // purge
+            if let Some((files, stage_info, options)) = purge_info {
+                PipelineBuilder::set_purge_files_on_finished(
+                    self.ctx.clone(),
+                    files.into_iter().map(|v| v.path).collect(),
+                    &options,
+                    stage_info,
+                    &mut pipeline.main_pipeline,
+                )?;
+            }
 
-        // Execute hook.
-        {
-            let hook_operator = HookOperator::create(
-                self.ctx.clone(),
-                self.plan.catalog.clone(),
-                self.plan.database.clone(),
-                self.plan.table.clone(),
-                MutationKind::Replace,
-                LockTableOption::NoLock,
-            );
-            hook_operator.execute(&mut pipeline.main_pipeline).await;
-        }
+            // Execute hook.
+            {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    self.plan.catalog.clone(),
+                    self.plan.database.clone(),
+                    self.plan.table.clone(),
+                    MutationKind::Replace,
+                    LockTableOption::NoLock,
+                );
+                hook_operator.execute(&mut pipeline.main_pipeline).await;
+            }
 
-        Ok(pipeline)
+            Ok(pipeline)
+        })
     }
 }
 

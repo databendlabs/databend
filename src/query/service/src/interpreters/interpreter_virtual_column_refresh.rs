@@ -52,71 +52,74 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
-        // check mutability
-        table.check_mutable()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            // check mutability
+            table.check_mutable()?;
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        // Generating virtual column data is a time-consuming operation.
-        // At this stage, neither the table is locked nor the BlockMeta is modified;
-        // only write the virtual column data to parquet file,
-        // thus not affecting concurrent insert operations
-        let results = prepare_refresh_virtual_column(
-            self.ctx.clone(),
-            fuse_table,
-            self.plan.limit,
-            self.plan.overwrite,
-            self.plan.selection.clone(),
-        )
-        .await?;
-
-        if results.is_empty() {
-            let result_block = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0])]);
-            return PipelineBuildResult::from_blocks(vec![result_block]);
-        }
-
-        // Lock the table and submit the BlockMeta with the virtual column,
-        // this takes a very short time and has a very low probability of failure.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-                &LockTableOption::LockWithRetry,
+            // Generating virtual column data is a time-consuming operation.
+            // At this stage, neither the table is locked nor the BlockMeta is modified;
+            // only write the virtual column data to parquet file,
+            // thus not affecting concurrent insert operations
+            let results = prepare_refresh_virtual_column(
+                self.ctx.clone(),
+                fuse_table,
+                self.plan.limit,
+                self.plan.overwrite,
+                self.plan.selection.clone(),
             )
             .await?;
 
-        let mut commit_res = PipelineBuildResult::create();
-        let applied_blocks = commit_refresh_virtual_column(
-            self.ctx.clone(),
-            fuse_table,
-            &mut commit_res.main_pipeline,
-            results,
-        )
-        .await?;
+            if results.is_empty() {
+                let result_block =
+                    DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0])]);
+                return PipelineBuildResult::from_blocks(vec![result_block]);
+            }
 
-        // return the number of refreshed blocks.
-        let result_block =
-            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![applied_blocks])]);
+            // Lock the table and submit the BlockMeta with the virtual column,
+            // this takes a very short time and has a very low probability of failure.
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?;
 
-        if commit_res.main_pipeline.is_empty() {
-            return PipelineBuildResult::from_blocks(vec![result_block]);
-        }
+            let mut commit_res = PipelineBuildResult::create();
+            let applied_blocks = commit_refresh_virtual_column(
+                self.ctx.clone(),
+                fuse_table,
+                &mut commit_res.main_pipeline,
+                results,
+            )
+            .await?;
 
-        commit_res.main_pipeline.add_lock_guard(lock_guard);
+            // return the number of refreshed blocks.
+            let result_block =
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![applied_blocks])]);
 
-        let mut result_res = PipelineBuildResult::from_blocks(vec![result_block])?;
-        result_res
-            .sources_pipelines
-            .extend(commit_res.sources_pipelines);
-        result_res.sources_pipelines.push(commit_res.main_pipeline);
-        Ok(result_res)
+            if commit_res.main_pipeline.is_empty() {
+                return PipelineBuildResult::from_blocks(vec![result_block]);
+            }
+
+            commit_res.main_pipeline.add_lock_guard(lock_guard);
+
+            let mut result_res = PipelineBuildResult::from_blocks(vec![result_block])?;
+            result_res
+                .sources_pipelines
+                .extend(commit_res.sources_pipelines);
+            result_res.sources_pipelines.push(commit_res.main_pipeline);
+            Ok(result_res)
+        })
     }
 }

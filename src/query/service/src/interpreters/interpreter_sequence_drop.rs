@@ -52,36 +52,38 @@ impl Interpreter for DropSequenceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let req = DropSequenceReq {
-            ident: self.plan.ident.clone(),
-            if_exists: self.plan.if_exists,
-        };
-        let catalog = self.ctx.get_default_catalog()?;
-        // we should do `drop ownership` after actually drop object, and object maybe not exists.
-        // drop the ownership
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            let tenant = self.plan.ident.tenant();
-            let name = self.plan.ident.name().to_string();
-            let role_api = UserApiProvider::instance().role_api(tenant);
-            let owner_object = OwnershipObject::Sequence { name };
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(tenant);
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let req = DropSequenceReq {
+                ident: self.plan.ident.clone(),
+                if_exists: self.plan.if_exists,
+            };
+            let catalog = self.ctx.get_default_catalog()?;
+            // we should do `drop ownership` after actually drop object, and object maybe not exists.
+            // drop the ownership
+            if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
+            {
+                let tenant = self.plan.ident.tenant();
+                let name = self.plan.ident.name().to_string();
+                let role_api = UserApiProvider::instance().role_api(tenant);
+                let owner_object = OwnershipObject::Sequence { name };
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(tenant);
+            }
 
-        let reply = catalog.drop_sequence(req).await?;
+            let reply = catalog.drop_sequence(req).await?;
 
-        if !reply.success && !self.plan.if_exists {
-            return Err(ErrorCode::UnknownSequence(format!(
-                "unknown sequence {:?}",
-                self.plan.ident.name()
-            )));
-        }
+            if !reply.success && !self.plan.if_exists {
+                return Err(ErrorCode::UnknownSequence(format!(
+                    "unknown sequence {:?}",
+                    self.plan.ident.name()
+                )));
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

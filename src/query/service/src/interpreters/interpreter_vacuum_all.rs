@@ -52,31 +52,36 @@ impl Interpreter for VacuumAllInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
-        VacuumTablesInterpreter::try_create(self.ctx.clone(), VacuumTablesPlan {
-            catalog: self.plan.catalog.clone(),
-            database: None,
-        })?
-        .execute2()
-        .await?;
+            VacuumTablesInterpreter::try_create(self.ctx.clone(), VacuumTablesPlan {
+                catalog: self.plan.catalog.clone(),
+                database: None,
+            })?
+            .execute2()
+            .await?;
 
-        VacuumDropTablesInterpreter::try_create(self.ctx.clone(), VacuumDropTablePlan {
-            catalog: self.plan.catalog.clone(),
-            database: String::new(),
-        })?
-        .execute2()
-        .await?;
+            VacuumDropTablesInterpreter::try_create(self.ctx.clone(), VacuumDropTablePlan {
+                catalog: self.plan.catalog.clone(),
+                database: String::new(),
+            })?
+            .execute2()
+            .await?;
 
-        VacuumTemporaryFilesInterpreter::try_create(self.ctx.clone(), VacuumTemporaryFilesPlan {
-            limit: None,
-            retain: None,
-        })?
-        .execute2()
-        .await?;
+            VacuumTemporaryFilesInterpreter::try_create(
+                self.ctx.clone(),
+                VacuumTemporaryFilesPlan {
+                    limit: None,
+                    retain: None,
+                },
+            )?
+            .execute2()
+            .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -55,56 +55,59 @@ impl Interpreter for DescUserInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        let user = user_mgr.get_user(&tenant, self.plan.user.clone()).await?;
+            let user = user_mgr.get_user(&tenant, self.plan.user.clone()).await?;
 
-        let names = vec![user.name.clone()];
-        let hostnames = vec![user.hostname.clone()];
-        let auth_types = vec![user.auth_info.get_type().to_str().to_string()];
-        let default_roles = vec![user.option.default_role().cloned().unwrap_or_default()];
-        let default_warehouses = vec![user.option.default_warehouse().cloned().unwrap_or_default()];
-        let roles = vec![user.grants.roles().iter().sorted().join(", ").to_string()];
-        let disableds = vec![user.option.disabled().cloned().unwrap_or_default()];
-        let network_policies = vec![user.option.network_policy().cloned()];
-        let password_policies = vec![user.option.password_policy().cloned()];
-        let must_change_passwords = vec![user.option.must_change_password().cloned()];
+            let names = vec![user.name.clone()];
+            let hostnames = vec![user.hostname.clone()];
+            let auth_types = vec![user.auth_info.get_type().to_str().to_string()];
+            let default_roles = vec![user.option.default_role().cloned().unwrap_or_default()];
+            let default_warehouses =
+                vec![user.option.default_warehouse().cloned().unwrap_or_default()];
+            let roles = vec![user.grants.roles().iter().sorted().join(", ").to_string()];
+            let disableds = vec![user.option.disabled().cloned().unwrap_or_default()];
+            let network_policies = vec![user.option.network_policy().cloned()];
+            let password_policies = vec![user.option.password_policy().cloned()];
+            let must_change_passwords = vec![user.option.must_change_password().cloned()];
 
-        let workload_group = match user.option.workload_group() {
-            None => vec![None],
-            Some(w) => {
-                let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
-                workload_mgr
-                    .get_by_id(w)
-                    .await
-                    .map_or(vec![None], |w| vec![Some(w.name)])
-            }
-        };
+            let workload_group = match user.option.workload_group() {
+                None => vec![None],
+                Some(w) => {
+                    let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+                    workload_mgr
+                        .get_by_id(w)
+                        .await
+                        .map_or(vec![None], |w| vec![Some(w.name)])
+                }
+            };
 
-        let public_keys = {
-            let keys = user.auth_info.get_public_keys();
-            if keys.is_empty() {
-                vec![None]
-            } else {
-                vec![Some(keys.len() as u64)]
-            }
-        };
+            let public_keys = {
+                let keys = user.auth_info.get_public_keys();
+                if keys.is_empty() {
+                    vec![None]
+                } else {
+                    vec![Some(keys.len() as u64)]
+                }
+            };
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(hostnames),
-            StringType::from_data(auth_types),
-            StringType::from_data(default_roles),
-            StringType::from_data(default_warehouses),
-            StringType::from_data(roles),
-            BooleanType::from_data(disableds),
-            StringType::from_opt_data(network_policies),
-            StringType::from_opt_data(password_policies),
-            BooleanType::from_opt_data(must_change_passwords),
-            StringType::from_opt_data(workload_group),
-            UInt64Type::from_opt_data(public_keys),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(hostnames),
+                StringType::from_data(auth_types),
+                StringType::from_data(default_roles),
+                StringType::from_data(default_warehouses),
+                StringType::from_data(roles),
+                BooleanType::from_data(disableds),
+                StringType::from_opt_data(network_policies),
+                StringType::from_opt_data(password_policies),
+                BooleanType::from_opt_data(must_change_passwords),
+                StringType::from_opt_data(workload_group),
+                UInt64Type::from_opt_data(public_keys),
+            ])])
+        })
     }
 }

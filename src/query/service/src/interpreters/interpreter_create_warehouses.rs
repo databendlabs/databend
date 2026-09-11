@@ -59,29 +59,61 @@ impl Interpreter for CreateWarehouseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        let tenant = self.ctx.get_tenant();
-        if let Some(warehouse_size) = self.plan.options.get("warehouse_size") {
-            if !self.plan.nodes.is_empty() {
-                return Err(ErrorCode::InvalidArgument(
-                    "WAREHOUSE_SIZE option and node list exists in one query.",
-                ));
+            let tenant = self.ctx.get_tenant();
+            if let Some(warehouse_size) = self.plan.options.get("warehouse_size") {
+                if !self.plan.nodes.is_empty() {
+                    return Err(ErrorCode::InvalidArgument(
+                        "WAREHOUSE_SIZE option and node list exists in one query.",
+                    ));
+                }
+
+                let Ok(warehouse_size) = warehouse_size.parse::<usize>() else {
+                    return Err(ErrorCode::InvalidArgument(
+                        "WAREHOUSE_SIZE must be a <number>",
+                    ));
+                };
+
+                let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                    .create_warehouse(self.plan.warehouse.clone(), vec![
+                        SelectedNode::Random(None);
+                        warehouse_size
+                    ])
+                    .await?;
+
+                if let WarehouseInfo::SystemManaged(sw) = warehouse {
+                    if let Some(current_role) = self.ctx.get_current_role() {
+                        let role_api = UserApiProvider::instance().role_api(&tenant);
+                        role_api
+                            .grant_ownership(
+                                &OwnershipObject::Warehouse { id: sw.role_id },
+                                &current_role.name,
+                            )
+                            .await?;
+                        RoleCacheManager::instance().invalidate_cache(&tenant);
+                    }
+                }
+
+                return Ok(PipelineBuildResult::create());
             }
 
-            let Ok(warehouse_size) = warehouse_size.parse::<usize>() else {
-                return Err(ErrorCode::InvalidArgument(
-                    "WAREHOUSE_SIZE must be a <number>",
-                ));
-            };
+            if self.plan.nodes.is_empty() {
+                return Err(ErrorCode::InvalidArgument("Warehouse nodes list is empty"));
+            }
+
+            let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());
+            for (group, nodes) in &self.plan.nodes {
+                for _ in 0..*nodes {
+                    selected_nodes.push(SelectedNode::Random(group.clone()));
+                }
+            }
 
             let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-                .create_warehouse(self.plan.warehouse.clone(), vec![
-                    SelectedNode::Random(None);
-                    warehouse_size
-                ])
+                .create_warehouse(self.plan.warehouse.clone(), selected_nodes)
                 .await?;
 
             if let WarehouseInfo::SystemManaged(sw) = warehouse {
@@ -97,44 +129,14 @@ impl Interpreter for CreateWarehouseInterpreter {
                 }
             }
 
-            return Ok(PipelineBuildResult::create());
-        }
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "create_warehouse", &self.plan))?
+            );
 
-        if self.plan.nodes.is_empty() {
-            return Err(ErrorCode::InvalidArgument("Warehouse nodes list is empty"));
-        }
-
-        let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());
-        for (group, nodes) in &self.plan.nodes {
-            for _ in 0..*nodes {
-                selected_nodes.push(SelectedNode::Random(group.clone()));
-            }
-        }
-
-        let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .create_warehouse(self.plan.warehouse.clone(), selected_nodes)
-            .await?;
-
-        if let WarehouseInfo::SystemManaged(sw) = warehouse {
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Warehouse { id: sw.role_id },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
-        }
-
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "create_warehouse", &self.plan))?
-        );
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

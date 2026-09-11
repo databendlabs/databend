@@ -46,20 +46,22 @@ impl Interpreter for UseDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if self.plan.database.trim().is_empty() {
-            return Err(ErrorCode::UnknownDatabase("No database selected"));
-        }
-        let db = self
-            .ctx
-            .set_current_database(self.plan.database.clone())
-            .await?;
-        db.trigger_use().await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if self.plan.database.trim().is_empty() {
+                return Err(ErrorCode::UnknownDatabase("No database selected"));
+            }
+            let db = self
+                .ctx
+                .set_current_database(self.plan.database.clone())
+                .await?;
+            db.trigger_use().await?;
 
-        self.ctx.set_affect(QueryAffect::UseDB {
-            name: self.plan.database.clone(),
-        });
-        let _schema = Arc::new(DataSchema::empty());
-        Ok(PipelineBuildResult::create())
+            self.ctx.set_affect(QueryAffect::UseDB {
+                name: self.plan.database.clone(),
+            });
+            let _schema = Arc::new(DataSchema::empty());
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

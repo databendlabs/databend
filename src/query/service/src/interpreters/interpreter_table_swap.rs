@@ -48,33 +48,35 @@ impl Interpreter for SwapTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.plan.tenant.clone();
-        let db_name = self.plan.database.clone();
-        let table_name = self.plan.table.clone();
-        let target_table_name = self.plan.target_table.clone();
-        let origin_table = catalog.get_table(&tenant, &db_name, &table_name).await?;
-        let target_table = catalog
-            .get_table(&tenant, &db_name, &target_table_name)
-            .await?;
-        if origin_table.is_temp() || target_table.is_temp() {
-            return Err(ErrorCode::AlterTableError("Can not swap temp table"));
-        }
-        origin_table.check_mutable()?;
-        target_table.check_mutable()?;
-        let _resp = catalog
-            .swap_table(SwapTableReq {
-                if_exists: self.plan.if_exists,
-                origin_table: TableNameIdent {
-                    tenant: self.plan.tenant.clone(),
-                    db_name: self.plan.database.clone(),
-                    table_name: self.plan.table.clone(),
-                },
-                target_table_name: self.plan.target_table.clone(),
-            })
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let tenant = self.plan.tenant.clone();
+            let db_name = self.plan.database.clone();
+            let table_name = self.plan.table.clone();
+            let target_table_name = self.plan.target_table.clone();
+            let origin_table = catalog.get_table(&tenant, &db_name, &table_name).await?;
+            let target_table = catalog
+                .get_table(&tenant, &db_name, &target_table_name)
+                .await?;
+            if origin_table.is_temp() || target_table.is_temp() {
+                return Err(ErrorCode::AlterTableError("Can not swap temp table"));
+            }
+            origin_table.check_mutable()?;
+            target_table.check_mutable()?;
+            let _resp = catalog
+                .swap_table(SwapTableReq {
+                    if_exists: self.plan.if_exists,
+                    origin_table: TableNameIdent {
+                        tenant: self.plan.tenant.clone(),
+                        db_name: self.plan.database.clone(),
+                        table_name: self.plan.table.clone(),
+                    },
+                    target_table_name: self.plan.target_table.clone(),
+                })
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

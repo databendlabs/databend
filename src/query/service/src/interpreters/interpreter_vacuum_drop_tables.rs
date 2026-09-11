@@ -133,19 +133,21 @@ impl Interpreter for VacuumDropTablesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
-        let ctx = self.ctx.clone();
-        let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+            let ctx = self.ctx.clone();
+            let duration =
+                Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
-        let retention_time = chrono::Utc::now() - duration;
+            let retention_time = chrono::Utc::now() - duration;
 
-        // Set the vacuum timestamp before cleanup so later undrop operations are blocked.
-        let tenant = ctx.get_tenant();
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        meta_api
+            // Set the vacuum timestamp before cleanup so later undrop operations are blocked.
+            let tenant = ctx.get_tenant();
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            meta_api
             .fetch_set_vacuum_timestamp(&tenant, retention_time)
             .await
             .map_err(|e| {
@@ -154,132 +156,135 @@ impl Interpreter for VacuumDropTablesInterpreter {
                     e
                 ))
             })?;
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        info!(
-            "=== VACUUM DROP TABLE STARTED === db: {:?}, retention_days: {}, retention_time: {:?}",
-            self.plan.database,
-            ctx.get_settings().get_data_retention_time_in_days()?,
-            retention_time
-        );
-        // if database if empty, vacuum all tables
-        let database_name = if self.plan.database.is_empty() {
-            None
-        } else {
-            Some(self.plan.database.clone())
-        };
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+            info!(
+                "=== VACUUM DROP TABLE STARTED === db: {:?}, retention_days: {}, retention_time: {:?}",
+                self.plan.database,
+                ctx.get_settings().get_data_retention_time_in_days()?,
+                retention_time
+            );
+            // if database if empty, vacuum all tables
+            let database_name = if self.plan.database.is_empty() {
+                None
+            } else {
+                Some(self.plan.database.clone())
+            };
 
-        let tenant = self.ctx.get_tenant();
-        let (tables, drop_ids) = catalog
-            .get_drop_table_infos(ListDroppedTableReq::new4(
-                &tenant,
-                database_name,
-                Some(retention_time),
-                None,
-            ))
-            .await?;
-
-        // map: table id to its belonging db id
-        let mut containing_db = BTreeMap::new();
-        for drop_id in drop_ids.iter() {
-            if let DroppedId::Table { name, id } = drop_id {
-                containing_db.insert(id.table_id, name.db_id);
-            }
-        }
-
-        info!(
-            "vacuum drop table from db {:?}, found {} tables: [{}], drop_ids: {:?}",
-            self.plan.database,
-            tables.len(),
-            tables
-                .iter()
-                .map(|t| format!(
-                    "{}(id:{})",
-                    t.get_table_info().name,
-                    t.get_table_info().ident.table_id
+            let tenant = self.ctx.get_tenant();
+            let (tables, drop_ids) = catalog
+                .get_drop_table_infos(ListDroppedTableReq::new4(
+                    &tenant,
+                    database_name,
+                    Some(retention_time),
+                    None,
                 ))
-                .collect::<Vec<_>>()
-                .join(", "),
-            drop_ids
-        );
+                .await?;
 
-        // Attached read-only tables may share physical data that must not be purged. Materialized
-        // views are read-only only to user mutations and own their Fuse data, so they must remain
-        // eligible for physical GC.
-        // Note: The drop_ids list still includes view IDs
-        let (views, tables): (Vec<_>, Vec<_>) = tables
-            .into_iter()
-            .filter(|tbl| !tbl.as_ref().is_read_only() || is_materialized_view_engine(tbl.engine()))
-            .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
-
-        {
-            let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
-            info!("view ids excluded from purging data: {:?}", view_ids);
-        }
-
-        info!(
-            "after filter read-only tables: {} tables remain: [{}]",
-            tables.len(),
-            tables
-                .iter()
-                .map(|t| format!(
-                    "{}(id:{})",
-                    t.get_table_info().name,
-                    t.get_table_info().ident.table_id
-                ))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        let tables_count = tables.len();
-
-        let handler = get_vacuum_handler();
-        let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-        let (_, failed_tables) = handler
-            .do_vacuum_drop_tables(threads_nums, tables, None)
-            .await?;
-
-        let failed_db_ids = failed_tables
-            .iter()
-            // Safe unwrap: the map is built from drop_ids
-            .map(|id| *containing_db.get(id).unwrap())
-            .collect::<HashSet<_>>();
-
-        let mut success_dropped_ids = vec![];
-        // Since drop_ids contains view IDs, any views (if present) will be added to
-        // the success_dropped_id list, with removal from the meta-server attempted later.
-        for drop_id in drop_ids {
-            match &drop_id {
-                DroppedId::Db { db_id, db_name: _ } => {
-                    if !failed_db_ids.contains(db_id) {
-                        success_dropped_ids.push(drop_id);
-                    }
-                }
-                DroppedId::Table { name: _, id } => {
-                    if !failed_tables.contains(&id.table_id) {
-                        success_dropped_ids.push(drop_id);
-                    }
+            // map: table id to its belonging db id
+            let mut containing_db = BTreeMap::new();
+            for drop_id in drop_ids.iter() {
+                if let DroppedId::Table { name, id } = drop_id {
+                    containing_db.insert(id.table_id, name.db_id);
                 }
             }
-        }
-        info!(
-            "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
-            failed_db_ids.len(),
-            failed_tables.len(),
-            success_dropped_ids.len()
-        );
-        if !failed_tables.is_empty() {
-            info!("failed table ids: {:?}", failed_tables);
-        }
 
-        let num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
-        let success_count = tables_count as u64 - failed_tables.len() as u64;
-        let failed_count = failed_tables.len() as u64;
+            info!(
+                "vacuum drop table from db {:?}, found {} tables: [{}], drop_ids: {:?}",
+                self.plan.database,
+                tables.len(),
+                tables
+                    .iter()
+                    .map(|t| format!(
+                        "{}(id:{})",
+                        t.get_table_info().name,
+                        t.get_table_info().ident.table_id
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                drop_ids
+            );
 
-        info!(
-            "=== VACUUM DROP TABLE COMPLETED === success: {}, failed: {}, total: {}, num_meta_keys_removed: {}",
-            success_count, failed_count, tables_count, num_meta_keys_removed
-        );
+            // Attached read-only tables may share physical data that must not be purged. Materialized
+            // views are read-only only to user mutations and own their Fuse data, so they must remain
+            // eligible for physical GC.
+            // Note: The drop_ids list still includes view IDs
+            let (views, tables): (Vec<_>, Vec<_>) = tables
+                .into_iter()
+                .filter(|tbl| {
+                    !tbl.as_ref().is_read_only() || is_materialized_view_engine(tbl.engine())
+                })
+                .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
 
-        Ok(PipelineBuildResult::create())
+            {
+                let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
+                info!("view ids excluded from purging data: {:?}", view_ids);
+            }
+
+            info!(
+                "after filter read-only tables: {} tables remain: [{}]",
+                tables.len(),
+                tables
+                    .iter()
+                    .map(|t| format!(
+                        "{}(id:{})",
+                        t.get_table_info().name,
+                        t.get_table_info().ident.table_id
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+
+            let tables_count = tables.len();
+
+            let handler = get_vacuum_handler();
+            let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
+            let (_, failed_tables) = handler
+                .do_vacuum_drop_tables(threads_nums, tables, None)
+                .await?;
+
+            let failed_db_ids = failed_tables
+                .iter()
+                // Safe unwrap: the map is built from drop_ids
+                .map(|id| *containing_db.get(id).unwrap())
+                .collect::<HashSet<_>>();
+
+            let mut success_dropped_ids = vec![];
+            // Since drop_ids contains view IDs, any views (if present) will be added to
+            // the success_dropped_id list, with removal from the meta-server attempted later.
+            for drop_id in drop_ids {
+                match &drop_id {
+                    DroppedId::Db { db_id, db_name: _ } => {
+                        if !failed_db_ids.contains(db_id) {
+                            success_dropped_ids.push(drop_id);
+                        }
+                    }
+                    DroppedId::Table { name: _, id } => {
+                        if !failed_tables.contains(&id.table_id) {
+                            success_dropped_ids.push(drop_id);
+                        }
+                    }
+                }
+            }
+            info!(
+                "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
+                failed_db_ids.len(),
+                failed_tables.len(),
+                success_dropped_ids.len()
+            );
+            if !failed_tables.is_empty() {
+                info!("failed table ids: {:?}", failed_tables);
+            }
+
+            let num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
+            let success_count = tables_count as u64 - failed_tables.len() as u64;
+            let failed_count = failed_tables.len() as u64;
+
+            info!(
+                "=== VACUUM DROP TABLE COMPLETED === success: {}, failed: {}, total: {}, num_meta_keys_removed: {}",
+                success_count, failed_count, tables_count, num_meta_keys_removed
+            );
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

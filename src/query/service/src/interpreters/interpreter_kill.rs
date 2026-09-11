@@ -131,22 +131,24 @@ impl Interpreter for KillInterpreter {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let id = &self.plan.id;
-        // If press Ctrl + C, MySQL Client will create a new session and send query
-        // `kill query mysql_connection_id` to server.
-        // the type of connection_id is u32, if parse success get session by connection_id,
-        // otherwise use the session_id.
-        // More info Link to: https://github.com/datafuselabs/databend/discussions/5405.
-        match id.parse::<u32>() {
-            Ok(mysql_conn_id) => match self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)) {
-                Some(get) => self.execute_kill(&get).await,
-                None => Err(ErrorCode::UnknownSession(format!(
-                    "MySQL connection id {} not found session id",
-                    mysql_conn_id
-                ))),
-            },
-            Err(_) => self.execute_kill(id).await,
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let id = &self.plan.id;
+            // If press Ctrl + C, MySQL Client will create a new session and send query
+            // `kill query mysql_connection_id` to server.
+            // the type of connection_id is u32, if parse success get session by connection_id,
+            // otherwise use the session_id.
+            // More info Link to: https://github.com/datafuselabs/databend/discussions/5405.
+            match id.parse::<u32>() {
+                Ok(mysql_conn_id) => match self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)) {
+                    Some(get) => self.execute_kill(&get).await,
+                    None => Err(ErrorCode::UnknownSession(format!(
+                        "MySQL connection id {} not found session id",
+                        mysql_conn_id
+                    ))),
+                },
+                Err(_) => self.execute_kill(id).await,
+            }
+        })
     }
 }

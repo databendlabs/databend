@@ -57,69 +57,72 @@ impl Interpreter for ShowWorkloadGroupsInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let workloads = GlobalInstance::get::<Arc<WorkloadMgr>>().get_all().await?;
+            let workloads = GlobalInstance::get::<Arc<WorkloadMgr>>().get_all().await?;
 
-        let mut conflict_name = HashSet::with_capacity(workloads.len());
-        let mut workload_name = ColumnBuilder::with_capacity(&DataType::String, workloads.len());
-        let mut workload_cpu_quota =
-            ColumnBuilder::with_capacity(&DataType::String, workloads.len());
-        let mut workload_mem_quota =
-            ColumnBuilder::with_capacity(&DataType::String, workloads.len());
-        let mut workload_query_max_running_time =
-            ColumnBuilder::with_capacity(&DataType::String, workloads.len());
-        let mut workload_max_query_concurrency =
-            ColumnBuilder::with_capacity(&DataType::String, workloads.len());
-        let mut workload_statement_queued_timeout_in_seconds =
-            ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+            let mut conflict_name = HashSet::with_capacity(workloads.len());
+            let mut workload_name =
+                ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+            let mut workload_cpu_quota =
+                ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+            let mut workload_mem_quota =
+                ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+            let mut workload_query_max_running_time =
+                ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+            let mut workload_max_query_concurrency =
+                ColumnBuilder::with_capacity(&DataType::String, workloads.len());
+            let mut workload_statement_queued_timeout_in_seconds =
+                ColumnBuilder::with_capacity(&DataType::String, workloads.len());
 
-        for workload in workloads {
-            let name = match conflict_name.insert(workload.name.clone()) {
-                true => workload.name.clone(),
-                false => format!("{}({})", workload.name, workload.id),
-            };
+            for workload in workloads {
+                let name = match conflict_name.insert(workload.name.clone()) {
+                    true => workload.name.clone(),
+                    false => format!("{}({})", workload.name, workload.id),
+                };
 
-            workload_name.push(Scalar::String(name).as_ref());
-            workload_cpu_quota.push(Scalar::as_ref(&match workload.get_quota(CPU_QUOTA_KEY) {
-                None => Scalar::String(String::new()),
-                Some(v) => Scalar::String(format!("{}", v)),
-            }));
-            workload_mem_quota.push(Scalar::as_ref(
-                &match workload.get_quota(MEMORY_QUOTA_KEY) {
+                workload_name.push(Scalar::String(name).as_ref());
+                workload_cpu_quota.push(Scalar::as_ref(&match workload.get_quota(CPU_QUOTA_KEY) {
                     None => Scalar::String(String::new()),
                     Some(v) => Scalar::String(format!("{}", v)),
-                },
-            ));
-            workload_query_max_running_time.push(Scalar::as_ref(&match workload
-                .get_quota(QUERY_TIMEOUT_QUOTA_KEY)
-            {
-                None => Scalar::String(String::new()),
-                Some(v) => Scalar::String(format!("{}", v)),
-            }));
-            workload_max_query_concurrency.push(Scalar::as_ref(&match workload
-                .get_quota(MAX_CONCURRENCY_QUOTA_KEY)
-            {
-                None => Scalar::String(String::new()),
-                Some(v) => Scalar::String(format!("{}", v)),
-            }));
-            workload_statement_queued_timeout_in_seconds.push(Scalar::as_ref(&match workload
-                .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
-            {
-                None => Scalar::String(String::new()),
-                Some(v) => Scalar::String(format!("{}", v)),
-            }));
-        }
+                }));
+                workload_mem_quota.push(Scalar::as_ref(
+                    &match workload.get_quota(MEMORY_QUOTA_KEY) {
+                        None => Scalar::String(String::new()),
+                        Some(v) => Scalar::String(format!("{}", v)),
+                    },
+                ));
+                workload_query_max_running_time.push(Scalar::as_ref(&match workload
+                    .get_quota(QUERY_TIMEOUT_QUOTA_KEY)
+                {
+                    None => Scalar::String(String::new()),
+                    Some(v) => Scalar::String(format!("{}", v)),
+                }));
+                workload_max_query_concurrency.push(Scalar::as_ref(&match workload
+                    .get_quota(MAX_CONCURRENCY_QUOTA_KEY)
+                {
+                    None => Scalar::String(String::new()),
+                    Some(v) => Scalar::String(format!("{}", v)),
+                }));
+                workload_statement_queued_timeout_in_seconds.push(Scalar::as_ref(&match workload
+                    .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
+                {
+                    None => Scalar::String(String::new()),
+                    Some(v) => Scalar::String(format!("{}", v)),
+                }));
+            }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            workload_name.build(),
-            workload_cpu_quota.build(),
-            workload_mem_quota.build(),
-            workload_query_max_running_time.build(),
-            workload_max_query_concurrency.build(),
-            workload_statement_queued_timeout_in_seconds.build(),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                workload_name.build(),
+                workload_cpu_quota.build(),
+                workload_mem_quota.build(),
+                workload_query_max_running_time.build(),
+                workload_max_query_concurrency.build(),
+                workload_statement_queued_timeout_in_seconds.build(),
+            ])])
+        })
     }
 }

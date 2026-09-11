@@ -51,21 +51,23 @@ impl Interpreter for RenameWarehouseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .rename_warehouse(self.plan.warehouse.clone(), self.plan.new_warehouse.clone())
-            .await?;
+            GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .rename_warehouse(self.plan.warehouse.clone(), self.plan.new_warehouse.clone())
+                .await?;
 
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "rename_warehouse", &self.plan))?
-        );
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "rename_warehouse", &self.plan))?
+            );
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

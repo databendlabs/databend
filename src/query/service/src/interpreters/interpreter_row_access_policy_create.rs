@@ -54,44 +54,46 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
-        let tenant = self.plan.tenant.clone();
-        let res = match handler
-            .create_row_access_policy(meta_api, self.plan.clone().into())
-            .await
-            .map_err(meta_service_error)?
-        {
-            Ok(reply) => {
-                if let Some(current_role) = self.ctx.get_current_role() {
-                    let role_api = UserApiProvider::instance().role_api(&tenant);
-                    role_api
-                        .grant_ownership(
-                            &OwnershipObject::RowAccessPolicy {
-                                policy_id: reply.id,
-                            },
-                            &current_role.name,
-                        )
-                        .await?;
-                    RoleCacheManager::instance().invalidate_cache(&tenant);
-                }
-                Ok(PipelineBuildResult::create())
-            }
-            Err(_e) => {
-                if self.plan.if_not_exists {
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            let handler = get_row_access_policy_handler();
+            let tenant = self.plan.tenant.clone();
+            let res = match handler
+                .create_row_access_policy(meta_api, self.plan.clone().into())
+                .await
+                .map_err(meta_service_error)?
+            {
+                Ok(reply) => {
+                    if let Some(current_role) = self.ctx.get_current_role() {
+                        let role_api = UserApiProvider::instance().role_api(&tenant);
+                        role_api
+                            .grant_ownership(
+                                &OwnershipObject::RowAccessPolicy {
+                                    policy_id: reply.id,
+                                },
+                                &current_role.name,
+                            )
+                            .await?;
+                        RoleCacheManager::instance().invalidate_cache(&tenant);
+                    }
                     Ok(PipelineBuildResult::create())
-                } else {
-                    Err(ErrorCode::RowAccessPolicyAlreadyExists(format!(
-                        "Security policy with name '{}' already exists",
-                        self.plan.name
-                    )))
                 }
-            }
-        };
+                Err(_e) => {
+                    if self.plan.if_not_exists {
+                        Ok(PipelineBuildResult::create())
+                    } else {
+                        Err(ErrorCode::RowAccessPolicyAlreadyExists(format!(
+                            "Security policy with name '{}' already exists",
+                            self.plan.name
+                        )))
+                    }
+                }
+            };
 
-        res
+            res
+        })
     }
 }

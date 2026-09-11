@@ -46,25 +46,27 @@ impl Interpreter for UndropTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let history = catalog
-            .get_table_history(&self.plan.tenant, &self.plan.database, &self.plan.table)
-            .await?;
-        if history
-            .last()
-            .is_some_and(|table| is_materialized_view_engine(table.engine()))
-        {
-            // DROP MV removes its immutable definition and source binding, so
-            // restoring only the backing table would create an invalid object.
-            return Err(ErrorCode::UndropTableHasNoHistory(format!(
-                "materialized view '{}.{}' cannot be undropped",
-                self.plan.database, self.plan.table
-            )));
-        }
-        catalog.undrop_table(self.plan.clone().into()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let history = catalog
+                .get_table_history(&self.plan.tenant, &self.plan.database, &self.plan.table)
+                .await?;
+            if history
+                .last()
+                .is_some_and(|table| is_materialized_view_engine(table.engine()))
+            {
+                // DROP MV removes its immutable definition and source binding, so
+                // restoring only the backing table would create an invalid object.
+                return Err(ErrorCode::UndropTableHasNoHistory(format!(
+                    "materialized view '{}.{}' cannot be undropped",
+                    self.plan.database, self.plan.table
+                )));
+            }
+            catalog.undrop_table(self.plan.clone().into()).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

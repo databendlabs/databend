@@ -51,22 +51,24 @@ impl Interpreter for CreateFileFormatInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_file_format_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_file_format_execute");
 
-        let plan = self.plan.clone();
-        let user_mgr = UserApiProvider::instance();
-        let user_defined_file_format = UserDefinedFileFormat::new(
-            &plan.name,
-            plan.file_format_params.clone(),
-            self.ctx.get_current_user()?.identity(),
-        );
+            let plan = self.plan.clone();
+            let user_mgr = UserApiProvider::instance();
+            let user_defined_file_format = UserDefinedFileFormat::new(
+                &plan.name,
+                plan.file_format_params.clone(),
+                self.ctx.get_current_user()?.identity(),
+            );
 
-        let tenant = self.ctx.get_tenant();
-        let _create_file_format = user_mgr
-            .add_file_format(&tenant, user_defined_file_format, &plan.create_option)
-            .await?;
+            let tenant = self.ctx.get_tenant();
+            let _create_file_format = user_mgr
+                .add_file_format(&tenant, user_defined_file_format, &plan.create_option)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

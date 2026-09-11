@@ -863,75 +863,77 @@ impl Interpreter for ModifyTableColumnInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table_with_branch(
-                &self.ctx.get_tenant(),
-                db_name,
-                tbl_name,
-                self.plan.branch.as_deref(),
-            )
-            .await?;
-
-        table.check_mutable()?;
-
-        let table_info = table.get_table_info();
-        let engine = table.engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support alter",
-                db_name, tbl_name, engine
-            )));
-        }
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                db_name, tbl_name
-            )));
-        }
-
-        let table_meta = table.get_table_info().meta.clone();
-
-        // NOTICE: if we support modify column data type,
-        // need to check whether this column is referenced by other computed columns.
-        let mut build_res = match &self.plan.action {
-            ModifyColumnAction::SetMaskingPolicy(mask_name, using_columns) => {
-                self.do_set_data_mask_policy(catalog, table, using_columns, mask_name.clone())
-                    .await?
-            }
-            ModifyColumnAction::UnsetMaskingPolicy(column) => {
-                self.do_unset_data_mask_policy(catalog, table, column.to_string())
-                    .await?
-            }
-            ModifyColumnAction::SetDataType(field_and_comment) => {
-                self.do_set_data_type(table, field_and_comment).await?
-            }
-            ModifyColumnAction::Comment(field_and_comment) => {
-                self.do_set_comment(table, field_and_comment).await?
-            }
-            ModifyColumnAction::ConvertStoredComputedColumn(column) => {
-                self.do_convert_stored_computed_column(
-                    catalog,
-                    table,
-                    table_meta,
-                    column.to_string(),
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let table = catalog
+                .get_table_with_branch(
+                    &self.ctx.get_tenant(),
+                    db_name,
+                    tbl_name,
+                    self.plan.branch.as_deref(),
                 )
-                .await?
-            }
-        };
+                .await?;
 
-        let lock_guard = self
-            .plan
-            .lock_guard
-            .as_ref()
-            .and_then(|holder| holder.try_take());
-        build_res.main_pipeline.add_lock_guard(lock_guard);
-        Ok(build_res)
+            table.check_mutable()?;
+
+            let table_info = table.get_table_info();
+            let engine = table.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support alter",
+                    db_name, tbl_name, engine
+                )));
+            }
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    db_name, tbl_name
+                )));
+            }
+
+            let table_meta = table.get_table_info().meta.clone();
+
+            // NOTICE: if we support modify column data type,
+            // need to check whether this column is referenced by other computed columns.
+            let mut build_res = match &self.plan.action {
+                ModifyColumnAction::SetMaskingPolicy(mask_name, using_columns) => {
+                    self.do_set_data_mask_policy(catalog, table, using_columns, mask_name.clone())
+                        .await?
+                }
+                ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                    self.do_unset_data_mask_policy(catalog, table, column.to_string())
+                        .await?
+                }
+                ModifyColumnAction::SetDataType(field_and_comment) => {
+                    self.do_set_data_type(table, field_and_comment).await?
+                }
+                ModifyColumnAction::Comment(field_and_comment) => {
+                    self.do_set_comment(table, field_and_comment).await?
+                }
+                ModifyColumnAction::ConvertStoredComputedColumn(column) => {
+                    self.do_convert_stored_computed_column(
+                        catalog,
+                        table,
+                        table_meta,
+                        column.to_string(),
+                    )
+                    .await?
+                }
+            };
+
+            let lock_guard = self
+                .plan
+                .lock_guard
+                .as_ref()
+                .and_then(|holder| holder.try_take());
+            build_res.main_pipeline.add_lock_guard(lock_guard);
+            Ok(build_res)
+        })
     }
 }
 

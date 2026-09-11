@@ -51,68 +51,70 @@ impl Interpreter for AlterViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        if let Ok(tbl) = catalog
-            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
-            .await
-        {
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            if let Ok(tbl) = catalog
+                .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
+                .await
+            {
+                let mut planner = Planner::new(self.ctx.clone());
+                let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
 
-            // Detect circular dependency: ALTER VIEW can introduce cycles
-            // the same way CREATE OR REPLACE VIEW can.
-            match &plan {
-                Plan::Query { metadata, .. } => {
-                    let metadata = metadata.read();
-                    check_view_circular_dependency(
-                        &metadata,
-                        &self.plan.catalog,
-                        &self.plan.database,
-                        &self.plan.view_name,
-                    )?;
+                // Detect circular dependency: ALTER VIEW can introduce cycles
+                // the same way CREATE OR REPLACE VIEW can.
+                match &plan {
+                    Plan::Query { metadata, .. } => {
+                        let metadata = metadata.read();
+                        check_view_circular_dependency(
+                            &metadata,
+                            &self.plan.catalog,
+                            &self.plan.database,
+                            &self.plan.view_name,
+                        )?;
+                    }
+                    _ => {
+                        return Err(ErrorCode::Unimplemented("alter view only support Query"));
+                    }
                 }
-                _ => {
-                    return Err(ErrorCode::Unimplemented("alter view only support Query"));
-                }
-            }
 
-            let mut options = HashMap::new();
-            let subquery = if self.plan.column_names.is_empty() {
-                self.plan.subquery.clone()
+                let mut options = HashMap::new();
+                let subquery = if self.plan.column_names.is_empty() {
+                    self.plan.subquery.clone()
+                } else {
+                    if plan.schema().fields().len() != self.plan.column_names.len() {
+                        return Err(ErrorCode::BadDataArrayLength(format!(
+                            "column name length mismatch, expect {}, got {}",
+                            plan.schema().fields().len(),
+                            self.plan.column_names.len(),
+                        )));
+                    }
+                    format!(
+                        "select * from ({}) {}({})",
+                        self.plan.subquery,
+                        self.plan.view_name,
+                        self.plan.column_names.join(", ")
+                    )
+                };
+                options.insert("query".to_string(), Some(subquery));
+
+                let req = UpsertTableOptionReq {
+                    table_id: tbl.get_id(),
+                    seq: MatchSeq::Exact(tbl.get_table_info().ident.seq),
+                    options,
+                };
+
+                catalog
+                    .upsert_table_option(&self.plan.tenant, &self.plan.database, req)
+                    .await?;
+
+                Ok(PipelineBuildResult::create())
             } else {
-                if plan.schema().fields().len() != self.plan.column_names.len() {
-                    return Err(ErrorCode::BadDataArrayLength(format!(
-                        "column name length mismatch, expect {}, got {}",
-                        plan.schema().fields().len(),
-                        self.plan.column_names.len(),
-                    )));
-                }
-                format!(
-                    "select * from ({}) {}({})",
-                    self.plan.subquery,
-                    self.plan.view_name,
-                    self.plan.column_names.join(", ")
-                )
-            };
-            options.insert("query".to_string(), Some(subquery));
-
-            let req = UpsertTableOptionReq {
-                table_id: tbl.get_id(),
-                seq: MatchSeq::Exact(tbl.get_table_info().ident.seq),
-                options,
-            };
-
-            catalog
-                .upsert_table_option(&self.plan.tenant, &self.plan.database, req)
-                .await?;
-
-            Ok(PipelineBuildResult::create())
-        } else {
-            return Err(ErrorCode::UnknownView(format!(
-                "Unknown view '{}'.'{}'",
-                self.plan.database, self.plan.view_name
-            )));
-        }
+                return Err(ErrorCode::UnknownView(format!(
+                    "Unknown view '{}'.'{}'",
+                    self.plan.database, self.plan.view_name
+                )));
+            }
+        })
     }
 }

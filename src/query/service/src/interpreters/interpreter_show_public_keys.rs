@@ -49,30 +49,32 @@ impl Interpreter for ShowPublicKeysInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
-        let user = user_mgr.get_user(&tenant, self.plan.user.clone()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
+            let user = user_mgr.get_user(&tenant, self.plan.user.clone()).await?;
 
-        let keys = user.auth_info.get_public_keys();
-        let mut fingerprints = Vec::with_capacity(keys.len());
-        let mut labels = Vec::with_capacity(keys.len());
-        let mut created_ats = Vec::with_capacity(keys.len());
+            let keys = user.auth_info.get_public_keys();
+            let mut fingerprints = Vec::with_capacity(keys.len());
+            let mut labels = Vec::with_capacity(keys.len());
+            let mut created_ats = Vec::with_capacity(keys.len());
 
-        for k in keys {
-            fingerprints.push(k.fingerprint()?);
-            labels.push(k.label.clone());
-            created_ats.push(
-                chrono::DateTime::from_timestamp(k.created_at, 0)
-                    .map(|dt| dt.to_rfc3339())
-                    .unwrap_or_default(),
-            );
-        }
+            for k in keys {
+                fingerprints.push(k.fingerprint()?);
+                labels.push(k.label.clone());
+                created_ats.push(
+                    chrono::DateTime::from_timestamp(k.created_at, 0)
+                        .map(|dt| dt.to_rfc3339())
+                        .unwrap_or_default(),
+                );
+            }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(fingerprints),
-            StringType::from_data(labels),
-            StringType::from_data(created_ats),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(fingerprints),
+                StringType::from_data(labels),
+                StringType::from_data(created_ats),
+            ])])
+        })
     }
 }

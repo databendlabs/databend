@@ -51,28 +51,30 @@ impl Interpreter for DescSequenceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let req = GetSequenceReq {
-            ident: self.plan.ident.clone(),
-        };
-        let catalog = self.ctx.get_default_catalog()?;
-        // Already check seq privilege before interpreter
-        let reply = catalog.get_sequence(req, &None).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let req = GetSequenceReq {
+                ident: self.plan.ident.clone(),
+            };
+            let catalog = self.ctx.get_default_catalog()?;
+            // Already check seq privilege before interpreter
+            let reply = catalog.get_sequence(req, &None).await?;
 
-        let name = vec![self.plan.ident.name().to_string()];
-        let interval = vec![reply.meta.step];
-        let current = vec![reply.meta.current];
-        let created_on = vec![reply.meta.create_on.timestamp_micros()];
-        let updated_on = vec![reply.meta.update_on.timestamp_micros()];
-        let comment = vec![reply.meta.comment];
-        let blocks = vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(name),
-            Int64Type::from_data(interval),
-            UInt64Type::from_data(current),
-            TimestampType::from_data(created_on),
-            TimestampType::from_data(updated_on),
-            StringType::from_opt_data(comment),
-        ])];
-        PipelineBuildResult::from_blocks(blocks)
+            let name = vec![self.plan.ident.name().to_string()];
+            let interval = vec![reply.meta.step];
+            let current = vec![reply.meta.current];
+            let created_on = vec![reply.meta.create_on.timestamp_micros()];
+            let updated_on = vec![reply.meta.update_on.timestamp_micros()];
+            let comment = vec![reply.meta.comment];
+            let blocks = vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(name),
+                Int64Type::from_data(interval),
+                UInt64Type::from_data(current),
+                TimestampType::from_data(created_on),
+                TimestampType::from_data(updated_on),
+                StringType::from_opt_data(comment),
+            ])];
+            PipelineBuildResult::from_blocks(blocks)
+        })
     }
 }

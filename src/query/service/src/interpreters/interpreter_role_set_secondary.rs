@@ -47,18 +47,20 @@ impl Interpreter for SetSecondaryRolesInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "set_secondary_roles_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "set_secondary_roles_execute");
 
-        let session = self.ctx.get_current_session();
+            let session = self.ctx.get_current_session();
 
-        let secondary_roles = match &self.plan {
-            SetSecondaryRolesPlan::None => Some(vec![]),
-            SetSecondaryRolesPlan::SpecifyRole(roles) => Some(roles.clone()),
-            SetSecondaryRolesPlan::All => None,
-        };
-        session.set_secondary_roles_checked(secondary_roles).await?;
+            let secondary_roles = match &self.plan {
+                SetSecondaryRolesPlan::None => Some(vec![]),
+                SetSecondaryRolesPlan::SpecifyRole(roles) => Some(roles.clone()),
+                SetSecondaryRolesPlan::All => None,
+            };
+            session.set_secondary_roles_checked(secondary_roles).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

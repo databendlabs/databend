@@ -50,63 +50,65 @@ impl Interpreter for DropViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.clone();
-        let db_name = self.plan.database.clone();
-        let view_name = self.plan.view_name.clone();
-        let tbl = self
-            .ctx
-            .get_table(&catalog_name, &db_name, &view_name)
-            .await
-            .ok();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.clone();
+            let db_name = self.plan.database.clone();
+            let view_name = self.plan.view_name.clone();
+            let tbl = self
+                .ctx
+                .get_table(&catalog_name, &db_name, &view_name)
+                .await
+                .ok();
 
-        if tbl.is_none() && !self.plan.if_exists {
-            return Err(ErrorCode::UnknownTable(format!(
-                "unknown view `{}`.`{}` in catalog '{}'",
-                db_name, view_name, &catalog_name
-            )));
-        }
-
-        if let Some(table) = &tbl {
-            let engine = table.get_table_info().engine();
-            if engine != VIEW_ENGINE {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} is not VIEW, please use `DROP {} {}.{}`",
-                    &self.plan.database,
-                    &self.plan.view_name,
-                    if engine == STREAM_ENGINE {
-                        "STREAM"
-                    } else {
-                        "TABLE"
-                    },
-                    &self.plan.database,
-                    &self.plan.view_name
+            if tbl.is_none() && !self.plan.if_exists {
+                return Err(ErrorCode::UnknownTable(format!(
+                    "unknown view `{}`.`{}` in catalog '{}'",
+                    db_name, view_name, &catalog_name
                 )));
             }
 
-            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-            let db = catalog
-                .get_database(&self.plan.tenant, &self.plan.database)
-                .await?;
-            catalog
-                .drop_table_by_id(DropTableByIdReq {
-                    if_exists: self.plan.if_exists,
-                    tenant: self.plan.tenant.clone(),
-                    table_name: self.plan.view_name.clone(),
-                    tb_id: table.get_id(),
-                    db_id: db.get_db_info().database_id.db_id,
-                    db_name: db.name().to_string(),
-                    engine: table.engine().to_string(),
-                    temp_prefix: table
-                        .options()
-                        .get(OPT_KEY_TEMP_PREFIX)
-                        .cloned()
-                        .unwrap_or_default(),
-                })
-                .await?;
-            log_lineage_object_deletion(&self.ctx, table.get_id());
-        };
+            if let Some(table) = &tbl {
+                let engine = table.get_table_info().engine();
+                if engine != VIEW_ENGINE {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "{}.{} is not VIEW, please use `DROP {} {}.{}`",
+                        &self.plan.database,
+                        &self.plan.view_name,
+                        if engine == STREAM_ENGINE {
+                            "STREAM"
+                        } else {
+                            "TABLE"
+                        },
+                        &self.plan.database,
+                        &self.plan.view_name
+                    )));
+                }
 
-        Ok(PipelineBuildResult::create())
+                let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+                let db = catalog
+                    .get_database(&self.plan.tenant, &self.plan.database)
+                    .await?;
+                catalog
+                    .drop_table_by_id(DropTableByIdReq {
+                        if_exists: self.plan.if_exists,
+                        tenant: self.plan.tenant.clone(),
+                        table_name: self.plan.view_name.clone(),
+                        tb_id: table.get_id(),
+                        db_id: db.get_db_info().database_id.db_id,
+                        db_name: db.name().to_string(),
+                        engine: table.engine().to_string(),
+                        temp_prefix: table
+                            .options()
+                            .get(OPT_KEY_TEMP_PREFIX)
+                            .cloned()
+                            .unwrap_or_default(),
+                    })
+                    .await?;
+                log_lineage_object_deletion(&self.ctx, table.get_id());
+            };
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -62,40 +62,43 @@ impl Interpreter for ShowCreateDictionaryInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let dict_name = self.plan.dictionary.clone();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+            let dict_name = self.plan.dictionary.clone();
 
-        let dict_ident = DictionaryNameIdent::new(
-            tenant,
-            DictionaryIdentity::new(self.plan.database_id, dict_name.clone()),
-        );
+            let dict_ident = DictionaryNameIdent::new(
+                tenant,
+                DictionaryIdentity::new(self.plan.database_id, dict_name.clone()),
+            );
 
-        let dictionary = if let Some(reply) = catalog.get_dictionary(dict_ident).await? {
-            reply.dictionary_meta
-        } else {
-            return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown dictionary {}",
-                dict_name.clone(),
-            )));
-        };
-        let settings = self.ctx.get_settings();
-        let settings = ShowCreateQuerySettings {
-            sql_dialect: settings.get_sql_dialect()?,
-            quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
-        };
+            let dictionary = if let Some(reply) = catalog.get_dictionary(dict_ident).await? {
+                reply.dictionary_meta
+            } else {
+                return Err(ErrorCode::UnknownDictionary(format!(
+                    "Unknown dictionary {}",
+                    dict_name.clone(),
+                )));
+            };
+            let settings = self.ctx.get_settings();
+            let settings = ShowCreateQuerySettings {
+                sql_dialect: settings.get_sql_dialect()?,
+                quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+            };
 
-        let create_query =
-            Self::show_create_query(catalog.as_ref(), &dictionary, &dict_name, &settings).await?;
-        let block = DataBlock::new(
-            vec![
-                BlockEntry::new_const_column(DataType::String, Scalar::String(dict_name), 1),
-                BlockEntry::new_const_column(DataType::String, Scalar::String(create_query), 1),
-            ],
-            1,
-        );
-        PipelineBuildResult::from_blocks(vec![block])
+            let create_query =
+                Self::show_create_query(catalog.as_ref(), &dictionary, &dict_name, &settings)
+                    .await?;
+            let block = DataBlock::new(
+                vec![
+                    BlockEntry::new_const_column(DataType::String, Scalar::String(dict_name), 1),
+                    BlockEntry::new_const_column(DataType::String, Scalar::String(create_query), 1),
+                ],
+                1,
+            );
+            PipelineBuildResult::from_blocks(vec![block])
+        })
     }
 }
 

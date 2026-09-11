@@ -54,38 +54,40 @@ impl Interpreter for DropUserUDFScript {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_udf_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_udf_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
 
-        // we should do `drop ownership` after actually drop udf, and udf maybe not exists.
-        // drop the ownership
-        if UserApiProvider::instance()
-            .exists_udf(&tenant, &self.plan.udf)
-            .await?
-        {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::UDF {
-                name: self.plan.udf.clone(),
-            };
+            // we should do `drop ownership` after actually drop udf, and udf maybe not exists.
+            // drop the ownership
+            if UserApiProvider::instance()
+                .exists_udf(&tenant, &self.plan.udf)
+                .await?
+            {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                let owner_object = OwnershipObject::UDF {
+                    name: self.plan.udf.clone(),
+                };
 
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
 
-        // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
+            // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
 
-        UserApiProvider::instance()
-            .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
-            .await??;
+            UserApiProvider::instance()
+                .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
+                .await??;
 
-        cleanup_object_tags(&tenant, TaggableObject::UDF {
-            name: plan.udf.clone(),
+            cleanup_object_tags(&tenant, TaggableObject::UDF {
+                name: plan.udf.clone(),
+            })
+            .await?;
+
+            Ok(PipelineBuildResult::create())
         })
-        .await?;
-
-        Ok(PipelineBuildResult::create())
     }
 }

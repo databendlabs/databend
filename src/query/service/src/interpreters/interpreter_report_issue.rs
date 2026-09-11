@@ -74,25 +74,27 @@ impl Interpreter for ReportIssueInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // Detection error
-        let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
-        let settings = self.ctx.get_settings();
-        report_context.add_setting_changes(settings);
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // Detection error
+            let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
+            let settings = self.ctx.get_settings();
+            report_context.add_setting_changes(settings);
 
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_query(
-            LevelFilter::Debug,
-            report_context.logs.clone(),
-        ));
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_query(
+                LevelFilter::Debug,
+                report_context.logs.clone(),
+            ));
 
-        tracking_payload
-            .tracking(self.detection_error(&mut report_context))
-            .await?;
+            tracking_payload
+                .tracking(self.detection_error(&mut report_context))
+                .await?;
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(vec![format!("{}", report_context)]),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(vec![format!("{}", report_context)]),
+            ])])
+        })
     }
 }
 

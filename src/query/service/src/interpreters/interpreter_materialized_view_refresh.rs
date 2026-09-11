@@ -50,35 +50,37 @@ impl Interpreter for RefreshMaterializedViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
 
-        let table = self
-            .ctx
-            .get_table(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.view_name,
-            )
-            .await?;
-        if table.engine() != MATERIALIZED_VIEW_ENGINE {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is not a materialized view",
-                self.plan.database, self.plan.view_name
-            )));
-        }
+            let table = self
+                .ctx
+                .get_table(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.view_name,
+                )
+                .await?;
+            if table.engine() != MATERIALIZED_VIEW_ENGINE {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is not a materialized view",
+                    self.plan.database, self.plan.view_name
+                )));
+            }
 
-        get_materialized_view_handler()
-            .do_refresh_materialized_view(
-                self.ctx.clone(),
-                table,
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.view_name,
-                self.plan.max_batch_size,
-            )
-            .await?;
-        Ok(PipelineBuildResult::create())
+            get_materialized_view_handler()
+                .do_refresh_materialized_view(
+                    self.ctx.clone(),
+                    table,
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.view_name,
+                    self.plan.max_batch_size,
+                )
+                .await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

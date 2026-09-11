@@ -50,50 +50,52 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let plan = &self.plan;
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-        let table = catalog
-            .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+            let table = catalog
+                .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+                .await?;
+            check_maintenance_target(table.as_ref(), &plan.target)?;
+
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
+            if fuse_table.cluster_key_str() == Some(cluster_key_str.as_str())
+                && fuse_table.cluster_type() == Some(plan.cluster_type)
+            {
+                return Ok(PipelineBuildResult::create());
+            }
+
+            let mut new_table_meta = fuse_table.get_table_info().meta.clone();
+            new_table_meta.cluster_key_seq += 1;
+            let cluster_key_meta = Some((new_table_meta.cluster_key_seq, cluster_key_str));
+            let cluster_type = plan.cluster_type;
+            commit_table_meta(
+                self.ctx.as_ref(),
+                table.as_ref(),
+                new_table_meta,
+                catalog,
+                |snapshot_opt, meta| {
+                    if let Some(snapshot) = snapshot_opt {
+                        snapshot.cluster_key_meta = cluster_key_meta.clone();
+                        snapshot.cluster_type = Some(cluster_type);
+                        snapshot.summary.cluster_stats = None;
+                    }
+                    if plan.branch.is_none() {
+                        meta.cluster_key_v2 = cluster_key_meta;
+                        meta.options
+                            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
+                        meta.options
+                            .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                            .or_insert_with(|| "1".to_owned());
+                    }
+                },
+            )
             .await?;
-        check_maintenance_target(table.as_ref(), &plan.target)?;
-
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
-        if fuse_table.cluster_key_str() == Some(cluster_key_str.as_str())
-            && fuse_table.cluster_type() == Some(plan.cluster_type)
-        {
-            return Ok(PipelineBuildResult::create());
-        }
-
-        let mut new_table_meta = fuse_table.get_table_info().meta.clone();
-        new_table_meta.cluster_key_seq += 1;
-        let cluster_key_meta = Some((new_table_meta.cluster_key_seq, cluster_key_str));
-        let cluster_type = plan.cluster_type;
-        commit_table_meta(
-            self.ctx.as_ref(),
-            table.as_ref(),
-            new_table_meta,
-            catalog,
-            |snapshot_opt, meta| {
-                if let Some(snapshot) = snapshot_opt {
-                    snapshot.cluster_key_meta = cluster_key_meta.clone();
-                    snapshot.cluster_type = Some(cluster_type);
-                    snapshot.summary.cluster_stats = None;
-                }
-                if plan.branch.is_none() {
-                    meta.cluster_key_v2 = cluster_key_meta;
-                    meta.options
-                        .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
-                    meta.options
-                        .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
-                        .or_insert_with(|| "1".to_owned());
-                }
-            },
-        )
-        .await?;
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
