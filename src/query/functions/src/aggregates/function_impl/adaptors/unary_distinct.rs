@@ -34,47 +34,74 @@ pub(crate) struct UnaryDistinctState<S> {
 }
 
 pub(crate) struct UnaryDistinctEval<S, const SKIP_NULLS: bool> {
+    // Erase only the nested evaluator to avoid the set-type x evaluator-type
+    // monomorphization product. The DISTINCT evaluator itself stays concrete
+    // until the remaining combinators have built the final call.
     nested: Box<dyn AggregateEval>,
     arg_type: DataType,
     _set: std::marker::PhantomData<fn() -> S>,
 }
 
-pub(crate) fn create_unary_distinct<const SKIP_NULLS: bool>(
+/// Finish composition in each set-type branch. Returning a boxed DISTINCT
+/// evaluator here would introduce another dispatch layer just to cross this
+/// helper boundary and hide its concrete type from the remaining combinators.
+pub(crate) fn create_unary_distinct<const SKIP_NULLS: bool, C: Combinator>(
+    combinator: C,
+    signature: AggregateSignature,
+    metadata: AggregateMetadata,
     nested: impl AggregateEval,
     state: &AggregateStateDescription,
     arg_type: DataType,
-) -> (AggregateStateDescription, Box<dyn AggregateEval>) {
+) -> Result<AggregateCallRef> {
     let nested: Box<dyn AggregateEval> = Box::new(nested);
-    fn create<S: DistinctSet, const SKIP_NULLS: bool>(
+    fn create<S: DistinctSet, const SKIP_NULLS: bool, C: Combinator>(
+        combinator: C,
+        signature: AggregateSignature,
+        metadata: AggregateMetadata,
         nested: Box<dyn AggregateEval>,
         state: &AggregateStateDescription,
         arg_type: DataType,
-    ) -> (AggregateStateDescription, Box<dyn AggregateEval>) {
+    ) -> Result<AggregateCallRef> {
         let mut fields = vec![AggrStateType::Custom(Layout::new::<UnaryDistinctState<S>>())];
         fields.extend_from_slice(state.fields());
         let state =
             AggregateStateDescription::new(fields, vec![S::serde_item()]).with_manual_drop(true);
-        (
+        combinator.create::<false>(
+            signature,
+            metadata,
             state,
-            Box::new(UnaryDistinctEval::<S, SKIP_NULLS> {
-                nested,
-                arg_type,
-                _set: std::marker::PhantomData,
-            }),
+            UnaryDistinctEval::<S, SKIP_NULLS>::new(nested, arg_type),
         )
     }
     with_number_mapped_type!(|NUM| match arg_type.remove_nullable() {
         DataType::Number(NumberDataType::NUM) =>
-            create::<TypedUniqSet<NumberType<NUM>>, SKIP_NULLS>(nested, state, arg_type),
-        DataType::Date => create::<TypedUniqSet<DateType>, SKIP_NULLS>(nested, state, arg_type),
-        DataType::Timestamp =>
-            create::<TypedUniqSet<TimestampType>, SKIP_NULLS>(nested, state, arg_type),
-        DataType::String => create::<StringDistinctSet, SKIP_NULLS>(nested, state, arg_type),
-        _ => create::<ScalarUniqSet, SKIP_NULLS>(nested, state, arg_type),
+            create::<TypedUniqSet<NumberType<NUM>>, SKIP_NULLS, C>(
+                combinator, signature, metadata, nested, state, arg_type
+            ),
+        DataType::Date => create::<TypedUniqSet<DateType>, SKIP_NULLS, C>(
+            combinator, signature, metadata, nested, state, arg_type
+        ),
+        DataType::Timestamp => create::<TypedUniqSet<TimestampType>, SKIP_NULLS, C>(
+            combinator, signature, metadata, nested, state, arg_type
+        ),
+        DataType::String => create::<StringDistinctSet, SKIP_NULLS, C>(
+            combinator, signature, metadata, nested, state, arg_type
+        ),
+        _ => create::<ScalarUniqSet, SKIP_NULLS, C>(
+            combinator, signature, metadata, nested, state, arg_type
+        ),
     })
 }
 
 impl<S: DistinctSet, const SKIP_NULLS: bool> UnaryDistinctEval<S, SKIP_NULLS> {
+    pub(super) fn new(nested: Box<dyn AggregateEval>, arg_type: DataType) -> Self {
+        Self {
+            nested,
+            arg_type,
+            _set: std::marker::PhantomData,
+        }
+    }
+
     fn state(state: AggrState<'_>) -> &mut UnaryDistinctState<S> {
         state_at(state, 0)
     }

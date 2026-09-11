@@ -346,15 +346,10 @@ mod tests {
         Arc::new(SumInfo { drop_count })
     }
 
-    fn distinct_sum(
-        drop_count: Arc<AtomicUsize>,
-    ) -> (AggregateStateDescription, Box<dyn AggregateEval>) {
-        let state = AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<SumState>())],
-            vec![StateSerdeItem::DataType(UInt64Type::data_type())],
+    fn distinct_sum(drop_count: Arc<AtomicUsize>) -> impl AggregateEval {
+        unary_distinct::UnaryDistinctEval::<super::super::uniq::TypedUniqSet<UInt64Type>, false>::new(
+            Box::new(plain_sum(drop_count)), UInt64Type::data_type(),
         )
-        .with_manual_drop(true);
-        create_unary_distinct::<false>(plain_sum(drop_count), &state, UInt64Type::data_type())
     }
 
     fn distinct_sum_state_description() -> AggregateStateDescription {
@@ -459,7 +454,7 @@ mod tests {
         order_by: Vec<AggregateRuntimeOrderByItem>,
     ) -> AggregateCallRef {
         let eval = MultiArgOrNullEval::new(SortEval::new(
-            distinct_sum(drop_count).1,
+            distinct_sum(drop_count),
             vec![UInt64Type::data_type(), UInt64Type::data_type()],
             order_by,
         ));
@@ -544,7 +539,7 @@ mod tests {
                 ..Default::default()
             },
             distinct_sum_state_description(),
-            distinct_sum(drop_count.clone()).1,
+            distinct_sum(drop_count.clone()),
         ));
 
         {
