@@ -43,7 +43,7 @@ use crate::operations::recluster::passes_depth_gate;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::RangeMaxTree;
 #[cfg(test)]
-use crate::statistics::calculate_block_overlap_depths;
+use crate::statistics::calculate_block_depths;
 
 /// Linear cluster-key recluster behavior.
 pub(crate) struct LinearReclusterStrategy;
@@ -1239,8 +1239,8 @@ mod tests {
             .iter()
             .map(|&(min, max)| (vec![Scalar::from(min)], vec![Scalar::from(max)]))
             .collect::<Vec<_>>();
-        let before = calculate_block_overlap_depths(&ranges, &types).unwrap();
-        let depth_sum = before.iter().map(|stat| stat.depth as i128).sum();
+        let before = calculate_block_depths(&ranges, &types).unwrap();
+        let depth_sum = before.iter().map(|&depth| depth as i128).sum();
         let selected = selected.iter().copied().collect::<HashSet<_>>();
         let (ranges, point_count) = index_depth_ranges(&ranges, &types).unwrap();
         let outputs = selected
@@ -1384,8 +1384,8 @@ mod tests {
             Scalar::from(10i32),
         ]);
         let ranges = vec![range; 3];
-        let before = calculate_block_overlap_depths(&ranges, &types).unwrap();
-        let depth_sum = before.iter().map(|stat| stat.depth as i128).sum();
+        let before = calculate_block_depths(&ranges, &types).unwrap();
+        let depth_sum = before.iter().map(|&depth| depth as i128).sum();
         let (ranges, point_count) = index_depth_ranges(&ranges, &types).unwrap();
         assert_eq!(
             estimate_depth_gain(
