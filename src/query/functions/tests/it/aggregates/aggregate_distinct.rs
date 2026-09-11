@@ -80,6 +80,14 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("list", "list_distinct"),
         ("LIST", "list_distinct"),
         ("SUM_ZERO", "sum_zero_distinct"),
+        ("quantile", "quantile_distinct"),
+        ("quantile_disc", "quantile_disc_distinct"),
+        ("quantile_cont", "quantile_cont_distinct"),
+        ("median", "median_distinct"),
+        ("std", "std_distinct"),
+        ("stddev", "stddev_distinct"),
+        ("stddev_pop", "stddev_pop_distinct"),
+        ("stddev_samp", "stddev_samp_distinct"),
     ] {
         assert_eq!(
             AGGR_REGISTRY
@@ -108,6 +116,36 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
             order_by: &[],
         })?;
         assert_eq!(explicit.signature().name, target);
+        for arg_type in [
+            args_type[0].clone(),
+            args_type[0].clone().wrap_nullable(),
+            DataType::Null,
+        ] {
+            // Plain sum_zero explicitly rejects a statically Null argument.
+            if base == "SUM_ZERO" && arg_type.is_null() {
+                continue;
+            }
+            let args_type = [arg_type];
+            let plain = AGGR_REGISTRY.resolve(RawAggregateCall {
+                name: base,
+                params: &[],
+                args_type: &args_type,
+                distinct: false,
+                order_by: &[],
+            })?;
+            let distinct = AGGR_REGISTRY.resolve(RawAggregateCall {
+                name: base,
+                params: &[],
+                args_type: &args_type,
+                distinct: true,
+                order_by: &[],
+            })?;
+            assert_eq!(
+                plain.signature().return_type,
+                distinct.signature().return_type,
+                "{base}({args_type:?})"
+            );
+        }
     }
 
     assert_eq!(
@@ -341,5 +379,135 @@ fn test_count_distinct_rows() -> Result<()> {
         groups.index(1).unwrap(),
         ScalarRef::Number(NumberScalar::UInt64(1))
     );
+    Ok(())
+}
+
+#[test]
+fn test_statistical_distinct() -> Result<()> {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::*;
+
+    use super::support::eval_v2_aggr_with_params;
+
+    // DISTINCT must remove frequency, including across serialization, while
+    // preserving Decimal scale and filtering NULL before collecting keys.
+    let inputs = [
+        (
+            Int64Type::from_data_with_validity(vec![1, 1, 1, 3, 99], vec![
+                true, true, true, true, false,
+            ]),
+            Int64Type::from_data(vec![1, 3]),
+        ),
+        (
+            Float64Type::from_data_with_validity(vec![1.0, 1.0, 1.0, 3.0, 99.0], vec![
+                true, true, true, true, false,
+            ]),
+            Float64Type::from_data(vec![1.0, 3.0]),
+        ),
+        (
+            Decimal64Type::from_opt_data_with_size(
+                vec![Some(110), Some(110), Some(110), Some(330), None],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+            Decimal64Type::from_data_with_size(
+                vec![110, 330],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+        (
+            Decimal128Type::from_opt_data_with_size(
+                vec![Some(110), Some(110), Some(110), Some(330), None],
+                Some(DecimalSize::new_unchecked(30, 2)),
+            ),
+            Decimal128Type::from_data_with_size(
+                vec![110, 330],
+                Some(DecimalSize::new_unchecked(30, 2)),
+            ),
+        ),
+        (
+            Decimal256Type::from_opt_data_with_size(
+                vec![
+                    Some(i256::from(110)),
+                    Some(i256::from(110)),
+                    Some(i256::from(110)),
+                    Some(i256::from(330)),
+                    None,
+                ],
+                Some(DecimalSize::new_unchecked(60, 2)),
+            ),
+            Decimal256Type::from_data_with_size(
+                vec![i256::from(110), i256::from(330)],
+                Some(DecimalSize::new_unchecked(60, 2)),
+            ),
+        ),
+    ];
+    for name in [
+        "quantile",
+        "quantile_disc",
+        "quantile_cont",
+        "median",
+        "std",
+        "stddev",
+        "stddev_pop",
+        "stddev_samp",
+    ] {
+        let params = if name.starts_with("quantile") {
+            vec![
+                Scalar::Number(NumberScalar::Float64(0.25.into())),
+                Scalar::Number(NumberScalar::Float64(0.75.into())),
+            ]
+        } else {
+            vec![]
+        };
+        for (input, unique) in &inputs {
+            let expected =
+                eval_v2_aggr_with_params(name, &params, &[unique.clone().into()], 2, false)?;
+            for serialized in [false, true] {
+                let actual = eval_v2_aggr_with_params(
+                    &format!("{name}_distinct"),
+                    &params,
+                    &[input.clone().into()],
+                    5,
+                    serialized,
+                )?;
+                assert_eq!(actual.1, expected.1);
+                if name.starts_with("std") {
+                    // Set replay can change Welford's floating-point rounding.
+                    let databend_common_expression::ScalarRef::Number(NumberScalar::Float64(value)) =
+                        expected.0.index(0).unwrap()
+                    else {
+                        panic!("expected a Float64 standard deviation");
+                    };
+                    super::support::assert_single_float_close(&actual, *value);
+                } else {
+                    assert_eq!(actual, expected, "{name}, serialized={serialized}");
+                }
+            }
+        }
+        for input in [
+            Int64Type::from_data(vec![]),
+            Int64Type::from_data_with_validity(vec![1, 1], vec![false, false]),
+        ] {
+            let rows = input.len();
+            let expected =
+                eval_v2_aggr_with_params(name, &params, &[input.clone().into()], rows, false)?;
+            let actual = eval_v2_aggr_with_params(
+                &format!("{name}_distinct"),
+                &params,
+                &[input.into()],
+                rows,
+                true,
+            )?;
+            assert_eq!(
+                actual.0.index(0),
+                Some(databend_common_expression::ScalarRef::Null),
+                "{name}, empty or all NULL"
+            );
+            assert_eq!(
+                actual, expected,
+                "{name}, empty or all NULL result and type"
+            );
+        }
+    }
     Ok(())
 }

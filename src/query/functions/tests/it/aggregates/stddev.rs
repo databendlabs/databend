@@ -247,7 +247,9 @@ fn test_state_baselines() {
                         binary("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
                         Scalar::Boolean(true),
                     ]),
-                    result: float64(f64::NAN),
+                    // The legacy state is unchanged; zero effective samples
+                    // now return NULL consistently with DISTINCT and Null input.
+                    result: Scalar::Null,
                     merge_result: MergeResult::SameAsResult,
                 },
                 Sample {

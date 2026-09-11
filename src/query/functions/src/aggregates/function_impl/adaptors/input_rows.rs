@@ -162,8 +162,8 @@ impl<I: AggregateEval> AggregateEval for InputRowsEval<I> {
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        // Native nullable kernels (e.g. stddev_pop) can yield NaN for zero
-        // samples. V1's outer OrNull returned NULL when no input rows arrived.
+        // Preserve the legacy outer OrNull flag: when no input rows arrived,
+        // return NULL without finalizing the native nullable kernel.
         if self.enabled && *input_rows_flag(input.state) == 0 {
             input.builder.push(ScalarRef::Null);
             return Ok(());

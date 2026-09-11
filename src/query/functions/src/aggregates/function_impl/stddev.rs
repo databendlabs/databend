@@ -74,6 +74,7 @@ impl StddevBuilder {
             .then(PlainRoute::unary(Self::create_for_type::<TYPE>))
             .then(IfRoute::unary(Self::create_for_type::<TYPE>))
             .then(StateRoute::unary(Self::create_for_type::<TYPE>))
+            .then(DistinctRoute::<true>::unary(Self::create_for_type::<TYPE>))
     }
 
     fn stddev_arguments() -> ArgumentsPattern {
@@ -180,7 +181,9 @@ impl<const TYPE: u8> AggregateStddevState<TYPE> {
     }
 
     fn result(&self) -> Option<f64> {
-        if self.count <= 1 && (TYPE == VAR_SAMP || TYPE == STD_SAMP) {
+        // No effective samples has the same result whether NULLs were filtered
+        // by the unary evaluator or by DISTINCT before replay.
+        if self.count == 0 || (self.count == 1 && (TYPE == VAR_SAMP || TYPE == STD_SAMP)) {
             return None;
         }
 
