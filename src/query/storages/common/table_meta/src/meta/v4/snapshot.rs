@@ -106,24 +106,14 @@ pub struct TableSnapshot {
     logical_change_counters: Option<LogicalChangeCounters>,
 }
 
-/// Cumulative logical UPDATE and DELETE row counters, tagged with the identity
-/// of the counting history they belong to.
-///
-/// Counters restart from zero whenever a predecessor cannot prove continuity —
-/// a legacy writer that dropped the field, or a pre-v4 format snapshot. A
-/// restart is invisible in the values themselves, so each history is tagged
-/// with the table seq at which it began. Totals from two different histories
-/// are unrelated and must never be subtracted; use [`Self::delta_from`] and
-/// [`Self::increments_since`] rather than reading the totals directly.
+/// Cumulative UPDATE/DELETE counters. Only endpoints with the same known epoch
+/// are comparable; a legacy writer breaks continuity and starts a new epoch.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, FrozenAPI)]
 pub struct LogicalChangeCounters {
     updated_rows_total: u64,
     deleted_rows_total: u64,
-    /// Table seq at which this counting history began.
-    ///
-    /// `None` means the snapshot was written by a version that tracked
-    /// counters but not their identity, so continuity cannot be established.
-    /// Such counters are unusable until a later write mints an epoch.
+    /// Table seq used when starting this history, before committing its first
+    /// snapshot. Missing in older snapshots; `None` cannot prove continuity.
     #[serde(default)]
     epoch: Option<u64>,
 }
@@ -155,32 +145,17 @@ impl LogicalChangeCounters {
         Ok(Some((updated, deleted)))
     }
 
-    /// Increments accumulated by `self` on top of `base`, where `self` is known
-    /// to have been generated directly from `base`.
-    ///
-    /// Unlike [`Self::delta_from`] this always yields a value: when `base`
-    /// could not prove continuity, `self` started a fresh history from zero and
-    /// its totals already *are* the increments. Deciding that by epoch, rather
-    /// than by defaulting the base to zero, avoids subtracting the totals of an
-    /// unrelated history.
-    pub fn increments_since(&self, base: Option<&Self>) -> Result<(u64, u64)> {
-        let (base_updated, base_deleted) = base
-            .filter(|base| base.epoch.is_some() && base.epoch == self.epoch)
-            .map_or((0, 0), |base| {
-                (base.updated_rows_total, base.deleted_rows_total)
-            });
-        // Either same epoch (monotonic) or reduced to a zero base, so neither
-        // subtraction may underflow. Release builds disable overflow checks, so
-        // verify rather than wrap.
-        let updated = self
-            .updated_rows_total
-            .checked_sub(base_updated)
-            .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
-        let deleted = self
-            .deleted_rows_total
-            .checked_sub(base_deleted)
-            .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
-        Ok((updated, deleted))
+    /// Extract this transaction's accumulated changes since its original base.
+    /// The transaction may contain multiple intermediate snapshots. A missing
+    /// or epochless base starts counting from zero; a known base must retain its
+    /// epoch throughout the transaction.
+    pub fn transaction_delta_from(&self, base: Option<&Self>) -> Result<(u64, u64)> {
+        match base.filter(|base| base.epoch.is_some()) {
+            Some(base) => self.delta_from(base)?.ok_or_else(|| {
+                ErrorCode::Internal("logical change counter epoch changed within transaction")
+            }),
+            None => Ok((self.updated_rows_total, self.deleted_rows_total)),
+        }
     }
 }
 
@@ -244,29 +219,19 @@ impl TableSnapshot {
         {
             summary.cluster_stats = None;
         }
-        // Inherit the predecessor's counting history only when it can be proven
-        // continuous. A predecessor whose counters are absent (legacy writer or
-        // pre-v4 format) or whose epoch is unknown leaves the accumulated totals
-        // unknowable, so counting restarts under a fresh identity instead of
-        // silently resuming from zero inside the old history.
-        let restarted = |epoch| LogicalChangeCounters {
-            updated_rows_total: 0,
-            deleted_rows_total: 0,
-            epoch,
-        };
-        let logical_change_counters = Some(match prev_snapshot.as_ref() {
-            // No predecessor at all: the table's counting history starts here
-            // and the totals really are zero, independent of any seq.
-            None => restarted(Some(prev_table_seq.unwrap_or(0))),
-            Some(prev) => match prev.logical_change_counters {
-                Some(counters) if counters.epoch.is_some() => counters,
-                // Restarting mid-history. Only provable when the table seq this
-                // restart commits against is known; without it the restart point
-                // is indistinguishable from the history it replaces, so leave it
-                // unknown and let readers fall back.
-                _ => restarted(prev_table_seq),
-            },
-        });
+        // Inherit a known history; otherwise restart using the current table seq.
+        // A missing seq stays unknown rather than inventing a shared epoch zero.
+        let logical_change_counters = Some(
+            prev_snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.logical_change_counters)
+                .filter(|counters| counters.epoch.is_some())
+                .unwrap_or(LogicalChangeCounters {
+                    updated_rows_total: 0,
+                    deleted_rows_total: 0,
+                    epoch: prev_table_seq,
+                }),
+        );
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -389,21 +354,23 @@ impl TableSnapshot {
         self.logical_change_counters
     }
 
-    /// Adds one committed operation's logical UPDATE and DELETE increments.
-    ///
-    /// A no-op when the counters are absent: resurrecting them here would
-    /// present a single operation's increments as the table's cumulative totals,
-    /// and without an epoch they could not be compared anyway. Snapshots from
-    /// `try_new` always carry counters, so this only guards ones deserialized
-    /// from a legacy writer.
-    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
+    /// Add an operation's increments without resurrecting absent counters.
+    /// Overflow fails atomically: wrapping or saturating could hide later changes.
+    pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) -> Result<()> {
         let Some(counters) = self.logical_change_counters.as_mut() else {
-            return;
+            return Ok(());
         };
-        // Release builds disable overflow checks. Saturate rather than wrap,
-        // since a wrapped total would later read as a counter decrease.
-        counters.updated_rows_total = counters.updated_rows_total.saturating_add(updated_rows);
-        counters.deleted_rows_total = counters.deleted_rows_total.saturating_add(deleted_rows);
+        let updated = counters
+            .updated_rows_total
+            .checked_add(updated_rows)
+            .ok_or_else(|| ErrorCode::Internal("logical updated row counter overflow"))?;
+        let deleted = counters
+            .deleted_rows_total
+            .checked_add(deleted_rows)
+            .ok_or_else(|| ErrorCode::Internal("logical deleted row counter overflow"))?;
+        counters.updated_rows_total = updated;
+        counters.deleted_rows_total = deleted;
+        Ok(())
     }
 }
 
@@ -626,7 +593,7 @@ mod tests {
     #[test]
     fn test_logical_change_counter_compatibility_boundary() {
         let mut aware = snapshot_at(Some(10), None);
-        aware.add_logical_change_delta(17, 23);
+        aware.add_logical_change_delta(17, 23).unwrap();
         let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
         let decoded_counters = decoded.logical_change_counters().unwrap();
         // Same history: totals are directly comparable.
@@ -653,7 +620,7 @@ mod tests {
 
         // A continuous descendant keeps the epoch and accumulates.
         let mut continuous = snapshot_at(Some(30), Some(Arc::new(first_aware)));
-        continuous.add_logical_change_delta(2, 5);
+        continuous.add_logical_change_delta(2, 5).unwrap();
         assert_eq!(
             continuous
                 .logical_change_counters()
@@ -669,7 +636,7 @@ mod tests {
         // Written by the version that tracked counters but not their identity:
         // the values are present but continuity is unprovable.
         let mut aware = snapshot_at(Some(10), None);
-        aware.add_logical_change_delta(7, 9);
+        aware.add_logical_change_delta(7, 9).unwrap();
         let mut value = serde_json::to_value(aware).unwrap();
         value
             .as_object_mut()
@@ -696,16 +663,72 @@ mod tests {
         // Its totals restarted, so they are this write's own increments.
         assert_eq!(
             healed_counters
-                .increments_since(Some(&epochless_counters))
+                .transaction_delta_from(Some(&epochless_counters))
                 .unwrap(),
             (0, 0)
         );
     }
 
     #[test]
+    fn test_missing_seq_does_not_create_a_known_epoch() {
+        let base = snapshot(None);
+        let child = snapshot(Some(Arc::new(base.clone())));
+        let base_counters = base.logical_change_counters().unwrap();
+        assert!(base_counters.epoch.is_none());
+        assert_eq!(
+            child
+                .logical_change_counters()
+                .unwrap()
+                .delta_from(&base_counters)
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_transaction_delta_requires_continuity_from_known_base() {
+        let mut base = snapshot_at(Some(10), None);
+        base.add_logical_change_delta(5, 3).unwrap();
+        let base_counters = base.logical_change_counters().unwrap();
+        let mut intermediate = snapshot_at(Some(11), Some(Arc::new(base)));
+        intermediate.add_logical_change_delta(2, 1).unwrap();
+        let mut latest = snapshot_at(Some(12), Some(Arc::new(intermediate)));
+        latest.add_logical_change_delta(3, 2).unwrap();
+        assert_eq!(
+            latest
+                .logical_change_counters()
+                .unwrap()
+                .transaction_delta_from(Some(&base_counters))
+                .unwrap(),
+            (5, 3)
+        );
+
+        for seq in [None, Some(20)] {
+            let unrelated = snapshot_at(seq, None).logical_change_counters().unwrap();
+            assert!(
+                unrelated
+                    .transaction_delta_from(Some(&base_counters))
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn test_counter_overflow_does_not_partially_update_totals() {
+        for (updated, deleted) in [(u64::MAX, 0), (0, u64::MAX)] {
+            let mut snapshot = snapshot_at(Some(10), None);
+            snapshot.add_logical_change_delta(updated, deleted).unwrap();
+            assert!(snapshot.add_logical_change_delta(1, 1).is_err());
+            let counters = snapshot.logical_change_counters().unwrap();
+            assert_eq!(counters.updated_rows_total, updated);
+            assert_eq!(counters.deleted_rows_total, deleted);
+        }
+    }
+
+    #[test]
     fn test_add_delta_does_not_resurrect_absent_counters() {
         let mut legacy = strip_counters(&snapshot(None));
-        legacy.add_logical_change_delta(4, 6);
+        legacy.add_logical_change_delta(4, 6).unwrap();
         // Must stay absent: 4/6 are one operation's increments, not the table's
         // cumulative totals.
         assert!(legacy.logical_change_counters().is_none());

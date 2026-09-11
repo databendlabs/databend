@@ -222,10 +222,8 @@ async fn try_rebuild_req(
                 ErrorCode::Internal(format!("Missing original snapshot for table {}", tid))
             })?
             .clone();
-        // `new_snapshot` is generated directly from `base_snapshot`, so this
-        // transaction's own increments are the difference between the two. When
-        // the base could not prove counter continuity, `new_snapshot` started a
-        // fresh history and its totals already are those increments.
+        // Recover all changes accumulated by this transaction from its original
+        // base, including any intermediate snapshots.
         let new_counters = new_snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.logical_change_counters())
@@ -234,7 +232,7 @@ async fn try_rebuild_req(
             .as_ref()
             .and_then(|snapshot| snapshot.logical_change_counters());
         let (logical_updated_rows, logical_deleted_rows) =
-            new_counters.increments_since(base_counters.as_ref())?;
+            new_counters.transaction_delta_from(base_counters.as_ref())?;
 
         let s = merge_statistics(
             new_snapshot.summary(),
@@ -333,7 +331,7 @@ async fn try_rebuild_req(
             None,
             table_meta_timestamps,
         )?;
-        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows);
+        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows)?;
         merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot
