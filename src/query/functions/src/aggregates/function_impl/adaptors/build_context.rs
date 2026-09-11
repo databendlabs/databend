@@ -308,7 +308,6 @@ where C: Combinator
         I: AggregateEval,
     {
         let signature = build_signature(&self.call, return_type);
-        debug_assert!(signature.order_by.is_empty());
         self.combinator
             .create::<false>(signature, self.metadata, state, eval)
     }

@@ -160,3 +160,52 @@ fn test_state_baselines() {
         },
     ]);
 }
+
+#[test]
+fn test_json_array_agg_null_specialization() -> databend_common_exception::Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    for name in ["json_array_agg", "json_agg"] {
+        for rows in [0, 4] {
+            for data_type in [DataType::Null, Int32Type::data_type().wrap_nullable()] {
+                let entry = BlockEntry::new_const_column(data_type, Scalar::Null, rows);
+                for each_row in [false, true] {
+                    for with_serialize in [false, true] {
+                        let (result, return_type) = eval_aggregate_for_test(
+                            name,
+                            vec![],
+                            std::slice::from_ref(&entry),
+                            rows,
+                            each_row,
+                            with_serialize,
+                            vec![],
+                        )?;
+                        assert_eq!(return_type, DataType::Variant);
+                        let ScalarRef::Variant(value) = result.index(0).unwrap() else {
+                            panic!("expected Variant");
+                        };
+                        assert_eq!(jsonb::RawJsonb::new(value).to_string(), "[]");
+                    }
+                }
+                if rows > 0 {
+                    let (result, _) =
+                        simulate_two_groups_group_by(name, vec![], &[entry], rows, vec![])?;
+                    for row in 0..2 {
+                        let ScalarRef::Variant(value) = result.index(row).unwrap() else {
+                            panic!("expected Variant");
+                        };
+                        assert_eq!(jsonb::RawJsonb::new(value).to_string(), "[]");
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}

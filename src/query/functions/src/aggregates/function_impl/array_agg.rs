@@ -20,6 +20,7 @@ use std::mem;
 use databend_common_column::binary::BinaryColumnBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -31,7 +32,6 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::empty_array::CoreEmptyArray;
 use databend_common_expression::types::empty_map::CoreEmptyMap;
 use databend_common_expression::types::interval::CoreInterval;
-use databend_common_expression::types::null::CoreNull;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::simple_type::SimpleType;
 use databend_common_expression::types::simple_type::SimpleValueType;
@@ -97,7 +97,9 @@ impl<T> AggregateArrayAggStateAny<T>
 where T: ValueType
 {
     fn add(&mut self, value: Option<T::ScalarRef<'_>>) {
-        self.values.push(T::to_owned_scalar(value.unwrap()));
+        if let Some(value) = value {
+            self.values.push(T::to_owned_scalar(value));
+        }
     }
 
     fn add_batch(&mut self, column: ColumnView<T>, _validity: Option<&Bitmap>) -> Result<()> {
@@ -222,22 +224,14 @@ where T: SimpleType + Debug
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AggregateArrayAggStateZST<const IS_NULL: bool> {
+#[derive(Clone, Debug, Default)]
+pub struct AggregateArrayAggStateZST {
     validity: MutableBitmap,
 }
 
-impl<const IS_NULL: bool> Default for AggregateArrayAggStateZST<IS_NULL> {
-    fn default() -> Self {
-        Self {
-            validity: Default::default(),
-        }
-    }
-}
-
-impl<const IS_NULL: bool> AggregateArrayAggStateZST<IS_NULL> {
+impl AggregateArrayAggStateZST {
     fn add(&mut self, value: Option<()>) {
-        if !IS_NULL && value.is_some() {
+        if value.is_some() {
             self.validity.push(true);
         }
     }
@@ -250,7 +244,7 @@ impl<const IS_NULL: bool> AggregateArrayAggStateZST<IS_NULL> {
     where
         V: ZeroSizeType,
     {
-        if IS_NULL || column.is_empty() {
+        if column.is_empty() {
             return Ok(());
         }
 
@@ -509,8 +503,7 @@ where
     }
 }
 
-impl<V, const IS_NULL: bool> ArrayCollectState<ZeroSizeValueType<V>>
-    for AggregateArrayAggStateZST<IS_NULL>
+impl<V> ArrayCollectState<ZeroSizeValueType<V>> for AggregateArrayAggStateZST
 where V: ZeroSizeType
 {
     fn state_description(_return_type: DataType) -> AggregateStateDescription {
@@ -601,6 +594,7 @@ impl ArrayAggBuilder {
         .then(PlainRoute::new(ArrayAggBuilder::create))
         .then(IfRoute::direct(ArrayAggBuilder::create))
         .then(StateRoute::direct(ArrayAggBuilder::create))
+        .then(DistinctRoute::<true>::direct(ArrayAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {
@@ -647,17 +641,19 @@ impl ArrayAggBuilder {
             DataType::Date => simple::<CoreDate>(build, return_type),
             DataType::Timestamp => simple::<CoreTimestamp>(build, return_type),
             DataType::Interval => simple::<CoreInterval>(build, return_type),
-            DataType::Null => Self::create_instance::<
-                ZeroSizeValueType<CoreNull>,
-                AggregateArrayAggStateZST<true>,
-            >(build, return_type),
+            // NULL inputs always produce an empty array; sorting cannot affect it.
+            DataType::Null => build.create(
+                DataType::EmptyArray,
+                NullArrayAggEval::state_description(),
+                NullArrayAggEval,
+            ),
             DataType::EmptyArray => Self::create_instance::<
                 ZeroSizeValueType<CoreEmptyArray>,
-                AggregateArrayAggStateZST<false>,
+                AggregateArrayAggStateZST,
             >(build, return_type),
             DataType::EmptyMap => Self::create_instance::<
                 ZeroSizeValueType<CoreEmptyMap>,
-                AggregateArrayAggStateZST<false>,
+                AggregateArrayAggStateZST,
             >(build, return_type),
             DataType::Boolean => Self::create_instance::<
                 BooleanType,
@@ -709,4 +705,53 @@ impl ArrayAggBuilder {
             ArrayCollectEval::<T, State>::default(),
         )
     }
+}
+
+// All input values are known to be NULL at construction time. Return EmptyArray
+// and preserve the legacy Array(Boolean) serialized state without per-row work.
+struct NullArrayAggEval;
+
+impl NullArrayAggEval {
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![], vec![StateSerdeItem::DataType(ArrayType::<
+            BooleanType,
+        >::data_type(
+        ))])
+    }
+}
+
+impl AggregateEval for NullArrayAggEval {
+    fn init_state(&self, _state: AggrState<'_>) {}
+    fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_keys(&self, _input: AccumulateKeysInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_row(&self, _input: AccumulateRowInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        for _ in input.states.iter() {
+            input.builders[0].push(ScalarRef::Array(Column::Boolean(Bitmap::new())));
+        }
+        Ok(())
+    }
+    fn merge_serialized(&self, _input: MergeSerializedInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn merge_states(&self, _input: MergeStatesInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+        input.builder.push(ScalarRef::EmptyArray);
+        Ok(())
+    }
+    unsafe fn drop_state(&self, _state: AggrState<'_>) {}
 }

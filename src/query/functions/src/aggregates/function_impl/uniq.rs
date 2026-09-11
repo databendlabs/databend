@@ -16,22 +16,28 @@ use std::alloc::Layout;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_hashtable::HashSet as TypedHashSet;
 use databend_common_hashtable::HashtableKeyable;
+use databend_common_hashtable::HashtableLike;
+use databend_common_hashtable::ShortStringHashSet;
 use databend_common_hashtable::StackHashSet;
 use databend_common_io::prelude::*;
 use siphasher::sip128::Hasher128;
@@ -40,7 +46,7 @@ use siphasher::sip128::SipHasher24;
 use super::AggregateRegistration;
 use super::adaptors::*;
 
-struct UniqBuilder;
+pub(super) struct UniqBuilder;
 
 impl UniqBuilder {
     fn register(registry: &mut AggregateRegistry) {
@@ -96,19 +102,21 @@ impl UniqBuilder {
         }
     }
 
-    fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
-        if build.args_type().len() == 1 {
-            let data_type = build.args_type()[0].remove_nullable();
-            return with_number_mapped_type!(|NUM| match data_type {
-                DataType::Number(NumberDataType::NUM) =>
-                    Self::create_set::<TypedUniqSet<NumberType<NUM>>>(build),
-                DataType::Date => Self::create_set::<TypedUniqSet<DateType>>(build),
-                DataType::Timestamp => Self::create_set::<TypedUniqSet<TimestampType>>(build),
-                DataType::String => Self::create_set::<StringUniqSet>(build),
-                _ => Self::create_set::<RowUniqSet>(build),
-            });
+    pub(super) fn create(
+        build: DirectBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
+        if build.args_type().len() > 1 {
+            return super::multi_arg_uniq::create(build);
         }
-        Self::create_set::<RowUniqSet>(build)
+        let data_type = build.args_type()[0].remove_nullable();
+        with_number_mapped_type!(|NUM| match data_type {
+            DataType::Number(NumberDataType::NUM) =>
+                Self::create_set::<TypedUniqSet<NumberType<NUM>>>(build),
+            DataType::Date => Self::create_set::<TypedUniqSet<DateType>>(build),
+            DataType::Timestamp => Self::create_set::<TypedUniqSet<TimestampType>>(build),
+            DataType::String => Self::create_set::<StringUniqSet>(build),
+            _ => Self::create_set::<ScalarUniqSet>(build),
+        })
     }
 }
 
@@ -131,26 +139,42 @@ impl UniqBuilder {
 
 // Uniq owns a set, not a Distinct adaptor plus a replayed Count state. Its
 // result is the set cardinality; merges only union sets, never add counts.
-trait UniqSet: Send + Sync + 'static {
+pub(super) trait UniqSet: Send + Sync + 'static {
     fn new() -> Self;
     fn len(&self) -> usize;
     fn serde_item() -> StateSerdeItem;
-    fn add(&mut self, columns: ProjectedBlock<'_>, row: usize) -> Result<()>;
-    fn add_batch(&mut self, columns: ProjectedBlock<'_>, validity: Option<&Bitmap>) -> Result<()> {
-        for row in 0..columns.num_rows() {
-            if validity.is_none_or(|v| v.get(row).unwrap()) {
-                self.add(columns, row)?;
+    fn merge(&mut self, rhs: &Self) -> bool;
+    fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<bool>;
+
+    type Type: AccessType;
+    fn insert(&mut self, value: <Self::Type as AccessType>::ScalarRef<'_>) -> Result<bool>;
+
+    fn add_batch(&mut self, entry: &BlockEntry, validity: Option<&Bitmap>) -> Result<bool> {
+        if entry.len() == 0 || validity.is_some_and(|v| v.true_count() == 0) {
+            return Ok(false);
+        }
+        let view = entry.downcast::<Self::Type>().unwrap();
+        if matches!(entry, BlockEntry::Const(..)) {
+            return self.insert(view.index(0).unwrap());
+        }
+        let mut changed = false;
+        if let Some(validity) = validity {
+            for (value, valid) in view.iter().zip(validity.iter()) {
+                if valid {
+                    changed |= self.insert(value)?;
+                }
+            }
+        } else {
+            for value in view.iter() {
+                changed |= self.insert(value)?;
             }
         }
-        Ok(())
+        Ok(changed)
     }
-
-    fn merge(&mut self, rhs: &Self);
-    fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()>;
-    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<()>;
 }
 
-struct TypedUniqSet<T: ValueType>
+pub(super) struct TypedUniqSet<T: ValueType>
 where T::Scalar: HashtableKeyable
 {
     keys: TypedHashSet<T::Scalar>,
@@ -161,6 +185,11 @@ where
     T: ArgType,
     T::Scalar: Copy + HashtableKeyable + Send + Sync,
 {
+    type Type = T;
+    fn insert(&mut self, value: T::ScalarRef<'_>) -> Result<bool> {
+        Ok(self.keys.set_insert(T::to_owned_scalar(value)).is_ok())
+    }
+
     fn new() -> Self {
         Self {
             keys: TypedHashSet::with_capacity(4),
@@ -172,24 +201,13 @@ where
     fn serde_item() -> StateSerdeItem {
         StateSerdeItem::DataType(ArrayType::<T>::data_type())
     }
-    fn add(&mut self, columns: ProjectedBlock<'_>, row: usize) -> Result<()> {
-        let column = columns[0].downcast::<T>().unwrap();
-        let _ = self
-            .keys
-            .set_insert(T::to_owned_scalar(column.index(row).unwrap()));
-        Ok(())
-    }
-    fn add_batch(&mut self, columns: ProjectedBlock<'_>, validity: Option<&Bitmap>) -> Result<()> {
-        let column = columns[0].downcast::<T>().unwrap();
-        for (row, value) in column.iter().enumerate() {
-            if validity.is_none_or(|v| v.get(row).unwrap()) {
-                let _ = self.keys.set_insert(T::to_owned_scalar(value));
-            }
+
+    fn merge(&mut self, rhs: &Self) -> bool {
+        let mut changed = false;
+        for key in rhs.keys.iter() {
+            changed |= self.keys.set_insert(*key.key()).is_ok();
         }
-        Ok(())
-    }
-    fn merge(&mut self, rhs: &Self) {
-        self.keys.set_merge(&rhs.keys);
+        changed
     }
     fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = ArrayType::<T>::downcast_builder(builder);
@@ -199,15 +217,16 @@ where
         builder.commit_row();
         Ok(())
     }
-    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<()> {
+    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<bool> {
+        let mut changed = false;
         let ScalarRef::Array(values) = value else {
             unreachable!()
         };
         let values = T::try_downcast_column(&values).unwrap();
         for value in T::iter_column(&values) {
-            let _ = self.keys.set_insert(T::to_owned_scalar(value));
+            changed |= self.keys.set_insert(T::to_owned_scalar(value)).is_ok();
         }
-        Ok(())
+        Ok(changed)
     }
 }
 
@@ -217,6 +236,13 @@ struct StringUniqSet {
     keys: StackHashSet<u128>,
 }
 impl UniqSet for StringUniqSet {
+    type Type = StringType;
+    fn insert(&mut self, value: &str) -> Result<bool> {
+        let mut hasher = SipHasher24::new();
+        hasher.write(value.as_bytes());
+        Ok(self.keys.set_insert(hasher.finish128().into()).is_ok())
+    }
+
     fn new() -> Self {
         Self {
             keys: StackHashSet::new(),
@@ -228,26 +254,13 @@ impl UniqSet for StringUniqSet {
     fn serde_item() -> StateSerdeItem {
         StateSerdeItem::Binary(None)
     }
-    fn add(&mut self, columns: ProjectedBlock<'_>, row: usize) -> Result<()> {
-        let column = columns[0].downcast::<StringType>().unwrap();
-        let mut hasher = SipHasher24::new();
-        hasher.write(column.index(row).unwrap().as_bytes());
-        let _ = self.keys.set_insert(hasher.finish128().into());
-        Ok(())
-    }
-    fn add_batch(&mut self, columns: ProjectedBlock<'_>, validity: Option<&Bitmap>) -> Result<()> {
-        let column = columns[0].downcast::<StringType>().unwrap();
-        for (row, value) in column.iter().enumerate() {
-            if validity.is_none_or(|v| v.get(row).unwrap()) {
-                let mut hasher = SipHasher24::new();
-                hasher.write(value.as_bytes());
-                let _ = self.keys.set_insert(hasher.finish128().into());
-            }
+
+    fn merge(&mut self, rhs: &Self) -> bool {
+        let mut changed = false;
+        for key in rhs.keys.iter() {
+            changed |= self.keys.set_insert(*key.key()).is_ok();
         }
-        Ok(())
-    }
-    fn merge(&mut self, rhs: &Self) {
-        self.keys.set_merge(&rhs.keys);
+        changed
     }
     fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = builder.as_binary_mut().unwrap();
@@ -258,23 +271,35 @@ impl UniqSet for StringUniqSet {
         builder.commit_row();
         Ok(())
     }
-    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<()> {
+    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<bool> {
+        let mut changed = false;
         let ScalarRef::Binary(mut bytes) = value else {
             unreachable!()
         };
         let count = bytes.read_uvarint()?;
         for _ in 0..count {
-            let _ = self.keys.set_insert(u128::deserialize_reader(&mut bytes)?);
+            changed |= self
+                .keys
+                .set_insert(u128::deserialize_reader(&mut bytes)?)
+                .is_ok();
         }
-        Ok(())
+        Ok(changed)
     }
 }
 
-// Generic and multi-argument keys retain v1's Borsh Vec<Scalar> representation.
-struct RowUniqSet {
+// Scalar fallback retains the v1 single-element row encoding on the wire.
+
+pub(super) struct ScalarUniqSet {
     keys: HashSet<Vec<u8>>,
 }
-impl UniqSet for RowUniqSet {
+impl UniqSet for ScalarUniqSet {
+    type Type = AnyType;
+    fn insert(&mut self, value: ScalarRef<'_>) -> Result<bool> {
+        Ok(self
+            .keys
+            .insert(borsh::to_vec(std::slice::from_ref(&value.to_owned()))?))
+    }
+
     fn new() -> Self {
         Self {
             keys: HashSet::new(),
@@ -286,18 +311,13 @@ impl UniqSet for RowUniqSet {
     fn serde_item() -> StateSerdeItem {
         StateSerdeItem::DataType(ArrayType::<BinaryType>::data_type())
     }
-    fn add(&mut self, columns: ProjectedBlock<'_>, row: usize) -> Result<()> {
-        let values = columns
-            .iter()
-            .map(|column| column.index(row).unwrap().to_owned())
-            .collect::<Vec<Scalar>>();
-        let mut bytes = Vec::new();
-        values.serialize(&mut bytes)?;
-        self.keys.insert(bytes);
-        Ok(())
-    }
-    fn merge(&mut self, rhs: &Self) {
-        self.keys.extend(rhs.keys.iter().cloned());
+
+    fn merge(&mut self, rhs: &Self) -> bool {
+        let mut changed = false;
+        for key in rhs.keys.iter() {
+            changed |= self.keys.insert(key.clone());
+        }
+        changed
     }
     fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = ArrayType::<BinaryType>::downcast_builder(builder);
@@ -307,14 +327,107 @@ impl UniqSet for RowUniqSet {
         builder.commit_row();
         Ok(())
     }
-    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<()> {
+    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<bool> {
+        let mut changed = false;
         let ScalarRef::Array(values) = value else {
             unreachable!()
         };
         let values = BinaryType::try_downcast_column(&values).unwrap();
-        self.keys
-            .extend(BinaryType::iter_column(&values).map(<[u8]>::to_vec));
+        for value in BinaryType::iter_column(&values) {
+            changed |= self.keys.insert(value.to_vec());
+        }
+        Ok(changed)
+    }
+}
+
+// Only sets retaining their original values can replay into another aggregate.
+pub(super) trait DistinctSet: UniqSet {
+    fn build_column(&self, data_type: &DataType) -> Result<Column>;
+}
+
+impl<T> DistinctSet for TypedUniqSet<T>
+where
+    T: ArgType,
+    T::Scalar: Copy + HashtableKeyable + Send + Sync,
+{
+    fn build_column(&self, _: &DataType) -> Result<Column> {
+        let mut builder = T::create_builder(self.keys.len(), &[]);
+        for key in self.keys.iter() {
+            T::push_item(&mut builder, T::to_scalar_ref(key.key()));
+        }
+        Ok(T::upcast_column(T::build_column(builder)))
+    }
+}
+
+impl DistinctSet for ScalarUniqSet {
+    fn build_column(&self, data_type: &DataType) -> Result<Column> {
+        let mut builder = ColumnBuilder::with_capacity(data_type, self.keys.len());
+        for key in &self.keys {
+            let row = Vec::<Scalar>::deserialize(&mut key.as_slice())?;
+            debug_assert_eq!(row.len(), 1);
+            builder.push(row[0].as_ref());
+        }
+        Ok(builder.build())
+    }
+}
+
+pub(super) struct StringDistinctSet {
+    keys: ShortStringHashSet<[u8]>,
+}
+impl UniqSet for StringDistinctSet {
+    type Type = StringType;
+    fn insert(&mut self, value: &str) -> Result<bool> {
+        Ok(self.keys.set_insert(value.as_bytes()))
+    }
+
+    fn new() -> Self {
+        #[allow(clippy::arc_with_non_send_sync)]
+        let arena = Arc::new(Bump::new());
+        Self {
+            keys: ShortStringHashSet::with_capacity(4, arena),
+        }
+    }
+    fn len(&self) -> usize {
+        self.keys.len()
+    }
+    fn serde_item() -> StateSerdeItem {
+        StateSerdeItem::DataType(ArrayType::<BinaryType>::data_type())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> bool {
+        let mut changed = false;
+        for key in rhs.keys.iter() {
+            changed |= self.keys.set_insert(key.key());
+        }
+        changed
+    }
+    fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
+        let mut builder = ArrayType::<BinaryType>::downcast_builder(builder);
+        for key in self.keys.iter() {
+            builder.put_item(key.key());
+        }
+        builder.commit_row();
         Ok(())
+    }
+    fn merge_serialized(&mut self, value: ScalarRef<'_>) -> Result<bool> {
+        let mut changed = false;
+        let ScalarRef::Array(column) = value else {
+            unreachable!()
+        };
+        let column = BinaryType::try_downcast_column(&column).unwrap();
+        for key in column.iter() {
+            changed |= self.keys.set_insert(key);
+        }
+        Ok(changed)
+    }
+}
+impl DistinctSet for StringDistinctSet {
+    fn build_column(&self, _: &DataType) -> Result<Column> {
+        let mut builder = StringColumnBuilder::with_capacity(self.keys.len());
+        for key in self.keys.iter() {
+            builder.put_and_commit(std::str::from_utf8(key.key()).unwrap());
+        }
+        Ok(Column::String(builder.build()))
     }
 }
 
@@ -327,17 +440,27 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
         input
             .state
             .get::<S>()
-            .add_batch(input.columns, input.validity)
+            .add_batch(&input.columns[0], input.validity)
+            .map(|_| ())
     }
+
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            state.get::<S>().add(input.columns, row)?;
+        let view = input.columns[0].downcast::<S::Type>().unwrap();
+        for (value, state) in view.iter().zip(input.states.iter()) {
+            state.get::<S>().insert(value)?;
         }
         Ok(())
     }
+
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        input.state.get::<S>().add(input.columns, input.row)
+        let view = input.columns[0].downcast::<S::Type>().unwrap();
+        input
+            .state
+            .get::<S>()
+            .insert(view.index(input.row).unwrap())
+            .map(|_| ())
     }
+
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         for state in input.states.iter() {
             state.get::<S>().serialize(&mut input.builders[0])?;
@@ -369,5 +492,99 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
     }
     unsafe fn drop_state(&self, state: AggrState<'_>) {
         unsafe { std::ptr::drop_in_place(state.get::<S>()) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::FromData;
+
+    use super::*;
+
+    fn round_trip<S: DistinctSet>(column: Column, expected: usize) -> Result<()> {
+        let data_type = column.data_type();
+        let entries = [BlockEntry::from(column)];
+        let mut set = S::new();
+        assert!(set.add_batch(&entries[0], None)?);
+        assert!(!set.add_batch(&entries[0], None)?);
+        assert_eq!(set.len(), expected);
+        let field = match S::serde_item() {
+            StateSerdeItem::DataType(ty) => ty,
+            _ => unreachable!(),
+        };
+        let mut builder = ColumnBuilder::with_capacity(&field, 1);
+        set.serialize(&mut builder)?;
+        let mut restored = S::new();
+        let serialized = builder.build_scalar();
+        assert!(restored.merge_serialized(serialized.as_ref())?);
+        assert!(!restored.merge_serialized(serialized.as_ref())?);
+        assert_eq!(restored.len(), expected);
+        assert!(!restored.merge(&set));
+        assert_eq!(restored.len(), expected);
+        let rebuilt = restored.build_column(&data_type)?;
+        let mut replayed = S::new();
+        replayed.add_batch(&BlockEntry::from(rebuilt), None)?;
+        assert_eq!(replayed.len(), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn string_distinct_storage_boundaries() -> Result<()> {
+        let values = [
+            "",
+            "abc",
+            "123456789",
+            "12345678901234567",
+            "1234567890123456789012345",
+            "abc\0",
+        ];
+        let column = StringType::from_data(values.to_vec());
+        round_trip::<StringDistinctSet>(column.clone(), values.len())?;
+        let mut set = StringDistinctSet::new();
+        set.add_batch(&BlockEntry::from(column), None)?;
+        let Column::String(rebuilt) = set.build_column(&DataType::String)? else {
+            unreachable!()
+        };
+        let mut actual = rebuilt.iter().collect::<Vec<_>>();
+        let mut expected = values.to_vec();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn scalar_distinct_row_format_round_trip() -> Result<()> {
+        round_trip::<ScalarUniqSet>(BooleanType::from_data(vec![true, false, true]), 2)?;
+        let mut set = ScalarUniqSet::new();
+        assert!(set.insert(ScalarRef::Boolean(true))?);
+        assert!(
+            set.keys
+                .contains(&borsh::to_vec(&vec![Scalar::Boolean(true)])?)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn typed_distinct_float_equality() -> Result<()> {
+        round_trip::<TypedUniqSet<Float32Type>>(
+            Float32Type::from_data(vec![
+                F32::from(-0.0),
+                F32::from(0.0),
+                F32::from(f32::from_bits(0x7fc00001)),
+                F32::from(f32::from_bits(0xffc00002)),
+            ]),
+            2,
+        )?;
+        round_trip::<TypedUniqSet<Float64Type>>(
+            Float64Type::from_data(vec![
+                F64::from(-0.0),
+                F64::from(0.0),
+                F64::from(f64::from_bits(0x7ff8000000000001)),
+                F64::from(f64::from_bits(0xfff8000000000002)),
+            ]),
+            2,
+        )
     }
 }

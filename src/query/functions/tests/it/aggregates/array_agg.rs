@@ -338,3 +338,323 @@ fn test_state_baselines() {
         },
     ]);
 }
+
+#[test]
+fn test_array_agg_distinct() -> databend_common_exception::Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::UInt64Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    let values = UInt64Type::from_data_with_validity(vec![2u64, 1, 2, 1, 0, 0], vec![
+        true, true, true, true, false, false,
+    ]);
+    for name in ["array_agg_distinct", "list_distinct"] {
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                for (entry, expected) in [
+                    (BlockEntry::from(values.clone()), vec![1u64, 2]),
+                    (
+                        BlockEntry::new_const_column(
+                            UInt64Type::data_type().wrap_nullable(),
+                            Scalar::Null,
+                            6,
+                        ),
+                        vec![],
+                    ),
+                    (
+                        BlockEntry::new_const_column(DataType::Null, Scalar::Null, 6),
+                        vec![],
+                    ),
+                    (
+                        BlockEntry::from(UInt64Type::from_data(Vec::<u64>::new())),
+                        vec![],
+                    ),
+                ] {
+                    let expected_type = if entry.data_type().is_null() {
+                        DataType::EmptyArray
+                    } else {
+                        DataType::Array(Box::new(UInt64Type::data_type()))
+                    };
+                    let rows = entry.len();
+                    let (result, return_type) = eval_aggregate_for_test(
+                        name,
+                        vec![],
+                        &[entry],
+                        rows,
+                        each_row,
+                        with_serialize,
+                        vec![],
+                    )?;
+                    assert_eq!(return_type, expected_type);
+                    if expected_type == DataType::EmptyArray {
+                        assert_eq!(result.index(0).unwrap(), ScalarRef::EmptyArray);
+                        continue;
+                    }
+                    let ScalarRef::Array(array) = result.index(0).unwrap() else {
+                        panic!("array aggregate must return an array");
+                    };
+                    let mut actual = array
+                        .iter()
+                        .map(|value| value.to_string())
+                        .collect::<Vec<_>>();
+                    actual.sort();
+                    assert_eq!(
+                        actual,
+                        expected.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                        "{name}, each_row={each_row}, with_serialize={with_serialize}"
+                    );
+                }
+            }
+        }
+        let (groups, _) =
+            simulate_two_groups_group_by(name, vec![], &[values.clone().into()], 6, vec![])?;
+        for (row, expected) in ["2", "1"].into_iter().enumerate() {
+            let ScalarRef::Array(array) = groups.index(row).unwrap() else {
+                panic!("array aggregate must return an array");
+            };
+            assert_eq!(array.len(), 1);
+            assert_eq!(array.index(0).unwrap().to_string(), expected);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_array_agg_null_specialization() -> Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+
+    use super::support::eval_aggregate_for_test;
+
+    for rows in [0, 4] {
+        let entry = BlockEntry::new_const_column(DataType::Null, Scalar::Null, rows);
+        for name in ["array_agg", "list", "array_agg_distinct", "list_distinct"] {
+            for order_by in [vec![], vec![AggregateBoundOrderByItem {
+                index: Symbol::new(0),
+                source: AggregateBoundOrderBySource::Argument { index: 0 },
+                data_type: DataType::Null,
+                nulls_first: false,
+                asc: true,
+            }]] {
+                for each_row in [false, true] {
+                    for with_serialize in [false, true] {
+                        let (result, return_type) = eval_aggregate_for_test(
+                            name,
+                            vec![],
+                            std::slice::from_ref(&entry),
+                            rows,
+                            each_row,
+                            with_serialize,
+                            order_by.clone(),
+                        )?;
+                        assert_eq!(return_type, DataType::EmptyArray);
+                        assert_eq!(result.index(0).unwrap(), ScalarRef::EmptyArray);
+                    }
+                }
+            }
+        }
+    }
+    let entry = BlockEntry::new_const_column(DataType::Null, Scalar::Null, 4);
+    let (result, _) = simulate_two_groups_group_by("array_agg", vec![], &[entry], 4, vec![])?;
+    for group in 0..2 {
+        assert_eq!(result.index(group).unwrap(), ScalarRef::EmptyArray);
+    }
+    Ok(())
+}
+
+#[test]
+fn test_array_agg_distinct_order_by() -> Result<()> {
+    use databend_common_expression::ScalarRef;
+    let values = UInt64Type::from_data_with_validity(vec![3u64, 1, 3, 2, 0], vec![
+        true, true, true, true, false,
+    ]);
+    for name in ["array_agg_distinct", "list_distinct"] {
+        for asc in [true, false] {
+            let order = vec![AggregateBoundOrderByItem {
+                index: Symbol::new(0),
+                source: AggregateBoundOrderBySource::Argument { index: 0 },
+                data_type: UInt64Type::data_type().wrap_nullable(),
+                nulls_first: false,
+                asc,
+            }];
+            let (groups, _) = simulate_two_groups_group_by(
+                name,
+                vec![],
+                &[values.clone().into()],
+                5,
+                order.clone(),
+            )?;
+            assert_eq!(
+                groups.index(0).unwrap(),
+                ScalarRef::Array(UInt64Type::from_data(vec![3u64]))
+            );
+            assert_eq!(
+                groups.index(1).unwrap(),
+                ScalarRef::Array(UInt64Type::from_data(if asc {
+                    vec![1u64, 2]
+                } else {
+                    vec![2u64, 1]
+                },))
+            );
+            for each_row in [false, true] {
+                for with_serialize in [false, true] {
+                    let (result, _) = super::support::eval_aggregate_for_test(
+                        name,
+                        vec![],
+                        &[values.clone().into()],
+                        5,
+                        each_row,
+                        with_serialize,
+                        order.clone(),
+                    )?;
+                    let expected = UInt64Type::from_data(if asc {
+                        vec![1u64, 2, 3]
+                    } else {
+                        vec![3u64, 2, 1]
+                    });
+                    assert_eq!(result.index(0).unwrap(), ScalarRef::Array(expected));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_array_agg_distinct_rejects_independent_sort_key() {
+    let order = vec![AggregateBoundOrderByItem {
+        index: Symbol::new(1),
+        source: AggregateBoundOrderBySource::Derived,
+        data_type: UInt64Type::data_type(),
+        nulls_first: false,
+        asc: true,
+    }];
+    let error = super::support::eval_aggregate_for_test(
+        "array_agg_distinct",
+        vec![],
+        &[UInt64Type::from_data(vec![1u64]).into()],
+        1,
+        false,
+        false,
+        order,
+    )
+    .unwrap_err();
+    assert!(
+        error
+            .message()
+            .contains("ORDER BY must reference its argument")
+    );
+}
+
+#[test]
+fn test_array_agg_any_state_skips_null() -> Result<()> {
+    use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+
+    let nested = UInt64Type::from_data_with_validity(vec![1u64, 0], vec![true, false]);
+    let cases = [
+        (DataType::Boolean, Scalar::Boolean(true)),
+        (
+            DataType::Array(Box::new(UInt64Type::data_type().wrap_nullable())),
+            Scalar::Array(nested),
+        ),
+        (
+            DataType::Tuple(vec![
+                DataType::Boolean,
+                UInt64Type::data_type().wrap_nullable(),
+            ]),
+            Scalar::Tuple(vec![Scalar::Boolean(true), Scalar::Null]),
+        ),
+    ];
+    for (data_type, value) in cases {
+        for all_null in [false, true] {
+            let mut input = ColumnBuilder::with_capacity(&data_type.clone().wrap_nullable(), 4);
+            let mut expected = ColumnBuilder::with_capacity(&data_type, 2);
+            for selected in [true, false, false, true] {
+                if selected && !all_null {
+                    input.push(value.as_ref());
+                    expected.push(value.as_ref());
+                } else {
+                    input.push(ScalarRef::Null);
+                }
+            }
+            let entry = input.build().into();
+            let expected = expected.build();
+            for name in ["array_agg", "list"] {
+                for each_row in [false, true] {
+                    for with_serialize in [false, true] {
+                        let (result, return_type) = super::support::eval_aggregate_for_test(
+                            name,
+                            vec![],
+                            std::slice::from_ref(&entry),
+                            4,
+                            each_row,
+                            with_serialize,
+                            vec![],
+                        )?;
+                        assert_eq!(return_type, DataType::Array(Box::new(data_type.clone())));
+                        assert_eq!(result.index(0).unwrap(), ScalarRef::Array(expected.clone()));
+                    }
+                }
+                let (groups, _) = simulate_two_groups_group_by(
+                    name,
+                    vec![],
+                    std::slice::from_ref(&entry),
+                    4,
+                    vec![],
+                )?;
+                let mut expected_group = ColumnBuilder::with_capacity(&data_type, 1);
+                if !all_null {
+                    expected_group.push(value.as_ref());
+                }
+                let expected_group = expected_group.build();
+                for row in 0..2 {
+                    assert_eq!(
+                        groups.index(row).unwrap(),
+                        ScalarRef::Array(expected_group.clone())
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_distinct_state_uses_native_columns() -> Result<()> {
+    use databend_common_expression::aggregate_function::RawAggregateCall;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_functions::aggregates::AGGR_REGISTRY;
+
+    for argument in [
+        DataType::Number(NumberDataType::Int64).wrap_nullable(),
+        DataType::Number(NumberDataType::Float32),
+        DataType::Number(NumberDataType::Float64),
+        DataType::Decimal(DecimalSize::new_unchecked(76, 12)),
+        DataType::String,
+        DataType::Variant,
+    ] {
+        let element = match argument {
+            DataType::String | DataType::Variant | DataType::Decimal(_) => DataType::Binary,
+            _ => argument.remove_nullable(),
+        };
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "array_agg",
+            params: &[],
+            args_type: &[argument],
+            distinct: true,
+            order_by: &[],
+        })?;
+        assert_eq!(
+            function.state_data_type(),
+            DataType::Tuple(vec![DataType::Array(Box::new(element))])
+        );
+    }
+    Ok(())
+}

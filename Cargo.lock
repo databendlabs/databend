@@ -4048,6 +4048,7 @@ dependencies = [
  "geozero",
  "glob",
  "goldenfile",
+ "hashbrown 0.15.3",
  "hex",
  "inventory",
  "itertools 0.13.0",

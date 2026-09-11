@@ -47,3 +47,10 @@ SELECT uid FROM (SELECT uid,retention(date = '2018-08-06', date = '2018-08-07') 
 statement ok
 DROP TABLE retention_test
 
+
+# Duplicate rows do not affect retention; rows with any NULL input are excluded.
+query TTT
+SELECT retention(a, b), retention(DISTINCT a, b), retention_distinct(a, b)
+FROM (VALUES (true, NULL::BOOLEAN), (false, true), (false, true)) t(a, b);
+----
+[0,0] [0,0] [0,0]

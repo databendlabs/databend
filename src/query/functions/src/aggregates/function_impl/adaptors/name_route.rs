@@ -25,7 +25,6 @@ use super::ArgumentsPattern;
 use super::Combinator;
 use super::DirectBuildContext;
 use super::DirectBuildFn;
-use super::DistinctCombinator;
 use super::IfCombinator;
 use super::LegacySignatureResolver;
 use super::MultiArgBuildContext;
@@ -37,6 +36,7 @@ use super::StateCombinator;
 use super::StateCombinatorPlan;
 use super::UnaryBuildContext;
 use super::UnaryBuildFn;
+use super::UnaryDistinctCombinator;
 use super::merge_combinator;
 use super::merge_combinator::MergeCombinator;
 use super::state_combinator;
@@ -694,25 +694,19 @@ impl RouteNode for DistinctAliasRoute {
 }
 
 pub(crate) struct DistinctRoute<const SKIP_NULLS: bool> {
-    build: RouteBuild<DistinctCombinator<SKIP_NULLS>>,
+    build: RouteBuild<UnaryDistinctCombinator<SKIP_NULLS>>,
 }
 
 impl<const SKIP_NULLS: bool> DistinctRoute<SKIP_NULLS> {
-    pub(crate) fn direct(build: DirectBuildFn<DistinctCombinator<SKIP_NULLS>>) -> Self {
+    pub(crate) fn direct(build: DirectBuildFn<UnaryDistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
             build: RouteBuild::Direct(build),
         }
     }
 
-    pub(crate) fn unary(build: UnaryBuildFn<DistinctCombinator<SKIP_NULLS>>) -> Self {
+    pub(crate) fn unary(build: UnaryBuildFn<UnaryDistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
             build: RouteBuild::Unary(build),
-        }
-    }
-
-    pub(crate) fn multi_arg(build: MultiArgBuildFn<DistinctCombinator<SKIP_NULLS>>) -> Self {
-        Self {
-            build: RouteBuild::MultiArg(build),
         }
     }
 }
@@ -737,11 +731,11 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
         if context.matching_name_index(Some("distinct")).is_none() {
             return Ok(None);
         }
-        if matches!(self.build, RouteBuild::MultiArg(_))
+        if context.null_input != NullInput::Native
             && let Some(function) = null_argument_result(
                 &context.request,
                 &self.metadata(context.metadata),
-                NullArgumentMode::Any,
+                NullArgumentMode::Only,
             )?
         {
             return Ok(Some(function));
@@ -757,8 +751,13 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
             distinct: false,
             ..context.request.clone()
         };
-        let combinator = DistinctCombinator {
-            args_type: args_type.clone(),
+        let [arg_type] = args_type.as_slice() else {
+            return Err(ErrorCode::BadArguments(
+                "unary DISTINCT requires one argument",
+            ));
+        };
+        let combinator = UnaryDistinctCombinator {
+            arg_type: arg_type.clone(),
         };
         let function = self
             .build

@@ -20,6 +20,7 @@ use borsh::BorshSerialize;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
@@ -239,6 +240,13 @@ impl JsonArrayAggBuilder {
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
+        if build.args_type()[0].is_null() {
+            return build.create(
+                DataType::Variant,
+                AggregateStateDescription::new(vec![], vec![StateSerdeItem::Binary(None)]),
+                NullJsonArrayAggEval,
+            );
+        }
         build.create(
             DataType::Variant,
             <JsonArrayAggState<AnyType> as ArrayCollectState<AnyType>>::state_description(
@@ -247,4 +255,42 @@ impl JsonArrayAggBuilder {
             ArrayCollectEval::<AnyType, JsonArrayAggState<AnyType>>::default(),
         )
     }
+}
+
+// NULL inputs cannot contribute elements. Keep the native state's wire format.
+struct NullJsonArrayAggEval;
+
+impl AggregateEval for NullJsonArrayAggEval {
+    fn init_state(&self, _state: AggrState<'_>) {}
+    fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_keys(&self, _input: AccumulateKeysInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_row(&self, _input: AccumulateRowInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        for _ in input.states.iter() {
+            JsonArrayAggState::<AnyType>::default().serialize(&mut input.builders[0])?;
+        }
+        Ok(())
+    }
+    fn merge_serialized(&self, _input: MergeSerializedInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn merge_states(&self, _input: MergeStatesInput<'_>) -> Result<()> {
+        Ok(())
+    }
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+        JsonArrayAggState::<AnyType>::default().merge_result(input.builder)
+    }
+    unsafe fn drop_state(&self, _state: AggrState<'_>) {}
 }

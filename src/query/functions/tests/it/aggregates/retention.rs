@@ -164,3 +164,66 @@ fn test_state_baselines() {
         },
     ]);
 }
+
+#[test]
+fn test_retention_distinct_arities() -> Result<()> {
+    use databend_common_expression::types::UInt8Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    for arity in [1, 2] {
+        let entries =
+            vec![BlockEntry::from(BooleanType::from_data(vec![true, false, true])); arity];
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                let (result, _) = eval_aggregate_for_test(
+                    "retention_distinct",
+                    vec![],
+                    &entries,
+                    3,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                let expected = UInt8Type::from_data(vec![1u8; arity]);
+                assert_eq!(result.index(0).unwrap(), ScalarRef::Array(expected));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_retention_distinct_null_filtering() -> Result<()> {
+    use databend_common_expression::types::UInt8Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    let entries = [
+        BlockEntry::from(BooleanType::from_data(vec![true, false, false])),
+        BlockEntry::from(BooleanType::from_data_with_validity(
+            vec![false, true, true],
+            vec![false, true, true],
+        )),
+    ];
+    for name in ["retention", "retention_distinct"] {
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                let (result, _) = eval_aggregate_for_test(
+                    name,
+                    vec![],
+                    &entries,
+                    3,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                assert_eq!(
+                    result.index(0).unwrap(),
+                    ScalarRef::Array(UInt8Type::from_data(vec![0u8, 0]))
+                );
+            }
+        }
+    }
+    Ok(())
+}
