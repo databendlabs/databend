@@ -728,32 +728,30 @@ pub(crate) struct LogicalChangeRows {
     deleted: u64,
 }
 
+/// UPDATE and DELETE rows committed between the two endpoints.
+///
+/// `None` means the delta is unknowable and the caller must fall back to
+/// endpoint/origin-based processing rather than treating it as "no changes".
 fn logical_change_delta(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
 ) -> Result<Option<(u64, u64)>> {
-    let Some((latest_updated, latest_deleted)) =
-        latest.and_then(TableSnapshot::logical_change_counters)
-    else {
+    let Some(latest_counters) = latest.and_then(TableSnapshot::logical_change_counters) else {
         return Ok(None);
     };
-    let (base_updated, base_deleted) = match base {
+    match base {
         Some(snapshot) => {
-            let Some(counters) = snapshot.logical_change_counters() else {
+            let Some(base_counters) = snapshot.logical_change_counters() else {
                 return Ok(None);
             };
-            counters
+            latest_counters.delta_from(&base_counters)
         }
-        None => (0, 0),
-    };
-
-    let updated = latest_updated
-        .checked_sub(base_updated)
-        .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
-    let deleted = latest_deleted
-        .checked_sub(base_deleted)
-        .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
-    Ok(Some((updated, deleted)))
+        // Without a base endpoint the delta only feeds row-count estimates. A
+        // restarted history makes the totals cover less than the table's whole
+        // life, which can understate an estimate but cannot affect the
+        // correctness of stream results.
+        None => latest_counters.increments_since(None).map(Some),
+    }
 }
 
 fn logical_change_rows(

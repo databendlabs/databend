@@ -106,10 +106,82 @@ pub struct TableSnapshot {
     logical_change_counters: Option<LogicalChangeCounters>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, FrozenAPI)]
-struct LogicalChangeCounters {
+/// Cumulative logical UPDATE and DELETE row counters, tagged with the identity
+/// of the counting history they belong to.
+///
+/// Counters restart from zero whenever a predecessor cannot prove continuity —
+/// a legacy writer that dropped the field, or a pre-v4 format snapshot. A
+/// restart is invisible in the values themselves, so each history is tagged
+/// with the table seq at which it began. Totals from two different histories
+/// are unrelated and must never be subtracted; use [`Self::delta_from`] and
+/// [`Self::increments_since`] rather than reading the totals directly.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, FrozenAPI)]
+pub struct LogicalChangeCounters {
     updated_rows_total: u64,
     deleted_rows_total: u64,
+    /// Table seq at which this counting history began.
+    ///
+    /// `None` means the snapshot was written by a version that tracked
+    /// counters but not their identity, so continuity cannot be established.
+    /// Such counters are unusable until a later write mints an epoch.
+    #[serde(default)]
+    epoch: Option<u64>,
+}
+
+impl LogicalChangeCounters {
+    /// UPDATE and DELETE rows committed between `base` and `self`.
+    ///
+    /// `Ok(None)` means the delta is unknowable and the caller must fall back
+    /// to endpoint/origin-based processing: either endpoint's identity is
+    /// unknown, or the two belong to different counting histories. Subtracting
+    /// across a restart would report the changes the restart hid as zero.
+    pub fn delta_from(&self, base: &Self) -> Result<Option<(u64, u64)>> {
+        let (Some(self_epoch), Some(base_epoch)) = (self.epoch, base.epoch) else {
+            return Ok(None);
+        };
+        if self_epoch != base_epoch {
+            return Ok(None);
+        }
+        // Monotonic within one epoch, so a decrease here is a broken invariant
+        // rather than a discontinuous history.
+        let updated = self
+            .updated_rows_total
+            .checked_sub(base.updated_rows_total)
+            .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
+        let deleted = self
+            .deleted_rows_total
+            .checked_sub(base.deleted_rows_total)
+            .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
+        Ok(Some((updated, deleted)))
+    }
+
+    /// Increments accumulated by `self` on top of `base`, where `self` is known
+    /// to have been generated directly from `base`.
+    ///
+    /// Unlike [`Self::delta_from`] this always yields a value: when `base`
+    /// could not prove continuity, `self` started a fresh history from zero and
+    /// its totals already *are* the increments. Deciding that by epoch, rather
+    /// than by defaulting the base to zero, avoids subtracting the totals of an
+    /// unrelated history.
+    pub fn increments_since(&self, base: Option<&Self>) -> Result<(u64, u64)> {
+        let (base_updated, base_deleted) = base
+            .filter(|base| base.epoch.is_some() && base.epoch == self.epoch)
+            .map_or((0, 0), |base| {
+                (base.updated_rows_total, base.deleted_rows_total)
+            });
+        // Either same epoch (monotonic) or reduced to a zero base, so neither
+        // subtraction may underflow. Release builds disable overflow checks, so
+        // verify rather than wrap.
+        let updated = self
+            .updated_rows_total
+            .checked_sub(base_updated)
+            .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
+        let deleted = self
+            .deleted_rows_total
+            .checked_sub(base_deleted)
+            .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
+        Ok((updated, deleted))
+    }
 }
 
 impl TableSnapshot {
@@ -172,12 +244,29 @@ impl TableSnapshot {
         {
             summary.cluster_stats = None;
         }
-        let logical_change_counters = Some(
-            prev_snapshot
-                .as_ref()
-                .and_then(|snapshot| snapshot.logical_change_counters)
-                .unwrap_or_default(),
-        );
+        // Inherit the predecessor's counting history only when it can be proven
+        // continuous. A predecessor whose counters are absent (legacy writer or
+        // pre-v4 format) or whose epoch is unknown leaves the accumulated totals
+        // unknowable, so counting restarts under a fresh identity instead of
+        // silently resuming from zero inside the old history.
+        let restarted = |epoch| LogicalChangeCounters {
+            updated_rows_total: 0,
+            deleted_rows_total: 0,
+            epoch,
+        };
+        let logical_change_counters = Some(match prev_snapshot.as_ref() {
+            // No predecessor at all: the table's counting history starts here
+            // and the totals really are zero, independent of any seq.
+            None => restarted(Some(prev_table_seq.unwrap_or(0))),
+            Some(prev) => match prev.logical_change_counters {
+                Some(counters) if counters.epoch.is_some() => counters,
+                // Restarting mid-history. Only provable when the table seq this
+                // restart commits against is known; without it the restart point
+                // is indistinguishable from the history it replaces, so leave it
+                // unknown and let readers fall back.
+                _ => restarted(prev_table_seq),
+            },
+        });
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -290,18 +379,31 @@ impl TableSnapshot {
         ensure_segments_unique(&self.segments)
     }
 
-    pub fn logical_change_counters(&self) -> Option<(u64, u64)> {
+    /// Cumulative logical change counters, or `None` when this snapshot was
+    /// written by a version that did not track them.
+    ///
+    /// The returned totals are only meaningful relative to another snapshot from
+    /// the same counting history; compare them via
+    /// [`LogicalChangeCounters::delta_from`] rather than reading them directly.
+    pub fn logical_change_counters(&self) -> Option<LogicalChangeCounters> {
         self.logical_change_counters
-            .map(|counters| (counters.updated_rows_total, counters.deleted_rows_total))
     }
 
     /// Adds one committed operation's logical UPDATE and DELETE increments.
+    ///
+    /// A no-op when the counters are absent: resurrecting them here would
+    /// present a single operation's increments as the table's cumulative totals,
+    /// and without an epoch they could not be compared anyway. Snapshots from
+    /// `try_new` always carry counters, so this only guards ones deserialized
+    /// from a legacy writer.
     pub fn add_logical_change_delta(&mut self, updated_rows: u64, deleted_rows: u64) {
-        let counters = self
-            .logical_change_counters
-            .get_or_insert_with(LogicalChangeCounters::default);
-        counters.updated_rows_total += updated_rows;
-        counters.deleted_rows_total += deleted_rows;
+        let Some(counters) = self.logical_change_counters.as_mut() else {
+            return;
+        };
+        // Release builds disable overflow checks. Saturate rather than wrap,
+        // since a wrapped total would later read as a counter decrease.
+        counters.updated_rows_total = counters.updated_rows_total.saturating_add(updated_rows);
+        counters.deleted_rows_total = counters.deleted_rows_total.saturating_add(deleted_rows);
     }
 }
 
