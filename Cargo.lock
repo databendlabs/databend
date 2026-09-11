@@ -15551,7 +15551,7 @@ dependencies = [
 [[package]]
 name = "reqwest-hickory-resolver"
 version = "0.2.0"
-source = "git+https://github.com/dqhl76/reqwest-hickory-resolver?rev=5ad03257a3c702d34b9643878efb5a3536323d2d#5ad03257a3c702d34b9643878efb5a3536323d2d"
+source = "git+https://github.com/datafuse-extras/reqwest-hickory-resolver?rev=5ad03257a3c702d34b9643878efb5a3536323d2d#5ad03257a3c702d34b9643878efb5a3536323d2d"
 dependencies = [
  "hickory-resolver",
  "rand 0.9.2",
