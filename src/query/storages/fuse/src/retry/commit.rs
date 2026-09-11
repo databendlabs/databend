@@ -230,9 +230,11 @@ async fn try_rebuild_req(
         let base_counters = base_snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.logical_change_counters());
-        let logical_delta = match new_counters {
-            Some(counters) => counters.transaction_delta_from(base_counters.as_ref())?,
-            None => None,
+        // A reset can discard changes from earlier statements. Only comparable
+        // endpoints prove the full transaction delta; otherwise invalidate below.
+        let logical_delta = match (new_counters, base_counters) {
+            (Some(new), Some(base)) => new.delta_from(&base)?,
+            _ => None,
         };
 
         let s = merge_statistics(

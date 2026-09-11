@@ -1007,60 +1007,39 @@ mod tests {
         assert_eq!(logical_change_rows(None, Some(&restarted)).unwrap(), None);
     }
 
-    /// A legacy writer between the two endpoints restarts the counters. The
-    /// endpoints then both read as zero, so the UPDATE/DELETE rows committed
-    /// before the restart must not be reported as "no changes" — that would
-    /// silently optimize a Standard stream into AppendOnly and drop them.
+    /// A restart must neither look like zero changes (zero base counters) nor
+    /// cause subtraction underflow (nonzero base counters).
     #[test]
-    fn test_restarted_counters_do_not_prove_absence_of_changes() {
-        // Stream created on a fresh table, so its base totals are zero.
-        let base = snapshot_at(Some(10), None, 3);
+    fn test_restarted_counters_fall_back() {
+        for (updated, deleted) in [(0, 0), (5, 3)] {
+            let mut base = snapshot_at(Some(10), None, 3);
+            base.add_logical_change_delta(updated, deleted);
 
-        // UPDATE 1 row + DELETE 1 row while counters are tracked.
-        let mut mutated = snapshot_at(Some(11), Some(Arc::new(base.clone())), 2);
-        mutated.add_logical_change_delta(1, 1);
-        assert_eq!(
-            logical_change_delta(Some(&base), Some(&mutated)).unwrap(),
-            Some((1, 1)),
-            "within one history the delta is visible"
-        );
+            let mut mutated = snapshot_at(Some(11), Some(Arc::new(base.clone())), 2);
+            mutated.add_logical_change_delta(1, 1);
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&mutated)).unwrap(),
+                Some((1, 1)),
+                "within one history the delta is visible"
+            );
 
-        // A legacy writer publishes a snapshot without the counter field.
-        let legacy = strip_counters(&snapshot_at(Some(12), Some(Arc::new(mutated)), 3));
-        assert_eq!(
-            logical_change_delta(Some(&base), Some(&legacy)).unwrap(),
-            None,
-            "unknown latest counters must not yield a delta"
-        );
+            let legacy = strip_counters(&snapshot_at(Some(12), Some(Arc::new(mutated)), 3));
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&legacy)).unwrap(),
+                None
+            );
 
-        // A counter-aware writer follows, restarting the totals from zero.
-        let after_upgrade = snapshot_at(Some(13), Some(Arc::new(legacy)), 4);
-        assert_eq!(
-            logical_change_delta(Some(&base), Some(&after_upgrade)).unwrap(),
-            None,
-            "endpoints from different histories must not be subtracted"
-        );
-    }
-
-    /// Same history break, but the stream's base already carried non-zero
-    /// totals. Subtracting across the restart used to underflow and fail the
-    /// query; it must now degrade to an unknown delta instead.
-    #[test]
-    fn test_restarted_counters_below_base_do_not_error() {
-        let mut base = snapshot_at(Some(10), None, 10);
-        base.add_logical_change_delta(5, 3);
-
-        let legacy = strip_counters(&snapshot_at(Some(11), Some(Arc::new(base.clone())), 10));
-        let after_upgrade = snapshot_at(Some(12), Some(Arc::new(legacy)), 11);
-
-        assert_eq!(
-            logical_change_delta(Some(&base), Some(&after_upgrade)).unwrap(),
-            None
-        );
-        assert_eq!(
-            logical_change_rows(Some(&base), Some(&after_upgrade)).unwrap(),
-            None
-        );
+            let after_upgrade = snapshot_at(Some(13), Some(Arc::new(legacy)), 4);
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&after_upgrade)).unwrap(),
+                None,
+                "different histories must fall back, base=({updated}, {deleted})"
+            );
+            assert_eq!(
+                logical_change_rows(Some(&base), Some(&after_upgrade)).unwrap(),
+                None
+            );
+        }
     }
 
     /// The fix must not cost the optimization for streams created after the

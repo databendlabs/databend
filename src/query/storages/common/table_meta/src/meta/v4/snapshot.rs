@@ -102,18 +102,19 @@ pub struct TableSnapshot {
 
     /// Cumulative logical UPDATE and DELETE counters. `None` means this snapshot
     /// was written by a version that did not track logical changes.
+    // Also cleared by transaction retry when the complete delta is unknown.
     #[serde(default)]
     logical_change_counters: Option<LogicalChangeCounters>,
 }
 
 /// Cumulative UPDATE/DELETE counters. Only endpoints with the same known epoch
-/// are comparable; a legacy writer breaks continuity and starts a new epoch.
+/// are comparable. Legacy writes and overflow break continuity.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, FrozenAPI)]
 pub struct LogicalChangeCounters {
     updated_rows_total: u64,
     deleted_rows_total: u64,
     /// Table seq used when starting this history, before committing its first
-    /// snapshot. Missing in older snapshots; `None` cannot prove continuity.
+    /// snapshot. `None` means unknown: older snapshots or a reset without a fresh seq.
     #[serde(default)]
     epoch: Option<u64>,
 }
@@ -143,16 +144,6 @@ impl LogicalChangeCounters {
             .checked_sub(base.deleted_rows_total)
             .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
         Ok(Some((updated, deleted)))
-    }
-
-    /// Extract the transaction's complete delta only when its history is known
-    /// to be continuous. After a reset, totals may omit earlier statements.
-    /// Without a known base, a reset cannot be distinguished from initialization.
-    pub fn transaction_delta_from(&self, base: Option<&Self>) -> Result<Option<(u64, u64)>> {
-        match base {
-            Some(base) => self.delta_from(base),
-            None => Ok(None),
-        }
     }
 }
 
@@ -609,13 +600,9 @@ mod tests {
         aware.add_logical_change_delta(17, 23);
         let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
         let decoded_counters = decoded.logical_change_counters().unwrap();
-        // Same history: totals are directly comparable.
-        assert_eq!(
-            decoded_counters
-                .delta_from(&aware.logical_change_counters().unwrap())
-                .unwrap(),
-            Some((0, 0))
-        );
+        assert_eq!(decoded_counters.updated_rows_total, 17);
+        assert_eq!(decoded_counters.deleted_rows_total, 23);
+        assert_eq!(decoded_counters.epoch, Some(10));
 
         // A legacy writer drops the field entirely.
         let legacy = strip_counters(&decoded);
@@ -676,9 +663,7 @@ mod tests {
         // An epochless transaction base cannot prove whether earlier statements
         // were lost in a reset, so retry must invalidate the merged counters.
         assert_eq!(
-            healed_counters
-                .transaction_delta_from(Some(&epochless_counters))
-                .unwrap(),
+            healed_counters.delta_from(&epochless_counters).unwrap(),
             None
         );
     }
@@ -700,7 +685,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_delta_requires_continuity_from_known_base() {
+    fn test_delta_across_intermediate_snapshots() {
         let mut base = snapshot_at(Some(10), None);
         base.add_logical_change_delta(5, 3);
         let base_counters = base.logical_change_counters().unwrap();
@@ -712,19 +697,14 @@ mod tests {
             latest
                 .logical_change_counters()
                 .unwrap()
-                .transaction_delta_from(Some(&base_counters))
+                .delta_from(&base_counters)
                 .unwrap(),
             Some((5, 3))
         );
 
         for seq in [None, Some(20)] {
             let unrelated = snapshot_at(seq, None).logical_change_counters().unwrap();
-            assert_eq!(
-                unrelated
-                    .transaction_delta_from(Some(&base_counters))
-                    .unwrap(),
-                None
-            );
+            assert_eq!(unrelated.delta_from(&base_counters).unwrap(), None);
         }
     }
 
@@ -741,12 +721,6 @@ mod tests {
             assert_eq!(counters.updated_rows_total, 1);
             assert_eq!(counters.deleted_rows_total, 2);
             assert_eq!(counters.delta_from(&base_counters).unwrap(), None);
-            assert_eq!(
-                counters
-                    .transaction_delta_from(Some(&base_counters))
-                    .unwrap(),
-                None
-            );
 
             let decoded = TableSnapshot::from_slice(&child.to_bytes().unwrap()).unwrap();
             let mut descendant = snapshot_at(Some(30), Some(Arc::new(decoded)));
@@ -759,12 +733,20 @@ mod tests {
                     .unwrap(),
                 Some((3, 4))
             );
+
+            // A second overflow at the same seq must not reuse epoch 20.
+            child.add_logical_change_delta(u64::MAX, u64::MAX);
+            let reset = child.logical_change_counters().unwrap();
+            assert_eq!(reset.epoch, None);
+            assert_eq!(reset.updated_rows_total, u64::MAX);
+            assert_eq!(reset.deleted_rows_total, u64::MAX);
+            assert_eq!(reset.delta_from(&counters).unwrap(), None);
         }
     }
 
     #[test]
     fn test_overflow_without_fresh_seq_stays_unknown() {
-        for seq in [None, Some(10)] {
+        for seq in [None, Some(9), Some(10)] {
             let mut base = snapshot_at(Some(10), None);
             base.add_logical_change_delta(u64::MAX, 0);
             let mut child = snapshot_at(seq, Some(Arc::new(base)));
@@ -773,12 +755,12 @@ mod tests {
             assert_eq!(counters.epoch, None);
             assert_eq!(counters.updated_rows_total, 1);
             assert_eq!(counters.deleted_rows_total, 2);
-            assert_eq!(counters.transaction_delta_from(None).unwrap(), None);
+            assert_eq!(counters.delta_from(&counters).unwrap(), None);
         }
     }
 
     #[test]
-    fn test_retry_with_unknown_delta_invalidates_latest_counters() {
+    fn test_invalidated_counters_roundtrip_and_restart() {
         let mut latest = snapshot_at(Some(10), None);
         latest.add_logical_change_delta(7, 9);
         let latest_counters = latest.logical_change_counters().unwrap();
