@@ -594,93 +594,6 @@ mod tests {
     }
 
     #[test]
-    fn test_logical_change_counter_compatibility_boundary() {
-        let mut aware = snapshot_at(Some(10), None);
-        aware.add_logical_change_delta(17, 23);
-        let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
-        let decoded_counters = decoded.logical_change_counters().unwrap();
-        assert_eq!(decoded_counters.updated_rows_total, 17);
-        assert_eq!(decoded_counters.deleted_rows_total, 23);
-        assert_eq!(decoded_counters.epoch, Some(10));
-
-        // A legacy writer drops the field entirely.
-        let legacy = strip_counters(&decoded);
-        assert!(legacy.logical_change_counters().is_none());
-
-        // Its counter-aware child restarts counting, but under a new identity so
-        // the restart stays detectable when endpoints are compared.
-        let first_aware = snapshot_at(Some(20), Some(Arc::new(legacy)));
-        let first_aware_counters = first_aware.logical_change_counters().unwrap();
-        assert_eq!(
-            first_aware_counters.delta_from(&decoded_counters).unwrap(),
-            None,
-            "counters from a restarted history must not be subtracted"
-        );
-
-        // A continuous descendant keeps the epoch and accumulates.
-        let mut continuous = snapshot_at(Some(30), Some(Arc::new(first_aware)));
-        continuous.add_logical_change_delta(2, 5);
-        assert_eq!(
-            continuous
-                .logical_change_counters()
-                .unwrap()
-                .delta_from(&first_aware_counters)
-                .unwrap(),
-            Some((2, 5))
-        );
-    }
-
-    #[test]
-    fn test_counters_without_epoch_are_unusable() {
-        // Written by the version that tracked counters but not their identity:
-        // the values are present but continuity is unprovable.
-        let mut aware = snapshot_at(Some(10), None);
-        aware.add_logical_change_delta(7, 9);
-        let mut value = serde_json::to_value(aware).unwrap();
-        value
-            .as_object_mut()
-            .unwrap()
-            .get_mut("logical_change_counters")
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .remove("epoch");
-        let epochless: TableSnapshot = serde_json::from_value(value).unwrap();
-        let epochless_counters = epochless.logical_change_counters().unwrap();
-        assert_eq!(epochless_counters.updated_rows_total, 7);
-        assert_eq!(epochless_counters.deleted_rows_total, 9);
-        assert_eq!(
-            epochless_counters.delta_from(&epochless_counters).unwrap(),
-            None
-        );
-
-        // A caller without a seq must preserve the totals too, but cannot
-        // identify the new history.
-        let unidentified = snapshot_at(None, Some(Arc::new(epochless.clone())));
-        let unidentified_counters = unidentified.logical_change_counters().unwrap();
-        assert_eq!(unidentified_counters.epoch, None);
-        assert_eq!(unidentified_counters.updated_rows_total, 7);
-        assert_eq!(unidentified_counters.deleted_rows_total, 9);
-
-        // Mint an epoch without resetting the totals used by older readers.
-        let healed = snapshot_at(Some(20), Some(Arc::new(epochless)));
-        let healed_counters = healed.logical_change_counters().unwrap();
-        assert_eq!(healed_counters.epoch, Some(20));
-        assert_eq!(healed_counters.updated_rows_total, 7);
-        assert_eq!(healed_counters.deleted_rows_total, 9);
-        assert_eq!(
-            healed_counters.delta_from(&healed_counters).unwrap(),
-            Some((0, 0))
-        );
-        // An epochless transaction base cannot prove whether earlier statements
-        // were lost in a reset, so retry must invalidate the merged counters.
-        assert_eq!(
-            healed_counters.delta_from(&epochless_counters).unwrap(),
-            None
-        );
-    }
-
-    #[test]
     fn test_epochless_writer_handoff_preserves_cumulative_totals() {
         // Model the older counter schema: unknown fields are discarded on read
         // and cannot be serialized back by an older writer.
@@ -705,7 +618,16 @@ mod tests {
             initial.add_logical_change_delta(base_updated, base_deleted);
             let base = old_writer(&initial, 0, 0);
             let base_counters = base.logical_change_counters().unwrap();
+            assert_eq!(base_counters.epoch, None);
+            assert_eq!(base_counters.delta_from(&base_counters).unwrap(), None);
             let old_latest = old_writer(&base, 1, 1);
+
+            // Missing seq must neither fabricate an epoch nor discard totals.
+            let unidentified = snapshot_at(None, Some(Arc::new(old_latest.clone())));
+            let counters = unidentified.logical_change_counters().unwrap();
+            assert_eq!(counters.epoch, None);
+            assert_eq!(counters.updated_rows_total, base_updated + 1);
+            assert_eq!(counters.deleted_rows_total, base_deleted + 1);
 
             let mut upgraded = snapshot_at(Some(20), Some(Arc::new(old_latest)));
             upgraded.add_logical_change_delta(2, 3);
@@ -821,27 +743,26 @@ mod tests {
     }
 
     #[test]
-    fn test_invalidated_counters_roundtrip_and_restart() {
-        let mut latest = snapshot_at(Some(10), None);
-        latest.add_logical_change_delta(7, 9);
-        let latest_counters = latest.logical_change_counters().unwrap();
-        let mut merged = snapshot_at(Some(20), Some(Arc::new(latest)));
-        merged.invalidate_logical_change_counters();
-        assert!(merged.logical_change_counters().is_none());
-        let merged = TableSnapshot::from_slice(&merged.to_bytes().unwrap()).unwrap();
-        assert!(merged.logical_change_counters().is_none());
-        let healed = snapshot_at(Some(30), Some(Arc::new(merged)));
-        let counters = healed.logical_change_counters().unwrap();
-        assert_eq!(counters.epoch, Some(30));
-        assert_eq!(counters.delta_from(&latest_counters).unwrap(), None);
-    }
+    fn test_absent_counters_roundtrip_and_restart() {
+        let mut base = snapshot_at(Some(10), None);
+        base.add_logical_change_delta(7, 9);
+        let base_counters = base.logical_change_counters().unwrap();
+        let mut invalidated = snapshot_at(Some(20), Some(Arc::new(base.clone())));
+        invalidated.invalidate_logical_change_counters();
 
-    #[test]
-    fn test_add_delta_does_not_resurrect_absent_counters() {
-        let mut legacy = strip_counters(&snapshot(None));
-        legacy.add_logical_change_delta(4, 6);
-        // Must stay absent: 4/6 are one operation's increments, not the table's
-        // cumulative totals.
-        assert!(legacy.logical_change_counters().is_none());
+        // Both a legacy writer and explicit invalidation produce unknown counters.
+        for mut absent in [strip_counters(&base), invalidated] {
+            absent.add_logical_change_delta(4, 6);
+            assert!(absent.logical_change_counters().is_none());
+            let decoded = TableSnapshot::from_slice(&absent.to_bytes().unwrap()).unwrap();
+            assert!(decoded.logical_change_counters().is_none());
+
+            let restarted = snapshot_at(Some(30), Some(Arc::new(decoded)));
+            let counters = restarted.logical_change_counters().unwrap();
+            assert_eq!(counters.epoch, Some(30));
+            assert_eq!(counters.updated_rows_total, 0);
+            assert_eq!(counters.deleted_rows_total, 0);
+            assert_eq!(counters.delta_from(&base_counters).unwrap(), None);
+        }
     }
 }
