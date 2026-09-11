@@ -35,8 +35,10 @@ use super::AggregateCallRef;
 use super::AggregateEval;
 use super::AggregateMetadata;
 use super::AggregateSignature;
+use super::AggregateStateDescription;
 use super::AggregateStateSet;
 use super::ArgumentsPattern;
+use super::Combinator;
 use super::FunctionInputLayout;
 use super::MergeResultInput;
 use super::MergeSerializedInput;
@@ -45,18 +47,17 @@ use super::RawAggregateCall;
 use super::SerializeInput;
 use super::state_combinator::aggregate_state_data_type;
 
-type NestedBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateCallRef> + 'a;
+type MergeBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateCallRef> + 'a;
 
 pub(crate) type LegacySignatureResolver = fn(&[Scalar], &DataType) -> Vec<Vec<DataType>>;
 
 pub(super) fn create(
     request: RawAggregateCall<'_>,
-    metadata: AggregateMetadata,
     nested_name: &str,
     nested_aliases: &[&str],
     nested_arguments: &ArgumentsPattern,
     legacy_signature_resolver: Option<LegacySignatureResolver>,
-    nested_build: &NestedBuild<'_>,
+    build_merge: &MergeBuild<'_>,
     returns_state: bool,
 ) -> Result<AggregateCallRef> {
     let combinator_name = if returns_state {
@@ -69,65 +70,118 @@ pub(super) fn create(
             "Aggregate function {nested_name}_{combinator_name} expects exactly one state argument"
         )));
     };
-    let nested_request = NestedRequest {
+    let merge_request = MergeRequest {
         name: nested_name,
         aliases: nested_aliases,
         arguments: nested_arguments,
         legacy_signature_resolver,
-        build: nested_build,
+        build: build_merge,
         params: request.params,
     };
 
     let state_type = argument_type.remove_nullable();
-    let (nested, result_state_type) = if let DataType::AggregateState(state) = &state_type {
-        create_from_metadata(nested_request, state, combinator_name)?
+    if let DataType::AggregateState(state) = &state_type {
+        create_from_metadata(merge_request, state, combinator_name)
     } else {
-        create_from_legacy_state(nested_request, &state_type, combinator_name)?
-    };
-
-    let return_type = if returns_state {
-        result_state_type
-    } else {
-        nested.signature().return_type.clone()
-    };
-    let signature = AggregateSignature {
-        name: request.name.to_string(),
-        params: request.params.to_vec(),
-        args_type: request.args_type.to_vec(),
-        distinct: request.distinct,
-        order_by: request.order_by.to_vec(),
-        return_type,
-    };
-    let state = nested.state().clone();
-    Ok(Arc::new(AggregateCallInstance::new(
-        signature,
-        FunctionInputLayout::Identity,
-        metadata.into_features(),
-        state,
-        MergeEval {
-            nested,
-            returns_state,
-        },
-    )))
+        create_from_legacy_state(merge_request, &state_type, combinator_name)
+    }
 }
 
-/// The params, metadata, and static builder needed to create a nested
-/// aggregate function for the current merge request.
+/// Inserts MERGE while the implementation and its state layout are still concrete.
+pub(crate) struct MergeCombinator {
+    pub(crate) signature: AggregateSignature,
+    pub(crate) metadata: AggregateMetadata,
+    pub(crate) returns_state: bool,
+}
+
+impl Combinator for MergeCombinator {
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        _metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        if ORDERED && !signature.order_by.is_empty() {
+            let (input_types, order_by) = super::sort_combinator::sort_runtime_inputs(
+                &signature.args_type,
+                &signature.order_by,
+            );
+            let state = super::sort_combinator::sort_state_description(&state);
+            let eval = super::sort_combinator::SortEval::new(eval, input_types, order_by);
+            self.finish(signature, state, eval)
+        } else {
+            self.finish(signature, state, eval)
+        }
+    }
+}
+
+impl MergeCombinator {
+    fn finish(
+        mut self,
+        nested_signature: AggregateSignature,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        let state_type = StateSerdeType::new(state.serde_items().to_vec()).data_type();
+        let argument_type = self.signature.args_type[0].remove_nullable();
+        let result_state_type = if let DataType::AggregateState(persisted) = argument_type {
+            if state_type != *persisted.state_type {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Aggregate state layout does not match the signature of {}",
+                    self.signature.name
+                )));
+            }
+            DataType::AggregateState(persisted)
+        } else {
+            if state_type != argument_type {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Aggregate state layout does not match the signature of {}",
+                    self.signature.name
+                )));
+            }
+            aggregate_state_data_type(
+                &nested_signature.name,
+                &nested_signature.params,
+                nested_signature.args_type,
+                state_type,
+            )?
+        };
+        self.signature.return_type = if self.returns_state {
+            result_state_type
+        } else {
+            nested_signature.return_type
+        };
+        Ok(Arc::new(AggregateCallInstance::new(
+            self.signature,
+            FunctionInputLayout::Identity,
+            self.metadata.into_features(),
+            state,
+            MergeEval {
+                nested: eval,
+                returns_state: self.returns_state,
+            },
+        )))
+    }
+}
+
+/// Resolves implementation arguments and builds the final MERGE call through
+/// MergeCombinator; no inner AggregateCall is constructed.
 #[derive(Clone, Copy)]
-struct NestedRequest<'a> {
+struct MergeRequest<'a> {
     name: &'a str,
     aliases: &'a [&'a str],
     arguments: &'a ArgumentsPattern,
     legacy_signature_resolver: Option<LegacySignatureResolver>,
-    build: &'a NestedBuild<'a>,
+    build: &'a MergeBuild<'a>,
     params: &'a [Scalar],
 }
 
 fn create_from_metadata(
-    request: NestedRequest<'_>,
+    request: MergeRequest<'_>,
     state: &AggregateStateDataType,
     combinator_name: &str,
-) -> Result<(AggregateCallRef, DataType)> {
+) -> Result<AggregateCallRef> {
     let nested_name = request.name;
     if !std::iter::once(request.name)
         .chain(request.aliases.iter().copied())
@@ -151,61 +205,41 @@ fn create_from_metadata(
         .cloned()
         .map(Scalar::from)
         .collect::<Vec<_>>();
-    let nested = (request.build)(&nested_params, &state.argument_types)?;
-    if serialized_state_type(&nested) != *state.state_type {
-        return Err(ErrorCode::BadDataValueType(format!(
-            "Aggregate state layout does not match the signature of {nested_name}_{combinator_name}"
-        )));
-    }
-
-    Ok((nested, DataType::AggregateState(Box::new(state.clone()))))
+    (request.build)(&nested_params, &state.argument_types)
 }
 
 fn create_from_legacy_state(
-    request: NestedRequest<'_>,
+    request: MergeRequest<'_>,
     state_type: &DataType,
     combinator_name: &str,
-) -> Result<(AggregateCallRef, DataType)> {
+) -> Result<AggregateCallRef> {
     let resolved = match request.legacy_signature_resolver {
         Some(resolve) => resolve(request.params, state_type)
             .into_iter()
-            .find_map(|argument_types| try_legacy_signature(request, state_type, argument_types)),
+            .find_map(|argument_types| try_legacy_signature(request, argument_types)),
         None => LegacySignatureSearch::new(request, state_type).run(),
     };
-    let Some((nested, argument_types)) = resolved else {
+    let Some(function) = resolved else {
         let nested_name = request.name;
         return Err(ErrorCode::BadDataValueType(format!(
             "Cannot infer the original aggregate argument from state type '{state_type}' for {nested_name}_{combinator_name}"
         )));
     };
-    let result_state_type = aggregate_state_data_type(
-        request.name,
-        request.params,
-        argument_types,
-        state_type.clone(),
-    )?;
-    Ok((nested, result_state_type))
+    Ok(function)
 }
 
 fn try_legacy_signature(
-    request: NestedRequest<'_>,
-    state_type: &DataType,
+    request: MergeRequest<'_>,
     argument_types: Vec<DataType>,
-) -> Option<(AggregateCallRef, Vec<DataType>)> {
+) -> Option<AggregateCallRef> {
     if !request.arguments.matches_types(&argument_types) {
         return None;
     }
-    let nested = (request.build)(request.params, &argument_types).ok()?;
-    if serialized_state_type(&nested) != *state_type
-        || legacy_signature_has_ambiguous_decimal_scale(request, &argument_types, state_type)
-    {
+    let function = (request.build)(request.params, &argument_types).ok()?;
+    if legacy_signature_has_ambiguous_decimal_scale(request, &argument_types) {
         return None;
     }
-    Some((nested, argument_types))
-}
-
-fn serialized_state_type(function: &AggregateCallRef) -> DataType {
-    StateSerdeType::new(function.state().serde_items().to_vec()).data_type()
+    Some(function)
 }
 
 fn collect_candidates(data_type: &DataType, candidates: &mut Vec<DataType>) {
@@ -233,8 +267,7 @@ fn collect_candidates(data_type: &DataType, candidates: &mut Vec<DataType>) {
 /// here instead of being threaded through recursive calls as positional
 /// arguments.
 struct LegacySignatureSearch<'a> {
-    request: NestedRequest<'a>,
-    state_type: &'a DataType,
+    request: MergeRequest<'a>,
     candidates: Vec<DataType>,
     argument_types: Vec<DataType>,
     attempts: usize,
@@ -249,19 +282,18 @@ impl<'a> LegacySignatureSearch<'a> {
     /// per-arity count.
     const MAX_ATTEMPTS: usize = 4096;
 
-    fn new(request: NestedRequest<'a>, state_type: &'a DataType) -> Self {
+    fn new(request: MergeRequest<'a>, state_type: &'a DataType) -> Self {
         let mut candidates = Vec::new();
         collect_candidates(state_type, &mut candidates);
         Self {
             request,
-            state_type,
             candidates,
             argument_types: Vec::new(),
             attempts: 0,
         }
     }
 
-    fn run(mut self) -> Option<(AggregateCallRef, Vec<DataType>)> {
+    fn run(mut self) -> Option<AggregateCallRef> {
         // Arity 0 is tried last: it only applies to `count`, and trying it first
         // would let a zero-argument state shadow a genuine single-argument one.
         for arity in (1..=Self::MAX_ARGUMENTS).chain(std::iter::once(0)) {
@@ -286,7 +318,7 @@ impl<'a> LegacySignatureSearch<'a> {
         self.attempts >= Self::MAX_ATTEMPTS
     }
 
-    fn search(&mut self, arity: usize) -> Option<(AggregateCallRef, Vec<DataType>)> {
+    fn search(&mut self, arity: usize) -> Option<AggregateCallRef> {
         if self.argument_types.len() == arity {
             return self.try_current();
         }
@@ -305,11 +337,11 @@ impl<'a> LegacySignatureSearch<'a> {
         None
     }
 
-    /// Checks the fully built argument list, returning the nested function when
+    /// Checks the fully built argument list, returning the MERGE call when
     /// it reproduces the state layout unambiguously.
-    fn try_current(&mut self) -> Option<(AggregateCallRef, Vec<DataType>)> {
+    fn try_current(&mut self) -> Option<AggregateCallRef> {
         self.attempts += 1;
-        try_legacy_signature(self.request, self.state_type, self.argument_types.clone())
+        try_legacy_signature(self.request, self.argument_types.clone())
     }
 }
 
@@ -317,9 +349,8 @@ impl<'a> LegacySignatureSearch<'a> {
 /// different scale would produce the same layout the original arguments cannot
 /// be recovered and the state is refused rather than guessed.
 fn legacy_signature_has_ambiguous_decimal_scale(
-    request: NestedRequest<'_>,
+    request: MergeRequest<'_>,
     argument_types: &[DataType],
-    state_type: &DataType,
 ) -> bool {
     if request.name.eq_ignore_ascii_case("sum")
         && argument_types.iter().any(is_legacy_decimal_sum_argument)
@@ -333,8 +364,7 @@ fn legacy_signature_has_ambiguous_decimal_scale(
             .any(|alternate_type| {
                 let mut alternate = argument_types.to_vec();
                 alternate[index] = alternate_type;
-                (request.build)(request.params, &alternate)
-                    .is_ok_and(|nested| serialized_state_type(&nested) == *state_type)
+                (request.build)(request.params, &alternate).is_ok()
             })
     })
 }
@@ -392,12 +422,12 @@ fn persist_params(params: &[Scalar]) -> Result<Vec<AggregateFunctionParam>> {
         .collect()
 }
 
-struct MergeEval {
-    nested: AggregateCallRef,
+struct MergeEval<I> {
+    nested: I,
     returns_state: bool,
 }
 
-impl MergeEval {
+impl<I> MergeEval<I> {
     fn physical_input(entry: &BlockEntry) -> (BlockEntry, Option<Bitmap>) {
         let validity = column_merge_validity(entry, None);
         let entry = entry.clone().remove_nullable();
@@ -411,7 +441,7 @@ impl MergeEval {
     }
 }
 
-impl AggregateEval for MergeEval {
+impl<I: AggregateEval> AggregateEval for MergeEval<I> {
     fn init_state(&self, state: AggrState<'_>) {
         self.nested.init_state(state)
     }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
@@ -27,6 +26,14 @@ use super::*;
 pub(crate) fn try_create_null_argument_result_function(
     request: RawAggregateCall<'_>,
     call_metadata: AggregateMetadata,
+) -> Result<AggregateCallRef> {
+    create_with_combinator(request, call_metadata, PlainCombinator)
+}
+
+pub(super) fn create_with_combinator(
+    request: RawAggregateCall<'_>,
+    call_metadata: AggregateMetadata,
+    combinator: impl Combinator,
 ) -> Result<AggregateCallRef> {
     let (data_type, result) = call_metadata.null_argument_result.value();
     let return_type = data_type.clone();
@@ -42,13 +49,7 @@ pub(crate) fn try_create_null_argument_result_function(
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             StateSerdeItem::DataType(data_type),
         ]);
-    Ok(Arc::new(AggregateCallInstance::new(
-        signature,
-        FunctionInputLayout::Identity,
-        call_metadata.into_features(),
-        state,
-        FixedResultEval { result },
-    )))
+    combinator.create::<false>(signature, call_metadata, state, FixedResultEval { result })
 }
 
 struct FixedResultEval {

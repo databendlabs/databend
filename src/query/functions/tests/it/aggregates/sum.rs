@@ -572,6 +572,56 @@ fn test_v2_merge_resolves_legacy_physical_state() -> Result<()> {
     Ok(())
 }
 
+/// NULL implementations must enter the MERGE combinator just like typed kernels.
+#[test]
+fn test_merge_null_implementations() -> Result<()> {
+    let entries = [BlockEntry::new_const_column(
+        DataType::Null,
+        Scalar::Null,
+        4,
+    )];
+    for name in ["sum", "count", "array_agg", "json_array_agg"] {
+        let (expected, expected_type) = eval_v2_aggr(name, &entries, 4, false)?;
+        let (column, state_type) = eval_v2_aggr(&format!("{name}_state"), &entries, 4, false)?;
+        let merged = eval_v2_state_merge_entry(
+            &format!("{name}_merge"),
+            &[],
+            &state_type,
+            column.clone().into(),
+        )?;
+        assert_eq!(merged.0, expected, "{name}");
+        assert_eq!(merged.1, expected_type, "{name}");
+        let merged_state = eval_v2_state_merge_entry(
+            &format!("{name}_merge_state"),
+            &[],
+            &state_type,
+            column.clone().into(),
+        )?;
+        assert_eq!(merged_state.0, column, "{name}");
+        assert_eq!(merged_state.1, state_type, "{name}");
+
+        let DataType::AggregateState(mut mismatched) = state_type else {
+            unreachable!();
+        };
+        mismatched.state_type = Box::new(DataType::Tuple(vec![DataType::String]));
+        let invalid_type = DataType::AggregateState(mismatched);
+        for suffix in ["merge", "merge_state"] {
+            let error = match AGGR_REGISTRY.resolve(RawAggregateCall {
+                name: &format!("{name}_{suffix}"),
+                params: &[],
+                args_type: std::slice::from_ref(&invalid_type),
+                distinct: false,
+                order_by: &[],
+            }) {
+                Ok(_) => panic!("{name}_{suffix} accepted a mismatched state layout"),
+                Err(error) => error,
+            };
+            assert!(error.message().contains("state layout"));
+        }
+    }
+    Ok(())
+}
+
 /// Once an aggregate supplies a precise resolver, an empty candidate set is a
 /// definitive refusal. In particular, a decimal sum state retains its scale
 /// and storage width but not the original precision, so merge must not fall

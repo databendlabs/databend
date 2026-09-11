@@ -19,6 +19,7 @@ use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::types::DataType;
 
 use super::AggregateCallRef;
+use super::AggregateSignature;
 use super::ArgumentPattern;
 use super::ArgumentsPattern;
 use super::Combinator;
@@ -37,6 +38,7 @@ use super::StateCombinatorPlan;
 use super::UnaryBuildContext;
 use super::UnaryBuildFn;
 use super::merge_combinator;
+use super::merge_combinator::MergeCombinator;
 use super::state_combinator;
 use super::try_create_null_argument_result_function;
 
@@ -249,12 +251,12 @@ fn strip_suffix_ignore_ascii_case<'a>(name: &'a str, suffix: &str) -> Option<&'a
 
 pub(crate) struct MergeRoute {
     returns_state: bool,
-    build: RouteBuild<PlainCombinator>,
+    build: RouteBuild<MergeCombinator>,
     legacy_signature_resolver: Option<LegacySignatureResolver>,
 }
 
 impl MergeRoute {
-    pub(crate) fn new(returns_state: bool, build: DirectBuildFn<PlainCombinator>) -> Self {
+    pub(crate) fn new(returns_state: bool, build: DirectBuildFn<MergeCombinator>) -> Self {
         Self {
             returns_state,
             build: RouteBuild::Direct(build),
@@ -262,7 +264,7 @@ impl MergeRoute {
         }
     }
 
-    pub(crate) fn unary(returns_state: bool, build: UnaryBuildFn<PlainCombinator>) -> Self {
+    pub(crate) fn unary(returns_state: bool, build: UnaryBuildFn<MergeCombinator>) -> Self {
         Self {
             returns_state,
             build: RouteBuild::Unary(build),
@@ -270,7 +272,7 @@ impl MergeRoute {
         }
     }
 
-    pub(crate) fn multi_arg(returns_state: bool, build: MultiArgBuildFn<PlainCombinator>) -> Self {
+    pub(crate) fn multi_arg(returns_state: bool, build: MultiArgBuildFn<MergeCombinator>) -> Self {
         Self {
             returns_state,
             build: RouteBuild::MultiArg(build),
@@ -321,7 +323,7 @@ impl RouteNode for MergeRoute {
         let order_by = request.order_by;
         let null_argument_mode = self.build.null_argument_mode();
         let metadata = *context.metadata;
-        let nested_build = |params: &[Scalar], args_type: &[DataType]| {
+        let build_merge = |params: &[Scalar], args_type: &[DataType]| {
             let nested_request = RawAggregateCall {
                 name: nested_name,
                 params,
@@ -329,23 +331,39 @@ impl RouteNode for MergeRoute {
                 distinct: false,
                 order_by,
             };
-            if context.null_input != NullInput::Native
-                && let Some(function) =
-                    null_argument_result(&nested_request, &metadata, null_argument_mode)?
-            {
-                return Ok(function);
+            let combinator = MergeCombinator {
+                signature: AggregateSignature {
+                    name: request.name.to_string(),
+                    params: request.params.to_vec(),
+                    args_type: request.args_type.to_vec(),
+                    distinct: request.distinct,
+                    order_by: request.order_by.to_vec(),
+                    return_type: DataType::Null,
+                },
+                metadata: self.metadata(context.metadata),
+                returns_state: self.returns_state,
+            };
+            let has_null_argument = match null_argument_mode {
+                NullArgumentMode::Only => matches!(args_type, [DataType::Null]),
+                NullArgumentMode::Any => args_type.iter().any(DataType::is_null),
+            };
+            if context.null_input != NullInput::Native && has_null_argument {
+                return super::null_argument_result::create_with_combinator(
+                    nested_request,
+                    metadata,
+                    combinator,
+                );
             }
             self.build
-                .build(nested_request, args_type, metadata, PlainCombinator)
+                .build(nested_request, args_type, metadata, combinator)
         };
         merge_combinator::create(
-            request,
-            self.metadata(context.metadata),
+            request.clone(),
             nested_name,
             context.names,
             context.arguments,
             self.legacy_signature_resolver,
-            &nested_build,
+            &build_merge,
             self.returns_state,
         )
         .map(Some)
