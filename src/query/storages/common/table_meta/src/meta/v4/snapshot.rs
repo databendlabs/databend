@@ -594,8 +594,15 @@ mod tests {
     }
 
     fn snapshot(previous: Option<Arc<TableSnapshot>>) -> TableSnapshot {
+        snapshot_at(None, previous)
+    }
+
+    fn snapshot_at(
+        prev_table_seq: Option<u64>,
+        previous: Option<Arc<TableSnapshot>>,
+    ) -> TableSnapshot {
         TableSnapshot::try_new(
-            None,
+            prev_table_seq,
             previous,
             TableSchema::default(),
             Statistics::default(),
@@ -607,22 +614,92 @@ mod tests {
         .unwrap()
     }
 
-    #[test]
-    fn test_logical_change_counter_compatibility_boundary() {
-        let mut aware = snapshot(None);
-        aware.add_logical_change_delta(17, 23);
-        let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
-        assert_eq!(decoded.logical_change_counters(), Some((17, 23)));
-
-        let mut legacy_value = serde_json::to_value(decoded).unwrap();
-        legacy_value
+    fn strip_counters(snapshot: &TableSnapshot) -> TableSnapshot {
+        let mut value = serde_json::to_value(snapshot.clone()).unwrap();
+        value
             .as_object_mut()
             .unwrap()
             .remove("logical_change_counters");
-        let legacy: TableSnapshot = serde_json::from_value(legacy_value).unwrap();
-        assert_eq!(legacy.logical_change_counters(), None);
+        serde_json::from_value(value).unwrap()
+    }
 
-        let first_aware = snapshot(Some(Arc::new(legacy)));
-        assert_eq!(first_aware.logical_change_counters(), Some((0, 0)));
+    #[test]
+    fn test_logical_change_counter_compatibility_boundary() {
+        let mut aware = snapshot_at(Some(10), None);
+        aware.add_logical_change_delta(17, 23);
+        let decoded = TableSnapshot::from_slice(&aware.to_bytes().unwrap()).unwrap();
+        let decoded_counters = decoded.logical_change_counters().unwrap();
+        // Same history: totals are directly comparable.
+        assert_eq!(
+            decoded_counters
+                .delta_from(&aware.logical_change_counters().unwrap())
+                .unwrap(),
+            Some((0, 0))
+        );
+
+        // A legacy writer drops the field entirely.
+        let legacy = strip_counters(&decoded);
+        assert!(legacy.logical_change_counters().is_none());
+
+        // Its counter-aware child restarts counting, but under a new identity so
+        // the restart stays detectable when endpoints are compared.
+        let first_aware = snapshot_at(Some(20), Some(Arc::new(legacy)));
+        let first_aware_counters = first_aware.logical_change_counters().unwrap();
+        assert_eq!(
+            first_aware_counters.delta_from(&decoded_counters).unwrap(),
+            None,
+            "counters from a restarted history must not be subtracted"
+        );
+
+        // A continuous descendant keeps the epoch and accumulates.
+        let mut continuous = snapshot_at(Some(30), Some(Arc::new(first_aware)));
+        continuous.add_logical_change_delta(2, 5);
+        assert_eq!(
+            continuous
+                .logical_change_counters()
+                .unwrap()
+                .delta_from(&first_aware_counters)
+                .unwrap(),
+            Some((2, 5))
+        );
+    }
+
+    #[test]
+    fn test_counters_without_epoch_are_unusable() {
+        // Written by the version that tracked counters but not their identity:
+        // the values are present but continuity is unprovable.
+        let mut aware = snapshot_at(Some(10), None);
+        aware.add_logical_change_delta(7, 9);
+        let mut value = serde_json::to_value(aware).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .get_mut("logical_change_counters")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove("epoch");
+        let epochless: TableSnapshot = serde_json::from_value(value).unwrap();
+        let epochless_counters = epochless.logical_change_counters().unwrap();
+        assert_eq!(epochless_counters.delta_from(&epochless_counters).unwrap(), None);
+
+        // The next write mints an epoch, so the table self-heals.
+        let healed = snapshot_at(Some(20), Some(Arc::new(epochless)));
+        let healed_counters = healed.logical_change_counters().unwrap();
+        assert_eq!(healed_counters.delta_from(&healed_counters).unwrap(), Some((0, 0)));
+        // Its totals restarted, so they are this write's own increments.
+        assert_eq!(
+            healed_counters.increments_since(Some(&epochless_counters)).unwrap(),
+            (0, 0)
+        );
+    }
+
+    #[test]
+    fn test_add_delta_does_not_resurrect_absent_counters() {
+        let mut legacy = strip_counters(&snapshot(None));
+        legacy.add_logical_change_delta(4, 6);
+        // Must stay absent: 4/6 are one operation's increments, not the table's
+        // cumulative totals.
+        assert!(legacy.logical_change_counters().is_none());
     }
 }

@@ -928,9 +928,17 @@ mod tests {
     use super::*;
 
     fn snapshot(rows: u64) -> TableSnapshot {
+        snapshot_at(None, None, rows)
+    }
+
+    fn snapshot_at(
+        prev_table_seq: Option<u64>,
+        previous: Option<Arc<TableSnapshot>>,
+        rows: u64,
+    ) -> TableSnapshot {
         TableSnapshot::try_new(
-            None,
-            None,
+            prev_table_seq,
+            previous,
             TableSchema::default(),
             Statistics {
                 row_count: rows,
@@ -944,14 +952,17 @@ mod tests {
         .unwrap()
     }
 
-    fn legacy_snapshot(rows: u64) -> TableSnapshot {
-        let snapshot = snapshot(rows);
-        let mut value = serde_json::to_value(snapshot).unwrap();
+    fn strip_counters(snapshot: &TableSnapshot) -> TableSnapshot {
+        let mut value = serde_json::to_value(snapshot.clone()).unwrap();
         value
             .as_object_mut()
             .unwrap()
             .remove("logical_change_counters");
         serde_json::from_value(value).unwrap()
+    }
+
+    fn legacy_snapshot(rows: u64) -> TableSnapshot {
+        strip_counters(&snapshot(rows))
     }
 
     #[test]
