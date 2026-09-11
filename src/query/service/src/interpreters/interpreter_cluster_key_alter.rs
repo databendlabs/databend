@@ -53,11 +53,17 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let plan = &self.plan;
-            let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-            let table = catalog
-                .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+            // Commit against the same table version used to bind the cluster key.
+            let table = self
+                .ctx
+                .get_table_with_branch(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    plan.branch.as_deref(),
+                )
                 .await?;
             check_maintenance_target(table.as_ref(), &plan.target)?;
 

@@ -180,6 +180,8 @@ pub struct CreateTableStmt {
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Option<ClusterOption>,
+    /// Row-level TTL expression, e.g. `TTL event_time + INTERVAL 30 DAY`.
+    pub ttl: Option<Expr>,
     pub table_options: BTreeMap<String, String>,
     pub partition_by: Option<Vec<Expr>>,
     pub table_properties: Option<BTreeMap<String, String>>,
@@ -238,6 +240,10 @@ impl Display for CreateTableStmt {
 
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
+        }
+
+        if let Some(ttl) = &self.ttl {
+            write!(f, " TTL {ttl}")?;
         }
 
         // Format table options
@@ -477,6 +483,15 @@ pub enum AlterTableAction {
         partition_by: Vec<Expr>,
     },
     DropTableClusterKey,
+    /// `ALTER TABLE ... SET TTL <expr>` sets or replaces the TTL definition.
+    SetTableTtl {
+        ttl: Expr,
+    },
+    /// `ALTER TABLE ... REMOVE TTL`.
+    ///
+    /// `DROP TTL` is intentionally not accepted: `DROP <ident>` already means
+    /// dropping a column, so it would be ambiguous with a column named `ttl`.
+    RemoveTableTtl,
     ReclusterTable {
         is_final: bool,
         selection: Option<Expr>,
@@ -565,6 +580,12 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
+            }
+            AlterTableAction::SetTableTtl { ttl } => {
+                write!(f, "SET TTL {ttl}")?;
+            }
+            AlterTableAction::RemoveTableTtl => {
+                write!(f, "REMOVE TTL")?;
             }
             AlterTableAction::ReclusterTable {
                 is_final,

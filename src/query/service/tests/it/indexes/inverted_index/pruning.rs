@@ -125,6 +125,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
+        ttl: None,
         table_indexes: None,
         table_constraints: None,
         attached_columns: None,

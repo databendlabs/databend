@@ -330,6 +330,7 @@ impl Binder {
             engine: Some(engine),
             uri_location: None,
             cluster_by: None,
+            ttl: None,
             table_options: Default::default(),
             partition_by: None,
             table_properties: Default::default(),
