@@ -14,4 +14,5 @@
 
 mod shared_stream;
 mod shared_table_functions;
+mod shared_table_tags;
 mod stream_create;

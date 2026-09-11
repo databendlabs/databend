@@ -1,0 +1,127 @@
+# Shared tables cannot change provider snapshot tags, even with ALTER privileges.
+# Uses sandbox tenants and the fs connection, as in the other sharing suites.
+# Per-user privileges and direct handler calls are covered by EE Rust tests.
+statement ok
+SET enable_experimental_table_ref = 1
+
+statement ok
+SET sandbox_tenant = 'shared_tags_provider'
+
+statement ok
+DROP SHARE IF EXISTS tags_share
+
+statement ok
+DROP CONNECTION IF EXISTS tags_conn
+
+statement ok
+CREATE OR REPLACE DATABASE tags_provider
+
+statement ok
+CREATE TABLE tags_provider.t(a INT)
+
+statement ok
+CREATE CONNECTION tags_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE SHARE tags_share CONNECTION = tags_conn
+
+statement ok
+GRANT USAGE ON DATABASE tags_provider TO SHARE tags_share
+
+statement ok
+GRANT SELECT ON TABLE tags_provider.t TO SHARE tags_share
+
+statement ok
+ALTER SHARE tags_share ADD ACCOUNTS = shared_tags_consumer
+
+statement ok
+SET sandbox_tenant = 'shared_tags_consumer'
+
+statement ok
+DROP DATABASE IF EXISTS tags_shared
+
+statement ok
+CREATE DATABASE tags_shared FROM SHARE shared_tags_provider.tags_share
+
+# An empty shared table must fail the mutability check before snapshot lookup.
+statement error (?s).*READ ONLY.*
+ALTER TABLE tags_shared.t CREATE TAG consumer_tag
+
+statement ok
+SET sandbox_tenant = 'shared_tags_provider'
+
+statement ok
+INSERT INTO tags_provider.t VALUES (73)
+
+statement ok
+ALTER TABLE tags_provider.t CREATE TAG provider_tag
+
+statement ok
+SET sandbox_tenant = 'shared_tags_consumer'
+
+statement error (?s).*READ ONLY.*
+ALTER TABLE tags_shared.t CREATE TAG consumer_tag
+
+statement error (?s).*READ ONLY.*
+ALTER TABLE tags_shared.t CREATE TAG consumer_tag AT (TAG => provider_tag) RETAIN 1 DAYS
+
+statement error (?s).*READ ONLY.*
+ALTER TABLE tags_shared.t CREATE TAG consumer_tag AT (TAG => missing_tag)
+
+statement error (?s).*READ ONLY.*
+ALTER TABLE tags_shared.t DROP TAG provider_tag
+
+# Provider tags remain readable through the shared table.
+query T
+SELECT name FROM fuse_tag('tags_shared', 't')
+----
+provider_tag
+
+query I
+SELECT a FROM tags_shared.t AT (TAG => provider_tag)
+----
+73
+
+statement ok
+SET sandbox_tenant = 'shared_tags_provider'
+
+# Failed consumer operations neither add tags nor remove the provider's tag.
+query T
+SELECT name FROM fuse_tag('tags_provider', 't')
+----
+provider_tag
+
+statement ok
+ALTER TABLE tags_provider.t CREATE TAG provider_copy AT (TAG => provider_tag)
+
+statement ok
+ALTER TABLE tags_provider.t DROP TAG provider_copy
+
+statement ok
+ALTER TABLE tags_provider.t DROP TAG provider_tag
+
+query I
+SELECT count(*) FROM fuse_tag('tags_provider', 't')
+----
+0
+
+statement ok
+DROP SHARE tags_share
+
+statement ok
+DROP CONNECTION tags_conn
+
+statement ok
+DROP DATABASE tags_provider
+
+statement ok
+SET sandbox_tenant = 'shared_tags_consumer'
+
+statement ok
+DROP DATABASE tags_shared
+
+statement ok
+SET sandbox_tenant = ''
+
+statement ok
+SET enable_experimental_table_ref = 0
