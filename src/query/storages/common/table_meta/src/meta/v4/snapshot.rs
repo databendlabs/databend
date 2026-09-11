@@ -681,15 +681,23 @@ mod tests {
             .remove("epoch");
         let epochless: TableSnapshot = serde_json::from_value(value).unwrap();
         let epochless_counters = epochless.logical_change_counters().unwrap();
-        assert_eq!(epochless_counters.delta_from(&epochless_counters).unwrap(), None);
+        assert_eq!(
+            epochless_counters.delta_from(&epochless_counters).unwrap(),
+            None
+        );
 
         // The next write mints an epoch, so the table self-heals.
         let healed = snapshot_at(Some(20), Some(Arc::new(epochless)));
         let healed_counters = healed.logical_change_counters().unwrap();
-        assert_eq!(healed_counters.delta_from(&healed_counters).unwrap(), Some((0, 0)));
+        assert_eq!(
+            healed_counters.delta_from(&healed_counters).unwrap(),
+            Some((0, 0))
+        );
         // Its totals restarted, so they are this write's own increments.
         assert_eq!(
-            healed_counters.increments_since(Some(&epochless_counters)).unwrap(),
+            healed_counters
+                .increments_since(Some(&epochless_counters))
+                .unwrap(),
             (0, 0)
         );
     }

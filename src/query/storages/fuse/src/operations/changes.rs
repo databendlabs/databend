@@ -1001,4 +1001,86 @@ mod tests {
             0
         );
     }
+
+    /// A legacy writer between the two endpoints restarts the counters. The
+    /// endpoints then both read as zero, so the UPDATE/DELETE rows committed
+    /// before the restart must not be reported as "no changes" — that would
+    /// silently optimize a Standard stream into AppendOnly and drop them.
+    #[test]
+    fn test_restarted_counters_do_not_prove_absence_of_changes() {
+        // Stream created on a fresh table, so its base totals are zero.
+        let base = snapshot_at(Some(10), None, 3);
+
+        // UPDATE 1 row + DELETE 1 row while counters are tracked.
+        let mut mutated = snapshot_at(Some(11), Some(Arc::new(base.clone())), 2);
+        mutated.add_logical_change_delta(1, 1);
+        assert_eq!(
+            logical_change_delta(Some(&base), Some(&mutated)).unwrap(),
+            Some((1, 1)),
+            "within one history the delta is visible"
+        );
+
+        // A legacy writer publishes a snapshot without the counter field.
+        let legacy = strip_counters(&snapshot_at(Some(12), Some(Arc::new(mutated)), 3));
+        assert_eq!(
+            logical_change_delta(Some(&base), Some(&legacy)).unwrap(),
+            None,
+            "unknown latest counters must not yield a delta"
+        );
+
+        // A counter-aware writer follows, restarting the totals from zero.
+        let after_upgrade = snapshot_at(Some(13), Some(Arc::new(legacy)), 4);
+        assert_eq!(
+            logical_change_delta(Some(&base), Some(&after_upgrade)).unwrap(),
+            None,
+            "endpoints from different histories must not be subtracted"
+        );
+    }
+
+    /// Same history break, but the stream's base already carried non-zero
+    /// totals. Subtracting across the restart used to underflow and fail the
+    /// query; it must now degrade to an unknown delta instead.
+    #[test]
+    fn test_restarted_counters_below_base_do_not_error() {
+        let mut base = snapshot_at(Some(10), None, 10);
+        base.add_logical_change_delta(5, 3);
+
+        let legacy = strip_counters(&snapshot_at(Some(11), Some(Arc::new(base.clone())), 10));
+        let after_upgrade = snapshot_at(Some(12), Some(Arc::new(legacy)), 11);
+
+        assert_eq!(
+            logical_change_delta(Some(&base), Some(&after_upgrade)).unwrap(),
+            None
+        );
+        assert_eq!(
+            logical_change_rows(Some(&base), Some(&after_upgrade)).unwrap(),
+            None
+        );
+    }
+
+    /// The fix must not cost the optimization for streams created after the
+    /// break, otherwise every table with a legacy ancestor regresses.
+    #[test]
+    fn test_history_after_restart_is_still_comparable() {
+        let legacy = legacy_snapshot(10);
+        // First counter-aware write mints a fresh history.
+        let restarted = snapshot_at(Some(20), Some(Arc::new(legacy)), 10);
+        // A stream created here uses `restarted` as its base.
+        let mut later = snapshot_at(Some(21), Some(Arc::new(restarted.clone())), 9);
+        later.add_logical_change_delta(2, 3);
+
+        assert_eq!(
+            logical_change_delta(Some(&restarted), Some(&later)).unwrap(),
+            Some((2, 3)),
+            "descendants of a restart share its history"
+        );
+        assert_eq!(
+            logical_change_rows(Some(&restarted), Some(&later)).unwrap(),
+            Some(LogicalChangeRows {
+                inserted: 2,
+                updated: 2,
+                deleted: 3,
+            })
+        );
+    }
 }
