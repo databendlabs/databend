@@ -4940,6 +4940,7 @@ dependencies = [
  "opendal 0.54.1",
  "parquet 58.1.0",
  "prometheus-client 0.22.3",
+ "rand 0.8.5",
  "regex",
  "reqwest",
  "serde",
@@ -15550,8 +15551,7 @@ dependencies = [
 [[package]]
 name = "reqwest-hickory-resolver"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4466c6958bbbd3024ace15426f7b5369222c0ad517167d10056fd5cc76aec99b"
+source = "git+https://github.com/dqhl76/reqwest-hickory-resolver?rev=5ad03257a3c702d34b9643878efb5a3536323d2d#5ad03257a3c702d34b9643878efb5a3536323d2d"
 dependencies = [
  "hickory-resolver",
  "rand 0.9.2",

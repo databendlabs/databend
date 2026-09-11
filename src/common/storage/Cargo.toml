@@ -35,6 +35,7 @@ lru = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
+rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
