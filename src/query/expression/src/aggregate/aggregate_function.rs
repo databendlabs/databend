@@ -399,6 +399,9 @@ pub struct AggregateFeatures {
     pub example: &'static str,
 }
 
+/// Memory layout, serialized fields, and manual destruction requirements for
+/// an evaluator's state. Describes the state contract without implementing its
+/// operations; those belong to [`AggregateEval`].
 #[derive(Debug, Clone, Default)]
 pub struct AggregateStateDescription {
     fields: Vec<AggrStateType>,
@@ -540,6 +543,12 @@ pub struct MergeResultInput<'a> {
     pub builder: &'a mut ColumnBuilder,
 }
 
+/// State operations implemented by a concrete aggregate evaluator.
+///
+/// Owns the behavior for initialization, accumulation, serialization, merging,
+/// finalization, and destruction. Its state accesses must agree with the
+/// accompanying [`AggregateStateDescription`]. Call metadata is exposed
+/// separately through [`AggregateCall`].
 pub trait AggregateEval: Send + Sync + 'static {
     fn init_state(&self, state: AggrState<'_>);
 
@@ -585,47 +594,12 @@ pub trait AggregateEval: Send + Sync + 'static {
     unsafe fn drop_state(&self, state: AggrState<'_>);
 }
 
-impl<E: AggregateEval + ?Sized> AggregateEval for Box<E> {
-    fn init_state(&self, state: AggrState<'_>) {
-        (**self).init_state(state);
-    }
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        (**self).accumulate(input)
-    }
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        (**self).accumulate_keys(input)
-    }
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        (**self).accumulate_row(input)
-    }
-    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
-        (**self).accumulate_row_count(input)
-    }
-    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
-        (**self).accumulate_row_count_keys(input)
-    }
-    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        (**self).serialize(input)
-    }
-    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        (**self).merge_serialized(input)
-    }
-    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        (**self).merge_states(input)
-    }
-    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        (**self).merge_result(input)
-    }
-    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        (**self).merge_result_read_only(input)
-    }
-    unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe {
-            (**self).drop_state(state);
-        }
-    }
-}
-
+/// A completed aggregate call exposed to the execution engine.
+///
+/// Combines the evaluator's state operations with its signature, features,
+/// physical input layout, and [`AggregateStateDescription`]. Construction and
+/// composition are complete before a builder returns an [`AggregateCallRef`];
+/// the execution engine uses this interface to run the resulting call.
 pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
     fn signature(&self) -> &AggregateSignature;
 

@@ -88,6 +88,8 @@ pub(super) fn create(
 }
 
 /// Inserts MERGE while the implementation and its state layout are still concrete.
+/// The function builder receives this combinator directly; it must not first
+/// build an inner AggregateCall and retain that call inside MergeEval.
 pub(crate) struct MergeCombinator {
     pub(crate) signature: AggregateSignature,
     pub(crate) metadata: AggregateMetadata,

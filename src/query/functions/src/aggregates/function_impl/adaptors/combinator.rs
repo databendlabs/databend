@@ -33,6 +33,29 @@ use super::if_combinator;
 use super::sort_combinator;
 use super::state_combinator;
 
+/// Aggregate composition is part of each concrete function's build context.
+///
+/// Name routes select a combinator and pass it into a `UnaryBuildContext`,
+/// `MultiArgBuildContext`, or `DirectBuildContext`. The function builder chooses
+/// its evaluator, result type, state layout, and NULL handling, then invokes the
+/// context's creation method to complete the composition. All combinations must
+/// be assembled within this construction path, before returning the final
+/// `AggregateCallRef`.
+///
+/// A universal wrapper around an already built `AggregateCall` loses this
+/// construction boundary. It must infer how to change NULL handling, input
+/// projection, ordering, and serialized state from an opaque inner call. Those
+/// policies are function-specific: array DISTINCT orders the unique values
+/// during replay, while MERGE consumes serialized states instead of raw inputs.
+/// Guessing these policies in an outer wrapper is error-prone and makes new
+/// combinations difficult to extend. Add the combination to the function's
+/// build context and update the evaluator and its state description together.
+///
+/// Keep concrete evaluator types through the remaining composition steps and
+/// erase the final call at the execution boundary. Deliberate internal erasure
+/// can limit monomorphization, such as DISTINCT's nested evaluator; it must not
+/// force callers to wrap a completed call or erase an evaluator merely to return
+/// it from a type-dispatch helper.
 pub(crate) trait Combinator {
     /// The evaluator consumes nullable columns itself. Retain them through
     /// input adaptors so input-presence and non-null presence stay distinct.
@@ -277,12 +300,23 @@ impl<const SKIP_NULLS: bool> Combinator for UnaryDistinctCombinator<SKIP_NULLS> 
             );
             let state = sort_combinator::sort_state_description(&state);
             let eval = sort_combinator::SortEval::new(eval, input_types, order_by);
-            let (state, eval) =
-                super::create_unary_distinct::<SKIP_NULLS>(eval, &state, self.arg_type);
-            return Ok(finish(signature, call_metadata, state, eval));
+            return super::create_unary_distinct::<SKIP_NULLS, _>(
+                PlainCombinator,
+                signature,
+                call_metadata,
+                eval,
+                &state,
+                self.arg_type,
+            );
         }
-        let (state, eval) = super::create_unary_distinct::<SKIP_NULLS>(eval, &state, self.arg_type);
-        Ok(finish(signature, call_metadata, state, eval))
+        super::create_unary_distinct::<SKIP_NULLS, _>(
+            PlainCombinator,
+            signature,
+            call_metadata,
+            eval,
+            &state,
+            self.arg_type,
+        )
     }
 }
 

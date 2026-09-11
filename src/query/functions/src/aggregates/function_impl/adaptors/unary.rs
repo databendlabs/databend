@@ -206,11 +206,30 @@ where
     let nested = UnaryEvalAdapter::new(UnaryStateEval::<S, I, R, false>::new(Arc::new(
         function_info,
     )));
-    let (state, eval) =
-        create_unary_distinct::<false>(nested, &state, distinct_args_type[0].clone());
-    let state = state.with_null_flag();
-    let eval = MultiArgSkipNullEval::new(MultiArgOrNullEval::new(eval));
-    combinator.create::<false>(signature, metadata, state, eval)
+    create_unary_distinct::<false, _>(
+        DistinctOrNullCombinator(combinator),
+        signature,
+        metadata,
+        nested,
+        &state,
+        distinct_args_type[0].clone(),
+    )
+}
+
+struct DistinctOrNullCombinator<C>(C);
+
+impl<C: Combinator> Combinator for DistinctOrNullCombinator<C> {
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        let state = state.with_null_flag();
+        let eval = MultiArgSkipNullEval::new(MultiArgOrNullEval::new(eval));
+        self.0.create::<ORDERED>(signature, metadata, state, eval)
+    }
 }
 
 impl<I, R, U> AggregateEval for UnaryEvalAdapter<I, R, U>
