@@ -26,6 +26,7 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -232,10 +233,42 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let tables_count = tables.len();
 
+        // A clone member's snapshots may reference files in any ancestor directory. Only current
+        // leaves are safe to physically remove: if another existing member names a table as its
+        // direct source, that child (or one of its descendants) can still reference the directory.
+        let candidate_table_ids = tables
+            .iter()
+            .map(|table| table.get_id())
+            .collect::<HashSet<_>>();
+        let candidate_clone_groups = tables
+            .iter()
+            .filter_map(|table| {
+                table
+                    .get_table_info()
+                    .meta
+                    .options
+                    .get(OPT_KEY_CLONE_GROUP_ID)
+                    .and_then(|value| value.parse::<u64>().ok())
+            })
+            .collect::<HashSet<_>>();
+        let mut safe_clone_table_ids = HashSet::new();
+        for group_id in candidate_clone_groups {
+            let bindings = catalog.list_clone_group_bindings(group_id).await?;
+            let mut members = HashSet::from([group_id]);
+            members.extend(bindings.iter().map(|(table_id, _)| *table_id));
+            let direct_sources = bindings
+                .into_iter()
+                .map(|(_, source_id)| source_id)
+                .collect::<HashSet<_>>();
+            safe_clone_table_ids.extend(candidate_table_ids.iter().copied().filter(|table_id| {
+                members.contains(table_id) && !direct_sources.contains(table_id)
+            }));
+        }
+
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
         let (_, failed_tables) = handler
-            .do_vacuum_drop_tables(threads_nums, tables, None)
+            .do_vacuum_drop_tables(threads_nums, tables, None, safe_clone_table_ids)
             .await?;
 
         let failed_db_ids = failed_tables

@@ -192,6 +192,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         cluster_key: None,
         table_indexes: None,
         table_constraints: None,
+        clone: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,

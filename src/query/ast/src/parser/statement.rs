@@ -4784,10 +4784,22 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
             table,
         },
     );
+    let clone = map(
+        rule! {
+            CLONE ~ #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)?
+        },
+        |(_, (catalog, database, table), travel_point)| CreateTableSource::Clone {
+            catalog,
+            database,
+            table,
+            travel_point: travel_point.map(|(_, point)| point),
+        },
+    );
 
     rule!(
         #columns
         | #like
+        | #clone
     )
     .parse(i)
 }

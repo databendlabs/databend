@@ -356,7 +356,10 @@ async fn try_rebuild_req(
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: latest_table.snapshot_loc(),
-            lvt_check: None,
+            // Preserve the transaction's original object timestamp. Rebuilding the snapshot does
+            // not rewrite its blocks or segments, so replacing this with a newer timestamp would
+            // allow GC to race with objects created earlier in the transaction.
+            lvt_check: update_table_meta_req.lvt_check.clone(),
         };
         *update_table_meta_req = req;
     }

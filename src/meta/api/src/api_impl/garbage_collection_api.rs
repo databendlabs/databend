@@ -40,10 +40,12 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -56,6 +58,7 @@ use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -816,6 +819,22 @@ async fn remove_data_for_dropped_table(
         table_id.table_id,
     )));
 
+    if let Some(group_id) = seq_meta
+        .data
+        .options
+        .get(OPT_KEY_CLONE_GROUP_ID)
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        txn.if_then.push(txn_del(&TableCloneByGroupIdent::new(
+            group_id,
+            table_id.table_id,
+        )));
+    }
+    txn.if_then.push(txn_del(&LeastVisibleTimeIdent::new(
+        tenant,
+        table_id.table_id,
+    )));
+
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
     // Get id -> name mapping
@@ -856,20 +875,16 @@ async fn remove_data_for_dropped_table(
         };
 
         let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
-        let table_ownership_seq_meta = {
-            let seq_meta = kv_api.get_pb(&table_ownership_key).await?;
-            let Some(seq_meta) = seq_meta else {
-                let err = format!(
-                    "cannot find OwnershipInfo of object: {:?}, ",
-                    table_ownership_key.to_string_key()
-                );
-                error!("{}", err);
-                return Ok(Err(err));
-            };
-            seq_meta
-        };
-
-        txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
+        if let Some(table_ownership_seq_meta) = kv_api.get_pb(&table_ownership_key).await? {
+            txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
+        } else {
+            // Staged CTAS/clone tables receive ownership only after publication. Their permanent
+            // orphan GC must still continue through tag, policy, clone-binding and counter cleanup.
+            debug!(
+                ownership_key = table_ownership_key.to_string_key();
+                "GC table has no ownership record"
+            );
+        }
     }
 
     // Clean up table ref tags under `__fd_table_tag/<table_id>/...`.

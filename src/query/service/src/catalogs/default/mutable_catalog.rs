@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -430,6 +431,25 @@ impl Catalog for MutableCatalog {
             .await
             .map_err(meta_service_error)?;
         Ok(res)
+    }
+
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        self.ctx
+            .meta
+            .mget_table_metas_by_ids(table_ids)
+            .await
+            .map_err(ErrorCode::from)
+    }
+
+    async fn list_clone_group_bindings(&self, clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        self.ctx
+            .meta
+            .list_clone_group_bindings(clone_group_id)
+            .await
+            .map_err(ErrorCode::from)
     }
 
     async fn get_mv_definition(
@@ -1031,6 +1051,18 @@ impl Catalog for MutableCatalog {
             .list_dictionaries(req)
             .await
             .map_err(meta_service_error)?)
+    }
+
+    async fn set_table_lvts(
+        &self,
+        tenant: &Tenant,
+        table_lvts: &HashMap<u64, LeastVisibleTime>,
+    ) -> Result<()> {
+        self.ctx
+            .meta
+            .set_table_lvts(tenant, table_lvts)
+            .await
+            .map_err(ErrorCode::from)
     }
 
     async fn set_table_lvt(

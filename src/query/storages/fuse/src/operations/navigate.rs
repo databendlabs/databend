@@ -12,30 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::analyze_cluster_keys;
+use databend_common_sql::bind_normalized_key_exprs;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_security_policies_by_schema;
+use databend_common_sql::binder::validate_table_indexes_by_schema;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -199,14 +210,11 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
-        if self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)? {
-            self.apply_navigation_metadata(&mut table_info.meta)?;
-        }
+        self.apply_snapshot_to_table_meta(&mut table_info.meta, snapshot)?;
         table_info
             .meta
             .options
             .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
-        self.apply_snapshot_statistics(&mut table_info.meta, snapshot);
 
         // let's instantiate it
         let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
@@ -562,6 +570,9 @@ impl FuseTable {
         Ok(table_tag.data.snapshot_loc)
     }
 
+    /// Project snapshot metadata and clear incompatible bloom/HLL options when the schema changes.
+    /// Returns whether the schema changed. Constraints, indexes and policies remain untouched;
+    /// callers validate them before publication or apply the read-only Time Travel projection.
     pub(crate) fn apply_snapshot_metadata_to_meta(
         &self,
         table_meta: &mut TableMeta,
@@ -575,7 +586,6 @@ impl FuseTable {
             }
             None => None,
         };
-
         match snapshot.cluster_type {
             Some(cluster_type) if cluster_key_meta.is_some() => {
                 table_meta
@@ -597,52 +607,51 @@ impl FuseTable {
             .next_column_id()
             .max(historical_schema.next_column_id());
 
-        // Preserve current table-level governance metadata when the target snapshot keeps the
-        // same schema after normalizing next_column_id. Snapshot navigation restores
-        // snapshot-carried metadata such as schema, clustering and statistics, but does not
-        // rewind later governance-only table_meta changes when the visible column layout is
-        // unchanged.
-        if table_meta.schema.as_ref() == &historical_schema {
+        let schema_changed = table_meta.schema.as_ref() != &historical_schema;
+        if schema_changed {
+            table_meta.fill_field_comments();
+            let comment_by_column_id = table_meta
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    (
+                        field.column_id(),
+                        table_meta
+                            .field_comments
+                            .get(index)
+                            .cloned()
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            table_meta.schema = Arc::new(historical_schema);
+            table_meta.field_comments = snapshot
+                .schema
+                .fields()
+                .iter()
+                .map(|field| {
+                    comment_by_column_id
+                        .get(&field.column_id())
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                .collect();
+        }
+
+        // These settings are owned by columns. Project them by stable ColumnId; settings for
+        // columns that do not exist in the historical structure are not applicable.
+        let column_ids = table_meta.schema.to_column_ids();
+        table_meta
+            .field_stats_truncate_len
+            .retain(|column_id, _| column_ids.contains(column_id));
+        if !schema_changed {
             return Ok(false);
         }
 
-        table_meta.fill_field_comments();
-        let comment_by_column_id = table_meta
-            .schema
-            .fields()
-            .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                (
-                    field.column_id(),
-                    table_meta
-                        .field_comments
-                        .get(index)
-                        .cloned()
-                        .unwrap_or_default(),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
-
-        table_meta.schema = Arc::new(historical_schema);
-        table_meta.field_comments = snapshot
-            .schema
-            .fields()
-            .iter()
-            .map(|field| {
-                comment_by_column_id
-                    .get(&field.column_id())
-                    .cloned()
-                    .unwrap_or_default()
-            })
-            .collect();
-        // Virtual columns are table-level derived metadata and are not versioned in snapshots.
-        // Snapshot navigation cannot prove that the current virtual schema is valid for the
-        // historical point, so clear it conservatively.
-        table_meta.virtual_schema = None;
-        table_meta.column_mask_policy = None;
-        table_meta.row_access_policy = None;
-
+        // Column-selection options must remain applicable to the projected schema.
         if let Some(value) = table_meta.options.get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
             if let ApproxDistinctColumns::Specify(cols) = value.parse::<ApproxDistinctColumns>()? {
                 let compatible = cols.iter().all(|col| {
@@ -737,11 +746,135 @@ impl FuseTable {
         Ok(())
     }
 
-    pub(crate) fn apply_snapshot_statistics(
+    /// Apply snapshot metadata for a read-only Time Travel table view.
+    pub fn apply_snapshot_to_table_meta(
         &self,
         table_meta: &mut TableMeta,
         snapshot: &TableSnapshot,
-    ) {
+    ) -> Result<()> {
+        if self.apply_snapshot_metadata_to_meta(table_meta, snapshot)? {
+            // Read-only Time Travel discards root-specific virtual metadata and applies
+            // best-effort policy projection, unlike persistent CLONE and FLASHBACK.
+            table_meta.virtual_schema = None;
+            table_meta.column_mask_policy = None;
+            table_meta.row_access_policy = None;
+            self.apply_navigation_metadata(table_meta)?;
+        }
+        Self::apply_snapshot_statistics(table_meta, snapshot);
+        Ok(())
+    }
+
+    /// Prepare metadata that will be persisted against a selected snapshot data root.
+    ///
+    /// Deprecated name-based policy fields must never be republished. Virtual-column progress is
+    /// tied to the previous root, while compatible definitions remain valid for the selected
+    /// schema and will be rebuilt lazily.
+    pub(crate) fn prepare_persistent_navigation_metadata(table_meta: &mut TableMeta) {
+        table_meta.column_mask_policy = None;
+        table_meta.row_access_policy = None;
+
+        let column_ids = table_meta.schema.to_column_ids();
+        if let Some(virtual_schema) = &mut table_meta.virtual_schema {
+            virtual_schema
+                .fields
+                .retain(|field| column_ids.contains(&field.source_column_id));
+            virtual_schema.number_of_blocks = 0;
+            if virtual_schema.fields.is_empty() {
+                table_meta.virtual_schema = None;
+            }
+        }
+    }
+
+    /// Validate current semantic metadata against a projected snapshot structure.
+    ///
+    /// Persisting CLONE and FLASHBACK operations use this after projecting field-owned metadata.
+    /// Table-level definitions fail closed when any reference or type cannot be resolved.
+    pub async fn validate_persistent_navigation_metadata(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        table_meta: &TableMeta,
+        operation: &str,
+    ) -> Result<()> {
+        validate_constraints_by_schema(ctx.clone(), &table_meta.constraints, &table_meta.schema)?;
+
+        validate_table_indexes_by_schema(&table_meta.indexes, table_meta.schema.clone()).map_err(
+            |err| {
+                ErrorCode::IllegalReference(format!(
+                    "Cannot {operation} the selected snapshot: {}",
+                    err.message()
+                ))
+            },
+        )?;
+
+        if let Some(virtual_schema) = &table_meta.virtual_schema {
+            for virtual_field in &virtual_schema.fields {
+                let source_field = table_meta
+                    .schema
+                    .field_of_column_id(virtual_field.source_column_id)
+                    .map_err(|_| {
+                        ErrorCode::IllegalReference(format!(
+                            "Cannot {operation} the selected snapshot: virtual column '{}' references missing source column ID {}",
+                            virtual_field.name, virtual_field.source_column_id
+                        ))
+                    })?;
+                if source_field.data_type().remove_nullable() != TableDataType::Variant {
+                    return Err(ErrorCode::VirtualColumnError(format!(
+                        "Cannot {operation} the selected snapshot: virtual column '{}' requires VARIANT source column '{}', but its type is {}",
+                        virtual_field.name,
+                        source_field.name(),
+                        source_field.data_type()
+                    )));
+                }
+            }
+        }
+
+        validate_security_policies_by_schema(ctx.clone(), table_meta, operation).await?;
+
+        let mut target = self.clone();
+        target.table_info.meta = table_meta.clone();
+        let target: Arc<dyn Table> = Arc::new(target);
+        if let Some(cluster_key) = table_meta.cluster_key_str() {
+            analyze_cluster_keys(ctx.clone(), target.clone(), cluster_key).map_err(|err| {
+                ErrorCode::InvalidClusterKeys(format!(
+                    "Cannot {operation} the selected snapshot: cluster key is incompatible with its schema: {}",
+                    err.message()
+                ))
+            })?;
+        }
+        if let Some(partition_key) = table_meta.options.get(OPT_KEY_PARTITION_BY) {
+            let expressions = parse_cluster_key_exprs(partition_key)?;
+            bind_normalized_key_exprs(ctx, target, expressions).map_err(|err| {
+                ErrorCode::IllegalReference(format!(
+                    "Cannot {operation} the selected snapshot: partition key is incompatible with its schema: {}",
+                    err.message()
+                ))
+            })?;
+        }
+
+        if let Some(value) = table_meta.options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            BloomIndexColumns::verify_definition(
+                value,
+                table_meta.schema.clone(),
+                BloomIndex::supported_type,
+            )?;
+        }
+        for key in [
+            OPT_KEY_APPROX_DISTINCT_COLUMNS,
+            OPT_KEY_ANALYZE_FREQUENCY_COLUMNS,
+        ] {
+            if let Some(value) = table_meta.options.get(key) {
+                ApproxDistinctColumns::verify_definition(
+                    value,
+                    table_meta.schema.clone(),
+                    RangeIndex::supported_table_type,
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn apply_snapshot_statistics(table_meta: &mut TableMeta, snapshot: &TableSnapshot) {
         let summary = &snapshot.summary;
         table_meta.statistics = TableStatistics {
             number_of_rows: summary.row_count,
@@ -756,5 +889,68 @@ impl FuseTable {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(summary.block_count),
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::VariantDataType;
+    use databend_common_expression::VirtualDataField;
+    use databend_common_expression::VirtualDataSchema;
+    use databend_common_meta_app::schema::TableMeta;
+
+    use crate::FuseTable;
+
+    #[test]
+    fn test_prepare_persistent_navigation_metadata() {
+        let mut table_meta = TableMeta {
+            schema: Arc::new(TableSchema::new_from_column_ids(
+                vec![TableField::new_from_column_id(
+                    "payload",
+                    TableDataType::Variant,
+                    1,
+                )],
+                Default::default(),
+                2,
+            )),
+            column_mask_policy: Some(
+                [("legacy_column".to_string(), "legacy_policy".to_string())].into(),
+            ),
+            row_access_policy: Some("legacy_policy".to_string()),
+            virtual_schema: Some(VirtualDataSchema {
+                fields: vec![
+                    VirtualDataField {
+                        name: "payload['kept']".to_string(),
+                        data_types: vec![VariantDataType::String],
+                        source_column_id: 1,
+                        column_id: 100,
+                    },
+                    VirtualDataField {
+                        name: "removed['field']".to_string(),
+                        data_types: vec![VariantDataType::String],
+                        source_column_id: 2,
+                        column_id: 101,
+                    },
+                ],
+                metadata: Default::default(),
+                next_column_id: 102,
+                number_of_blocks: 42,
+            }),
+            ..Default::default()
+        };
+
+        FuseTable::prepare_persistent_navigation_metadata(&mut table_meta);
+
+        assert!(table_meta.column_mask_policy.is_none());
+        assert!(table_meta.row_access_policy.is_none());
+        let virtual_schema = table_meta.virtual_schema.as_ref().unwrap();
+        assert_eq!(virtual_schema.fields.len(), 1);
+        assert_eq!(virtual_schema.fields[0].source_column_id, 1);
+        assert_eq!(virtual_schema.number_of_blocks, 0);
     }
 }

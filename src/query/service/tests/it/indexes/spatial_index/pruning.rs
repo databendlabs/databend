@@ -156,6 +156,7 @@ async fn test_spatial_index_pruning_geometry() -> anyhow::Result<()> {
         cluster_key: None,
         table_indexes: Some(table_indexes),
         table_constraints: None,
+        clone: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,
