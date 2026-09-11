@@ -30,6 +30,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::cap_stat_info_by_rows;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Sort {
@@ -48,7 +49,15 @@ pub struct Sort {
 
 impl Sort {
     pub fn used_columns(&self) -> ColumnSet {
-        self.items.iter().map(|item| item.index).collect()
+        let mut used_columns: ColumnSet = self.items.iter().map(|item| item.index).collect();
+        if let Some(window) = &self.window_partition {
+            for item in &window.partition_by {
+                used_columns.insert(item.index);
+                item.scalar.collect_used_columns(&mut used_columns);
+            }
+            window.func.collect_used_columns(&mut used_columns);
+        }
+        used_columns
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
@@ -66,9 +75,15 @@ impl Sort {
             }
         }
 
-        if self.window_partition.is_some() {
-            unimplemented!()
-        };
+        if let Some(window) = &mut self.window_partition {
+            for item in &mut window.partition_by {
+                if item.index == old {
+                    item.index = new;
+                }
+                let _ = item.scalar.replace_column(old, new);
+            }
+            window.func.replace_column(old, new);
+        }
     }
 
     pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
@@ -83,9 +98,13 @@ impl Sort {
             }
         }
 
-        if self.window_partition.is_some() {
-            unimplemented!()
-        };
+        if let Some(window) = &mut self.window_partition {
+            for item in &mut window.partition_by {
+                item.index = replace(item.index)?;
+                item.scalar.replace_columns(&mut replace)?;
+            }
+            window.func.replace_columns(&mut replace)?;
+        }
 
         Ok(())
     }
@@ -101,6 +120,17 @@ pub struct SortItem {
 impl Operator for Sort {
     fn rel_op(&self) -> RelOp {
         RelOp::Sort
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let partition_items = self.window_partition.iter().flat_map(|partition| {
+            partition
+                .partition_by
+                .iter()
+                .map(|item| &item.scalar)
+                .chain(partition.func.scalar_expr_iter())
+        });
+        Box::new(partition_items)
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
@@ -185,8 +215,15 @@ impl Operator for Sort {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         let output_columns = input_prop.output_columns.clone();
-        let outer_columns = input_prop.outer_columns.clone();
-        let used_columns = input_prop.used_columns.clone();
+        let mut outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
+        outer_columns.extend(
+            self.used_columns()
+                .difference(&input_prop.output_columns)
+                .copied(),
+        );
+        let mut used_columns = input_prop.used_columns.clone();
+        used_columns.extend(self.used_columns());
 
         // Derive orderings
         let orderings = self.items.clone();

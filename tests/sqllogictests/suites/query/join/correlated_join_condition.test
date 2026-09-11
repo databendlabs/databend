@@ -70,3 +70,57 @@ WHERE EXISTS (
 )
 ----
 1
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE EXISTS (
+    SELECT t2.b
+    FROM (VALUES (10), (20)) t2(b)
+    GROUP BY t1.a, t2.b
+)
+----
+1
+2
+
+query I rowsort
+SELECT *
+FROM (VALUES (1), (2)) t1(a)
+WHERE EXISTS (
+    SELECT DISTINCT t1.a
+    FROM (VALUES (10), (20)) t2(b)
+)
+----
+1
+2
+
+query I rowsort
+SELECT (SELECT row_number() OVER (
+            PARTITION BY t1.a ORDER BY t2.b
+        )
+        FROM (VALUES (10), (20)) t2(b)
+        LIMIT 1)
+FROM (VALUES (1), (2)) t1(a)
+----
+1
+1
+
+query I rowsort
+SELECT (SELECT row_number() OVER (
+            ORDER BY t1.a, t2.b
+        )
+        FROM (VALUES (10), (20)) t2(b)
+        LIMIT 1)
+FROM (VALUES (1), (2)) t1(a)
+----
+1
+1
+
+query I rowsort
+SELECT (SELECT sum(t1.a + t2.b) OVER ()
+        FROM (VALUES (10), (20)) t2(b)
+        LIMIT 1)
+FROM (VALUES (1), (2)) t1(a)
+----
+32
+34

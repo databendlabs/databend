@@ -22,6 +22,7 @@ use enum_as_inner::EnumAsInner;
 
 use super::MutationSource;
 use super::SubqueryExpr;
+use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::impl_match_rel_op;
 use crate::impl_try_from_rel_operator;
@@ -58,6 +59,23 @@ use crate::plans::WindowGroup;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::sequence::Sequence;
 
+pub(crate) fn derive_outer_columns<'a, I>(
+    mut outer_columns: ColumnSet,
+    available_columns: &ColumnSet,
+    scalar_exprs: I,
+) -> ColumnSet
+where
+    I: IntoIterator<Item = &'a ScalarExpr>,
+{
+    let mut scalar_columns = ColumnSet::new();
+    for scalar in scalar_exprs {
+        scalar.collect_used_columns(&mut scalar_columns);
+    }
+    scalar_columns.retain(|column| !available_columns.contains(column));
+    outer_columns.extend(scalar_columns);
+    outer_columns
+}
+
 pub trait Operator {
     /// Get relational operator kind
     fn rel_op(&self) -> RelOp;
@@ -69,6 +87,14 @@ pub trait Operator {
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         Box::new(std::iter::empty())
+    }
+
+    fn derive_outer_columns(
+        &self,
+        outer_columns: ColumnSet,
+        available_columns: &ColumnSet,
+    ) -> ColumnSet {
+        derive_outer_columns(outer_columns, available_columns, self.scalar_expr_iter())
     }
 
     /// Derive relational property
@@ -282,4 +308,123 @@ impl_try_from_rel_operator! {
     MaterializedCTE,
     MaterializedCTERef,
     Sequence
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Symbol;
+    use crate::Visibility;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ScalarItem;
+    use crate::plans::Scan;
+    use crate::plans::SortItem;
+    use crate::plans::WindowFuncType;
+    use crate::plans::WindowPartition;
+
+    fn column(index: usize) -> ScalarExpr {
+        ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                format!("c{index}"),
+                Symbol::new(index),
+                Box::new(DataType::Number(NumberDataType::Int32)),
+                Visibility::Visible,
+            )
+            .build(),
+        })
+    }
+
+    fn column_set(indices: &[usize]) -> ColumnSet {
+        indices.iter().copied().map(Symbol::new).collect()
+    }
+
+    fn scan(columns: &[usize]) -> SExpr {
+        SExpr::create_leaf(Scan {
+            columns: column_set(columns),
+            ..Default::default()
+        })
+    }
+
+    fn assert_outer_columns(name: &str, s_expr: &SExpr) -> Result<()> {
+        let property = RelExpr::with_s_expr(s_expr).derive_relational_prop()?;
+        assert_eq!(property.outer_columns, column_set(&[0]), "{name}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_relational_properties_track_scalar_outer_columns() -> Result<()> {
+        let aggregate = Aggregate {
+            group_items: vec![ScalarItem {
+                scalar: column(0),
+                index: Symbol::new(2),
+            }],
+            ..Default::default()
+        };
+        assert_outer_columns("aggregate", &SExpr::create_unary(aggregate, scan(&[1])))?;
+
+        let window = Window {
+            span: None,
+            index: Symbol::new(2),
+            function: WindowFuncType::RowNumber,
+            arguments: vec![],
+            partition_by: vec![ScalarItem {
+                scalar: column(0),
+                index: Symbol::new(3),
+            }],
+            order_by: vec![],
+            frame: Default::default(),
+            limit: None,
+            top: None,
+        };
+        assert_outer_columns("window", &SExpr::create_unary(window, scan(&[1])))?;
+
+        let union = UnionAll {
+            left_outputs: vec![(Symbol::new(2), Some(column(0)))],
+            right_outputs: vec![(Symbol::new(2), None)],
+            cte_scan_names: vec![],
+            logical_recursive_cte_id: None,
+            output_indexes: vec![Symbol::new(2)],
+        };
+        assert_outer_columns(
+            "union",
+            &SExpr::create_binary(union, scan(&[1]), scan(&[1])),
+        )?;
+
+        let sort = Sort {
+            items: vec![],
+            limit: None,
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: Some(WindowPartition {
+                partition_by: vec![ScalarItem {
+                    scalar: column(0),
+                    index: Symbol::new(3),
+                }],
+                top: None,
+                func: WindowFuncType::RowNumber,
+            }),
+        };
+        assert_outer_columns("sort", &SExpr::create_unary(sort, scan(&[1, 3])))?;
+
+        let top_n = TopN {
+            items: vec![SortItem {
+                index: Symbol::new(0),
+                asc: true,
+                nulls_first: false,
+            }],
+            limit: 1,
+            offset: 0,
+            lazy_columns: ColumnSet::new(),
+            after_exchange: None,
+        };
+        assert_outer_columns("top_n", &SExpr::create_unary(top_n, scan(&[1])))?;
+
+        Ok(())
+    }
 }

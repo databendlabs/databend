@@ -537,11 +537,8 @@ impl Operator for WindowGroup {
             output_columns.insert(window.index);
         }
 
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        let outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
 
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns.clone());
@@ -635,11 +632,8 @@ impl Operator for Window {
         output_columns.insert(self.index);
 
         // Derive outer columns
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        let outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -746,6 +740,54 @@ impl WindowFuncType {
             WindowFuncType::NthValue(_) => "nth_value".to_string(),
             WindowFuncType::Ntile(_) => "ntile".to_string(),
             WindowFuncType::CumeDist => "cume_dist".to_string(),
+        }
+    }
+
+    pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
+        let _ = self.replace_columns(|column| Ok(if column == old { new } else { column }));
+    }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
+        match self {
+            WindowFuncType::Aggregate(aggregate) => {
+                for expr in aggregate.exprs_mut() {
+                    expr.replace_columns(&mut replace)?;
+                }
+            }
+            WindowFuncType::LagLead(function) => {
+                function.arg.replace_columns(&mut replace)?;
+                if let Some(default) = &mut function.default {
+                    default.replace_columns(&mut replace)?;
+                }
+            }
+            WindowFuncType::NthValue(function) => {
+                function.arg.replace_columns(&mut replace)?;
+            }
+            WindowFuncType::RowNumber
+            | WindowFuncType::Rank
+            | WindowFuncType::DenseRank
+            | WindowFuncType::PercentRank
+            | WindowFuncType::Ntile(_)
+            | WindowFuncType::CumeDist => {}
+        }
+        Ok(())
+    }
+
+    pub fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        match self {
+            WindowFuncType::Aggregate(aggregate) => Box::new(aggregate.exprs()),
+            WindowFuncType::LagLead(function) => Box::new(
+                std::iter::once(function.arg.as_ref())
+                    .chain(function.default.iter().map(|expr| expr.as_ref())),
+            ),
+            WindowFuncType::NthValue(function) => Box::new(std::iter::once(function.arg.as_ref())),
+            WindowFuncType::RowNumber
+            | WindowFuncType::Rank
+            | WindowFuncType::DenseRank
+            | WindowFuncType::PercentRank
+            | WindowFuncType::Ntile(_)
+            | WindowFuncType::CumeDist => Box::new(std::iter::empty()),
         }
     }
 

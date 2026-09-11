@@ -71,6 +71,7 @@ async fn correlated_exists_subquery_over_union_all_regression() -> anyhow::Resul
 async fn correlated_join_condition_subquery_regression() -> anyhow::Result<()> {
     let cases = [
         (
+            "inner_join_on",
             r"
                 SELECT *
                 FROM (VALUES (1), (2)) t1(a)
@@ -83,6 +84,7 @@ async fn correlated_join_condition_subquery_regression() -> anyhow::Result<()> {
             2,
         ),
         (
+            "non_equi_join_on",
             r"
                 SELECT *
                 FROM (VALUES (1), (2)) t1(a)
@@ -95,6 +97,7 @@ async fn correlated_join_condition_subquery_regression() -> anyhow::Result<()> {
             1,
         ),
         (
+            "left_join_on",
             r"
                 SELECT *
                 FROM (VALUES (1), (2)) t1(a)
@@ -108,8 +111,80 @@ async fn correlated_join_condition_subquery_regression() -> anyhow::Result<()> {
         ),
     ];
 
-    for (sql, expected_rows) in cases {
-        assert_eq!(execute_query_rows(sql).await?, expected_rows);
+    for (case_name, sql, expected_rows) in cases {
+        let rows = execute_query_rows(sql)
+            .await
+            .map_err(|err| anyhow::anyhow!("{case_name}: {err}"))?;
+        assert_eq!(rows, expected_rows, "{case_name}");
+    }
+
+    let additional_cases = [
+        (
+            "aggregate_group_by",
+            r"
+                SELECT *
+                FROM (VALUES (1), (2)) t1(a)
+                WHERE EXISTS (
+                    SELECT t2.b
+                    FROM (VALUES (10), (20)) t2(b)
+                    GROUP BY t1.a, t2.b
+                )
+            ",
+            2,
+        ),
+        (
+            "distinct_outer_column",
+            r"
+                SELECT *
+                FROM (VALUES (1), (2)) t1(a)
+                WHERE EXISTS (
+                    SELECT DISTINCT t1.a
+                    FROM (VALUES (10), (20)) t2(b)
+                )
+            ",
+            2,
+        ),
+        (
+            "window_partition_by_outer_column",
+            r"
+                SELECT (SELECT row_number() OVER (
+                            PARTITION BY t1.a ORDER BY t2.b
+                        )
+                        FROM (VALUES (10), (20)) t2(b)
+                        LIMIT 1)
+                FROM (VALUES (1), (2)) t1(a)
+            ",
+            2,
+        ),
+        (
+            "window_order_by_outer_column",
+            r"
+                SELECT (SELECT row_number() OVER (
+                            ORDER BY t1.a, t2.b
+                        )
+                        FROM (VALUES (10), (20)) t2(b)
+                        LIMIT 1)
+                FROM (VALUES (1), (2)) t1(a)
+            ",
+            2,
+        ),
+        (
+            "window_argument_outer_column",
+            r"
+                SELECT (SELECT sum(t1.a + t2.b) OVER ()
+                        FROM (VALUES (10), (20)) t2(b)
+                        LIMIT 1)
+                FROM (VALUES (1), (2)) t1(a)
+            ",
+            2,
+        ),
+    ];
+
+    for (case_name, sql, expected_rows) in additional_cases {
+        let rows = execute_query_rows(sql)
+            .await
+            .map_err(|err| anyhow::anyhow!("{case_name}: {err}"))?;
+        assert_eq!(rows, expected_rows, "{case_name}");
     }
 
     Ok(())

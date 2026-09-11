@@ -351,11 +351,8 @@ impl Operator for Aggregate {
         }
 
         // Derive outer columns
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        let outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;

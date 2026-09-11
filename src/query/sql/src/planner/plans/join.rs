@@ -484,17 +484,18 @@ impl Operator for Join {
         output_columns.extend(right_prop.output_columns.iter().copied());
 
         // Derive outer columns
-        let mut outer_columns = left_prop.outer_columns.clone();
-        outer_columns.extend(right_prop.outer_columns.iter().copied());
-
-        for condition in &self.equi_conditions {
-            condition.left.collect_used_columns(&mut outer_columns);
-            condition.right.collect_used_columns(&mut outer_columns);
-        }
-        for condition in &self.non_equi_conditions {
-            condition.collect_used_columns(&mut outer_columns);
-        }
-        outer_columns.retain(|column| !output_columns.contains(column));
+        let outer_columns = self.derive_outer_columns(
+            left_prop
+                .outer_columns
+                .union(&right_prop.outer_columns)
+                .cloned()
+                .collect(),
+            &left_prop
+                .output_columns
+                .union(&right_prop.output_columns)
+                .cloned()
+                .collect(),
+        );
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
