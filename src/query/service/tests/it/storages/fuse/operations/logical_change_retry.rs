@@ -101,9 +101,9 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
     let writer = fixture.new_session_with_type(SessionType::Dummy).await?;
     let id = table(&fixture, name).await?.get_id();
 
-    // Each round has an actual metadata conflict: the transaction buffers its
-    // changes before a separate session commits an append to the same table.
-    for round in 0..2 {
+    // The other session commits after this transaction buffers its mutations,
+    // forcing a metadata conflict at COMMIT.
+    {
         let before = totals(&fixture, name).await?;
         fixture.execute_command("BEGIN").await?;
         fixture
@@ -112,9 +112,8 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
         fixture
             .execute_command(&format!("UPDATE {target} SET v=v+1 WHERE id=3"))
             .await?;
-        let delete_id = if round == 0 { 2 } else { 100 };
         fixture
-            .execute_command(&format!("DELETE FROM {target} WHERE id={delete_id}"))
+            .execute_command(&format!("DELETE FROM {target} WHERE id=2"))
             .await?;
         assert_eq!(
             fixture
@@ -125,11 +124,7 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
                 .get(&id),
             Some(&Some((2, 1)))
         );
-        execute(
-            &writer,
-            &format!("INSERT INTO {target} VALUES ({},0)", 100 + round),
-        )
-        .await?;
+        execute(&writer, &format!("INSERT INTO {target} VALUES (100,0)")).await?;
         fixture.execute_command("COMMIT").await?;
         assert_eq!(totals(&fixture, name).await?, (before.0 + 2, before.1 + 1));
         assert_eq!(
@@ -151,39 +146,109 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
                 .is_empty()
         );
     }
-    // Keep internal bookkeeping assertions here: a SQL result alone cannot
-    // distinguish a known zero from missing counters after a successful retry.
-    let second_name = "counter_second";
-    let second = format!("{}.{}", fixture.default_db_name(), second_name);
-    fixture
-        .execute_command(&format!("CREATE TABLE {second}(id INT, v INT)"))
-        .await?;
-    fixture
-        .execute_command(&format!("INSERT INTO {second} VALUES (1,10),(2,20)"))
-        .await?;
-    let second_id = table(&fixture, second_name).await?.get_id();
-    for (sql, expected) in [
-        (format!("ANALYZE TABLE {target}"), vec![(id, (0, 0))]),
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let writer = fixture.new_session_with_type(SessionType::Dummy).await?;
+    let db = fixture.default_db_name();
+    let names = ["counter_a", "counter_b"];
+    let mut ids = Vec::new();
+    for session in [fixture.default_session(), writer.clone()] {
+        execute(&session, "SET auto_compaction_imperfect_blocks_threshold=0").await?;
+        execute(&session, "SET enable_auto_analyze=0").await?;
+    }
+    for name in names {
+        let target = format!("{db}.{name}");
+        fixture
+            .execute_command(&format!("CREATE TABLE {target}(id INT, v INT)"))
+            .await?;
+        fixture
+            .execute_command(&format!("INSERT INTO {target} VALUES (1,10),(2,20),(3,30)"))
+            .await?;
+        fixture
+            .execute_command(&format!("UPDATE {target} SET v=11 WHERE id=1"))
+            .await?;
+        fixture
+            .execute_command(&format!("DELETE FROM {target} WHERE id=2"))
+            .await?;
+        assert_eq!(totals(&fixture, name).await?, (1, 1));
+        ids.push(table(&fixture, name).await?.get_id());
+    }
+
+    let a = format!("{db}.{}", names[0]);
+    let b = format!("{db}.{}", names[1]);
+    // Start with two rows per table. ANALYZE + concurrent append leaves three;
+    // INSERT ALL + concurrent append leaves five, which OVERWRITE removes.
+    for (statements, delta, expected_rows) in [
         (
-            format!("INSERT ALL INTO {target} INTO {second} SELECT 9, 90"),
-            vec![(id, (0, 0)), (second_id, (0, 0))],
+            vec![format!("ANALYZE TABLE {a}"), format!("ANALYZE TABLE {b}")],
+            (0, 0),
+            3,
         ),
         (
-            format!("INSERT OVERWRITE ALL INTO {target} INTO {second} SELECT 9, 90"),
-            vec![(id, (0, 3)), (second_id, (0, 2))],
+            vec![format!("INSERT ALL INTO {a} INTO {b} SELECT 9,90")],
+            (0, 0),
+            5,
+        ),
+        (
+            vec![format!(
+                "INSERT OVERWRITE ALL INTO {a} INTO {b} SELECT 9,90"
+            )],
+            (0, 5),
+            2,
         ),
     ] {
+        let mut before = Vec::new();
+        for name in names {
+            // Exercise each write path from an old, nonzero counter baseline.
+            make_epochless(&fixture, name).await?;
+            before.push(totals(&fixture, name).await?);
+        }
         fixture.execute_command("BEGIN").await?;
-        fixture.execute_command(&sql).await?;
+        for sql in &statements {
+            fixture.execute_command(sql).await?;
+        }
         let deltas = fixture
             .default_session()
             .txn_mgr()
             .lock()
             .logical_change_deltas();
-        for (table_id, delta) in expected {
-            assert_eq!(deltas.get(&table_id), Some(&Some(delta)), "{sql}");
+        for id in &ids {
+            assert_eq!(deltas.get(id), Some(&Some(delta)), "{statements:?}");
         }
-        fixture.execute_command("ROLLBACK").await?;
+        for name in names {
+            execute(&writer, &format!("INSERT INTO {db}.{name} VALUES (100,0)")).await?;
+        }
+        fixture.execute_command("COMMIT").await?;
+        for (index, name) in names.into_iter().enumerate() {
+            assert_eq!(
+                totals(&fixture, name).await?,
+                (before[index].0 + delta.0, before[index].1 + delta.1),
+                "persisted counters after retry: {statements:?}, {name}"
+            );
+            assert_eq!(
+                table(&fixture, name)
+                    .await?
+                    .read_table_snapshot()
+                    .await?
+                    .unwrap()
+                    .summary
+                    .row_count,
+                expected_rows
+            );
+        }
+        assert!(
+            fixture
+                .default_session()
+                .txn_mgr()
+                .lock()
+                .logical_change_deltas()
+                .is_empty()
+        );
     }
     Ok(())
 }

@@ -1,7 +1,6 @@
 # Named connections share the file's sandbox, but retain independent sessions.
 # `connection` applies only to the immediately following statement/query.
-# Default connection = transaction A; writer = independently committing B.
-# No sleeps or client retries: B commits after A has buffered a stale version.
+# ANALYZE and multi-table counter assertions live in the Rust integration test.
 
 statement ok
 CREATE DATABASE logical_change_retry
@@ -13,7 +12,7 @@ connection writer
 statement ok
 USE logical_change_retry
 
-# Disable maintenance hooks to keep concurrent appends from rewriting base segments.
+# Keep the concurrent append from rewriting the transaction's base segments.
 statement ok
 SET auto_compaction_imperfect_blocks_threshold = 0
 
@@ -29,112 +28,30 @@ statement ok
 SET enable_auto_analyze = 0
 
 statement ok
-CREATE TABLE t1(id INT)
+CREATE TABLE t(id INT)
 
 statement ok
-CREATE TABLE t2(id INT)
+INSERT INTO t VALUES (6), (9)
 
-statement ok
-INSERT INTO t1 VALUES (1), (2)
-
-statement ok
-INSERT INTO t2 VALUES (1), (2)
-
-# ANALYZE buffers metadata without logical changes; concurrent append forces rebasing.
+# B commits after A buffers mutations, forcing a version conflict without sleeps.
 statement ok
 BEGIN
 
 statement ok
-ANALYZE TABLE t1
+UPDATE t SET id = 60 WHERE id = 6
+
+statement ok
+DELETE FROM t WHERE id = 9
 
 connection writer
 statement ok
-INSERT INTO t1 VALUES (3)
+INSERT INTO t VALUES (7)
 
 statement ok
 COMMIT
 
 query I
-SELECT id FROM t1 ORDER BY id
-----
-1
-2
-3
-
-# Multi-table INSERT preserves its own rows and the concurrent append.
-statement ok
-BEGIN
-
-statement ok
-INSERT ALL INTO t1 INTO t2 SELECT 4
-
-connection writer
-statement ok
-INSERT INTO t2 VALUES (5)
-
-statement ok
-COMMIT
-
-query I
-SELECT id FROM t1 ORDER BY id
-----
-1
-2
-3
-4
-
-query I
-SELECT id FROM t2 ORDER BY id
-----
-1
-2
-4
-5
-
-# OVERWRITE replaces original segments; B's appended segment survives the merge.
-statement ok
-BEGIN
-
-statement ok
-INSERT OVERWRITE ALL INTO t1 INTO t2 SELECT 9
-
-connection writer
-statement ok
-INSERT INTO t2 VALUES (6)
-
-statement ok
-COMMIT
-
-query I
-SELECT id FROM t1 ORDER BY id
-----
-9
-
-query I
-SELECT id FROM t2 ORDER BY id
-----
-6
-9
-
-# Multiple single-table mutations are applied exactly once on retry.
-statement ok
-BEGIN
-
-statement ok
-UPDATE t2 SET id = 60 WHERE id = 6
-
-statement ok
-DELETE FROM t2 WHERE id = 9
-
-connection writer
-statement ok
-INSERT INTO t2 VALUES (7)
-
-statement ok
-COMMIT
-
-query I
-SELECT id FROM t2 ORDER BY id
+SELECT id FROM t ORDER BY id
 ----
 7
 60
@@ -143,33 +60,33 @@ statement ok
 BEGIN
 
 statement ok
-DELETE FROM t2
+DELETE FROM t
 
 statement ok
 ROLLBACK
 
 query I
-SELECT id FROM t2 ORDER BY id
+SELECT id FROM t ORDER BY id
 ----
 7
 60
 
-# Reuse A after rollback; the discarded transaction must not affect this commit.
+# Reuse A after rollback; discarded writes must not affect this commit.
 statement ok
 BEGIN
 
 statement ok
-INSERT INTO t2 VALUES (8)
+INSERT INTO t VALUES (8)
 
 connection writer
 statement ok
-INSERT INTO t2 VALUES (10)
+INSERT INTO t VALUES (10)
 
 statement ok
 COMMIT
 
 query I
-SELECT id FROM t2 ORDER BY id
+SELECT id FROM t ORDER BY id
 ----
 7
 8
