@@ -111,3 +111,12 @@ select histogram(distinct x, 2) = histogram(2)(distinct x),
 from (values (1), (1), (1), (2), (3), (null)) t(x);
 ----
 true true
+
+# Explicit DISTINCT names accept the same legacy configuration arguments.
+query TTTT
+select string_agg_distinct(x, '|'), listagg_distinct(x, '|'),
+       group_concat_distinct(x, '|'),
+       histogram_distinct(n, 2) = histogram(2)(distinct n)
+from (values ('a', 1), ('a', 1), ('a', 2)) t(x, n);
+----
+a a a true

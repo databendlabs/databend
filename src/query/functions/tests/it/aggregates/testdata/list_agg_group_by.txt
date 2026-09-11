@@ -31,12 +31,12 @@ evaluation (internal):
 
 ast: listagg(s, '|')
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------+
-| Column | Data                                                                            |
-+--------+---------------------------------------------------------------------------------+
-| s      | Column(StringColumn[abc, def, opq, xyz])                                        |
-| Output | NullableColumn { column: StringColumn[abcopq, defxyz], validity: [0b______11] } |
-+--------+---------------------------------------------------------------------------------+
++--------+-----------------------------------------------------------------------------------+
+| Column | Data                                                                              |
++--------+-----------------------------------------------------------------------------------+
+| s      | Column(StringColumn[abc, def, opq, xyz])                                          |
+| Output | NullableColumn { column: StringColumn[abc|opq, def|xyz], validity: [0b______11] } |
++--------+-----------------------------------------------------------------------------------+
 
 
 ast: listagg(s_null, '-')
@@ -45,7 +45,7 @@ evaluation (internal):
 | Column | Data                                                                               |
 +--------+------------------------------------------------------------------------------------+
 | s_null | Column(NullableColumn { column: StringColumn[a, , c, d], validity: [0b____1101] }) |
-| Output | NullableColumn { column: StringColumn[ac, d], validity: [0b______11] }             |
+| Output | NullableColumn { column: StringColumn[a-c, d], validity: [0b______11] }            |
 +--------+------------------------------------------------------------------------------------+
 
 

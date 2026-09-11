@@ -1,3 +1,73 @@
+=== listagg_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: listagg(text, '|')
+status: ok
+scalar: listagg(text, '|')
+type: String NULL
+
+=== group_concat_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: group_concat(text, '|')
+status: ok
+scalar: group_concat(text, '|')
+type: String NULL
+
+=== string_agg_distinct_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: string_agg_distinct(text, '|')
+status: ok
+scalar: string_agg_distinct(text, '|')
+type: String NULL
+
+=== listagg_distinct_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: listagg_distinct(text, '|')
+status: ok
+scalar: listagg_distinct(text, '|')
+type: String NULL
+
+=== group_concat_distinct_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: group_concat_distinct(text, '|')
+status: ok
+scalar: group_concat_distinct(text, '|')
+type: String NULL
+
+=== string_agg_state_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: string_agg_state(text, '|')
+status: ok
+scalar: string_agg_state(text, '|')
+type: AggregateState(string_agg('|'), String NULL)
+
+=== histogram_distinct_legacy_buckets ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: histogram_distinct(number, 2)
+status: ok
+scalar: histogram_distinct(number, 2)
+type: String NULL
+
+=== histogram_state_legacy_buckets ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: histogram_state(number, 2)
+status: ok
+scalar: histogram_state(number, 2)
+type: AggregateState(histogram(2), Int64 NULL)
+
+=== histogram_semantic_distinct_legacy_buckets ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: histogram(distinct number, 2)
+status: ok
+scalar: histogram(DISTINCT number, 2)
+type: String NULL
+
+=== listagg_filter_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: listagg(text, '|') FILTER (WHERE flag)
+status: ok
+scalar: listagg(text, '|') FILTER ( WHERE flag )
+type: String NULL
+
 === count_star_removes_count_args ===
 description: count(*) should type check through the aggregate path that removes redundant count arguments.
 sql: count(*)

@@ -6,6 +6,66 @@ use super::*;
 async fn test_type_check_aggregate_resolution() -> Result<()> {
     let cases = [
         SqlTestCase {
+            name: "listagg_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "listagg(text, '|')",
+        },
+        SqlTestCase {
+            name: "group_concat_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "group_concat(text, '|')",
+        },
+        SqlTestCase {
+            name: "string_agg_distinct_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "string_agg_distinct(text, '|')",
+        },
+        SqlTestCase {
+            name: "listagg_distinct_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "listagg_distinct(text, '|')",
+        },
+        SqlTestCase {
+            name: "group_concat_distinct_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "group_concat_distinct(text, '|')",
+        },
+        SqlTestCase {
+            name: "string_agg_state_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "string_agg_state(text, '|')",
+        },
+        SqlTestCase {
+            name: "histogram_distinct_legacy_buckets",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "histogram_distinct(number, 2)",
+        },
+        SqlTestCase {
+            name: "histogram_state_legacy_buckets",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "histogram_state(number, 2)",
+        },
+        SqlTestCase {
+            name: "histogram_semantic_distinct_legacy_buckets",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "histogram(distinct number, 2)",
+        },
+        SqlTestCase {
+            name: "listagg_filter_legacy_delimiter",
+            description: "Legacy configuration arguments should become params before aggregate construction.",
+            setup_sqls: &[],
+            sql: "listagg(text, '|') FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "count_star_removes_count_args",
             description: "count(*) should type check through the aggregate path that removes redundant count arguments.",
             setup_sqls: &[],
