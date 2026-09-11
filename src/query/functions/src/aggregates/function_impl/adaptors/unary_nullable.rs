@@ -29,7 +29,6 @@ use super::unary::UnaryAccumulateRowInput;
 use super::unary::UnaryEval;
 use super::*;
 
-pub(crate) type UnarySkipNull<U> = UnaryNullable<U, false>;
 pub(crate) type UnaryOrNull<U> = UnaryNullable<U, true>;
 
 pub(crate) struct UnaryNullable<U, const RESULT_NULL: bool> {

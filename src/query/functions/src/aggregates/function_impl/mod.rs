@@ -47,6 +47,7 @@ mod markov_train;
 mod min_max_any;
 mod mode;
 mod moments;
+mod multi_arg_uniq;
 mod quantile_cont;
 mod quantile_disc;
 mod quantile_tdigest;

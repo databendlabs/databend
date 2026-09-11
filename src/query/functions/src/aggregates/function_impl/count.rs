@@ -23,24 +23,19 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
-use databend_common_expression::with_number_mapped_type;
 
 use super::AggregateRegistration;
 use super::adaptors::*;
+use super::uniq::UniqBuilder;
 
 #[derive(Default)]
 pub struct AggregateCountState {
@@ -174,7 +169,14 @@ impl CountBuilder {
 
 impl CountBuilder {
     fn create_distinct(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
-        create_distinct_count_function(build, true)
+        if !build.params().is_empty() {
+            return Err(ErrorCode::BadArguments(format!(
+                "{} expects no parameters",
+                build.name()
+            )));
+        }
+
+        UniqBuilder::create(build)
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
@@ -186,77 +188,6 @@ impl CountBuilder {
             CountEval::new(has_argument),
         )
     }
-
-    fn distinct_state_description() -> AggregateStateDescription {
-        AggregateStateDescription::new(
-            vec![
-                AggrStateType::Custom(Layout::new::<AggregateDistinctState>()),
-                AggrStateType::Custom(Layout::new::<AggregateCountState>()),
-            ],
-            vec![
-                StateSerdeItem::DataType(DataType::Array(Box::new(DataType::Binary))),
-                StateSerdeItem::DataType(UInt64Type::data_type()),
-            ],
-        )
-        .with_manual_drop(true)
-    }
-}
-
-pub(super) fn create_distinct_count_function(
-    build: DirectBuildContext<'_, impl Combinator>,
-    count_argument: bool,
-) -> Result<AggregateCallRef> {
-    if !build.params().is_empty() {
-        return Err(ErrorCode::BadArguments(format!(
-            "{} expects no parameters",
-            build.name()
-        )));
-    }
-
-    if build.args_type().len() == 1 {
-        return create_unary_distinct_count_function(build);
-    }
-
-    let state = CountBuilder::distinct_state_description();
-    let args_type = build.args_type().to_vec();
-    let eval = MultiArgSkipNullEval::new(DistinctEval::<false>::new(
-        CountEval::new(count_argument),
-        args_type,
-    ));
-
-    build.create(UInt64Type::data_type(), state, eval)
-}
-
-fn create_unary_distinct_count_function(
-    build: DirectBuildContext<'_, impl Combinator>,
-) -> Result<AggregateCallRef> {
-    let data_type = build.args_type()[0].remove_nullable();
-    with_number_mapped_type!(|NUM_TYPE| match data_type {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            create_unary_distinct_count_function_typed::<NumberType<NUM_TYPE>>(build)
-        }
-        DataType::String => create_unary_distinct_count_function_typed::<StringType>(build),
-        DataType::Date => create_unary_distinct_count_function_typed::<DateType>(build),
-        DataType::Timestamp => create_unary_distinct_count_function_typed::<TimestampType>(build),
-        _ => create_unary_distinct_count_function_typed::<AnyType>(build),
-    })
-}
-
-fn create_unary_distinct_count_function_typed<T>(
-    build: DirectBuildContext<'_, impl Combinator>,
-) -> Result<AggregateCallRef>
-where T: ValueType {
-    let state = CountEval::state_description();
-    let distinct_arg_type = build.args_type()[0].remove_nullable();
-    let eval = UnaryEvalAdapter::new(UnarySkipNull::new(UnaryDistinct::new(
-        UnaryStateEval::<AggregateCountState, T, UInt64Type, false>::new(().into()),
-        distinct_arg_type,
-    )));
-    build.create(
-        UInt64Type::data_type(),
-        unary_distinct_state_description(&state),
-        eval,
-    )
 }
 
 impl CountEval {

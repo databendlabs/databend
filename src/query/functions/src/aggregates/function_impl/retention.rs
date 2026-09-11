@@ -65,7 +65,7 @@ impl RetentionBuilder {
         .then(PlainRoute::multi_arg(Self::create))
         .then(IfRoute::multi_arg(Self::create))
         .then(StateRoute::multi_arg(Self::create).with_metadata(Self::RETENTION_STATE_METADATA))
-        .then(DistinctRoute::<true>::multi_arg(Self::create))
+        .then(DistinctAliasRoute::multi_arg(Self::create))
         .register(registry);
     }
 }
@@ -156,6 +156,12 @@ impl AggregateEval for RetentionEval {
         let state = input.state.get::<AggregateRetentionState>();
         let views = self.boolean_views(input.columns);
         for row in 0..input.columns.num_rows() {
+            if input
+                .validity
+                .is_some_and(|validity| !validity.get(row).unwrap())
+            {
+                continue;
+            }
             self.accumulate_row_into_state(state, &views, row);
         }
         Ok(())

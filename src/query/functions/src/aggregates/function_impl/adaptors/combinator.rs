@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::StateSerdeType;
 use databend_common_expression::types::DataType;
@@ -28,7 +29,6 @@ use super::AggregateSignature;
 use super::AggregateStateDescription;
 use super::FunctionInputLayout;
 use super::StateCombinatorPlan;
-use super::distinct_combinator;
 use super::if_combinator;
 use super::sort_combinator;
 use super::state_combinator;
@@ -62,8 +62,8 @@ pub(crate) struct IfCombinator {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct DistinctCombinator<const SKIP_NULLS: bool> {
-    pub(crate) args_type: Vec<DataType>,
+pub(crate) struct UnaryDistinctCombinator<const SKIP_NULLS: bool> {
+    pub(crate) arg_type: DataType,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -247,7 +247,7 @@ impl Combinator for IfCombinator {
     }
 }
 
-impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
+impl<const SKIP_NULLS: bool> Combinator for UnaryDistinctCombinator<SKIP_NULLS> {
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
@@ -255,13 +255,34 @@ impl<const SKIP_NULLS: bool> Combinator for DistinctCombinator<SKIP_NULLS> {
         state: AggregateStateDescription,
         eval: impl AggregateEval,
     ) -> Result<AggregateCallRef> {
-        let state = distinct_combinator::distinct_state_description(&state);
-        let eval = distinct_combinator::DistinctEval::<SKIP_NULLS>::new(eval, self.args_type);
-        if ORDERED {
-            Ok(finish_with_order_by(signature, call_metadata, state, eval))
-        } else {
-            Ok(finish(signature, call_metadata, state, eval))
+        // No values can enter the distinct set for a statically NULL argument.
+        if SKIP_NULLS && self.arg_type.is_null() {
+            return PlainCombinator.create::<ORDERED>(signature, call_metadata, state, eval);
         }
+        if ORDERED && !signature.order_by.is_empty() {
+            // DISTINCT retains only the argument; independent sort keys cannot
+            // be reconstructed when the unique values are replayed.
+            if signature.order_by.iter().any(|item| {
+                !matches!(item.source, AggregateBoundOrderBySource::Argument {
+                    index: 0
+                })
+            }) {
+                return Err(ErrorCode::BadArguments(
+                    "DISTINCT aggregate ORDER BY must reference its argument",
+                ));
+            }
+            let (input_types, order_by) = sort_combinator::sort_runtime_inputs(
+                std::slice::from_ref(&self.arg_type),
+                &signature.order_by,
+            );
+            let state = sort_combinator::sort_state_description(&state);
+            let eval = sort_combinator::SortEval::new(eval, input_types, order_by);
+            let (state, eval) =
+                super::create_unary_distinct::<SKIP_NULLS>(eval, &state, self.arg_type);
+            return Ok(finish(signature, call_metadata, state, eval));
+        }
+        let (state, eval) = super::create_unary_distinct::<SKIP_NULLS>(eval, &state, self.arg_type);
+        Ok(finish(signature, call_metadata, state, eval))
     }
 }
 

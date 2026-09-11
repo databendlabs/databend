@@ -76,6 +76,9 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("count", "count_distinct"),
         ("sum", "sum_distinct"),
         ("avg", "avg_distinct"),
+        ("array_agg", "array_agg_distinct"),
+        ("list", "list_distinct"),
+        ("LIST", "list_distinct"),
         ("SUM_ZERO", "sum_zero_distinct"),
     ] {
         assert_eq!(
@@ -203,5 +206,140 @@ fn test_eager_aggregation_strategies() -> Result<()> {
         })?;
         assert_eq!(call.features().eager_aggregation, strategy, "{name}");
     }
+    Ok(())
+}
+
+#[test]
+fn test_distinct_float_equality() -> Result<()> {
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::Float64Type;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::support::eval_aggregate_for_test;
+
+    let values = Float64Type::from_data(vec![
+        -0.0f64,
+        0.0f64,
+        f64::from_bits(0x7ff8000000000001),
+        f64::from_bits(0xfff8000000000002),
+    ]);
+    for name in ["count_distinct", "uniq"] {
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                let (result, _) = eval_aggregate_for_test(
+                    name,
+                    vec![],
+                    &[values.clone().into()],
+                    4,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                assert_eq!(
+                    result.index(0).unwrap(),
+                    ScalarRef::Number(NumberScalar::UInt64(2))
+                );
+                // Multi-argument DISTINCT retains bytewise row equality, including
+                // signed zeros and different NaN payloads.
+                let (result, _) = eval_aggregate_for_test(
+                    name,
+                    vec![],
+                    &[
+                        values.clone().into(),
+                        databend_common_expression::types::BooleanType::from_data(vec![true; 4])
+                            .into(),
+                    ],
+                    4,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                assert_eq!(
+                    result.index(0).unwrap(),
+                    ScalarRef::Number(NumberScalar::UInt64(4))
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_distinct_unary_any_fallback() -> Result<()> {
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::StringType;
+
+    use super::support::eval_aggregate_for_test;
+
+    let values = StringType::from_data_with_validity(vec!["a", "b", "a", "ignored"], vec![
+        true, true, true, false,
+    ]);
+    for each_row in [false, true] {
+        for with_serialize in [false, true] {
+            let (result, _) = eval_aggregate_for_test(
+                "count_distinct",
+                vec![],
+                &[values.clone().into()],
+                4,
+                each_row,
+                with_serialize,
+                vec![],
+            )?;
+            assert_eq!(
+                result.index(0).unwrap(),
+                ScalarRef::Number(NumberScalar::UInt64(2))
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_count_distinct_rows() -> Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::UInt64Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    let entries = [
+        BlockEntry::from(UInt64Type::from_data_with_validity(
+            vec![1u64, 1, 2, 0, 2, 1],
+            vec![true, true, true, false, true, true],
+        )),
+        BlockEntry::from(StringType::from_data_with_validity(
+            vec!["a", "a", "b", "b", "", "a"],
+            vec![true, true, true, true, false, true],
+        )),
+    ];
+    for each_row in [false, true] {
+        for with_serialize in [false, true] {
+            let (result, _) = eval_aggregate_for_test(
+                "count_distinct",
+                vec![],
+                &entries,
+                6,
+                each_row,
+                with_serialize,
+                vec![],
+            )?;
+            assert_eq!(
+                result.index(0).unwrap(),
+                ScalarRef::Number(NumberScalar::UInt64(2))
+            );
+        }
+    }
+    let (groups, _) = simulate_two_groups_group_by("count_distinct", vec![], &entries, 6, vec![])?;
+    assert_eq!(
+        groups.index(0).unwrap(),
+        ScalarRef::Number(NumberScalar::UInt64(2))
+    );
+    assert_eq!(
+        groups.index(1).unwrap(),
+        ScalarRef::Number(NumberScalar::UInt64(1))
+    );
     Ok(())
 }

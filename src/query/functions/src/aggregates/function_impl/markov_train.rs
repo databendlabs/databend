@@ -27,6 +27,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
@@ -50,12 +51,14 @@ impl MarkovTrainBuilder {
             MarkovTrainBuilder::MARKOV_TRAIN_METADATA,
             NullInput::Filter,
         )
-        .then(MergeRoute::multi_arg(false, MarkovTrainBuilder::create))
-        .then(MergeRoute::multi_arg(true, MarkovTrainBuilder::create))
-        .then(PlainRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(IfRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(StateRoute::multi_arg(MarkovTrainBuilder::create))
-        .then(DistinctRoute::<true>::multi_arg(MarkovTrainBuilder::create))
+        .then(MergeRoute::unary(false, MarkovTrainBuilder::create))
+        .then(MergeRoute::unary(true, MarkovTrainBuilder::create))
+        .then(PlainRoute::unary(MarkovTrainBuilder::create))
+        .then(IfRoute::unary(MarkovTrainBuilder::create))
+        .then(StateRoute::unary(MarkovTrainBuilder::create))
+        .then(DistinctRoute::<true>::unary(
+            MarkovTrainBuilder::create,
+        ))
         .register(registry);
     }
 }
@@ -260,14 +263,14 @@ impl MarkovTrainEval {
     }
 }
 
-impl AggregateEval for MarkovTrainEval {
+impl UnaryEval<StringType, AnyType> for MarkovTrainEval {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(AggregateMarkovTrainState::default);
     }
 
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
+    fn accumulate(&self, input: UnaryAccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateMarkovTrainState>();
-        let values = input.columns[0].downcast::<StringType>().unwrap();
+        let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
         match input.validity {
             Some(validity) => {
@@ -286,8 +289,8 @@ impl AggregateEval for MarkovTrainEval {
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let values = input.columns[0].downcast::<StringType>().unwrap();
+    fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
+        let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
         for (row, state) in input.states.iter().enumerate() {
             state.get::<AggregateMarkovTrainState>().consume(
@@ -299,8 +302,8 @@ impl AggregateEval for MarkovTrainEval {
         Ok(())
     }
 
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        let values = input.columns[0].downcast::<StringType>().unwrap();
+    fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {
+        let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
         input.state.get::<AggregateMarkovTrainState>().consume(
             self.params.order,
@@ -362,12 +365,12 @@ impl AggregateEval for MarkovTrainEval {
 }
 
 impl MarkovTrainBuilder {
-    fn create(build: MultiArgBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
-        if build.args_type()[0] != DataType::String {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
+        if *build.arg_type() != DataType::String {
             return Err(ErrorCode::BadDataValueType(format!(
                 "{} does not support type '{:?}', must be string type",
                 build.name(),
-                build.args_type()[0]
+                *build.arg_type()
             )));
         }
 
@@ -411,7 +414,7 @@ impl MarkovTrainBuilder {
             }
         };
 
-        build.create_multi_arg_or_null(
+        build.create_unary_or_null_with_eval::<StringType, AnyType, _>(
             DataType::Array(Box::new(DataType::Tuple(vec![
                 UInt32Type::data_type(),
                 UInt32Type::data_type(),

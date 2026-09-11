@@ -112,3 +112,25 @@ fn test_state_baselines() {
         },
     ]);
 }
+
+#[test]
+fn test_markov_train_distinct_null_argument() -> databend_common_exception::Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DataType;
+
+    use super::support::eval_v2_aggr;
+
+    let entry = BlockEntry::new_const_column(DataType::Null, Scalar::Null, 3);
+    for with_serialize in [false, true] {
+        let (result, _) = eval_v2_aggr(
+            "markov_train_distinct",
+            std::slice::from_ref(&entry),
+            3,
+            with_serialize,
+        )?;
+        assert_eq!(result.index(0).unwrap(), ScalarRef::Null);
+    }
+    Ok(())
+}

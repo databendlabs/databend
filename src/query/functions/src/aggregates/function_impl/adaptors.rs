@@ -25,9 +25,9 @@ use databend_common_expression::aggregate::AggrState;
 pub use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 
+mod array_collect;
 mod build_context;
 mod combinator;
-mod distinct_combinator;
 pub(crate) mod if_combinator;
 mod input_rows;
 pub(super) mod merge_combinator;
@@ -37,26 +37,24 @@ mod null_argument_result;
 mod sort_combinator;
 pub(crate) mod state_combinator;
 mod unary;
+mod unary_distinct;
 mod unary_nullable;
-mod array_collect;
 
+pub(super) use array_collect::ArrayCollectEval;
+pub(super) use array_collect::ArrayCollectState;
 pub(super) use combinator::Combinator;
-pub(super) use combinator::DistinctCombinator;
 pub(super) use combinator::IfCombinator;
 pub(super) use combinator::PlainCombinator;
 pub(super) use combinator::StateCombinator;
-pub(super) use distinct_combinator::AggregateDistinctState;
-pub(super) use distinct_combinator::DistinctEval;
+pub(super) use combinator::UnaryDistinctCombinator;
 pub(super) use merge_combinator::LegacySignatureResolver;
 pub(super) use multi_arg_nullable::MultiArgOrNullEval;
 pub(super) use multi_arg_nullable::MultiArgSkipNullEval;
 pub(super) use name_route::*;
 pub(super) use null_argument_result::try_create_null_argument_result_function;
 pub(super) use unary::*;
+pub(super) use unary_distinct::create_unary_distinct;
 pub(super) use unary_nullable::UnaryOrNull;
-pub(super) use unary_nullable::UnarySkipNull;
-pub(super) use array_collect::ArrayCollectState;
-pub(super) use array_collect::ArrayCollectEval;
 
 /// Builds an implementation while retaining the complete external call contract.
 pub(super) struct UnaryBuildContext<'a, C> {
@@ -211,7 +209,6 @@ mod tests {
     use databend_common_expression::ScalarRef;
     use databend_common_expression::aggregate::AggrStateType;
     use databend_common_expression::types::ArgType;
-    use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::UInt64Type;
 
@@ -349,16 +346,30 @@ mod tests {
         Arc::new(SumInfo { drop_count })
     }
 
+    fn distinct_sum(
+        drop_count: Arc<AtomicUsize>,
+    ) -> (AggregateStateDescription, Box<dyn AggregateEval>) {
+        let state = AggregateStateDescription::new(
+            vec![AggrStateType::Custom(Layout::new::<SumState>())],
+            vec![StateSerdeItem::DataType(UInt64Type::data_type())],
+        )
+        .with_manual_drop(true);
+        create_unary_distinct::<false>(plain_sum(drop_count), &state, UInt64Type::data_type())
+    }
+
     fn distinct_sum_state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(
             vec![
-                AggrStateType::Custom(Layout::new::<AggregateDistinctState>()),
+                AggrStateType::Custom(Layout::new::<
+                    unary_distinct::UnaryDistinctState<
+                        super::super::uniq::TypedUniqSet<UInt64Type>,
+                    >,
+                >()),
                 AggrStateType::Custom(Layout::new::<SumState>()),
             ],
-            vec![
-                StateSerdeItem::DataType(DataType::Array(Box::new(DataType::Binary))),
-                StateSerdeItem::DataType(UInt64Type::data_type()),
-            ],
+            vec![StateSerdeItem::DataType(DataType::Array(Box::new(
+                UInt64Type::data_type(),
+            )))],
         )
         .with_manual_drop(true)
     }
@@ -367,14 +378,17 @@ mod tests {
         AggregateStateDescription::new(
             vec![
                 AggrStateType::Custom(Layout::new::<AggregateSortState>()),
-                AggrStateType::Custom(Layout::new::<AggregateDistinctState>()),
+                AggrStateType::Custom(Layout::new::<
+                    unary_distinct::UnaryDistinctState<
+                        super::super::uniq::TypedUniqSet<UInt64Type>,
+                    >,
+                >()),
                 AggrStateType::Custom(Layout::new::<SumState>()),
                 AggrStateType::Bool,
             ],
             vec![
                 StateSerdeItem::Binary(None),
-                StateSerdeItem::DataType(DataType::Array(Box::new(DataType::Binary))),
-                StateSerdeItem::DataType(UInt64Type::data_type()),
+                StateSerdeItem::DataType(DataType::Array(Box::new(UInt64Type::data_type()))),
                 StateSerdeItem::DataType(DataType::Boolean),
             ],
         )
@@ -433,7 +447,7 @@ mod tests {
 
     fn full_modifier_order_by() -> Vec<AggregateRuntimeOrderByItem> {
         vec![AggregateRuntimeOrderByItem {
-            input: AggregateRuntimeOrderByInput::SortKey { offset: 2 },
+            input: AggregateRuntimeOrderByInput::SortKey { offset: 1 },
             data_type: UInt64Type::data_type(),
             asc: true,
             nulls_first: false,
@@ -445,22 +459,15 @@ mod tests {
         order_by: Vec<AggregateRuntimeOrderByItem>,
     ) -> AggregateCallRef {
         let eval = MultiArgOrNullEval::new(SortEval::new(
-            DistinctEval::<false>::new(plain_sum(drop_count), vec![
-                UInt64Type::data_type(),
-                DataType::Boolean,
-            ]),
-            vec![
-                UInt64Type::data_type(),
-                DataType::Boolean,
-                UInt64Type::data_type(),
-            ],
+            distinct_sum(drop_count).1,
+            vec![UInt64Type::data_type(), UInt64Type::data_type()],
             order_by,
         ));
         Arc::new(AggregateCallInstance::new(
             AggregateSignature {
                 name: "sum_probe_full_modifiers".to_string(),
                 params: vec![],
-                args_type: vec![UInt64Type::data_type(), DataType::Boolean],
+                args_type: vec![UInt64Type::data_type()],
                 distinct: true,
                 order_by: vec![],
                 return_type: UInt64Type::data_type().wrap_nullable(),
@@ -481,7 +488,6 @@ mod tests {
     fn full_modifier_entries() -> Vec<BlockEntry> {
         vec![
             UInt64Type::from_data(vec![2, 2, 5, 9, 0, 1]).into(),
-            BooleanType::from_data(vec![true, true, true, false, true, true]).into(),
             UInt64Type::from_data(vec![3, 1, 2, 0, 4, 5]).into(),
         ]
     }
@@ -538,10 +544,7 @@ mod tests {
                 ..Default::default()
             },
             distinct_sum_state_description(),
-            DistinctEval::<false>::new(
-                plain_sum(drop_count.clone()),
-                vec![UInt64Type::data_type()],
-            ),
+            distinct_sum(drop_count.clone()).1,
         ));
 
         {
@@ -552,6 +555,30 @@ mod tests {
                 columns: (&entries).into(),
                 validity: None,
             })?;
+            let mut snapshot = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
+            function.merge_result_read_only(MergeResultInput {
+                state: source_owner.state(0),
+                builder: &mut snapshot,
+            })?;
+            assert_eq!(
+                snapshot.build().index(0).unwrap(),
+                ScalarRef::Number(NumberScalar::UInt64(7))
+            );
+            let more = [UInt64Type::from_data(vec![5, 3]).into()];
+            function.accumulate(AccumulateInput {
+                state: source_owner.state(0),
+                columns: (&more).into(),
+                validity: None,
+            })?;
+            let mut snapshot = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
+            function.merge_result_read_only(MergeResultInput {
+                state: source_owner.state(0),
+                builder: &mut snapshot,
+            })?;
+            assert_eq!(
+                snapshot.build().index(0).unwrap(),
+                ScalarRef::Number(NumberScalar::UInt64(10))
+            );
             let serialized_state = serialize_state(&function, &source_owner)?;
 
             let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
@@ -569,11 +596,11 @@ mod tests {
             let column = builder.build();
             assert_eq!(
                 unsafe { column.index_unchecked(0) },
-                ScalarRef::Number(NumberScalar::UInt64(7))
+                ScalarRef::Number(NumberScalar::UInt64(10))
             );
         }
 
-        assert_eq!(drop_count.load(Ordering::SeqCst), 2);
+        assert_eq!(drop_count.load(Ordering::SeqCst), 3);
         Ok(())
     }
 
@@ -610,7 +637,6 @@ mod tests {
             let right = AggregateStateOwner::new(vec![function.clone()])?;
             let left_entries: Vec<BlockEntry> = vec![
                 UInt64Type::from_data(vec![2, 5]).into(),
-                BooleanType::from_data(vec![true, true]).into(),
                 UInt64Type::from_data(vec![1, 2]).into(),
             ];
             function.accumulate(AccumulateInput {
@@ -621,7 +647,6 @@ mod tests {
 
             let right_entries: Vec<BlockEntry> = vec![
                 UInt64Type::from_data(vec![2, 1]).into(),
-                BooleanType::from_data(vec![true, true]).into(),
                 UInt64Type::from_data(vec![0, 3]).into(),
             ];
             function.accumulate(AccumulateInput {
@@ -652,7 +677,6 @@ mod tests {
             let source_owner = AggregateStateOwner::new(vec![function.clone()])?;
             let entries: Vec<BlockEntry> = vec![
                 UInt64Type::from_data(vec![2, 2, 5, 9, 0, 1]).into(),
-                BooleanType::from_data(vec![true, true, true, false, true, true]).into(),
                 UInt64Type::from_data(vec![3, 1, 2, 0, 4, 5]).into(),
             ];
 
