@@ -59,22 +59,28 @@ FROM (VALUES (NULL::INT32), (NULL::INT32)) t(v);
 [] []
 
 # A statically empty array result does not require sorting.
-query TT
-SELECT array_agg(NULL ORDER BY number), array_agg_distinct(NULL ORDER BY NULL) FROM numbers(4);
+query T
+SELECT array_agg(NULL ORDER BY number) FROM numbers(4);
 ----
-[] []
+[]
 
-query TT
-SELECT array_agg_distinct(v ORDER BY v), list_distinct(v ORDER BY v DESC)
+# SQL type checking rejects ORDER BY on explicit DISTINCT names, including Null input.
+statement error only aggregate functions allowed in within group syntax
+SELECT array_agg_distinct(NULL ORDER BY NULL) FROM numbers(4);
+
+statement error only aggregate functions allowed in within group syntax
+SELECT array_agg_distinct(v ORDER BY v)
 FROM (VALUES (3), (1), (3), (2), (NULL)) t(v);
-----
-[1,2,3] [3,2,1]
+
+statement error only aggregate functions allowed in within group syntax
+SELECT list_distinct(v ORDER BY v DESC)
+FROM (VALUES (3), (1), (3), (2), (NULL)) t(v);
 
 # Skip NULL arguments, while preserving NULL elements inside an array value.
 query T
 SELECT array_agg(v) FROM (VALUES (true), (NULL::BOOLEAN)) t(v);
 ----
-[true]
+[1]
 
 query T
 SELECT list(v) FROM (VALUES (NULL::BOOLEAN), (NULL::BOOLEAN)) t(v);
