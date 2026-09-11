@@ -181,7 +181,7 @@ where
     }
 }
 
-impl<T> AggregateUnaryState<T> for JsonArrayAggState<T>
+impl<T> ArrayCollectState<T> for JsonArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Clone + Send + Sync,
@@ -241,10 +241,10 @@ impl JsonArrayAggBuilder {
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
         build.create(
             DataType::Variant,
-            <JsonArrayAggState<AnyType> as AggregateUnaryState<AnyType>>::state_description(
+            <JsonArrayAggState<AnyType> as ArrayCollectState<AnyType>>::state_description(
                 DataType::Variant,
             ),
-            AggregateUnaryStateEval::<AnyType, JsonArrayAggState<AnyType>>::default(),
+            ArrayCollectEval::<AnyType, JsonArrayAggState<AnyType>>::default(),
         )
     }
 }

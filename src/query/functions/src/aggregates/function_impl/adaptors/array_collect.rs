@@ -27,7 +27,7 @@ use databend_common_expression::utils::column_merge_validity;
 
 use super::*;
 
-pub(crate) trait AggregateUnaryState<T>: Clone + Send + Sync + 'static
+pub(crate) trait ArrayCollectState<T>: Clone + Send + Sync + 'static
 where T: AccessType
 {
     fn state_description(return_type: DataType) -> AggregateStateDescription;
@@ -45,20 +45,20 @@ where T: AccessType
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
 }
 
-pub(crate) struct AggregateUnaryStateEval<T, State> {
+pub(crate) struct ArrayCollectEval<T, State> {
     _p: PhantomData<fn(T, State)>,
 }
 
-impl<T, State> Default for AggregateUnaryStateEval<T, State> {
+impl<T, State> Default for ArrayCollectEval<T, State> {
     fn default() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<T, State> AggregateEval for AggregateUnaryStateEval<T, State>
+impl<T, State> AggregateEval for ArrayCollectEval<T, State>
 where
     T: AccessType,
-    State: Default + AggregateUnaryState<T>,
+    State: Default + ArrayCollectState<T>,
 {
     fn init_state(&self, state: AggrState<'_>) {
         state.write(State::default);

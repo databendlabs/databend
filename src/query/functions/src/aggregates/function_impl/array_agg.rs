@@ -430,7 +430,7 @@ where T: ArgType + Debug + Send
     }
 }
 
-impl<T> AggregateUnaryState<T> for AggregateArrayAggStateAny<T>
+impl<T> ArrayCollectState<T> for AggregateArrayAggStateAny<T>
 where
     T: AccessType + ValueType,
     T::Scalar: Send + Sync,
@@ -467,7 +467,7 @@ where
     }
 }
 
-impl<T> AggregateUnaryState<SimpleValueType<T>> for AggregateArrayAggStateSimple<T>
+impl<T> ArrayCollectState<SimpleValueType<T>> for AggregateArrayAggStateSimple<T>
 where
     T: SimpleType + Debug,
     T::Scalar: Send + Sync,
@@ -509,7 +509,7 @@ where
     }
 }
 
-impl<V, const IS_NULL: bool> AggregateUnaryState<ZeroSizeValueType<V>>
+impl<V, const IS_NULL: bool> ArrayCollectState<ZeroSizeValueType<V>>
     for AggregateArrayAggStateZST<IS_NULL>
 where V: ZeroSizeType
 {
@@ -549,7 +549,7 @@ where V: ZeroSizeType
     }
 }
 
-impl<T> AggregateUnaryState<T> for AggregateArrayAggStateBinary<T>
+impl<T> ArrayCollectState<T> for AggregateArrayAggStateBinary<T>
 where T: ArgType + AccessType + Debug + Send + Sync
 {
     fn state_description(return_type: DataType) -> AggregateStateDescription {
@@ -701,12 +701,12 @@ impl ArrayAggBuilder {
     ) -> Result<AggregateCallRef>
     where
         T: AccessType,
-        State: Default + AggregateUnaryState<T>,
+        State: Default + ArrayCollectState<T>,
     {
         build.create_ordered(
             return_type.clone(),
             State::state_description(return_type),
-            AggregateUnaryStateEval::<T, State>::default(),
+            ArrayCollectEval::<T, State>::default(),
         )
     }
 }
