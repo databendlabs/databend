@@ -381,6 +381,17 @@ SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3167'
 query T
 EXPLAIN SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3167'
 ----
+<slt:ignore>granule pruning: 100 to 1<slt:ignore>
+
+# At an exact boundary, the preceding granule is conservatively retained.
+query IT
+SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3100'
+----
+3100 v3100
+
+query T
+EXPLAIN SELECT key_id, payload FROM spi_implicit_string WHERE key_id = '3100'
+----
 <slt:ignore>granule pruning: 100 to 2<slt:ignore>
 
 statement ok

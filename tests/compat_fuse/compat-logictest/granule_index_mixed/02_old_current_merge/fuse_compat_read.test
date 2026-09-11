@@ -46,6 +46,16 @@ SET recluster_method='vertical'
 statement ok
 ALTER TABLE gi_sort_merge RECLUSTER FINAL
 
+# FINAL keeps the current mature block separate from the old writer's level-0
+# append. Compact explicitly before checking a single rewritten, ordered block.
+query II
+SELECT count(),count(DISTINCT _block_name) FROM gi_sort_merge
+----
+16 2
+
+statement ok
+OPTIMIZE TABLE gi_sort_merge COMPACT
+
 query II
 SELECT count(),count(DISTINCT _block_name) FROM gi_sort_merge
 ----

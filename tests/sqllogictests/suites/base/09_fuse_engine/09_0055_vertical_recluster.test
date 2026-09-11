@@ -46,6 +46,11 @@ alter table t_vertical set options(change_tracking = true)
 statement ok
 insert into t_vertical(k, payload, nested) values (9, 'i', (90, 'ii')), (7, 'g', (70, 'gg')), (8, 'h', (80, 'hh'))
 
+# Changing the key forces SortBlocks to rewrite both input blocks and materialize
+# origin fields. FINAL alone does not mix fresh level-0 and mature level-1 blocks.
+statement ok
+alter table t_vertical cluster by(k, payload)
+
 statement ok
 alter table t_vertical recluster final
 
@@ -148,8 +153,8 @@ select info:average_depth from clustering_information('db_vertical_recluster', '
 ----
 1.0
 
-# FINAL candidate selection is independent of the execution method. Both methods
-# must merge the same level-1 plus level-0 layout into one block.
+# Vertical MergeBlocks keeps fresh level-0 appends separate from mature blocks.
+# Horizontal rewriting may consolidate them; compare rows after explicit compaction.
 statement ok
 create table t_horizontal_final(k int, payload string) row_per_block=16 block_per_segment=2
 
@@ -201,6 +206,23 @@ set recluster_method = 'vertical'
 
 statement ok
 alter table t_vertical_final recluster final
+
+query II
+select count(), count(distinct _block_name) from t_horizontal_final
+----
+16 1
+
+query II
+select count(), count(distinct _block_name) from t_vertical_final
+----
+16 2
+
+# Physical compaction explicitly combines the levels before checking row equality.
+statement ok
+optimize table t_horizontal_final compact
+
+statement ok
+optimize table t_vertical_final compact
 
 query II
 select count(), count(distinct _block_name) from t_horizontal_final
