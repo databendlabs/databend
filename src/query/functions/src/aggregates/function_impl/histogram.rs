@@ -63,6 +63,7 @@ impl HistogramBuilder {
         .then(PlainRoute::unary(HistogramBuilder::create))
         .then(IfRoute::unary(HistogramBuilder::create))
         .then(StateRoute::unary(HistogramBuilder::create))
+        .then(DistinctRoute::<true>::unary(HistogramBuilder::create))
         .register(registry);
     }
 }
@@ -75,12 +76,7 @@ inventory::submit! {
 
 impl HistogramBuilder {
     fn histogram_arguments() -> ArgumentsPattern {
-        ArgumentsPattern::variadic(
-            vec![ArgumentPattern::any()],
-            ArgumentPattern::any(),
-            0,
-            Some(1),
-        )
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any()])
     }
 
     const HISTOGRAM_METADATA: AggregateMetadata = AggregateMetadata {
@@ -90,7 +86,7 @@ impl HistogramBuilder {
         documentation: AggregateDocumentation {
             category: "Aggregate",
             description: "builds an equi-height histogram",
-            definition: "histogram(expr[, buckets])",
+            definition: "histogram(expr[, buckets]) or histogram(buckets)(expr)",
             example: "select histogram(number) from numbers(10)",
         },
     };

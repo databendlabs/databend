@@ -96,6 +96,9 @@ impl GeographicAggregateMetadata for CollectAggOp {
             .then(StateRoute::direct(
                 GeographicBuilder::create_collect::<CollectAggOp>,
             ))
+            .then(DistinctRoute::<true>::direct(
+                GeographicBuilder::create_collect::<CollectAggOp>,
+            ))
     }
 }
 

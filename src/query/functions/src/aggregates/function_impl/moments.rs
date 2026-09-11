@@ -56,6 +56,7 @@ impl MomentsBuilder {
         .then(PlainRoute::unary(Self::create_skewness))
         .then(IfRoute::unary(Self::create_skewness))
         .then(StateRoute::unary(Self::create_skewness))
+        .then(DistinctRoute::<true>::unary(Self::create_skewness))
         .register(registry);
         NameRoute::new(
             &["kurtosis"],

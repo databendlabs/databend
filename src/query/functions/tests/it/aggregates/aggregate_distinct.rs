@@ -1,46 +1,44 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::aggregate_function::DistinctPolicy;
 use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use goldenfile::Mint;
 
 use super::support::AggregationSimulator;
 use super::support::eval_aggregate;
+use super::support::eval_aggregate_for_test;
 use super::support::simulate_two_groups_group_by;
 use super::support::write_aggregate_expr_case;
 
 fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
-        (
-            "a",
-            databend_common_expression::types::number::Int64Type::from_data(vec![4i64, 3, 2, 1])
-                .into(),
-        ),
-        (
-            "c",
-            databend_common_expression::types::number::UInt64Type::from_data(vec![1u64, 2, 1, 3])
-                .into(),
-        ),
+        ("a", Int64Type::from_data(vec![4i64, 3, 2, 1]).into()),
+        ("c", UInt64Type::from_data(vec![1u64, 2, 1, 3]).into()),
         (
             "x_null",
-            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
-                vec![1u64, 2, 3, 4],
-                vec![true, true, false, false],
-            )
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                true, true, false, false,
+            ])
             .into(),
         ),
         (
             "all_null",
-            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
-                vec![1u64, 2, 3, 4],
-                vec![false, false, false, false],
-            )
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                false, false, false, false,
+            ])
             .into(),
         ),
     ];
@@ -51,6 +49,108 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
     write_aggregate_expr_case(file, "sum_distinct(x_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "sum_distinct(all_null)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "avg_distinct(c)", columns, simulator, vec![]);
+
+    let columns = [
+        (
+            "n",
+            Int64Type::from_opt_data(vec![Some(1), Some(1), Some(1), Some(2), Some(3), None])
+                .into(),
+        ),
+        (
+            "all_null",
+            Int64Type::from_opt_data(vec![None::<i64>; 6]).into(),
+        ),
+        (
+            "s",
+            StringType::from_opt_data(vec![
+                Some("a"),
+                Some("a"),
+                Some("a"),
+                Some("b"),
+                Some("c"),
+                None,
+            ])
+            .into(),
+        ),
+        (
+            "point",
+            StringType::from_opt_data(vec![
+                Some("SRID=4326;POINT(1 2)"),
+                None,
+                Some("SRID=4326;POINT(1 2)"),
+                Some("SRID=4326;POINT(1 2)"),
+                None,
+                Some("SRID=4326;POINT(1 2)"),
+            ])
+            .into(),
+        ),
+    ];
+    let empty = [("n", Int64Type::from_data(vec![]).into())];
+    for name in [
+        "quantile",
+        "quantile_disc",
+        "quantile_cont",
+        "median",
+        "std",
+        "stddev",
+        "stddev_pop",
+        "stddev_samp",
+        "skewness",
+        "histogram",
+    ] {
+        for arg in ["n", "all_null", "NULL"] {
+            write_aggregate_expr_case(
+                file,
+                &format!("{name}_distinct({arg})"),
+                &columns,
+                simulator,
+                vec![],
+            );
+        }
+        write_aggregate_expr_case(
+            file,
+            &format!("{name}_distinct(n)"),
+            &empty,
+            simulator,
+            vec![],
+        );
+    }
+    // Exercise numeric set dispatch and Decimal fallback without duplicating
+    // the same fixture for each physical width.
+    for arg in [
+        "try_cast(n as float64)",
+        "try_cast(n as decimal(15, 2))",
+        "try_cast(n as decimal(30, 2))",
+        "try_cast(n as decimal(60, 2))",
+    ] {
+        for name in [
+            "quantile_disc",
+            "quantile_cont",
+            "stddev_pop",
+            "skewness",
+            "histogram",
+        ] {
+            write_aggregate_expr_case(
+                file,
+                &format!("{name}_distinct({arg})"),
+                &columns,
+                simulator,
+                vec![],
+            );
+        }
+    }
+    for expr in [
+        "quantile_distinct(0.25, 0.75)(n)",
+        "quantile_disc_distinct(0.25, 0.75)(n)",
+        "quantile_cont_distinct(0.25, 0.75)(n)",
+        "histogram_distinct(2)(n)",
+        "histogram_distinct(2)(s)",
+        "st_collect_distinct(to_geometry(point))",
+        "st_collect_distinct(to_geometry(try_cast(all_null as string)))",
+        "st_collect_distinct(NULL)",
+    ] {
+        write_aggregate_expr_case(file, expr, &columns, simulator, vec![]);
+    }
 }
 
 #[test]
@@ -88,7 +188,15 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("stddev", "stddev_distinct"),
         ("stddev_pop", "stddev_pop_distinct"),
         ("stddev_samp", "stddev_samp_distinct"),
+        ("skewness", "skewness_distinct"),
+        ("histogram", "histogram_distinct"),
+        ("st_collect", "st_collect_distinct"),
     ] {
+        let args_type = if base == "st_collect" {
+            [DataType::Geometry]
+        } else {
+            args_type.clone()
+        };
         assert_eq!(
             AGGR_REGISTRY
                 .descriptor(base)
@@ -249,12 +357,6 @@ fn test_eager_aggregation_strategies() -> Result<()> {
 
 #[test]
 fn test_distinct_float_equality() -> Result<()> {
-    use databend_common_expression::ScalarRef;
-    use databend_common_expression::types::Float64Type;
-    use databend_common_expression::types::NumberScalar;
-
-    use super::support::eval_aggregate_for_test;
-
     let values = Float64Type::from_data(vec![
         -0.0f64,
         0.0f64,
@@ -304,12 +406,6 @@ fn test_distinct_float_equality() -> Result<()> {
 
 #[test]
 fn test_distinct_unary_any_fallback() -> Result<()> {
-    use databend_common_expression::ScalarRef;
-    use databend_common_expression::types::NumberScalar;
-    use databend_common_expression::types::StringType;
-
-    use super::support::eval_aggregate_for_test;
-
     let values = StringType::from_data_with_validity(vec!["a", "b", "a", "ignored"], vec![
         true, true, true, false,
     ]);
@@ -335,14 +431,6 @@ fn test_distinct_unary_any_fallback() -> Result<()> {
 
 #[test]
 fn test_count_distinct_rows() -> Result<()> {
-    use databend_common_expression::BlockEntry;
-    use databend_common_expression::ScalarRef;
-    use databend_common_expression::types::NumberScalar;
-    use databend_common_expression::types::StringType;
-    use databend_common_expression::types::UInt64Type;
-
-    use super::support::eval_aggregate_for_test;
-
     let entries = [
         BlockEntry::from(UInt64Type::from_data_with_validity(
             vec![1u64, 1, 2, 0, 2, 1],
@@ -379,135 +467,5 @@ fn test_count_distinct_rows() -> Result<()> {
         groups.index(1).unwrap(),
         ScalarRef::Number(NumberScalar::UInt64(1))
     );
-    Ok(())
-}
-
-#[test]
-fn test_statistical_distinct() -> Result<()> {
-    use databend_common_expression::Scalar;
-    use databend_common_expression::types::*;
-
-    use super::support::eval_v2_aggr_with_params;
-
-    // DISTINCT must remove frequency, including across serialization, while
-    // preserving Decimal scale and filtering NULL before collecting keys.
-    let inputs = [
-        (
-            Int64Type::from_data_with_validity(vec![1, 1, 1, 3, 99], vec![
-                true, true, true, true, false,
-            ]),
-            Int64Type::from_data(vec![1, 3]),
-        ),
-        (
-            Float64Type::from_data_with_validity(vec![1.0, 1.0, 1.0, 3.0, 99.0], vec![
-                true, true, true, true, false,
-            ]),
-            Float64Type::from_data(vec![1.0, 3.0]),
-        ),
-        (
-            Decimal64Type::from_opt_data_with_size(
-                vec![Some(110), Some(110), Some(110), Some(330), None],
-                Some(DecimalSize::new_unchecked(15, 2)),
-            ),
-            Decimal64Type::from_data_with_size(
-                vec![110, 330],
-                Some(DecimalSize::new_unchecked(15, 2)),
-            ),
-        ),
-        (
-            Decimal128Type::from_opt_data_with_size(
-                vec![Some(110), Some(110), Some(110), Some(330), None],
-                Some(DecimalSize::new_unchecked(30, 2)),
-            ),
-            Decimal128Type::from_data_with_size(
-                vec![110, 330],
-                Some(DecimalSize::new_unchecked(30, 2)),
-            ),
-        ),
-        (
-            Decimal256Type::from_opt_data_with_size(
-                vec![
-                    Some(i256::from(110)),
-                    Some(i256::from(110)),
-                    Some(i256::from(110)),
-                    Some(i256::from(330)),
-                    None,
-                ],
-                Some(DecimalSize::new_unchecked(60, 2)),
-            ),
-            Decimal256Type::from_data_with_size(
-                vec![i256::from(110), i256::from(330)],
-                Some(DecimalSize::new_unchecked(60, 2)),
-            ),
-        ),
-    ];
-    for name in [
-        "quantile",
-        "quantile_disc",
-        "quantile_cont",
-        "median",
-        "std",
-        "stddev",
-        "stddev_pop",
-        "stddev_samp",
-    ] {
-        let params = if name.starts_with("quantile") {
-            vec![
-                Scalar::Number(NumberScalar::Float64(0.25.into())),
-                Scalar::Number(NumberScalar::Float64(0.75.into())),
-            ]
-        } else {
-            vec![]
-        };
-        for (input, unique) in &inputs {
-            let expected =
-                eval_v2_aggr_with_params(name, &params, &[unique.clone().into()], 2, false)?;
-            for serialized in [false, true] {
-                let actual = eval_v2_aggr_with_params(
-                    &format!("{name}_distinct"),
-                    &params,
-                    &[input.clone().into()],
-                    5,
-                    serialized,
-                )?;
-                assert_eq!(actual.1, expected.1);
-                if name.starts_with("std") {
-                    // Set replay can change Welford's floating-point rounding.
-                    let databend_common_expression::ScalarRef::Number(NumberScalar::Float64(value)) =
-                        expected.0.index(0).unwrap()
-                    else {
-                        panic!("expected a Float64 standard deviation");
-                    };
-                    super::support::assert_single_float_close(&actual, *value);
-                } else {
-                    assert_eq!(actual, expected, "{name}, serialized={serialized}");
-                }
-            }
-        }
-        for input in [
-            Int64Type::from_data(vec![]),
-            Int64Type::from_data_with_validity(vec![1, 1], vec![false, false]),
-        ] {
-            let rows = input.len();
-            let expected =
-                eval_v2_aggr_with_params(name, &params, &[input.clone().into()], rows, false)?;
-            let actual = eval_v2_aggr_with_params(
-                &format!("{name}_distinct"),
-                &params,
-                &[input.into()],
-                rows,
-                true,
-            )?;
-            assert_eq!(
-                actual.0.index(0),
-                Some(databend_common_expression::ScalarRef::Null),
-                "{name}, empty or all NULL"
-            );
-            assert_eq!(
-                actual, expected,
-                "{name}, empty or all NULL result and type"
-            );
-        }
-    }
     Ok(())
 }

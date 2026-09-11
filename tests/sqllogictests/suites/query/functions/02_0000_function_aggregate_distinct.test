@@ -83,3 +83,31 @@ select std(x), std(distinct x), stddev(x), stddev(distinct x)
 from (values (null::int), (null::int)) t(x);
 ----
 NULL NULL NULL NULL
+
+query I
+select skewness(distinct x)::int
+from (values (1), (1), (1), (2), (3), (null)) t(x);
+----
+0
+
+query T
+select histogram(2)(distinct x) =
+       (select histogram(2)(x) from (values (1), (2), (3)) u(x))
+from (values (1), (1), (1), (2), (3), (null)) t(x);
+----
+true
+
+query T
+select st_aswkt(st_collect(distinct to_geometry(x))) =
+       (select st_aswkt(st_collect(to_geometry('POINT(1 2)'))) from numbers(1))
+from (values ('POINT(1 2)'), ('POINT(1 2)'), (null)) t(x);
+----
+true
+
+# Type checking normalizes the legacy bucket argument before DISTINCT routing.
+query TT
+select histogram(distinct x, 2) = histogram(2)(distinct x),
+       histogram(x, 2) = histogram(2)(x)
+from (values (1), (1), (1), (2), (3), (null)) t(x);
+----
+true true
