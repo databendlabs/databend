@@ -114,6 +114,7 @@ impl InmMemoryFile {
             schema_descr,
             Some(arrow_schema),
             None,
+            false,
         )
         .with_push_downs(Some(&pushdowns));
         reader_builder.build_output()?;

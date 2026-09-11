@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::SpillProgress;
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -317,6 +318,67 @@ async fn test_top_n_runtime_boundary_on_nullable_key_over_multi_block_fuse() -> 
         top_n_rows_nulls_first,
         execute_rows(ctx, &nulls_first).await?
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_aggregate_rank_limit_registers_scan_filter_without_premature_boundary() -> Result<()>
+{
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{}.aggregate_rank_limit", db);
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {table} (id UInt64) ENGINE=FUSE ROW_PER_BLOCK=5"
+        ))
+        .await?;
+
+    // The preferred ASC scan order visits the all-zero block first. It does
+    // not contain enough distinct groups to establish a LIMIT 3 boundary.
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {table} VALUES (0), (0), (0), (0), (0)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {table} VALUES (1), (2), (3), (4), (5)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {table} VALUES (6), (7), (8), (9), (10)"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let settings = ctx.get_settings();
+    settings.set_max_threads(1)?;
+    settings.set_max_block_size(5)?;
+    settings.set_setting("max_push_down_limit".into(), "10000".into())?;
+
+    let rows = execute_rows(
+        ctx.clone(),
+        &format!("SELECT id, count(*) FROM {table} GROUP BY id ORDER BY id LIMIT 3"),
+    )
+    .await?;
+    assert_eq!(rows, vec![
+        vec![
+            Scalar::Number(NumberScalar::UInt64(0)),
+            Scalar::Number(NumberScalar::UInt64(5)),
+        ],
+        vec![
+            Scalar::Number(NumberScalar::UInt64(1)),
+            Scalar::Number(NumberScalar::UInt64(1)),
+        ],
+        vec![
+            Scalar::Number(NumberScalar::UInt64(2)),
+            Scalar::Number(NumberScalar::UInt64(1)),
+        ],
+    ]);
+    assert!(!ctx.get_runtime_scan_filters(0).is_empty());
+
     Ok(())
 }
 

@@ -21,6 +21,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,8 +29,6 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
-use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
-use databend_common_expression::VirtualDataSchema;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
@@ -60,9 +59,11 @@ use crate::FuseTable;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
 use crate::io::BlockReader;
+use crate::io::JsonPathStatisticsBuilder;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnBuilder;
+use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::WriteSettings;
 use crate::io::read::read_segment_stats;
 use crate::io::write_data;
@@ -72,7 +73,6 @@ use crate::operations::MutationGenerator;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
 use crate::operations::TableMutationAggregator;
-use crate::operations::VirtualSchemaMode;
 
 #[derive(Clone, Debug)]
 pub struct VirtualColumnRefreshResult {
@@ -101,6 +101,11 @@ pub async fn prepare_refresh_virtual_column(
     overwrite: bool,
     selection: Option<RefreshSelection>,
 ) -> Result<Vec<VirtualColumnRefreshResult>> {
+    if !fuse_table.enable_virtual_column() {
+        return Err(ErrorCode::VirtualColumnError(
+            "Virtual column write is disabled for table, set table option enable_virtual_column=true first",
+        ));
+    }
     let start = Instant::now();
     let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
         // no snapshot
@@ -130,12 +135,10 @@ pub async fn prepare_refresh_virtual_column(
         ..table_schema.as_ref().clone()
     });
 
-    if !fuse_table.enable_virtual_column() {
-        return Err(ErrorCode::VirtualColumnError(
-            "Virtual column write is disabled for table, set table option enable_virtual_column=true first",
-        ));
-    }
-    let virtual_column_builder = VirtualColumnBuilder::try_create(source_schema)?;
+    let virtual_column_builder = VirtualColumnBuilder::try_create(
+        source_schema.clone(),
+        fuse_table.virtual_column_layout_policy(),
+    )?;
     info!(
         "Preparing virtual column refresh for table_id={} with {} variant source fields",
         fuse_table.get_id(),
@@ -163,7 +166,12 @@ pub async fn prepare_refresh_virtual_column(
     });
     let mut matched_selection = false;
     let mut reached_limit = false;
-    // Iterates through all segments and collect blocks don't have virtual block meta.
+    let mut skipped_has_sidecar = 0usize;
+    let mut selected_blocks = 0usize;
+    let settings = ReadSettings::from_ctx(&ctx)?;
+    // Refresh plans one complete segment at a time. All blocks rebuilt in a
+    // segment share one adaptive direct/shared layout, while materialization is
+    // deferred to bounded workers without retaining decoded source blocks.
     let mut virtual_column_tasks = Vec::new();
     for (location, ver) in snapshot.segments.iter() {
         if reached_limit {
@@ -187,55 +195,120 @@ pub async fn prepare_refresh_virtual_column(
             Some(loc) => Some(read_segment_stats(operator.clone(), loc).await?),
             _ => None,
         };
-
-        for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
-            let mut matched_block_filter = false;
-            if let Some(target) = block_filter.as_ref() {
-                if &block_meta.location.0 != target {
-                    continue;
-                }
-                matched_selection = true;
-                matched_block_filter = true;
+        let block_metas = segment_info.block_metas()?;
+        if let Some(target) = block_filter.as_ref() {
+            if !block_metas
+                .iter()
+                .any(|block_meta| &block_meta.location.0 == target)
+            {
+                continue;
             }
-
+            // A block selection identifies its owning segment. Refresh planning
+            // and materialization remain segment-scoped.
+            matched_selection = true;
+        }
+        let mut segment_blocks = Vec::new();
+        for (block_idx, block_meta) in block_metas.iter().enumerate() {
             let mut has_legacy_virtual = false;
-            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
+            let has_sidecar_data = block_meta.virtual_block_meta.as_ref().is_some_and(|meta| {
                 if TableMetaLocationGenerator::is_legacy_virtual_block_location(
-                    &virtual_block_meta.virtual_location.0,
+                    &meta.virtual_location.0,
                 ) {
                     has_legacy_virtual = true;
                 }
-            }
-
-            if !overwrite && block_meta.virtual_block_meta.is_some() && !has_legacy_virtual {
-                if matched_block_filter {
-                    reached_limit = true;
-                    break;
-                }
+                meta.virtual_column_size > 0
+            });
+            if !overwrite && has_sidecar_data && !has_legacy_virtual {
+                skipped_has_sidecar += 1;
                 continue;
             }
 
-            let column_hlls = stats
-                .as_ref()
-                .and_then(|v| v.block_hlls.get(block_idx))
-                .cloned();
-            virtual_column_tasks.push(VirtualColumnBuildTask {
+            segment_blocks.push((
+                block_meta.clone(),
+                stats
+                    .as_ref()
+                    .and_then(|value| value.block_hlls.get(block_idx))
+                    .cloned(),
+            ));
+        }
+        if segment_blocks.is_empty() {
+            if block_filter.is_some() && matched_selection {
+                reached_limit = true;
+            }
+            continue;
+        }
+        // LIMIT is segment-granular: never split the work of one segment.
+        if limit > 0 && selected_blocks > 0 && selected_blocks + segment_blocks.len() > limit {
+            break;
+        }
+
+        // Reuse complete segment-local path metadata when available. Otherwise
+        // scan one source block at a time, collect bounded statistics, and release
+        // the decoded Variant data before continuing.
+        let mut planner =
+            VirtualColumnLayoutPlanner::create(fuse_table.virtual_column_layout_policy());
+        let mut scanned_path_builder = None;
+        let mut scanned_rows = 0u64;
+        let mut metadata_reused_blocks = 0usize;
+        let mut scanned_blocks = 0usize;
+        let selected_locations = segment_blocks
+            .iter()
+            .map(|(meta, _)| meta.location.0.clone())
+            .collect::<HashSet<_>>();
+        let mut build_tasks = Vec::with_capacity(segment_blocks.len());
+        for (block_meta, column_hlls) in segment_blocks {
+            if !planner.add_block_if_complete(
+                segment_info.summary.virtual_segment_schema.as_ref(),
+                &block_meta,
+            ) {
+                let block = block_reader
+                    .read_by_meta(&settings, &block_meta, &storage_format)
+                    .await?;
+                if scanned_path_builder.is_none() {
+                    scanned_path_builder = Some(JsonPathStatisticsBuilder::try_create(
+                        source_schema.clone(),
+                        fuse_table.virtual_column_layout_policy(),
+                    )?);
+                }
+                scanned_path_builder.as_mut().unwrap().add_block(&block)?;
+                scanned_rows += block.num_rows() as u64;
+                scanned_blocks += 1;
+            } else {
+                metadata_reused_blocks += 1;
+            }
+            build_tasks.push(VirtualColumnBuildTask {
                 block_location: block_meta.location.0.clone(),
                 block_meta,
                 column_hlls,
             });
-
-            if limit > 0 && virtual_column_tasks.len() >= limit {
-                reached_limit = true;
-                break;
-            }
-            if matched_block_filter {
-                reached_limit = true;
-                break;
-            }
+        }
+        if let Some(mut scanned_path_builder) = scanned_path_builder {
+            let scanned_statistics = scanned_path_builder.finalize();
+            planner.add_draft_statistics(&scanned_statistics, scanned_rows);
+        }
+        debug!(
+            "Virtual column refresh planning reused metadata for {} blocks and scanned {} blocks",
+            metadata_reused_blocks, scanned_blocks
+        );
+        planner.add_blocks(
+            segment_info.summary.virtual_segment_schema.as_ref(),
+            block_metas
+                .iter()
+                .filter(|meta| !selected_locations.contains(meta.location.0.as_str()))
+                .map(AsRef::as_ref),
+        );
+        let Some(layout) = planner.build() else {
+            continue;
+        };
+        selected_blocks += build_tasks.len();
+        virtual_column_tasks.push(VirtualColumnSegmentBuildTask {
+            layout: Arc::new(layout),
+            blocks: build_tasks,
+        });
+        if limit > 0 && selected_blocks >= limit || block_filter.is_some() {
+            reached_limit = true;
         }
     }
-
     if let (Some(sel), false) = (selection.as_ref(), matched_selection) {
         let message = match sel {
             RefreshSelection::SegmentLocation(loc) => {
@@ -250,13 +323,17 @@ pub async fn prepare_refresh_virtual_column(
 
     if virtual_column_tasks.is_empty() {
         info!(
-            "Prepare virtual column refresh finished in {} ms (no tasks)",
-            start.elapsed().as_millis()
+            "Prepare virtual column refresh finished in {} ms (no tasks, skipped: {} with sidecar)",
+            start.elapsed().as_millis(),
+            skipped_has_sidecar,
         );
         return Ok(vec![]);
     }
 
-    let block_nums = virtual_column_tasks.len();
+    let block_nums = virtual_column_tasks
+        .iter()
+        .map(|segment| segment.blocks.len())
+        .sum::<usize>();
     info!(
         "Prepared {} blocks for virtual column refresh (limit={}, overwrite={})",
         block_nums, limit, overwrite
@@ -399,6 +476,7 @@ pub async fn commit_refresh_virtual_column(
             None,
             None,
             table_meta_timestamps,
+            false,
         )
     })?;
 
@@ -425,19 +503,12 @@ pub async fn do_vacuum_virtual_column(
         return Ok(VirtualColumnVacuumResult::default());
     };
 
-    let (mut mutation_entries, rebuilt_virtual_schema) =
+    let mutation_entries =
         prepare_vacuum_virtual_column_mutations(fuse_table, latest_snapshot.clone()).await?;
 
     let removed_files = mutation_entries.len() as u64;
-    let schema_changed = fuse_table.get_table_info().meta.virtual_schema != rebuilt_virtual_schema;
-    let need_commit = !mutation_entries.is_empty() || schema_changed;
-
+    let need_commit = !mutation_entries.is_empty();
     if need_commit {
-        mutation_entries.push(MutationLogEntry::AppendVirtualSchema {
-            virtual_schema: rebuilt_virtual_schema,
-            mode: VirtualSchemaMode::Replace,
-        });
-
         let block = DataBlock::from(MutationLogs {
             entries: mutation_entries,
             ..Default::default()
@@ -476,6 +547,7 @@ pub async fn do_vacuum_virtual_column(
                 Some(prev_snapshot_id),
                 None,
                 table_meta_timestamps,
+                false,
             )
         })?;
     }
@@ -575,14 +647,12 @@ pub async fn cleanup_vacuum_virtual_column_files(
 async fn prepare_vacuum_virtual_column_mutations(
     fuse_table: &FuseTable,
     latest_snapshot: Arc<TableSnapshot>,
-) -> Result<(Vec<MutationLogEntry>, Option<VirtualDataSchema>)> {
+) -> Result<Vec<MutationLogEntry>> {
     let table_schema = fuse_table.schema();
     let segment_reader =
         MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
 
     let mut mutation_entries = Vec::new();
-    let mut referenced_column_ids = HashSet::new();
-    let mut number_of_remaining_virtual_blocks = 0_u64;
 
     for (segment_idx, (location, ver)) in latest_snapshot.segments.iter().enumerate() {
         let segment_info = segment_reader
@@ -640,47 +710,11 @@ async fn prepare_vacuum_virtual_column_mutations(
 
                 continue;
             }
-
-            number_of_remaining_virtual_blocks += 1;
-            for column_id in virtual_block_meta.virtual_column_metas.keys() {
-                referenced_column_ids.insert(*column_id);
-            }
         }
     }
 
-    let rebuilt_virtual_schema = prune_virtual_schema(
-        &fuse_table.get_table_info().meta.virtual_schema,
-        &referenced_column_ids,
-        number_of_remaining_virtual_blocks,
-    );
-
-    Ok((mutation_entries, rebuilt_virtual_schema))
+    Ok(mutation_entries)
 }
-
-fn prune_virtual_schema(
-    old_virtual_schema: &Option<VirtualDataSchema>,
-    referenced_column_ids: &HashSet<u32>,
-    number_of_remaining_virtual_blocks: u64,
-) -> Option<VirtualDataSchema> {
-    let mut virtual_schema = old_virtual_schema.clone()?;
-
-    virtual_schema
-        .fields
-        .retain(|field| referenced_column_ids.contains(&field.column_id));
-    virtual_schema.fields.sort_by_key(|field| field.column_id);
-
-    if virtual_schema.fields.len() > VIRTUAL_COLUMNS_LIMIT {
-        virtual_schema.fields.truncate(VIRTUAL_COLUMNS_LIMIT);
-    }
-
-    if virtual_schema.fields.is_empty() {
-        None
-    } else {
-        virtual_schema.number_of_blocks = number_of_remaining_virtual_blocks;
-        Some(virtual_schema)
-    }
-}
-
 #[async_backtrace::framed]
 async fn collect_virtual_locations(
     operator: &Operator,
@@ -704,6 +738,11 @@ async fn collect_virtual_locations(
 
 const VIRTUAL_COLUMN_PROGRESS_LOG_STEP: usize = 10;
 
+struct VirtualColumnSegmentBuildTask {
+    blocks: Vec<VirtualColumnBuildTask>,
+    layout: Arc<VirtualColumnLayout>,
+}
+
 struct VirtualColumnBuildTask {
     block_location: String,
     block_meta: Arc<BlockMeta>,
@@ -718,9 +757,9 @@ async fn build_virtual_columns(
     operator: Operator,
     write_settings: WriteSettings,
     virtual_column_builder: VirtualColumnBuilder,
-    tasks: Vec<VirtualColumnBuildTask>,
+    tasks: Vec<VirtualColumnSegmentBuildTask>,
 ) -> Result<Vec<VirtualColumnRefreshResult>> {
-    let block_nums = tasks.len();
+    let block_nums = tasks.iter().map(|task| task.blocks.len()).sum::<usize>();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_threads = std::cmp::min(block_nums, max_threads).max(1);
     info!(
@@ -731,11 +770,17 @@ async fn build_virtual_columns(
     let settings = ReadSettings::from_ctx(&ctx)?;
 
     let results: Vec<Result<_, _>> = execute_futures_in_parallel(
-        tasks.into_iter().map(move |task| {
+        tasks.into_iter().flat_map(|segment_task| {
+            segment_task.blocks.into_iter().map(move |task| {
+                (task, segment_task.layout.clone())
+            })
+        }).map(move |(task, layout)| {
             let block_reader = block_reader.clone();
             let operator = operator.clone();
             let write_settings = write_settings.clone();
-            let mut virtual_column_builder = virtual_column_builder.clone();
+            let mut virtual_column_builder = virtual_column_builder
+                .clone()
+                .with_adaptive_layout(layout);
             let processed = processed.clone();
             let storage_format = storage_format;
             let settings = settings;
@@ -747,20 +792,15 @@ async fn build_virtual_columns(
                 let virtual_column_state =
                     virtual_column_builder.finalize(&write_settings, &task.block_meta.location)?;
 
-                if virtual_column_state
+                if let Some(virtual_columns) = &virtual_column_state
                     .draft_virtual_block_meta
-                    .virtual_column_size
-                    > 0
+                    .virtual_columns
+                    && virtual_columns.virtual_column_size > 0
                 {
                     let start = Instant::now();
 
-                    let virtual_column_size = virtual_column_state
-                        .draft_virtual_block_meta
-                        .virtual_column_size;
-                    let location = &virtual_column_state
-                        .draft_virtual_block_meta
-                        .virtual_location
-                        .0;
+                    let virtual_column_size = virtual_columns.virtual_column_size;
+                    let location = &virtual_columns.virtual_location.0;
 
                     write_data(virtual_column_state.data, &operator, location).await?;
 
@@ -819,77 +859,11 @@ async fn build_virtual_columns(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use databend_common_exception::Result;
-    use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
-    use databend_common_expression::VariantDataType;
-    use databend_common_expression::VirtualDataField;
-    use databend_common_expression::VirtualDataSchema;
     use opendal::Operator;
     use opendal::services::Memory;
 
     use super::collect_virtual_locations;
-    use super::prune_virtual_schema;
-
-    fn schema_with_ids(ids: &[u32]) -> VirtualDataSchema {
-        VirtualDataSchema {
-            fields: ids
-                .iter()
-                .map(|column_id| VirtualDataField {
-                    name: format!("v['{column_id}']"),
-                    data_types: vec![VariantDataType::String],
-                    source_column_id: 0,
-                    column_id: *column_id,
-                })
-                .collect(),
-            metadata: std::collections::BTreeMap::new(),
-            next_column_id: ids.iter().max().map(|v| v + 1).unwrap_or(1),
-            number_of_blocks: 0,
-        }
-    }
-
-    #[test]
-    fn test_prune_virtual_schema_keeps_referenced_and_updates_blocks() {
-        let schema = schema_with_ids(&[3, 1, 2]);
-        let referenced = HashSet::from([1_u32, 3_u32]);
-
-        let pruned =
-            prune_virtual_schema(&Some(schema), &referenced, 7).expect("schema should remain");
-
-        let column_ids = pruned
-            .fields
-            .iter()
-            .map(|f| f.column_id)
-            .collect::<Vec<_>>();
-        assert_eq!(column_ids, vec![1, 3]);
-        assert_eq!(pruned.number_of_blocks, 7);
-    }
-
-    #[test]
-    fn test_prune_virtual_schema_empty_returns_none() {
-        let schema = schema_with_ids(&[1, 2]);
-        let referenced: HashSet<u32> = HashSet::new();
-
-        let pruned = prune_virtual_schema(&Some(schema), &referenced, 0);
-        assert!(pruned.is_none());
-    }
-
-    #[test]
-    fn test_prune_virtual_schema_truncates_to_limit() {
-        let ids = (0..(VIRTUAL_COLUMNS_LIMIT as u32 + 5)).collect::<Vec<_>>();
-        let schema = schema_with_ids(&ids);
-        let referenced = ids.iter().copied().collect::<HashSet<_>>();
-
-        let pruned =
-            prune_virtual_schema(&Some(schema), &referenced, 1).expect("schema should remain");
-
-        assert_eq!(pruned.fields.len(), VIRTUAL_COLUMNS_LIMIT);
-        assert_eq!(
-            pruned.fields.last().unwrap().column_id,
-            VIRTUAL_COLUMNS_LIMIT as u32 - 1
-        );
-    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_collect_virtual_locations_empty_prefix() -> Result<()> {

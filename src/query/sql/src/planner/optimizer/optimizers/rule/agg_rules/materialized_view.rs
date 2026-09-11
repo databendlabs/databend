@@ -37,6 +37,7 @@ use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -119,6 +120,7 @@ pub(crate) fn try_rewrite(
     s_expr: &SExpr,
     candidates: &[MaterializedViewCandidate],
     required_output_columns: Option<&HashSet<Symbol>>,
+    stat_context: &StatContext,
 ) -> Result<Option<(SExpr, u64)>> {
     let mut query_info = QueryInfo::new(
         table_index,
@@ -146,7 +148,7 @@ pub(crate) fn try_rewrite(
             continue;
         };
         let scan_pruning_factor = scan_pruning_factor_for_plan(metadata, &replacement);
-        let cost = estimate_rewrite_cost(&replacement, scan_pruning_factor);
+        let cost = estimate_rewrite_cost(&replacement, scan_pruning_factor, stat_context);
         let current = RewriteCandidate {
             replacement,
             mv_table_id: candidate.mv_table_id,
@@ -289,28 +291,42 @@ fn try_build_replacement(
     Ok(Some((replacement, requires_aggregate_rollup)))
 }
 
-fn estimate_rewrite_cost(s_expr: &SExpr, scan_pruning_factor: f64) -> f64 {
-    estimate_compute_cost(s_expr) + estimate_scan_cost(s_expr, scan_pruning_factor)
+fn estimate_rewrite_cost(
+    s_expr: &SExpr,
+    scan_pruning_factor: f64,
+    stat_context: &StatContext,
+) -> f64 {
+    estimate_compute_cost(s_expr, stat_context)
+        + estimate_scan_cost(s_expr, scan_pruning_factor, stat_context)
 }
 
-fn estimate_compute_cost(s_expr: &SExpr) -> f64 {
-    let children_cost: f64 = s_expr.children().map(estimate_compute_cost).sum();
+fn estimate_compute_cost(s_expr: &SExpr, stat_context: &StatContext) -> f64 {
+    let children_cost: f64 = s_expr
+        .children()
+        .map(|child| estimate_compute_cost(child, stat_context))
+        .sum();
     let node_cost = match s_expr.plan() {
         RelOperator::Scan(_) => 0.0,
         RelOperator::Aggregate(_) => {
-            input_cardinality(s_expr).unwrap_or(UNKNOWN_CARDINALITY_COST) * AGGREGATE_PER_ROW
+            input_cardinality(s_expr, stat_context).unwrap_or(UNKNOWN_CARDINALITY_COST)
+                * AGGREGATE_PER_ROW
         }
         RelOperator::UnionAll(_) => {
-            output_cardinality(s_expr).unwrap_or(UNKNOWN_CARDINALITY_COST) * COMPUTE_PER_ROW
+            output_cardinality(s_expr, stat_context).unwrap_or(UNKNOWN_CARDINALITY_COST)
+                * COMPUTE_PER_ROW
         }
         RelOperator::Filter(_)
         | RelOperator::EvalScalar(_)
         | RelOperator::Sort(_)
         | RelOperator::TopN(_)
         | RelOperator::Limit(_) => {
-            output_cardinality(s_expr).unwrap_or(UNKNOWN_CARDINALITY_COST) * COMPUTE_PER_ROW
+            output_cardinality(s_expr, stat_context).unwrap_or(UNKNOWN_CARDINALITY_COST)
+                * COMPUTE_PER_ROW
         }
-        _ => output_cardinality(s_expr).unwrap_or(UNKNOWN_CARDINALITY_COST) * COMPUTE_PER_ROW,
+        _ => {
+            output_cardinality(s_expr, stat_context).unwrap_or(UNKNOWN_CARDINALITY_COST)
+                * COMPUTE_PER_ROW
+        }
     };
     children_cost + node_cost
 }
@@ -331,18 +347,18 @@ fn estimate_compute_cost(s_expr: &SExpr) -> f64 {
 ///
 /// Unknown cardinalities use `UNKNOWN_CARDINALITY_COST` rather than being
 /// treated as free.
-fn estimate_scan_cost(s_expr: &SExpr, scan_pruning_factor: f64) -> f64 {
+fn estimate_scan_cost(s_expr: &SExpr, scan_pruning_factor: f64, stat_context: &StatContext) -> f64 {
     match s_expr.plan() {
         RelOperator::Scan(scan) => scan_cost(scan, scan_pruning_factor),
         RelOperator::Filter(_) => {
             let Some(child) = s_expr.child(0).ok() else {
                 return UNKNOWN_CARDINALITY_COST;
             };
-            let child_cost = estimate_scan_cost(child, scan_pruning_factor);
-            let Some(child_rows) = output_cardinality(child) else {
+            let child_cost = estimate_scan_cost(child, scan_pruning_factor, stat_context);
+            let Some(child_rows) = output_cardinality(child, stat_context) else {
                 return child_cost;
             };
-            let Some(output_rows) = output_cardinality(s_expr) else {
+            let Some(output_rows) = output_cardinality(s_expr, stat_context) else {
                 return child_cost;
             };
             if child_rows > 0.0 && output_rows.is_finite() {
@@ -353,11 +369,11 @@ fn estimate_scan_cost(s_expr: &SExpr, scan_pruning_factor: f64) -> f64 {
         }
         RelOperator::UnionAll(_) => s_expr
             .children()
-            .map(|child| estimate_scan_cost(child, scan_pruning_factor))
+            .map(|child| estimate_scan_cost(child, scan_pruning_factor, stat_context))
             .sum(),
         _ => s_expr
             .children()
-            .map(|child| estimate_scan_cost(child, scan_pruning_factor))
+            .map(|child| estimate_scan_cost(child, scan_pruning_factor, stat_context))
             .sum(),
     }
 }
@@ -510,13 +526,16 @@ fn simple_cluster_key_column(expr: &ast::Expr) -> Option<&str> {
     }
 }
 
-fn input_cardinality(s_expr: &SExpr) -> Option<f64> {
-    s_expr.child(0).ok().and_then(output_cardinality)
+fn input_cardinality(s_expr: &SExpr, stat_context: &StatContext) -> Option<f64> {
+    s_expr
+        .child(0)
+        .ok()
+        .and_then(|child| output_cardinality(child, stat_context))
 }
 
-fn output_cardinality(s_expr: &SExpr) -> Option<f64> {
+fn output_cardinality(s_expr: &SExpr, stat_context: &StatContext) -> Option<f64> {
     RelExpr::with_s_expr(s_expr)
-        .derive_cardinality()
+        .derive_cardinality(stat_context)
         .ok()
         .map(|stat| stat.cardinality)
         .filter(|cardinality| cardinality.is_finite())
@@ -766,13 +785,14 @@ mod tests {
     #[test]
     fn cluster_prefix_is_part_of_scan_cost() {
         let scan = scan_with_rows(Some(100));
-        let unpruned = estimate_rewrite_cost(&scan, 1.0);
+        let unpruned = estimate_rewrite_cost(&scan, 1.0, &StatContext::default());
         let equality_pruned = estimate_rewrite_cost(
             &scan,
             cluster_pruning_factor(PrefixRouteScore {
                 matched_prefix: 1,
                 equality_prefix: 1,
             }),
+            &StatContext::default(),
         );
         let range_pruned = estimate_rewrite_cost(
             &scan,
@@ -780,6 +800,7 @@ mod tests {
                 matched_prefix: 1,
                 equality_prefix: 0,
             }),
+            &StatContext::default(),
         );
 
         assert!(equality_pruned < range_pruned);
@@ -812,8 +833,8 @@ mod tests {
 
     #[test]
     fn smaller_scan_is_cheaper_than_larger_scan() {
-        let small = estimate_rewrite_cost(&scan_with_rows(Some(10)), 1.0);
-        let large = estimate_rewrite_cost(&scan_with_rows(Some(100)), 1.0);
+        let small = estimate_rewrite_cost(&scan_with_rows(Some(10)), 1.0, &StatContext::default());
+        let large = estimate_rewrite_cost(&scan_with_rows(Some(100)), 1.0, &StatContext::default());
         assert!(small < large);
     }
 
@@ -830,13 +851,16 @@ mod tests {
             ),
             Arc::new(scan.clone()),
         );
-        assert!(estimate_rewrite_cost(&scan, 1.0) < estimate_rewrite_cost(&with_aggregate, 1.0));
+        assert!(
+            estimate_rewrite_cost(&scan, 1.0, &StatContext::default())
+                < estimate_rewrite_cost(&with_aggregate, 1.0, &StatContext::default())
+        );
     }
 
     #[test]
     fn unknown_scan_stats_are_more_expensive_than_known_small_scan() {
-        let unknown = estimate_rewrite_cost(&scan_with_rows(None), 1.0);
-        let known = estimate_rewrite_cost(&scan_with_rows(Some(1)), 1.0);
+        let unknown = estimate_rewrite_cost(&scan_with_rows(None), 1.0, &StatContext::default());
+        let known = estimate_rewrite_cost(&scan_with_rows(Some(1)), 1.0, &StatContext::default());
         assert!(known < unknown);
     }
 }

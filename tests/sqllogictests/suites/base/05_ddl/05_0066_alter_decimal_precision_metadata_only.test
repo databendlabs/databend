@@ -1,0 +1,390 @@
+statement ok
+DROP TABLE IF EXISTS decimal_derived_cluster_key
+
+statement ok
+DROP TABLE IF EXISTS decimal_derived_cluster_key_blocks
+
+statement ok
+DROP TABLE IF EXISTS decimal_type_dependent_cluster_key
+
+statement ok
+DROP TABLE IF EXISTS decimal_type_dependent_cluster_key_blocks
+
+statement ok
+DROP TABLE IF EXISTS decimal_stale_table_stats
+
+statement ok
+DROP TABLE IF EXISTS decimal_stale_scale_stats
+
+statement ok
+DROP TABLE IF EXISTS decimal_stale_scale_stats_blocks
+
+statement ok
+DROP TABLE IF EXISTS decimal_metadata_only
+
+statement ok
+DROP TABLE IF EXISTS decimal_metadata_only_blocks
+
+# Same Parquet representation: preserve blocks, retag persisted column/cluster stats,
+# and allow predicates plus new writes that produce stats with the wider precision.
+statement ok
+CREATE TABLE decimal_metadata_only(d DECIMAL(10, 2)) CLUSTER BY (d) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO decimal_metadata_only VALUES (1.00), (2.00), (3.00), (4.00)
+
+statement ok
+CREATE TABLE decimal_metadata_only_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_metadata_only')
+
+statement ok
+ALTER TABLE decimal_metadata_only MODIFY COLUMN d DECIMAL(15, 2)
+
+query I
+SELECT count(*)
+FROM decimal_metadata_only_blocks old_blocks
+LEFT JOIN fuse_block('default', 'decimal_metadata_only') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+WHERE new_blocks.block_location IS NULL
+----
+0
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_metadata_only WHERE d > 2.00 ORDER BY d LIMIT 2
+----
+3.00 DECIMAL(15, 2) NULL
+4.00 DECIMAL(15, 2) NULL
+
+statement ok
+INSERT INTO decimal_metadata_only VALUES (5.00), (6.00)
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_metadata_only WHERE d >= 4.00
+----
+4.00 DECIMAL(15, 2) NULL
+5.00 DECIMAL(15, 2) NULL
+6.00 DECIMAL(15, 2) NULL
+
+statement ok
+DROP TABLE decimal_metadata_only
+
+statement ok
+DROP TABLE decimal_metadata_only_blocks
+
+statement ok
+DROP TABLE IF EXISTS decimal_vector_cluster_key
+
+statement ok
+DROP TABLE IF EXISTS decimal_vector_cluster_key_blocks
+
+# Vector keys are not persisted in ClusterStatistics min/max. The Decimal key therefore
+# remains dimension zero even though it is expression one in CLUSTER BY.
+statement ok
+CREATE TABLE decimal_vector_cluster_key(
+  embedding VECTOR(3),
+  d DECIMAL(10, 2),
+  VECTOR INDEX idx (embedding) distance='cosine'
+) CLUSTER BY (embedding, d) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO decimal_vector_cluster_key VALUES
+  ([1.0, 0.0, 0.0], 1.00),
+  ([0.0, 1.0, 0.0], 2.00),
+  ([0.0, 0.0, 1.0], 3.00)
+
+statement ok
+CREATE TABLE decimal_vector_cluster_key_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_vector_cluster_key')
+
+statement ok
+ALTER TABLE decimal_vector_cluster_key MODIFY COLUMN d DECIMAL(15, 2)
+
+query I
+SELECT count(*)
+FROM decimal_vector_cluster_key_blocks old_blocks
+LEFT JOIN fuse_block('default', 'decimal_vector_cluster_key') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+WHERE new_blocks.block_location IS NULL
+----
+0
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_vector_cluster_key WHERE d >= 2.00
+----
+2.00 DECIMAL(15, 2) NULL
+3.00 DECIMAL(15, 2) NULL
+
+statement ok
+INSERT INTO decimal_vector_cluster_key VALUES ([1.0, 1.0, 0.0], 4.00)
+
+query I
+SELECT count(*) FROM decimal_vector_cluster_key WHERE d > 0
+----
+4
+
+statement ok
+DROP TABLE decimal_vector_cluster_key
+
+statement ok
+DROP TABLE decimal_vector_cluster_key_blocks
+
+statement ok
+DROP TABLE IF EXISTS decimal_historical_cluster_key
+
+statement ok
+DROP TABLE IF EXISTS decimal_historical_cluster_key_blocks
+
+# Blocks retain cluster statistics tagged with the key ID active when they were written.
+# Widening the current Decimal key must leave obsolete integer-key statistics untouched.
+statement ok
+CREATE TABLE decimal_historical_cluster_key(i INT, d DECIMAL(10, 2))
+CLUSTER BY (i) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO decimal_historical_cluster_key VALUES (1, 1.00), (2, 2.00)
+
+statement ok
+ALTER TABLE decimal_historical_cluster_key CLUSTER BY (d)
+
+statement ok
+INSERT INTO decimal_historical_cluster_key VALUES (3, 3.00), (4, 4.00)
+
+statement ok
+CREATE TABLE decimal_historical_cluster_key_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_historical_cluster_key')
+
+statement ok
+ALTER TABLE decimal_historical_cluster_key MODIFY COLUMN d DECIMAL(15, 2)
+
+query I
+SELECT count(*)
+FROM decimal_historical_cluster_key_blocks old_blocks
+LEFT JOIN fuse_block('default', 'decimal_historical_cluster_key') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+WHERE new_blocks.block_location IS NULL
+----
+0
+
+query II rowsort
+SELECT i, d FROM decimal_historical_cluster_key WHERE d >= 2.00
+----
+2 2.00
+3 3.00
+4 4.00
+
+statement ok
+INSERT INTO decimal_historical_cluster_key VALUES (5, 5.00)
+
+query I
+SELECT count(*) FROM decimal_historical_cluster_key WHERE d > 0
+----
+5
+
+statement ok
+DROP TABLE decimal_historical_cluster_key
+
+statement ok
+DROP TABLE decimal_historical_cluster_key_blocks
+
+statement ok
+DROP TABLE IF EXISTS decimal_hilbert_cluster_key
+
+statement ok
+DROP TABLE IF EXISTS decimal_hilbert_cluster_key_blocks
+
+# Hilbert statistics persist MBR dimensions. Decimal widening deliberately falls back
+# to the existing full-table rewrite instead of trying to retag ordinary key positions.
+statement ok
+CREATE TABLE decimal_hilbert_cluster_key(d DECIMAL(10, 2), x INT)
+CLUSTER BY HILBERT(d, x) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO decimal_hilbert_cluster_key VALUES (1.00, 1), (2.00, 2), (3.00, 3)
+
+statement ok
+CREATE TABLE decimal_hilbert_cluster_key_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_hilbert_cluster_key')
+
+statement ok
+ALTER TABLE decimal_hilbert_cluster_key MODIFY COLUMN d DECIMAL(15, 2)
+
+query I
+SELECT count(*)
+FROM decimal_hilbert_cluster_key_blocks old_blocks
+JOIN fuse_block('default', 'decimal_hilbert_cluster_key') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+----
+0
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_hilbert_cluster_key WHERE d >= 2.00
+----
+2.00 DECIMAL(15, 2) NULL
+3.00 DECIMAL(15, 2) NULL
+
+statement ok
+DROP TABLE decimal_hilbert_cluster_key
+
+statement ok
+DROP TABLE decimal_hilbert_cluster_key_blocks
+
+# The column itself stays INT64 in Parquet, but the derived cluster key changes
+# from Decimal64(18, 0) to Decimal128(19, 0). Metadata-only retagging cannot
+# safely update those cluster statistics, so MODIFY COLUMN must fall back to the
+# existing full-table rewrite instead of returning an internal error.
+statement ok
+CREATE TABLE decimal_derived_cluster_key(d DECIMAL(17, 0)) CLUSTER BY (d + CAST(1 AS DECIMAL(1, 0)))
+
+statement ok
+INSERT INTO decimal_derived_cluster_key VALUES (1), (2), (99999999999999999)
+
+statement ok
+CREATE TABLE decimal_derived_cluster_key_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_derived_cluster_key')
+
+statement ok
+ALTER TABLE decimal_derived_cluster_key MODIFY COLUMN d DECIMAL(18, 0)
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_derived_cluster_key
+----
+1 DECIMAL(18, 0) NULL
+2 DECIMAL(18, 0) NULL
+99999999999999999 DECIMAL(18, 0) NULL
+
+query I
+SELECT count(*)
+FROM decimal_derived_cluster_key_blocks old_blocks
+JOIN fuse_block('default', 'decimal_derived_cluster_key') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+----
+0
+
+statement ok
+DROP TABLE decimal_derived_cluster_key
+
+statement ok
+DROP TABLE decimal_derived_cluster_key_blocks
+
+# A derived key can keep the same result type while changing values when its input Decimal
+# precision changes. Such keys must fall back to the full-table rewrite.
+statement ok
+CREATE TABLE decimal_type_dependent_cluster_key(d DECIMAL(10, 2))
+CLUSTER BY (concat(typeof(d), to_string(d))) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO decimal_type_dependent_cluster_key VALUES (1.00), (2.00), (3.00)
+
+statement ok
+CREATE TABLE decimal_type_dependent_cluster_key_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_type_dependent_cluster_key')
+
+statement ok
+ALTER TABLE decimal_type_dependent_cluster_key MODIFY COLUMN d DECIMAL(15, 2)
+
+query I
+SELECT count(*)
+FROM decimal_type_dependent_cluster_key_blocks old_blocks
+JOIN fuse_block('default', 'decimal_type_dependent_cluster_key') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+----
+0
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_type_dependent_cluster_key
+----
+1.00 DECIMAL(15, 2) NULL
+2.00 DECIMAL(15, 2) NULL
+3.00 DECIMAL(15, 2) NULL
+
+statement ok
+DROP TABLE decimal_type_dependent_cluster_key
+
+statement ok
+DROP TABLE decimal_type_dependent_cluster_key_blocks
+
+# UPDATE leaves the ANALYZE sidecar stale. A metadata-only widening must not make its old
+# Top-N/Count-Min data fresh again, and a later append must not merge against that stale base.
+statement ok
+CREATE TABLE decimal_stale_table_stats(id INT, d DECIMAL(10, 2))
+approx_distinct_columns = '' analyze_frequency_columns = 'd' analyze_top_n_size = 2
+analyze_count_min_sketch_error_rate = '0.001'
+
+statement ok
+INSERT INTO decimal_stale_table_stats
+SELECT number::INT, if(number < 90, 1, number - 88)::DECIMAL(10, 2) FROM numbers(100)
+
+statement ok
+ANALYZE TABLE decimal_stale_table_stats
+
+statement ok
+UPDATE decimal_stale_table_stats SET d = 2.00 WHERE id < 80
+
+query T
+EXPLAIN SELECT * FROM decimal_stale_table_stats WHERE d = 1.00
+----
+table: default.default.decimal_stale_table_stats<slt:ignore>estimated rows: 9.09
+
+statement ok
+ALTER TABLE decimal_stale_table_stats MODIFY COLUMN d DECIMAL(15, 2)
+
+query T
+EXPLAIN SELECT * FROM decimal_stale_table_stats WHERE d = 1.00
+----
+table: default.default.decimal_stale_table_stats<slt:ignore>estimated rows: 9.09
+
+statement ok
+INSERT INTO decimal_stale_table_stats SELECT number::INT + 100, 3.00 FROM numbers(100)
+
+query T
+EXPLAIN SELECT * FROM decimal_stale_table_stats WHERE d = 1.00
+----
+table: default.default.decimal_stale_table_stats<slt:ignore>estimated rows: 18.18
+
+statement ok
+DROP TABLE decimal_stale_table_stats
+
+# A scale-changing ALTER uses the full-table rewrite and leaves the old ANALYZE sidecar stale.
+# The following metadata-only precision widening must inherit that unusable sidecar unchanged,
+# rather than trying to retag its old-scale Decimal Top-N values.
+statement ok
+CREATE TABLE decimal_stale_scale_stats(d DECIMAL(10, 2))
+approx_distinct_columns = '' analyze_frequency_columns = 'd' analyze_top_n_size = 2
+
+statement ok
+INSERT INTO decimal_stale_scale_stats VALUES (1.00), (2.00), (2.00)
+
+statement ok
+ANALYZE TABLE decimal_stale_scale_stats
+
+statement ok
+ALTER TABLE decimal_stale_scale_stats MODIFY COLUMN d DECIMAL(10, 3)
+
+statement ok
+CREATE TABLE decimal_stale_scale_stats_blocks AS
+SELECT block_location FROM fuse_block('default', 'decimal_stale_scale_stats')
+
+statement ok
+ALTER TABLE decimal_stale_scale_stats MODIFY COLUMN d DECIMAL(15, 3)
+
+query I
+SELECT count(*)
+FROM decimal_stale_scale_stats_blocks old_blocks
+LEFT JOIN fuse_block('default', 'decimal_stale_scale_stats') new_blocks
+  ON old_blocks.block_location = new_blocks.block_location
+WHERE new_blocks.block_location IS NULL
+----
+0
+
+query IT rowsort
+SELECT d, typeof(d) FROM decimal_stale_scale_stats
+----
+1.000 DECIMAL(15, 3) NULL
+2.000 DECIMAL(15, 3) NULL
+2.000 DECIMAL(15, 3) NULL
+
+statement ok
+DROP TABLE decimal_stale_scale_stats
+
+statement ok
+DROP TABLE decimal_stale_scale_stats_blocks

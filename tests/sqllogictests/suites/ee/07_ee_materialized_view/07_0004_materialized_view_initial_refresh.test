@@ -1,0 +1,187 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+create or replace database test_mv_initial_refresh
+
+statement ok
+use test_mv_initial_refresh
+
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+set enable_distributed_pruning = 1
+
+statement ok
+create table source (id int, amount int, active boolean) change_tracking = true
+
+statement ok
+insert into source values (1, 10, true), (2, 20, false)
+
+# The initial scan must preserve change$row_id for rows with mutation/compaction history.
+statement ok
+update source set amount = 11 where id = 1
+
+statement ok
+optimize table source compact
+
+statement ok
+insert into source values (3, 30, true)
+
+statement ok
+insert into source values (4, 40, true)
+
+# Four segments also exceed the node count in the three-node test cluster.
+statement ok
+insert into source values (9, 90, false)
+
+statement ok
+create materialized view detail_mv as select id, amount from source where active
+
+statement ok
+create materialized view aggregate_mv as select sum(amount) as total from source where active
+
+statement ok
+refresh materialized view detail_mv
+
+statement ok
+refresh materialized view aggregate_mv
+
+query II
+select id, amount from detail_mv order by id
+----
+1 11
+3 30
+4 40
+
+query I
+select total from aggregate_mv
+----
+81
+
+# Inspect persisted storage too: MV reads can otherwise hide an incomplete refresh.
+query I
+select sum(row_count) from fuse_block('test_mv_initial_refresh', 'detail_mv')
+----
+3
+
+# Append-only refresh must start after the initial snapshot, without duplicating the baseline.
+statement ok
+insert into source values (5, 50, true)
+
+statement ok
+refresh materialized view detail_mv
+
+statement ok
+refresh materialized view aggregate_mv
+
+query I
+select sum(row_count) from fuse_block('test_mv_initial_refresh', 'detail_mv')
+----
+4
+
+query I
+select total from aggregate_mv
+----
+131
+
+# Move the original rows to new blocks, then exercise MERGE against their stable row IDs.
+statement ok
+optimize table source compact
+
+statement ok
+update source set amount = 12 where id = 1
+
+statement ok
+update source set active = not active where id in (2, 3)
+
+statement ok
+delete from source where id = 4
+
+statement ok
+refresh materialized view detail_mv
+
+statement ok
+refresh materialized view aggregate_mv
+
+query II
+select id, amount from detail_mv order by id
+----
+1 12
+2 20
+5 50
+
+query I
+select sum(row_count) from fuse_block('test_mv_initial_refresh', 'detail_mv')
+----
+3
+
+query I
+select total from aggregate_mv
+----
+82
+
+# A refresh checkpoint with no source snapshot must also rebuild on the next nonempty endpoint.
+statement ok
+truncate table source
+
+statement ok
+refresh materialized view detail_mv
+
+statement ok
+refresh materialized view aggregate_mv
+
+statement ok
+insert into source values (6, 60, true)
+
+statement ok
+insert into source values (7, 70, true)
+
+statement ok
+insert into source values (8, 80, false)
+
+statement ok
+insert into source values (9, 90, false)
+
+statement ok
+refresh materialized view detail_mv
+
+statement ok
+refresh materialized view aggregate_mv
+
+query II
+select id, amount from detail_mv order by id
+----
+6 60
+7 70
+
+query I
+select sum(row_count) from fuse_block('test_mv_initial_refresh', 'detail_mv')
+----
+2
+
+query I
+select total from aggregate_mv
+----
+130
+
+statement ok
+unset enable_compact_after_write
+
+statement ok
+unset enable_distributed_pruning
+
+statement ok
+drop database test_mv_initial_refresh

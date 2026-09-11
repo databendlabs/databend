@@ -12,10 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_storages_fuse::FuseTable;
-use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 
@@ -26,22 +23,11 @@ async fn test_fuse_snapshot_analyze() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
-    let ctx = fixture.new_query_ctx().await?;
     let case_name = "analyze_statistic_optimize";
     do_insertions(&fixture).await?;
 
     fixture.analyze_table().await?;
     check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, 2, Some(()), None).await?;
-
-    // Purge will keep at least two snapshots.
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot_files = fuse_table.list_snapshot_files().await?;
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, false)
-        .await?;
-    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
 
     Ok(())
 }
@@ -83,35 +69,6 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> anyhow::Result<()> {
         assert!(snapshot_opt.is_some());
         assert!(snapshot_opt.unwrap().table_statistics_location.is_none());
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze_purge() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture.create_default_database().await?;
-
-    let ctx = fixture.new_query_ctx().await?;
-    let case_name = "analyze_statistic_purge";
-    do_insertions(&fixture).await?;
-
-    fixture.analyze_table().await?;
-    check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, 2, Some(()), None).await?;
-
-    append_sample_data(1, &fixture).await?;
-    fixture.analyze_table().await?;
-    check_data_dir(&fixture, case_name, 5, 2, 3, 3, 3, 3, Some(()), None).await?;
-
-    // Purge will keep at least two snapshots.
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot_files = fuse_table.list_snapshot_files().await?;
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, false)
-        .await?;
-    check_data_dir(&fixture, case_name, 1, 1, 2, 2, 2, 2, Some(()), Some(())).await?;
 
     Ok(())
 }

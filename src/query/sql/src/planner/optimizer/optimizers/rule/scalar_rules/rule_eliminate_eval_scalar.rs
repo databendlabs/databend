@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 
 use crate::ColumnSet;
-use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -30,11 +29,16 @@ use crate::plans::RelOp;
 pub struct RuleEliminateEvalScalar {
     id: RuleID,
     matchers: Vec<Matcher>,
-    metadata: MetadataRef,
+}
+
+impl Default for RuleEliminateEvalScalar {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RuleEliminateEvalScalar {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::EliminateEvalScalar,
             // EvalScalar
@@ -44,7 +48,6 @@ impl RuleEliminateEvalScalar {
                 op_type: RelOp::EvalScalar,
                 children: vec![Matcher::Leaf],
             }],
-            metadata,
         }
     }
 }
@@ -59,10 +62,6 @@ impl Rule for RuleEliminateEvalScalar {
         let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
         if eval_scalar.items.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
-            return Ok(());
-        }
-
-        if self.metadata.read().has_agg_indices() {
             return Ok(());
         }
 

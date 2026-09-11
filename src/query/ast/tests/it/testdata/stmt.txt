@@ -1870,406 +1870,6 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
-CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
----------- Output ---------
-CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
----------- AST ------------
-CreateIndex(
-    CreateIndexStmt {
-        index_type: Aggregating,
-        create_option: Create,
-        index_name: Identifier {
-            span: Some(
-                25..29,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
-        query: Query {
-            span: Some(
-                33..80,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        33..80,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: FunctionCall {
-                                span: Some(
-                                    40..46,
-                                ),
-                                func: FunctionCall {
-                                    distinct: false,
-                                    name: Identifier {
-                                        span: Some(
-                                            40..43,
-                                        ),
-                                        name: "SUM",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                    args: [
-                                        ColumnRef {
-                                            span: Some(
-                                                44..45,
-                                            ),
-                                            column: ColumnRef {
-                                                database: None,
-                                                table: None,
-                                                column: Name(
-                                                    Identifier {
-                                                        span: Some(
-                                                            44..45,
-                                                        ),
-                                                        name: "a",
-                                                        quote: None,
-                                                        ident_type: None,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ],
-                                    params: [],
-                                    order_by: [],
-                                    filter: None,
-                                    window: None,
-                                    lambda: None,
-                                },
-                            },
-                            alias: None,
-                        },
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    48..49,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                48..49,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                55..57,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        55..57,
-                                    ),
-                                    name: "t1",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: Some(
-                        BinaryOp {
-                            span: Some(
-                                66..67,
-                            ),
-                            op: Gt,
-                            left: ColumnRef {
-                                span: Some(
-                                    64..65,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                64..65,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            right: Literal {
-                                span: Some(
-                                    68..69,
-                                ),
-                                value: UInt64(
-                                    3,
-                                ),
-                            },
-                        },
-                    ),
-                    group_by: Some(
-                        Normal(
-                            [
-                                ColumnRef {
-                                    span: Some(
-                                        79..80,
-                                    ),
-                                    column: ColumnRef {
-                                        database: None,
-                                        table: None,
-                                        column: Name(
-                                            Identifier {
-                                                span: Some(
-                                                    79..80,
-                                                ),
-                                                name: "b",
-                                                quote: None,
-                                                ident_type: None,
-                                            },
-                                        ),
-                                    },
-                                },
-                            ],
-                        ),
-                    ),
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-        sync_creation: true,
-    },
-)
-
-
----------- Input ----------
-CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
----------- Output ---------
-CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
----------- AST ------------
-CreateIndex(
-    CreateIndexStmt {
-        index_type: Aggregating,
-        create_option: CreateOrReplace,
-        index_name: Identifier {
-            span: Some(
-                36..40,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
-        query: Query {
-            span: Some(
-                44..91,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        44..91,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: FunctionCall {
-                                span: Some(
-                                    51..57,
-                                ),
-                                func: FunctionCall {
-                                    distinct: false,
-                                    name: Identifier {
-                                        span: Some(
-                                            51..54,
-                                        ),
-                                        name: "SUM",
-                                        quote: None,
-                                        ident_type: None,
-                                    },
-                                    args: [
-                                        ColumnRef {
-                                            span: Some(
-                                                55..56,
-                                            ),
-                                            column: ColumnRef {
-                                                database: None,
-                                                table: None,
-                                                column: Name(
-                                                    Identifier {
-                                                        span: Some(
-                                                            55..56,
-                                                        ),
-                                                        name: "a",
-                                                        quote: None,
-                                                        ident_type: None,
-                                                    },
-                                                ),
-                                            },
-                                        },
-                                    ],
-                                    params: [],
-                                    order_by: [],
-                                    filter: None,
-                                    window: None,
-                                    lambda: None,
-                                },
-                            },
-                            alias: None,
-                        },
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    59..60,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                59..60,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                66..68,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        66..68,
-                                    ),
-                                    name: "t1",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: Some(
-                        BinaryOp {
-                            span: Some(
-                                77..78,
-                            ),
-                            op: Gt,
-                            left: ColumnRef {
-                                span: Some(
-                                    75..76,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                75..76,
-                                            ),
-                                            name: "b",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            right: Literal {
-                                span: Some(
-                                    79..80,
-                                ),
-                                value: UInt64(
-                                    3,
-                                ),
-                            },
-                        },
-                    ),
-                    group_by: Some(
-                        Normal(
-                            [
-                                ColumnRef {
-                                    span: Some(
-                                        90..91,
-                                    ),
-                                    column: ColumnRef {
-                                        database: None,
-                                        table: None,
-                                        column: Name(
-                                            Identifier {
-                                                span: Some(
-                                                    90..91,
-                                                ),
-                                                name: "b",
-                                                quote: None,
-                                                ident_type: None,
-                                            },
-                                        ),
-                                    },
-                                },
-                            ],
-                        ),
-                    ),
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-        sync_creation: true,
-    },
-)
-
-
----------- Input ----------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);
 ---------- Output ---------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b)
@@ -16806,13 +16406,12 @@ OptimizeTable(
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+OPTIMIZE TABLE t PURGE;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10
+VACUUM TABLE t
 ---------- AST ------------
-OptimizeTable(
-    OptimizeTableStmt {
-        catalog: None,
+VacuumTable(
+    VacuumTableStmt {
         database: None,
         table: Identifier {
             span: Some(
@@ -16822,68 +16421,35 @@ OptimizeTable(
             quote: None,
             ident_type: None,
         },
-        action: Purge {
-            before: Some(
-                Snapshot(
-                    Literal {
-                        span: Some(
-                            43..77,
-                        ),
-                        value: String(
-                            "9828b23f74664ff3806f44bbc1925ea5",
-                        ),
-                    },
-                ),
-            ),
-        },
-        limit: Some(
-            10,
-        ),
     },
 )
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+OPTIMIZE TABLE db.t PURGE;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+VACUUM TABLE db.t
 ---------- AST ------------
-OptimizeTable(
-    OptimizeTableStmt {
-        catalog: None,
-        database: None,
+VacuumTable(
+    VacuumTableStmt {
+        database: Some(
+            Identifier {
+                span: Some(
+                    15..17,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                15..16,
+                18..19,
             ),
             name: "t",
             quote: None,
             ident_type: None,
         },
-        action: Purge {
-            before: Some(
-                Timestamp(
-                    Cast {
-                        span: Some(
-                            72..83,
-                        ),
-                        expr: Literal {
-                            span: Some(
-                                44..72,
-                            ),
-                            value: String(
-                                "2023-06-26 09:49:02.038483",
-                            ),
-                        },
-                        target_type: Timestamp,
-                        pg_style: true,
-                    },
-                ),
-            ),
-        },
-        limit: Some(
-            10,
-        ),
     },
 )
 
@@ -19882,11 +19448,10 @@ AlterDatabase(
 ---------- Input ----------
 VACUUM TABLE t;
 ---------- Output ---------
-VACUUM TABLE t 
+VACUUM TABLE t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
         database: None,
         table: Identifier {
             span: Some(
@@ -19895,117 +19460,91 @@ VacuumTable(
             name: "t",
             quote: None,
             ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: None,
         },
     },
 )
 
 
 ---------- Input ----------
-VACUUM TABLE t DRY RUN;
+VACUUM TABLE db.t;
 ---------- Output ---------
-VACUUM TABLE t DRY RUN
+VACUUM TABLE db.t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
-        database: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..15,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                13..14,
+                16..17,
             ),
             name: "t",
             quote: None,
             ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: Some(
-                false,
-            ),
         },
     },
 )
 
 
 ---------- Input ----------
-VACUUM TABLE t DRY RUN SUMMARY;
+VACUUM TABLES;
 ---------- Output ---------
-VACUUM TABLE t DRY RUN SUMMARY
+VACUUM TABLES
 ---------- AST ------------
-VacuumTable(
-    VacuumTableStmt {
-        catalog: None,
+VacuumTables(
+    VacuumTablesStmt {
         database: None,
-        table: Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        option: VacuumTableOption {
-            dry_run: Some(
-                true,
-            ),
-        },
     },
+)
+
+
+---------- Input ----------
+VACUUM TABLES FROM db;
+---------- Output ---------
+VACUUM TABLES FROM db
+---------- AST ------------
+VacuumTables(
+    VacuumTablesStmt {
+        database: Some(
+            Identifier {
+                span: Some(
+                    19..21,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+VACUUM ALL;
+---------- Output ---------
+VACUUM ALL
+---------- AST ------------
+VacuumAll(
+    VacuumAllStmt,
 )
 
 
 ---------- Input ----------
 VACUUM DROP TABLE;
 ---------- Output ---------
-VACUUM DROP TABLE 
+VACUUM DROP TABLE
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
         database: None,
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE DRY RUN;
----------- Output ---------
-VACUUM DROP TABLE DRY RUN
----------- AST ------------
-VacuumDropTable(
-    VacuumDropTableStmt {
-        catalog: None,
-        database: None,
-        option: VacuumDropTableOption {
-            dry_run: Some(
-                false,
-            ),
-            limit: None,
-        },
-    },
-)
-
-
----------- Input ----------
-VACUUM DROP TABLE DRY RUN SUMMARY;
----------- Output ---------
-VACUUM DROP TABLE DRY RUN SUMMARY
----------- AST ------------
-VacuumDropTable(
-    VacuumDropTableStmt {
-        catalog: None,
-        database: None,
-        option: VacuumDropTableOption {
-            dry_run: Some(
-                true,
-            ),
-            limit: None,
-        },
     },
 )
 
@@ -20013,11 +19552,10 @@ VacuumDropTable(
 ---------- Input ----------
 VACUUM DROP TABLE FROM db;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db 
+VACUUM DROP TABLE FROM db
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
         database: Some(
             Identifier {
                 span: Some(
@@ -20028,38 +19566,39 @@ VacuumDropTable(
                 ident_type: None,
             },
         ),
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: None,
-        },
     },
 )
 
 
 ---------- Input ----------
-VACUUM DROP TABLE FROM db LIMIT 10;
+VACUUM DROPPED OBJECTS;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db  LIMIT 10
+VACUUM DROP TABLE
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
-        catalog: None,
+        database: None,
+    },
+)
+
+
+---------- Input ----------
+VACUUM DROPPED OBJECTS FROM db;
+---------- Output ---------
+VACUUM DROP TABLE FROM db
+---------- AST ------------
+VacuumDropTable(
+    VacuumDropTableStmt {
         database: Some(
             Identifier {
                 span: Some(
-                    23..25,
+                    28..30,
                 ),
                 name: "db",
                 quote: None,
                 ident_type: None,
             },
         ),
-        option: VacuumDropTableOption {
-            dry_run: None,
-            limit: Some(
-                10,
-            ),
-        },
     },
 )
 
@@ -20339,28 +19878,6 @@ RenameDictionary(
             quote: None,
             ident_type: None,
         },
-    },
-)
-
-
----------- Input ----------
-REFRESH AGGREGATING INDEX idx1 LIMIT 10;
----------- Output ---------
-REFRESH AGGREGATING INDEX idx1 LIMIT 10
----------- AST ------------
-RefreshIndex(
-    RefreshIndexStmt {
-        index: Identifier {
-            span: Some(
-                26..30,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
-        limit: Some(
-            10,
-        ),
     },
 )
 
@@ -30019,7 +29536,7 @@ CopyIntoLocation(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -30083,7 +29600,7 @@ CreateTask(
             },
         ),
         sql: SingleStatement(
-            "VACUUM TABLE t ",
+            "VACUUM TABLE t",
         ),
     },
 )
@@ -30092,7 +29609,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t 
+CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -30110,7 +29627,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "VACUUM TABLE t ",
+            "VACUUM TABLE t",
         ),
     },
 )
@@ -30131,7 +29648,7 @@ CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los A
 BEGIN;
 INSERT INTO t VALUES ('a;');
 DELETE FROM t WHERE c = ';';
-VACUUM TABLE t ;
+VACUUM TABLE t;
 MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
@@ -30156,7 +29673,7 @@ CreateTask(
                 "BEGIN",
                 "INSERT INTO t VALUES ('a;')",
                 "DELETE FROM t WHERE c = ';'",
-                "VACUUM TABLE t ",
+                "VACUUM TABLE t",
                 "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                 "COMMIT",
             ],
@@ -30909,7 +30426,7 @@ ALTER TASK MyTask2 MODIFY AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
 DELETE FROM t WHERE c = ';';
-VACUUM TABLE t ;
+VACUUM TABLE t;
 MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
@@ -30924,7 +30441,7 @@ AlterTask(
                     "BEGIN",
                     "INSERT INTO t VALUES ('a;')",
                     "DELETE FROM t WHERE c = ';'",
-                    "VACUUM TABLE t ",
+                    "VACUUM TABLE t",
                     "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *",
                     "COMMIT",
                 ],
@@ -31243,26 +30760,6 @@ ShowDictionaries(
                 pattern: "dict%",
             },
         ),
-    },
-)
-
-
----------- Input ----------
-DROP AGGREGATING INDEX IF EXISTS idx1
----------- Output ---------
-DROP AGGREGATING INDEX IF EXISTS idx1
----------- AST ------------
-DropIndex(
-    DropIndexStmt {
-        if_exists: true,
-        index: Identifier {
-            span: Some(
-                33..37,
-            ),
-            name: "idx1",
-            quote: None,
-            ident_type: None,
-        },
     },
 )
 

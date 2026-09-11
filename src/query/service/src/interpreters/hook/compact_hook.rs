@@ -219,12 +219,8 @@ pub(crate) async fn compact_table(
             limit: compaction_limits.clone(),
         });
         let s_expr = SExpr::create_leaf(Arc::new(compact_block));
-        let compact_interpreter = OptimizeCompactBlockInterpreter::try_create(
-            ctx.clone(),
-            s_expr,
-            lock_opt.clone(),
-            false,
-        )?;
+        let compact_interpreter =
+            OptimizeCompactBlockInterpreter::try_create(ctx.clone(), s_expr, lock_opt.clone())?;
         let mut build_res = compact_interpreter.execute2().await?;
         // execute the compact pipeline
         if build_res.main_pipeline.is_complete_pipeline()? {
@@ -294,8 +290,12 @@ pub(crate) async fn compact_table(
                 selection: None,
                 is_final: false,
             };
-            let recluster_interpreter =
-                ReclusterTableInterpreter::try_create(ctx.clone(), recluster, lock_opt)?;
+            let allow_segment_claims = lock_opt != LockTableOption::NoLock;
+            let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                ctx.clone(),
+                recluster,
+                allow_segment_claims,
+            )?;
             // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
             // we do not need to use `PipelineCompleteExecutor` to execute it.
             let build_res = recluster_interpreter.execute2().await?;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -43,20 +44,40 @@ use crate::meta::BlockMeta;
 use crate::meta::ClusterKeyInfo;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
+use crate::meta::DraftVirtualBlockMeta;
 use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::PartitionStatistics;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
+use crate::meta::VirtualSegmentSchema;
 use crate::meta::format::encode;
 use crate::meta::reduce_cluster_statistics;
 use crate::meta::supported_stat_type;
 use crate::meta::validate_segment_partition_statistics;
 
+/// Describes how one block contributes virtual-column metadata when building a
+/// new segment. The input stays aligned with its `BlockMeta` until final
+/// segment-local path indexes and direct column ids are assigned.
+#[derive(Clone, Debug)]
+pub enum VirtualBlockInput {
+    /// The block has no virtual metadata to register.
+    None,
+    /// A newly written block whose canonical paths have not received
+    /// segment-local indexes or direct column ids yet.
+    Draft(DraftVirtualBlockMeta),
+    /// A surviving block from an existing segment. Its persisted path indexes
+    /// and direct column ids must be interpreted through the original schema.
+    Existing {
+        /// `None` represents legacy or unavailable segment schema metadata.
+        schema: Option<Arc<VirtualSegmentSchema>>,
+    },
+}
+
 pub trait SegmentBuilder: Send + Sync + 'static {
     type Segment: AbstractSegment;
     fn block_count(&self) -> usize;
-    fn add_block(&mut self, block_meta: BlockMeta) -> Result<()>;
+    fn add_block(&mut self, block_meta: BlockMeta, virtual_input: VirtualBlockInput) -> Result<()>;
     fn build(
         &mut self,
         thresholds: BlockThresholds,
@@ -126,7 +147,11 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.row_count.len()
     }
 
-    fn add_block(&mut self, block_meta: BlockMeta) -> Result<()> {
+    fn add_block(
+        &mut self,
+        block_meta: BlockMeta,
+        _virtual_input: VirtualBlockInput,
+    ) -> Result<()> {
         self.row_count.push(block_meta.row_count);
         self.block_size.push(block_meta.block_size);
         self.file_size.push(block_meta.file_size);
@@ -377,6 +402,7 @@ impl ColumnOrientedSegmentBuilder {
             cluster_stats,
             partition_stats,
             virtual_block_count: Some(virtual_block_count),
+            virtual_segment_schema: None,
             additional_stats_meta,
         })
     }

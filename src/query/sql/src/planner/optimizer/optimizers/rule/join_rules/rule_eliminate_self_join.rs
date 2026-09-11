@@ -364,7 +364,6 @@ impl RuleEliminateSelfJoin {
         // signatures can be eliminated against each other.
         if scan.limit.is_some()
             || scan.order_by.as_ref().is_some_and(|v| !v.is_empty())
-            || scan.agg_index.is_some()
             || scan.change_type.is_some()
             || scan.update_stream_columns
             || scan.inverted_index.is_some()

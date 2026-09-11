@@ -14,6 +14,7 @@
 
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::ir::StatContext;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
@@ -41,12 +42,16 @@ async fn write_optimized_case(
 
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;
-    writeln!(file, "{}", raw_plan.format_indent(Default::default())?)?;
+    writeln!(
+        file,
+        "{}",
+        raw_plan.format_indent(Default::default(), &StatContext::default())?
+    )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default())?
+        optimized_plan.format_indent(Default::default(), &StatContext::default())?
     )?;
     writeln!(file)?;
 

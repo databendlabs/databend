@@ -22,6 +22,30 @@ async fn test_type_check_variant_rewrites() -> Result<()> {
             sql: "[10, 20, 30][1]",
         },
         SqlTestCase {
+            name: "array_expression_index_access_binds",
+            description: "Non-literal array indices should bind through get with normal type checking.",
+            setup_sqls: &[],
+            sql: "array('a', 'b', 'c')[delta % 2]",
+        },
+        SqlTestCase {
+            name: "array_dynamic_index_before_literal_path_binds",
+            description: "Literal access after a dynamic index should preserve the remaining path.",
+            setup_sqls: &[],
+            sql: "[[10, 20], [30, 40]][delta][2]",
+        },
+        SqlTestCase {
+            name: "array_dynamic_index_after_literal_path_binds",
+            description: "A dynamic index should preserve preceding literal access.",
+            setup_sqls: &[],
+            sql: "[[10, 20], [30, 40]][1][delta]",
+        },
+        SqlTestCase {
+            name: "map_expression_key_access_binds",
+            description: "Computed map keys should use the existing get function.",
+            setup_sqls: &[],
+            sql: "{'k1': 1, 'k2': delta}[concat('k', '1')]",
+        },
+        SqlTestCase {
             name: "map_key_access_binds",
             description: "Map key access should preserve the existing get-function rewrite.",
             setup_sqls: &[],
@@ -82,7 +106,7 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
         .iter()
         .map(|(name, (_, column_index))| (name.key_name.as_str(), column_index.as_usize()))
         .collect::<Vec<_>>();
-    assert_eq!(virtual_columns, vec![("v['a'][0]", 2), ("v['b']['c']", 3)]);
+    assert_eq!(virtual_columns, vec![("a[0]", 2), ("b.c", 3)]);
 
     let metadata = metadata.read();
     assert_eq!(metadata.columns().len(), 4);
@@ -134,13 +158,13 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
             virtual_schema: Some(VirtualDataSchema {
                 fields: vec![
                     VirtualDataField {
-                        name: "v['a'][0]".to_string(),
+                        name: "v.a[0]".to_string(),
                         data_types: vec![VariantDataType::Jsonb],
                         source_column_id: 1,
                         column_id: 100,
                     },
                     VirtualDataField {
-                        name: "v['b']['c']".to_string(),
+                        name: "v.b.c".to_string(),
                         data_types: vec![VariantDataType::Jsonb],
                         source_column_id: 1,
                         column_id: 101,
@@ -160,7 +184,6 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
         table.into(),
         None,
         None,
-        false,
         false,
         false,
         None,

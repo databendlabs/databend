@@ -24,6 +24,7 @@ use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -33,9 +34,12 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_index::VirtualColumnStat;
+use databend_storages_common_index::VirtualColumnStatsOfNames;
 use databend_storages_common_index::eliminate_cast;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
@@ -116,7 +120,7 @@ fn test_range_index_prunes_integer_column_eq_numeric_string_literal() {
     let expr = parse_expr("a = '4'", &[("a", Int32Type::data_type())]);
     let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
-    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -134,7 +138,172 @@ fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
     let expr = parse_expr("a = '4'", &[("a", Int32Type::data_type().wrap_nullable())]);
     let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
 
-    assert!(!index.apply(&stats, None, |_| false).unwrap());
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+}
+
+#[test]
+fn test_range_index_prunes_by_virtual_column_statistics() {
+    fn n(value: i32) -> Scalar {
+        Scalar::Number(value.into())
+    }
+
+    // The virtual column is intentionally absent from the table schema. Its
+    // statistics are supplied separately by the Fuse block metadata path.
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(r#""v.a" > 20"#, &[("v.a", Int32Type::data_type())]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: n(1),
+        max: n(10),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::Int32),
+    })]);
+
+    assert!(
+        !index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_range_index_prunes_try_cast_virtual_column_by_physical_type() {
+    fn n(value: u64) -> Scalar {
+        Scalar::Number(value.into())
+    }
+
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(r#"is_true(try_cast("v.a" as uint8) = 100)"#, &[(
+        "v.a",
+        DataType::Variant.wrap_nullable(),
+    )]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: n(1),
+        max: n(8),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        !index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_range_index_keeps_variant_function_with_typed_virtual_column_statistics() {
+    fn n(value: u64) -> Scalar {
+        Scalar::Number(value.into())
+    }
+
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(r#"json_typeof("v.a") = 'string'"#, &[(
+        "v.a",
+        DataType::Variant.wrap_nullable(),
+    )]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: n(1),
+        max: n(8),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_range_index_keeps_mixed_cast_and_variant_function_virtual_column_references() {
+    fn n(value: u64) -> Scalar {
+        Scalar::Number(value.into())
+    }
+
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(
+        r#"is_true(try_cast("v.a" as uint8) = 100) AND json_typeof("v.a") = 'string'"#,
+        &[("v.a", DataType::Variant.wrap_nullable())],
+    );
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: n(1),
+        max: n(8),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_range_index_keeps_without_virtual_column_statistics() {
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(r#""v.a" > 20"#, &[("v.a", Int32Type::data_type())]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+
+    assert!(
+        index
+            .apply(&Default::default(), None, None, |_| false)
+            .unwrap()
+    );
 }
 
 #[test]
@@ -180,16 +349,231 @@ fn test_range_index_keeps_nullable_boolean_cast_under_is_true() {
         .into_iter()
         .collect();
 
-    let rewritten_expr = eliminate_cast(&expr, input_domains).unwrap();
+    let rewritten_expr = eliminate_cast(&expr, input_domains, &FunctionContext::default()).unwrap();
     assert_eq!(rewritten_expr.data_type(), &DataType::Boolean);
     let index = RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
         .unwrap();
 
-    assert!(index.apply(&stats, None, |_| false).unwrap());
+    assert!(index.apply(&stats, None, None, |_| false).unwrap());
 
     let inverted_index =
         RangeIndex::try_create(func_ctx, &inverted_expr, schema, Default::default()).unwrap();
-    assert!(inverted_index.apply(&stats, None, |_| false).unwrap());
+    assert!(inverted_index.apply(&stats, None, None, |_| false).unwrap());
+}
+
+#[test]
+fn test_range_index_plain_predicate_without_rewrite_candidates() {
+    // `site_code = '2815' and contains([1, 5, 9], account)` contains no
+    // cast-elimination candidate, so `apply` runs without the rewrite pass;
+    // pruning decisions must stay identical to the general path.
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("site_code", TableDataType::String),
+        TableField::new("account", TableDataType::Number(NumberDataType::Int64)),
+    ]));
+
+    let site_code = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "site_code".to_string(),
+        data_type: DataType::String,
+        display_name: "site_code".to_string(),
+    });
+    let account = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "account".to_string(),
+        data_type: DataType::Number(NumberDataType::Int64),
+        display_name: "account".to_string(),
+    });
+    let target = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::String("2815".to_string()),
+        data_type: DataType::String,
+    });
+    let in_list = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Array(Int64Type::from_data(vec![1i64, 5, 9])),
+        data_type: DataType::Array(Box::new(DataType::Number(NumberDataType::Int64))),
+    });
+    let eq = check_function(None, "eq", &[], &[site_code, target], &BUILTIN_FUNCTIONS).unwrap();
+    let contains = check_function(
+        None,
+        "contains",
+        &[],
+        &[in_list, account],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+    let expr = check_function(
+        None,
+        "and_filters",
+        &[],
+        &[eq, contains],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    let index =
+        RangeIndex::try_create(func_ctx, &expr, schema.clone(), Default::default()).unwrap();
+
+    let site_code_id = schema.leaf_columns_of(&"site_code".to_string())[0];
+    let account_id = schema.leaf_columns_of(&"account".to_string())[0];
+    let make_stats = |site_min: &str, site_max: &str, account_min: i64, account_max: i64| {
+        let mut stats = StatisticsOfColumns::default();
+        stats.insert(
+            site_code_id,
+            ColumnStatistics::new(
+                Scalar::String(site_min.to_string()),
+                Scalar::String(site_max.to_string()),
+                0,
+                0,
+                None,
+            ),
+        );
+        stats.insert(
+            account_id,
+            ColumnStatistics::new(
+                Scalar::Number(account_min.into()),
+                Scalar::Number(account_max.into()),
+                0,
+                0,
+                None,
+            ),
+        );
+        stats
+    };
+
+    // Pruned by the first conjunct: '2815' is outside [3000, 3100].
+    let stats = make_stats("3000", "3100", 0, 100);
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    // Kept: both conjuncts overlap the block ranges.
+    let stats = make_stats("2800", "2900", 0, 100);
+    assert!(index.apply(&stats, None, None, |_| false).unwrap());
+    // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
+    let stats = make_stats("2800", "2900", 1000, 2000);
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+}
+
+#[test]
+fn test_range_index_rewrites_candidates_nested_under_and() {
+    // The rewrite candidates sit below `and`; the candidate detection must
+    // find them so the rewrite pass still runs and prunes the block.
+    fn n(n: i32) -> Scalar {
+        Scalar::Number(n.into())
+    }
+
+    let fields = vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
+    ];
+    let schema = Arc::new(TableSchema::new(fields));
+    let stats = create_stats(&[("a", n(-2), n(3)), ("b", n(-2), n(3))], &schema);
+    let columns = [("a", Int32Type::data_type()), ("b", Int32Type::data_type())];
+
+    // `a = '4'` rewrites to `a = 4`, which is outside [-2, 3].
+    for text in ["b = 1 and a = '4'", "b = 1 and to_string(a) = '4'"] {
+        let expr = parse_expr(text, &columns);
+        let index = RangeIndex::try_create(
+            FunctionContext::default(),
+            &expr,
+            schema.clone(),
+            Default::default(),
+        )
+        .unwrap();
+        assert!(
+            !index.apply(&stats, None, None, |_| false).unwrap(),
+            "{text} should prune the block"
+        );
+    }
+}
+
+#[test]
+fn test_range_index_int_column_string_literal_with_contains() {
+    // Production shape: Int32 `site_code` compared against a String literal
+    // (a cast-elimination rewrite candidate, hoisted at creation) combined
+    // with `contains` over an in-list.
+    fn n(n: i32) -> Scalar {
+        Scalar::Number(n.into())
+    }
+
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("site_code", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("account", TableDataType::Number(NumberDataType::Int64)),
+    ]));
+
+    let site_code = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "site_code".to_string(),
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "site_code".to_string(),
+    });
+    let account = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "account".to_string(),
+        data_type: DataType::Number(NumberDataType::Int64),
+        display_name: "account".to_string(),
+    });
+    let target = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::String("2815".to_string()),
+        data_type: DataType::String,
+    });
+    let in_list = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Array(Int64Type::from_data(vec![1i64, 5, 9])),
+        data_type: DataType::Array(Box::new(DataType::Number(NumberDataType::Int64))),
+    });
+    let eq = check_function(None, "eq", &[], &[site_code, target], &BUILTIN_FUNCTIONS).unwrap();
+    let contains = check_function(
+        None,
+        "contains",
+        &[],
+        &[in_list, account],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+    let expr = check_function(
+        None,
+        "and_filters",
+        &[],
+        &[eq, contains],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    let index =
+        RangeIndex::try_create(func_ctx, &expr, schema.clone(), Default::default()).unwrap();
+
+    let site_code_id = schema.leaf_columns_of(&"site_code".to_string())[0];
+    let account_id = schema.leaf_columns_of(&"account".to_string())[0];
+    let make_stats = |site_min: i32, site_max: i32, account_min: i64, account_max: i64| {
+        let mut stats = StatisticsOfColumns::default();
+        stats.insert(
+            site_code_id,
+            ColumnStatistics::new(n(site_min), n(site_max), 0, 0, None),
+        );
+        stats.insert(
+            account_id,
+            ColumnStatistics::new(
+                Scalar::Number(account_min.into()),
+                Scalar::Number(account_max.into()),
+                0,
+                0,
+                None,
+            ),
+        );
+        stats
+    };
+
+    // Pruned by the first conjunct: 2815 is outside [3000, 3100].
+    let stats = make_stats(3000, 3100, 0, 100);
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+    // Kept: both conjuncts overlap the block ranges.
+    let stats = make_stats(2800, 2900, 0, 100);
+    assert!(index.apply(&stats, None, None, |_| false).unwrap());
+    // Pruned by the second conjunct: [1000, 2000] misses every in-list value.
+    let stats = make_stats(2800, 2900, 1000, 2000);
+    assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
 #[test]
@@ -441,7 +825,7 @@ fn run_text_with_schema(
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(&stats, None, |_| false) {
+    match index.apply(&stats, None, None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -488,7 +872,7 @@ fn run_text(file: &mut impl Write, text: &str, domains: &[(&str, Scalar, Scalar)
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(&stats, None, |_| false) {
+    match index.apply(&stats, None, None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -519,7 +903,7 @@ fn run_text_spatial(
     writeln!(file, "expr      : {expr}").unwrap();
     writeln!(file, "spatial   : {spatial_stats:?}").unwrap();
 
-    match index.apply(&stats, spatial_stats.as_ref(), |_| false) {
+    match index.apply(&stats, spatial_stats.as_ref(), None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }

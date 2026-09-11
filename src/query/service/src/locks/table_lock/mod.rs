@@ -21,16 +21,19 @@ use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::LockGuard;
 
-use crate::locks::LockManager;
+use crate::locks::CoordinationManager;
 use crate::sessions::TableContext;
 
-pub struct TableLock {
-    lock_mgr: Arc<LockManager>,
+pub(super) struct TableLock {
+    lock_mgr: Arc<CoordinationManager>,
     table_info: TableInfo,
 }
 
 impl TableLock {
-    pub fn create(lock_mgr: Arc<LockManager>, table_info: TableInfo) -> Arc<dyn Lock> {
+    pub(super) fn create(
+        lock_mgr: Arc<CoordinationManager>,
+        table_info: TableInfo,
+    ) -> Arc<dyn Lock> {
         Arc::new(TableLock {
             lock_mgr,
             table_info,
@@ -49,15 +52,13 @@ impl Lock for TableLock {
         ctx: Arc<dyn TableContext>,
         should_retry: bool,
     ) -> Result<Option<Arc<LockGuard>>> {
-        let tenant = ctx.get_tenant();
-        let table_id = self.table_info.ident.table_id;
         let lock_key = LockKey::Table {
-            tenant: tenant.clone(),
-            table_id,
+            tenant: ctx.get_tenant(),
+            table_id: self.table_info.ident.table_id,
         };
         let catalog = self.table_info.catalog();
         self.lock_mgr
-            .try_lock(ctx, lock_key, catalog, should_retry)
+            .try_table_lock(ctx, lock_key, catalog, should_retry)
             .await
     }
 }

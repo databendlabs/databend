@@ -34,6 +34,8 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use chrono::Utc;
+use chrono_tz::Tz;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
@@ -156,8 +158,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
 use log::warn;
@@ -168,7 +168,7 @@ use tokio::sync::Semaphore;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
-use crate::locks::LockManager;
+use crate::locks::CoordinationManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -529,6 +529,10 @@ impl QueryContext {
 
     pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
         self.shared.set_executor(weak_ptr)
+    }
+
+    pub(crate) fn kill<C>(&self, cause: ErrorCode<C>) {
+        self.shared.kill(cause)
     }
 
     pub fn attach_stage(&self, attachment: StageAttachment) {

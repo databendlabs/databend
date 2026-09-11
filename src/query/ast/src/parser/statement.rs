@@ -1413,20 +1413,30 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let optimize_table = map(
-        rule! {
-            OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, (catalog, database, table), action, opt_limit)| {
-            Statement::OptimizeTable(OptimizeTableStmt {
-                catalog,
-                database,
-                table,
-                action,
-                limit: opt_limit.map(|(_, limit)| limit),
-            })
-        },
-    );
+    let optimize_table = alt((
+        map(
+            rule! {
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ PURGE
+            },
+            |(_, _, (database, table), _)| {
+                Statement::VacuumTable(VacuumTableStmt { database, table })
+            },
+        ),
+        map(
+            rule! {
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+            },
+            |(_, _, (database, table), action, opt_limit)| {
+                Statement::OptimizeTable(OptimizeTableStmt {
+                    catalog: None,
+                    database,
+                    table,
+                    action,
+                    limit: opt_limit.map(|(_, limit)| limit),
+                })
+            },
+        ),
+    ));
     let vacuum_temp_files = map(
         rule! {
             VACUUM ~ TEMPORARY ~ FILES ~ (RETAIN ~ #literal_duration)? ~ (LIMIT ~ #literal_u64)?
@@ -1440,30 +1450,40 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let vacuum_table = map(
         rule! {
-            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #vacuum_table_option
+            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_2
         },
-        |(_, _, (catalog, database, table), option)| {
-            Statement::VacuumTable(VacuumTableStmt {
-                catalog,
-                database,
-                table,
-                option,
+        |(_, _, (database, table))| Statement::VacuumTable(VacuumTableStmt { database, table }),
+    );
+    let vacuum_tables = map(
+        rule! {
+            VACUUM ~ TABLES ~ (FROM ~ ^#ident)?
+        },
+        |(_, _, database)| {
+            Statement::VacuumTables(VacuumTablesStmt {
+                database: database.map(|(_, database)| database),
             })
         },
     );
+    let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
         },
-        |(_, _, _, database_option, option)| {
-            let (catalog, database) = database_option.map_or_else(
-                || (None, None),
-                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
-            );
+        |(_, _, _, database_option)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
-                catalog,
-                database,
-                option,
+                database: database_option.map(|(_, database)| database),
+            })
+        },
+    );
+    let dropped_keyword = match_ident_text("DROPPED");
+    let objects_keyword = match_ident_text("OBJECTS");
+    let vacuum_dropped_objects = map(
+        rule! {
+            VACUUM ~ #dropped_keyword ~ #objects_keyword ~ (FROM ~ ^#ident)?
+        },
+        |(_, _, _, database_option)| {
+            Statement::VacuumDropTable(VacuumDropTableStmt {
+                database: database_option.map(|(_, database)| database),
             })
         },
     );
@@ -1827,13 +1847,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let refresh_materialized_view = map(
         rule! {
-            REFRESH ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3
+            REFRESH ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, _, (catalog, database, view))| {
+        |(_, _, _, (catalog, database, view), limit)| {
             Statement::RefreshMaterializedView(RefreshMaterializedViewStmt {
                 catalog,
                 database,
                 view,
+                limit: limit.map(|(_, value)| value),
             })
         },
     );
@@ -1873,53 +1894,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 limit,
-            })
-        },
-    );
-
-    let create_index = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ ASYNC?
-            ~ AGGREGATING ~ INDEX
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident
-            ~ AS ~ #query
-        },
-        |(_, opt_or_replace, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateIndex(CreateIndexStmt {
-                index_type: TableIndexType::Aggregating,
-                create_option,
-                index_name,
-                query: Box::new(query),
-                sync_creation: opt_async.is_none(),
-            }))
-        },
-    );
-
-    let drop_index = map(
-        rule! {
-            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
-        },
-        |(_, _, _, opt_if_exists, index)| {
-            Statement::DropIndex(DropIndexStmt {
-                if_exists: opt_if_exists.is_some(),
-                index,
-            })
-        },
-    );
-
-    let refresh_index = map(
-        rule! {
-            REFRESH ~ AGGREGATING ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, _, index, opt_limit)| {
-            Statement::RefreshIndex(RefreshIndexStmt {
-                index,
-                limit: opt_limit.map(|(_, limit)| limit),
             })
         },
     );
@@ -2545,18 +2519,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
         },
         |(_, name, _, args, _)| Statement::Call(CallStmt { name, args }),
-    );
-
-    let vacuum_temporary_tables = map(
-        rule! {
-            VACUUM ~ TEMPORARY ~ TABLES ~ ( LIMIT ~ ^#literal_u64 )?
-        },
-        |(_, _, _, opt_limit)| {
-            Statement::Call(CallStmt {
-                name: Identifier::from_name(None, "fuse_vacuum_temporary_table"),
-                args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
-            })
-        },
     );
 
     let presign = map(
@@ -3234,14 +3196,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (PURGE | COMPACT [SEGMENT])`"
             ).parse(i),
         VACUUM => rule!(
-            #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            #vacuum_all : "`VACUUM ALL`"
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #vacuum_tables : "`VACUUM TABLES [FROM <database>]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table>`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM <database>]`"
+            | #vacuum_dropped_objects : "`VACUUM DROPPED OBJECTS [FROM <database>]`"
             | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
-            | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             ).parse(i),
@@ -3255,8 +3219,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ).parse(i),
         REFRESH => rule!(
             #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
-            | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view>`"
-            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view> [LIMIT <rows>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),
@@ -3324,7 +3287,6 @@ AS
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
                 | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] [CLUSTER BY [LINEAR] (...)] [COMMENT = '<string_literal>'] AS SELECT ...`"
-                | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
             | (
@@ -3374,7 +3336,6 @@ AS
                 | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
                 | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
                 | #drop_materialized_view : "`DROP MATERIALIZED VIEW [IF EXISTS] [<database>.]<view>`"
-                | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
                 | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             )
             | (
@@ -5517,20 +5478,11 @@ pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
-    alt((
-        value(OptimizeTableAction::All, rule! { ALL }),
-        map(
-            rule! { PURGE ~ (BEFORE ~ ^#travel_point)? },
-            |(_, opt_travel_point)| OptimizeTableAction::Purge {
-                before: opt_travel_point.map(|(_, p)| p),
-            },
-        ),
-        map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
-            OptimizeTableAction::Compact {
-                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-            }
-        }),
-    ))
+    map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
+        OptimizeTableAction::Compact {
+            target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+        }
+    })
     .parse(i)
 }
 
@@ -5553,31 +5505,6 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
         #days
         | #seconds
     )
-    .parse(i)
-}
-
-pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
-    alt((map(
-        rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
-        },
-        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
-            limit: opt_limit.map(|(_, limit)| limit as usize),
-        },
-    ),))
-    .parse(i)
-}
-
-pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
-    alt((map(
-        rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)?
-        },
-        |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
-        },
-    ),))
     .parse(i)
 }
 
@@ -6021,7 +5948,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Iceberg, rule! { ICEBERG }),
         value(Engine::Delta, rule! { DELTA }),
         value(Engine::Paimon, rule! { PAIMON }),
-        value(Engine::Proxy, rule! { PROXY }),
     ));
 
     map(
