@@ -1974,10 +1974,7 @@ mod tests {
             &operator,
             &settings,
             granule.mins.as_ref().unwrap(),
-            &[
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-                DataType::Nullable(Box::new(DataType::String)),
-            ],
+            2,
             3,
         )
         .unwrap()

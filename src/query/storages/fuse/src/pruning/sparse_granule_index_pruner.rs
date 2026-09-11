@@ -172,7 +172,7 @@ impl SparseGranuleIndexPruner {
             &self.dal,
             &self.read_settings,
             mins_layout,
-            &self.cluster_key_types,
+            self.cluster_key_types.len(),
             num_granules,
             lock_stats,
         )?;

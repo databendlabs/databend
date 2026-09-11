@@ -537,19 +537,15 @@ impl PrefetchedGranuleMarkArrays {
         settings: &ReadSettings,
         layout: &GranuleIndexFileLayout,
         names: &[String],
-        data_types: &[DataType],
         num_rows: usize,
         lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
-        if names.len() != data_types.len() {
-            return Err(ErrorCode::Internal("granule mark names and types differ"));
-        }
         let cache = CacheManager::instance().get_table_data_array_cache();
         let mut columns = Vec::with_capacity(names.len());
         let mut misses = Vec::new();
 
-        for (name, data_type) in names.iter().zip(data_types) {
-            let cache_entry = Self::cache_entry(layout, name, &data_type.to_string());
+        for name in names {
+            let cache_entry = Self::cache_entry(layout, name);
             let array = Self::find_cached_array(&cache, &cache_entry, num_rows);
             if array.is_none() {
                 misses.push(name.clone());
@@ -569,22 +565,19 @@ impl PrefetchedGranuleMarkArrays {
         })
     }
 
-    fn cache_entry(
-        layout: &GranuleIndexFileLayout,
-        name: &str,
-        data_type: &str,
-    ) -> Option<MarkArrayCacheEntry> {
+    fn cache_entry(layout: &GranuleIndexFileLayout, name: &str) -> Option<MarkArrayCacheEntry> {
         let byte_ranges = layout.columns.get(name)?;
         if byte_ranges.len() != 1 {
             return None;
         }
         let byte_range = byte_ranges[0];
-        let key = TableDataCacheKey::new(
+        // TODO: Coordinate metadata-only cluster-key type changes with cluster IDs.
+        // Until then, reusing cached mins across a Decimal precision change is unsupported.
+        let key = TableDataCacheKey::new_no_type(
             &layout.location.0,
             0,
             byte_range.offset,
             byte_range.len,
-            data_type,
         );
         Some((key, byte_range.len))
     }
@@ -714,7 +707,6 @@ impl GranulePruningReadContext {
             settings,
             layout,
             &unique_names,
-            &vec![DataType::Number(NumberDataType::UInt64); unique_names.len()],
             num_granules,
             lock_stats,
         )?;
@@ -775,25 +767,21 @@ impl PrefetchedGranuleMins {
         dal: &Operator,
         settings: &ReadSettings,
         layout: &GranuleIndexFileLayout,
-        element_types: &[DataType],
+        num_keys: usize,
         num_granules: usize,
     ) -> Result<Self> {
-        Self::prefetch_with_stats(dal, settings, layout, element_types, num_granules, None)
+        Self::prefetch_with_stats(dal, settings, layout, num_keys, num_granules, None)
     }
 
     pub(crate) fn prefetch_with_stats(
         dal: &Operator,
         settings: &ReadSettings,
         layout: &GranuleIndexFileLayout,
-        element_types: &[DataType],
+        num_keys: usize,
         num_granules: usize,
         lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
-        let data_types = element_types
-            .iter()
-            .map(DataType::wrap_nullable)
-            .collect::<Vec<_>>();
-        let names = (0..element_types.len())
+        let names = (0..num_keys)
             .map(|index| format!("{}{}", GRANULE_INDEX_MIN_COL_PREFIX, index))
             .collect::<Vec<_>>();
         let arrays = PrefetchedGranuleMarkArrays::prefetch(
@@ -801,7 +789,6 @@ impl PrefetchedGranuleMins {
             settings,
             layout,
             &names,
-            &data_types,
             num_granules,
             lock_stats,
         )?;
@@ -908,7 +895,6 @@ impl OffsetsIndex {
             settings,
             layout,
             &names,
-            &vec![DataType::Number(NumberDataType::UInt64); names.len()],
             num_granules,
             lock_stats,
         )?;
@@ -1090,16 +1076,11 @@ mod tests {
         let layout = state.layout();
 
         let element_types = vec![DataType::Number(NumberDataType::Int64)];
-        let mins = PrefetchedGranuleMins::prefetch(
-            &op,
-            &settings,
-            layout.mins.as_ref().unwrap(),
-            &element_types,
-            3,
-        )
-        .unwrap()
-        .read(&element_types)
-        .unwrap();
+        let mins =
+            PrefetchedGranuleMins::prefetch(&op, &settings, layout.mins.as_ref().unwrap(), 1, 3)
+                .unwrap()
+                .read(&element_types)
+                .unwrap();
         assert_eq!(mins.into_scalars(), granule_mins);
 
         let mut col_metas = HashMap::new();
@@ -1186,13 +1167,7 @@ mod tests {
         let reads = layouts
             .iter()
             .map(|layout| {
-                PrefetchedGranuleMins::prefetch(
-                    &op,
-                    &settings,
-                    layout.mins.as_ref().unwrap(),
-                    &element_types,
-                    2,
-                )
+                PrefetchedGranuleMins::prefetch(&op, &settings, layout.mins.as_ref().unwrap(), 1, 2)
             })
             .collect::<Result<Vec<_>>>()
             .unwrap();
@@ -1224,7 +1199,7 @@ mod tests {
             &op,
             &test_settings(),
             state.layout().mins.as_ref().unwrap(),
-            std::slice::from_ref(&element_type),
+            1,
             2,
         )
         .unwrap()
@@ -1373,21 +1348,16 @@ mod tests {
             size: 56,
             columns: HashMap::from([("m0".to_string(), vec![byte_range])]),
         };
-        assert!(PrefetchedGranuleMarkArrays::cache_entry(&layout, "m0", "UInt64").is_some());
-        let narrow =
-            PrefetchedGranuleMarkArrays::cache_entry(&layout, "m0", "Decimal(10, 2)").unwrap();
-        let wide =
-            PrefetchedGranuleMarkArrays::cache_entry(&layout, "m0", "Decimal(15, 2)").unwrap();
-        assert_ne!(narrow.0.as_ref(), wide.0.as_ref());
+        assert!(PrefetchedGranuleMarkArrays::cache_entry(&layout, "m0").is_some());
         layout
             .columns
             .insert("m1".to_string(), vec![byte_range, BytesRange {
                 offset: 32,
                 len: 24,
             }]);
-        assert!(PrefetchedGranuleMarkArrays::cache_entry(&layout, "m1", "UInt64").is_none());
+        assert!(PrefetchedGranuleMarkArrays::cache_entry(&layout, "m1").is_none());
 
-        let key = TableDataCacheKey::new(location, 0, byte_range.offset, byte_range.len, "UInt64");
+        let key = TableDataCacheKey::new_no_type(location, 0, byte_range.offset, byte_range.len);
         let cache_entry = Some((key.clone(), byte_range.len));
         let array: ArrayRef = Arc::new(UInt64Array::from(vec![1, 2, 3]));
         cache
