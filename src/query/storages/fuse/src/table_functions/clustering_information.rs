@@ -17,12 +17,15 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
+use databend_common_base::runtime::JoinHandle;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::parse_table_name;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -40,9 +43,15 @@ use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::VariableRowConverter;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::parse_cluster_keys;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::read_cluster_stats;
+use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use jsonb::Value as JsonbValue;
 use log::info;
 use serde::Deserialize;
@@ -52,6 +61,7 @@ use crate::FuseTable;
 use crate::Table;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::PreparedClusterKeyExpr;
 use crate::statistics::cluster_key_types_for_depth;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::hilbert_bounds_for_diagnostics;
@@ -207,6 +217,36 @@ struct CollectedMetadata {
     constant_block_count: u64,
 }
 
+impl CollectedMetadata {
+    fn new(key_types: Vec<DataType>, block_count: usize) -> Self {
+        let endpoint_builders = (!key_types.is_empty()).then(|| {
+            key_types
+                .iter()
+                .map(|ty| ColumnBuilder::with_capacity(ty, block_count.saturating_mul(2)))
+                .collect()
+        });
+        Self {
+            key_types,
+            endpoint_builders,
+            block_count,
+            constant_block_count: 0,
+        }
+    }
+
+    fn append(&mut self, (columns, constant_block_count): SegmentEndpoints) {
+        // Every block contributes a min/max pair to each endpoint column.
+        debug_assert!(!columns.is_empty());
+        debug_assert!(columns[0].len().is_multiple_of(2));
+        self.constant_block_count += constant_block_count;
+        if let Some(builders) = self.endpoint_builders.as_mut() {
+            debug_assert_eq!(builders.len(), columns.len());
+            for (builder, column) in builders.iter_mut().zip(&columns) {
+                builder.append_column(column);
+            }
+        }
+    }
+}
+
 struct ClusteringInformationImpl<'a> {
     ctx: Arc<dyn TableContext>,
     table: &'a FuseTable,
@@ -285,80 +325,60 @@ impl ClusteringInformationImpl<'_> {
                 key_types.len()
             )));
         }
-        let capacity = snapshot.summary.block_count as usize;
+        let block_count = snapshot.summary.block_count;
         // `clustering_information` intentionally measures only the declared cluster-key domains
         // across the whole table. PARTITION BY boundaries are outside this function's metric, even
         // though pruning and recluster execution are partition-local. Changing that established
         // definition and its reported values should be handled in a separate compatibility PR.
-        let mut endpoint_builders = (!key_types.is_empty()).then(|| {
-            key_types
-                .iter()
-                .map(|ty| ColumnBuilder::with_capacity(ty, capacity.saturating_mul(2)))
-                .collect::<Vec<_>>()
-        });
-        let hilbert_key_id = key.default_key_id.filter(|_| key.is_hilbert);
-        let prepared_exprs =
-            prepare_cluster_key_exprs(&key.stats_exprs, self.table.schema().as_ref());
-        let segments_io = SegmentsIO::create(
-            self.ctx.clone(),
-            self.table.operator.clone(),
-            self.table.schema(),
-        );
-        let mut constant_block_count = 0u64;
-        let mut block_count = 0usize;
-        let chunk_size = self.ctx.get_settings().get_max_threads()?.max(1) as usize * 4;
-
-        for chunk in snapshot.segments.chunks(chunk_size) {
-            let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
-                .await?;
-            for segment in segments {
-                let segment = segment?;
-                for block in segment.blocks {
-                    block_count += 1;
-                    if let Some(cluster_key_id) = hilbert_key_id {
-                        let bounds = hilbert_bounds_for_diagnostics(
-                            &prepared_exprs,
-                            &block.col_stats,
-                            block.cluster_stats.as_ref(),
-                            cluster_key_id,
-                        );
-                        constant_block_count +=
-                            u64::from(bounds[0] == bounds[1] && bounds[2] == bounds[3]);
-                        let builders = endpoint_builders.as_mut().ok_or_else(|| {
-                            ErrorCode::Internal(
-                                "Hilbert clustering information has no endpoint columns"
-                                    .to_string(),
-                            )
-                        })?;
-                        builders[0].push(bounds[0].as_ref());
-                        builders[0].push(bounds[1].as_ref());
-                        builders[1].push(bounds[2].as_ref());
-                        builders[1].push(bounds[3].as_ref());
-                    } else if let Some(builders) = endpoint_builders.as_mut() {
-                        let (min, max) = get_min_max_stats(
-                            &prepared_exprs,
-                            &block.col_stats,
-                            block.cluster_stats.as_ref(),
-                            key.default_key_id,
-                        );
-                        debug_assert_eq!(min.len(), max.len());
-                        constant_block_count += u64::from(min == max);
-                        push_endpoint(builders, &min);
-                        push_endpoint(builders, &max);
-                    } else {
-                        constant_block_count += 1;
-                    }
-                }
-            }
+        let mut metadata = CollectedMetadata::new(key_types.clone(), block_count as usize);
+        if key_types.is_empty() {
+            // With no scalar key domains, every block is constant. Snapshot counts suffice;
+            // there are no endpoints to collect, so skip segment IO and worker creation.
+            metadata.constant_block_count = block_count;
+            return Ok(metadata);
         }
-
-        Ok(CollectedMetadata {
-            key_types,
-            endpoint_builders,
-            block_count,
-            constant_block_count,
-        })
+        let is_hilbert = key.is_hilbert;
+        let cluster_key_id = key.default_key_id;
+        let prepared_exprs = Arc::new(prepare_cluster_key_exprs(
+            &key.stats_exprs,
+            self.table.schema().as_ref(),
+        ));
+        let threads = self.ctx.get_settings().get_max_threads()?.max(1) as usize;
+        // One request-scoped runtime; no per-batch startup or batch-wide completion barrier.
+        let runtime = Runtime::with_worker_threads(threads, Some("clustering-metadata".into()))?;
+        // Abort outstanding tasks on error/cancellation before dropping the runtime.
+        let mut tasks = MetadataTasks::default();
+        let max_in_flight = threads * 2;
+        let mut locations = snapshot.segments.iter();
+        let key_types = Arc::new(key_types);
+        loop {
+            self.ctx
+                .check_aborting()
+                .map_err(|err| err.with_context("failed to collect clustering metadata"))?;
+            while tasks.pending.len() < max_in_flight {
+                let Some(location) = locations.next() else {
+                    break;
+                };
+                let location = location.clone();
+                let operator = self.table.operator.clone();
+                let schema = self.table.schema();
+                let types = key_types.clone();
+                let exprs = prepared_exprs.clone();
+                tasks.pending.push(runtime.spawn(async move {
+                    let segment =
+                        SegmentsIO::read_compact_segment(operator, location, schema, true).await?;
+                    collect_segment_endpoints(&segment, &types, &exprs, cluster_key_id, is_hilbert)
+                }));
+            }
+            let Some(result) = tasks.pending.next().await else {
+                break;
+            };
+            let segment = result.map_err(|e| {
+                ErrorCode::Internal(format!("clustering metadata task failed: {e}"))
+            })??;
+            metadata.append(segment);
+        }
+        Ok(metadata)
     }
 
     fn build_hilbert_response(
@@ -451,6 +471,10 @@ impl ClusteringInformationImpl<'_> {
                 constant_block_count,
                 average_overlaps: rounded_average(aggregate.sum_overlap, aggregate.block_count),
                 average_depth: rounded_average(aggregate.sum_depth, aggregate.block_count),
+                max_depth: aggregate
+                    .depth_counts
+                    .last_key_value()
+                    .map_or(0, |(&depth, _)| depth),
                 p95_depth: percentile_depth(&aggregate.depth_counts, aggregate.block_count, 95),
                 p99_depth: percentile_depth(&aggregate.depth_counts, aggregate.block_count, 99),
                 block_depth_histogram: {
@@ -469,13 +493,14 @@ impl ClusteringInformationImpl<'_> {
             }
         };
         info!(
-            "clustering_information: finished table={} cluster_type={} blocks={} constant_blocks={} average_overlaps={} average_depth={} p95_depth={} p99_depth={} calculation_elapsed={:?} total_elapsed={:?}",
+            "clustering_information: finished table={} cluster_type={} blocks={} constant_blocks={} average_overlaps={} average_depth={} max_depth={} p95_depth={} p99_depth={} calculation_elapsed={:?} total_elapsed={:?}",
             self.table.table_info.desc,
             cluster_type,
             info.total_block_count,
             info.constant_block_count,
             info.average_overlaps,
             info.average_depth,
+            info.max_depth,
             info.p95_depth,
             info.p99_depth,
             calculation_start.elapsed(),
@@ -512,16 +537,16 @@ impl ClusteringInformationImpl<'_> {
                 info,
             });
         };
+        let total_block_count = snapshot.summary.block_count;
         let timestamp = snapshot.timestamp.unwrap_or(now).timestamp_micros();
         info!(
             "clustering_information: started table={} cluster_type={} segments={} blocks={}",
             self.table.table_info.desc,
             cluster_type,
             snapshot.segments.len(),
-            snapshot.summary.block_count,
+            total_block_count,
         );
 
-        let total_block_count = snapshot.summary.block_count;
         let metadata_start = Instant::now();
         let metadata = self.collect_metadata(&snapshot, &key).await?;
         info!(
@@ -537,6 +562,92 @@ impl ClusteringInformationImpl<'_> {
             self.build_linear_response(key, timestamp, total_block_count, metadata, total_start)
         }
     }
+}
+
+// Endpoint columns and constant block count.
+type SegmentEndpoints = (Vec<Column>, u64);
+
+#[derive(Default)]
+struct MetadataTasks {
+    pending: FuturesUnordered<JoinHandle<Result<SegmentEndpoints>>>,
+}
+
+impl Drop for MetadataTasks {
+    fn drop(&mut self) {
+        for task in self.pending.iter() {
+            task.abort();
+        }
+    }
+}
+
+fn collect_segment_endpoints(
+    segment: &CompactSegmentInfo,
+    key_types: &[DataType],
+    prepared_exprs: &[PreparedClusterKeyExpr],
+    cluster_key_id: Option<u32>,
+    is_hilbert: bool,
+) -> Result<SegmentEndpoints> {
+    debug_assert!(!key_types.is_empty());
+    let mut builders = key_types
+        .iter()
+        .map(|ty| ColumnBuilder::with_capacity(ty, segment.summary.block_count as usize * 2))
+        .collect::<Vec<_>>();
+    let mut constant_block_count = 0;
+    let projected = match cluster_key_id {
+        Some(id) => read_cluster_stats(segment, id)?,
+        _ => None,
+    };
+    // Match hilbert_bounds_for_diagnostics before appending any endpoints. Invalid or
+    // prefixed bounds must use column-domain inference, not truncate to the first two values.
+    let projected = projected.filter(|stats| {
+        !is_hilbert
+            || stats.iter().all(|stats| {
+                stats.min().len() == HILBERT_CLUSTER_DIMENSIONS
+                    && stats.max().len() == HILBERT_CLUSTER_DIMENSIONS
+                    && valid_cluster_stats_hilbert_minmax(stats, HILBERT_CLUSTER_DIMENSIONS)
+                        .is_some()
+            })
+    });
+    if let Some(stats) = projected {
+        for stats in stats {
+            constant_block_count += u64::from(stats.min() == stats.max());
+            push_endpoint(&mut builders, stats.min());
+            push_endpoint(&mut builders, stats.max());
+        }
+    } else {
+        // Custom keys, stale/missing statistics and legacy positional encoding retain the
+        // existing domain inference. Full metadata is released on this worker, not the consumer.
+        let segment = SegmentInfo::try_from(segment)?;
+        for block in segment.blocks {
+            if let (true, Some(id)) = (is_hilbert, cluster_key_id) {
+                let bounds = hilbert_bounds_for_diagnostics(
+                    prepared_exprs,
+                    &block.col_stats,
+                    block.cluster_stats.as_ref(),
+                    id,
+                );
+                constant_block_count += u64::from(bounds[0] == bounds[1] && bounds[2] == bounds[3]);
+                builders[0].push(bounds[0].as_ref());
+                builders[0].push(bounds[1].as_ref());
+                builders[1].push(bounds[2].as_ref());
+                builders[1].push(bounds[3].as_ref());
+            } else {
+                let (min, max) = get_min_max_stats(
+                    prepared_exprs,
+                    &block.col_stats,
+                    block.cluster_stats.as_ref(),
+                    cluster_key_id,
+                );
+                constant_block_count += u64::from(min == max);
+                push_endpoint(&mut builders, &min);
+                push_endpoint(&mut builders, &max);
+            }
+        }
+    }
+    Ok((
+        builders.into_iter().map(ColumnBuilder::build).collect(),
+        constant_block_count,
+    ))
 }
 
 fn push_endpoint(builders: &mut [ColumnBuilder], endpoint: &[Scalar]) {
@@ -682,6 +793,7 @@ struct LinearClusterStatistics {
     constant_block_count: u64,
     average_overlaps: f64,
     average_depth: f64,
+    max_depth: usize,
     p95_depth: usize,
     p99_depth: usize,
     block_depth_histogram: BTreeMap<String, u64>,

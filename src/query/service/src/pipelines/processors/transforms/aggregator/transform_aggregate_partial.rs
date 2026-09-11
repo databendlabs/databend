@@ -16,10 +16,8 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
-use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
@@ -177,12 +175,6 @@ impl TransformPartialAggregate {
 
     #[inline(always)]
     fn execute_one_block(&mut self, block: DataBlock) -> Result<()> {
-        let is_agg_index_block = block
-            .get_meta()
-            .and_then(AggIndexMeta::downcast_ref_from)
-            .map(|index| index.is_agg)
-            .unwrap_or_default();
-
         let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
         let block_bytes = block.memory_size();
@@ -195,33 +187,11 @@ impl TransformPartialAggregate {
                     unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out")
                 }
                 HashTable::AggregateHashTable(hashtable) => {
-                    let (params_columns, states_index) = if is_agg_index_block {
-                        let num_columns = block.num_columns();
-                        let states_count = self
-                            .params
-                            .states_layout
-                            .as_ref()
-                            .map(|layout| layout.num_aggr_func())
-                            .unwrap_or(0);
-                        (
-                            vec![],
-                            (num_columns - states_count..num_columns).collect::<Vec<_>>(),
-                        )
-                    } else {
-                        (
-                            Self::aggregate_arguments(
-                                &block,
-                                &self.params.aggregate_functions_arguments,
-                            ),
-                            vec![],
-                        )
-                    };
-
-                    let agg_states = if !states_index.is_empty() {
-                        ProjectedBlock::project(&states_index, &block)
-                    } else {
-                        (&[]).into()
-                    };
+                    let params_columns = Self::aggregate_arguments(
+                        &block,
+                        &self.params.aggregate_functions_arguments,
+                    );
+                    let agg_states = (&[]).into();
 
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,

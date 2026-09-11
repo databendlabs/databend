@@ -149,7 +149,6 @@ use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeCompactSegmentPlan;
-use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
@@ -204,8 +203,10 @@ use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
+use crate::plans::VacuumAllPlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::plans::VacuumVirtualColumnPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -332,6 +333,8 @@ pub enum Plan {
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
+    VacuumTables(Box<VacuumTablesPlan>),
+    VacuumAll(Box<VacuumAllPlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
     VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
@@ -349,11 +352,9 @@ pub enum Plan {
     DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
-    OptimizePurge(Box<OptimizePurgePlan>),
     OptimizeCompactSegment(Box<OptimizeCompactSegmentPlan>),
     OptimizeCompactBlock {
         s_expr: Box<SExpr>,
-        need_purge: bool,
     },
 
     // Insert
@@ -575,7 +576,6 @@ impl Plan {
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
             | Plan::DataMutation { .. }
-            | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
             _ => QueryKind::Other,
@@ -615,6 +615,8 @@ impl Plan {
             Plan::ShowCreateMaterializedView(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
+            Plan::VacuumTables(plan) => plan.schema(),
+            Plan::VacuumAll(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
@@ -745,5 +747,54 @@ impl Plan {
             formatted_ast: formatted_ast.clone(),
             ignore_result: *ignore_result,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vacuum_plans_have_no_result_set() {
+        let plans = [
+            Plan::VacuumTable(Box::new(VacuumTablePlan {
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            })),
+            Plan::VacuumTables(Box::new(VacuumTablesPlan {
+                catalog: "default".to_string(),
+                database: None,
+            })),
+            Plan::VacuumAll(Box::new(VacuumAllPlan {
+                catalog: "default".to_string(),
+            })),
+            Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+                catalog: "default".to_string(),
+                database: String::new(),
+            })),
+            Plan::VacuumTemporaryFiles(Box::new(VacuumTemporaryFilesPlan {
+                limit: None,
+                retain: None,
+            })),
+        ];
+
+        for plan in plans {
+            assert!(plan.schema().fields().is_empty());
+            assert!(!plan.has_result_set());
+        }
+    }
+
+    #[test]
+    fn virtual_column_vacuum_has_removed_files_result() {
+        let plan = Plan::VacuumVirtualColumn(Box::new(VacuumVirtualColumnPlan {
+            catalog: "default".to_string(),
+            database: "default".to_string(),
+            table: "t".to_string(),
+        }));
+
+        assert_eq!(plan.schema().fields().len(), 1);
+        assert_eq!(plan.schema().field(0).name(), "removed_files");
+        assert!(plan.has_result_set());
     }
 }

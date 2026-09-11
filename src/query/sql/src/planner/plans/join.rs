@@ -32,6 +32,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::Side;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -384,10 +385,11 @@ impl Join {
         &self,
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
+        stat_ctx: &StatContext,
     ) -> Result<Arc<StatInfo>> {
         let mut estimator =
             JoinStatsEstimator::new(self.join_type, left_stat_info, right_stat_info);
-        estimator.evaluate_join(self)?;
+        estimator.evaluate_join(self, &stat_ctx.function_context)?;
         estimator.finish()
     }
 
@@ -558,10 +560,10 @@ impl Operator for Join {
         }
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let left_stat_info = rel_expr.derive_cardinality_child(0)?;
-        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
+        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx)?;
         Ok(stat_info)
     }
 
@@ -589,8 +591,9 @@ impl Operator for Join {
                 return Ok(required);
             }
 
-            let left_cardinality = rel_expr.derive_cardinality_child(0)?.cardinality;
-            let right_cardinality = rel_expr.derive_cardinality_child(1)?.cardinality;
+            let stat_ctx = StatContext::new(ctx.get_function_context()?);
+            let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
+            let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
             let broadcast_child = if left_cardinality <= right_cardinality {
                 0
             } else {
@@ -631,8 +634,9 @@ impl Operator for Join {
                 | JoinType::RightAsof
                 | JoinType::FullAsof
         ) {
-            let left_stat_info = rel_expr.derive_cardinality_child(0)?;
-            let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+            let stat_ctx = StatContext::new(ctx.get_function_context()?);
+            let left_stat_info = rel_expr.derive_cardinality_child(0, &stat_ctx)?;
+            let right_stat_info = rel_expr.derive_cardinality_child(1, &stat_ctx)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
             // where n is the number of servers in the cluster.
             let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {

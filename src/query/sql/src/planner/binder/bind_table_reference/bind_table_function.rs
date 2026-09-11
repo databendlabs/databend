@@ -311,7 +311,6 @@ impl Binder {
             table_alias_name,
             false,
             false,
-            false,
             None,
         );
         let (s_expr, mut bind_context) =
@@ -370,7 +369,6 @@ impl Binder {
                 table.clone(),
                 None,
                 table_alias_name,
-                false,
                 false,
                 false,
                 None,

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -44,6 +45,9 @@ use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 
 const DEFAULT_NON_EQUI_SELECTIVITY: f64 = 0.5;
+// Keep strongest-condition estimates until multi-condition backoff handles
+// correlated and repeated join keys without severe underestimation.
+const ENABLE_JOIN_SELECTIVITY_BACKOFF: bool = false;
 
 pub(super) struct JoinStats {
     pub(super) output_rows: f64,
@@ -235,7 +239,14 @@ impl JoinConditionEstimates {
         if estimate.matched_pair_rows < self.strongest_equi_pair_rows {
             self.strongest_equi_pair_rows = estimate.matched_pair_rows;
             self.strongest_condition_ndv = estimate.ndv;
+        } else if estimate.matched_pair_rows == self.strongest_equi_pair_rows {
+            self.strongest_condition_ndv = match (self.strongest_condition_ndv, estimate.ndv) {
+                (Some(left), Some(right)) => Some(left.min(right)),
+                (left, right) => left.or(right),
+            };
         }
+        // Pair selectivity and side coverage need not rank conditions in the
+        // same order. Collect every condition before combining each quantity.
         self.left.add_equi_matches(
             estimate.left_matched_rows,
             estimate.left_histogram_estimated_matched_rows,
@@ -343,7 +354,7 @@ impl JoinStatsEstimator {
         }
     }
 
-    pub(crate) fn evaluate_join(&mut self, join: &Join) -> Result<()> {
+    pub(crate) fn evaluate_join(&mut self, join: &Join, func_ctx: &FunctionContext) -> Result<()> {
         let left_stat_cardinality = self
             .left_input
             .statistics
@@ -365,6 +376,7 @@ impl JoinStatsEstimator {
                 &self.right_input.statistics,
                 left_stat_cardinality,
                 right_stat_cardinality,
+                func_ctx,
             )?;
             self.contributions
                 .push(JoinConditionContribution::from_equi(
@@ -396,6 +408,7 @@ impl JoinStatsEstimator {
                     &input,
                     input_cardinality,
                     &column_row_scales,
+                    func_ctx,
                 )?;
                 self.contributions
                     .push(JoinConditionContribution::from_non_equi(&evaluated));
@@ -651,10 +664,13 @@ impl JoinStatsEstimator {
             (JoinType::Full | JoinType::FullAsof, Side::Right) => left.unmatched_rows(),
             _ => 0.0,
         };
-        let combines_condition_ndv = matches!(
-            self.join_type,
-            JoinType::Inner | JoinType::InnerAny | JoinType::LeftSemi | JoinType::RightSemi
-        );
+        // Without backoff, propagate side coverage without applying an extra
+        // condition selectivity to either join keys or non-key columns.
+        let combines_condition_ndv = ENABLE_JOIN_SELECTIVITY_BACKOFF
+            && matches!(
+                self.join_type,
+                JoinType::Inner | JoinType::InnerAny | JoinType::LeftSemi | JoinType::RightSemi
+            );
         let (ndv_surviving_input_rows, residual_ndv_selectivity) =
             if !combines_condition_ndv || expression_output == ExpressionStatOutput::Input {
                 (surviving_input_rows, 1.0)
@@ -1125,6 +1141,15 @@ fn combine_condition_estimates(
 ) -> f64 {
     if estimates.is_empty() || input_cardinality <= 0.0 {
         return fallback;
+    }
+
+    if !ENABLE_JOIN_SELECTIVITY_BACKOFF {
+        return estimates
+            .iter()
+            .copied()
+            .reduce(f64::min)
+            .unwrap()
+            .clamp(0.0, input_cardinality);
     }
 
     estimates.sort_by(f64::total_cmp);

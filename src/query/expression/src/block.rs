@@ -926,19 +926,6 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project_with_agg_index(self, projections: &ColumnSet, num_evals: usize) -> Self {
-        let mut columns = Vec::with_capacity(projections.len());
-        let eval_offset = self.entries.len() - num_evals;
-        for (index, column) in self.entries.into_iter().enumerate() {
-            if !projections.contains(&index) && index < eval_offset {
-                continue;
-            }
-            columns.push(column);
-        }
-        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
-    }
-
-    #[inline]
     pub fn get_last_column(&self) -> &Column {
         self.entries.last().unwrap().as_column().unwrap()
     }

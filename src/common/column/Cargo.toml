@@ -25,11 +25,11 @@ arrow-buffer = { workspace = true }
 arrow-data = { workspace = true }
 arrow-schema = { workspace = true }
 bytemuck = { workspace = true }
+chrono = { workspace = true }
 either = { workspace = true }
 ethnum = { workspace = true }
 foreign_vec = { workspace = true }
 hex = { workspace = true }
-jiff = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }

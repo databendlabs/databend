@@ -12,9 +12,6 @@ edition = { workspace = true }
 default = []
 storage-hdfs = ["databend-common-storage/storage-hdfs"]
 
-[package.metadata.cargo-machete]
-ignored = ["strum"]
-
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }

@@ -88,6 +88,7 @@ impl ParquetTable {
             self.schema_descr.clone(),
             Some(self.arrow_schema.clone()),
             Some(self.schema_from.clone()),
+            self.schema_descr_from_arrow_fallback,
         )
         .with_options(self.read_options)
         .with_push_downs(plan.push_downs.as_ref());

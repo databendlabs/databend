@@ -18,6 +18,7 @@ use similar::TextDiff;
 
 use crate::Metadata;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::planner::format::FormatOptions;
 use crate::planner::format::MetadataIdHumanizer;
 
@@ -30,9 +31,14 @@ impl SExpr {
     ///
     /// # Returns
     /// A string containing the diff between the two SExpr instances.
-    pub fn diff(&self, other: &SExpr, metadata: &Metadata) -> Result<String> {
-        let self_str = self.pretty_format(metadata)?;
-        let other_str = other.pretty_format(metadata)?;
+    pub fn diff(
+        &self,
+        other: &SExpr,
+        metadata: &Metadata,
+        stat_context: &StatContext,
+    ) -> Result<String> {
+        let self_str = self.pretty_format(metadata, stat_context)?;
+        let other_str = other.pretty_format(metadata, stat_context)?;
 
         if self_str == other_str {
             return Ok("No differences found.".to_string());
@@ -60,9 +66,9 @@ impl SExpr {
     ///
     /// # Returns
     /// A Result containing the formatted SExpr string.
-    pub fn pretty_format(&self, metadata: &Metadata) -> Result<String> {
+    pub fn pretty_format(&self, metadata: &Metadata, stat_context: &StatContext) -> Result<String> {
         let options = FormatOptions { verbose: false };
-        let humanizer = MetadataIdHumanizer::new(metadata, options);
+        let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
         Ok(self.to_format_tree(&humanizer)?.format_pretty()?)
     }
 }

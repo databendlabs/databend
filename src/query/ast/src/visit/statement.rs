@@ -161,6 +161,8 @@ impl Walk for Statement {
             Statement::RenameTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::OptimizeTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::VacuumTable(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::VacuumTables(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::VacuumAll(_) => {}
             Statement::VacuumDropTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::VacuumTemporaryFiles(_) => {}
             Statement::VacuumVirtualColumn(stmt) => try_walk!(stmt.walk(visitor)),
@@ -187,9 +189,6 @@ impl Walk for Statement {
             Statement::DropStream(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DescribeStream(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::ShowStreams(stmt) => try_walk!(stmt.walk(visitor)),
-            Statement::CreateIndex(stmt) => try_walk!(stmt.walk(visitor)),
-            Statement::DropIndex(stmt) => try_walk!(stmt.walk(visitor)),
-            Statement::RefreshIndex(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateTableIndex(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DropTableIndex(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::RefreshTableIndex(stmt) => try_walk!(stmt.walk(visitor)),
@@ -390,6 +389,8 @@ impl WalkMut for Statement {
             Statement::RenameTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::OptimizeTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::VacuumTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::VacuumTables(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::VacuumAll(_) => {}
             Statement::VacuumDropTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::VacuumTemporaryFiles(_) => {}
             Statement::VacuumVirtualColumn(stmt) => try_walk!(stmt.walk_mut(visitor)),
@@ -416,9 +417,6 @@ impl WalkMut for Statement {
             Statement::DropStream(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DescribeStream(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::ShowStreams(stmt) => try_walk!(stmt.walk_mut(visitor)),
-            Statement::CreateIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),
-            Statement::DropIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),
-            Statement::RefreshIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateTableIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DropTableIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::RefreshTableIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),

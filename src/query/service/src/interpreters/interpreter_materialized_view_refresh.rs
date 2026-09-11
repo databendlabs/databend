@@ -76,6 +76,7 @@ impl Interpreter for RefreshMaterializedViewInterpreter {
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.view_name,
+                self.plan.max_batch_size,
             )
             .await?;
         Ok(PipelineBuildResult::create())

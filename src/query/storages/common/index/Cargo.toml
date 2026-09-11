@@ -34,7 +34,6 @@ crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
 geo = { workspace = true }
-goldenfile = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
 levenshtein_automata = { workspace = true }
@@ -66,10 +65,14 @@ databend-common-expression-test-support = { workspace = true }
 
 anyhow = { workspace = true }
 divan = { workspace = true }
-rand = { workspace = true }
+goldenfile = { workspace = true }
 
 [[bench]]
 name = "build_from_block"
+harness = false
+
+[[bench]]
+name = "range_index_apply"
 harness = false
 
 [lints]

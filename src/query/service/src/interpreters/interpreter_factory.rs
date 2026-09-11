@@ -29,8 +29,6 @@ use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_dictionary_create::CreateDictionaryInterpreter;
 use super::interpreter_dictionary_drop::DropDictionaryInterpreter;
 use super::interpreter_dictionary_show_create::ShowCreateDictionaryInterpreter;
-use super::interpreter_index_create::CreateIndexInterpreter;
-use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
@@ -491,24 +489,27 @@ impl InterpreterFactory {
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
-                ctx,
-                *purge.clone(),
-            )?)),
             Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
                 OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
-            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+            Plan::OptimizeCompactBlock { s_expr } => {
                 Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
                     ctx,
                     *s_expr.clone(),
                     LockTableOption::LockWithRetry,
-                    *need_purge,
                 )?))
             }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
+            )?)),
+            Plan::VacuumTables(vacuum_tables) => Ok(Arc::new(VacuumTablesInterpreter::try_create(
+                ctx,
+                *vacuum_tables.clone(),
+            )?)),
+            Plan::VacuumAll(vacuum_all) => Ok(Arc::new(VacuumAllInterpreter::try_create(
+                ctx,
+                *vacuum_all.clone(),
             )?)),
             Plan::VacuumDropTable(vacuum_drop_table) => Ok(Arc::new(
                 VacuumDropTablesInterpreter::try_create(ctx, *vacuum_drop_table.clone())?,
@@ -599,18 +600,6 @@ impl InterpreterFactory {
             Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
 
             // Indexes
-            Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
-            Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
-            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
             Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),

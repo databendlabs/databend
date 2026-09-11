@@ -55,6 +55,7 @@ use super::eliminate_cast::*;
 use crate::Index;
 use crate::SpatialPredicate;
 use crate::SpatialPredicateOp;
+use crate::VirtualColumnStatsOfNames;
 use crate::collect_spatial_predicates;
 use crate::rect_contains;
 use crate::rects_distance_intersect;
@@ -70,6 +71,28 @@ pub struct RangeIndex {
     // Default stats for each column if no stats are available (e.g. for new-add columns)
     default_stats: StatisticsOfColumns,
     predicates: Vec<SpatialPredicate>,
+
+    /// Per-column domain sources resolved once from the immutable expression
+    /// and schema, so that each `apply` call avoids re-walking the expression
+    /// tree and re-scanning the schema for every block.
+    column_slots: Vec<ColumnDomainSlot>,
+    /// Whether the expression contains any pattern that the cast-elimination
+    /// rewrite could apply to. When false, `apply` skips the rewrite pass.
+    has_rewrite_candidates: bool,
+}
+
+/// The precomputed domain source for one column referenced by the pruning
+/// expression.
+#[derive(Clone)]
+struct ColumnDomainSlot {
+    name: String,
+    data_type: DataType,
+    /// Leaf column ids resolved from the table schema. `None` for
+    /// internal/stream columns and virtual columns.
+    leaf_column_ids: Option<Vec<ColumnId>>,
+    /// Whether a slot without leaf IDs may consume block-local virtual-column
+    /// statistics. Internal and stream columns must always use full domains.
+    virtual_stats_eligible: bool,
 }
 
 impl RangeIndex {
@@ -83,13 +106,69 @@ impl RangeIndex {
             Some(result) => (result.expr, result.predicates),
             None => (expr.clone(), Vec::new()),
         };
-        Ok(Self {
+        Ok(Self::create_from_parts(
             expr,
             func_ctx,
             schema,
             default_stats,
             predicates,
-        })
+        ))
+    }
+
+    fn create_from_parts(
+        expr: Expr<String>,
+        func_ctx: FunctionContext,
+        schema: TableSchemaRef,
+        default_stats: StatisticsOfColumns,
+        predicates: Vec<SpatialPredicate>,
+    ) -> Self {
+        // Hoist domain-independent rewrites (e.g. `int_col = '123'` =>
+        // `int_col = 123`) out of the per-block path by running the rewrite
+        // pass once with full input domains. A rewrite accepted under full
+        // domains is valid for every block; rewrites that full domains cannot
+        // prove safe (overflow-checked cast elimination) keep their candidate
+        // pattern in the expression and are retried per block through
+        // `has_rewrite_candidates` below, so pruning results are unchanged.
+        let expr = if has_rewrite_candidates(&func_ctx, &expr) {
+            let mut full_domains = HashMap::new();
+            for (name, ty) in expr.column_refs() {
+                full_domains.insert(name, Domain::full(&ty));
+            }
+            match eliminate_cast(&expr, full_domains, &func_ctx) {
+                Some(rewritten) => rewritten,
+                None => expr,
+            }
+        } else {
+            expr
+        };
+
+        let mut column_slots = Vec::new();
+        for (name, data_type) in expr.column_refs() {
+            // Internal/stream columns are not stored; virtual columns have no leaf IDs.
+            let virtual_stats_eligible = !is_internal_column(&name) && !is_stream_column(&name);
+            let leaf_column_ids = if virtual_stats_eligible {
+                let column_ids = schema.leaf_columns_of(&name);
+                (!column_ids.is_empty()).then_some(column_ids)
+            } else {
+                None
+            };
+            column_slots.push(ColumnDomainSlot {
+                name,
+                data_type,
+                leaf_column_ids,
+                virtual_stats_eligible,
+            });
+        }
+        let has_rewrite_candidates = has_rewrite_candidates(&func_ctx, &expr);
+        Self {
+            expr,
+            func_ctx,
+            schema,
+            default_stats,
+            predicates,
+            column_slots,
+            has_rewrite_candidates,
+        }
     }
 
     pub fn try_apply_const(&self) -> Result<bool> {
@@ -107,67 +186,90 @@ impl RangeIndex {
         &self,
         stats: &StatisticsOfColumns,
         spatial_stats: Option<&StatisticsOfSpatialColumns>,
+        virtual_col_stats: Option<&VirtualColumnStatsOfNames>,
         column_is_default: F,
     ) -> Result<bool>
     where
         F: Fn(&ColumnId) -> bool,
     {
-        let mut input_domains: HashMap<String, Domain> = self
-            .expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                // internal column and stream column are not actual stored columns
-                if is_internal_column(&name) || is_stream_column(&name) {
-                    return Ok((name, Domain::full(&ty)));
+        let mut input_domains: HashMap<String, Domain> =
+            HashMap::with_capacity(self.column_slots.len());
+        let mut virtual_column_types = HashMap::new();
+        let cast_input_columns = cast_input_columns(&self.expr);
+        for slot in &self.column_slots {
+            let domain = match &slot.leaf_column_ids {
+                None => {
+                    // The name may refer to a virtual column (e.g. `v['a']`). Use the
+                    // block-local virtual column statistics only when their physical
+                    // type is compatible with the expression or can be made compatible
+                    // by rewriting a direct Cast/TryCast input.
+                    let virtual_stat = if slot.virtual_stats_eligible {
+                        virtual_col_stats.and_then(|stats| stats.get(&slot.name))
+                    } else {
+                        None
+                    };
+                    if let Some(stat) = virtual_stat {
+                        let column_stat = stat.to_column_statistics();
+                        let data_type = DataType::from(&stat.data_type);
+                        if slot.data_type == data_type {
+                            statistics_to_domain(vec![&column_stat], &data_type)
+                        } else if cast_input_columns.contains(&slot.name) {
+                            let domain = statistics_to_domain(vec![&column_stat], &data_type);
+                            virtual_column_types.insert(slot.name.clone(), data_type);
+                            domain
+                        } else {
+                            Domain::full(&slot.data_type)
+                        }
+                    } else {
+                        Domain::full(&slot.data_type)
+                    }
                 }
-
-                let column_ids = self.schema.leaf_columns_of(&name);
-                // virtual columns are not included in leaf columns
-                // TODO: add range filter for virtual columns
-                if column_ids.is_empty() {
-                    return Ok((name, Domain::full(&ty)));
-                }
-
-                let stats = column_ids
-                    .iter()
-                    .filter_map(|column_id| match stats.get(column_id) {
-                        None => {
-                            if column_is_default(column_id)
-                                && self.default_stats.contains_key(column_id)
-                            {
-                                Some(&self.default_stats[column_id])
-                            } else {
-                                None
+                Some(column_ids) => {
+                    let mut column_stats = Vec::with_capacity(column_ids.len());
+                    for column_id in column_ids {
+                        if let Some(stat) = stats.get(column_id) {
+                            column_stats.push(stat);
+                        } else if column_is_default(column_id) {
+                            if let Some(stat) = self.default_stats.get(column_id) {
+                                column_stats.push(stat);
                             }
                         }
-                        other => other,
-                    })
-                    .collect();
-
-                let domain = statistics_to_domain(stats, &ty);
-                Ok((name, domain))
-            })
-            .collect::<Result<_>>()?;
+                    }
+                    statistics_to_domain(column_stats, &slot.data_type)
+                }
+            };
+            input_domains.insert(slot.name.clone(), domain);
+        }
 
         for (name, domain) in self.spatial_predicate_domains(spatial_stats) {
             input_domains.insert(name, domain);
         }
 
-        let mut visitor = RewriteVisitor {
-            input_domains,
-            func_ctx: &self.func_ctx,
-            fn_registry: &BUILTIN_FUNCTIONS,
-        };
+        // Besides ordinary cast-elimination candidates, a typed virtual column
+        // whose physical type differs from its logical type needs the visitor to
+        // rewrite its direct Cast/TryCast input before domain folding.
+        let needs_rewrite = self.has_rewrite_candidates || !virtual_column_types.is_empty();
+        let (expr, input_domains) = if needs_rewrite {
+            let mut visitor = RewriteVisitor {
+                input_domains,
+                virtual_column_types: (!virtual_column_types.is_empty())
+                    .then_some(&virtual_column_types),
+                func_ctx: &self.func_ctx,
+                fn_registry: &BUILTIN_FUNCTIONS,
+            };
 
-        let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
-            Some(expr) => Cow::Owned(expr),
-            None => Cow::Borrowed(&self.expr),
+            let expr = match visit_expr(&self.expr, &mut visitor).unwrap() {
+                Some(expr) => Cow::Owned(expr),
+                None => Cow::Borrowed(&self.expr),
+            };
+            (expr, visitor.input_domains)
+        } else {
+            (Cow::Borrowed(&self.expr), input_domains)
         };
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             expr,
-            &visitor.input_domains,
+            &input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
@@ -189,14 +291,14 @@ impl RangeIndex {
         partition_columns: &HashMap<String, Scalar>,
     ) -> Result<bool> {
         let expr = self.expr.fill_const_column(partition_columns);
-        RangeIndex {
+        Self::create_from_parts(
             expr,
-            func_ctx: self.func_ctx.clone(),
-            schema: self.schema.clone(),
-            default_stats: self.default_stats.clone(),
-            predicates: self.predicates.clone(),
-        }
-        .apply(stats, None, |_| false)
+            self.func_ctx.clone(),
+            self.schema.clone(),
+            self.default_stats.clone(),
+            self.predicates.clone(),
+        )
+        .apply(stats, None, None, |_| false)
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {
