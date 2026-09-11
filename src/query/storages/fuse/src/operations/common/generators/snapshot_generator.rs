@@ -71,7 +71,7 @@ pub trait SnapshotGenerator {
             table_stats_gen,
         )?;
         let (updated_rows, deleted_rows) = self.logical_change_delta(&previous);
-        snapshot.add_logical_change_delta(updated_rows, deleted_rows)?;
+        snapshot.add_logical_change_delta(updated_rows, deleted_rows);
         decorate_snapshot(&mut snapshot, txn_mgr, previous, table_info.ident.table_id)?;
         Ok(snapshot)
     }

@@ -226,13 +226,14 @@ async fn try_rebuild_req(
         // base, including any intermediate snapshots.
         let new_counters = new_snapshot
             .as_ref()
-            .and_then(|snapshot| snapshot.logical_change_counters())
-            .ok_or_else(|| ErrorCode::Internal("new snapshot lacks logical change counters"))?;
+            .and_then(|snapshot| snapshot.logical_change_counters());
         let base_counters = base_snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.logical_change_counters());
-        let (logical_updated_rows, logical_deleted_rows) =
-            new_counters.transaction_delta_from(base_counters.as_ref())?;
+        let logical_delta = match new_counters {
+            Some(counters) => counters.transaction_delta_from(base_counters.as_ref())?,
+            None => None,
+        };
 
         let s = merge_statistics(
             new_snapshot.summary(),
@@ -331,7 +332,10 @@ async fn try_rebuild_req(
             None,
             table_meta_timestamps,
         )?;
-        merged_snapshot.add_logical_change_delta(logical_updated_rows, logical_deleted_rows)?;
+        match logical_delta {
+            Some((updated, deleted)) => merged_snapshot.add_logical_change_delta(updated, deleted),
+            None => merged_snapshot.invalidate_logical_change_counters(),
+        }
         merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot

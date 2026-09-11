@@ -967,7 +967,7 @@ mod tests {
         let legacy = legacy_snapshot(10);
         let base = snapshot_at(Some(10), None, 10);
         let mut latest = snapshot_at(Some(11), Some(Arc::new(base.clone())), 9);
-        latest.add_logical_change_delta(2, 3).unwrap();
+        latest.add_logical_change_delta(2, 3);
 
         assert_eq!(
             logical_change_rows(Some(&legacy), Some(&latest)).unwrap(),
@@ -983,7 +983,7 @@ mod tests {
         );
 
         let mut newer_base = snapshot_at(Some(12), Some(Arc::new(latest.clone())), 10);
-        newer_base.add_logical_change_delta(3, 0).unwrap();
+        newer_base.add_logical_change_delta(3, 0);
         assert!(logical_change_rows(Some(&newer_base), Some(&latest)).is_err());
 
         let base = snapshot(10);
@@ -1018,7 +1018,7 @@ mod tests {
 
         // UPDATE 1 row + DELETE 1 row while counters are tracked.
         let mut mutated = snapshot_at(Some(11), Some(Arc::new(base.clone())), 2);
-        mutated.add_logical_change_delta(1, 1).unwrap();
+        mutated.add_logical_change_delta(1, 1);
         assert_eq!(
             logical_change_delta(Some(&base), Some(&mutated)).unwrap(),
             Some((1, 1)),
@@ -1048,7 +1048,7 @@ mod tests {
     #[test]
     fn test_restarted_counters_below_base_do_not_error() {
         let mut base = snapshot_at(Some(10), None, 10);
-        base.add_logical_change_delta(5, 3).unwrap();
+        base.add_logical_change_delta(5, 3);
 
         let legacy = strip_counters(&snapshot_at(Some(11), Some(Arc::new(base.clone())), 10));
         let after_upgrade = snapshot_at(Some(12), Some(Arc::new(legacy)), 11);
@@ -1072,7 +1072,7 @@ mod tests {
         let restarted = snapshot_at(Some(20), Some(Arc::new(legacy)), 10);
         // A stream created here uses `restarted` as its base.
         let mut later = snapshot_at(Some(21), Some(Arc::new(restarted.clone())), 9);
-        later.add_logical_change_delta(2, 3).unwrap();
+        later.add_logical_change_delta(2, 3);
 
         assert_eq!(
             logical_change_delta(Some(&restarted), Some(&later)).unwrap(),
