@@ -207,19 +207,18 @@ impl TableSnapshot {
         {
             summary.cluster_stats = None;
         }
-        // Inherit a known history; otherwise restart using the current table seq.
-        // A missing seq stays unknown rather than inventing a shared epoch zero.
-        let logical_change_counters = Some(
-            prev_snapshot
-                .as_ref()
-                .and_then(|snapshot| snapshot.logical_change_counters)
-                .filter(|counters| counters.epoch.is_some())
-                .unwrap_or(LogicalChangeCounters {
-                    updated_rows_total: 0,
-                    deleted_rows_total: 0,
-                    epoch: prev_table_seq,
-                }),
-        );
+        // Preserve existing totals even without an epoch: older readers still
+        // subtract them. Start a new identity, not new totals, at this boundary.
+        // Only an absent counter field starts from zero. A missing seq stays unknown.
+        let mut counters = prev_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.logical_change_counters)
+            .unwrap_or(LogicalChangeCounters {
+                updated_rows_total: 0,
+                deleted_rows_total: 0,
+                epoch: None,
+            });
+        counters.epoch = counters.epoch.or(prev_table_seq);
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -232,7 +231,7 @@ impl TableSnapshot {
             cluster_key_meta,
             cluster_type,
             table_statistics_location,
-            logical_change_counters,
+            logical_change_counters: Some(counters),
         })
     }
 
@@ -648,14 +647,27 @@ mod tests {
             .remove("epoch");
         let epochless: TableSnapshot = serde_json::from_value(value).unwrap();
         let epochless_counters = epochless.logical_change_counters().unwrap();
+        assert_eq!(epochless_counters.updated_rows_total, 7);
+        assert_eq!(epochless_counters.deleted_rows_total, 9);
         assert_eq!(
             epochless_counters.delta_from(&epochless_counters).unwrap(),
             None
         );
 
-        // The next write mints an epoch, so the table self-heals.
+        // A caller without a seq must preserve the totals too, but cannot
+        // identify the new history.
+        let unidentified = snapshot_at(None, Some(Arc::new(epochless.clone())));
+        let unidentified_counters = unidentified.logical_change_counters().unwrap();
+        assert_eq!(unidentified_counters.epoch, None);
+        assert_eq!(unidentified_counters.updated_rows_total, 7);
+        assert_eq!(unidentified_counters.deleted_rows_total, 9);
+
+        // Mint an epoch without resetting the totals used by older readers.
         let healed = snapshot_at(Some(20), Some(Arc::new(epochless)));
         let healed_counters = healed.logical_change_counters().unwrap();
+        assert_eq!(healed_counters.epoch, Some(20));
+        assert_eq!(healed_counters.updated_rows_total, 7);
+        assert_eq!(healed_counters.deleted_rows_total, 9);
         assert_eq!(
             healed_counters.delta_from(&healed_counters).unwrap(),
             Some((0, 0))
@@ -666,6 +678,55 @@ mod tests {
             healed_counters.delta_from(&epochless_counters).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn test_epochless_writer_handoff_preserves_cumulative_totals() {
+        // Model the older counter schema: unknown fields are discarded on read
+        // and cannot be serialized back by an older writer.
+        #[derive(Serialize, Deserialize)]
+        struct EpochlessCounters {
+            updated_rows_total: u64,
+            deleted_rows_total: u64,
+        }
+
+        fn old_writer(snapshot: &TableSnapshot, updated: u64, deleted: u64) -> TableSnapshot {
+            let mut value = serde_json::to_value(snapshot).unwrap();
+            let mut counters: EpochlessCounters =
+                serde_json::from_value(value["logical_change_counters"].clone()).unwrap();
+            counters.updated_rows_total += updated;
+            counters.deleted_rows_total += deleted;
+            value["logical_change_counters"] = serde_json::to_value(counters).unwrap();
+            serde_json::from_value(value).unwrap()
+        }
+
+        for (base_updated, base_deleted) in [(0, 0), (5, 3)] {
+            let mut initial = snapshot_at(Some(10), None);
+            initial.add_logical_change_delta(base_updated, base_deleted);
+            let base = old_writer(&initial, 0, 0);
+            let base_counters = base.logical_change_counters().unwrap();
+            let old_latest = old_writer(&base, 1, 1);
+
+            let mut upgraded = snapshot_at(Some(20), Some(Arc::new(old_latest)));
+            upgraded.add_logical_change_delta(2, 3);
+            let counters = upgraded.logical_change_counters().unwrap();
+            assert_eq!(counters.epoch, Some(20));
+            // An old reader ignores epoch and subtracts the totals directly.
+            assert_eq!(counters.updated_rows_total - base_updated, 3);
+            assert_eq!(counters.deleted_rows_total - base_deleted, 4);
+            assert_eq!(counters.delta_from(&base_counters).unwrap(), None);
+
+            // An older writer takes over again and drops the epoch. The next
+            // new writer must preserve its increments while assigning a new epoch.
+            let old_latest = old_writer(&upgraded, 4, 5);
+            let next = snapshot_at(Some(30), Some(Arc::new(old_latest)));
+            let decoded = TableSnapshot::from_slice(&next.to_bytes().unwrap()).unwrap();
+            let next_counters = decoded.logical_change_counters().unwrap();
+            assert_eq!(next_counters.epoch, Some(30));
+            assert_eq!(next_counters.updated_rows_total - base_updated, 7);
+            assert_eq!(next_counters.deleted_rows_total - base_deleted, 9);
+            assert_eq!(next_counters.delta_from(&counters).unwrap(), None);
+        }
     }
 
     #[test]
