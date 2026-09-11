@@ -56,9 +56,7 @@ impl MarkovTrainBuilder {
         .then(PlainRoute::unary(MarkovTrainBuilder::create))
         .then(IfRoute::unary(MarkovTrainBuilder::create))
         .then(StateRoute::unary(MarkovTrainBuilder::create))
-        .then(DistinctRoute::<true>::unary(
-            MarkovTrainBuilder::create,
-        ))
+        .then(DistinctRoute::<true>::unary(MarkovTrainBuilder::create))
         .register(registry);
     }
 }
