@@ -970,6 +970,8 @@ pub enum TokenKind {
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
+    #[token("MATERIALIZE", ignore(ascii_case))]
+    MATERIALIZE,
     #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
     MUST_CHANGE_PASSWORD,
     #[token("NEXT_DAY", ignore(ascii_case))]
@@ -1390,6 +1392,8 @@ pub enum TokenKind {
     TRY_CAST,
     #[token("TSV", ignore(ascii_case))]
     TSV,
+    #[token("TTL", ignore(ascii_case))]
+    TTL,
     #[token("TUESDAY", ignore(ascii_case))]
     TUESDAY,
     #[token("TUPLE", ignore(ascii_case))]

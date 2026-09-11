@@ -1291,6 +1291,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #uri_location )?
             ~ #create_table_partition_by?
             ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
+            ~ ( TTL ~ ^#expr )?
             ~ ( #table_option )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
@@ -1307,6 +1308,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             uri_location,
             opt_partition_by,
             opt_cluster_by,
+            opt_ttl,
             opt_table_options,
             opt_table_properties,
             opt_as_query,
@@ -1332,6 +1334,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 engine,
                 uri_location,
                 cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
+                ttl: opt_ttl.map(|(_, ttl)| ttl),
                 table_options,
                 partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
@@ -5246,6 +5249,30 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _)| AlterTableAction::DropTableClusterKey,
     );
 
+    // `SET TTL <expr>` and `MODIFY TTL <expr>` are accepted as aliases.
+    let set_table_ttl = map(
+        rule! {
+            ( SET | MODIFY ) ~ TTL ~ ^#expr
+        },
+        |(_, _, ttl)| AlterTableAction::SetTableTtl { ttl },
+    );
+
+    let remove_table_ttl = map(
+        rule! {
+            REMOVE ~ TTL
+        },
+        |(_, _)| AlterTableAction::RemoveTableTtl,
+    );
+
+    let materialize_table_ttl = map(
+        rule! {
+            MATERIALIZE ~ TTL ~ ( LIMIT ~ ^#literal_u64 )?
+        },
+        |(_, _, opt_limit)| AlterTableAction::MaterializeTableTtl {
+            limit: opt_limit.map(|(_, limit)| limit),
+        },
+    );
+
     let recluster_table = map(
         rule! {
             RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
@@ -5358,6 +5385,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let alter_table_action_secondary = rule!(
         #unset_table_options
+            | #set_table_ttl
+            | #remove_table_ttl
+            | #materialize_table_ttl
             | #refresh_cache
             | #modify_table_connection
             | #drop_all_row_access_polices

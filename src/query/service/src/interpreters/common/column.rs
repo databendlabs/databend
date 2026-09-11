@@ -20,6 +20,7 @@ use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_idents;
+use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -55,6 +56,19 @@ pub fn cluster_key_referenced_columns(cluster_key: &str) -> Result<HashSet<Strin
     for mut expr in exprs {
         expr.drive_mut(&mut collector);
     }
+    Ok(collector.columns)
+}
+
+/// Columns referenced by a row-level TTL expression.
+///
+/// Unlike a cluster key, a TTL is a single expression rather than a comma
+/// separated list, so it must not go through the tuple-unwrapping done by
+/// `parse_cluster_key_exprs`: `TTL (a, b)` is not valid TTL and should not be
+/// silently split into two expressions.
+pub fn ttl_referenced_columns(ttl: &str) -> Result<HashSet<String>> {
+    let mut expr = parse_expr(&tokenize_sql(ttl)?, Dialect::default())?;
+    let mut collector = ColumnRefCollector::new();
+    expr.drive_mut(&mut collector);
     Ok(collector.columns)
 }
 
@@ -122,6 +136,45 @@ pub fn rename_column_in_cluster_key(
         })
         .collect::<Vec<_>>();
     Ok(Some(format!("({})", cluster_keys.join(", "))))
+}
+
+/// Rewrite a row-level TTL expression after `RENAME COLUMN`.
+///
+/// Returns `None` when the TTL does not reference the renamed column, so the
+/// caller can skip writing an unchanged value.
+pub fn rename_column_in_ttl(
+    ctx: &dyn TableContext,
+    ttl: &str,
+    old_column: &str,
+    new_column: &str,
+) -> Result<Option<String>> {
+    // `ttl` is persisted in table metadata and may have been stored with different
+    // quoting rules than the current session dialect. Use a dialect that accepts both.
+    let sql_dialect = Dialect::default();
+    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+    let new_quote = ident_opt_quote(
+        new_column,
+        false,
+        name_resolution_ctx.quoted_ident_case_sensitive,
+        sql_dialect,
+    );
+
+    let mut expr = parse_expr(&tokenize_sql(ttl)?, sql_dialect)?;
+    let mut renamer = ColumnRenamer {
+        old: old_column,
+        new: new_column,
+        new_quote,
+        changed: false,
+    };
+    expr.drive_mut(&mut renamer);
+
+    if !renamer.changed {
+        return Ok(None);
+    }
+
+    let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
+    expr.drive_mut(&mut normalizer);
+    Ok(Some(format!("{expr:#}")))
 }
 
 pub fn rename_column_in_comma_separated_ident(

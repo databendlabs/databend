@@ -61,6 +61,8 @@ pub struct CreateTablePlan {
     pub field_comments: Vec<String>,
     pub field_stats_truncate_len: Vec<Option<u64>>,
     pub cluster_key: Option<String>,
+    /// Row-level TTL expression text, already validated and normalized.
+    pub ttl: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
@@ -534,6 +536,26 @@ pub struct DropTableClusterKeyPlan {
 }
 
 impl DropTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Row-level TTL: `ALTER TABLE ... SET TTL <expr>` and `... REMOVE TTL`.
+///
+/// Removing a TTL is just setting it to nothing, so one plan covers both rather
+/// than duplicating the surrounding plumbing for a single `Option`.
+#[derive(Clone, Debug)]
+pub struct AlterTableTtlPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// Validated and normalized TTL expression text; `None` means `REMOVE TTL`.
+    pub ttl: Option<String>,
+}
+
+impl AlterTableTtlPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

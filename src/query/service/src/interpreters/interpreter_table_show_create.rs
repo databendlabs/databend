@@ -20,6 +20,8 @@ use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -382,6 +384,21 @@ impl ShowCreateTableInterpreter {
                     .as_str(),
                 );
             }
+        }
+
+        if let Some(ttl_str) = &table_info.meta.ttl {
+            // The stored text was normalized when the TTL was bound, but it may
+            // have been written under a different session dialect, so parse it
+            // with the permissive dialect and re-normalize for this session.
+            let mut expr = parse_expr(&tokenize_sql(ttl_str)?, Dialect::default())?;
+            let mut normalizer = ClusterKeyNormalizer {
+                force_quoted_ident,
+                unquoted_ident_case_sensitive,
+                quoted_ident_case_sensitive,
+                sql_dialect,
+            };
+            expr.drive_mut(&mut normalizer);
+            table_create_sql.push_str(format!(" TTL {expr:#}").as_str());
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {

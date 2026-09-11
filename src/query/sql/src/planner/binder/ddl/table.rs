@@ -128,6 +128,7 @@ use uuid::Uuid;
 use crate::BindContext;
 use crate::ClusterKeyNormalizer;
 use crate::DefaultExprBinder;
+use crate::MetadataRef;
 use crate::Planner;
 use crate::SelectBuilder;
 use crate::binder::Binder;
@@ -149,6 +150,7 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTablePartitionByPlan;
+use crate::plans::AlterTableTtlPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -187,6 +189,7 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::validate_ttl_expr;
 
 #[derive(Visitor)]
 #[visitor(FunctionCall(enter))]
@@ -602,6 +605,7 @@ impl Binder {
             source,
             table_options,
             cluster_by,
+            ttl,
             as_query,
             table_type,
             engine,
@@ -1055,6 +1059,11 @@ impl Binder {
             }
         }
 
+        let ttl = match ttl {
+            Some(ttl_expr) => Some(self.analyze_ttl_expr(ttl_expr, schema.clone()).await?),
+            None => None,
+        };
+
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
@@ -1071,6 +1080,7 @@ impl Binder {
             field_comments,
             field_stats_truncate_len,
             cluster_key,
+            ttl,
             as_select: as_query_plan,
             table_indexes,
             table_constraints,
@@ -1145,6 +1155,7 @@ impl Binder {
             field_comments: vec![],
             field_stats_truncate_len: vec![],
             cluster_key: None,
+            ttl: None,
             as_select: None,
             table_indexes: None,
             table_constraints: None,
@@ -1578,6 +1589,29 @@ impl Binder {
                     branch,
                 },
             ))),
+            AlterTableAction::SetTableTtl { ttl } => {
+                let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
+                let ttl = self.analyze_ttl_expr(ttl, tbl.schema()).await?;
+                Ok(Plan::AlterTableTtl(Box::new(AlterTableTtlPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ttl: Some(ttl),
+                })))
+            }
+            AlterTableAction::RemoveTableTtl => {
+                Ok(Plan::AlterTableTtl(Box::new(AlterTableTtlPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ttl: None,
+                })))
+            }
+            AlterTableAction::MaterializeTableTtl { .. } => Err(ErrorCode::Unimplemented(
+                "MATERIALIZE TTL is not supported yet".to_string(),
+            )),
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
@@ -2465,6 +2499,84 @@ impl Binder {
         }
     }
 
+    /// Build a `BindContext` exposing `schema`'s fields as resolvable columns.
+    ///
+    /// The returned metadata owns the derived column indices the context refers
+    /// to, so the two must be used together.
+    fn bind_context_from_schema(&self, schema: &TableSchemaRef) -> (BindContext, MetadataRef) {
+        let mut bind_context = BindContext::new();
+        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
+        for field in schema.fields().iter() {
+            let data_type = DataType::from(field.data_type());
+            let column_index = metadata
+                .write()
+                .add_derived_column(field.name().clone(), data_type.clone());
+            bind_context.add_column_binding(
+                ColumnBindingBuilder::new(
+                    field.name().clone(),
+                    column_index,
+                    Box::new(data_type),
+                    Visibility::Visible,
+                )
+                .build(),
+            );
+        }
+        (bind_context, metadata)
+    }
+
+    /// Validate a row-level TTL expression and normalize it to the text form
+    /// persisted in `TableMeta.ttl`.
+    ///
+    /// The semantic rules live in `validate_ttl_expr`, shared with the
+    /// `MODIFY COLUMN` guard that re-checks a persisted TTL against a new
+    /// schema, so the two cannot disagree on what a valid TTL is.
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn analyze_ttl_expr(
+        &mut self,
+        ttl_expr: &AstExpr,
+        schema: TableSchemaRef,
+    ) -> Result<String> {
+        let (mut bind_context, metadata) = self.bind_context_from_schema(&schema);
+
+        let mut scalar_binder = ScalarBinder::new(
+            &mut bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            metadata,
+            &[],
+        );
+        // A TTL is evaluated by a background task with no user session to
+        // resolve a UDF against.
+        scalar_binder.forbid_udf();
+
+        let (scalar, _) = scalar_binder.bind(ttl_expr)?;
+        let display = format!("{ttl_expr:#}");
+        if !scalar.evaluable() {
+            return Err(ErrorCode::SemanticError(format!(
+                "TTL expression `{display}` is invalid"
+            )));
+        }
+        // Without a column reference the expression is either always or never
+        // expired, and block-level min/max pruning has nothing to work with.
+        if scalar.used_columns().is_empty() {
+            return Err(ErrorCode::SemanticError(format!(
+                "TTL expression `{display}` must reference at least one column"
+            )));
+        }
+        validate_ttl_expr(&scalar.as_expr()?, &display)?;
+
+        // Normalize identifiers the way cluster keys are, so the persisted text
+        // round-trips through SHOW CREATE TABLE.
+        let mut normalized = ttl_expr.clone();
+        normalized.drive_mut(&mut ClusterKeyNormalizer {
+            force_quoted_ident: false,
+            unquoted_ident_case_sensitive: self.name_resolution_ctx.unquoted_ident_case_sensitive,
+            quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
+            sql_dialect: self.dialect,
+        });
+        Ok(format!("{normalized:#}"))
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_cluster_keys(
         &mut self,
@@ -2506,22 +2618,7 @@ impl Binder {
         let expr_len = key_exprs.len();
 
         // Build a temporary BindContext to resolve the expr
-        let mut bind_context = BindContext::new();
-        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
-        for field in schema.fields().iter() {
-            let column_index = metadata
-                .write()
-                .add_derived_column(field.name().clone(), DataType::from(field.data_type()));
-            let column = ColumnBindingBuilder::new(
-                field.name().clone(),
-                column_index,
-                Box::new(DataType::from(field.data_type())),
-                Visibility::Visible,
-            )
-            .build();
-
-            bind_context.add_column_binding(column);
-        }
+        let (mut bind_context, metadata) = self.bind_context_from_schema(&schema);
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
             self.ctx.clone(),
