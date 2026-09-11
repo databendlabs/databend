@@ -109,7 +109,14 @@ async fn vacuum_database(
             continue;
         }
 
-        if let Err(error) = handler.do_vacuum2(table, ctx.clone(), false).await {
+        let result = async {
+            // Earlier tables may take days to vacuum. Refresh by ID so the
+            // snapshot captured by list_tables does not hold back LVT and GC.
+            let table = table.refresh(ctx.as_ref()).await?;
+            handler.do_vacuum2(table.as_ref(), ctx.clone(), false).await
+        }
+        .await;
+        if let Err(error) = result {
             if error.code() == ErrorCode::ABORTED_QUERY {
                 return Err(error);
             }
@@ -121,4 +128,149 @@ async fn vacuum_database(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    use databend_common_base::base::GlobalInstance;
+    use databend_common_catalog::table_context::AbortChecker;
+    use databend_enterprise_vacuum_handler::VacuumHandler;
+    use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+    use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
+    use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
+    use tokio::sync::Notify;
+    use tokio::sync::mpsc;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    struct SnapshotRecordingVacuumHandler {
+        first_table: mpsc::Sender<u64>,
+        resume: Arc<Notify>,
+        snapshots: Arc<Mutex<Vec<(u64, String)>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl VacuumHandler for SnapshotRecordingVacuumHandler {
+        async fn do_vacuum2(
+            &self,
+            table: &dyn Table,
+            _ctx: Arc<dyn TableContext>,
+            respect_flash_back: bool,
+        ) -> Result<()> {
+            assert!(!respect_flash_back);
+            let snapshot = FuseTable::try_from_table(table)?.snapshot_loc().unwrap();
+            let is_first = {
+                let mut snapshots = self.snapshots.lock().unwrap();
+                snapshots.push((table.get_id(), snapshot));
+                snapshots.len() == 1
+            };
+            if is_first {
+                self.first_table.send(table.get_id()).await.unwrap();
+                self.resume.notified().await;
+            }
+            Ok(())
+        }
+
+        async fn do_vacuum_drop_tables(
+            &self,
+            _threads_nums: usize,
+            _tables: Vec<Arc<dyn Table>>,
+            _dry_run_limit: Option<usize>,
+        ) -> VacuumDropTablesResult {
+            unreachable!("batch vacuum must not vacuum dropped tables")
+        }
+
+        async fn do_vacuum_temporary_files(
+            &self,
+            _abort_checker: AbortChecker,
+            _temporary_dir: String,
+            _options: &VacuumTempOptions,
+            _vacuum_limit: usize,
+        ) -> Result<usize> {
+            unreachable!("batch vacuum must not vacuum temporary files")
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_vacuum_tables_refreshes_snapshot_by_id() -> anyhow::Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let database = "vacuum_refresh_db";
+        fixture
+            .execute_command(&format!("create database {database}"))
+            .await?;
+        for table in ["t1", "t2"] {
+            fixture
+                .execute_command(&format!(
+                    "create table {database}.{table} (c int) as select 1"
+                ))
+                .await?;
+        }
+
+        let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+        let catalog = ctx.get_default_catalog()?;
+        let tables = catalog.list_tables(&ctx.get_tenant(), database).await?;
+        assert_eq!(tables.len(), 2);
+
+        let (first_table_tx, mut first_table_rx) = mpsc::channel(1);
+        let resume = Arc::new(Notify::new());
+        let snapshots = Arc::new(Mutex::new(Vec::new()));
+        GlobalInstance::set(Arc::new(VacuumHandlerWrapper::new(Box::new(
+            SnapshotRecordingVacuumHandler {
+                first_table: first_table_tx,
+                resume: resume.clone(),
+                snapshots: snapshots.clone(),
+            },
+        ))));
+
+        let update_waiting_table = async {
+            // The first handler call proves that vacuum has already listed the
+            // tables. Choose the other table without relying on catalog order.
+            let first_table_id = first_table_rx.recv().await.unwrap();
+            let waiting_table = tables
+                .iter()
+                .find(|table| table.get_id() != first_table_id)
+                .unwrap();
+            let old_snapshot = FuseTable::try_from_table(waiting_table.as_ref())?
+                .snapshot_loc()
+                .unwrap();
+            let name = &waiting_table.get_table_info().name;
+            fixture
+                .execute_command(&format!("truncate table {database}.{name}"))
+                .await?;
+            // Refresh must use the table ID even if the listed name is stale.
+            fixture
+                .execute_command(&format!("alter table {database}.{name} rename to renamed"))
+                .await?;
+            let updated_table = catalog
+                .get_table(&ctx.get_tenant(), database, "renamed")
+                .await?;
+            assert_eq!(updated_table.get_id(), waiting_table.get_id());
+            let new_snapshot = FuseTable::try_from_table(updated_table.as_ref())?
+                .snapshot_loc()
+                .unwrap();
+            assert_ne!(new_snapshot, old_snapshot);
+            resume.notify_one();
+            Ok::<_, ErrorCode>((updated_table.get_id(), new_snapshot))
+        };
+
+        let (_, expected_snapshot) = tokio::time::timeout(Duration::from_secs(30), async {
+            tokio::try_join!(
+                vacuum_tables(&ctx, catalog.as_ref(), Some(database)),
+                update_waiting_table,
+            )
+        })
+        .await??;
+
+        let snapshots = snapshots.lock().unwrap();
+        assert_eq!(snapshots.len(), 2, "both listed tables must be vacuumed");
+        assert_eq!(
+            snapshots[1], expected_snapshot,
+            "vacuum must use the snapshot committed while the table was waiting"
+        );
+        Ok(())
+    }
 }
