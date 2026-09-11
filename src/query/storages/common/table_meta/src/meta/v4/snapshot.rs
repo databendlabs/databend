@@ -122,28 +122,21 @@ pub struct LogicalChangeCounters {
 impl LogicalChangeCounters {
     /// UPDATE and DELETE rows committed between `base` and `self`.
     ///
-    /// `Ok(None)` means the delta is unknowable and the caller must fall back
+    /// `None` means the delta is unknowable and the caller must fall back
     /// to endpoint/origin-based processing: either endpoint's identity is
-    /// unknown, or the two belong to different counting histories. Subtracting
-    /// across a restart would report the changes the restart hid as zero.
-    pub fn delta_from(&self, base: &Self) -> Result<Option<(u64, u64)>> {
-        let (Some(self_epoch), Some(base_epoch)) = (self.epoch, base.epoch) else {
-            return Ok(None);
-        };
-        if self_epoch != base_epoch {
-            return Ok(None);
+    /// unknown, the histories differ, or a counter decreases. A shared epoch
+    /// alone does not establish forward endpoint ordering.
+    pub fn delta_from(&self, base: &Self) -> Option<(u64, u64)> {
+        if self.epoch? != base.epoch? {
+            return None;
         }
-        // Monotonic within one epoch, so a decrease here is a broken invariant
-        // rather than a discontinuous history.
         let updated = self
             .updated_rows_total
-            .checked_sub(base.updated_rows_total)
-            .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
+            .checked_sub(base.updated_rows_total)?;
         let deleted = self
             .deleted_rows_total
-            .checked_sub(base.deleted_rows_total)
-            .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
-        Ok(Some((updated, deleted)))
+            .checked_sub(base.deleted_rows_total)?;
+        Some((updated, deleted))
     }
 }
 
@@ -619,7 +612,7 @@ mod tests {
             let base = old_writer(&initial, 0, 0);
             let base_counters = base.logical_change_counters().unwrap();
             assert_eq!(base_counters.epoch, None);
-            assert_eq!(base_counters.delta_from(&base_counters).unwrap(), None);
+            assert_eq!(base_counters.delta_from(&base_counters), None);
             let old_latest = old_writer(&base, 1, 1);
 
             // Missing seq must neither fabricate an epoch nor discard totals.
@@ -636,7 +629,7 @@ mod tests {
             // An old reader ignores epoch and subtracts the totals directly.
             assert_eq!(counters.updated_rows_total - base_updated, 3);
             assert_eq!(counters.deleted_rows_total - base_deleted, 4);
-            assert_eq!(counters.delta_from(&base_counters).unwrap(), None);
+            assert_eq!(counters.delta_from(&base_counters), None);
 
             // An older writer takes over again and drops the epoch. The next
             // new writer must preserve its increments while assigning a new epoch.
@@ -647,7 +640,7 @@ mod tests {
             assert_eq!(next_counters.epoch, Some(30));
             assert_eq!(next_counters.updated_rows_total - base_updated, 7);
             assert_eq!(next_counters.deleted_rows_total - base_deleted, 9);
-            assert_eq!(next_counters.delta_from(&counters).unwrap(), None);
+            assert_eq!(next_counters.delta_from(&counters), None);
         }
     }
 
@@ -661,8 +654,7 @@ mod tests {
             child
                 .logical_change_counters()
                 .unwrap()
-                .delta_from(&base_counters)
-                .unwrap(),
+                .delta_from(&base_counters),
             None
         );
     }
@@ -680,14 +672,13 @@ mod tests {
             latest
                 .logical_change_counters()
                 .unwrap()
-                .delta_from(&base_counters)
-                .unwrap(),
+                .delta_from(&base_counters),
             Some((5, 3))
         );
 
         for seq in [None, Some(20)] {
             let unrelated = snapshot_at(seq, None).logical_change_counters().unwrap();
-            assert_eq!(unrelated.delta_from(&base_counters).unwrap(), None);
+            assert_eq!(unrelated.delta_from(&base_counters), None);
         }
     }
 
@@ -703,7 +694,7 @@ mod tests {
             assert_eq!(counters.epoch, Some(20));
             assert_eq!(counters.updated_rows_total, 1);
             assert_eq!(counters.deleted_rows_total, 2);
-            assert_eq!(counters.delta_from(&base_counters).unwrap(), None);
+            assert_eq!(counters.delta_from(&base_counters), None);
 
             let decoded = TableSnapshot::from_slice(&child.to_bytes().unwrap()).unwrap();
             let mut descendant = snapshot_at(Some(30), Some(Arc::new(decoded)));
@@ -712,8 +703,7 @@ mod tests {
                 descendant
                     .logical_change_counters()
                     .unwrap()
-                    .delta_from(&counters)
-                    .unwrap(),
+                    .delta_from(&counters),
                 Some((3, 4))
             );
 
@@ -723,7 +713,7 @@ mod tests {
             assert_eq!(reset.epoch, None);
             assert_eq!(reset.updated_rows_total, u64::MAX);
             assert_eq!(reset.deleted_rows_total, u64::MAX);
-            assert_eq!(reset.delta_from(&counters).unwrap(), None);
+            assert_eq!(reset.delta_from(&counters), None);
         }
     }
 
@@ -738,7 +728,7 @@ mod tests {
             assert_eq!(counters.epoch, None);
             assert_eq!(counters.updated_rows_total, 1);
             assert_eq!(counters.deleted_rows_total, 2);
-            assert_eq!(counters.delta_from(&counters).unwrap(), None);
+            assert_eq!(counters.delta_from(&counters), None);
         }
     }
 
@@ -762,7 +752,7 @@ mod tests {
             assert_eq!(counters.epoch, Some(30));
             assert_eq!(counters.updated_rows_total, 0);
             assert_eq!(counters.deleted_rows_total, 0);
-            assert_eq!(counters.delta_from(&base_counters).unwrap(), None);
+            assert_eq!(counters.delta_from(&base_counters), None);
         }
     }
 }

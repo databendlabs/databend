@@ -78,6 +78,9 @@ pub struct TxnBuffer {
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
     multi_table_insert_rows: HashMap<u64, u64>,
+    // Only successfully buffered writes contribute. Some((0, 0)) is a known
+    // insert-only delta; None means the transaction total overflowed.
+    logical_change_deltas: HashMap<u64, Option<(u64, u64)>>,
 
     // TODO doc this
     table_tnx_begin_timestamps: HashMap<u64, DateTime<Utc>>,
@@ -285,6 +288,29 @@ impl TxnManager {
 
     pub fn multi_table_insert_rows(&self) -> HashMap<u64, u64> {
         self.txn_buffer.multi_table_insert_rows.clone()
+    }
+
+    /// Record one successfully buffered write, never a candidate commit attempt.
+    /// This is independent of persisted counter epochs and snapshot resets.
+    pub fn add_logical_change_delta(&mut self, table_id: u64, delta: (u64, u64)) {
+        if !self.is_active() {
+            return;
+        }
+        let total = self
+            .txn_buffer
+            .logical_change_deltas
+            .entry(table_id)
+            .or_insert(Some((0, 0)));
+        *total = total.and_then(|(updated, deleted)| {
+            updated
+                .checked_add(delta.0)
+                .zip(deleted.checked_add(delta.1))
+        });
+    }
+
+    /// Freeze these totals before commit retries. Missing is not a known zero.
+    pub fn logical_change_deltas(&self) -> HashMap<u64, Option<(u64, u64)>> {
+        self.txn_buffer.logical_change_deltas.clone()
     }
 
     pub fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -508,6 +534,45 @@ mod tests {
         let (db, table) = TxnBuffer::parse_db_tbl_name("'db'.'tbl'");
         assert_eq!(db, "db");
         assert_eq!(table, "tbl");
+    }
+
+    #[test]
+    fn test_logical_deltas_accumulate_freeze_and_clear() {
+        let manager = TxnManager::init();
+        let mut txn = manager.lock();
+        txn.add_logical_change_delta(1, (9, 9));
+        assert!(txn.logical_change_deltas().is_empty());
+        txn.begin();
+        txn.add_logical_change_delta(1, (5, 0));
+        txn.add_logical_change_delta(1, (2, 3));
+        txn.add_logical_change_delta(2, (0, 0));
+        let frozen = txn.logical_change_deltas();
+        assert_eq!(frozen.get(&1), Some(&Some((7, 3))));
+        assert_eq!(frozen.get(&2), Some(&Some((0, 0))));
+        assert_eq!(frozen.get(&3), None);
+        txn.set_auto_commit();
+        assert_eq!(txn.logical_change_deltas(), frozen);
+        txn.clear();
+        assert!(txn.logical_change_deltas().is_empty());
+        assert_eq!(frozen.get(&1), Some(&Some((7, 3))));
+
+        txn.begin();
+        txn.add_logical_change_delta(1, (1, 2));
+        txn.force_set_fail();
+        assert!(txn.logical_change_deltas().is_empty());
+    }
+
+    #[test]
+    fn test_logical_delta_overflow_stays_unknown() {
+        let manager = TxnManager::init();
+        let mut txn = manager.lock();
+        txn.begin();
+        for (id, initial) in [(1, (u64::MAX, 0)), (2, (0, u64::MAX))] {
+            txn.add_logical_change_delta(id, initial);
+            txn.add_logical_change_delta(id, (1, 1));
+            txn.add_logical_change_delta(id, (0, 0));
+            assert_eq!(txn.logical_change_deltas().get(&id), Some(&None));
+        }
     }
 
     #[test]

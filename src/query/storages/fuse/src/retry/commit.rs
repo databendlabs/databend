@@ -57,6 +57,9 @@ pub async fn commit_with_backoff(
     // Also cache the original snapshots for statistics merging.
     let (table_segments_diffs, table_original_snapshots) =
         compute_table_segments_diffs(ctx.clone(), &req).await?;
+    // Snapshot counters may lack epochs or restart. Retry the same complete
+    // transaction delta, recorded only after each write was successfully buffered.
+    let logical_deltas = ctx.txn_mgr().lock().logical_change_deltas();
 
     loop {
         let ret = catalog
@@ -80,6 +83,7 @@ pub async fn commit_with_backoff(
             update_failed_tbls,
             &table_segments_diffs,
             &table_original_snapshots,
+            &logical_deltas,
         )
         .await?;
     }
@@ -157,6 +161,7 @@ async fn try_rebuild_req(
     update_failed_tbls: Vec<(u64, u64, TableMeta)>,
     table_segments_diffs: &HashMap<u64, SegmentsDiff>,
     table_original_snapshots: &HashMap<u64, Option<Arc<TableSnapshot>>>,
+    logical_deltas: &HashMap<u64, Option<(u64, u64)>>,
 ) -> Result<()> {
     info!(
         "try_rebuild_req: update_failed_tbls={:?}",
@@ -222,20 +227,9 @@ async fn try_rebuild_req(
                 ErrorCode::Internal(format!("Missing original snapshot for table {}", tid))
             })?
             .clone();
-        // Recover all changes accumulated by this transaction from its original
-        // base, including any intermediate snapshots.
-        let new_counters = new_snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.logical_change_counters());
-        let base_counters = base_snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.logical_change_counters());
-        // A reset can discard changes from earlier statements. Only comparable
-        // endpoints prove the full transaction delta; otherwise invalidate below.
-        let logical_delta = match (new_counters, base_counters) {
-            (Some(new), Some(base)) => new.delta_from(&base)?,
-            _ => None,
-        };
+        // Missing/overflowed transaction bookkeeping is unknown, not zero.
+        // In particular, an epochless base no longer invalidates a known delta.
+        let logical_delta = logical_deltas.get(&tid).copied().flatten();
 
         let s = merge_statistics(
             new_snapshot.summary(),

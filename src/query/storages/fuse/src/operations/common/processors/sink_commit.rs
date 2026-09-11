@@ -86,6 +86,7 @@ enum State {
         table_info: TableInfo,
     },
     TryCommit {
+        logical_delta: (u64, u64),
         data: Vec<u8>,
         snapshot: TableSnapshot,
         table_info: TableInfo,
@@ -509,6 +510,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // therefore, we can safely proceed.
 
                 let mut table_statistics = table_stats_gen.take_table_statistics();
+                let logical_delta = self.snapshot_gen.logical_change_delta(&previous);
                 match self.snapshot_gen.generate_new_snapshot(
                     &table_info,
                     cluster_key_info,
@@ -523,6 +525,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             &snapshot,
                         );
                         self.state = State::TryCommit {
+                            logical_delta,
                             data: snapshot.to_bytes()?,
                             snapshot,
                             table_info,
@@ -630,6 +633,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 }
             }
             State::TryCommit {
+                logical_delta,
                 data,
                 snapshot,
                 table_info,
@@ -724,6 +728,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 match commit_result {
                     Ok(_) => {
+                        self.ctx
+                            .txn_mgr()
+                            .lock()
+                            .add_logical_change_delta(table_info.ident.table_id, logical_delta);
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
                             &table_info,

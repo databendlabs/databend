@@ -105,6 +105,7 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut hlls = HashMap::with_capacity(self.commit_metas.len());
         let mut top_ns = HashMap::with_capacity(self.commit_metas.len());
         let mut imperfect_counts = HashMap::with_capacity(self.commit_metas.len());
+        let mut logical_deltas = HashMap::with_capacity(self.commit_metas.len());
         let insert_rows = std::mem::take(&mut self.insert_rows);
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             let table = self.tables.get(&table_id).unwrap();
@@ -113,7 +114,7 @@ impl AsyncSink for CommitMultiTableInsert {
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             if table.is_temp() {
-                let (req, imperfect_count) = build_update_temp_table_req(
+                let prepared = build_update_temp_table_req(
                     table.as_ref(),
                     &snapshot_generator,
                     self.ctx.txn_mgr(),
@@ -123,10 +124,11 @@ impl AsyncSink for CommitMultiTableInsert {
                     &commit_meta.top_n,
                 )
                 .await?;
-                update_temp_tables.push(req);
-                imperfect_counts.insert(table_id, imperfect_count);
+                update_temp_tables.push(prepared.update);
+                logical_deltas.insert(table_id, prepared.logical_delta);
+                imperfect_counts.insert(table_id, prepared.imperfect_count);
             } else {
-                let (req, imperfect_count) = build_update_table_meta_req(
+                let prepared = build_update_table_meta_req(
                     table.as_ref(),
                     &snapshot_generator,
                     self.ctx.txn_mgr(),
@@ -136,8 +138,9 @@ impl AsyncSink for CommitMultiTableInsert {
                     &commit_meta.top_n,
                 )
                 .await?;
-                update_table_metas.push((req, table.get_table_info().clone()));
-                imperfect_counts.insert(table_id, imperfect_count);
+                update_table_metas.push((prepared.update, table.get_table_info().clone()));
+                logical_deltas.insert(table_id, prepared.logical_delta);
+                imperfect_counts.insert(table_id, prepared.imperfect_count);
             }
             snapshot_generators.insert(table_id, snapshot_generator);
             top_ns.insert(table_id, commit_meta.top_n);
@@ -221,6 +224,9 @@ impl AsyncSink for CommitMultiTableInsert {
                     let mut txn_mgr = txn_mgr.lock();
                     if txn_mgr.is_active() {
                         txn_mgr.add_multi_table_insert_rows(insert_rows.clone());
+                        for (&table_id, &delta) in &logical_deltas {
+                            txn_mgr.add_logical_change_delta(table_id, delta);
+                        }
                     }
                 }
 
@@ -251,7 +257,7 @@ impl AsyncSink for CommitMultiTableInsert {
                             .await?;
                         for (req, _) in update_table_metas.iter_mut() {
                             if req.table_id == tid {
-                                let (new_req, imperfect_count) = build_update_table_meta_req(
+                                let prepared = build_update_table_meta_req(
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
@@ -261,8 +267,9 @@ impl AsyncSink for CommitMultiTableInsert {
                                     top_ns.get(&tid).unwrap(),
                                 )
                                 .await?;
-                                *req = new_req;
-                                imperfect_counts.insert(tid, imperfect_count);
+                                *req = prepared.update;
+                                imperfect_counts.insert(tid, prepared.imperfect_count);
+                                logical_deltas.insert(tid, prepared.logical_delta);
                                 break;
                             }
                         }
@@ -345,6 +352,14 @@ fn build_temp_update_multi_table_meta_req(
     }
 }
 
+/// A prepared metadata update and the bookkeeping for that exact candidate.
+struct PreparedTableCommit<T> {
+    update: T,
+    imperfect_count: u64,
+    /// Logical UPDATE/DELETE increments, recorded only after successful commit.
+    logical_delta: (u64, u64),
+}
+
 async fn build_update_temp_table_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
@@ -353,9 +368,9 @@ async fn build_update_temp_table_req(
     insert_hll: &BlockHLL,
     insert_rows: u64,
     insert_top_n: &BlockTopN,
-) -> Result<(UpdateTempTableReq, u64)> {
+) -> Result<PreparedTableCommit<UpdateTempTableReq>> {
     let table_info = table.get_table_info();
-    let (new_table_meta, imperfect_count) = write_new_snapshot_and_build_table_meta(
+    let prepared = write_new_snapshot_and_build_table_meta(
         table,
         snapshot_generator,
         txn_mgr,
@@ -366,15 +381,16 @@ async fn build_update_temp_table_req(
     )
     .await?;
 
-    Ok((
-        UpdateTempTableReq {
+    Ok(PreparedTableCommit {
+        update: UpdateTempTableReq {
             table_id: table_info.ident.table_id,
-            new_table_meta,
+            new_table_meta: prepared.update,
             copied_files: Default::default(),
             desc: table_info.desc.clone(),
         },
-        imperfect_count,
-    ))
+        imperfect_count: prepared.imperfect_count,
+        logical_delta: prepared.logical_delta,
+    })
 }
 
 async fn build_update_table_meta_req(
@@ -385,9 +401,9 @@ async fn build_update_table_meta_req(
     insert_hll: &BlockHLL,
     insert_rows: u64,
     insert_top_n: &BlockTopN,
-) -> Result<(UpdateTableMetaReq, u64)> {
+) -> Result<PreparedTableCommit<UpdateTableMetaReq>> {
     let fuse_table = FuseTable::try_from_table(table)?;
-    let (new_table_meta, imperfect_count) = write_new_snapshot_and_build_table_meta(
+    let prepared = write_new_snapshot_and_build_table_meta(
         table,
         snapshot_generator,
         txn_mgr,
@@ -403,11 +419,15 @@ async fn build_update_table_meta_req(
     let req = UpdateTableMetaReq {
         table_id,
         seq: MatchSeq::Exact(table_version),
-        new_table_meta,
+        new_table_meta: prepared.update,
         base_snapshot_location: fuse_table.snapshot_loc(),
         lvt_check: None,
     };
-    Ok((req, imperfect_count))
+    Ok(PreparedTableCommit {
+        update: req,
+        imperfect_count: prepared.imperfect_count,
+        logical_delta: prepared.logical_delta,
+    })
 }
 
 async fn write_new_snapshot_and_build_table_meta(
@@ -418,7 +438,7 @@ async fn write_new_snapshot_and_build_table_meta(
     insert_hll: &BlockHLL,
     insert_rows: u64,
     insert_top_n: &BlockTopN,
-) -> Result<(TableMeta, u64)> {
+) -> Result<PreparedTableCommit<TableMeta>> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     // Match single-table commits: transaction commits may collapse intermediate snapshot
@@ -435,6 +455,7 @@ async fn write_new_snapshot_and_build_table_meta(
         .await?;
     let mut table_statistics = table_stats_gen.take_table_statistics();
     let table_info = table.get_table_info();
+    let logical_delta = snapshot_generator.logical_change_delta(&previous);
     let snapshot = snapshot_generator.generate_new_snapshot(
         table_info,
         fuse_table.cluster_key_info(),
@@ -460,10 +481,11 @@ async fn write_new_snapshot_and_build_table_meta(
             .await?;
     }
 
-    Ok((
-        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot),
+    Ok(PreparedTableCommit {
+        update: FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot),
         imperfect_count,
-    ))
+        logical_delta,
+    })
 }
 
 #[cfg(test)]
