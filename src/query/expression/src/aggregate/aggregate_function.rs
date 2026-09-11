@@ -585,6 +585,47 @@ pub trait AggregateEval: Send + Sync + 'static {
     unsafe fn drop_state(&self, state: AggrState<'_>);
 }
 
+impl<E: AggregateEval + ?Sized> AggregateEval for Box<E> {
+    fn init_state(&self, state: AggrState<'_>) {
+        (**self).init_state(state);
+    }
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
+        (**self).accumulate(input)
+    }
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
+        (**self).accumulate_keys(input)
+    }
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
+        (**self).accumulate_row(input)
+    }
+    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
+        (**self).accumulate_row_count(input)
+    }
+    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
+        (**self).accumulate_row_count_keys(input)
+    }
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        (**self).serialize(input)
+    }
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
+        (**self).merge_serialized(input)
+    }
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
+        (**self).merge_states(input)
+    }
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+        (**self).merge_result(input)
+    }
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
+        (**self).merge_result_read_only(input)
+    }
+    unsafe fn drop_state(&self, state: AggrState<'_>) {
+        unsafe {
+            (**self).drop_state(state);
+        }
+    }
+}
+
 pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
     fn signature(&self) -> &AggregateSignature;
 
