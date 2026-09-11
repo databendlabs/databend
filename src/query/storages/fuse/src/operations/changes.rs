@@ -722,7 +722,7 @@ fn replace_push_downs(
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct LogicalChangeRows {
+pub(crate) struct LogicalChangeRows {
     inserted: u64,
     updated: u64,
     deleted: u64,
@@ -773,6 +773,27 @@ fn logical_change_rows(
         updated,
         deleted,
     }))
+}
+
+pub(crate) fn estimate_change_rows(
+    base: Option<&TableSnapshot>,
+    latest: &TableSnapshot,
+    mode: &StreamMode,
+) -> Result<u64> {
+    if let Some(rows) = logical_change_rows(base, Some(latest))? {
+        return Ok(match mode {
+            StreamMode::AppendOnly => rows.inserted,
+            StreamMode::Standard => rows
+                .inserted
+                .saturating_add(rows.deleted)
+                .saturating_add(rows.updated.saturating_mul(2)),
+        });
+    }
+
+    Ok(latest
+        .summary
+        .row_count
+        .abs_diff(base.map_or(0, |snapshot| snapshot.summary.row_count)))
 }
 
 fn estimate_append_candidate_rows(
@@ -958,5 +979,17 @@ mod tests {
         let mut newer_base = snapshot(10);
         newer_base.add_logical_change_delta(3, 0);
         assert!(logical_change_rows(Some(&newer_base), Some(&latest)).is_err());
+
+        let base = snapshot(10);
+        let mut updated = snapshot(10);
+        updated.add_logical_change_delta(2, 0);
+        assert_eq!(
+            estimate_change_rows(Some(&base), &updated, &StreamMode::Standard).unwrap(),
+            4
+        );
+        assert_eq!(
+            estimate_change_rows(Some(&base), &updated, &StreamMode::AppendOnly).unwrap(),
+            0
+        );
     }
 }

@@ -590,9 +590,5 @@ pub(crate) fn is_fresh_table_snapshot_top_n(
     snapshot: &TableSnapshot,
     stats: &TableSnapshotStatistics,
 ) -> bool {
-    stats.row_count == snapshot.summary.row_count
-        && snapshot
-            .prev_snapshot_id
-            .as_ref()
-            .is_none_or(|(snapshot_id, _)| *snapshot_id == stats.snapshot_id)
+    stats.is_fresh_for(snapshot)
 }

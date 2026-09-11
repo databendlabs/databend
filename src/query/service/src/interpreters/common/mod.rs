@@ -47,6 +47,7 @@ pub use query_log::InterpreterQueryLog;
 pub use stream::dml_build_update_stream_req;
 pub use stream::query_build_update_stream_req;
 pub use table::check_referenced_computed_columns;
+pub use table::stored_computed_column_references;
 pub use util::check_deduplicate_label;
 pub use worker::get_worker_client_config;
 

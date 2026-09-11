@@ -1288,13 +1288,7 @@ impl Table for FuseTable {
                 .unwrap_or_default();
             let aligned_table_statistics = table_statistics
                 .as_ref()
-                .filter(|v| v.row_count == snapshot.summary.row_count)
-                .filter(|v| {
-                    snapshot
-                        .prev_snapshot_id
-                        .as_ref()
-                        .is_none_or(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
-                });
+                .filter(|stats| stats.is_fresh_for(&snapshot));
             let top_n = aligned_table_statistics
                 .map(|v| v.top_n.clone())
                 .unwrap_or_default();
