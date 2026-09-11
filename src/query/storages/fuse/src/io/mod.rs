@@ -93,4 +93,5 @@ pub(crate) use write::create_inverted_index_builders;
 pub(crate) use write::create_tokenizer_manager;
 pub(crate) use write::num_granules_of;
 pub use write::serialize_block;
+pub(crate) use write::virtual_offset_mark;
 pub use write::write_data;

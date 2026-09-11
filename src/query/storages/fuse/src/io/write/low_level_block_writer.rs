@@ -126,7 +126,9 @@ impl GranuleIndexesWrite {
         mut self,
         metadata: &ParquetMetaData,
         row_count: usize,
+        extra_marks: Vec<crate::io::granule_index::GranuleMark>,
     ) -> Result<GranuleIndexFileState> {
+        self.output.marks.extend(extra_marks);
         for writer in self.writers {
             self.output.merge(writer.finish()?)?;
         }
@@ -955,12 +957,15 @@ impl FuseLowLevelDataWriter {
         }
         let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
 
+        let mut virtual_marks = Vec::new();
         let draft_virtual_block_meta = match self.virtual_columns.as_mut() {
             Some(builder) => {
-                let state = builder.finalize(
+                let state = builder.finalize_with_granules(
                     &parent.options.write_settings,
                     &parent.options.block_location,
+                    self.granule_rows,
                 )?;
+                virtual_marks = state.granule_marks;
                 let meta = state.draft_virtual_block_meta;
                 if let Some(columns) = &meta.virtual_columns
                     && columns.virtual_column_size > 0
@@ -1000,7 +1005,7 @@ impl FuseLowLevelDataWriter {
 
         let offsets_layout = match self.granule_indexes {
             Some(indexes) => {
-                let state = indexes.finish(&metadata, row_count)?;
+                let state = indexes.finish(&metadata, row_count, virtual_marks)?;
                 let layout = state.layout.clone();
                 parent.write_file(state.data, &state.layout.location)?;
                 Some(layout)
@@ -1829,6 +1834,46 @@ mod tests {
             ]),
             2,
         );
+    }
+
+    #[test]
+    fn test_virtual_marks_share_low_level_offsets_file() {
+        use databend_common_expression::types::VariantType;
+
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "v",
+            TableDataType::Variant,
+        )]));
+        let values = [r#"{"a":1}"#, r#"{"a":2}"#, r#"{"a":3}"#]
+            .map(|value| jsonb::parse_value(value.as_bytes()).unwrap().to_vec());
+        let column = VariantType::from_data(values.into());
+        let mut write_options = options(operator, schema.clone());
+        write_options.cluster_keys = None;
+        write_options.set_statistics(Vec::new(), Vec::new(), false);
+        write_options.set_virtual_columns(Some(
+            VirtualColumnBuilder::try_create(schema, Default::default()).unwrap(),
+        ));
+        let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
+        let data = writer.write_data().unwrap();
+        let mut leaf = data.next_column().unwrap();
+        leaf.write(&column.slice(0..1)).unwrap();
+        leaf.write(&column.slice(1..3)).unwrap();
+        let result = leaf.finish().unwrap().finish().unwrap().finish().unwrap();
+        let layout = &result.block_meta.granule_index.as_ref().unwrap().offsets;
+        let virtual_columns = result
+            .draft_virtual_block_meta
+            .unwrap()
+            .virtual_columns
+            .unwrap();
+        assert!(layout.columns.contains_key("g_0"));
+        assert_eq!(layout.columns.len(), 2);
+        let column = &virtual_columns.virtual_column_metas[0].column_meta;
+        assert!(layout.columns.contains_key(&crate::io::virtual_offset_mark(
+            &virtual_columns.virtual_location.0,
+            column.offset
+        )));
     }
 
     #[test]

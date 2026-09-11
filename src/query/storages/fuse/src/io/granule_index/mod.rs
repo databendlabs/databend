@@ -84,6 +84,7 @@ pub fn materialize_cluster_key_columns(
         .map(Some)
 }
 
+#[derive(Debug, Clone)]
 pub struct GranuleMark {
     pub field: TableField,
     pub values: Column,

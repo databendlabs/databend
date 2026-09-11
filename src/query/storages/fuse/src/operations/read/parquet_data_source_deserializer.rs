@@ -61,6 +61,7 @@ struct ActiveGranuleRead {
     part: PartInfoPtr,
     groups: VecDeque<Vec<std::ops::Range<usize>>>,
     reader: GranuleDataReader,
+    virtual_reader: Option<GranuleDataReader>,
 }
 
 struct DecodedRange {
@@ -352,11 +353,24 @@ impl DeserializeDataTransform {
         self.diagnostics.selected_bytes += selected;
         self.diagnostics.coalesced_bytes += coalesced;
         self.diagnostics.coalesced_requests += requests;
+        let virtual_reader = self.read_block_context.create_virtual_granule_reader(
+            &part,
+            &groups,
+            self.cache_lock_stats.clone(),
+        )?;
+        if let Some(reader) = &virtual_reader {
+            let (columns, selected, coalesced, requests) = reader.read_plan_stats();
+            self.diagnostics.projected_columns += columns;
+            self.diagnostics.selected_bytes += selected;
+            self.diagnostics.coalesced_bytes += coalesced;
+            self.diagnostics.coalesced_requests += requests;
+        }
         self.diagnostics.granule_reader_create += start.elapsed();
         self.active_granule_read = Some(ActiveGranuleRead {
             part,
             groups: groups.into(),
             reader,
+            virtual_reader,
         });
         Ok(())
     }
@@ -377,11 +391,41 @@ impl DeserializeDataTransform {
             let range_read = active.reader.read_next()?.ok_or_else(|| {
                 ErrorCode::Internal("granule data reader ended before group was complete")
             })?;
-            self.diagnostics.granule_read += read_start.elapsed();
             if range_read.range != expected_range {
                 return Err(ErrorCode::Internal("granule read ranges are out of sync"));
             }
-            decoded_ranges.push(self.decode_normal_range(fuse_part, range_read.data, None)?);
+            let virtual_data = if let Some(reader) = &mut active.virtual_reader {
+                let read = reader
+                    .read_next()?
+                    .ok_or_else(|| ErrorCode::Internal("virtual granule reader ended early"))?;
+                if read.range != expected_range
+                    || read.data.row_range() != range_read.data.row_range()
+                {
+                    return Err(ErrorCode::Internal(
+                        "virtual granule ranges are out of sync",
+                    ));
+                }
+                let meta = fuse_part
+                    .block_meta_index()
+                    .and_then(|index| index.virtual_block_meta.as_ref())
+                    .ok_or_else(|| ErrorCode::Internal("virtual granule metadata is missing"))?;
+                Some(VirtualBlockReadResult::create(
+                    read.data.row_range().unwrap().len(),
+                    fuse_part.compression,
+                    read.data,
+                    VirtualColumnReader::read_schema(meta),
+                    meta.virtual_column_read_plan.clone(),
+                    None,
+                ))
+            } else {
+                None
+            };
+            self.diagnostics.granule_read += read_start.elapsed();
+            decoded_ranges.push(self.decode_normal_range(
+                fuse_part,
+                range_read.data,
+                virtual_data,
+            )?);
         }
 
         let finalize_start = Instant::now();

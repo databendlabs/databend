@@ -345,10 +345,13 @@ impl FuseBlockWriter {
         }
         let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
 
-        let virtual_column_state =
+        let mut virtual_column_state =
             if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
-                let virtual_column_state = virtual_column_builder
-                    .finalize(&self.properties.write_settings, &block_location)?;
+                let virtual_column_state = virtual_column_builder.finalize_with_granules(
+                    &self.properties.write_settings,
+                    &block_location,
+                    self.properties.write_settings.index_granularity,
+                )?;
                 Some(virtual_column_state)
             } else {
                 None
@@ -386,7 +389,12 @@ impl FuseBlockWriter {
             granule_index,
             granule_payloads,
         } = match self.block_writer.take() {
-            Some(writer) => writer.finish()?,
+            Some(writer) => writer.finish_with_extra_marks(
+                virtual_column_state
+                    .as_mut()
+                    .map(|state| std::mem::take(&mut state.granule_marks))
+                    .unwrap_or_default(),
+            )?,
             // Empty builder: no block was ever written.
             None => ParquetBlockOutput {
                 data: Buffer::new(),

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
@@ -34,6 +35,7 @@ use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::RangeReader;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Buffer;
 
 use super::BlockReadContext;
@@ -484,11 +486,42 @@ impl GranuleDataReader {
         part: &FuseBlockPartInfo,
         groups: &[Vec<Range<usize>>],
         offsets: &OffsetsIndex,
+        ignore_column_ids: Option<&HashSet<ColumnId>>,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> Result<Self> {
+        Self::create_for_file(
+            read_context,
+            settings,
+            &part.location,
+            block_file_len(part),
+            part.nums_rows,
+            &part.columns_meta,
+            read_context
+                .project_indices()
+                .values()
+                .map(|(id, ..)| *id)
+                .filter(|id| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id))),
+            groups,
+            offsets,
+            lock_stats,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn create_for_file(
+        read_context: &BlockReadContext,
+        settings: &ReadSettings,
+        location: &str,
+        file_len: u64,
+        block_rows: usize,
+        col_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_ids: impl IntoIterator<Item = ColumnId>,
+        groups: &[Vec<Range<usize>>],
+        offsets: &OffsetsIndex,
         lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
         let ranges = collect_ranges(groups);
-        offsets.validate_ranges(&ranges, part.nums_rows)?;
-        let file_len = block_file_len(part);
+        offsets.validate_ranges(&ranges, block_rows)?;
         let fetch_part_num = read_context.storage_fetch_part_num()?.max(1);
         let range_size = usize::try_from(GRANULE_IO_RANGE_SIZE).unwrap_or(usize::MAX);
         let held_budget = range_size.saturating_mul(fetch_part_num.saturating_add(2));
@@ -504,19 +537,19 @@ impl GranuleDataReader {
         };
 
         let mut column_readers = Vec::new();
-        for (column_id, ..) in read_context.project_indices().values() {
-            let meta = part.columns_meta.get(column_id).ok_or_else(|| {
+        for column_id in column_ids {
+            let meta = col_metas.get(&column_id).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "granule data metadata missing projected column {column_id}"
                 ))
             })?;
             let (has_dictionary, byte_ranges) =
-                offsets.column_byte_ranges(*column_id, meta, &ranges)?;
+                offsets.column_byte_ranges(column_id, meta, &ranges)?;
             record_remote_bytes(&byte_ranges);
 
             let reader = create_file_range_reader_with_stats(
                 read_context.operator().clone(),
-                part.location.clone(),
+                location.to_string(),
                 file_len,
                 fetch_part_num,
                 GRANULE_IO_RANGE_SIZE,
@@ -525,7 +558,7 @@ impl GranuleDataReader {
                 lock_stats.clone(),
             )?;
             let reader = GranuleColumnReader::try_create(
-                *column_id,
+                column_id,
                 reader,
                 &byte_ranges,
                 has_dictionary,
@@ -536,12 +569,12 @@ impl GranuleDataReader {
         }
 
         Ok(Self {
-            location: part.location.clone(),
+            location: location.to_string(),
             ranges: ranges.into(),
             column_readers,
             column_array_cache: CacheManager::instance().get_table_data_array_cache(),
             granule_rows: offsets.granule_rows(),
-            block_rows: part.nums_rows,
+            block_rows,
         })
     }
 

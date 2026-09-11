@@ -29,6 +29,7 @@ use opendal::Buffer;
 use parquet::file::properties::WriterPropertiesPtr;
 
 use crate::io::granule_index::GranuleIndexWriter;
+use crate::io::granule_index::GranuleMark;
 use crate::io::granule_index::PendingGranuleIndexOutput;
 use crate::io::write::GranuleIndexFileWriter;
 use crate::io::write::GranuleIndexState;
@@ -74,6 +75,7 @@ pub(super) struct ParquetBlockWriter {
     inner: ParquetFileWriter,
     schema: TableSchemaRef,
     granule: Option<GranuleWriteSettings>,
+    page_rows: Option<usize>,
     total_rows: usize,
     written: usize,
     leaf_column_ids: Vec<ColumnId>,
@@ -94,6 +96,7 @@ impl ParquetBlockWriter {
         Self {
             inner,
             schema,
+            page_rows: granule.as_ref().map(|settings| settings.rows),
             granule,
             total_rows: 0,
             written: 0,
@@ -101,8 +104,22 @@ impl ParquetBlockWriter {
         }
     }
 
+    /// Align a virtual column file to its block without creating a separate marks file.
+    pub(super) fn with_page_rows(mut self, rows: Option<usize>) -> Result<Self> {
+        if rows == Some(0) || self.granule.is_some() || self.total_rows != 0 {
+            return Err(ErrorCode::BadArguments(
+                "virtual column page alignment requires a fresh writer and positive granule rows",
+            ));
+        }
+        if rows.is_some() {
+            self.inner.enable_page_layout();
+        }
+        self.page_rows = rows;
+        Ok(self)
+    }
+
     pub(super) fn write(&mut self, block: DataBlock) -> Result<()> {
-        let Some(granule) = self.granule.as_mut() else {
+        let Some(rows) = self.page_rows else {
             self.inner.write_block(block)?;
             return Ok(());
         };
@@ -111,23 +128,27 @@ impl ParquetBlockWriter {
         let num_rows = block.num_rows();
         self.total_rows += num_rows;
         while offset < num_rows {
-            let take = (granule.rows - self.written).min(num_rows - offset);
+            let take = (rows - self.written).min(num_rows - offset);
             let range = offset..offset + take;
 
             self.inner.write_block(block.slice(range.clone()))?;
-            for writer in &mut granule.writers {
-                writer.write(&block, range.clone())?;
+            if let Some(granule) = &mut self.granule {
+                for writer in &mut granule.writers {
+                    writer.write(&block, range.clone())?;
+                }
             }
 
             offset += take;
             self.written += take;
 
-            if self.written == granule.rows {
+            if self.written == rows {
                 self.written = 0;
 
                 self.inner.flush_page()?;
-                for writer in &mut granule.writers {
-                    writer.finish_granule()?;
+                if let Some(granule) = &mut self.granule {
+                    for writer in &mut granule.writers {
+                        writer.finish_granule()?;
+                    }
                 }
             }
         }
@@ -138,13 +159,27 @@ impl ParquetBlockWriter {
         self.inner.compressed_size()
     }
 
-    pub(super) fn finish(mut self) -> Result<ParquetBlockOutput> {
+    #[cfg(test)]
+    pub(super) fn finish(self) -> Result<ParquetBlockOutput> {
+        self.finish_with_extra_marks(Vec::new())
+    }
+
+    pub(super) fn finish_with_extra_marks(
+        mut self,
+        extra_marks: Vec<GranuleMark>,
+    ) -> Result<ParquetBlockOutput> {
+        if self.granule.is_none() && !extra_marks.is_empty() {
+            return Err(ErrorCode::Internal(
+                "virtual column marks require block granule index",
+            ));
+        }
         let granule = self.granule.take();
         let serialized = self.inner.finish()?;
         let granule_index = match granule {
             Some(granule) => {
                 let num_granules = self.total_rows.div_ceil(granule.rows);
                 let mut output = PendingGranuleIndexOutput::default();
+                output.marks.extend(extra_marks);
                 for writer in granule.writers {
                     output.merge(writer.finish()?)?;
                 }

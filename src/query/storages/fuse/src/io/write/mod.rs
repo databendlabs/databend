@@ -52,6 +52,7 @@ pub use granule_index_writer::GranulePruningReadContext;
 pub(crate) use granule_index_writer::OffsetsIndex;
 pub(crate) use granule_index_writer::PrefetchedGranuleMins;
 pub(crate) use granule_index_writer::num_granules_of;
+pub(crate) use granule_index_writer::virtual_offset_mark;
 pub use inverted_index_writer::InvertedIndexBuilder;
 pub use inverted_index_writer::InvertedIndexWriter;
 pub(crate) use inverted_index_writer::create_index_schema;

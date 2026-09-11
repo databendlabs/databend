@@ -72,6 +72,10 @@ impl BlockReadResult {
         }
     }
 
+    pub(crate) fn location(&self) -> &str {
+        &self.merge_io_result.block_path
+    }
+
     pub fn row_range(&self) -> Option<&std::ops::Range<usize>> {
         self.row_range.as_ref()
     }

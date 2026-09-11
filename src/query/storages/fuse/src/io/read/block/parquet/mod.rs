@@ -14,24 +14,17 @@
 
 use std::collections::HashMap;
 
-use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
-use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FilterVisitor;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
-use databend_common_expression::visitor::ValueVisitor;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::ColumnArrayCache;
-use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
@@ -39,7 +32,9 @@ mod deserialize;
 mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
+pub(crate) use deserialize::ArrayCacheContext;
 pub use deserialize::column_chunks_to_record_batch;
+pub(crate) use deserialize::deserialize_column_chunks;
 pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
@@ -97,30 +92,6 @@ impl BlockReader {
         )
     }
 
-    fn cache_array(
-        cache: &ColumnArrayCache,
-        block_path: &str,
-        column_id: ColumnId,
-        column_meta: Option<&ColumnMeta>,
-        data_item: &DataItem,
-        complete_column_chunks: bool,
-        array: &ArrayRef,
-    ) {
-        let range = match data_item {
-            DataItem::GranuleData(_, range) => Some(range.clone()),
-            DataItem::RawData(_) if complete_column_chunks => column_meta.map(|meta| {
-                let (offset, len) = meta.offset_length();
-                offset..offset + len
-            }),
-            _ => None,
-        };
-        if let Some(range) = range {
-            let key =
-                TableDataCacheKey::new(block_path, column_id, range.start, range.end - range.start);
-            cache.insert(key.into(), (array.clone(), array.get_array_memory_size()));
-        }
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn deserialize_parquet_chunks_inner(
         &self,
@@ -142,31 +113,27 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        let has_selection = selection.is_some();
-        let parquet_selection = selection.map(|s| s.selection.clone());
-        let record_batch = column_chunks_to_record_batch(
+        let array_cache = match self.put_cache {
+            true => CacheManager::instance().get_table_data_array_cache(),
+            false => None,
+        };
+        let record_batch = deserialize_column_chunks(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
-            parquet_selection,
+            selection.map(|s| s.selection.clone()),
+            array_cache.as_ref().map(|cache| ArrayCacheContext {
+                cache,
+                location: block_path,
+                column_metas,
+                complete_column_chunks,
+            }),
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache && !has_selection {
-            CacheManager::instance().get_table_data_array_cache()
-        } else {
-            None
-        };
-
-        for ((i, field), column_node) in self
-            .projected_schema
-            .fields
-            .iter()
-            .enumerate()
-            .zip(self.project_column_nodes.iter())
-        {
+        for (i, field) in self.projected_schema.fields.iter().enumerate() {
             let data_type = field.data_type().into();
 
             // NOTE, there is something tricky here:
@@ -185,38 +152,8 @@ impl BlockReader {
 
             let data_item = column_chunks.get(&field.column_id);
             let value = match data_item {
-                Some(DataItem::RawData(_)) | Some(DataItem::GranuleData(_, _)) => {
-                    let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                    if !column_node.is_nested
-                        && arrow_array.len() == num_rows
-                        && let Some(cache) = &array_cache
-                    {
-                        Self::cache_array(
-                            cache,
-                            block_path,
-                            field.column_id,
-                            column_metas.get(&field.column_id),
-                            data_item.expect("matched raw data above"),
-                            complete_column_chunks,
-                            &arrow_array,
-                        );
-                    }
-                    Value::from_arrow_rs(arrow_array, &data_type)?
-                }
-                Some(DataItem::ColumnArray(cached)) => {
-                    if column_node.is_nested {
-                        // a defensive check, should never happen
-                        return Err(ErrorCode::StorageOther(
-                            "unexpected nested field: nested leaf field hits cached",
-                        ));
-                    }
-                    let mut value = Value::from_arrow_rs(cached.0.clone(), &data_type)?;
-                    if let Some(selection) = selection {
-                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
-                        filter_visitor.visit_value(value)?;
-                        value = filter_visitor.take_result().unwrap();
-                    }
-                    value
+                Some(_) => {
+                    Value::from_arrow_rs(column_by_name(&record_batch, &name_paths[i]), &data_type)?
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };
@@ -270,29 +207,5 @@ fn column_name_paths(projection: &Projection, schema: &TableSchema) -> Vec<Vec<S
             }
             name_paths
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use arrow_array::Int32Array;
-    use databend_storages_common_cache::InMemoryLruCache;
-    use opendal::Buffer;
-
-    use super::*;
-
-    #[test]
-    fn test_cache_granule_array_by_file_range() {
-        let cache = InMemoryLruCache::with_bytes_capacity("granule-array".to_string(), 1024);
-        let array: ArrayRef = Arc::new(Int32Array::from(vec![10, 20]));
-        let item = DataItem::GranuleData(Buffer::new(), 100..180);
-
-        BlockReader::cache_array(&cache, "block", 7, None, &item, false, &array);
-
-        let key = TableDataCacheKey::new("block", 7, 100, 80);
-        let cached = cache.get(&key).unwrap();
-        assert!(Arc::ptr_eq(&cached.0, &array));
     }
 }

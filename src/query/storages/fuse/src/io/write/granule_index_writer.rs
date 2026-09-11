@@ -63,6 +63,41 @@ pub const GRANULE_INDEX_MIN_COL_PREFIX: &str = "m";
 /// Prefix of a per-leaf-column offset column name (`g_{column_id}`).
 pub const GRANULE_INDEX_OFFSET_COL_PREFIX: &str = "g_";
 
+/// The immutable virtual column file name and chunk start identify a physical leaf even
+/// when its segment-local or query column id changes. Refresh gets a new generation.
+pub(crate) fn virtual_offset_mark(location: &str, chunk_offset: u64) -> String {
+    let generation = location.rsplit('/').next().unwrap_or(location);
+    format!("gv1_{generation}_{chunk_offset}")
+}
+
+pub(crate) fn virtual_offset_marks(
+    rows: usize,
+    block_rows: usize,
+    location: &str,
+    page_layout: &[LeafPageLayout],
+    chunk_offsets: impl ExactSizeIterator<Item = u64>,
+) -> Result<Vec<GranuleMark>> {
+    if page_layout.len() != chunk_offsets.len() {
+        return Err(ErrorCode::Internal(
+            "virtual page layout and chunk counts differ",
+        ));
+    }
+    if rows == 0 {
+        return Err(ErrorCode::Internal("virtual granule rows must be positive"));
+    }
+    let writer = GranuleIndexFileWriter::new(rows, vec![], None, (String::new(), 0));
+    page_layout
+        .iter()
+        .zip(chunk_offsets)
+        .map(|(leaf, offset)| {
+            Ok(GranuleMark::create(
+                &virtual_offset_mark(location, offset),
+                writer.granule_offsets(leaf, block_rows.div_ceil(rows))?,
+            ))
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone)]
 pub struct GranuleIndexFileState {
     pub data: Buffer,
@@ -810,18 +845,43 @@ impl OffsetsIndex {
         projected_column_ids: impl IntoIterator<Item = ColumnId>,
         lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
+        Self::load_named_with_stats(
+            dal,
+            settings,
+            layout,
+            granule_rows,
+            block_rows,
+            col_metas,
+            projected_column_ids
+                .into_iter()
+                .map(|id| (id, format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}"))),
+            lock_stats,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn load_named_with_stats(
+        dal: &Operator,
+        settings: &ReadSettings,
+        layout: &GranuleIndexFileLayout,
+        granule_rows: usize,
+        block_rows: usize,
+        col_metas: &HashMap<ColumnId, ColumnMeta>,
+        columns: impl IntoIterator<Item = (ColumnId, String)>,
+        lock_stats: Option<Arc<CacheLockStats>>,
+    ) -> Result<Self> {
         let num_granules = num_granules_of(block_rows, granule_rows);
         if num_granules == 0 {
             return Err(ErrorCode::Internal(
                 "granule index offsets cannot be loaded for zero granules",
             ));
         }
-        let mut projected_column_ids = projected_column_ids.into_iter().collect::<Vec<_>>();
-        projected_column_ids.sort_unstable();
-        projected_column_ids.dedup();
-        let names = projected_column_ids
+        let mut columns = columns.into_iter().collect::<Vec<_>>();
+        columns.sort_unstable_by_key(|(id, _)| *id);
+        columns.dedup_by_key(|(id, _)| *id);
+        let names = columns
             .iter()
-            .map(|id| format!("{}{}", GRANULE_INDEX_OFFSET_COL_PREFIX, id))
+            .map(|(_, name)| name.clone())
             .collect::<Vec<_>>();
         let arrays = PrefetchedGranuleMarkArrays::prefetch(
             dal,
@@ -832,14 +892,13 @@ impl OffsetsIndex {
             lock_stats,
         )?;
         let mut values_by_name = arrays.read_u64()?;
-        let mut offsets = HashMap::with_capacity(projected_column_ids.len());
-        for id in projected_column_ids {
+        let mut offsets = HashMap::with_capacity(columns.len());
+        for (id, name) in columns {
             let meta = col_metas.get(&id).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "granule index metadata missing projected leaf column {id}"
                 ))
             })?;
-            let name = format!("{GRANULE_INDEX_OFFSET_COL_PREFIX}{id}");
             let values = values_by_name.remove(&name).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "granule index offsets missing projected leaf column {name}"

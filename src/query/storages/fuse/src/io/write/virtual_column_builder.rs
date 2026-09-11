@@ -84,6 +84,7 @@ use parquet::file::metadata::ParquetMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use super::granule_index_writer::virtual_offset_marks;
 use super::parquet_block_writer::ParquetBlockWriter;
 use crate::MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS;
 use crate::MAX_VIRTUAL_COLUMN_PATH_STATISTICS;
@@ -94,6 +95,7 @@ use crate::index::encode_compact_virtual_column_shared_ids;
 use crate::index::encode_compact_virtual_column_string_table;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnLayoutPolicy;
+use crate::io::granule_index::GranuleMark;
 use crate::io::write::WriteSettings;
 use crate::statistics::gen_columns_statistics;
 
@@ -102,6 +104,7 @@ const DEFAULT_VIRTUAL_COLUMN_NUMBER: usize = 32;
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
     pub data: opendal::Buffer,
+    pub(crate) granule_marks: Vec<GranuleMark>,
     pub draft_virtual_block_meta: DraftVirtualBlockMeta,
 }
 
@@ -777,6 +780,16 @@ impl VirtualColumnBuilder {
         write_settings: &WriteSettings,
         location: &Location,
     ) -> Result<VirtualColumnState> {
+        // Standalone refresh cannot change the immutable parent offsets file.
+        self.finalize_with_granules(write_settings, location, None)
+    }
+
+    pub(crate) fn finalize_with_granules(
+        &mut self,
+        write_settings: &WriteSettings,
+        location: &Location,
+        granule_rows: Option<usize>,
+    ) -> Result<VirtualColumnState> {
         let mut virtual_paths = Vec::with_capacity(self.variant_fields.len());
         for _ in 0..self.variant_fields.len() {
             virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
@@ -813,6 +826,7 @@ impl VirtualColumnBuilder {
 
             return Ok(VirtualColumnState {
                 data: opendal::Buffer::new(),
+                granule_marks: vec![],
                 draft_virtual_block_meta,
             });
         }
@@ -1023,11 +1037,11 @@ impl VirtualColumnBuilder {
             HashMap::new(),
         )?;
 
-        // Plain write (`granule_rows = None`); virtual columns derive their metas from the raw
-        // parquet footer, so use `finish_plain` to get the full `SerializedParquet` back.
+        // Capture aligned pages without serializing a separate offsets file. The
+        // parent writer merges these marks with its own before publishing the block.
         let props = Arc::new(build_parquet_writer_properties(
             write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
+            write_settings.enable_parquet_dictionary && granule_rows.is_none(),
             Some(&columns_statistics),
             metadata,
             virtual_block.num_rows(),
@@ -1035,13 +1049,32 @@ impl VirtualColumnBuilder {
             write_settings.data_page_rows,
             write_settings.data_page_bytes,
         ));
-        let mut writer = ParquetBlockWriter::new(props, virtual_block_schema.clone(), None);
+        let mut writer = ParquetBlockWriter::new(props, virtual_block_schema.clone(), None)
+            .with_page_rows(granule_rows)?;
         writer.write(virtual_block)?;
         let SerializedParquet {
             payload,
             metadata: file_meta,
-            ..
+            page_layout,
         } = writer.finish_plain()?;
+        let virtual_column_location =
+            TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
+        let granule_marks = match granule_rows {
+            Some(rows) => virtual_offset_marks(
+                rows,
+                total_rows,
+                &virtual_column_location,
+                page_layout
+                    .as_deref()
+                    .ok_or_else(|| ErrorCode::Internal("virtual granule page layout is missing"))?,
+                file_meta
+                    .row_group(0)
+                    .columns()
+                    .iter()
+                    .map(|meta| meta.byte_range().0),
+            )?,
+            None => vec![],
+        };
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
             file_meta,
@@ -1050,8 +1083,6 @@ impl VirtualColumnBuilder {
         )?;
         let data = opendal::Buffer::from(payload);
         let data_size = data.len() as u64;
-        let virtual_column_location =
-            TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
 
         info!(
             "Generated virtual column data for block {}: virtual_columns={}, extracted_paths={}, rows={}, bytes={}",
@@ -1073,6 +1104,7 @@ impl VirtualColumnBuilder {
 
         Ok(VirtualColumnState {
             data,
+            granule_marks,
             draft_virtual_block_meta,
         })
     }
@@ -1552,9 +1584,285 @@ mod tests {
         column_meta.virtual_location.0.clear();
         block_meta.virtual_location.0.clear();
         assert_eq!(column_meta, block_meta);
-        assert_eq!(column_state.data.to_vec(), block_state.data.to_vec());
+        // Footer JSON maps have randomized iteration order; compare decoded data,
+        // not the byte order of otherwise equivalent metadata.
+        let decode = |data| {
+            parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+                databend_storages_common_io::BufferReader(data),
+            )
+            .unwrap()
+            .build()
+            .unwrap()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap()
+        };
+        assert_eq!(decode(column_state.data), decode(block_state.data));
         assert_eq!(column_builder.variant_rows, vec![0, 0]);
         assert_eq!(column_builder.total_rows, 0);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_granule_offsets_roundtrip_direct_and_shared() {
+        use arrow_array::RecordBatch;
+        use databend_storages_common_io::BufferReader;
+        use databend_storages_common_io::ReadSettings;
+        use databend_storages_common_table_meta::meta::ColumnMeta;
+        use databend_storages_common_table_meta::meta::SingleColumnMeta;
+        use opendal::Operator;
+        use opendal::services::Memory;
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+        use super::super::granule_index_writer::GranuleIndexFileWriter;
+        use super::super::granule_index_writer::OffsetsIndex;
+        use super::super::granule_index_writer::virtual_offset_mark;
+        use crate::io::DataItem;
+        use crate::io::read::column_chunks_to_record_batch;
+
+        crate::test_utils::init_test_globals().unwrap();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "v",
+            TableDataType::Variant,
+        )]));
+        let block = DataBlock::new_from_columns(vec![variant_column(&[
+            r#"{"a":1,"b":"one","c":null}"#,
+            r#"{"a":2,"b":"two"}"#,
+            r#"{}"#,
+            r#"{"a":4,"b":"four","c":4}"#,
+            r#"{"a":5,"b":"five"}"#,
+        ])]);
+        // One direct path and typed shared maps, including empty rows and JSON null.
+        let mut builder = VirtualColumnBuilder::try_create(schema, Default::default())
+            .unwrap()
+            .with_exact_layout(Arc::new(VirtualColumnLayout {
+                direct_paths: vec![VirtualColumnPath {
+                    source_column_id: 0,
+                    path: "a".to_string(),
+                }],
+            }));
+        builder.add_block(&block).unwrap();
+        let settings = WriteSettings {
+            enable_parquet_dictionary: true,
+            index_granularity: Some(2),
+            data_page_rows: Some(1),
+            ..Default::default()
+        };
+        let location = ("table/_b/block.parquet".to_string(), 0);
+        let state = builder
+            .finalize_with_granules(&settings, &location, Some(2))
+            .unwrap();
+        let virtual_location = &state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_location
+            .0;
+        let reader =
+            ParquetRecordBatchReaderBuilder::try_new(BufferReader(state.data.clone())).unwrap();
+        let read_schema = TableSchema::try_from(reader.schema().as_ref()).unwrap();
+        let leaf_ids = read_schema.to_leaf_column_ids();
+        let metas = leaf_ids
+            .iter()
+            .zip(reader.metadata().row_group(0).columns())
+            .map(|(id, chunk)| {
+                let (offset, len) = chunk.byte_range();
+                (
+                    *id,
+                    ColumnMeta::Parquet(SingleColumnMeta {
+                        offset,
+                        len,
+                        num_values: chunk.num_values() as u64,
+                    }),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        assert_eq!(state.granule_marks.len(), metas.len());
+        assert!(metas.len() > 1);
+        let mut reader = reader.with_batch_size(5).build().unwrap();
+        let expected = reader.next().unwrap().unwrap();
+        assert!(reader.next().is_none());
+        let op = Operator::new(Memory::default()).unwrap().finish();
+        // Virtual marks use the existing offsets serializer, not a separate index.
+        let marks_writer = GranuleIndexFileWriter::new(2, vec![], None, ("offsets".to_string(), 0));
+        let marks = marks_writer
+            .serialize_offsets(&[], 3, state.granule_marks)
+            .unwrap();
+        op.write("offsets", marks.data).await.unwrap();
+        let read_settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 1024 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+        let offsets = OffsetsIndex::load_named_with_stats(
+            &op,
+            &read_settings,
+            &marks.layout,
+            2,
+            5,
+            &metas,
+            metas.iter().map(|(id, meta)| {
+                (
+                    *id,
+                    virtual_offset_mark(virtual_location, meta.offset_length().0),
+                )
+            }),
+            None,
+        )
+        .unwrap();
+        // Simulate segment-local/query ids unrelated to the file's leaf ordinals.
+        let remapped = metas
+            .iter()
+            .map(|(id, meta)| (*id + 100, meta.clone()))
+            .collect::<HashMap<_, _>>();
+        let remapped_offsets = OffsetsIndex::load_named_with_stats(
+            &op,
+            &read_settings,
+            &marks.layout,
+            2,
+            5,
+            &remapped,
+            remapped.iter().map(|(id, meta)| {
+                (
+                    *id,
+                    virtual_offset_mark(virtual_location, meta.offset_length().0),
+                )
+            }),
+            None,
+        )
+        .unwrap();
+        for (id, meta) in &metas {
+            let range = 1..3;
+            assert_eq!(
+                offsets
+                    .column_byte_ranges(*id, meta, std::slice::from_ref(&range))
+                    .unwrap(),
+                remapped_offsets
+                    .column_byte_ranges(*id + 100, meta, std::slice::from_ref(&range))
+                    .unwrap(),
+            );
+        }
+        for (range, rows) in [(1..2, 2..4), (2..3, 4..5)] {
+            let mut chunks = HashMap::new();
+            let mut selected_bytes = 0;
+            for (id, meta) in &metas {
+                let (dictionary, ranges) = offsets
+                    .column_byte_ranges(*id, meta, std::slice::from_ref(&range))
+                    .unwrap();
+                assert!(!dictionary);
+                let byte_range = ranges[0].clone();
+                let mut bytes = Vec::new();
+                for range in ranges {
+                    selected_bytes += range.end - range.start;
+                    bytes.extend_from_slice(
+                        &state
+                            .data
+                            .slice(range.start as usize..range.end as usize)
+                            .to_vec(),
+                    );
+                }
+                chunks.insert(*id, DataItem::GranuleData(bytes.into(), byte_range));
+            }
+            assert!(
+                selected_bytes
+                    < metas
+                        .values()
+                        .map(|meta| meta.offset_length().1)
+                        .sum::<u64>()
+            );
+            let actual: RecordBatch = column_chunks_to_record_batch(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                None,
+            )
+            .unwrap();
+            assert_eq!(actual, expected.slice(rows.start, rows.len()));
+            use databend_storages_common_cache::CacheAccessor;
+            use databend_storages_common_cache::InMemoryLruCache;
+            use databend_storages_common_cache::TableDataCacheKey;
+
+            use crate::io::read::ArrayCacheContext;
+            use crate::io::read::deserialize_column_chunks;
+
+            // A direct column can be cached while the shared Map leaves remain raw.
+            let cache = InMemoryLruCache::with_bytes_capacity("virtual-mixed".into(), 1024 * 1024);
+            let context = ArrayCacheContext {
+                cache: &cache,
+                location: virtual_location,
+                column_metas: &metas,
+                complete_column_chunks: false,
+            };
+            let decoded = deserialize_column_chunks(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                None,
+                Some(context),
+            )
+            .unwrap();
+            assert_eq!(decoded, actual);
+            let mut hits = Vec::new();
+            for (id, item) in &chunks {
+                let DataItem::GranuleData(_, range) = item else {
+                    unreachable!()
+                };
+                let key = TableDataCacheKey::new(
+                    virtual_location,
+                    *id,
+                    range.start,
+                    range.end - range.start,
+                );
+                if let Some(array) = cache.get(&key) {
+                    hits.push((*id, array));
+                }
+            }
+            assert_eq!(hits.len(), 1);
+            for (id, array) in &hits {
+                chunks.insert(*id, DataItem::ColumnArray(array));
+            }
+            let mixed = deserialize_column_chunks(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                None,
+                None,
+            )
+            .unwrap();
+            assert_eq!(mixed, actual);
+            use parquet::arrow::arrow_reader::RowSelection;
+            use parquet::arrow::arrow_reader::RowSelector;
+            let empty = deserialize_column_chunks(
+                &read_schema,
+                rows.len(),
+                &chunks,
+                &settings.table_compression.into(),
+                Some(RowSelection::from(vec![RowSelector::skip(rows.len())])),
+                None,
+            )
+            .unwrap();
+            assert_eq!(empty.num_rows(), 0);
+        }
+        builder.add_block(&block).unwrap();
+        let refreshed = builder.finalize(&settings, &location).unwrap();
+        assert!(refreshed.granule_marks.is_empty());
+        let refreshed_location = &refreshed
+            .draft_virtual_block_meta
+            .virtual_columns
+            .unwrap()
+            .virtual_location
+            .0;
+        assert_ne!(virtual_location, refreshed_location);
+        assert!(
+            metas.values().all(
+                |meta| !marks.layout.columns.contains_key(&virtual_offset_mark(
+                    refreshed_location,
+                    meta.offset_length().0
+                ))
+            )
+        );
     }
 
     #[test]
