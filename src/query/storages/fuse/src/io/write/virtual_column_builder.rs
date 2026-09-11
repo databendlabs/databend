@@ -1803,6 +1803,16 @@ mod tests {
             )
             .unwrap();
             assert_eq!(decoded, actual);
+            let column_types: HashMap<_, _> = read_schema
+                .leaf_fields()
+                .into_iter()
+                .map(|field| {
+                    (
+                        field.column_id,
+                        DataType::from(field.data_type()).to_string(),
+                    )
+                })
+                .collect();
             let mut hits = Vec::new();
             for (id, item) in &chunks {
                 let DataItem::GranuleData(_, range) = item else {
@@ -1813,6 +1823,7 @@ mod tests {
                     *id,
                     range.start,
                     range.end - range.start,
+                    &column_types[id],
                 );
                 if let Some(array) = cache.get(&key) {
                     hits.push((*id, array));

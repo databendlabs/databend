@@ -47,4 +47,5 @@ pub use statistics::VirtualSegmentColumnPath;
 pub use statistics::VirtualSegmentPath;
 pub use statistics::VirtualSegmentSchema;
 pub use statistics::validate_segment_partition_statistics;
+pub use statistics::widen_decimal_scalar;
 pub use table_snapshot_statistics::TableSnapshotStatistics;

@@ -256,6 +256,11 @@ impl ReadBlockContext {
             })
             .max()
             .unwrap_or(0);
+        let schema = VirtualColumnReader::read_schema(meta);
+        let column_types = schema.leaf_fields().into_iter().map(|field| {
+            let data_type = databend_common_expression::types::DataType::from(field.data_type());
+            (field.column_id, data_type.to_string())
+        });
         Ok(Some(GranuleDataReader::create_for_file(
             &self.block_read_ctx,
             &self.read_settings,
@@ -263,7 +268,7 @@ impl ReadBlockContext {
             file_len,
             part.nums_rows,
             &columns,
-            columns.keys().copied(),
+            column_types,
             groups,
             &offsets,
             Some(lock_stats),

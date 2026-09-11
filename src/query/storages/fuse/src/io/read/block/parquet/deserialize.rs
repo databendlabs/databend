@@ -24,7 +24,9 @@ use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::ColumnArrayCache;
 use databend_storages_common_cache::TableDataCacheKey;
@@ -50,7 +52,9 @@ pub(crate) struct ArrayCacheContext<'a> {
 }
 
 impl ArrayCacheContext<'_> {
-    fn insert(&self, column_id: ColumnId, item: &DataItem, array: &arrow_array::ArrayRef) {
+    fn insert(&self, field: &TableField, item: &DataItem, array: &arrow_array::ArrayRef) {
+        let column_id = field.column_id;
+        let data_type = DataType::from(field.data_type()).to_string();
         let range = match item {
             DataItem::GranuleData(_, range) => Some(range.clone()),
             DataItem::RawData(_) if self.complete_column_chunks => {
@@ -69,6 +73,7 @@ impl ArrayCacheContext<'_> {
             column_id,
             range.start,
             range.end - range.start,
+            &data_type,
         );
         self.cache
             .insert(key.into(), (array.clone(), array.get_array_memory_size()));
@@ -134,7 +139,7 @@ pub(crate) fn deserialize_column_chunks(
                     && array.len() == num_rows
                     && let (Some(context), Some(item)) = (&cache, item)
                 {
-                    context.insert(field.column_id, item, array);
+                    context.insert(field, item, array);
                 }
                 array.clone()
             }
@@ -263,6 +268,7 @@ mod tests {
                 id as u32,
                 offset,
                 len,
+                "Int32",
             ));
         }
         let cache = InMemoryLruCache::with_bytes_capacity("decode-test".to_string(), 1024 * 1024);
@@ -357,7 +363,8 @@ mod tests {
                         "virtual-column-file-2",
                         *id,
                         range.start,
-                        range.end - range.start
+                        range.end - range.start,
+                        "Int32",
                     ))
                     .is_none()
             );

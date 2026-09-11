@@ -40,6 +40,7 @@ pub use v2::VirtualSegmentColumnPath;
 pub use v2::VirtualSegmentPath;
 pub use v2::VirtualSegmentSchema;
 pub use v2::validate_segment_partition_statistics;
+pub use v2::widen_decimal_scalar;
 pub use v4::CompactSegmentInfo;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;

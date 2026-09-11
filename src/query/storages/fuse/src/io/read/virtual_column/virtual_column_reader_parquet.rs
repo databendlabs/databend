@@ -136,10 +136,18 @@ impl VirtualColumnReader {
         let cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_arrays = Vec::new();
         let mut column_ranges = HashMap::new();
+        let column_types: HashMap<_, _> = schema
+            .leaf_fields()
+            .into_iter()
+            .map(|field| {
+                let data_type = DataType::from(field.data_type()).to_string();
+                (field.column_id, data_type)
+            })
+            .collect();
         let mut ranges = Vec::new();
         for (id, meta) in &virtual_block_meta.virtual_column_metas {
             let (offset, len) = meta.offset_length();
-            let key = TableDataCacheKey::new(virtual_loc, *id, offset, len);
+            let key = TableDataCacheKey::new(virtual_loc, *id, offset, len, &column_types[id]);
             let cached = cache
                 .get_sized(&key, len)
                 .filter(|array| array.0.len() == num_rows);

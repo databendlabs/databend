@@ -475,6 +475,7 @@ pub(crate) struct GranuleDataReader {
     ranges: VecDeque<Range<usize>>,
     column_readers: Vec<GranuleColumnReader>,
     column_array_cache: Option<ColumnArrayCache>,
+    column_types: HashMap<ColumnId, String>,
     granule_rows: usize,
     block_rows: usize,
 }
@@ -499,8 +500,8 @@ impl GranuleDataReader {
             read_context
                 .project_indices()
                 .values()
-                .map(|(id, ..)| *id)
-                .filter(|id| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id))),
+                .filter(|(id, ..)| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id)))
+                .map(|(id, _, data_type)| (*id, data_type.to_string())),
             groups,
             offsets,
             lock_stats,
@@ -515,7 +516,7 @@ impl GranuleDataReader {
         file_len: u64,
         block_rows: usize,
         col_metas: &HashMap<ColumnId, ColumnMeta>,
-        column_ids: impl IntoIterator<Item = ColumnId>,
+        columns: impl IntoIterator<Item = (ColumnId, String)>,
         groups: &[Vec<Range<usize>>],
         offsets: &OffsetsIndex,
         lock_stats: Option<Arc<CacheLockStats>>,
@@ -536,8 +537,10 @@ impl GranuleDataReader {
             chunk_align: crate::io::disk_cache_chunk_size().unwrap_or(1),
         };
 
+        let mut column_types = HashMap::new();
         let mut column_readers = Vec::new();
-        for column_id in column_ids {
+        for (column_id, data_type) in columns {
+            column_types.insert(column_id, data_type);
             let meta = col_metas.get(&column_id).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "granule data metadata missing projected column {column_id}"
@@ -573,6 +576,7 @@ impl GranuleDataReader {
             ranges: ranges.into(),
             column_readers,
             column_array_cache: CacheManager::instance().get_table_data_array_cache(),
+            column_types,
             granule_rows: offsets.granule_rows(),
             block_rows,
         })
@@ -609,8 +613,14 @@ impl GranuleDataReader {
             let data_range = reader.next_data_range();
             let cached = data_range.as_ref().and_then(|range| {
                 let len = range.end - range.start;
-                let key =
-                    TableDataCacheKey::new(&self.location, reader.column_id, range.start, len);
+                let data_type = &self.column_types[&reader.column_id];
+                let key = TableDataCacheKey::new(
+                    &self.location,
+                    reader.column_id,
+                    range.start,
+                    len,
+                    data_type,
+                );
                 self.column_array_cache
                     .get_sized(&key, len)
                     .filter(|array| array.0.len() == row_range.len())
@@ -811,7 +821,7 @@ mod tests {
         .unwrap();
         let cache = InMemoryLruCache::with_bytes_capacity("granule-test".to_string(), 1024);
         let array: ArrayRef = Arc::new(Int32Array::from(vec![10, 20]));
-        let key = TableDataCacheKey::new("block", 0, 0, 100);
+        let key = TableDataCacheKey::new("block", 0, 0, 100, "Int32");
         cache.insert(key.into(), (array.clone(), array.get_array_memory_size()));
         let mut ranges = VecDeque::new();
         ranges.push_back(0..1);
@@ -820,6 +830,7 @@ mod tests {
             ranges,
             column_readers: vec![column_reader],
             column_array_cache: Some(cache),
+            column_types: HashMap::from([(0, "Int32".to_string())]),
             granule_rows: 2,
             block_rows: 2,
         };

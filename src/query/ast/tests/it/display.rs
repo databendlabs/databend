@@ -30,6 +30,23 @@ fn test_stmt_display(sql: &str) {
 }
 
 #[test]
+fn test_refresh_materialized_view_limit() {
+    let sql = "REFRESH MATERIALIZED VIEW db.mv LIMIT 1000";
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+    match &stmt {
+        Statement::RefreshMaterializedView(stmt) => {
+            assert_eq!(stmt.limit, Some(1000));
+            assert_eq!(stmt.database.as_ref().unwrap().name, "db");
+            assert_eq!(stmt.view.name, "mv");
+        }
+        _ => panic!("expected REFRESH MATERIALIZED VIEW statement"),
+    }
+
+    test_stmt_display(sql);
+}
+#[test]
 fn test_multi_table_insert_display() {
     const SQL_FILE_PATH: &str = "tests/it/testsql/multi_table_insert.sql";
     let sqls = std::fs::read_to_string(SQL_FILE_PATH).unwrap();
