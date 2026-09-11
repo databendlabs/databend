@@ -11,6 +11,14 @@ query_http_url=${QUERY_HTTP_URL:-http://${QUERY_MYSQL_HANDLER_HOST}:${QUERY_HTTP
 consumer_tenant=$(curl -fsS "${QUERY_ADMIN_URL:-http://localhost:8080}/v1/config" | jq -r '.query.tenant_id')
 [[ -n "$consumer_tenant" && "$consumer_tenant" != null ]]
 
+# Match the provider storage: EE CI uses S3/MinIO, while local runs can use fs.
+share_connection_options="storage_type = '${STORAGE_TYPE:-fs}'"
+if [[ "${STORAGE_TYPE:-fs}" == s3 ]]; then
+	share_connection_options+=" access_key_id = '${STORAGE_S3_ACCESS_KEY_ID:-minioadmin}'
+secret_access_key = '${STORAGE_S3_SECRET_ACCESS_KEY:-minioadmin}'
+endpoint_url = '${STORAGE_S3_ENDPOINT_URL:-http://127.0.0.1:9900}'"
+fi
+
 bendsql_connect_root_null <<SQL
 set sandbox_tenant = 'shared_stream_api_provider';
 drop share if exists stream_api_share;
@@ -18,7 +26,7 @@ drop database if exists stream_api_provider;
 drop connection if exists stream_api_conn;
 create database stream_api_provider;
 create table stream_api_provider.t(a int) change_tracking = true;
-create connection stream_api_conn storage_type = 'fs';
+create connection stream_api_conn ${share_connection_options};
 create share stream_api_share connection = stream_api_conn;
 grant usage on database stream_api_provider to share stream_api_share;
 grant select on table stream_api_provider.t to share stream_api_share;
