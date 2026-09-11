@@ -38,7 +38,7 @@ mod sort_combinator;
 pub(crate) mod state_combinator;
 mod unary;
 mod unary_nullable;
-mod unary_state;
+mod array_collect;
 
 pub(super) use combinator::Combinator;
 pub(super) use combinator::DistinctCombinator;
@@ -55,8 +55,8 @@ pub(super) use null_argument_result::try_create_null_argument_result_function;
 pub(super) use unary::*;
 pub(super) use unary_nullable::UnaryOrNull;
 pub(super) use unary_nullable::UnarySkipNull;
-pub(super) use unary_state::AggregateUnaryState;
-pub(super) use unary_state::AggregateUnaryStateEval;
+pub(super) use array_collect::ArrayCollectState;
+pub(super) use array_collect::ArrayCollectEval;
 
 /// Builds an implementation while retaining the complete external call contract.
 pub(super) struct UnaryBuildContext<'a, C> {
