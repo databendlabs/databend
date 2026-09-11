@@ -162,19 +162,36 @@ where
     }
 
     fn add_batch(&mut self, args: ColumnView<A>, values: ColumnView<V>, validity: Option<&Bitmap>) {
-        match validity {
-            Some(validity) => {
-                for ((arg, value), valid) in args.iter().zip(values.iter()).zip(validity.iter()) {
-                    if valid {
-                        self.add(value, arg);
+        let candidate = match validity {
+            Some(validity) => values
+                .iter()
+                .enumerate()
+                .zip(validity.iter())
+                .filter_map(|(item, valid)| valid.then_some(item))
+                .reduce(|current, (row, value)| {
+                    if should_change::<V, CMP_TYPE>(&current.1, &value) {
+                        (row, value)
+                    } else {
+                        current
                     }
+                }),
+            None => values.iter().enumerate().reduce(|current, (row, value)| {
+                if should_change::<V, CMP_TYPE>(&current.1, &value) {
+                    (row, value)
+                } else {
+                    current
                 }
-            }
-            None => {
-                for (arg, value) in args.iter().zip(values.iter()) {
-                    self.add(value, arg);
-                }
-            }
+            }),
+        };
+        // Read and copy the argument only for the batch winner, and retain the
+        // existing argument on ties, just as in the row and merge paths.
+        if let Some((row, value)) = candidate
+            && self.should_change(&value)
+        {
+            self.data = Some((
+                V::to_owned_scalar(value),
+                A::to_owned_scalar(args.index(row).unwrap()),
+            ));
         }
     }
 
@@ -453,5 +470,55 @@ where
     unsafe fn drop_state(&self, state: AggrState<'_>) {
         let state = state.get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>();
         unsafe { std::ptr::drop_in_place(state) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::ReturnType;
+
+    use super::*;
+
+    fn check_batch<const CMP: u8>(values: Vec<i64>) {
+        let mut state = AggregateArgMinMaxState::<StringType, Int64Type, CMP>::default();
+        let args = StringType::column_from_iter(
+            ["filtered", "first", "tie", "worse"]
+                .into_iter()
+                .map(str::to_owned),
+            &[],
+        );
+        let validity: Bitmap = [false, true, true, true].into_iter().collect();
+        state.add_batch(
+            ColumnView::Column(args),
+            ColumnView::Column(values.into()),
+            Some(&validity),
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+        let winner = state.data.as_ref().unwrap().0;
+        state.add_batch(
+            ColumnView::Const("later tie".to_owned(), 2),
+            ColumnView::Const(winner, 2),
+            None,
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+        let invalid: Bitmap = [false, false].into_iter().collect();
+        state.add_batch(
+            ColumnView::Const("invalid".to_owned(), 2),
+            ColumnView::Const(0, 2),
+            Some(&invalid),
+        );
+        state.add_batch(
+            ColumnView::Const("empty".to_owned(), 0),
+            ColumnView::Const(0, 0),
+            None,
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+    }
+
+    #[test]
+    fn batch_winner_and_ties() {
+        check_batch::<TYPE_MIN>(vec![-100, 1, 1, 2]);
+        check_batch::<TYPE_MAX>(vec![100, 2, 2, 1]);
     }
 }

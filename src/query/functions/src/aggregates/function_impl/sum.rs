@@ -14,11 +14,15 @@
 
 use std::alloc::Layout;
 
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
@@ -269,6 +273,52 @@ where
         Ok(())
     }
 
+    fn add_batch(
+        &mut self,
+        column: ColumnView<NumberType<T>>,
+        validity: Option<&Bitmap>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        match column {
+            ColumnView::Const(value, rows) => {
+                let value: R = value.as_();
+                let count = validity.map_or(rows, Bitmap::true_count);
+                for _ in 0..count {
+                    self.value += value;
+                }
+            }
+            ColumnView::Column(buffer) => {
+                // Keep the v1 accumulation order: reduce each buffer first,
+                // then add its sum to the state. This matters for floats.
+                let mut sum = R::default();
+                match validity {
+                    Some(validity)
+                        if (validity.true_count() as f64 / validity.len() as f64)
+                            < SELECTIVITY_THRESHOLD =>
+                    {
+                        for index in TrueIdxIter::new(validity.len(), Some(validity)) {
+                            sum += unsafe { buffer.get_unchecked(index).as_() };
+                        }
+                    }
+                    Some(validity) => {
+                        for (value, valid) in buffer.iter().zip(validity.iter()) {
+                            if valid {
+                                sum += value.as_();
+                            }
+                        }
+                    }
+                    None => {
+                        for value in buffer.iter() {
+                            sum += value.as_();
+                        }
+                    }
+                }
+                self.value += sum;
+            }
+        }
+        Ok(())
+    }
+
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         self.value += rhs.value;
         Ok(())
@@ -355,6 +405,49 @@ where T: Decimal + std::ops::AddAssign
         }
 
         self.value = sum.to_u64_array();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        column: ColumnView<DecimalType<T>>,
+        validity: Option<&Bitmap>,
+        function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        if SHOULD_CHECK_OVERFLOW {
+            // Check every intermediate sum, even if later values would cancel it.
+            match validity {
+                Some(validity) => {
+                    for (value, valid) in column.iter().zip(validity.iter()) {
+                        if valid {
+                            self.add(value, function_info)?;
+                        }
+                    }
+                }
+                None => {
+                    for value in column.iter() {
+                        self.add(value, function_info)?;
+                    }
+                }
+            }
+        } else {
+            let mut sum = T::from_u64_array(self.value);
+            match validity {
+                Some(validity) if validity.null_count() > 0 => {
+                    for (value, valid) in column.iter().zip(validity.iter()) {
+                        if valid {
+                            sum += value;
+                        }
+                    }
+                }
+                _ => {
+                    for value in column.iter() {
+                        sum += value;
+                    }
+                }
+            }
+            self.value = sum.to_u64_array();
+        }
         Ok(())
     }
 
@@ -623,5 +716,101 @@ impl SumBuilder {
             AggregateSumUInt64State::state_description(NumberType::<u64>::data_type()),
             (),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::Float64Type;
+    use databend_common_expression::types::Int64Type;
+
+    use super::*;
+
+    #[test]
+    fn numeric_batch_accumulation_order() -> Result<()> {
+        let mut state = AggregateNumberSumState::<Float64Type>::default();
+        state.add_batch(
+            ColumnView::<Float64Type>::Column(vec![1e16.into()].into()),
+            None,
+            &(),
+        )?;
+        state.add_batch(
+            ColumnView::<Float64Type>::Column(vec![(-1e16).into(), 1.0.into()].into()),
+            None,
+            &(),
+        )?;
+        assert_eq!(state.value, 0.0);
+
+        state.value = 1e16.into();
+        state.add_batch(ColumnView::<Float64Type>::Const(1.0.into(), 2), None, &())?;
+        assert_eq!(state.value, 1e16);
+        Ok(())
+    }
+
+    #[test]
+    fn numeric_batch_validity() -> Result<()> {
+        for bits in [
+            vec![true; 10],
+            vec![true, true, true, true, true, true, true, true, false, true],
+            vec![
+                false, false, true, false, false, false, false, false, true, false,
+            ],
+            vec![false; 10],
+            vec![],
+        ] {
+            let values: Vec<i64> = (1..=bits.len() as i64).collect();
+            let expected: i64 = values
+                .iter()
+                .zip(&bits)
+                .filter(|(_, b)| **b)
+                .map(|(v, _)| v)
+                .sum();
+            let validity: Bitmap = bits.into_iter().collect();
+            let mut state = AggregateNumberSumState::<Int64Type> { value: 7 };
+            state.add_batch(
+                ColumnView::<Int64Type>::Column(values.into()),
+                Some(&validity),
+                &(),
+            )?;
+            assert_eq!(state.value, 7 + expected);
+            state.add_batch(
+                ColumnView::<Int64Type>::Const(3, validity.len()),
+                Some(&validity),
+                &(),
+            )?;
+            assert_eq!(state.value, 7 + expected + 3 * validity.true_count() as i64);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn decimal_batch_intermediate_overflow() -> Result<()> {
+        let max = <i128 as Decimal>::DECIMAL_MAX;
+        let mut checked = AggregateDecimalSumState::<true, i128>::default();
+        assert!(
+            checked
+                .add_batch(ColumnView::Column(vec![max, 1, -1].into()), None, &())
+                .is_err()
+        );
+        assert_eq!(i128::from_u64_array(checked.value), max);
+
+        let validity: Bitmap = [true, false, true].into_iter().collect();
+        let mut checked = AggregateDecimalSumState::<true, i128>::default();
+        checked.add_batch(
+            ColumnView::Column(vec![max, 1, -1].into()),
+            Some(&validity),
+            &(),
+        )?;
+        assert_eq!(i128::from_u64_array(checked.value), max - 1);
+
+        let mut unchecked = AggregateDecimalSumState::<false, i128>::default();
+        unchecked.add_batch(
+            ColumnView::Column(vec![10, 100, -3].into()),
+            Some(&validity),
+            &(),
+        )?;
+        unchecked.add_batch(ColumnView::Const(2, 3), None, &())?;
+        assert_eq!(i128::from_u64_array(unchecked.value), 13);
+        Ok(())
     }
 }
