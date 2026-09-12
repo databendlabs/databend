@@ -110,6 +110,29 @@ fn test_to_jsonb_binary(file: &mut impl Write) {
 fn test_to_binary(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
+    run_ast(
+        file,
+        format!("to_hex({prefix}to_binary(char(0, 65, 127, 128, 255), 'latin1'))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("to_hex({prefix}to_binary(char(128, 255), 'latin-1'))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("to_hex({prefix}to_binary(char(128, 255), 'iso-8859-1'))"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}to_binary(char(256), 'latin1')"), &[]);
+    run_ast(file, format!("to_hex({prefix}to_binary(s, 'latin1'))"), &[
+        (
+            "s",
+            StringType::from_data(vec!["\u{80}\u{ff}", "\u{100}", "plain"]),
+        ),
+    ]);
+
     run_ast(file, format!("{prefix}to_binary(to_bitmap('1,2,3'))"), &[]);
     run_ast(
         file,
