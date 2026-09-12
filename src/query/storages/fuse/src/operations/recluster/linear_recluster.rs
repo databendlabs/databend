@@ -40,6 +40,10 @@ use crate::statistics::RangeMaxTree;
 pub(crate) struct LinearReclusterStrategy;
 
 impl ReclusterStrategy for LinearReclusterStrategy {
+    fn supports_ordered_merge(&self) -> bool {
+        true
+    }
+
     fn select_segments(
         &self,
         properties: &ReclusterProperties,
@@ -200,7 +204,13 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 max_depth,
                 average_depth,
             };
-            candidates.push(task_candidate(group, score, &task_indices, blocks));
+            candidates.push(task_candidate(
+                self.supports_ordered_merge(),
+                group,
+                score,
+                &task_indices,
+                blocks,
+            ));
         };
 
         let mut candidates = Vec::new();
