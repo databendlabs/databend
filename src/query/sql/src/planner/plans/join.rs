@@ -847,13 +847,19 @@ impl Operator for Join {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::stat_distribution::NdvEstimate;
+    use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
 
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+    use crate::optimizer::ir::ColumnStat;
     use crate::optimizer::ir::SExpr;
+    use crate::optimizer::ir::Statistics;
     use crate::plans::BoundColumnRef;
     use crate::plans::Exchange;
     use crate::plans::FunctionCall;
@@ -951,6 +957,144 @@ mod tests {
         let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
+        Ok(())
+    }
+
+    fn zero_stat(precise: bool, column_index: usize) -> Arc<StatInfo> {
+        Arc::new(StatInfo {
+            cardinality: 0.0,
+            statistics: Statistics {
+                precise_cardinality: precise.then_some(0),
+                column_stats: HashMap::from([(Symbol::new(column_index), ColumnStat::Int {
+                    min: 1,
+                    max: 10,
+                    ndv: NdvEstimate::exact(10.0),
+                    null_count: StatCount::exact(0),
+                    histogram: None,
+                })]),
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
+            },
+        })
+    }
+
+    #[test]
+    fn test_join_type_proven_empty_propagation() -> Result<()> {
+        let cases = [
+            (JoinType::Cross, true, true),
+            (JoinType::Inner, true, true),
+            (JoinType::InnerAny, true, true),
+            (JoinType::Asof, true, true),
+            (JoinType::Left, true, false),
+            (JoinType::LeftAny, true, false),
+            (JoinType::LeftAsof, false, true),
+            (JoinType::Right, false, true),
+            (JoinType::RightAny, false, true),
+            (JoinType::RightAsof, true, false),
+            (JoinType::Full, false, false),
+            (JoinType::FullAsof, false, false),
+            (JoinType::LeftSemi, true, true),
+            (JoinType::RightSemi, true, true),
+            (JoinType::LeftSingle, true, false),
+            (JoinType::RightMark, true, false),
+            (JoinType::LeftAnti, true, false),
+            (JoinType::RightSingle, false, true),
+            (JoinType::LeftMark, false, true),
+            (JoinType::RightAnti, false, true),
+        ];
+
+        for (join_type, left_propagates, right_propagates) in cases {
+            let join = Join {
+                join_type,
+                ..Default::default()
+            };
+            let left_only = join.derive_join_stats(
+                zero_stat(true, 0),
+                zero_stat(false, 1),
+                &StatContext::default(),
+            )?;
+            assert_eq!(
+                left_only.statistics.precise_cardinality,
+                left_propagates.then_some(0),
+                "left proven-empty input for {join_type:?}"
+            );
+
+            let right_only = join.derive_join_stats(
+                zero_stat(false, 0),
+                zero_stat(true, 1),
+                &StatContext::default(),
+            )?;
+            assert_eq!(
+                right_only.statistics.precise_cardinality,
+                right_propagates.then_some(0),
+                "right proven-empty input for {join_type:?}"
+            );
+
+            let non_empty = Arc::new(StatInfo {
+                cardinality: 10.0,
+                statistics: Statistics {
+                    precise_cardinality: Some(10),
+                    ..Default::default()
+                },
+            });
+            for (left, right, propagates) in [
+                (zero_stat(true, 0), non_empty.clone(), left_propagates),
+                (non_empty, zero_stat(true, 1), right_propagates),
+            ] {
+                let stat = join.derive_join_stats(left, right, &StatContext::default())?;
+                assert_eq!(
+                    stat.statistics.precise_cardinality,
+                    propagates.then_some(0),
+                    "non-empty peer for {join_type:?}"
+                );
+                if propagates {
+                    assert_eq!(stat.cardinality, 0.0, "proven-empty {join_type:?}");
+                    assert!(stat.statistics.column_stats.is_empty());
+                } else {
+                    assert_eq!(
+                        stat.cardinality, 10.0,
+                        "preserved non-empty input for {join_type:?}"
+                    );
+                }
+            }
+
+            let both = join.derive_join_stats(
+                zero_stat(true, 0),
+                zero_stat(true, 1),
+                &StatContext::default(),
+            )?;
+            assert_eq!(
+                both.statistics.precise_cardinality,
+                Some(0),
+                "both proven-empty inputs for {join_type:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_join_estimated_zero_keeps_column_distributions() -> Result<()> {
+        let join = Join {
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let stat = join.derive_join_stats(
+            zero_stat(false, 0),
+            zero_stat(false, 1),
+            &StatContext::default(),
+        )?;
+
+        assert_eq!(stat.cardinality, 0.0);
+        assert_eq!(stat.statistics.precise_cardinality, None);
+        assert_eq!(stat.statistics.column_stats.len(), 2);
+        assert_eq!(
+            stat.statistics.column_stats[&Symbol::new(0)].ndv(),
+            NdvEstimate::exact(10.0)
+        );
+        assert_eq!(
+            stat.statistics.column_stats[&Symbol::new(1)].ndv(),
+            NdvEstimate::exact(10.0)
+        );
         Ok(())
     }
 }

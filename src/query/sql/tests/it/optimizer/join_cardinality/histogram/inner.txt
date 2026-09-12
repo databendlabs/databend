@@ -108,6 +108,8 @@ right stats   : rows=26, min=20, max=23, ndv=4, histogram_input=present
 query         : inner_join
 sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
 join          : INNER cardinality=0.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
 
 case          : inner_any_join_overlap
 description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
