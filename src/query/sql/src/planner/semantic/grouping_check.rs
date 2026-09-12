@@ -20,6 +20,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
@@ -196,6 +197,13 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
             self.visit(argument)?;
         }
         function.refresh_return_type()
+    }
+
+    fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+        for argument in &mut lambda.args {
+            self.visit(argument)?;
+        }
+        lambda.refresh_return_type()
     }
 
     fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {

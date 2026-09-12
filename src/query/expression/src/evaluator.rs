@@ -2034,11 +2034,41 @@ impl<'a> Evaluator<'a> {
         return_type: &DataType,
         validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
-        let expr = lambda_expr.as_expr(self.fn_registry);
-
         if func_name == "json_path_transform" {
+            let expr = lambda_expr.as_expr(self.fn_registry);
             return self.run_json_path_transform(args, data_types, &expr, return_type, validity);
         }
+
+        // The binder folds lambda calls whose collection starts with a
+        // degenerate type before constructing a LambdaFunc. Planner rewrites
+        // can introduce the same types later; honor the refreshed return type
+        // without evaluating a body typed for the original collection.
+        let collection_type = data_types
+            .last()
+            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
+            .remove_nullable();
+        let degenerate = match (&collection_type, return_type.remove_nullable()) {
+            (DataType::Null, DataType::Null) | (DataType::EmptyArray, DataType::Null) => {
+                Some(Scalar::Null)
+            }
+            (DataType::EmptyArray, DataType::EmptyArray) => Some(Scalar::EmptyArray),
+            (DataType::EmptyMap, DataType::EmptyMap) => Some(Scalar::EmptyMap),
+            _ => None,
+        };
+        if let Some(scalar) = degenerate {
+            let len = args.iter().find_map(|arg| match arg {
+                Value::Column(col) => Some(col.len()),
+                Value::Scalar(_) => None,
+            });
+            return Ok(match len {
+                Some(len) => {
+                    Value::Column(ColumnBuilder::repeat(&scalar.as_ref(), len, return_type).build())
+                }
+                None => Value::Scalar(scalar),
+            });
+        }
+
+        let expr = lambda_expr.as_expr(self.fn_registry);
 
         // array_reduce differs
         if func_name == "array_reduce" {
