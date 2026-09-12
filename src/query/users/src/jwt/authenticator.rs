@@ -26,6 +26,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::jwk;
+use super::key_pair::verification_options;
 
 #[derive(Debug, Clone)]
 pub enum PubKey {
@@ -125,8 +126,12 @@ impl JwtAuthenticator {
         pub_key: &PubKey,
     ) -> Result<JWTClaims<CustomClaims>> {
         let result = match pub_key {
-            PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
-            PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
+            PubKey::RSA256(pk) => {
+                pk.verify_token::<CustomClaims>(token, Some(verification_options()))
+            }
+            PubKey::ES256(pk) => {
+                pk.verify_token::<CustomClaims>(token, Some(verification_options()))
+            }
         };
         let claims = result.map_err(|err| ErrorCode::AuthenticateFailure(err.to_string()))?;
         match claims.subject {
