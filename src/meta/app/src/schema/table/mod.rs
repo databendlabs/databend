@@ -59,6 +59,9 @@ pub use refs::*;
 pub enum DatabaseType {
     #[default]
     NormalDB,
+    /// A consumer's read-only view of a provider table. This is runtime table
+    /// information, not part of the provider's persisted TableMeta.
+    SharedDB,
 }
 
 impl Display for DatabaseType {
@@ -67,6 +70,7 @@ impl Display for DatabaseType {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
             }
+            DatabaseType::SharedDB => write!(f, "shared database"),
         }
     }
 }
@@ -101,6 +105,10 @@ pub struct TableInfo {
 }
 
 impl TableInfo {
+    pub fn is_shared(&self) -> bool {
+        matches!(self.db_type, DatabaseType::SharedDB)
+    }
+
     pub fn database_name(&self) -> Result<&str> {
         if self.engine() != "FUSE" {
             return Err(ErrorCode::Internal(format!(

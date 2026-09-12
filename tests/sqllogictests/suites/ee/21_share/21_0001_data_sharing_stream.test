@@ -1,0 +1,418 @@
+# Cross-tenant shared-table streams. The provider owns tracking/storage; each consumer owns
+# its local stream offset. Uses the same fs connection and sandbox tenants as sharing tests.
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+DROP SHARE IF EXISTS stream_share
+
+statement ok
+DROP CONNECTION IF EXISTS stream_conn
+
+statement ok
+DROP DATABASE IF EXISTS stream_provider
+
+statement ok
+CREATE DATABASE stream_provider
+
+statement ok
+CREATE TABLE stream_provider.t(id INT, value INT)
+
+statement ok
+CREATE CONNECTION stream_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE SHARE stream_share CONNECTION = stream_conn
+
+statement ok
+GRANT USAGE ON DATABASE stream_provider TO SHARE stream_share
+
+statement ok
+GRANT SELECT ON TABLE stream_provider.t TO SHARE stream_share
+
+statement ok
+ALTER SHARE stream_share ADD ACCOUNTS = share_stream_consumer_e2e, share_stream_consumer2_e2e
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+statement ok
+CREATE OR REPLACE DATABASE stream_local
+
+statement ok
+DROP DATABASE IF EXISTS stream_shared
+
+statement ok
+CREATE DATABASE stream_shared FROM SHARE share_stream_provider_e2e.stream_share
+
+statement error (?s).*provider must enable change_tracking.*
+CREATE STREAM stream_local.s ON TABLE stream_shared.t
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+ALTER TABLE stream_provider.t SET OPTIONS(change_tracking = true)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+statement error (?s).*local database.*
+CREATE STREAM stream_shared.s ON TABLE stream_shared.t
+
+statement ok
+CREATE STREAM stream_local.s ON TABLE stream_shared.t
+
+statement ok
+CREATE STREAM stream_local.standard ON TABLE stream_shared.t APPEND_ONLY = false
+
+statement ok
+CREATE STREAM stream_local.batch ON TABLE stream_shared.t
+
+statement ok
+CREATE TABLE stream_local.sink(id INT, value INT)
+
+query B
+SELECT has_data FROM stream_status('stream_local.s')
+----
+0
+
+query III
+SELECT * FROM stream_backlog('stream_local.s')
+----
+0 0 0
+
+query TT
+SHOW CREATE TABLE stream_local.s
+----
+s CREATE STREAM `s` ON TABLE `stream_shared`.`t`
+
+query TT
+SELECT table_name, invalid_reason FROM system.streams WHERE database = 'stream_local' AND name = 's'
+----
+stream_shared.t (empty)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer2_e2e'
+
+statement ok
+CREATE OR REPLACE DATABASE stream_local
+
+statement ok
+DROP DATABASE IF EXISTS stream_shared
+
+statement ok
+CREATE DATABASE stream_shared FROM SHARE share_stream_provider_e2e.stream_share
+
+statement ok
+CREATE STREAM stream_local.s ON TABLE stream_shared.t
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+INSERT INTO stream_provider.t VALUES (1, 10)
+
+statement ok
+INSERT INTO stream_provider.t VALUES (2, 20)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+query II rowsort
+SELECT id, value FROM stream_local.s
+----
+1 10
+2 20
+
+# A plain SELECT does not consume.
+query I
+SELECT count(*) FROM stream_local.s
+----
+2
+
+query B
+SELECT has_data FROM stream_status('stream_local.s')
+----
+1
+
+# Navigation to another local stream keeps the shared source binding.
+statement ok
+CREATE STREAM stream_local.at_stream ON TABLE stream_shared.t AT(STREAM => stream_local.s)
+
+query I
+SELECT count(*) FROM stream_local.at_stream
+----
+2
+
+statement ok
+INSERT INTO stream_local.sink SELECT id, value FROM stream_local.s
+
+query I
+SELECT count(*) FROM stream_local.s
+----
+0
+
+query I
+SELECT count(*) FROM stream_local.at_stream
+----
+2
+
+# Both batch paths must read the shared source at the selected endpoint.
+statement ok
+SET enable_stream_batch_snapshot_forward_scan = 1
+
+query I
+SELECT id FROM stream_local.batch WITH(MAX_BATCH_SIZE = 1)
+----
+1
+
+statement ok
+INSERT INTO stream_local.sink SELECT id, value FROM stream_local.batch WITH(MAX_BATCH_SIZE = 1)
+
+statement ok
+SET enable_stream_batch_snapshot_forward_scan = 0
+
+query I
+SELECT id FROM stream_local.batch WITH(MAX_BATCH_SIZE = 1)
+----
+2
+
+statement ok
+INSERT INTO stream_local.sink SELECT id, value FROM stream_local.batch WITH(MAX_BATCH_SIZE = 1)
+
+query I
+SELECT count(*) FROM stream_local.batch
+----
+0
+
+# A second tenant's offset is independent of the first tenant's consumption.
+statement ok
+set sandbox_tenant = 'share_stream_consumer2_e2e'
+
+query I
+SELECT count(*) FROM stream_local.s
+----
+2
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+# Explicit consumption advances only on success, and rollback keeps both data and offset.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO stream_local.sink SELECT id, value FROM stream_local.at_stream
+
+# A later statement restores the shared source as a FuseTable at the fixed endpoint.
+query I
+SELECT count(*) FROM stream_local.at_stream
+----
+2
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM stream_local.at_stream
+----
+2
+
+statement error (?is).*divi[ds].*zero.*
+INSERT INTO stream_local.sink SELECT id, intdiv(value, 0) FROM stream_local.at_stream
+
+query I
+SELECT count(*) FROM stream_local.at_stream
+----
+2
+
+query I rowsort
+SELECT id FROM stream_local.at_stream WITH(CONSUME = true)
+----
+1
+2
+
+query I
+SELECT count(*) FROM stream_local.at_stream
+----
+0
+
+statement ok
+INSERT INTO stream_local.sink SELECT id, value FROM stream_local.standard
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+UPDATE stream_provider.t SET value = 11 WHERE id = 1
+
+statement ok
+DELETE FROM stream_provider.t WHERE id = 2
+
+statement ok
+INSERT INTO stream_provider.t VALUES (3, 30)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+query IITB rowsort
+SELECT id, value, change$action, change$is_update FROM stream_local.standard
+----
+1 10 DELETE 1
+1 11 INSERT 1
+2 20 DELETE 0
+3 30 INSERT 0
+
+# Provider and consumer database renames must not redirect a stream to a same-named table.
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+ALTER TABLE stream_provider.t RENAME TO renamed
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+query TT
+SHOW CREATE TABLE stream_local.s
+----
+s CREATE STREAM `s` ON TABLE `stream_shared`.`renamed`
+
+query I
+SELECT count(*) FROM stream_local.standard
+----
+4
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+REVOKE SELECT ON TABLE stream_provider.renamed FROM SHARE stream_share
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+statement error (?s).*not granted by share.*
+SELECT id FROM stream_local.s
+
+statement error (?s).*not granted by share.*
+SELECT * FROM stream_status('stream_local.s')
+
+statement error (?s).*not granted by share.*
+SELECT * FROM stream_backlog('stream_local.s')
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+GRANT SELECT ON TABLE stream_provider.renamed TO SHARE stream_share
+
+statement ok
+ALTER TABLE stream_provider.renamed SET OPTIONS(change_tracking = false)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+statement error (?s).*Change tracking is not enabled.*
+SELECT id FROM stream_local.s
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+ALTER TABLE stream_provider.renamed SET OPTIONS(change_tracking = true)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+statement error (?s).*Change tracking has been missing.*
+SELECT id FROM stream_local.s
+
+# Creating another stream at the old offset must also reject the tracking gap.
+statement error (?s).*Change tracking has been missing.*
+CREATE STREAM stream_local.invalid_at ON TABLE stream_shared.renamed AT(STREAM => stream_local.s)
+
+statement ok
+CREATE OR REPLACE STREAM stream_local.s ON TABLE stream_shared.renamed
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+REVOKE SELECT ON TABLE stream_provider.renamed FROM SHARE stream_share
+
+statement ok
+DROP TABLE stream_provider.renamed
+
+statement ok
+CREATE TABLE stream_provider.renamed(id INT, value INT) change_tracking = true
+
+statement ok
+GRANT SELECT ON TABLE stream_provider.renamed TO SHARE stream_share
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+statement error (?s).*(dropped|Unknown table|not granted).*
+SELECT id FROM stream_local.s
+
+statement ok
+CREATE OR REPLACE STREAM stream_local.s ON TABLE stream_shared.renamed
+
+statement ok
+DROP DATABASE stream_shared
+
+statement ok
+CREATE DATABASE stream_shared FROM SHARE share_stream_provider_e2e.stream_share
+
+# A retained ID-to-name mapping must not bind the old stream to the replacement database.
+statement error (?s).*Base database 'stream_shared'.*dropped.*
+SELECT id FROM stream_local.s
+
+statement error (?s).*Base database 'stream_shared'.*dropped.*
+SELECT id FROM stream_local.s WITH(MAX_BATCH_SIZE = 1)
+
+statement ok
+CREATE OR REPLACE STREAM stream_local.s ON TABLE stream_shared.renamed
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+INSERT INTO stream_provider.renamed VALUES (42, 42)
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer_e2e'
+
+query I
+SELECT id FROM stream_local.s
+----
+42
+
+statement ok
+DROP DATABASE stream_shared
+
+statement ok
+DROP DATABASE stream_local
+
+statement ok
+set sandbox_tenant = 'share_stream_consumer2_e2e'
+
+statement ok
+DROP DATABASE stream_shared
+
+statement ok
+DROP DATABASE stream_local
+
+statement ok
+set sandbox_tenant = 'share_stream_provider_e2e'
+
+statement ok
+DROP SHARE stream_share
+
+statement ok
+DROP CONNECTION stream_conn
+
+statement ok
+DROP DATABASE stream_provider

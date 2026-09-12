@@ -37,6 +37,7 @@ use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
 
@@ -202,6 +203,13 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                 branch_name.as_deref(),
             )
             .await?;
+        check_shared_table_select(
+            ctx.as_ref(),
+            &current_catalog,
+            &self.args.database_name,
+            tbl.as_ref(),
+        )
+        .await?;
 
         let table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::StorageOther("Invalid table engine, only FUSE table supports fuse_snapshot")

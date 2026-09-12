@@ -764,12 +764,12 @@ impl Catalog for MutableCatalog {
         tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        // deal with share table
-        {
-            if req.update_table_metas.len() == 1 {
-                match req.update_table_metas[0].1.db_type.clone() {
-                    DatabaseType::NormalDB => {}
-                }
+        for (_, table_info) in &req.update_table_metas {
+            if table_info.is_shared() {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "Cannot modify shared table {}: table is READ ONLY",
+                    table_info.desc
+                )));
             }
         }
 
@@ -853,6 +853,10 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
+            DatabaseType::SharedDB => Err(ErrorCode::InvalidOperation(format!(
+                "Cannot truncate shared table {}: table is READ ONLY",
+                table_info.desc
+            ))),
         }
     }
 

@@ -1171,6 +1171,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let (is_externals, storage_params): (Vec<bool>, Vec<String>) = database_tables
             .iter()
             .map(|v| {
+                if v.get_table_info().is_shared() {
+                    return (false, String::new());
+                }
                 let storage_params = &v.get_table_info().meta.storage_params;
                 storage_params
                     .as_ref()

@@ -5145,6 +5145,7 @@ dependencies = [
  "log",
  "opendal",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "walkdir",

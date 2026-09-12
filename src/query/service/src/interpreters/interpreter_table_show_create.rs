@@ -168,7 +168,7 @@ impl ShowCreateTableInterpreter {
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
         match table.engine() {
-            STREAM_ENGINE => Self::show_create_stream_query(catalog, table).await,
+            STREAM_ENGINE => Self::show_create_stream_query(catalog, tenant, table).await,
             VIEW_ENGINE => Self::show_create_view_query(table, database),
             MATERIALIZED_VIEW_ENGINE => {
                 Self::show_create_materialized_view_query(
@@ -386,7 +386,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(&Self::format_table_options(table_info.options()));
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" {
+        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
@@ -472,9 +472,13 @@ impl ShowCreateTableInterpreter {
         Ok(create_sql)
     }
 
-    async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {
+    async fn show_create_stream_query(
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        table: &dyn Table,
+    ) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
-        let source_database_name = stream_table.source_database_name(catalog).await?;
+        let source_database_name = stream_table.source_database_name(catalog, tenant).await?;
         let source_table_name = stream_table.source_table_name(catalog).await?;
         let mode = stream_table.mode();
 
