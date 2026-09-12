@@ -21,6 +21,9 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::ReclusterTaskKind;
+use databend_common_catalog::table::Table;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
@@ -39,6 +42,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
@@ -55,6 +59,7 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -812,8 +817,213 @@ async fn test_compacts_small_overlaps() -> anyhow::Result<()> {
     .await?;
     assert!(!parts.is_empty());
     assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::MergeBlocks);
     assert_eq!(task_part_counts(&parts), vec![3]);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_task_kinds() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+    let operator = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let locations = TableMetaLocationGenerator::new("_task_kinds".to_owned());
+
+    // The old cluster key has valid physical column statistics but does not
+    // certify row order under the current key. Include missing cluster stats too.
+    for (case, key_ids, rows, bytes, budget, expected) in [
+        ("ordered_small", vec![Some(1), Some(1)], 1, 1, 4, vec![(
+            ReclusterTaskKind::MergeBlocks,
+            2,
+        )]),
+        ("mixed_small", vec![Some(0), Some(1)], 1, 1, 4, vec![(
+            ReclusterTaskKind::SortBlocks,
+            2,
+        )]),
+        ("old_singleton", vec![Some(0)], 1000, 100, 4, vec![(
+            ReclusterTaskKind::SortBlocks,
+            1,
+        )]),
+        ("missing_singleton", vec![None], 1000, 100, 4, vec![(
+            ReclusterTaskKind::SortBlocks,
+            1,
+        )]),
+        (
+            "mixed_large",
+            vec![Some(0), None, Some(1), Some(1)],
+            1000,
+            100,
+            4,
+            vec![
+                (ReclusterTaskKind::MergeBlocks, 2),
+                (ReclusterTaskKind::SortBlocks, 1),
+                (ReclusterTaskKind::SortBlocks, 1),
+            ],
+        ),
+        (
+            "task_budget",
+            vec![Some(0), None, Some(0)],
+            1000,
+            100,
+            1,
+            vec![(ReclusterTaskKind::SortBlocks, 1)],
+        ),
+        ("over_memory", vec![Some(0)], 1000, 1001, 4, vec![]),
+    ] {
+        let mut blocks = Vec::new();
+        for key_id in key_ids {
+            let mut block = make_recluster_block(key_id.unwrap_or(0), 1, 100, 0, rows, bytes, 50);
+            let meta = Arc::make_mut(&mut block);
+            if key_id.is_none() {
+                meta.cluster_stats = None;
+            }
+            meta.col_stats.insert(
+                0,
+                ColumnStatistics::new(Scalar::from(1i32), Scalar::from(100i32), 0, bytes, None),
+            );
+            blocks.push(block);
+        }
+        let source_count = blocks.len();
+        let location =
+            write_recluster_segment(&operator, &locations, blocks, thresholds, 1).await?;
+        let (_, _, parts) = materialize_segment_locations_with_mode(
+            ctx.clone(),
+            operator.clone(),
+            vec![location],
+            thresholds,
+            1,
+            budget,
+            1000,
+            ReclusterMode::Conservative,
+        )
+        .await?;
+        let actual = parts
+            .tasks
+            .iter()
+            .map(|task| (task.kind, task.parts.len()))
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "{case}");
+        if !parts.is_empty() {
+            let rewritten = parts
+                .tasks
+                .iter()
+                .map(|task| task.parts.len())
+                .sum::<usize>();
+            assert_eq!(
+                rewritten + parts.remained_blocks.len(),
+                source_count,
+                "{case}"
+            );
+            let mut source_locations = HashSet::new();
+            for task in &parts.tasks {
+                let decoded: ReclusterTask = serde_json::from_slice(&serde_json::to_vec(task)?)?;
+                assert_eq!(decoded.kind, task.kind);
+                assert_eq!(decoded.parts, task.parts);
+                assert_eq!(decoded.total_rows, task.total_rows);
+                for part in &task.parts.partitions {
+                    let part = FuseBlockPartInfo::from_part(part)?;
+                    assert!(
+                        source_locations.insert(part.location.clone()),
+                        "duplicate source in {case}"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let name = format!(
+        "{}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    fixture
+        .execute_command(&format!(
+            "create table {name}(id int not null) row_per_block=3 block_per_segment=2"
+        ))
+        .await?;
+    // Two full blocks: the combined row count exceeds the small-group limit.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} values (6),(1),(5),(3),(2),(4)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("alter table {name} cluster by(id)"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(1)?;
+    ctx.get_settings()
+        .set_setting("enable_distributed_recluster".to_owned(), "0".to_owned())?;
+    execute_command(ctx, &format!("alter table {name} recluster")).await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse.read_table_snapshot().await?.unwrap();
+    let key_id = fuse.cluster_key_id().unwrap();
+    let mut ordered = 0;
+    let mut unordered = 0;
+    for location in &snapshot.segments {
+        let segment = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema())
+            .read(&LoadParams {
+                location: location.0.clone(),
+                len_hint: None,
+                ver: location.1,
+                put_cache: false,
+            })
+            .await?;
+        for block in segment.block_metas()?.iter() {
+            if block
+                .cluster_stats
+                .as_ref()
+                .is_some_and(|stats| stats.cluster_key_id == key_id)
+            {
+                ordered += 1;
+            } else {
+                unordered += 1;
+            }
+        }
+    }
+    assert_eq!(
+        (ordered, unordered),
+        (1, 1),
+        "ordinary RECLUSTER must execute only one task round"
+    );
+
+    fixture
+        .execute_command(&format!("alter table {name} recluster final"))
+        .await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.summary.row_count, 6);
+    for location in &snapshot.segments {
+        let segment = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema())
+            .read(&LoadParams {
+                location: location.0.clone(),
+                len_hint: None,
+                ver: location.1,
+                put_cache: false,
+            })
+            .await?;
+        assert!(segment.block_metas()?.iter().all(|block| {
+            block
+                .cluster_stats
+                .as_ref()
+                .is_some_and(|stats| stats.cluster_key_id == key_id)
+        }));
+    }
+    fixture
+        .execute_command(&format!("alter table {name} recluster final"))
+        .await?;
     Ok(())
 }
 

@@ -27,6 +27,24 @@ alter table t_recluster recluster
 # ----
 # 1
 
+# Verify task-kind transport for ordered inputs.
+query I
+select count() from t_recluster
+----
+60
+
+# Invalidate the ordering proof and distribute SortBlocks tasks as well.
+statement ok
+alter table t_recluster cluster by(-a)
+
+statement ok
+alter table t_recluster recluster final
+
+query III
+select count(), min(a), max(a) from t_recluster
+----
+60 -9 10
+
 statement ok
 set enable_distributed_recluster = 0
 

@@ -24,6 +24,7 @@ use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -39,6 +40,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
@@ -130,6 +132,11 @@ impl IPhysicalPlan for Recluster {
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
                 let task = &self.tasks[0];
+                if task.parts.is_empty() {
+                    return Err(ErrorCode::Internal(
+                        "recluster task must have source blocks",
+                    ));
+                }
                 let settings = builder.ctx.get_settings();
                 // Execution-time guard: planning-time admission runs on the
                 // coordinator and cannot see this node's live memory pressure.
@@ -179,6 +186,7 @@ impl IPhysicalPlan for Recluster {
                     log::info!(
                         event = "recluster.input_planned",
                         table_id = table.get_id(),
+                        task_kind :? = task.kind,
                         input_levels :serde = task.input_level_stats;
                         "Recluster input planned"
                     );
@@ -239,8 +247,14 @@ impl IPhysicalPlan for Recluster {
                     .set_rows_per_block(rows_per_block)
                     .set_bytes_per_block(bytes_per_block);
 
+                if task.kind == ReclusterTaskKind::MergeBlocks && !cluster_stats_gen.is_linear() {
+                    return Err(ErrorCode::Internal(
+                        "MergeBlocks requires linear cluster keys",
+                    ));
+                }
+
                 if cluster_stats_gen.is_hilbert() {
-                    build_hilbert_layout_pipeline(
+                    Self::build_hilbert_layout_pipeline(
                         builder,
                         task,
                         &mut cluster_stats_gen,
@@ -249,7 +263,7 @@ impl IPhysicalPlan for Recluster {
                         max_threads,
                     )?;
                 } else {
-                    build_regular_layout_pipeline(
+                    Self::build_regular_layout_pipeline(
                         builder,
                         task,
                         &cluster_stats_gen,
@@ -319,144 +333,210 @@ impl IPhysicalPlan for Recluster {
     }
 }
 
-fn build_hilbert_layout_pipeline(
-    builder: &mut PipelineBuilder,
-    task: &ReclusterTask,
-    cluster_stats_gen: &mut ClusterStatsGenerator,
-    rows_per_block: usize,
-    compact_thresholds: BlockThresholds,
-    max_threads: usize,
-) -> Result<()> {
-    let dimension_offsets = cluster_stats_gen.hilbert_dimension_offsets()?;
-    let worker_count = builder.main_pipeline.output_len().max(1);
-    let target_blocks = task.total_rows.div_ceil(rows_per_block).max(1);
-    let num_collectors = max_threads
-        .min(target_blocks)
-        .clamp(1, u8::MAX as usize + 1);
-    let exchange = HilbertRangeExchange::create(
-        dimension_offsets,
-        task.total_rows,
-        worker_count,
-        num_collectors,
-    );
+impl Recluster {
+    fn build_hilbert_layout_pipeline(
+        builder: &mut PipelineBuilder,
+        task: &ReclusterTask,
+        cluster_stats_gen: &mut ClusterStatsGenerator,
+        rows_per_block: usize,
+        compact_thresholds: BlockThresholds,
+        max_threads: usize,
+    ) -> Result<()> {
+        let dimension_offsets = cluster_stats_gen.hilbert_dimension_offsets()?;
+        let worker_count = builder.main_pipeline.output_len().max(1);
+        let target_blocks = task.total_rows.div_ceil(rows_per_block).max(1);
+        let num_collectors = max_threads.min(target_blocks);
+        let num_collectors = num_collectors.clamp(1, u8::MAX as usize + 1);
+        let exchange = HilbertRangeExchange::create(
+            dimension_offsets,
+            task.total_rows,
+            worker_count,
+            num_collectors,
+        );
 
-    // The barrier uses the complete sort spill policy, including the sort-spill enable switch;
-    // the configured sort batch size controls each oldest-first spill unit.
-    let spiller = ReclusterSpiller::create(builder.ctx.clone())?;
+        // The barrier uses the complete sort spill policy, including the sort-spill enable switch;
+        // the configured sort batch size controls each oldest-first spill unit.
+        let spiller = ReclusterSpiller::create(builder.ctx.clone())?;
 
-    // Every input stream samples locally, then all streams replay against one immutable task-local
-    // weighted range plan.
-    let worker_id = AtomicUsize::new(0);
-    let range_exchange = exchange.clone();
-    builder.main_pipeline.add_transform(move |input, output| {
-        let id = worker_id.fetch_add(1, Ordering::Relaxed);
-        let memory_settings = spiller.memory_settings().clone();
-        Ok(ProcessorPtr::create(TransformHilbertCluster::<
-            ReclusterSpiller,
-        >::create(
-            input,
-            output,
-            exchange.clone(),
-            id,
-            spiller.clone(),
-            memory_settings,
-        )))
-    })?;
+        // Every input stream samples locally, then all streams replay against one immutable task-local
+        // weighted range plan.
+        let worker_id = AtomicUsize::new(0);
+        let range_exchange = exchange.clone();
+        let pipeline = &mut builder.main_pipeline;
+        pipeline.add_transform(move |input, output| {
+            let id = worker_id.fetch_add(1, Ordering::Relaxed);
+            let memory_settings = spiller.memory_settings().clone();
+            Ok(ProcessorPtr::create(TransformHilbertCluster::create(
+                input,
+                output,
+                exchange.clone(),
+                id,
+                spiller.clone(),
+                memory_settings,
+            )))
+        })?;
 
-    builder.main_pipeline.try_resize(num_collectors)?;
-    builder
-        .main_pipeline
-        .exchange(num_collectors, range_exchange)?;
+        pipeline.try_resize(num_collectors)?;
+        pipeline.exchange(num_collectors, range_exchange)?;
 
-    // Each collector owns a disjoint Hilbert-key interval. Sort only inside that interval, then
-    // compact locally so every output block covers a continuous key range without a global merge.
-    let mut sort_fields = cluster_stats_gen.out_fields.clone();
-    let hilbert_value_offset = sort_fields.len();
-    sort_fields.push(DataField::new(
-        "_task_hilbert_value",
-        DataType::Number(NumberDataType::UInt32),
-    ));
-    let sort_schema = DataSchemaRefExt::create(sort_fields);
-    let sort_desc = vec![SortColumnDescription {
-        offset: hilbert_value_offset,
-        asc: true,
-        nulls_first: false,
-    }];
-    SortPipelineBuilder::create(
-        builder.ctx.clone(),
-        sort_schema,
-        sort_desc.into(),
-        None,
-        builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
-    )?
-    .with_block_size_hit(rows_per_block)
-    .build_local_full_sort_pipeline(&mut builder.main_pipeline, false)?;
+        // Each collector owns a disjoint Hilbert-key interval. Sort only inside that interval, then
+        // compact locally so every output block covers a continuous key range without a global merge.
+        let mut sort_fields = cluster_stats_gen.out_fields.clone();
+        let hilbert_value_offset = sort_fields.len();
+        sort_fields.push(DataField::new(
+            "_task_hilbert_value",
+            DataType::Number(NumberDataType::UInt32),
+        ));
+        let sort_schema = DataSchemaRefExt::create(sort_fields);
+        let sort_desc = vec![SortColumnDescription {
+            offset: hilbert_value_offset,
+            asc: true,
+            nulls_first: false,
+        }];
+        SortPipelineBuilder::create(
+            builder.ctx.clone(),
+            sort_schema,
+            sort_desc.into(),
+            None,
+            builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
+        )?
+        .with_block_size_hit(rows_per_block)
+        .build_local_full_sort_pipeline(pipeline, false)?;
 
-    // The ordinary cluster statistics generator removes all trailing temporary columns before
-    // serialization; include the task-local Hilbert sort key.
-    cluster_stats_gen.extra_key_num += 1;
-    let extra_key_num = cluster_stats_gen.extra_key_num;
-    builder.main_pipeline.add_accumulating_transformer(move || {
-        OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
-    });
-    builder
-        .main_pipeline
-        .add_block_meta_transformer(|| TransformCompactBlock);
-    Ok(())
-}
+        // The ordinary cluster statistics generator removes all trailing temporary columns before
+        // serialization; include the task-local Hilbert sort key.
+        cluster_stats_gen.extra_key_num += 1;
+        let extra_key_num = cluster_stats_gen.extra_key_num;
+        pipeline.add_accumulating_transformer(move || {
+            OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+        });
+        pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+        Ok(())
+    }
 
-fn build_regular_layout_pipeline(
-    builder: &mut PipelineBuilder,
-    task: &ReclusterTask,
-    cluster_stats_gen: &ClusterStatsGenerator,
-    rows_per_block: usize,
-    compact_thresholds: BlockThresholds,
-    max_threads: usize,
-) -> Result<()> {
-    if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
-        let vector_column_input_offset = vector_operator.vector_column_input_offset;
-        let dimension = vector_operator.info.dimension;
-        let distance_type = vector_operator.info.distance_type;
+    fn build_recluster_sort_pipeline(
+        kind: ReclusterTaskKind,
+        sort: SortPipelineBuilder,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        match kind {
+            ReclusterTaskKind::SortBlocks => {
+                // Establish order in the input fragments, then merge them using the
+                // existing full-sort builder, including its spill support.
+                sort.build_full_sort_pipeline(pipeline, false)
+            }
+            ReclusterTaskKind::MergeBlocks => {
+                // Each source block is already ordered. A stream may contain several
+                // overlapping blocks, so retain local and cross-stream run merges,
+                // without sorting rows inside an input block.
+                sort.build_merge_sort_pipeline(pipeline, false, false)
+            }
+        }
+    }
+
+    fn build_regular_layout_pipeline(
+        builder: &mut PipelineBuilder,
+        task: &ReclusterTask,
+        cluster_stats_gen: &ClusterStatsGenerator,
+        rows_per_block: usize,
+        compact_thresholds: BlockThresholds,
+        max_threads: usize,
+    ) -> Result<()> {
+        if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
+            let vector_column_input_offset = vector_operator.vector_column_input_offset;
+            let dimension = vector_operator.info.dimension;
+            let distance_type = vector_operator.info.distance_type;
+            builder.main_pipeline.try_resize(1)?;
+            builder.main_pipeline.add_accumulating_transformer(move || {
+                TransformVectorCluster::new(
+                    vector_column_input_offset,
+                    dimension,
+                    distance_type,
+                    rows_per_block,
+                )
+            });
+            builder.main_pipeline.try_resize(max_threads)?;
+        }
+
+        // Linear and vector clustering use their regular global row-sort pipeline.
+        let schema = DataSchemaRefExt::create(cluster_stats_gen.out_fields.clone());
+        let sort_descs = cluster_stats_gen.sort_descs();
+        let sort_pipeline_builder = SortPipelineBuilder::create(
+            builder.ctx.clone(),
+            schema,
+            sort_descs.into(),
+            None,
+            builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
+        )?
+        .with_block_size_hit(rows_per_block);
+        Self::build_recluster_sort_pipeline(
+            task.kind,
+            sort_pipeline_builder,
+            &mut builder.main_pipeline,
+        )?;
+
         builder.main_pipeline.try_resize(1)?;
+        let extra_key_num = cluster_stats_gen.extra_key_num;
         builder.main_pipeline.add_accumulating_transformer(move || {
-            TransformVectorCluster::new(
-                vector_column_input_offset,
-                dimension,
-                distance_type,
-                rows_per_block,
-            )
+            OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
         });
         builder.main_pipeline.try_resize(max_threads)?;
+        builder
+            .main_pipeline
+            .add_block_meta_transformer(|| TransformCompactBlock);
+        Ok(())
     }
+}
 
-    // Linear and vector clustering use their regular global row-sort pipeline.
-    let schema = DataSchemaRefExt::create(cluster_stats_gen.out_fields.clone());
-    let sort_descs = cluster_stats_gen.sort_descs();
-    let skip_partial_sort = task.all_ordered && cluster_stats_gen.is_linear();
-    let sort_pipeline_builder = SortPipelineBuilder::create(
-        builder.ctx.clone(),
-        schema,
-        sort_descs.into(),
-        None,
-        builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
-    )?
-    .with_block_size_hit(rows_per_block);
-    if !skip_partial_sort {
-        let partial_sort_descs = sort_pipeline_builder.sort_column_desc();
-        builder.main_pipeline.add_transformer(move || {
-            TransformSortPartial::new(LimitType::None, partial_sort_descs.clone())
-        });
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_recluster_sort_pipeline_boundary() -> anyhow::Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        for width in [1, 2] {
+            for kind in [
+                ReclusterTaskKind::SortBlocks,
+                ReclusterTaskKind::MergeBlocks,
+            ] {
+                let kind: ReclusterTaskKind = serde_json::from_str(&serde_json::to_string(&kind)?)?;
+                let schema = DataSchemaRefExt::create(vec![DataField::new(
+                    "k",
+                    DataType::Number(NumberDataType::Int32),
+                )]);
+                let sort = SortPipelineBuilder::create(
+                    ctx.clone(),
+                    schema,
+                    vec![SortColumnDescription {
+                        offset: 0,
+                        asc: true,
+                        nulls_first: false,
+                    }]
+                    .into(),
+                    None,
+                    false,
+                )?;
+                let mut pipeline = Pipeline::create();
+                pipeline.add_source(EmptySource::create, width)?;
+                Recluster::build_recluster_sort_pipeline(kind, sort, &mut pipeline)?;
+                let partial_sorts = pipeline
+                    .graph
+                    .node_weights()
+                    .filter(|node| unsafe { node.proc.name() }.contains("SortPartialTransform"))
+                    .count();
+                assert_eq!(
+                    partial_sorts,
+                    if kind == ReclusterTaskKind::SortBlocks {
+                        width
+                    } else {
+                        0
+                    }
+                );
+            }
+        }
+        Ok(())
     }
-    sort_pipeline_builder.build_merge_sort_pipeline(&mut builder.main_pipeline, false, false)?;
-
-    builder.main_pipeline.try_resize(1)?;
-    let extra_key_num = cluster_stats_gen.extra_key_num;
-    builder.main_pipeline.add_accumulating_transformer(move || {
-        OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
-    });
-    builder.main_pipeline.try_resize(max_threads)?;
-    builder
-        .main_pipeline
-        .add_block_meta_transformer(|| TransformCompactBlock);
-    Ok(())
 }
