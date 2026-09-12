@@ -31,7 +31,7 @@ use super::core::RowsTypeVisitor;
 use super::core::SortKeyDescription;
 use super::core::SortedStream;
 use super::core::algorithm::HeapSort;
-use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::LoserTreeTop2Sort;
 use super::core::algorithm::SortAlgorithm;
 use super::core::select_row_type;
 use super::sort_merge_base::MergeSort;
@@ -138,7 +138,7 @@ impl<R: Rows> TransformSortMerge<R> {
         }
 
         if self.enable_loser_tree {
-            self.merge_sort_algo::<LoserTreeSort<R>>(batch_size, size_hint)
+            self.merge_sort_algo::<LoserTreeTop2Sort<R>>(batch_size, size_hint)
         } else {
             self.merge_sort_algo::<HeapSort<R>>(batch_size, size_hint)
         }

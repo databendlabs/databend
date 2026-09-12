@@ -80,7 +80,9 @@ pub(super) fn choose_encode_method(fields: &[RowSortField]) -> Option<usize> {
 #[derive(Debug, Clone)]
 pub struct FixedRows<const N: usize>(Buffer<[u64; N]>);
 
-impl<const N: usize> Rows for FixedRows<N> {
+// SAFETY: Buffer stores its elements in an Arc-backed allocation, so moving the
+// Buffer wrapper does not relocate referenced elements.
+unsafe impl<const N: usize> Rows for FixedRows<N> {
     const IS_ASC_COLUMN: bool = true;
 
     type Item<'a>

@@ -63,7 +63,9 @@ use super::variable_encode::var_encode;
 
 pub type VariableRows = BinaryColumn;
 
-impl Rows for VariableRows {
+// SAFETY: BinaryColumn stores data and offsets in Arc-backed buffers, so moving
+// the column wrapper does not relocate referenced byte slices.
+unsafe impl Rows for VariableRows {
     const IS_ASC_COLUMN: bool = true;
     type Item<'a> = &'a [u8];
     type Type = BinaryType;
