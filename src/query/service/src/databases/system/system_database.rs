@@ -44,6 +44,7 @@ use databend_common_storages_system::LocksTable;
 use databend_common_storages_system::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTotalsTable;
+use databend_common_storages_system::MaterializedViewsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
@@ -152,6 +153,7 @@ impl SystemDatabase {
             ViewsTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
             ProceduresTable::create(sys_db_meta.next_table_id()),
             StatisticsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            MaterializedViewsTable::create(sys_db_meta.next_table_id(), ctl_name),
         ];
 
         let disable_system_table_load;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use databend_common_expression::TableSchema;
 use databend_meta_client::types::SeqV;
 
@@ -153,6 +155,40 @@ pub struct MVInfo {
     pub mv_id: u64,
     pub definition: SeqV<MVDefinition>,
     pub table_meta: SeqV<TableMeta>,
+}
+
+/// Safe equality constraints accepted by the materialized-view listing API.
+///
+/// `None` means that the caller did not extract a necessary constraint for that field. The API
+/// applies these constraints only to prune candidates; SQL callers must still evaluate their
+/// complete filter expression.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MaterializedViewListFilter {
+    pub materialized_view_ids: Option<BTreeSet<u64>>,
+    pub database_names: Option<BTreeSet<String>>,
+    pub names: Option<BTreeSet<String>>,
+    pub source_table_ids: Option<BTreeSet<u64>>,
+}
+
+/// Source metadata collected for one listed materialized view.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListedMVSource {
+    pub table_id: u64,
+    pub table_name: Option<String>,
+    /// Whether source `TableMeta` exists and is not soft-dropped.
+    pub is_active: bool,
+    pub bound_source_generation: Option<u64>,
+    pub current_source_generation: Option<u64>,
+}
+
+/// Complete metadata needed by management and system-table listing paths.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListedMaterializedView {
+    pub mv: MVInfo,
+    pub database_id: u64,
+    pub database_name: String,
+    pub name: String,
+    pub source: ListedMVSource,
 }
 
 /// A consistent view of the active MV bindings for one source table.
