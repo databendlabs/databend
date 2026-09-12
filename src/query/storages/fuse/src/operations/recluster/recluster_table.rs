@@ -44,6 +44,7 @@ use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
+use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
@@ -226,12 +227,18 @@ impl FuseTable {
 
             // Step 2: scan this fixed range, excluding still-carried windows.
             // Carried tasks count toward early accept before new probing.
-            let mut early_accept_count = valid_carry
-                .iter()
-                .flat_map(|window| window.tasks.iter())
-                .filter(|task| mutator.passes_early_accept(task))
-                .count();
-            let scan_locations = if scan_start < scan_end && early_accept_count < mutator.max_tasks
+            let mut early_accept_count = if mutator.properties.enable_task_selection_v2 {
+                0
+            } else {
+                valid_carry
+                    .iter()
+                    .flat_map(|window| window.tasks.iter())
+                    .filter(|task| mutator.passes_early_accept(task))
+                    .count()
+            };
+            let scan_locations = if scan_start < scan_end
+                && (mutator.properties.enable_task_selection_v2
+                    || early_accept_count < mutator.max_tasks)
             {
                 let scan_range = &snapshot.segments[scan_start..scan_end];
                 let carry_locations = (!valid_carry.is_empty()).then(|| {
@@ -331,9 +338,12 @@ impl FuseTable {
                         .get_or_insert_with(|| Arc::new(Semaphore::new(max_threads * 2)))
                         .clone();
                     let mut segment_windows = segment_windows.into_iter().enumerate();
-                    while early_accept_count < mutator.max_tasks {
-                        let remaining_task_budget =
-                            mutator.max_tasks.saturating_sub(early_accept_count);
+                    loop {
+                        let remaining_task_budget = if mutator.properties.enable_task_selection_v2 {
+                            mutator.max_tasks
+                        } else {
+                            mutator.max_tasks.saturating_sub(early_accept_count)
+                        };
                         if remaining_task_budget == 0 {
                             break;
                         }
@@ -352,14 +362,24 @@ impl FuseTable {
                             let decode_runtime = decode_runtime.clone();
                             let decode_semaphore = decode_semaphore.clone();
                             async move {
-                                mutator
-                                    .probe_candidate_window(
-                                        selected_segs,
-                                        remaining_task_budget,
-                                        decode_runtime,
-                                        decode_semaphore,
-                                    )
-                                    .await
+                                if mutator.builds_tasks_after_decode() {
+                                    mutator
+                                        .decode_candidate_window(
+                                            selected_segs,
+                                            decode_runtime,
+                                            decode_semaphore,
+                                        )
+                                        .await
+                                } else {
+                                    mutator
+                                        .probe_candidate_window(
+                                            selected_segs,
+                                            remaining_task_budget,
+                                            decode_runtime,
+                                            decode_semaphore,
+                                        )
+                                        .await
+                                }
                             }
                         });
 
@@ -376,11 +396,13 @@ impl FuseTable {
                         for window in probed {
                             probe_windows += 1;
                             probe_tasks += window.tasks.len();
-                            early_accept_count += window
-                                .tasks
-                                .iter()
-                                .filter(|task| mutator.passes_early_accept(task))
-                                .count();
+                            if !mutator.properties.enable_task_selection_v2 {
+                                early_accept_count += window
+                                    .tasks
+                                    .iter()
+                                    .filter(|task| mutator.passes_early_accept(task))
+                                    .count();
+                            }
                             pending_windows.push(window);
                         }
                     }
@@ -397,6 +419,8 @@ impl FuseTable {
                 }
             }
 
+            mutator.build_decoded_window_tasks(&mut pending_windows)?;
+
             let (_, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
@@ -404,7 +428,8 @@ impl FuseTable {
                 // early accepts fill the task budget. In that case early candidates
                 // rank first, while other probed tasks remain available to fill budget
                 // left by candidates skipped due to the segment-claim limit.
-                let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
+                let enable_v2 = mutator.properties.enable_task_selection_v2;
+                let prioritize_early_accept = !enable_v2 && early_accept_count >= mutator.max_tasks;
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
@@ -416,7 +441,31 @@ impl FuseTable {
                         ));
                     }
                 }
-                sort_task_candidates(&mut sorted_tasks);
+                if enable_v2 {
+                    sorted_tasks.sort_by(|left, right| {
+                        right.2.cmp_desc_v2(&left.2).then_with(|| {
+                            pending_windows[left.0].tasks[left.1]
+                                .base_level
+                                .cmp(&pending_windows[right.0].tasks[right.1].base_level)
+                        })
+                    });
+                    let mut chain: Vec<&ReclusterTaskCandidate> = Vec::new();
+                    let mut overlapping = Vec::new();
+                    let mut ordered = Vec::with_capacity(sorted_tasks.len());
+                    for candidate in sorted_tasks {
+                        let task = &pending_windows[candidate.0].tasks[candidate.1];
+                        if chain.iter().any(|picked| picked.key_span_intersects(task)) {
+                            overlapping.push(candidate);
+                        } else {
+                            chain.push(task);
+                            ordered.push(candidate);
+                        }
+                    }
+                    ordered.extend(overlapping);
+                    sorted_tasks = ordered;
+                } else {
+                    sort_task_candidates(&mut sorted_tasks);
+                }
 
                 let mut selected_task_indices =
                     select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks);
@@ -612,6 +661,10 @@ mod tests {
     fn score(priority: usize) -> CandidateScore {
         CandidateScore {
             selected_total_bytes: priority,
+            selected_block_count: priority,
+            estimated_depth_gain: priority as i64,
+            task_threshold_bytes: priority,
+            touched_segment_count: 1,
             max_depth: priority,
             average_depth: priority as f64,
         }
@@ -627,6 +680,7 @@ mod tests {
             base_level: 0,
             input_level_stats: Vec::new(),
             all_ordered: false,
+            key_span: None,
         }
     }
 
@@ -636,6 +690,7 @@ mod tests {
                 .map(|index| ((format!("{}-{}", prefix, index), 0), None))
                 .collect(),
             tasks: vec![candidate(0..segment_count)],
+            decoded_blocks: Arc::new(Vec::new()),
         }
     }
 

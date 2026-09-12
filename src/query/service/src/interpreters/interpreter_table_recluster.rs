@@ -543,7 +543,7 @@ impl ReclusterTableInterpreter {
             deduplicated_label: None,
             table_meta_timestamps,
             recluster_info: Some(ReclusterInfoSideCar {
-                merged_blocks: remained_blocks,
+                merged_blocks: remained_blocks.into_iter().map(Arc::new).collect(),
                 removed_segment_indexes,
                 removed_statistics: removed_segment_summary,
                 acquire_commit_lock,

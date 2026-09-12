@@ -1,0 +1,171 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0055
+
+statement ok
+CREATE DATABASE db_09_0055
+
+statement ok
+USE db_09_0055
+
+statement ok
+SET enable_recluster_task_selection_v2 = 0
+
+query T
+SELECT value FROM system.settings WHERE name = 'enable_recluster_task_selection_v2'
+----
+0
+
+statement ok
+CREATE TABLE t_v1(a INT NOT NULL) ROW_PER_BLOCK = 3
+
+statement ok
+INSERT INTO t_v1 VALUES (0), (1), (4)
+
+statement ok
+ALTER TABLE t_v1 CLUSTER BY(abs(a))
+
+statement ok
+INSERT INTO t_v1 VALUES (3)
+
+statement ok
+INSERT INTO t_v1 VALUES (-6), (-8)
+
+statement ok
+INSERT INTO t_v1 VALUES (2), (5), (-7)
+
+statement ok
+ALTER TABLE t_v1 RECLUSTER
+
+query I
+SELECT COUNT() FROM t_v1
+----
+9
+
+query I
+SELECT SUM(a) FROM t_v1
+----
+-6
+
+query B
+SELECT info:average_depth <= 1.0 FROM clustering_information('db_09_0055', 't_v1')
+----
+1
+
+statement ok
+CREATE TABLE t_final_v1(a INT NOT NULL) ROW_PER_BLOCK = 3
+
+statement ok
+INSERT INTO t_final_v1 VALUES (0), (1), (4)
+
+statement ok
+ALTER TABLE t_final_v1 CLUSTER BY(abs(a))
+
+statement ok
+INSERT INTO t_final_v1 VALUES (3)
+
+statement ok
+INSERT INTO t_final_v1 VALUES (-6), (-8)
+
+statement ok
+INSERT INTO t_final_v1 VALUES (2), (5), (-7)
+
+query B
+SELECT info:average_depth > 1.0 FROM clustering_information('db_09_0055', 't_final_v1')
+----
+1
+
+statement ok
+ALTER TABLE t_final_v1 RECLUSTER FINAL
+
+query I
+SELECT COUNT() FROM t_final_v1
+----
+9
+
+query I
+SELECT SUM(a) FROM t_final_v1
+----
+-6
+
+statement ok
+SET enable_recluster_task_selection_v2 = 1
+
+query T
+SELECT value FROM system.settings WHERE name = 'enable_recluster_task_selection_v2'
+----
+1
+
+statement ok
+CREATE TABLE t_v2(a INT NOT NULL) ROW_PER_BLOCK = 3
+
+statement ok
+INSERT INTO t_v2 VALUES (0), (1), (4)
+
+statement ok
+ALTER TABLE t_v2 CLUSTER BY(abs(a))
+
+statement ok
+INSERT INTO t_v2 VALUES (3)
+
+statement ok
+INSERT INTO t_v2 VALUES (-6), (-8)
+
+statement ok
+INSERT INTO t_v2 VALUES (2), (5), (-7)
+
+statement ok
+ALTER TABLE t_v2 RECLUSTER
+
+query I
+SELECT COUNT() FROM t_v2
+----
+9
+
+query I
+SELECT SUM(a) FROM t_v2
+----
+-6
+
+query B
+SELECT info:average_depth <= 1.0 FROM clustering_information('db_09_0055', 't_v2')
+----
+1
+
+statement ok
+CREATE TABLE t_final_v2(a INT NOT NULL) ROW_PER_BLOCK = 3
+
+statement ok
+INSERT INTO t_final_v2 VALUES (0), (1), (4)
+
+statement ok
+ALTER TABLE t_final_v2 CLUSTER BY(abs(a))
+
+statement ok
+INSERT INTO t_final_v2 VALUES (3)
+
+statement ok
+INSERT INTO t_final_v2 VALUES (-6), (-8)
+
+statement ok
+INSERT INTO t_final_v2 VALUES (2), (5), (-7)
+
+query B
+SELECT info:average_depth > 1.0 FROM clustering_information('db_09_0055', 't_final_v2')
+----
+1
+
+statement ok
+ALTER TABLE t_final_v2 RECLUSTER FINAL
+
+query I
+SELECT COUNT() FROM t_final_v2
+----
+9
+
+query I
+SELECT SUM(a) FROM t_final_v2
+----
+-6
+
+statement ok
+DROP DATABASE db_09_0055

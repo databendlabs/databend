@@ -14,13 +14,20 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
+use databend_common_expression::compare_scalars;
+use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use indexmap::IndexMap;
 use indexmap::IndexSet;
+use indexmap::map::Entry;
 use log::debug;
 
 use crate::SegmentLocation;
@@ -39,6 +46,172 @@ use crate::statistics::RangeMaxTree;
 /// Linear cluster-key recluster behavior.
 pub(crate) struct LinearReclusterStrategy;
 
+pub(crate) struct ReclusterDepthStats {
+    positions: HashMap<String, usize>,
+    // Endpoint order is shared by all candidates; simulated outputs introduce no new keys.
+    ranges: Vec<(usize, usize)>,
+    overlaps: RangeOverlapIndex,
+    overlap_sum: i128,
+}
+
+/// One task's estimated output run, not the ranges of individual output blocks.
+struct ReclusterOutputRun {
+    /// Inclusive positions in the shared, sorted cluster-key endpoint table.
+    start_point: usize,
+    end_point: usize,
+    /// Estimated output block count; weights overlap burden, not run multiplicity.
+    block_count: usize,
+}
+
+/// Counts inclusive range intersections without scanning the shared ranges.
+struct RangeOverlapIndex {
+    starts: Vec<usize>,
+    ends: Vec<usize>,
+}
+
+impl RangeOverlapIndex {
+    fn new(ranges: impl Iterator<Item = (usize, usize)>) -> Self {
+        let (mut starts, mut ends): (Vec<_>, Vec<_>) = ranges.unzip();
+        starts.sort_unstable();
+        ends.sort_unstable();
+        Self { starts, ends }
+    }
+
+    fn count(&self, start: usize, end: usize) -> usize {
+        self.starts.partition_point(|&p| p <= end) - self.ends.partition_point(|&p| p < start)
+    }
+}
+
+impl ReclusterDepthStats {
+    pub(crate) fn create<'a>(
+        blocks: impl Iterator<Item = &'a ReclusterBlock>,
+        key_types: &[DataType],
+    ) -> Result<Self> {
+        let mut positions = HashMap::new();
+        let mut ranges = Vec::new();
+        for block in blocks {
+            let stats = block.stats();
+            if stats.min().len() != key_types.len() || stats.max().len() != key_types.len() {
+                return Err(ErrorCode::Internal(
+                    "Invalid cluster-key arity in recluster window",
+                ));
+            }
+            if positions
+                .insert(block.meta.location.0.clone(), ranges.len())
+                .is_some()
+            {
+                return Err(ErrorCode::Internal("Duplicate block in recluster windows"));
+            }
+            ranges.push((stats.min().as_slice(), stats.max().as_slice()));
+        }
+        let (ranges, _) = index_depth_ranges(&ranges, key_types)?;
+        Ok(Self::from_ranges(positions, ranges))
+    }
+
+    fn from_ranges(positions: HashMap<String, usize>, ranges: Vec<(usize, usize)>) -> Self {
+        let overlaps = RangeOverlapIndex::new(ranges.iter().copied());
+        // Inputs have unit weight; count each directed relationship, excluding self.
+        let overlap_sum = ranges
+            .iter()
+            .map(|&(start, end)| (overlaps.count(start, end) - 1) as i128)
+            .sum();
+        Self {
+            positions,
+            ranges,
+            overlaps,
+            overlap_sum,
+        }
+    }
+
+    /// Evaluate a batch against one fixed pre-state; a single task is a one-element batch.
+    /// Burden is sum(weight * intersecting OTHER runs) / sum(weight). Inputs have
+    /// unit weight, outputs use executor-estimated block counts but each adds one run.
+    /// Return the reduction scaled by initial block count (signed, rounded down).
+    /// Per candidate: O(S log N + S log S + T log N + T²), not a scan over N neighbors.
+    pub(crate) fn gain<'a, I>(
+        &self,
+        tasks: impl IntoIterator<Item = I>,
+        properties: &ReclusterProperties,
+    ) -> Result<i64>
+    where
+        I: IntoIterator<Item = &'a ReclusterBlock>,
+    {
+        let mut selected = HashSet::new();
+        let mut outputs = Vec::new();
+        for blocks in tasks {
+            let (mut total_rows, mut total_bytes, mut total_compressed) = (0usize, 0usize, 0usize);
+            let (mut start, mut end) = (usize::MAX, 0);
+            for block in blocks {
+                let idx = *self
+                    .positions
+                    .get(&block.meta.location.0)
+                    .ok_or_else(|| ErrorCode::Internal("Candidate missing from decoded windows"))?;
+                if !selected.insert(idx) {
+                    return Err(ErrorCode::Internal("Shared input in joint recluster tasks"));
+                }
+                start = start.min(self.ranges[idx].0);
+                end = end.max(self.ranges[idx].1);
+                total_rows += block.meta.row_count as usize;
+                total_bytes += block.meta.block_size as usize;
+                total_compressed += block.meta.file_size as usize;
+            }
+            let count = estimate_output_block_count(
+                total_rows,
+                total_bytes,
+                total_compressed,
+                &properties.block_thresholds,
+            )
+            .ok_or_else(|| ErrorCode::Internal("Missing output size for recluster candidate"))?;
+            outputs.push(ReclusterOutputRun {
+                start_point: start,
+                end_point: end,
+                block_count: count,
+            });
+        }
+        if selected.is_empty() {
+            return Ok(0);
+        }
+        let selected_index = RangeOverlapIndex::new(selected.iter().map(|&idx| self.ranges[idx]));
+        // Removing an input deletes both directions of every incident relationship.
+        // Internal selected relationships occur twice in degrees, so restore them once.
+        let mut after = self.overlap_sum;
+        for &idx in &selected {
+            let (start, end) = self.ranges[idx];
+            let degree = (self.overlaps.count(start, end) - 1) as i128;
+            let internal = (selected_index.count(start, end) - 1) as i128;
+            after += internal - 2 * degree;
+        }
+        for (i, output) in outputs.iter().enumerate() {
+            let neighbors = self.overlaps.count(output.start_point, output.end_point)
+                - selected_index.count(output.start_point, output.end_point);
+            // Remaining inputs have weight 1. The output contributes one run to
+            // each neighbor, while its own burden is weighted by output block count.
+            after += (output.block_count as i128 + 1) * neighbors as i128;
+            for other in &outputs[..i] {
+                if output.start_point <= other.end_point && other.start_point <= output.end_point {
+                    after += output.block_count as i128 + other.block_count as i128;
+                }
+            }
+        }
+        let blocks_after = (self.ranges.len() - selected.len()) as i128
+            + outputs
+                .iter()
+                .map(|output| output.block_count as i128)
+                .sum::<i128>();
+        Ok(overlap_gain_from_sums(
+            self.overlap_sum,
+            after,
+            self.ranges.len(),
+            blocks_after,
+        ))
+    }
+}
+
+struct CandidatePlan {
+    peak_pos: usize,
+    score: CandidateScore,
+}
+
 impl ReclusterStrategy for LinearReclusterStrategy {
     fn select_segments(
         &self,
@@ -56,6 +229,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
         indices: &[usize],
         blocks: &[&ReclusterBlock],
         task_budget: usize,
+        depth_stats: Option<&super::ReclusterDepthStats>,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let mut points_map = BTreeMap::new();
         for (local_idx, &i) in indices.iter().enumerate() {
@@ -92,7 +266,6 @@ impl ReclusterStrategy for LinearReclusterStrategy {
         let mut live = vec![false; block_count];
         let mut live_count = 0usize;
         let mut max_depth = 0;
-        // Peak tuple: (max point position, max depth, width of depth > threshold region).
         let mut peaks = Vec::new();
         let mut current_peak: Option<(usize, usize, usize)> = None;
         for (i, (starts, ends)) in values.iter().enumerate() {
@@ -179,6 +352,27 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             },
         );
 
+        let enable_task_selection_v2 = properties.enable_task_selection_v2;
+        let local_depths = if enable_task_selection_v2 && !peaks.is_empty() && depth_stats.is_none()
+        {
+            Some(ReclusterDepthStats::create(
+                blocks.iter().copied(),
+                &properties.scalar_cluster_key_types,
+            )?)
+        } else {
+            None
+        };
+        let depth_stats = depth_stats.or(local_depths.as_ref());
+        let estimate_depth_gain = |selected: &[usize]| -> Result<i64> {
+            match depth_stats {
+                Some(stats) => stats.gain(
+                    [selected.iter().map(|&idx| blocks[indices[idx]])],
+                    properties,
+                ),
+                None => Ok(0),
+            }
+        };
+
         let push_task = |candidates: &mut Vec<ReclusterTaskCandidate>,
                          used_blocks: &mut [bool],
                          local_indices: Vec<usize>,
@@ -197,17 +391,63 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 .collect::<Vec<_>>();
             let score = CandidateScore {
                 selected_total_bytes: task_bytes,
+                selected_block_count: task_indices.len(),
                 max_depth,
                 average_depth,
+                estimated_depth_gain: 0,
+                task_threshold_bytes: properties.memory_threshold,
+                // Filled in by `task_candidate`, which groups blocks by segment.
+                touched_segment_count: 0,
             };
             candidates.push(task_candidate(group, score, &task_indices, blocks));
         };
 
+        let push_plan = |plans: &mut IndexMap<Vec<usize>, CandidatePlan>,
+                         peak_pos: usize,
+                         mut local_indices: Vec<usize>,
+                         task_bytes: usize,
+                         max_depth: usize|
+         -> Result<()> {
+            local_indices.sort_unstable();
+            let Entry::Vacant(entry) = plans.entry(local_indices) else {
+                return Ok(());
+            };
+            let local_indices = entry.key();
+            let estimated_depth_gain = estimate_depth_gain(local_indices)?;
+            // Memory cap may have truncated the hotspot's full peak-depth set;
+            // the actual overlap depth of what got selected cannot exceed how
+            // many blocks made it into the task.
+            let max_depth = max_depth.min(local_indices.len());
+            // v2 ranks plans before they become candidates, so the segment span
+            // has to be known here for scoring to see it.
+            // Group indices preserve segment-major decode order; the plan key is sorted.
+            let touched_segment_count = usize::from(!local_indices.is_empty())
+                + local_indices
+                    .windows(2)
+                    .filter(|pair| {
+                        blocks[indices[pair[0]]].index.segment_idx
+                            != blocks[indices[pair[1]]].index.segment_idx
+                    })
+                    .count();
+            let score = CandidateScore {
+                selected_total_bytes: task_bytes,
+                selected_block_count: local_indices.len(),
+                max_depth,
+                average_depth,
+                estimated_depth_gain,
+                task_threshold_bytes: properties.memory_threshold,
+                touched_segment_count,
+            };
+            entry.insert(CandidatePlan { peak_pos, score });
+            Ok(())
+        };
+
         let mut candidates = Vec::new();
         let mut used_blocks = vec![false; block_count];
+        let mut plans = IndexMap::new();
 
         for &(peak_pos, peak_depth, _) in &peaks {
-            if candidates.len() >= task_budget {
+            if !enable_task_selection_v2 && candidates.len() >= task_budget {
                 break;
             }
 
@@ -221,37 +461,39 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             while hotspot_right + 1 < num_points && point_depths[hotspot_right + 1] == peak_depth {
                 hotspot_right += 1;
             }
-
+            let hotspot_blocks = (0..block_count)
+                .filter(|&idx| open_pos[idx] <= hotspot_right && close_pos[idx] >= hotspot_left)
+                .map(|idx| (idx, blocks[indices[idx]].meta.block_size as usize))
+                .collect::<Vec<_>>();
             // Pack hotspot-overlapping blocks first. Tasks split only on memory,
             // so a deep hotspot is not scattered by parallelism balancing.
-            // Keep the peak depth from the initial sweep. Here used_blocks only
-            // prevents the same block from being assigned to multiple tasks.
+            // Keep the peak depth from the initial sweep. Blocks are not marked
+            // as used until all peak plans have been scored and ranked.
             let mut task_bytes = 0usize;
             let mut task_indices = Vec::new();
-            for local_idx in 0..block_count {
-                if used_blocks[local_idx] {
+            for &(local_idx, block_size) in &hotspot_blocks {
+                if !enable_task_selection_v2 && used_blocks[local_idx] {
                     continue;
                 }
-                if open_pos[local_idx] > hotspot_right || close_pos[local_idx] < hotspot_left {
-                    continue;
-                }
-                let idx = indices[local_idx];
-                let block_size = blocks[idx].meta.block_size as usize;
                 let should_split_for_memory = !task_indices.is_empty()
                     && task_bytes.saturating_add(block_size) > properties.memory_threshold;
 
                 if should_split_for_memory {
                     if task_indices.len() >= 2 {
                         let local_indices = std::mem::take(&mut task_indices);
-                        push_task(
-                            &mut candidates,
-                            &mut used_blocks,
-                            local_indices,
-                            task_bytes,
-                            peak_depth,
-                        );
-                        if candidates.len() >= task_budget {
-                            break;
+                        if enable_task_selection_v2 {
+                            push_plan(&mut plans, peak_pos, local_indices, task_bytes, peak_depth)?;
+                        } else {
+                            push_task(
+                                &mut candidates,
+                                &mut used_blocks,
+                                local_indices,
+                                task_bytes,
+                                peak_depth,
+                            );
+                            if candidates.len() >= task_budget {
+                                break;
+                            }
                         }
                     } else {
                         task_indices.clear();
@@ -299,7 +541,7 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                         &values[cur].0
                     };
                     for &local_idx in group_indices {
-                        if used_blocks[local_idx] {
+                        if !enable_task_selection_v2 && used_blocks[local_idx] {
                             continue;
                         }
                         let idx = indices[local_idx];
@@ -316,18 +558,60 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             }
 
             if task_indices.len() >= 2 {
-                push_task(
-                    &mut candidates,
-                    &mut used_blocks,
-                    task_indices,
-                    task_bytes,
-                    peak_depth,
-                );
+                if enable_task_selection_v2 {
+                    push_plan(&mut plans, peak_pos, task_indices, task_bytes, peak_depth)?;
+                } else {
+                    push_task(
+                        &mut candidates,
+                        &mut used_blocks,
+                        task_indices,
+                        task_bytes,
+                        peak_depth,
+                    );
+                }
+            }
+            if enable_task_selection_v2 {
+                // Each block gets a fresh chance to form a task. An oversized next block
+                // must not prevent a later, smaller block from joining the current task.
+                for (local_indices, task_bytes) in
+                    forward_packs(&hotspot_blocks, properties.memory_threshold)
+                {
+                    push_plan(&mut plans, peak_pos, local_indices, task_bytes, peak_depth)?;
+                }
+            }
+        }
+
+        let mut rejected_conflict_count = 0usize;
+        if enable_task_selection_v2 {
+            plans.sort_by(|_, left, _, right| {
+                right
+                    .score
+                    .cmp_desc_v2(&left.score)
+                    .then_with(|| left.peak_pos.cmp(&right.peak_pos))
+            });
+
+            used_blocks.fill(false);
+            for (local_indices, plan) in &plans {
+                if candidates.len() >= task_budget {
+                    break;
+                }
+                if local_indices.iter().any(|idx| used_blocks[*idx]) {
+                    rejected_conflict_count += 1;
+                    continue;
+                }
+                for &local_idx in local_indices {
+                    used_blocks[local_idx] = true;
+                }
+                let task_indices = local_indices
+                    .iter()
+                    .map(|local_idx| indices[*local_idx])
+                    .collect::<Vec<_>>();
+                candidates.push(task_candidate(group, plan.score, &task_indices, blocks));
             }
         }
 
         debug!(
-            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} peak_count={} task_count={}",
+            "recluster: probed task candidates group={} block_count={} avg_depth={} depth_threshold={} max_depth={} peak_count={} task_count={} rejected_conflict_count={}",
             group,
             block_count,
             average_depth,
@@ -335,10 +619,97 @@ impl ReclusterStrategy for LinearReclusterStrategy {
             max_depth,
             peaks.len(),
             candidates.len(),
+            rejected_conflict_count,
         );
 
         Ok(candidates)
     }
+}
+
+// At most one candidate per starting block, with O(n²) size checks but O(n) candidates.
+// Blocks may occur in multiple candidates; execution conflicts are resolved after scoring.
+fn forward_packs(
+    blocks: &[(usize, usize)],
+    budget: usize,
+) -> impl Iterator<Item = (Vec<usize>, usize)> + '_ {
+    let mut suffix_min = vec![usize::MAX; blocks.len() + 1];
+    for i in (0..blocks.len()).rev() {
+        suffix_min[i] = blocks[i].1.min(suffix_min[i + 1]);
+    }
+    blocks
+        .iter()
+        .enumerate()
+        .filter_map(move |(start, &(idx, size))| {
+            if size > budget {
+                return None;
+            }
+            let mut selected = vec![idx];
+            let mut bytes = size;
+            for (pos, &(idx, size)) in blocks.iter().enumerate().skip(start + 1) {
+                if suffix_min[pos] > budget - bytes {
+                    break;
+                }
+                if size <= budget - bytes {
+                    selected.push(idx);
+                    bytes += size;
+                }
+            }
+            (selected.len() >= 2).then_some((selected, bytes))
+        })
+}
+
+// Reuse the executor's target sizing; final compaction may change this count.
+fn estimate_output_block_count(
+    total_rows: usize,
+    total_bytes: usize,
+    total_compressed: usize,
+    thresholds: &BlockThresholds,
+) -> Option<usize> {
+    if total_rows == 0 || total_bytes == 0 || total_compressed == 0 {
+        return None;
+    }
+    let (rows_per_block, _) =
+        thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
+    Some(total_rows.div_ceil(rows_per_block))
+}
+
+// Sort distinct keys once, using the same key identity and ordering as the scalar sweep.
+fn index_depth_ranges<T: AsRef<[Scalar]>>(
+    ranges: &[(T, T)],
+    key_types: &[DataType],
+) -> Result<(Vec<(usize, usize)>, usize)> {
+    if ranges.is_empty() {
+        return Ok((Vec::new(), 0));
+    }
+    let mut positions = HashMap::new();
+    for (min, max) in ranges {
+        positions.entry(min.as_ref()).or_insert(0);
+        positions.entry(max.as_ref()).or_insert(0);
+    }
+    let keys = positions.keys().copied().collect::<Vec<_>>();
+    let order = compare_scalars(&keys, key_types)?;
+    for (pos, idx) in order.into_iter().enumerate() {
+        *positions.get_mut(keys[idx as usize]).unwrap() = pos;
+    }
+    let ranges = ranges
+        .iter()
+        .map(|(min, max)| (positions[min.as_ref()], positions[max.as_ref()]))
+        .collect::<Vec<_>>();
+    if ranges.iter().any(|(start, end)| start > end) {
+        return Err(ErrorCode::Internal("Invalid recluster block range"));
+    }
+    Ok((ranges, positions.len()))
+}
+
+fn overlap_gain_from_sums(
+    before: i128,
+    after: i128,
+    blocks_before: usize,
+    blocks_after: i128,
+) -> i64 {
+    // Floor so a small negative estimate cannot truncate to zero.
+    let gain = (before * blocks_after - after * blocks_before as i128).div_euclid(blocks_after);
+    gain.clamp(i64::MIN as i128, i64::MAX as i128) as i64
 }
 
 /// Select scalar segment windows with a sweep over segment min/max points.
@@ -512,11 +883,606 @@ fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) 
         && !end.is_empty()
         && start.len() + end.len() <= 3
     {
-        let set: HashSet<usize> = HashSet::from_iter(start.iter().chain(end.iter()).cloned());
-        if set.len() == 2 {
+        let first = start[0];
+        let mut others = start.iter().chain(end).filter(|&&idx| idx != first);
+        if let Some(second) = others.next()
+            && others.all(|idx| idx == second)
+        {
             return 1;
         }
     }
 
     open_interval_count + start.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    fn estimate_overlap_gain(
+        selected: &HashSet<usize>,
+        outputs: &[ReclusterOutputRun],
+        ranges: &[(usize, usize)],
+        overlap_before: i128,
+    ) -> i64 {
+        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), ranges.to_vec());
+        assert_eq!(stats.overlap_sum, overlap_before);
+        gain_from_fixture(&mut stats, selected, outputs)
+    }
+
+    // Adapt range-only fixtures to the public gain entry, including its output sizing.
+    fn gain_from_fixture(
+        stats: &mut ReclusterDepthStats,
+        selected: &HashSet<usize>,
+        outputs: &[ReclusterOutputRun],
+    ) -> i64 {
+        use databend_storages_common_table_meta::meta::BlockMeta;
+        use databend_storages_common_table_meta::meta::ClusterKeyInfo;
+        use databend_storages_common_table_meta::meta::ClusterStatistics;
+        use databend_storages_common_table_meta::meta::Compression;
+        use databend_storages_common_table_meta::table::ClusterType;
+
+        use crate::operations::recluster::ReclusterBlockStats;
+
+        let properties = ReclusterProperties {
+            mode: ReclusterMode::Aggressive,
+            depth_threshold: 1.0,
+            block_thresholds: BlockThresholds::new(10, 10, 10, 10),
+            cluster_key_info: ClusterKeyInfo::new((0, "(key)".to_string()), ClusterType::Linear),
+            partition_key_count: 0,
+            memory_threshold: usize::MAX,
+            enable_task_selection_v2: true,
+            prepared_cluster_key_exprs: Vec::new(),
+            scalar_cluster_key_types: vec![DataType::Number(NumberDataType::Int32)],
+        };
+        let mut remaining = selected.clone();
+        let tasks = outputs
+            .iter()
+            .map(|output| {
+                let mut ids = remaining
+                    .iter()
+                    .copied()
+                    .filter(|&idx| {
+                        let (start, end) = stats.ranges[idx];
+                        start >= output.start_point && end <= output.end_point
+                    })
+                    .collect::<Vec<_>>();
+                ids.sort_unstable();
+                assert!(!ids.is_empty());
+                let len = ids.len();
+                ids.into_iter()
+                    .enumerate()
+                    .map(|(pos, idx)| {
+                        remaining.remove(&idx);
+                        let name = idx.to_string();
+                        stats.positions.insert(name.clone(), idx);
+                        let (start, end) = stats.ranges[idx];
+                        let split =
+                            |total: usize| (total / len + usize::from(pos < total % len)) as u64;
+                        ReclusterBlock {
+                            index: crate::operations::common::BlockMetaIndex {
+                                segment_idx: 0,
+                                block_idx: idx,
+                            },
+                            meta: Arc::new(BlockMeta::new(
+                                split(output.block_count * 8),
+                                split(output.block_count * 10),
+                                split(output.block_count * 10),
+                                HashMap::new(),
+                                HashMap::new(),
+                                None,
+                                (name, 2),
+                                None,
+                                0,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                Compression::Lz4Raw,
+                                None,
+                            )),
+                            stats: ReclusterBlockStats::Normalized(ClusterStatistics::new(
+                                0,
+                                vec![Scalar::from(start as i32)],
+                                vec![Scalar::from(end as i32)],
+                                0,
+                            )),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert!(remaining.is_empty());
+        stats
+            .gain(tasks.iter().map(|task| task.iter()), &properties)
+            .unwrap()
+    }
+
+    #[test]
+    fn test_boundary_depth_matches_distinct_block_rule() {
+        let lists = [vec![], vec![0], vec![1], vec![0, 0], vec![0, 1], vec![1, 2]];
+        for live in 0..=3 {
+            for start in &lists {
+                for end in &lists {
+                    let fold = live == 1
+                        && !start.is_empty()
+                        && !end.is_empty()
+                        && start.len() + end.len() <= 3
+                        && start.iter().chain(end).collect::<HashSet<_>>().len() == 2;
+                    assert_eq!(
+                        calc_point_depth(live, start, end),
+                        if fold { 1 } else { live + start.len() }
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_borrowed_range_index_matches_owned() {
+        let types = [DataType::Number(NumberDataType::Int32)];
+        let owned = [(0i32, 10i32), (5, 10), (5, 5)]
+            .map(|(min, max)| (vec![Scalar::from(min)], vec![Scalar::from(max)]));
+        let borrowed = owned
+            .each_ref()
+            .map(|(min, max)| (min.as_slice(), max.as_slice()));
+        assert_eq!(
+            index_depth_ranges(&owned, &types).unwrap(),
+            index_depth_ranges(&borrowed, &types).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_overlap_gain_matches_expanded_relationships() {
+        // Independent O(n²) oracle, with no endpoint index or incremental subtraction.
+        let choices = [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)];
+        for a in choices {
+            for b in choices {
+                for c in choices {
+                    let ranges = vec![a, b, c, a];
+                    let mut stats =
+                        ReclusterDepthStats::from_ranges(HashMap::new(), ranges.clone());
+                    let before: i128 = ranges
+                        .iter()
+                        .map(|&(lo, hi)| {
+                            (ranges.iter().filter(|&&(l, r)| l <= hi && lo <= r).count() - 1)
+                                as i128
+                        })
+                        .sum();
+                    assert_eq!(stats.overlap_sum, before);
+                    for selected in [
+                        HashSet::from([0, 3]),
+                        HashSet::from([0, 1, 2]),
+                        HashSet::from([0, 1, 2, 3]),
+                    ] {
+                        for output_blocks in [1, 2, 4] {
+                            let outputs = [ReclusterOutputRun {
+                                start_point: selected.iter().map(|&i| ranges[i].0).min().unwrap(),
+                                end_point: selected.iter().map(|&i| ranges[i].1).max().unwrap(),
+                                block_count: output_blocks,
+                            }];
+                            let mut runs = ranges
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| !selected.contains(i))
+                                .map(|(_, &(l, r))| (l, r, 1usize))
+                                .collect::<Vec<_>>();
+                            runs.push((
+                                outputs[0].start_point,
+                                outputs[0].end_point,
+                                output_blocks,
+                            ));
+                            let after: i128 = runs
+                                .iter()
+                                .enumerate()
+                                .map(|(i, &(l, r, weight))| {
+                                    weight as i128
+                                        * runs
+                                            .iter()
+                                            .enumerate()
+                                            .filter(|&(j, &(a, b, _))| i != j && a <= r && l <= b)
+                                            .count()
+                                            as i128
+                                })
+                                .sum();
+                            let count = (ranges.len() - selected.len() + output_blocks) as i128;
+                            let expected = (before * count - after * ranges.len() as i128)
+                                .div_euclid(count)
+                                as i64;
+                            assert_eq!(
+                                gain_from_fixture(&mut stats, &selected, &outputs),
+                                expected
+                            );
+                        }
+                    }
+                    // Reusing the same shared state must not accumulate candidate mutations.
+                    assert_eq!(stats.overlap_sum, before);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_duplicate_ranges_keep_remaining_multiplicity() {
+        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), vec![(0, 1); 5]);
+        assert_eq!(stats.overlap_sum, 20);
+        let outputs = [ReclusterOutputRun {
+            start_point: 0,
+            end_point: 1,
+            block_count: 2,
+        }];
+        assert_eq!(
+            gain_from_fixture(&mut stats, &HashSet::from([0, 1]), &outputs),
+            5
+        );
+        assert_eq!(
+            gain_from_fixture(&mut stats, &HashSet::from([2, 3]), &outputs),
+            5
+        );
+        assert_eq!(stats.overlap_sum, 20);
+    }
+
+    #[test]
+    fn test_joint_gain_accounts_for_shared_neighbor() {
+        let ranges = [(0, 1), (0, 1), (3, 4), (3, 4), (0, 4)];
+        let a = HashSet::from([0, 1]);
+        let b = HashSet::from([2, 3]);
+        let both = HashSet::from([0, 1, 2, 3]);
+        let left = ReclusterOutputRun {
+            start_point: 0,
+            end_point: 1,
+            block_count: 2,
+        };
+        let right = ReclusterOutputRun {
+            start_point: 3,
+            end_point: 4,
+            block_count: 2,
+        };
+        assert_eq!(
+            estimate_overlap_gain(&a, std::slice::from_ref(&left), &ranges, 12),
+            3
+        );
+        assert_eq!(
+            estimate_overlap_gain(&b, std::slice::from_ref(&right), &ranges, 12),
+            3
+        );
+        // Each side reduces the long neighbor's overlap burden independently.
+        assert_eq!(estimate_overlap_gain(&both, &[left, right], &ranges, 12), 6);
+        assert_eq!(
+            estimate_overlap_gain(
+                &both,
+                &[
+                    ReclusterOutputRun {
+                        start_point: 3,
+                        end_point: 4,
+                        block_count: 1
+                    },
+                    ReclusterOutputRun {
+                        start_point: 0,
+                        end_point: 1,
+                        block_count: 1
+                    },
+                ],
+                &ranges,
+                12
+            ),
+            5
+        );
+        assert_eq!(estimate_overlap_gain(&HashSet::new(), &[], &[], 0), 0);
+    }
+
+    #[test]
+    fn test_joint_overlap_outputs_include_cross_task_relationships() {
+        let ranges = vec![(0, 2), (0, 2), (1, 3), (1, 3), (1, 1)];
+        let selected = HashSet::from([0, 1, 2, 3]);
+        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), ranges);
+        assert_eq!(stats.overlap_sum, 20);
+        for left in [1, 2, 4] {
+            for right in [1, 2, 4] {
+                let mut outputs = [
+                    ReclusterOutputRun {
+                        start_point: 0,
+                        end_point: 2,
+                        block_count: left,
+                    },
+                    ReclusterOutputRun {
+                        start_point: 1,
+                        end_point: 3,
+                        block_count: right,
+                    },
+                ];
+                // Two output runs and one neighbor form a complete overlap graph.
+                // Every run has two neighbors, independent of its block-count weight.
+                assert_eq!(gain_from_fixture(&mut stats, &selected, &outputs), 10);
+                outputs.reverse();
+                assert_eq!(gain_from_fixture(&mut stats, &selected, &outputs), 10);
+            }
+        }
+    }
+
+    #[test]
+    fn test_forward_packs_suffix_min_preserves_candidates() {
+        for a in [0, 50, 100, 201] {
+            for b in [0, 50, 100, 201] {
+                for c in [0, 50, 100, 201] {
+                    let blocks = [(0, a), (1, b), (2, c)];
+                    let expected = blocks
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(start, &(idx, size))| {
+                            if size > 200 {
+                                return None;
+                            }
+                            let mut selected = vec![idx];
+                            let mut bytes = size;
+                            for &(idx, size) in &blocks[start + 1..] {
+                                if size <= 200 - bytes {
+                                    selected.push(idx);
+                                    bytes += size;
+                                }
+                            }
+                            (selected.len() >= 2).then_some((selected, bytes))
+                        })
+                        .collect::<Vec<_>>();
+                    assert_eq!(forward_packs(&blocks, 200).collect::<Vec<_>>(), expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_forward_packs_skip_non_fitting_blocks() {
+        let blocks = [(0, 103), (1, 163), (2, 103), (3, 55)];
+        let packs = forward_packs(&blocks, 256).collect::<Vec<_>>();
+        assert_eq!(packs, vec![
+            (vec![0, 2], 206),
+            (vec![1, 3], 218),
+            (vec![2, 3], 158)
+        ]);
+    }
+
+    #[test]
+    fn test_forward_packs_reuse_blocks_across_candidates() {
+        let blocks = [(0, 100), (1, 100), (2, 100)];
+        assert_eq!(forward_packs(&blocks, 200).collect::<Vec<_>>(), vec![
+            (vec![0, 1], 200),
+            (vec![1, 2], 200)
+        ]);
+        assert!(forward_packs(&blocks, 99).next().is_none());
+        assert!(forward_packs(&[], 200).next().is_none());
+    }
+
+    #[test]
+    fn test_shared_depth_stats_include_normalized_blocks_from_other_windows() {
+        use databend_storages_common_table_meta::meta::BlockMeta;
+        use databend_storages_common_table_meta::meta::ClusterStatistics;
+        use databend_storages_common_table_meta::meta::Compression;
+
+        use crate::operations::recluster::ReclusterBlockStats;
+
+        let types = [DataType::Number(NumberDataType::Int32)];
+        let make_block = |name: &str, segment_idx| {
+            let stats =
+                ClusterStatistics::new(0, vec![Scalar::from(0i32)], vec![Scalar::from(10i32)], 0);
+            let meta = Arc::new(BlockMeta::new(
+                100,
+                1000,
+                100,
+                HashMap::new(),
+                HashMap::new(),
+                None,
+                (name.to_string(), 2),
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Compression::Lz4Raw,
+                None,
+            ));
+            ReclusterBlock {
+                index: crate::operations::common::BlockMetaIndex {
+                    segment_idx,
+                    block_idx: 0,
+                },
+                meta,
+                stats: ReclusterBlockStats::Normalized(stats),
+            }
+        };
+        let blocks = [
+            make_block("a", 0),
+            make_block("b", 0),
+            make_block("neighbor", 1),
+        ];
+        let shared = ReclusterDepthStats::create(blocks.iter(), &types).unwrap();
+        let selected = HashSet::from([shared.positions["a"], shared.positions["b"]]);
+        assert_eq!(
+            estimate_overlap_gain(
+                &selected,
+                &[ReclusterOutputRun {
+                    start_point: 0,
+                    end_point: 1,
+                    block_count: 2
+                }],
+                &shared.ranges,
+                shared.overlap_sum,
+            ),
+            3
+        );
+        assert!(ReclusterDepthStats::create([&blocks[0], &blocks[0]].into_iter(), &types).is_err());
+        let empty = ReclusterDepthStats::create(std::iter::empty(), &types).unwrap();
+        assert!(empty.ranges.is_empty());
+        assert_eq!(empty.overlap_sum, 0);
+    }
+
+    fn gain(ranges: &[(i32, i32)], selected: &[usize]) -> i64 {
+        let types = [DataType::Number(NumberDataType::Int32)];
+        let ranges = ranges
+            .iter()
+            .map(|&(min, max)| (vec![Scalar::from(min)], vec![Scalar::from(max)]))
+            .collect::<Vec<_>>();
+        let overlap_sum = ranges
+            .iter()
+            .map(|(l, r)| (ranges.iter().filter(|(a, b)| a <= r && l <= b).count() - 1) as i128)
+            .sum();
+        let selected = selected.iter().copied().collect::<HashSet<_>>();
+        let (ranges, _) = index_depth_ranges(&ranges, &types).unwrap();
+        let outputs = selected
+            .iter()
+            .map(|&i| ranges[i])
+            .reduce(|(lo, hi), (a, b)| (lo.min(a), hi.max(b)))
+            .map(|(lo, hi)| ReclusterOutputRun {
+                start_point: lo,
+                end_point: hi,
+                block_count: selected.len(),
+            });
+        estimate_overlap_gain(&selected, outputs.as_slice(), &ranges, overlap_sum)
+    }
+
+    #[test]
+    fn test_gain_accounts_for_output_block_count_and_neighbors() {
+        assert_eq!(gain(&[(0, 10); 10], &[0, 1, 2, 3]), 30);
+        assert_eq!(gain(&[(0, 10); 3], &[0, 1]), 3);
+        assert_eq!(gain(&[(0, 10); 3], &[0, 1, 2]), 6);
+    }
+
+    #[test]
+    fn test_gain_does_not_grow_with_key_span() {
+        assert_eq!(gain(&[(0, 1); 3], &[0, 1, 2]), 6);
+        assert_eq!(gain(&[(0, 100); 3], &[0, 1, 2]), 6);
+    }
+
+    #[test]
+    fn test_gain_reduces_overlap_even_when_other_peaks_remain() {
+        assert_eq!(
+            gain(&[(0, 10), (0, 10), (20, 30), (20, 30), (0, 30)], &[0, 1]),
+            3
+        );
+        assert_eq!(gain(&[(0, 10), (0, 10), (0, 10), (20, 30)], &[0, 1]), 3);
+    }
+
+    #[test]
+    fn test_negative_gain_is_preserved_after_accounting_for_output() {
+        assert!(gain(&[(0, 0), (4, 4), (2, 2)], &[0, 1]) < 0);
+        assert_eq!(gain(&[(0, 1), (4, 5)], &[0, 1]), 0);
+    }
+
+    #[test]
+    fn test_merging_disjoint_blocks_can_increase_neighbor_overlap() {
+        let ranges = [(0, 1), (3, 4), (2, 2)];
+        assert_eq!(
+            estimate_overlap_gain(
+                &HashSet::from([0, 1]),
+                &[ReclusterOutputRun {
+                    start_point: 0,
+                    end_point: 4,
+                    block_count: 1
+                }],
+                &ranges,
+                0
+            ),
+            -3
+        );
+    }
+
+    #[test]
+    fn test_gain_shared_endpoints() {
+        assert_eq!(gain(&[(0, 1), (1, 2), (1, 1)], &[0, 1]), 3);
+    }
+
+    #[test]
+    fn test_gain_empty_and_single_block_simulations() {
+        assert_eq!(gain(&[(0, 10); 3], &[]), 0);
+        assert_eq!(gain(&[(0, 10); 3], &[0]), 0);
+        assert_eq!(gain(&[(0, 10); 3], &[0, 0]), 0);
+    }
+
+    #[test]
+    fn test_output_count_does_not_turn_block_removal_into_overlap_gain() {
+        let ranges = [(0, 1), (4, 5)];
+        for output_blocks in [1, 4] {
+            assert_eq!(
+                estimate_overlap_gain(
+                    &HashSet::from([0, 1]),
+                    &[ReclusterOutputRun {
+                        start_point: 0,
+                        end_point: 5,
+                        block_count: output_blocks
+                    }],
+                    &ranges,
+                    0
+                ),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn test_output_count_uses_average_overlap_denominator() {
+        let ranges = [(0, 1), (0, 1), (2, 3)];
+        // Before: 2/3. After: 0 for any output count, so gain in input-block units is 2.
+        for output_blocks in [1, 2, 4] {
+            assert_eq!(
+                estimate_overlap_gain(
+                    &HashSet::from([0, 1]),
+                    &[ReclusterOutputRun {
+                        start_point: 0,
+                        end_point: 1,
+                        block_count: output_blocks
+                    }],
+                    &ranges,
+                    2
+                ),
+                2
+            );
+        }
+    }
+
+    #[test]
+    fn test_executor_sizing_drives_output_count() {
+        use databend_common_expression::BlockThresholds;
+        let thresholds = BlockThresholds::new(1000, 1_000_000, 200_000, 4);
+        let (rows_per_block, _) = thresholds.calc_rows_for_recluster(10_000, 2_000_000, 100_000);
+        assert_eq!(10_000usize.div_ceil(rows_per_block), 12);
+        let (rows_per_block, _) = thresholds.calc_rows_for_recluster(10_000, 30_000_000, 1_000_000);
+        assert_eq!(10_000usize.div_ceil(rows_per_block), 15);
+    }
+
+    #[test]
+    fn test_gain_nullable_composite_keys() {
+        let types = [
+            DataType::String.wrap_nullable(),
+            DataType::Number(NumberDataType::Int32),
+        ];
+        let range = (vec![Scalar::Null, Scalar::from(0i32)], vec![
+            Scalar::Null,
+            Scalar::from(10i32),
+        ]);
+        let ranges = vec![range; 3];
+        let (ranges, _) = index_depth_ranges(&ranges, &types).unwrap();
+        assert_eq!(
+            estimate_overlap_gain(
+                &HashSet::from([0, 1]),
+                &[ReclusterOutputRun {
+                    start_point: 0,
+                    end_point: 1,
+                    block_count: 2
+                }],
+                &ranges,
+                6
+            ),
+            3
+        );
+    }
 }
