@@ -77,6 +77,21 @@ TableScan
 └── estimated rows: 0.00
 
 query T
+explain select * from t1 where d < to_timestamp(a);
+----
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [d (#0), a (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 2 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))], limit: NONE]
+└── estimated rows: 0.00
+
+query T
 explain select * from  t2 where d < a;
 ----
 TableScan

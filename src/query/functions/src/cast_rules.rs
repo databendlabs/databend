@@ -14,7 +14,6 @@
 
 use databend_common_expression::AutoCastRules;
 use databend_common_expression::FunctionRegistry;
-use databend_common_expression::type_check::ALL_SIMPLE_CAST_FUNCTIONS;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::DataType;
@@ -23,6 +22,34 @@ use databend_common_expression::types::NumberDataType;
 use crate::scalars::ALL_COMP_FUNC_NAMES;
 use crate::scalars::ALL_STRING_FUNC_NAMES;
 use crate::scalars::PURE_STRING_FUNC_NAMES;
+
+// Functions whose argument resolution must not use the default String/Variant auto-cast policy.
+// FunctionCall-to-Cast equivalence is determined independently by expression Cast dispatch.
+const CAST_FUNCTIONS_WITH_GENERAL_AUTO_CAST_RULES: &[&str] = &[
+    "to_binary",
+    "to_string",
+    "to_uint8",
+    "to_uint16",
+    "to_uint32",
+    "to_uint64",
+    "to_int8",
+    "to_int16",
+    "to_int32",
+    "to_int64",
+    "to_float32",
+    "to_float64",
+    "to_timestamp",
+    "to_timestamp_tz",
+    "to_interval",
+    "to_date",
+    "to_variant",
+    "to_boolean",
+    "to_decimal",
+    "to_bitmap",
+    "to_geometry",
+    "to_geography",
+    "parse_json",
+];
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(GENERAL_CAST_RULES.iter().cloned());
@@ -43,7 +70,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     }
 
-    for func_name in ALL_SIMPLE_CAST_FUNCTIONS {
+    for func_name in CAST_FUNCTIONS_WITH_GENERAL_AUTO_CAST_RULES {
         // Disable auto cast from strings or variants.
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
     }
