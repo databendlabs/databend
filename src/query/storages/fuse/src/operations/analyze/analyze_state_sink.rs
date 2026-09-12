@@ -508,7 +508,15 @@ impl SinkAnalyzeState {
                 &None,
                 &table.operator,
             )
-            .await
+            .await?;
+        // ANALYZE bypasses the mutation sinks but still buffers a snapshot in an
+        // explicit transaction. Record a known zero so commit retries preserve
+        // the source's cumulative counters instead of treating them as missing.
+        self.ctx
+            .txn_mgr()
+            .lock()
+            .add_logical_change_delta(table.get_id(), (0, 0));
+        Ok(())
     }
 
     async fn commit_statistics_with_retry(&mut self) -> Result<()> {

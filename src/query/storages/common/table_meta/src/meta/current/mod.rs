@@ -39,6 +39,7 @@ pub use v2::VirtualSegmentSchema;
 pub use v2::validate_segment_partition_statistics;
 pub use v2::widen_decimal_scalar;
 pub use v4::CompactSegmentInfo;
+pub use v4::LogicalChangeCounters;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;

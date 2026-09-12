@@ -253,7 +253,7 @@ impl FuseTable {
                     return Ok(StreamMode::Standard);
                 };
                 let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;
-                if logical_change_delta(Some(&base_snapshot), Some(&latest_snapshot))?
+                if logical_change_delta(Some(&base_snapshot), Some(&latest_snapshot))
                     .is_some_and(|delta| delta == (0, 0))
                 {
                     Ok(StreamMode::AppendOnly)
@@ -728,39 +728,24 @@ pub(crate) struct LogicalChangeRows {
     deleted: u64,
 }
 
+/// Compare only endpoints with known, continuous counters. An empty base does
+/// not establish the start of a potentially restarted counting history.
 fn logical_change_delta(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
-) -> Result<Option<(u64, u64)>> {
-    let Some((latest_updated, latest_deleted)) =
-        latest.and_then(TableSnapshot::logical_change_counters)
-    else {
-        return Ok(None);
-    };
-    let (base_updated, base_deleted) = match base {
-        Some(snapshot) => {
-            let Some(counters) = snapshot.logical_change_counters() else {
-                return Ok(None);
-            };
-            counters
-        }
-        None => (0, 0),
-    };
-
-    let updated = latest_updated
-        .checked_sub(base_updated)
-        .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
-    let deleted = latest_deleted
-        .checked_sub(base_deleted)
-        .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
-    Ok(Some((updated, deleted)))
+) -> Option<(u64, u64)> {
+    let base_counters = base?.logical_change_counters()?;
+    let latest_counters = latest?.logical_change_counters()?;
+    latest_counters.delta_from(&base_counters)
 }
 
+/// Estimate logical rows only when both endpoints have comparable counters.
+/// Missing or discontinuous history must fall back to endpoint processing.
 fn logical_change_rows(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
 ) -> Result<Option<LogicalChangeRows>> {
-    let Some((updated, deleted)) = logical_change_delta(base, latest)? else {
+    let Some((updated, deleted)) = logical_change_delta(base, latest) else {
         return Ok(None);
     };
     let base_rows = base.map_or(0, |snapshot| snapshot.summary.row_count);
@@ -930,9 +915,17 @@ mod tests {
     use super::*;
 
     fn snapshot(rows: u64) -> TableSnapshot {
+        snapshot_at(None, None, rows)
+    }
+
+    fn snapshot_at(
+        prev_table_seq: Option<u64>,
+        previous: Option<Arc<TableSnapshot>>,
+        rows: u64,
+    ) -> TableSnapshot {
         TableSnapshot::try_new(
-            None,
-            None,
+            prev_table_seq,
+            previous,
             TableSchema::default(),
             Statistics {
                 row_count: rows,
@@ -946,9 +939,8 @@ mod tests {
         .unwrap()
     }
 
-    fn legacy_snapshot(rows: u64) -> TableSnapshot {
-        let snapshot = snapshot(rows);
-        let mut value = serde_json::to_value(snapshot).unwrap();
+    fn strip_counters(snapshot: &TableSnapshot) -> TableSnapshot {
+        let mut value = serde_json::to_value(snapshot.clone()).unwrap();
         value
             .as_object_mut()
             .unwrap()
@@ -956,11 +948,15 @@ mod tests {
         serde_json::from_value(value).unwrap()
     }
 
+    fn legacy_snapshot(rows: u64) -> TableSnapshot {
+        strip_counters(&snapshot(rows))
+    }
+
     #[test]
     fn test_logical_change_rows() {
         let legacy = legacy_snapshot(10);
-        let base = snapshot(10);
-        let mut latest = snapshot(9);
+        let base = snapshot_at(Some(10), None, 10);
+        let mut latest = snapshot_at(Some(11), Some(Arc::new(base.clone())), 9);
         latest.add_logical_change_delta(2, 3);
 
         assert_eq!(
@@ -976,12 +972,20 @@ mod tests {
             })
         );
 
-        let mut newer_base = snapshot(10);
-        newer_base.add_logical_change_delta(3, 0);
-        assert!(logical_change_rows(Some(&newer_base), Some(&latest)).is_err());
+        // Either counter decreasing makes the delta unknown, even in one epoch.
+        for (updated, deleted) in [(3, 0), (0, 3)] {
+            let mut newer_base = snapshot_at(Some(12), Some(Arc::new(latest.clone())), 10);
+            newer_base.add_logical_change_delta(updated, deleted);
+            assert_eq!(logical_change_delta(Some(&newer_base), Some(&latest)), None);
+            assert_eq!(
+                logical_change_rows(Some(&newer_base), Some(&latest)).unwrap(),
+                None
+            );
+        }
 
-        let base = snapshot(10);
-        let mut updated = snapshot(10);
+        // Preserve upstream's estimate coverage with endpoints in one epoch.
+        let base = snapshot_at(Some(20), None, 10);
+        let mut updated = snapshot_at(Some(21), Some(Arc::new(base.clone())), 10);
         updated.add_logical_change_delta(2, 0);
         assert_eq!(
             estimate_change_rows(Some(&base), &updated, &StreamMode::Standard).unwrap(),
@@ -990,6 +994,71 @@ mod tests {
         assert_eq!(
             estimate_change_rows(Some(&base), &updated, &StreamMode::AppendOnly).unwrap(),
             0
+        );
+    }
+
+    #[test]
+    fn test_no_base_does_not_trust_partial_history() {
+        let legacy = legacy_snapshot(10);
+        let restarted = snapshot_at(Some(20), Some(Arc::new(legacy)), 11);
+        assert_eq!(logical_change_delta(None, Some(&restarted)), None);
+        assert_eq!(logical_change_rows(None, Some(&restarted)).unwrap(), None);
+    }
+
+    /// A restart must neither look like zero changes (zero base counters) nor
+    /// cause subtraction underflow (nonzero base counters).
+    #[test]
+    fn test_restarted_counters_fall_back() {
+        for (updated, deleted) in [(0, 0), (5, 3)] {
+            let mut base = snapshot_at(Some(10), None, 3);
+            base.add_logical_change_delta(updated, deleted);
+
+            let mut mutated = snapshot_at(Some(11), Some(Arc::new(base.clone())), 2);
+            mutated.add_logical_change_delta(1, 1);
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&mutated)),
+                Some((1, 1)),
+                "within one history the delta is visible"
+            );
+
+            let legacy = strip_counters(&snapshot_at(Some(12), Some(Arc::new(mutated)), 3));
+            assert_eq!(logical_change_delta(Some(&base), Some(&legacy)), None);
+
+            let after_upgrade = snapshot_at(Some(13), Some(Arc::new(legacy)), 4);
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&after_upgrade)),
+                None,
+                "different histories must fall back, base=({updated}, {deleted})"
+            );
+            assert_eq!(
+                logical_change_rows(Some(&base), Some(&after_upgrade)).unwrap(),
+                None,
+            );
+        }
+    }
+
+    /// The fix must not cost the optimization for streams created after the
+    /// break, otherwise every table with a legacy ancestor regresses.
+    #[test]
+    fn test_history_after_restart_is_still_comparable() {
+        let legacy = legacy_snapshot(10);
+        // First counter-aware write mints a fresh history.
+        let restarted = snapshot_at(Some(20), Some(Arc::new(legacy)), 10);
+        // A stream created here uses `restarted` as its base.
+        let mut later = snapshot_at(Some(21), Some(Arc::new(restarted.clone())), 9);
+        later.add_logical_change_delta(2, 3);
+
+        assert_eq!(
+            logical_change_delta(Some(&restarted), Some(&later)),
+            Some((2, 3))
+        );
+        assert_eq!(
+            logical_change_rows(Some(&restarted), Some(&later)).unwrap(),
+            Some(LogicalChangeRows {
+                inserted: 2,
+                updated: 2,
+                deleted: 3,
+            })
         );
     }
 }
