@@ -1,0 +1,83 @@
+query I
+SELECT count(*) FROM numbers(100) t1 JOIN numbers(100) t2 ON
+    t1.number=t2.number JOIN numbers(100) t3 ON t2.number=t3.number JOIN numbers(100) t4
+    ON t3.number=t4.number JOIN numbers(100) t5 ON t4.number=t5.number JOIN numbers(100)
+    t6 ON t5.number=t6.number JOIN numbers(100) t7 ON t6.number=t7.number JOIN
+    numbers(100) t8 ON t7.number=t8.number JOIN numbers(100) t9 ON t8.number=t9.number
+    JOIN numbers(100) t10 ON t9.number=t10.number JOIN numbers(100) t11 ON
+    t10.number=t11.number JOIN numbers(100) t12 ON t11.number=t12.number JOIN
+    numbers(100) t13 ON t12.number=t13.number JOIN numbers(100) t14 ON
+    t13.number=t14.number JOIN numbers(100) t15 ON t14.number=t15.number JOIN
+    numbers(100) t16 ON t15.number=t16.number JOIN numbers(100) t17 ON
+    t16.number=t17.number JOIN numbers(100) t18 ON t17.number=t18.number JOIN
+    numbers(100) t19 ON t18.number=t19.number JOIN numbers(100) t20 ON
+    t19.number=t20.number JOIN numbers(100) t21 ON t20.number=t21.number JOIN
+    numbers(100) t22 ON t21.number=t22.number JOIN numbers(100) t23 ON
+    t22.number=t23.number JOIN numbers(100) t24 ON t23.number=t24.number JOIN
+    numbers(100) t25 ON t24.number=t25.number JOIN numbers(100) t26 ON
+    t25.number=t26.number JOIN numbers(100) t27 ON t26.number=t27.number JOIN
+    numbers(100) t28 ON t27.number=t28.number JOIN numbers(100) t29 ON
+    t28.number=t29.number JOIN numbers(100) t30 ON t29.number=t30.number JOIN
+    numbers(100) t31 ON t30.number=t31.number JOIN numbers(100) t32 ON
+    t31.number=t32.number JOIN numbers(100) t33 ON t32.number=t33.number JOIN
+    numbers(100) t34 ON t33.number=t34.number JOIN numbers(100) t35 ON
+    t34.number=t35.number JOIN numbers(100) t36 ON t35.number=t36.number JOIN
+    numbers(100) t37 ON t36.number=t37.number JOIN numbers(100) t38 ON
+    t37.number=t38.number JOIN numbers(100) t39 ON t38.number=t39.number JOIN
+    numbers(100) t40 ON t39.number=t40.number JOIN numbers(100) t41 ON
+    t40.number=t41.number JOIN numbers(100) t42 ON t41.number=t42.number JOIN
+    numbers(100) t43 ON t42.number=t43.number JOIN numbers(100) t44 ON
+    t43.number=t44.number JOIN numbers(100) t45 ON t44.number=t45.number JOIN
+    numbers(100) t46 ON t45.number=t46.number JOIN numbers(100) t47 ON
+    t46.number=t47.number JOIN numbers(100) t48 ON t47.number=t48.number JOIN
+    numbers(100) t49 ON t48.number=t49.number JOIN numbers(100) t50 ON
+    t49.number=t50.number;
+----
+100
+
+query I
+select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number;
+----
+1
+
+query I
+SELECT count(*) FROM numbers(100) t1 JOIN numbers(100) t2 ON
+    t1.number=t2.number JOIN numbers(100) t3 ON t2.number=t3.number JOIN numbers(100) t4
+    ON t3.number=t4.number JOIN numbers(100) t5 ON t4.number=t5.number JOIN numbers(100)
+    t6 ON t5.number=t6.number JOIN numbers(100) t7 ON t6.number=t7.number JOIN
+    numbers(100) t8 ON t7.number=t8.number JOIN numbers(100) t9 ON t8.number=t9.number
+    JOIN numbers(100) t10 ON t9.number=t10.number JOIN numbers(100) t11 ON
+    t10.number=t11.number JOIN numbers(100) t12 ON t11.number=t12.number JOIN
+    numbers(100) t13 ON t12.number=t13.number JOIN numbers(100) t14 ON
+    t13.number=t14.number JOIN numbers(100) t15 ON t14.number=t15.number JOIN
+    numbers(100) t16 ON t15.number=t16.number JOIN numbers(100) t17 ON
+    t16.number=t17.number JOIN numbers(100) t18 ON t17.number=t18.number JOIN
+    numbers(100) t19 ON t18.number=t19.number JOIN numbers(100) t20 ON
+    t19.number=t20.number JOIN numbers(100) t21 ON t20.number=t21.number JOIN
+    numbers(100) t22 ON t21.number=t22.number JOIN numbers(100) t23 ON
+    t22.number=t23.number JOIN numbers(100) t24 ON t23.number=t24.number JOIN
+    numbers(100) t25 ON t24.number=t25.number JOIN numbers(100) t26 ON
+    t25.number=t26.number JOIN numbers(100) t27 ON t26.number=t27.number JOIN
+    numbers(100) t28 ON t27.number=t28.number JOIN numbers(100) t29 ON
+    t28.number=t29.number JOIN numbers(100) t30 ON t29.number=t30.number JOIN
+    numbers(100) t31 ON t30.number=t31.number JOIN numbers(100) t32 ON
+    t31.number=t32.number JOIN numbers(100) t33 ON t32.number=t33.number JOIN
+    numbers(100) t34 ON t33.number=t34.number JOIN numbers(100) t35 ON
+    t34.number=t35.number JOIN numbers(100) t36 ON t35.number=t36.number JOIN
+    numbers(100) t37 ON t36.number=t37.number JOIN numbers(100) t38 ON
+    t37.number=t38.number JOIN numbers(100) t39 ON t38.number=t39.number JOIN
+    numbers(100) t40 ON t39.number=t40.number JOIN numbers(100) t41 ON
+    t40.number=t41.number JOIN numbers(100) t42 ON t41.number=t42.number JOIN
+    numbers(100) t43 ON t42.number=t43.number JOIN numbers(100) t44 ON
+    t43.number=t44.number JOIN numbers(100) t45 ON t44.number=t45.number JOIN
+    numbers(100) t46 ON t45.number=t46.number JOIN numbers(100) t47 ON
+    t46.number=t47.number JOIN numbers(100) t48 ON t47.number=t48.number JOIN
+    numbers(100) t49 ON t48.number=t49.number JOIN numbers(100) t50 ON
+    t49.number=t50.number;
+----
+100
+
+query I
+select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number  union select count(*) from numbers(100) group by number;
+----
+1
