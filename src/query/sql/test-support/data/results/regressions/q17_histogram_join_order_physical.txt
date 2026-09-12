@@ -47,7 +47,7 @@ AggregateFinal
             │       │           ├── estimated rows: 1.00
             │       │           └── Exchange
             │       │               ├── output columns: [sum(s.l_quantity) (#10), count(s.l_quantity) (#11), s.l_partkey (#7)]
-            │       │               ├── exchange type: Hash(0)
+            │       │               ├── exchange type: NodeToNodeHash(0)
             │       │               └── AggregatePartial
             │       │                   ├── group by: [l_partkey]
             │       │                   ├── aggregate functions: [sum(l_quantity), count()]

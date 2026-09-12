@@ -26,6 +26,7 @@ use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
 use once_cell::sync::OnceCell;
 
+use super::settings_getter_setter::HashJoinShuffleMode;
 use super::settings_getter_setter::SpillFileFormat;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();
@@ -651,6 +652,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("hash_join_shuffle_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("global")),
+                    desc: "Hash join shuffle mode. 'global' hash-partitions data across execution threads on all query nodes; 'node' hash-partitions data across query nodes, then distributes received blocks among local execution threads.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(HashJoinShuffleMode::values())),
                 }),
                 ("grouping_sets_to_union", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

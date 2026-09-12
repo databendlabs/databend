@@ -25,8 +25,8 @@ Aggregate(Final)
                 │       │           └── Aggregate(Partial)
                 │       │               ├── group items: [lineitem.l_partkey (#7) AS (#7)]
                 │       │               ├── aggregate functions: [sum(lineitem.l_quantity (#8)) AS (#10), count() AS (#11)]
-                │       │               └── Exchange(Hash)
-                │       │                   ├── Exchange(Hash): keys: [lineitem.l_partkey (#7)]
+                │       │               └── Exchange(NodeToNodeHash)
+                │       │                   ├── Exchange(NodeToNodeHash): keys: [lineitem.l_partkey (#7)]
                 │       │                   └── Scan
                 │       │                       ├── table: default.lineitem (#2)
                 │       │                       ├── filters: []

@@ -465,18 +465,21 @@ fn top_n_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &TopN) -> FormatTr
 }
 
 fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> FormatTreeNode {
-    let payload = match op {
-        Exchange::Broadcast => "Exchange(Broadcast)",
-        Exchange::Merge => "Exchange(Merge)",
-        Exchange::MergeSort => "Exchange(MergeSort)",
-        Exchange::NodeToNodeHash(_) => "Exchange(Hash)",
-        Exchange::GlobalHash(_) => "Exchange(Hash)",
+    let (payload, key_label) = match op {
+        Exchange::Broadcast => ("Exchange(Broadcast)", None),
+        Exchange::Merge => ("Exchange(Merge)", None),
+        Exchange::MergeSort => ("Exchange(MergeSort)", None),
+        Exchange::NodeToNodeHash(_) => {
+            ("Exchange(NodeToNodeHash)", Some("Exchange(NodeToNodeHash)"))
+        }
+        Exchange::GlobalHash(_) => ("Exchange(Hash)", Some("Exchange(Hash)")),
     };
 
     match op {
         Exchange::NodeToNodeHash(keys) | Exchange::GlobalHash(keys) => {
             FormatTreeNode::with_children(payload.to_string(), vec![FormatTreeNode::new(format!(
-                "Exchange(Hash): keys: [{}]",
+                "{}: keys: [{}]",
+                key_label.unwrap(),
                 keys.iter()
                     .map(|expr| format_scalar(id_humanizer, expr))
                     .join(", ")
@@ -673,4 +676,46 @@ fn merge_into_to_format_tree<I: IdHumanizer>(
     ]
     .concat();
     FormatTreeNode::with_children(target_table_format, all_children)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::IndexType;
+    use crate::Symbol;
+    use crate::planner::format::FormatOptions;
+
+    #[derive(Default)]
+    struct TestIdHumanizer {
+        options: FormatOptions,
+    }
+
+    impl IdHumanizer for TestIdHumanizer {
+        fn humanize_column_id(&self, id: Symbol) -> String {
+            format!("#{}", id.as_usize())
+        }
+
+        fn humanize_table_id(&self, id: IndexType) -> String {
+            format!("#{id}")
+        }
+
+        fn options(&self) -> &FormatOptions {
+            &self.options
+        }
+    }
+
+    #[test]
+    fn test_hash_exchange_labels() {
+        let humanizer = TestIdHumanizer::default();
+        let node = exchange_to_format_tree(&humanizer, &Exchange::NodeToNodeHash(vec![]));
+        assert_eq!(node.payload, "Exchange(NodeToNodeHash)");
+        assert_eq!(
+            node.children[0].payload,
+            "Exchange(NodeToNodeHash): keys: []"
+        );
+
+        let global = exchange_to_format_tree(&humanizer, &Exchange::GlobalHash(vec![]));
+        assert_eq!(global.payload, "Exchange(Hash)");
+        assert_eq!(global.children[0].payload, "Exchange(Hash): keys: []");
+    }
 }

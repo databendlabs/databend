@@ -47,7 +47,7 @@ Sort(Route)
         ├── estimated rows: 0.00
         └── Exchange
             ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
-            ├── exchange type: Hash()
+            ├── exchange type: NodeToNodeHash()
             └── Sort(Sample)
                 ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
                 ├── sort keys: [a DESC NULLS LAST]
@@ -105,7 +105,7 @@ Sort(Route)
         ├── estimated rows: 0.00
         └── Exchange
             ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
-            ├── exchange type: Hash()
+            ├── exchange type: NodeToNodeHash()
             └── Sort(Sample)
                 ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
                 ├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]

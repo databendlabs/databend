@@ -340,6 +340,7 @@ mod tests {
 
     use crate::ChangeValue;
     use crate::DefaultSettings;
+    use crate::HashJoinShuffleMode;
     use crate::ScopeLevel;
     use crate::Settings;
 
@@ -364,6 +365,23 @@ mod tests {
 
         assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
         assert_eq!(settings.changes.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_hash_join_shuffle_mode() -> Result<()> {
+        let settings = Settings::create(Tenant::new_literal("test_tenant"));
+        assert_eq!(
+            settings.get_hash_join_shuffle_mode()?,
+            HashJoinShuffleMode::Global
+        );
+
+        settings.set_setting("hash_join_shuffle_mode".to_string(), "node".to_string())?;
+        assert_eq!(
+            settings.get_hash_join_shuffle_mode()?,
+            HashJoinShuffleMode::Node
+        );
+        assert!("invalid".parse::<HashJoinShuffleMode>().is_err());
         Ok(())
     }
 

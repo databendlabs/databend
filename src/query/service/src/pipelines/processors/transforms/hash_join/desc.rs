@@ -118,7 +118,11 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
 
 impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
-        let other_predicate = Self::join_predicate(&join.join_type, &join.non_equi_conditions)?;
+        let other_predicate = Self::join_predicate(
+            &join.join_type,
+            join.from_correlated_subquery,
+            &join.non_equi_conditions,
+        )?;
 
         let build_keys: Vec<Expr> = join
             .build_keys
@@ -155,6 +159,7 @@ impl HashJoinDesc {
 
     fn join_predicate(
         join_type: &JoinType,
+        from_correlated_subquery: bool,
         non_equi_conditions: &[RemoteExpr],
     ) -> Result<Option<Expr>> {
         let expr = non_equi_conditions
@@ -171,6 +176,7 @@ impl HashJoinDesc {
                 }
                 _ => {
                     if matches!(join_type, JoinType::RightMark)
+                        || (from_correlated_subquery && matches!(join_type, JoinType::LeftMark))
                         || !expr.data_type().is_nullable_or_null()
                     {
                         Ok(Some(expr))

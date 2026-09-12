@@ -285,8 +285,8 @@ Exchange(Merge)
                 │               └── Aggregate(Partial)
                 │                   ├── group items: [c0array (#4) AS (#4)]
                 │                   ├── aggregate functions: []
-                │                   └── Exchange(Hash)
-                │                       ├── Exchange(Hash): keys: [c0array (#4)]
+                │                   └── Exchange(NodeToNodeHash)
+                │                       ├── Exchange(NodeToNodeHash): keys: [c0array (#4)]
                 │                       └── Filter
                 │                           ├── filters: [eq(array_any(array_filter(c0array (#4), ["x"] -> x (#2) = 'baz')), 'baz')]
                 │                           └── ConstantTableScan

@@ -32,16 +32,16 @@ TopN
                 │       │       │           └── Aggregate(Partial)
                 │       │       │               ├── group items: [store_returns.sr_store_sk (#103) AS (#103)]
                 │       │       │               ├── aggregate functions: [sum(Sum(sr_return_amt) (#144)) AS (#145), count(Sum(sr_return_amt) (#144)) AS (#146)]
-                │       │       │               └── Exchange(Hash)
-                │       │       │                   ├── Exchange(Hash): keys: [store_returns.sr_store_sk (#103)]
+                │       │       │               └── Exchange(NodeToNodeHash)
+                │       │       │                   ├── Exchange(NodeToNodeHash): keys: [store_returns.sr_store_sk (#103)]
                 │       │       │                   └── Aggregate(Final)
                 │       │       │                       ├── group items: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103)]
                 │       │       │                       ├── aggregate functions: [sum(store_returns.sr_return_amt (#107)) AS (#144)]
                 │       │       │                       └── Aggregate(Partial)
                 │       │       │                           ├── group items: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103)]
                 │       │       │                           ├── aggregate functions: [sum(store_returns.sr_return_amt (#107)) AS (#144)]
-                │       │       │                           └── Exchange(Hash)
-                │       │       │                               ├── Exchange(Hash): keys: [store_returns.sr_customer_sk (#99)]
+                │       │       │                           └── Exchange(NodeToNodeHash)
+                │       │       │                               ├── Exchange(NodeToNodeHash): keys: [store_returns.sr_customer_sk (#99)]
                 │       │       │                               └── EvalScalar
                 │       │       │                                   ├── scalars: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103), store_returns.sr_return_amt (#107) AS (#107), store_returns.sr_returned_date_sk (#96) AS (#151), date_dim.d_date_sk (#116) AS (#152), date_dim.d_year (#122) AS (#153)]
                 │       │       │                                   └── Join(Inner)
@@ -70,8 +70,8 @@ TopN
                 │           └── Aggregate(Partial)
                 │               ├── group items: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7)]
                 │               ├── aggregate functions: [sum(store_returns.sr_return_amt (#11)) AS (#48)]
-                │               └── Exchange(Hash)
-                │                   ├── Exchange(Hash): keys: [store_returns.sr_customer_sk (#3)]
+                │               └── Exchange(NodeToNodeHash)
+                │                   ├── Exchange(NodeToNodeHash): keys: [store_returns.sr_customer_sk (#3)]
                 │                   └── EvalScalar
                 │                       ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), store_returns.sr_return_amt (#11) AS (#11), store_returns.sr_returned_date_sk (#0) AS (#148), date_dim.d_date_sk (#20) AS (#149), date_dim.d_year (#26) AS (#150)]
                 │                       └── Join(Inner)

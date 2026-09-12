@@ -20,7 +20,7 @@ TopN(Final)
             ├── estimated rows: 3615890.89
             └── Exchange
                 ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
-                ├── exchange type: Hash(0, 1, 2)
+                ├── exchange type: NodeToNodeHash(0, 1, 2)
                 └── AggregatePartial
                     ├── group by: [d_year, i_brand, i_brand_id]
                     ├── aggregate functions: [sum(ss_ext_sales_price)]

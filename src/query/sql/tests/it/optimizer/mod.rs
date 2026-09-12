@@ -25,6 +25,7 @@ mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod hierarchical_grouping_sets;
 mod join_cardinality;
+mod join_distribution;
 mod materialized_cte_distribution;
 mod normalize_scalar;
 mod outer_join_to_anti;

@@ -30,8 +30,8 @@ Exchange(Merge)
     │       └── Aggregate(Partial)
     │           ├── group items: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1)]
     │           ├── aggregate functions: [sum(mcte_input.v (#2)) AS (#6)]
-    │           └── Exchange(Hash)
-    │               ├── Exchange(Hash): keys: [mcte_input.a (#0)]
+    │           └── Exchange(NodeToNodeHash)
+    │               ├── Exchange(NodeToNodeHash): keys: [mcte_input.a (#0)]
     │               └── Scan
     │                   ├── table: default.mcte_input (#0)
     │                   ├── filters: []
@@ -48,8 +48,8 @@ Exchange(Merge)
         │       └── Aggregate(Partial)
         │           ├── group items: [mcte_input.a (#0) AS (#0)]
         │           ├── aggregate functions: [sum(sum(v) (#6)) AS (#6)]
-        │           └── Exchange(Hash)
-        │               ├── Exchange(Hash): keys: [mcte_input.a (#0)]
+        │           └── Exchange(NodeToNodeHash)
+        │               ├── Exchange(NodeToNodeHash): keys: [mcte_input.a (#0)]
         │               └── MaterializedCTERef
         │                   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
         │                   ├── output columns: [sum(v) (#6), mcte_input.a (#0), mcte_input.b (#1)]

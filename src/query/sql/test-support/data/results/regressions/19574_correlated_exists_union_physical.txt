@@ -51,7 +51,7 @@ Filter
                 │           ├── estimated rows: 1.00
                 │           └── Exchange
                 │               ├── output columns: [f1 (#4)]
-                │               ├── exchange type: Hash(0)
+                │               ├── exchange type: NodeToNodeHash(0)
                 │               └── AggregatePartial
                 │                   ├── group by: [f1]
                 │                   ├── aggregate functions: []
@@ -82,7 +82,7 @@ Filter
                                 ├── estimated rows: 1.00
                                 └── Exchange
                                     ├── output columns: [f1 (#5)]
-                                    ├── exchange type: Hash(0)
+                                    ├── exchange type: NodeToNodeHash(0)
                                     └── AggregatePartial
                                         ├── group by: [f1]
                                         ├── aggregate functions: []

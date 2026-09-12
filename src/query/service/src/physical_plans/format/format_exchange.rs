@@ -49,7 +49,7 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
             FormatTreeNode::new(format!("exchange type: {}", match self.inner.kind {
                 FragmentKind::Init => "Init-Partition".to_string(),
                 FragmentKind::Normal => format!(
-                    "Hash({})",
+                    "NodeToNodeHash({})",
                     self.inner
                         .keys
                         .iter()

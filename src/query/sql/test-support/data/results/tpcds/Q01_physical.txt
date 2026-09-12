@@ -63,7 +63,7 @@ TopN(Final)
             │       │       │           ├── estimated rows: 1.00
             │       │       │           └── Exchange
             │       │       │               ├── output columns: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146), store_returns.sr_store_sk (#103)]
-            │       │       │               ├── exchange type: Hash(0)
+            │       │       │               ├── exchange type: NodeToNodeHash(0)
             │       │       │               └── AggregatePartial
             │       │       │                   ├── group by: [sr_store_sk]
             │       │       │                   ├── aggregate functions: [sum(Sum(sr_return_amt)), count(Sum(sr_return_amt))]
@@ -75,7 +75,7 @@ TopN(Final)
             │       │       │                       ├── estimated rows: 1.00
             │       │       │                       └── Exchange
             │       │       │                           ├── output columns: [Sum(sr_return_amt) (#144), store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103)]
-            │       │       │                           ├── exchange type: Hash(0, 1)
+            │       │       │                           ├── exchange type: NodeToNodeHash(0, 1)
             │       │       │                           └── AggregatePartial
             │       │       │                               ├── group by: [sr_customer_sk, sr_store_sk]
             │       │       │                               ├── aggregate functions: [sum(sr_return_amt)]
@@ -132,7 +132,7 @@ TopN(Final)
             │           ├── estimated rows: 43794.67
             │           └── Exchange
             │               ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
-            │               ├── exchange type: Hash(0, 1)
+            │               ├── exchange type: NodeToNodeHash(0, 1)
             │               └── AggregatePartial
             │                   ├── group by: [sr_customer_sk, sr_store_sk]
             │                   ├── aggregate functions: [sum(sr_return_amt)]
