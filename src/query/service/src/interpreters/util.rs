@@ -151,7 +151,7 @@ impl Client for ScriptClient {
         let ctx = self
             .ctx
             .get_current_session()
-            .create_query_context_with_cluster(self.ctx.get_cluster(), &BUILD_INFO)?;
+            .create_query_context_with_cluster(self.ctx.get_cluster(), &BUILD_INFO, None)?;
         Self::inherit_query_ctx(&self.ctx, &ctx);
 
         let mut planner = Planner::new(ctx.clone());

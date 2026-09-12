@@ -44,7 +44,7 @@ pub struct AccessLogger {
 impl AccessLogger {
     pub fn create(ctx: Arc<QueryContext>) -> Self {
         let query_id = ctx.get_id().to_string();
-        let query_start = convert_query_log_timestamp(ctx.get_created_time());
+        let query_start = convert_query_log_timestamp(ctx.get_query_created_time());
         let user_name = ctx.get_current_user().map(|u| u.name).unwrap_or_default();
 
         Self {
