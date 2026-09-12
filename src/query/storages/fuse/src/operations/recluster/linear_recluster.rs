@@ -42,8 +42,6 @@ use crate::operations::recluster::SelectedReclusterSegment;
 use crate::operations::recluster::passes_depth_gate;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::RangeMaxTree;
-#[cfg(test)]
-use crate::statistics::calculate_block_depths;
 
 /// Linear cluster-key recluster behavior.
 pub(crate) struct LinearReclusterStrategy;
@@ -52,10 +50,8 @@ pub(crate) struct ReclusterDepthStats {
     positions: HashMap<String, usize>,
     // Endpoint order is shared by all candidates; simulated outputs introduce no new keys.
     ranges: Vec<(usize, usize)>,
-    // Identical ranges still contribute one coverage layer per input block.
-    range_counts: HashMap<(usize, usize), usize>,
-    point_changes: Vec<i64>,
-    depth_sum: i128,
+    overlaps: RangeOverlapIndex,
+    overlap_sum: i128,
 }
 
 /// One task's estimated output run, not the ranges of individual output blocks.
@@ -63,8 +59,27 @@ struct ReclusterOutputRun {
     /// Inclusive positions in the shared, sorted cluster-key endpoint table.
     start_point: usize,
     end_point: usize,
-    /// Estimated output block count; weights depth mass, not coverage layers.
+    /// Estimated output block count; weights overlap burden, not run multiplicity.
     block_count: usize,
+}
+
+/// Counts inclusive range intersections without scanning the shared ranges.
+struct RangeOverlapIndex {
+    starts: Vec<usize>,
+    ends: Vec<usize>,
+}
+
+impl RangeOverlapIndex {
+    fn new(ranges: impl Iterator<Item = (usize, usize)>) -> Self {
+        let (mut starts, mut ends): (Vec<_>, Vec<_>) = ranges.unzip();
+        starts.sort_unstable();
+        ends.sort_unstable();
+        Self { starts, ends }
+    }
+
+    fn count(&self, start: usize, end: usize) -> usize {
+        self.starts.partition_point(|&p| p <= end) - self.ends.partition_point(|&p| p < start)
+    }
 }
 
 impl ReclusterDepthStats {
@@ -89,47 +104,30 @@ impl ReclusterDepthStats {
             }
             ranges.push((stats.min().as_slice(), stats.max().as_slice()));
         }
-        let (ranges, point_count) = index_depth_ranges(&ranges, key_types)?;
-        Ok(Self::from_ranges(positions, ranges, point_count))
+        let (ranges, _) = index_depth_ranges(&ranges, key_types)?;
+        Ok(Self::from_ranges(positions, ranges))
     }
 
-    fn from_ranges(
-        positions: HashMap<String, usize>,
-        ranges: Vec<(usize, usize)>,
-        point_count: usize,
-    ) -> Self {
-        let mut range_counts = HashMap::new();
-        for &range in &ranges {
-            *range_counts.entry(range).or_insert(0usize) += 1;
-        }
-        let mut point_changes = vec![0i64; point_count + 1];
-        for (&(start, end), &count) in &range_counts {
-            point_changes[start] += count as i64;
-            point_changes[end + 1] -= count as i64;
-        }
-        let depth_sum = if ranges.is_empty() {
-            0
-        } else {
-            let mut depth = 0i64;
-            let tree = RangeMaxTree::from_iter(point_changes[..point_count].iter().map(|change| {
-                depth += change;
-                depth as usize
-            }));
-            range_counts
-                .iter()
-                .map(|(&(start, end), &count)| count as i128 * tree.range_max(start, end) as i128)
-                .sum()
-        };
+    fn from_ranges(positions: HashMap<String, usize>, ranges: Vec<(usize, usize)>) -> Self {
+        let overlaps = RangeOverlapIndex::new(ranges.iter().copied());
+        // Inputs have unit weight; count each directed relationship, excluding self.
+        let overlap_sum = ranges
+            .iter()
+            .map(|&(start, end)| (overlaps.count(start, end) - 1) as i128)
+            .sum();
         Self {
             positions,
             ranges,
-            range_counts,
-            point_changes,
-            depth_sum,
+            overlaps,
+            overlap_sum,
         }
     }
 
     /// Evaluate a batch against one fixed pre-state; a single task is a one-element batch.
+    /// Burden is sum(weight * intersecting OTHER runs) / sum(weight). Inputs have
+    /// unit weight, outputs use executor-estimated block counts but each adds one run.
+    /// Return the reduction scaled by initial block count (signed, rounded down).
+    /// Per candidate: O(S log N + S log S + T log N + T²), not a scan over N neighbors.
     pub(crate) fn gain<'a, I>(
         &self,
         tasks: impl IntoIterator<Item = I>,
@@ -173,53 +171,36 @@ impl ReclusterDepthStats {
         if selected.is_empty() {
             return Ok(0);
         }
-        let mut removed_counts = HashMap::new();
+        let selected_index = RangeOverlapIndex::new(selected.iter().map(|&idx| self.ranges[idx]));
+        // Removing an input deletes both directions of every incident relationship.
+        // Internal selected relationships occur twice in degrees, so restore them once.
+        let mut after = self.overlap_sum;
         for &idx in &selected {
-            *removed_counts.entry(self.ranges[idx]).or_insert(0usize) += 1;
+            let (start, end) = self.ranges[idx];
+            let degree = (self.overlaps.count(start, end) - 1) as i128;
+            let internal = (selected_index.count(start, end) - 1) as i128;
+            after += internal - 2 * degree;
         }
-        // Update the precomputed coverage; the sentinel preserves inclusive endpoints.
-        let mut changes = self.point_changes.clone();
-        for (&(start, end), &count) in &removed_counts {
-            changes[start] -= count as i64;
-            changes[end + 1] += count as i64;
-        }
-        for output in &outputs {
-            changes[output.start_point] += 1;
-            changes[output.end_point + 1] -= 1;
-        }
-        let mut depth = 0i64;
-        let tree = RangeMaxTree::from_iter(changes[..changes.len() - 1].iter().map(|change| {
-            depth += change;
-            depth as usize
-        }));
-        let neighbors: i128 = self
-            .range_counts
-            .iter()
-            .map(|(&(start, end), &count)| {
-                let remaining = count - removed_counts.get(&(start, end)).copied().unwrap_or(0);
-                if remaining == 0 {
-                    0
-                } else {
-                    remaining as i128 * tree.range_max(start, end) as i128
+        for (i, output) in outputs.iter().enumerate() {
+            let neighbors = self.overlaps.count(output.start_point, output.end_point)
+                - selected_index.count(output.start_point, output.end_point);
+            // Remaining inputs have weight 1. The output contributes one run to
+            // each neighbor, while its own burden is weighted by output block count.
+            after += (output.block_count as i128 + 1) * neighbors as i128;
+            for other in &outputs[..i] {
+                if output.start_point <= other.end_point && other.start_point <= output.end_point {
+                    after += output.block_count as i128 + other.block_count as i128;
                 }
-            })
-            .sum();
-        // Outputs remain separate runs; only identical remaining INPUT ranges are grouped.
-        let output_depth: i128 = outputs
-            .iter()
-            .map(|output| {
-                output.block_count as i128
-                    * tree.range_max(output.start_point, output.end_point) as i128
-            })
-            .sum();
+            }
+        }
         let blocks_after = (self.ranges.len() - selected.len()) as i128
             + outputs
                 .iter()
                 .map(|output| output.block_count as i128)
                 .sum::<i128>();
-        Ok(depth_gain_from_sums(
-            self.depth_sum,
-            neighbors + output_depth,
+        Ok(overlap_gain_from_sums(
+            self.overlap_sum,
+            after,
             self.ranges.len(),
             blocks_after,
         ))
@@ -720,7 +701,7 @@ fn index_depth_ranges<T: AsRef<[Scalar]>>(
     Ok((ranges, positions.len()))
 }
 
-fn depth_gain_from_sums(
+fn overlap_gain_from_sums(
     before: i128,
     after: i128,
     blocks_before: usize,
@@ -920,16 +901,14 @@ mod tests {
 
     use super::*;
 
-    fn estimate_depth_gain(
+    fn estimate_overlap_gain(
         selected: &HashSet<usize>,
         outputs: &[ReclusterOutputRun],
         ranges: &[(usize, usize)],
-        point_count: usize,
-        depth_before: i128,
+        overlap_before: i128,
     ) -> i64 {
-        let mut stats =
-            ReclusterDepthStats::from_ranges(HashMap::new(), ranges.to_vec(), point_count);
-        assert_eq!(stats.depth_sum, depth_before);
+        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), ranges.to_vec());
+        assert_eq!(stats.overlap_sum, overlap_before);
         gain_from_fixture(&mut stats, selected, outputs)
     }
 
@@ -1060,26 +1039,23 @@ mod tests {
     }
 
     #[test]
-    fn test_grouped_ranges_match_expanded_block_depths() {
-        // Independent brute-force oracle: count each remaining block at every point,
-        // then find every block/run maximum without grouping or a range-max tree.
+    fn test_overlap_gain_matches_expanded_relationships() {
+        // Independent O(n²) oracle, with no endpoint index or incremental subtraction.
         let choices = [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)];
         for a in choices {
             for b in choices {
                 for c in choices {
                     let ranges = vec![a, b, c, a];
                     let mut stats =
-                        ReclusterDepthStats::from_ranges(HashMap::new(), ranges.clone(), 3);
+                        ReclusterDepthStats::from_ranges(HashMap::new(), ranges.clone());
                     let before: i128 = ranges
                         .iter()
                         .map(|&(lo, hi)| {
-                            (lo..=hi)
-                                .map(|p| ranges.iter().filter(|&&(l, r)| l <= p && p <= r).count())
-                                .max()
-                                .unwrap() as i128
+                            (ranges.iter().filter(|&&(l, r)| l <= hi && lo <= r).count() - 1)
+                                as i128
                         })
                         .sum();
-                    assert_eq!(stats.depth_sum, before);
+                    assert_eq!(stats.overlap_sum, before);
                     for selected in [
                         HashSet::from([0, 3]),
                         HashSet::from([0, 1, 2]),
@@ -1091,35 +1067,30 @@ mod tests {
                                 end_point: selected.iter().map(|&i| ranges[i].1).max().unwrap(),
                                 block_count: output_blocks,
                             }];
-                            let point_depths = (0..3)
-                                .map(|p| {
-                                    ranges
-                                        .iter()
-                                        .enumerate()
-                                        .filter(|&(i, &(l, r))| {
-                                            !selected.contains(&i) && l <= p && p <= r
-                                        })
-                                        .count()
-                                        + usize::from(
-                                            outputs[0].start_point <= p
-                                                && p <= outputs[0].end_point,
-                                        )
-                                })
-                                .collect::<Vec<_>>();
-                            let remaining: i128 = ranges
+                            let mut runs = ranges
                                 .iter()
                                 .enumerate()
                                 .filter(|(i, _)| !selected.contains(i))
-                                .map(|(_, &(l, r))| {
-                                    *point_depths[l..=r].iter().max().unwrap() as i128
+                                .map(|(_, &(l, r))| (l, r, 1usize))
+                                .collect::<Vec<_>>();
+                            runs.push((
+                                outputs[0].start_point,
+                                outputs[0].end_point,
+                                output_blocks,
+                            ));
+                            let after: i128 = runs
+                                .iter()
+                                .enumerate()
+                                .map(|(i, &(l, r, weight))| {
+                                    weight as i128
+                                        * runs
+                                            .iter()
+                                            .enumerate()
+                                            .filter(|&(j, &(a, b, _))| i != j && a <= r && l <= b)
+                                            .count()
+                                            as i128
                                 })
                                 .sum();
-                            let after = remaining
-                                + output_blocks as i128
-                                    * *point_depths[outputs[0].start_point..=outputs[0].end_point]
-                                        .iter()
-                                        .max()
-                                        .unwrap() as i128;
                             let count = (ranges.len() - selected.len() + output_blocks) as i128;
                             let expected = (before * count - after * ranges.len() as i128)
                                 .div_euclid(count)
@@ -1131,7 +1102,7 @@ mod tests {
                         }
                     }
                     // Reusing the same shared state must not accumulate candidate mutations.
-                    assert_eq!(stats.depth_sum, before);
+                    assert_eq!(stats.overlap_sum, before);
                 }
             }
         }
@@ -1139,9 +1110,8 @@ mod tests {
 
     #[test]
     fn test_duplicate_ranges_keep_remaining_multiplicity() {
-        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), vec![(0, 1); 5], 2);
-        assert_eq!(stats.range_counts.len(), 1);
-        assert_eq!(stats.point_changes, vec![5, 0, -5]);
+        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), vec![(0, 1); 5]);
+        assert_eq!(stats.overlap_sum, 20);
         let outputs = [ReclusterOutputRun {
             start_point: 0,
             end_point: 1,
@@ -1155,7 +1125,7 @@ mod tests {
             gain_from_fixture(&mut stats, &HashSet::from([2, 3]), &outputs),
             5
         );
-        assert_eq!(stats.point_changes, vec![5, 0, -5]);
+        assert_eq!(stats.overlap_sum, 20);
     }
 
     #[test]
@@ -1175,20 +1145,17 @@ mod tests {
             block_count: 2,
         };
         assert_eq!(
-            estimate_depth_gain(&a, std::slice::from_ref(&left), &ranges, 5, 15),
-            2
+            estimate_overlap_gain(&a, std::slice::from_ref(&left), &ranges, 12),
+            3
         );
         assert_eq!(
-            estimate_depth_gain(&b, std::slice::from_ref(&right), &ranges, 5, 15),
-            2
+            estimate_overlap_gain(&b, std::slice::from_ref(&right), &ranges, 12),
+            3
         );
-        // Both sides must change to lower the long neighbor's maximum.
+        // Each side reduces the long neighbor's overlap burden independently.
+        assert_eq!(estimate_overlap_gain(&both, &[left, right], &ranges, 12), 6);
         assert_eq!(
-            estimate_depth_gain(&both, &[left, right], &ranges, 5, 15),
-            5
-        );
-        assert_eq!(
-            estimate_depth_gain(
+            estimate_overlap_gain(
                 &both,
                 &[
                     ReclusterOutputRun {
@@ -1203,12 +1170,40 @@ mod tests {
                     },
                 ],
                 &ranges,
-                5,
-                15
+                12
             ),
             5
         );
-        assert_eq!(estimate_depth_gain(&HashSet::new(), &[], &[], 0, 0), 0);
+        assert_eq!(estimate_overlap_gain(&HashSet::new(), &[], &[], 0), 0);
+    }
+
+    #[test]
+    fn test_joint_overlap_outputs_include_cross_task_relationships() {
+        let ranges = vec![(0, 2), (0, 2), (1, 3), (1, 3), (1, 1)];
+        let selected = HashSet::from([0, 1, 2, 3]);
+        let mut stats = ReclusterDepthStats::from_ranges(HashMap::new(), ranges);
+        assert_eq!(stats.overlap_sum, 20);
+        for left in [1, 2, 4] {
+            for right in [1, 2, 4] {
+                let mut outputs = [
+                    ReclusterOutputRun {
+                        start_point: 0,
+                        end_point: 2,
+                        block_count: left,
+                    },
+                    ReclusterOutputRun {
+                        start_point: 1,
+                        end_point: 3,
+                        block_count: right,
+                    },
+                ];
+                // Two output runs and one neighbor form a complete overlap graph.
+                // Every run has two neighbors, independent of its block-count weight.
+                assert_eq!(gain_from_fixture(&mut stats, &selected, &outputs), 10);
+                outputs.reverse();
+                assert_eq!(gain_from_fixture(&mut stats, &selected, &outputs), 10);
+            }
+        }
     }
 
     #[test]
@@ -1313,7 +1308,7 @@ mod tests {
         let shared = ReclusterDepthStats::create(blocks.iter(), &types).unwrap();
         let selected = HashSet::from([shared.positions["a"], shared.positions["b"]]);
         assert_eq!(
-            estimate_depth_gain(
+            estimate_overlap_gain(
                 &selected,
                 &[ReclusterOutputRun {
                     start_point: 0,
@@ -1321,15 +1316,14 @@ mod tests {
                     block_count: 2
                 }],
                 &shared.ranges,
-                shared.point_changes.len() - 1,
-                shared.depth_sum,
+                shared.overlap_sum,
             ),
             3
         );
         assert!(ReclusterDepthStats::create([&blocks[0], &blocks[0]].into_iter(), &types).is_err());
         let empty = ReclusterDepthStats::create(std::iter::empty(), &types).unwrap();
         assert!(empty.ranges.is_empty());
-        assert_eq!(empty.depth_sum, 0);
+        assert_eq!(empty.overlap_sum, 0);
     }
 
     fn gain(ranges: &[(i32, i32)], selected: &[usize]) -> i64 {
@@ -1338,10 +1332,12 @@ mod tests {
             .iter()
             .map(|&(min, max)| (vec![Scalar::from(min)], vec![Scalar::from(max)]))
             .collect::<Vec<_>>();
-        let before = calculate_block_depths(&ranges, &types).unwrap();
-        let depth_sum = before.iter().map(|&depth| depth as i128).sum();
+        let overlap_sum = ranges
+            .iter()
+            .map(|(l, r)| (ranges.iter().filter(|(a, b)| a <= r && l <= b).count() - 1) as i128)
+            .sum();
         let selected = selected.iter().copied().collect::<HashSet<_>>();
-        let (ranges, point_count) = index_depth_ranges(&ranges, &types).unwrap();
+        let (ranges, _) = index_depth_ranges(&ranges, &types).unwrap();
         let outputs = selected
             .iter()
             .map(|&i| ranges[i])
@@ -1351,13 +1347,7 @@ mod tests {
                 end_point: hi,
                 block_count: selected.len(),
             });
-        estimate_depth_gain(
-            &selected,
-            outputs.as_slice(),
-            &ranges,
-            point_count,
-            depth_sum,
-        )
+        estimate_overlap_gain(&selected, outputs.as_slice(), &ranges, overlap_sum)
     }
 
     #[test]
@@ -1374,10 +1364,10 @@ mod tests {
     }
 
     #[test]
-    fn test_gain_preserves_other_peaks_and_ignores_distant_blocks() {
+    fn test_gain_reduces_overlap_even_when_other_peaks_remain() {
         assert_eq!(
             gain(&[(0, 10), (0, 10), (20, 30), (20, 30), (0, 30)], &[0, 1]),
-            2
+            3
         );
         assert_eq!(gain(&[(0, 10), (0, 10), (0, 10), (20, 30)], &[0, 1]), 3);
     }
@@ -1389,10 +1379,10 @@ mod tests {
     }
 
     #[test]
-    fn test_merging_disjoint_blocks_can_increase_neighbor_depth() {
+    fn test_merging_disjoint_blocks_can_increase_neighbor_overlap() {
         let ranges = [(0, 1), (3, 4), (2, 2)];
         assert_eq!(
-            estimate_depth_gain(
+            estimate_overlap_gain(
                 &HashSet::from([0, 1]),
                 &[ReclusterOutputRun {
                     start_point: 0,
@@ -1400,8 +1390,7 @@ mod tests {
                     block_count: 1
                 }],
                 &ranges,
-                5,
-                3
+                0
             ),
             -3
         );
@@ -1420,11 +1409,11 @@ mod tests {
     }
 
     #[test]
-    fn test_output_count_does_not_turn_block_removal_into_depth_gain() {
+    fn test_output_count_does_not_turn_block_removal_into_overlap_gain() {
         let ranges = [(0, 1), (4, 5)];
         for output_blocks in [1, 4] {
             assert_eq!(
-                estimate_depth_gain(
+                estimate_overlap_gain(
                     &HashSet::from([0, 1]),
                     &[ReclusterOutputRun {
                         start_point: 0,
@@ -1432,8 +1421,7 @@ mod tests {
                         block_count: output_blocks
                     }],
                     &ranges,
-                    6,
-                    2
+                    0
                 ),
                 0
             );
@@ -1441,12 +1429,12 @@ mod tests {
     }
 
     #[test]
-    fn test_output_count_uses_average_depth_denominator() {
+    fn test_output_count_uses_average_overlap_denominator() {
         let ranges = [(0, 1), (0, 1), (2, 3)];
-        // Before: 5/3. After: 1 for any output count, so gain in input-block units is 2.
+        // Before: 2/3. After: 0 for any output count, so gain in input-block units is 2.
         for output_blocks in [1, 2, 4] {
             assert_eq!(
-                estimate_depth_gain(
+                estimate_overlap_gain(
                     &HashSet::from([0, 1]),
                     &[ReclusterOutputRun {
                         start_point: 0,
@@ -1454,8 +1442,7 @@ mod tests {
                         block_count: output_blocks
                     }],
                     &ranges,
-                    4,
-                    5
+                    2
                 ),
                 2
             );
@@ -1483,11 +1470,9 @@ mod tests {
             Scalar::from(10i32),
         ]);
         let ranges = vec![range; 3];
-        let before = calculate_block_depths(&ranges, &types).unwrap();
-        let depth_sum = before.iter().map(|&depth| depth as i128).sum();
-        let (ranges, point_count) = index_depth_ranges(&ranges, &types).unwrap();
+        let (ranges, _) = index_depth_ranges(&ranges, &types).unwrap();
         assert_eq!(
-            estimate_depth_gain(
+            estimate_overlap_gain(
                 &HashSet::from([0, 1]),
                 &[ReclusterOutputRun {
                     start_point: 0,
@@ -1495,8 +1480,7 @@ mod tests {
                     block_count: 2
                 }],
                 &ranges,
-                point_count,
-                depth_sum
+                6
             ),
             3
         );
