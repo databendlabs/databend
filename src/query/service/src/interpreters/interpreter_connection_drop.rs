@@ -55,38 +55,40 @@ impl Interpreter for DropConnectionInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_connection_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_connection_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        // 1. Drop the connection first
-        user_mgr
-            .drop_connection(&tenant, &plan.name, plan.if_exists)
-            .await?;
+            // 1. Drop the connection first
+            user_mgr
+                .drop_connection(&tenant, &plan.name, plan.if_exists)
+                .await?;
 
-        // 2. Revoke ownership (after drop succeeds to prevent permission leak)
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::Connection {
-                name: self.plan.name.clone(),
+            // 2. Revoke ownership (after drop succeeds to prevent permission leak)
+            if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+            {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                let owner_object = OwnershipObject::Connection {
+                    name: self.plan.name.clone(),
+                };
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+
+            // 3. Clean up tag references (must be after drop for concurrency safety)
+            let taggable_object = TaggableObject::Connection {
+                name: plan.name.clone(),
             };
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+            cleanup_object_tags(&tenant, taggable_object).await?;
 
-        // 3. Clean up tag references (must be after drop for concurrency safety)
-        let taggable_object = TaggableObject::Connection {
-            name: plan.name.clone(),
-        };
-        cleanup_object_tags(&tenant, taggable_object).await?;
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

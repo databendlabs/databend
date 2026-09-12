@@ -53,93 +53,95 @@ impl Interpreter for RefreshTableIndexInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
-        // check mutability
-        table.check_mutable()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            // check mutability
+            table.check_mutable()?;
 
-        let index_name = self.plan.index_name.clone();
-        let segment_locs = self.plan.segment_locs.clone();
-        let table_meta = &table.get_table_info().meta;
-        let Some(index) = table_meta.indexes.get(&index_name) else {
-            return Err(ErrorCode::RefreshIndexError(format!(
-                "{} index {} does not exist",
-                self.plan.index_type, index_name
-            )));
-        };
-        let table_schema = &table_meta.schema;
-        let mut field_indices = Vec::with_capacity(index.column_ids.len());
-        for column_id in &index.column_ids {
-            for (index, field) in table_schema.fields.iter().enumerate() {
-                if field.column_id() == *column_id {
-                    field_indices.push(index);
-                    break;
+            let index_name = self.plan.index_name.clone();
+            let segment_locs = self.plan.segment_locs.clone();
+            let table_meta = &table.get_table_info().meta;
+            let Some(index) = table_meta.indexes.get(&index_name) else {
+                return Err(ErrorCode::RefreshIndexError(format!(
+                    "{} index {} does not exist",
+                    self.plan.index_type, index_name
+                )));
+            };
+            let table_schema = &table_meta.schema;
+            let mut field_indices = Vec::with_capacity(index.column_ids.len());
+            for column_id in &index.column_ids {
+                for (index, field) in table_schema.fields.iter().enumerate() {
+                    if field.column_id() == *column_id {
+                        field_indices.push(index);
+                        break;
+                    }
                 }
             }
-        }
-        if field_indices.len() != index.column_ids.len() {
-            return Err(ErrorCode::RefreshIndexError(format!(
-                "{} index {} is invalid",
-                self.plan.index_type, index_name
-            )));
-        }
-        let index_version = index.version.clone();
-        let index_schema = table_schema.project(&field_indices);
+            if field_indices.len() != index.column_ids.len() {
+                return Err(ErrorCode::RefreshIndexError(format!(
+                    "{} index {} is invalid",
+                    self.plan.index_type, index_name
+                )));
+            }
+            let index_version = index.version.clone();
+            let index_schema = table_schema.project(&field_indices);
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let index_type = match self.plan.index_type {
-            ast::TableIndexType::Inverted => TableIndexType::Inverted,
-            ast::TableIndexType::Ngram => TableIndexType::Ngram,
-            ast::TableIndexType::Vector => TableIndexType::Vector,
-            ast::TableIndexType::Spatial => TableIndexType::Spatial,
-        };
+            let index_type = match self.plan.index_type {
+                ast::TableIndexType::Inverted => TableIndexType::Inverted,
+                ast::TableIndexType::Ngram => TableIndexType::Ngram,
+                ast::TableIndexType::Vector => TableIndexType::Vector,
+                ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            };
 
-        let mut build_res = PipelineBuildResult::create();
-        let refreshed_blocks = match self.plan.index_type {
-            ast::TableIndexType::Inverted => {
-                // TODO: Refactor refresh inverted index
-                fuse_table
-                    .do_refresh_inverted_index(
+            let mut build_res = PipelineBuildResult::create();
+            let refreshed_blocks = match self.plan.index_type {
+                ast::TableIndexType::Inverted => {
+                    // TODO: Refactor refresh inverted index
+                    fuse_table
+                        .do_refresh_inverted_index(
+                            self.ctx.clone(),
+                            index_name,
+                            index_version,
+                            &index.options,
+                            index_schema.into(),
+                            segment_locs,
+                            &mut build_res.main_pipeline,
+                        )
+                        .await?
+                }
+                _ => {
+                    do_refresh_table_index(
+                        fuse_table,
                         self.ctx.clone(),
                         index_name,
-                        index_version,
-                        &index.options,
+                        index_type,
                         index_schema.into(),
                         segment_locs,
                         &mut build_res.main_pipeline,
                     )
                     .await?
+                }
+            };
+
+            let result_block =
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![refreshed_blocks])]);
+
+            if build_res.main_pipeline.is_empty() {
+                return PipelineBuildResult::from_blocks(vec![result_block]);
             }
-            _ => {
-                do_refresh_table_index(
-                    fuse_table,
-                    self.ctx.clone(),
-                    index_name,
-                    index_type,
-                    index_schema.into(),
-                    segment_locs,
-                    &mut build_res.main_pipeline,
-                )
-                .await?
-            }
-        };
 
-        let result_block =
-            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![refreshed_blocks])]);
-
-        if build_res.main_pipeline.is_empty() {
-            return PipelineBuildResult::from_blocks(vec![result_block]);
-        }
-
-        let mut result_res = PipelineBuildResult::from_blocks(vec![result_block])?;
-        result_res
-            .sources_pipelines
-            .extend(build_res.sources_pipelines);
-        result_res.sources_pipelines.push(build_res.main_pipeline);
-        Ok(result_res)
+            let mut result_res = PipelineBuildResult::from_blocks(vec![result_block])?;
+            result_res
+                .sources_pipelines
+                .extend(build_res.sources_pipelines);
+            result_res.sources_pipelines.push(build_res.main_pipeline);
+            Ok(result_res)
+        })
     }
 }

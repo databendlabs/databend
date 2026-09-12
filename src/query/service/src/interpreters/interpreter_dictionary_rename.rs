@@ -48,28 +48,32 @@ impl Interpreter for RenameDictionaryInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = &self.plan.tenant;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = &self.plan.tenant;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        let dict_ident =
-            DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
-        let name_ident = DictionaryNameIdent::new(tenant, dict_ident);
+            let dict_ident =
+                DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
+            let name_ident = DictionaryNameIdent::new(tenant, dict_ident);
 
-        let new_dict_ident =
-            DictionaryIdentity::new(self.plan.new_database_id, self.plan.new_dictionary.clone());
+            let new_dict_ident = DictionaryIdentity::new(
+                self.plan.new_database_id,
+                self.plan.new_dictionary.clone(),
+            );
 
-        let req = RenameDictionaryReq {
-            name_ident,
-            new_dict_ident,
-        };
+            let req = RenameDictionaryReq {
+                name_ident,
+                new_dict_ident,
+            };
 
-        let reply = catalog.rename_dictionary(req).await;
-        if let Err(err) = reply {
-            if !(self.plan.if_exists && err.code() == ErrorCode::UNKNOWN_DICTIONARY) {
-                return Err(err);
+            let reply = catalog.rename_dictionary(req).await;
+            if let Err(err) = reply {
+                if !(self.plan.if_exists && err.code() == ErrorCode::UNKNOWN_DICTIONARY) {
+                    return Err(err);
+                }
             }
-        }
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

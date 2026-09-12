@@ -51,29 +51,31 @@ impl Interpreter for DropNetworkPolicyInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_network_policy_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_network_policy_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
 
-        let global_network_policy = self
-            .ctx
-            .get_settings()
-            .get_network_policy()
-            .unwrap_or_default();
-        if global_network_policy == plan.name {
-            return Err(ErrorCode::NetworkPolicyIsUsedByUser(format!(
-                "network policy `{}` is global network policy, can't be dropped",
-                global_network_policy,
-            )));
-        }
+            let global_network_policy = self
+                .ctx
+                .get_settings()
+                .get_network_policy()
+                .unwrap_or_default();
+            if global_network_policy == plan.name {
+                return Err(ErrorCode::NetworkPolicyIsUsedByUser(format!(
+                    "network policy `{}` is global network policy, can't be dropped",
+                    global_network_policy,
+                )));
+            }
 
-        let user_mgr = UserApiProvider::instance();
-        user_mgr
-            .drop_network_policy(&tenant, plan.name.as_str(), plan.if_exists)
-            .await?;
+            let user_mgr = UserApiProvider::instance();
+            user_mgr
+                .drop_network_policy(&tenant, plan.name.as_str(), plan.if_exists)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

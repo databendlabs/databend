@@ -67,53 +67,55 @@ impl Interpreter for TruncateTableInterpreter {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // try add lock table.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // try add lock table.
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?;
 
-        let table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
-        // check mutability
-        table.check_mutable()?;
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            // check mutability
+            table.check_mutable()?;
 
-        if self.proxy_to_warehouse && table.broadcast_truncate_to_warehouse() {
-            let warehouse = self.ctx.get_warehouse_cluster().await?;
+            if self.proxy_to_warehouse && table.broadcast_truncate_to_warehouse() {
+                let warehouse = self.ctx.get_warehouse_cluster().await?;
 
-            let mut message = HashMap::with_capacity(warehouse.nodes.len());
-            for node_info in &warehouse.nodes {
-                if node_info.id != warehouse.local_id {
-                    message.insert(node_info.id.clone(), self.plan.clone());
+                let mut message = HashMap::with_capacity(warehouse.nodes.len());
+                for node_info in &warehouse.nodes {
+                    if node_info.id != warehouse.local_id {
+                        message.insert(node_info.id.clone(), self.plan.clone());
+                    }
                 }
+
+                let settings = self.ctx.get_settings();
+                let flight_params = FlightParams {
+                    timeout: settings.get_flight_client_timeout()?,
+                    retry_times: settings.get_flight_max_retry_times()?,
+                    retry_interval: settings.get_flight_retry_interval()?,
+                    keep_alive: settings.get_flight_keep_alive_params()?,
+                };
+                warehouse
+                    .do_action::<_, ()>(TRUNCATE_TABLE, message, flight_params)
+                    .await?;
             }
 
-            let settings = self.ctx.get_settings();
-            let flight_params = FlightParams {
-                timeout: settings.get_flight_client_timeout()?,
-                retry_times: settings.get_flight_max_retry_times()?,
-                retry_interval: settings.get_flight_retry_interval()?,
-                keep_alive: settings.get_flight_keep_alive_params()?,
-            };
-            warehouse
-                .do_action::<_, ()>(TRUNCATE_TABLE, message, flight_params)
+            let mut build_res = PipelineBuildResult::create();
+            build_res.main_pipeline.add_lock_guard(lock_guard);
+            table
+                .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
                 .await?;
-        }
-
-        let mut build_res = PipelineBuildResult::create();
-        build_res.main_pipeline.add_lock_guard(lock_guard);
-        table
-            .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
-            .await?;
-        Ok(build_res)
+            Ok(build_res)
+        })
     }
 }

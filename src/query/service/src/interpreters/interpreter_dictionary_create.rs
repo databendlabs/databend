@@ -50,58 +50,60 @@ impl Interpreter for CreateDictionaryInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = &self.plan.tenant;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = &self.plan.tenant;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        let dictionary_meta = self.plan.meta.clone();
-        let dict_ident =
-            DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
-        let dictionary_ident = DictionaryNameIdent::new(tenant, dict_ident);
-        let req = CreateDictionaryReq {
-            dictionary_ident: dictionary_ident.clone(),
-            dictionary_meta: dictionary_meta.clone(),
-        };
+            let dictionary_meta = self.plan.meta.clone();
+            let dict_ident =
+                DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
+            let dictionary_ident = DictionaryNameIdent::new(tenant, dict_ident);
+            let req = CreateDictionaryReq {
+                dictionary_ident: dictionary_ident.clone(),
+                dictionary_meta: dictionary_meta.clone(),
+            };
 
-        let reply = catalog.create_dictionary(req).await;
-        if let Err(e) = reply {
-            if e.code() == ErrorCode::DICTIONARY_ALREADY_EXISTS {
-                match self.plan.create_option {
-                    CreateOption::Create => {
-                        return Err(ErrorCode::DictionaryAlreadyExists(format!(
-                            "Dictionary {} already exists",
-                            self.plan.dictionary,
-                        )));
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(PipelineBuildResult::create());
-                    }
-                    CreateOption::CreateOrReplace => {
-                        let Some(seq_id) = catalog.get_dictionary_id(dictionary_ident).await?
-                        else {
-                            return Err(ErrorCode::UnknownDictionary(format!(
-                                "Dictionary {} does not exist",
-                                self.plan.dictionary,
-                            )));
-                        };
-
-                        let id_ident = seq_id.data.into_t_ident(tenant);
-                        let transition = catalog
-                            .update_dictionary_by_id(id_ident, dictionary_meta.clone())
-                            .await?;
-                        if !transition.is_changed() {
-                            return Err(ErrorCode::UnknownDictionary(format!(
-                                "Dictionary {} does not exist",
+            let reply = catalog.create_dictionary(req).await;
+            if let Err(e) = reply {
+                if e.code() == ErrorCode::DICTIONARY_ALREADY_EXISTS {
+                    match self.plan.create_option {
+                        CreateOption::Create => {
+                            return Err(ErrorCode::DictionaryAlreadyExists(format!(
+                                "Dictionary {} already exists",
                                 self.plan.dictionary,
                             )));
                         }
+                        CreateOption::CreateIfNotExists => {
+                            return Ok(PipelineBuildResult::create());
+                        }
+                        CreateOption::CreateOrReplace => {
+                            let Some(seq_id) = catalog.get_dictionary_id(dictionary_ident).await?
+                            else {
+                                return Err(ErrorCode::UnknownDictionary(format!(
+                                    "Dictionary {} does not exist",
+                                    self.plan.dictionary,
+                                )));
+                            };
 
-                        return Ok(PipelineBuildResult::create());
+                            let id_ident = seq_id.data.into_t_ident(tenant);
+                            let transition = catalog
+                                .update_dictionary_by_id(id_ident, dictionary_meta.clone())
+                                .await?;
+                            if !transition.is_changed() {
+                                return Err(ErrorCode::UnknownDictionary(format!(
+                                    "Dictionary {} does not exist",
+                                    self.plan.dictionary,
+                                )));
+                            }
+
+                            return Ok(PipelineBuildResult::create());
+                        }
                     }
                 }
+                return Err(e);
             }
-            return Err(e);
-        }
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

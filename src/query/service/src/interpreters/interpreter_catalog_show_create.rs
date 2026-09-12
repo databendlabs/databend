@@ -51,70 +51,72 @@ impl Interpreter for ShowCreateCatalogInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
-        let name = catalog.name();
-        let info = catalog.info();
+            let name = catalog.name();
+            let info = catalog.info();
 
-        let (catalog_type, option) = match &info.meta.catalog_option {
-            CatalogOption::Default => (String::from("default"), String::new()),
-            CatalogOption::Hive(op) => (
-                String::from("hive"),
-                format!(
-                    "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
-                    op.address,
-                    op.storage_params
-                        .as_ref()
-                        .map(|sp| sp.to_string())
-                        .unwrap_or_else(|| "none".to_string())
-                ),
-            ),
-            CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
-                IcebergCatalogOption::Rest(cfg) => {
-                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.uri, cfg.warehouse)
-                }
-                IcebergCatalogOption::Hms(cfg) => {
-                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
-                }
-                IcebergCatalogOption::Glue(cfg) => {
-                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
-                }
-                IcebergCatalogOption::Storage(cfg) => {
+            let (catalog_type, option) = match &info.meta.catalog_option {
+                CatalogOption::Default => (String::from("default"), String::new()),
+                CatalogOption::Hive(op) => (
+                    String::from("hive"),
                     format!(
-                        "ADDRESS\n{}\nTABLE_BUCKET_ARN\n{}",
-                        cfg.address, cfg.table_bucket_arn
-                    )
+                        "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
+                        op.address,
+                        op.storage_params
+                            .as_ref()
+                            .map(|sp| sp.to_string())
+                            .unwrap_or_else(|| "none".to_string())
+                    ),
+                ),
+                CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
+                    IcebergCatalogOption::Rest(cfg) => {
+                        format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.uri, cfg.warehouse)
+                    }
+                    IcebergCatalogOption::Hms(cfg) => {
+                        format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
+                    }
+                    IcebergCatalogOption::Glue(cfg) => {
+                        format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
+                    }
+                    IcebergCatalogOption::Storage(cfg) => {
+                        format!(
+                            "ADDRESS\n{}\nTABLE_BUCKET_ARN\n{}",
+                            cfg.address, cfg.table_bucket_arn
+                        )
+                    }
+                }),
+                CatalogOption::Paimon(op) => {
+                    let metastore = op
+                        .options
+                        .get("metastore")
+                        .cloned()
+                        .unwrap_or_else(|| "filesystem".to_string());
+                    let warehouse = op.options.get("warehouse").cloned().unwrap_or_default();
+                    let mut lines = vec![
+                        format!("METASTORE\n{metastore}"),
+                        format!("WAREHOUSE\n{warehouse}"),
+                    ];
+                    if let Some(uri) = op.options.get("uri") {
+                        lines.insert(1, format!("URI\n{uri}"));
+                    }
+                    (String::from("paimon"), lines.join("\n"))
                 }
-            }),
-            CatalogOption::Paimon(op) => {
-                let metastore = op
-                    .options
-                    .get("metastore")
-                    .cloned()
-                    .unwrap_or_else(|| "filesystem".to_string());
-                let warehouse = op.options.get("warehouse").cloned().unwrap_or_default();
-                let mut lines = vec![
-                    format!("METASTORE\n{metastore}"),
-                    format!("WAREHOUSE\n{warehouse}"),
-                ];
-                if let Some(uri) = op.options.get("uri") {
-                    lines.insert(1, format!("URI\n{uri}"));
-                }
-                (String::from("paimon"), lines.join("\n"))
-            }
-        };
+            };
 
-        let block = DataBlock::new(
-            vec![
-                BlockEntry::new_const_column(DataType::String, Scalar::String(name), 1),
-                BlockEntry::new_const_column(DataType::String, Scalar::String(catalog_type), 1),
-                BlockEntry::new_const_column(DataType::String, Scalar::String(option), 1),
-            ],
-            1,
-        );
-        debug!("Show create catalog executor result: {:?}", block);
+            let block = DataBlock::new(
+                vec![
+                    BlockEntry::new_const_column(DataType::String, Scalar::String(name), 1),
+                    BlockEntry::new_const_column(DataType::String, Scalar::String(catalog_type), 1),
+                    BlockEntry::new_const_column(DataType::String, Scalar::String(option), 1),
+                ],
+                1,
+            );
+            debug!("Show create catalog executor result: {:?}", block);
 
-        PipelineBuildResult::from_blocks(vec![block])
+            PipelineBuildResult::from_blocks(vec![block])
+        })
     }
 }

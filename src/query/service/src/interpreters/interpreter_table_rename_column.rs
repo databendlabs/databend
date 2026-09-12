@@ -60,130 +60,132 @@ impl Interpreter for RenameTableColumnInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table_with_branch(
-                &self.ctx.get_tenant(),
-                db_name,
-                tbl_name,
-                self.plan.branch.as_deref(),
-            )
-            .await?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let table = catalog
+                .get_table_with_branch(
+                    &self.ctx.get_tenant(),
+                    db_name,
+                    tbl_name,
+                    self.plan.branch.as_deref(),
+                )
+                .await?;
 
-        // check mutability
-        table.check_mutable()?;
+            // check mutability
+            table.check_mutable()?;
 
-        let table_info = table.get_table_info();
-        let engine = table.engine();
-        if matches!(
-            engine.to_uppercase().as_str(),
-            VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
-        ) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support rename column name",
-                &self.plan.database, &self.plan.table, engine
-            )));
-        }
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                &self.plan.database, &self.plan.table
-            )));
-        }
+            let table_info = table.get_table_info();
+            let engine = table.engine();
+            if matches!(
+                engine.to_uppercase().as_str(),
+                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+            ) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support rename column name",
+                    &self.plan.database, &self.plan.table, engine
+                )));
+            }
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
 
-        let mut new_table_meta = table.get_table_info().meta.clone();
+            let mut new_table_meta = table.get_table_info().meta.clone();
 
-        is_valid_column(&self.plan.new_column)?;
+            is_valid_column(&self.plan.new_column)?;
 
-        let mut schema: DataSchema = table.schema().into();
-        let field = schema.field_with_name(self.plan.old_column.as_str())?;
-        if field.computed_expr().is_none() {
-            let index = schema.index_of(self.plan.old_column.as_str())?;
-            schema.rename_field(index, self.plan.new_column.as_str());
-            // Check if old column is referenced by computed columns.
-            check_referenced_computed_columns(
-                self.ctx.clone(),
-                Arc::new(schema),
-                self.plan.old_column.as_str(),
-            )?;
-        }
+            let mut schema: DataSchema = table.schema().into();
+            let field = schema.field_with_name(self.plan.old_column.as_str())?;
+            if field.computed_expr().is_none() {
+                let index = schema.index_of(self.plan.old_column.as_str())?;
+                schema.rename_field(index, self.plan.new_column.as_str());
+                // Check if old column is referenced by computed columns.
+                check_referenced_computed_columns(
+                    self.ctx.clone(),
+                    Arc::new(schema),
+                    self.plan.old_column.as_str(),
+                )?;
+            }
 
-        // update table options
-        let opts = &mut new_table_meta.options;
-        if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
-            rename_column_in_comma_separated_ident(
-                self.ctx.as_ref(),
-                value,
-                &self.plan.old_column,
-                &self.plan.new_column,
-            )?;
-        }
-        if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
-            rename_column_in_comma_separated_ident(
-                self.ctx.as_ref(),
-                value,
-                &self.plan.old_column,
-                &self.plan.new_column,
-            )?;
-        }
-        if let Some(value) = opts.get_mut(OPT_KEY_PARTITION_BY)
-            && let Some(new_partition_key) = rename_column_in_cluster_key(
-                self.ctx.as_ref(),
-                value,
-                &self.plan.old_column,
-                &self.plan.new_column,
-            )?
-        {
-            *value = new_partition_key;
-        }
-        if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
-            rename_column_in_comma_separated_ident(
-                self.ctx.as_ref(),
-                value,
-                &self.plan.old_column,
-                &self.plan.new_column,
-            )?;
-        }
+            // update table options
+            let opts = &mut new_table_meta.options;
+            if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+                rename_column_in_comma_separated_ident(
+                    self.ctx.as_ref(),
+                    value,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
+            if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+                rename_column_in_comma_separated_ident(
+                    self.ctx.as_ref(),
+                    value,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
+            if let Some(value) = opts.get_mut(OPT_KEY_PARTITION_BY)
+                && let Some(new_partition_key) = rename_column_in_cluster_key(
+                    self.ctx.as_ref(),
+                    value,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?
+            {
+                *value = new_partition_key;
+            }
+            if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
+                rename_column_in_comma_separated_ident(
+                    self.ctx.as_ref(),
+                    value,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
 
-        let mut new_cluster_key = None;
-        if let Some((_, cluster_key)) = table.cluster_key_meta() {
-            new_cluster_key = rename_column_in_cluster_key(
-                self.ctx.as_ref(),
-                &cluster_key,
-                &self.plan.old_column,
-                &self.plan.new_column,
-            )?;
-        }
+            let mut new_cluster_key = None;
+            if let Some((_, cluster_key)) = table.cluster_key_meta() {
+                new_cluster_key = rename_column_in_cluster_key(
+                    self.ctx.as_ref(),
+                    &cluster_key,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
 
-        commit_table_meta(
-            &self.ctx,
-            table.as_ref(),
-            new_table_meta,
-            catalog,
-            |snapshot_opt, meta| {
-                if let Some(snapshot) = snapshot_opt {
-                    snapshot.schema = self.plan.schema.clone();
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                new_table_meta,
+                catalog,
+                |snapshot_opt, meta| {
+                    if let Some(snapshot) = snapshot_opt {
+                        snapshot.schema = self.plan.schema.clone();
+                        if let Some(cluster_key) = &new_cluster_key {
+                            if let Some((_, ref mut key)) = snapshot.cluster_key_meta {
+                                *key = cluster_key.clone();
+                            }
+                        }
+                    }
+                    meta.schema = Arc::new(self.plan.schema.clone());
                     if let Some(cluster_key) = &new_cluster_key {
-                        if let Some((_, ref mut key)) = snapshot.cluster_key_meta {
+                        if let Some((_, ref mut key)) = meta.cluster_key_v2 {
                             *key = cluster_key.clone();
                         }
                     }
-                }
-                meta.schema = Arc::new(self.plan.schema.clone());
-                if let Some(cluster_key) = &new_cluster_key {
-                    if let Some((_, ref mut key)) = meta.cluster_key_v2 {
-                        *key = cluster_key.clone();
-                    }
-                }
-            },
-        )
-        .await?;
+                },
+            )
+            .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

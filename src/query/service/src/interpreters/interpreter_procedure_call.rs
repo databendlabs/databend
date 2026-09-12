@@ -70,65 +70,69 @@ impl Interpreter for CallProcedureInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let res: Result<_> = try {
-            let mut src = vec![];
-            for (arg, arg_name) in self.plan.args.iter().zip(self.plan.arg_names.iter()) {
-                src.push(ScriptStatement::LetVar {
-                    declare: DeclareVar {
-                        span: None,
-                        name: Identifier::from_name(None, arg_name),
-                        data_type: None,
-                        default: Some(arg.clone()),
-                    },
-                });
-            }
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let tokens = tokenize_sql(&self.plan.script).map_err(ErrorCode::from)?;
-            let mut ast = run_parser(
-                &tokens,
-                sql_dialect,
-                ParseMode::Template,
-                false,
-                script_block,
-            )
-            .map_err(ErrorCode::from)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let res: Result<_> = try {
+                let mut src = vec![];
+                for (arg, arg_name) in self.plan.args.iter().zip(self.plan.arg_names.iter()) {
+                    src.push(ScriptStatement::LetVar {
+                        declare: DeclareVar {
+                            span: None,
+                            name: Identifier::from_name(None, arg_name),
+                            data_type: None,
+                            default: Some(arg.clone()),
+                        },
+                    });
+                }
+                let settings = self.ctx.get_settings();
+                let sql_dialect = settings.get_sql_dialect()?;
+                let tokens = tokenize_sql(&self.plan.script).map_err(ErrorCode::from)?;
+                let mut ast = run_parser(
+                    &tokens,
+                    sql_dialect,
+                    ParseMode::Template,
+                    false,
+                    script_block,
+                )
+                .map_err(ErrorCode::from)?;
 
-            for declare in ast.declares {
-                match declare {
-                    DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
-                    DeclareItem::Set(declare) => {
-                        src.push(ScriptStatement::LetStatement { declare })
+                for declare in ast.declares {
+                    match declare {
+                        DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
+                        DeclareItem::Set(declare) => {
+                            src.push(ScriptStatement::LetStatement { declare })
+                        }
                     }
                 }
-            }
-            src.append(&mut ast.body);
-            let compiled = compile(&src)?;
+                src.append(&mut ast.body);
+                let compiled = compile(&src)?;
 
-            let client = ScriptClient {
-                ctx: self.ctx.clone(),
+                let client = ScriptClient {
+                    ctx: self.ctx.clone(),
+                };
+                let mut executor = Executor::load(ast.span, client, compiled);
+                let script_max_steps = settings.get_script_max_steps()?;
+                let result = executor.run(script_max_steps as usize).await?;
+
+                match result {
+                    Some(ReturnValue::Var(scalar)) => {
+                        self.state.set_scalar_schema(&scalar).await;
+                        PipelineBuildResult::from_blocks(vec![ProcedureState::scalar_result(
+                            scalar,
+                        )])?
+                    }
+                    Some(ReturnValue::Set(set)) => {
+                        self.state.set_schema(set.schema).await;
+                        PipelineBuildResult::from_blocks(vec![set.block])?
+                    }
+                    None => {
+                        self.state.set_null_schema().await;
+                        PipelineBuildResult::from_blocks(vec![ProcedureState::null_result()])?
+                    }
+                }
             };
-            let mut executor = Executor::load(ast.span, client, compiled);
-            let script_max_steps = settings.get_script_max_steps()?;
-            let result = executor.run(script_max_steps as usize).await?;
 
-            match result {
-                Some(ReturnValue::Var(scalar)) => {
-                    self.state.set_scalar_schema(&scalar).await;
-                    PipelineBuildResult::from_blocks(vec![ProcedureState::scalar_result(scalar)])?
-                }
-                Some(ReturnValue::Set(set)) => {
-                    self.state.set_schema(set.schema).await;
-                    PipelineBuildResult::from_blocks(vec![set.block])?
-                }
-                None => {
-                    self.state.set_null_schema().await;
-                    PipelineBuildResult::from_blocks(vec![ProcedureState::null_result()])?
-                }
-            }
-        };
-
-        res.map_err(|err| err.display_with_sql(&self.plan.script))
+            res.map_err(|err| err.display_with_sql(&self.plan.script))
+        })
     }
 }

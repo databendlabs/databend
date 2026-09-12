@@ -56,55 +56,57 @@ impl Interpreter for CreateDatabaseInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
 
-        let tenant = self.plan.tenant.clone();
+            let tenant = self.plan.tenant.clone();
 
-        let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let databases = catalog.list_databases(&tenant).await?;
-        if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
-            return Err(ErrorCode::TenantQuotaExceeded(format!(
-                "Max databases quota exceeded {}",
-                quota.max_databases
-            )));
-        };
-
-        let create_db_req: CreateDatabaseReq = self.plan.clone().into();
-        let reply = catalog.create_database(create_db_req).await?;
-        if !reply.created {
-            if self.plan.create_option.if_return_error() {
-                return Err(ErrorCode::DatabaseAlreadyExists(format!(
-                    "{} database exists",
-                    self.plan.database
+            let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
+            let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let databases = catalog.list_databases(&tenant).await?;
+            if quota.max_databases != 0 && databases.len() >= quota.max_databases as usize {
+                return Err(ErrorCode::TenantQuotaExceeded(format!(
+                    "Max databases quota exceeded {}",
+                    quota.max_databases
                 )));
+            };
+
+            let create_db_req: CreateDatabaseReq = self.plan.clone().into();
+            let reply = catalog.create_database(create_db_req).await?;
+            if !reply.created {
+                if self.plan.create_option.if_return_error() {
+                    return Err(ErrorCode::DatabaseAlreadyExists(format!(
+                        "{} database exists",
+                        self.plan.database
+                    )));
+                }
+
+                return Ok(PipelineBuildResult::create());
             }
 
-            return Ok(PipelineBuildResult::create());
-        }
-
-        // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
-        // the future.
-        if let Some(current_role) = self.ctx.get_current_role() {
-            // iceberg db do not need to generate ownership.
-            if !catalog.is_external() {
-                // revoke ownership handling is now integrated into the create_database transaction
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Database {
-                            catalog_name: self.plan.catalog.clone(),
-                            db_id: *reply.db_id,
-                        },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
+            // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
+            // the future.
+            if let Some(current_role) = self.ctx.get_current_role() {
+                // iceberg db do not need to generate ownership.
+                if !catalog.is_external() {
+                    // revoke ownership handling is now integrated into the create_database transaction
+                    let role_api = UserApiProvider::instance().role_api(&tenant);
+                    role_api
+                        .grant_ownership(
+                            &OwnershipObject::Database {
+                                catalog_name: self.plan.catalog.clone(),
+                                db_id: *reply.db_id,
+                            },
+                            &current_role.name,
+                        )
+                        .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
             }
-        }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

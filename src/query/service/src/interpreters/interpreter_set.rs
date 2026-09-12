@@ -181,96 +181,99 @@ impl Interpreter for SetInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let scalars = match &self.set.values {
-            SetScalarsOrQuery::VarValue(scalars) => scalars.clone(),
-            SetScalarsOrQuery::Query(query) => {
-                let (s_expr, metadata, bind_context, formatted_ast) = match query.as_ref() {
-                    Plan::Query {
-                        s_expr,
-                        metadata,
-                        bind_context,
-                        formatted_ast,
-                        ..
-                    } => (s_expr, metadata, bind_context, formatted_ast),
-                    v => unreachable!("Input plan must be Query, but it's {}", v),
-                };
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let scalars = match &self.set.values {
+                SetScalarsOrQuery::VarValue(scalars) => scalars.clone(),
+                SetScalarsOrQuery::Query(query) => {
+                    let (s_expr, metadata, bind_context, formatted_ast) = match query.as_ref() {
+                        Plan::Query {
+                            s_expr,
+                            metadata,
+                            bind_context,
+                            formatted_ast,
+                            ..
+                        } => (s_expr, metadata, bind_context, formatted_ast),
+                        v => unreachable!("Input plan must be Query, but it's {}", v),
+                    };
 
-                let select_interpreter = SelectInterpreter::try_create(
-                    self.ctx.clone(),
-                    *(bind_context.clone()),
-                    *s_expr.clone(),
-                    metadata.clone(),
-                    formatted_ast.clone(),
-                    false,
-                )?;
+                    let select_interpreter = SelectInterpreter::try_create(
+                        self.ctx.clone(),
+                        *(bind_context.clone()),
+                        *s_expr.clone(),
+                        metadata.clone(),
+                        formatted_ast.clone(),
+                        false,
+                    )?;
 
-                let stream = select_interpreter
-                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
-                    .await?;
-                let datablocks: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
-                let num_columns = bind_context.columns.len();
-                if num_columns != self.set.idents.len() {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Expect {} column in set query result, but got {} columns",
-                        self.set.idents.len(),
-                        num_columns
-                    )));
-                }
-                let num_rows: usize = datablocks.iter().map(|b| b.num_rows()).sum();
-                if num_rows == 0 {
-                    if matches!(self.set.set_type, SetType::Variable) {
-                        self.execute_variables(vec![Scalar::Null; self.set.idents.len()])
-                            .await?;
-                        return Ok(PipelineBuildResult::create());
+                    let stream = select_interpreter
+                        .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                        .await?;
+                    let datablocks: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
+                    let num_columns = bind_context.columns.len();
+                    if num_columns != self.set.idents.len() {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Expect {} column in set query result, but got {} columns",
+                            self.set.idents.len(),
+                            num_columns
+                        )));
                     }
+                    let num_rows: usize = datablocks.iter().map(|b| b.num_rows()).sum();
+                    if num_rows == 0 {
+                        if matches!(self.set.set_type, SetType::Variable) {
+                            self.execute_variables(vec![Scalar::Null; self.set.idents.len()])
+                                .await?;
+                            return Ok(PipelineBuildResult::create());
+                        }
+                        return Err(ErrorCode::BadArguments(
+                            "Subquery in SET statement returned 0 rows, expected exactly 1 row",
+                        ));
+                    }
+                    let datablock = DataBlock::concat(&datablocks)?;
+
+                    if datablock.num_rows() != 1 {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Expect scalar result in set query result, but got {} rows",
+                            datablock.num_rows()
+                        )));
+                    }
+                    datablock
+                        .columns()
+                        .iter()
+                        .map(|c| {
+                            c.index(0)
+                                .ok_or_else(|| {
+                                    ErrorCode::Internal(
+                                        "Failed to access first row of datablock column"
+                                            .to_string(),
+                                    )
+                                })
+                                .map(|s| s.to_owned())
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                }
+            };
+
+            if scalars.len() != self.set.idents.len() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Expect {} values in set statement, but got {}",
+                    self.set.idents.len(),
+                    scalars.len()
+                )));
+            }
+
+            match &self.set.set_type {
+                SetType::SettingsGlobal => self.execute_settings(scalars, true).await?,
+                SetType::SettingsSession => self.execute_settings(scalars, false).await?,
+                SetType::Variable => self.execute_variables(scalars).await?,
+                SetType::SettingsQuery => {
                     return Err(ErrorCode::BadArguments(
-                        "Subquery in SET statement returned 0 rows, expected exactly 1 row",
+                        "Query level setting can not be set",
                     ));
                 }
-                let datablock = DataBlock::concat(&datablocks)?;
-
-                if datablock.num_rows() != 1 {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Expect scalar result in set query result, but got {} rows",
-                        datablock.num_rows()
-                    )));
-                }
-                datablock
-                    .columns()
-                    .iter()
-                    .map(|c| {
-                        c.index(0)
-                            .ok_or_else(|| {
-                                ErrorCode::Internal(
-                                    "Failed to access first row of datablock column".to_string(),
-                                )
-                            })
-                            .map(|s| s.to_owned())
-                    })
-                    .collect::<Result<Vec<_>>>()?
             }
-        };
 
-        if scalars.len() != self.set.idents.len() {
-            return Err(ErrorCode::BadArguments(format!(
-                "Expect {} values in set statement, but got {}",
-                self.set.idents.len(),
-                scalars.len()
-            )));
-        }
-
-        match &self.set.set_type {
-            SetType::SettingsGlobal => self.execute_settings(scalars, true).await?,
-            SetType::SettingsSession => self.execute_settings(scalars, false).await?,
-            SetType::Variable => self.execute_variables(scalars).await?,
-            SetType::SettingsQuery => {
-                return Err(ErrorCode::BadArguments(
-                    "Query level setting can not be set",
-                ));
-            }
-        }
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

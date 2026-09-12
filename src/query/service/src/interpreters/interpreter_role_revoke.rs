@@ -51,25 +51,27 @@ impl Interpreter for RevokeRoleInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "revoke_role_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "revoke_role_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        match plan.principal {
-            PrincipalIdentity::User(user) => {
-                UserApiProvider::instance()
-                    .revoke_role_from_user(&tenant, user, plan.role)
-                    .await?;
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            match plan.principal {
+                PrincipalIdentity::User(user) => {
+                    UserApiProvider::instance()
+                        .revoke_role_from_user(&tenant, user, plan.role)
+                        .await?;
+                }
+                PrincipalIdentity::Role(role) => {
+                    UserApiProvider::instance()
+                        .revoke_role_from_role(&tenant, &role, &plan.role)
+                        .await?;
+                }
             }
-            PrincipalIdentity::Role(role) => {
-                UserApiProvider::instance()
-                    .revoke_role_from_role(&tenant, &role, &plan.role)
-                    .await?;
-            }
-        }
 
-        RoleCacheManager::instance().force_reload(&tenant).await?;
-        Ok(PipelineBuildResult::create())
+            RoleCacheManager::instance().force_reload(&tenant).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

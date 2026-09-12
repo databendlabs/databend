@@ -44,10 +44,12 @@ impl Interpreter for UndropDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        catalog.undrop_database(self.plan.clone().into()).await?;
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            catalog.undrop_database(self.plan.clone().into()).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

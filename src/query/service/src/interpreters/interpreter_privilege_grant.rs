@@ -213,62 +213,64 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_privilege_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_privilege_execute");
 
-        let plan = self.plan.clone();
+            let plan = self.plan.clone();
 
-        validate_grant_privileges(&plan.principal, &plan.on, plan.priv_types)?;
-        validate_grant_object_exists(&self.ctx, &plan.on).await?;
+            validate_grant_privileges(&plan.principal, &plan.on, plan.priv_types)?;
+            validate_grant_object_exists(&self.ctx, &plan.on).await?;
 
-        // TODO: check user existence
-        // TODO: check privilege on granting on the grant object
+            // TODO: check user existence
+            // TODO: check privilege on granting on the grant object
 
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        match plan.principal {
-            PrincipalIdentity::User(user) => {
-                user_mgr
-                    .grant_privileges_to_user(&tenant, user, plan.on, plan.priv_types)
-                    .await?;
-            }
-            PrincipalIdentity::Role(role) => {
-                if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
-                    let owner_object = self
-                        .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
-                        .await?;
-                    if self.ctx.get_current_role().is_some() {
-                        if let OwnershipObject::Warehouse { .. } = owner_object {
-                            let warehouse_mgr =
-                                GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
-
-                            // Only support grant ownership when support_forward_warehouse_request is true
-                            if !warehouse_mgr.support_forward_warehouse_request() {
-                                return Err(ErrorCode::IllegalGrant(
-                                    "Illegal GRANT/REVOKE command; only supported for warehouses managed by the system",
-                                ));
-                            }
-                        }
-                        self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
-                            .await?;
-                    } else {
-                        return Err(ErrorCode::UnknownRole(
-                            "No current role, cannot grant ownership",
-                        ));
-                    }
-                } else {
+            match plan.principal {
+                PrincipalIdentity::User(user) => {
                     user_mgr
-                        .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
+                        .grant_privileges_to_user(&tenant, user, plan.on, plan.priv_types)
                         .await?;
                 }
-                // grant_ownership and grant_privileges_to_role will modify the kv in meta.
-                // So we need invalidate the role cache.
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
-        }
+                PrincipalIdentity::Role(role) => {
+                    if plan.priv_types.has_privilege(Ownership) && plan.priv_types.len() == 1 {
+                        let owner_object = self
+                            .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
+                            .await?;
+                        if self.ctx.get_current_role().is_some() {
+                            if let OwnershipObject::Warehouse { .. } = owner_object {
+                                let warehouse_mgr =
+                                    GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
 
-        Ok(PipelineBuildResult::create())
+                                // Only support grant ownership when support_forward_warehouse_request is true
+                                if !warehouse_mgr.support_forward_warehouse_request() {
+                                    return Err(ErrorCode::IllegalGrant(
+                                        "Illegal GRANT/REVOKE command; only supported for warehouses managed by the system",
+                                    ));
+                                }
+                            }
+                            self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
+                                .await?;
+                        } else {
+                            return Err(ErrorCode::UnknownRole(
+                                "No current role, cannot grant ownership",
+                            ));
+                        }
+                    } else {
+                        user_mgr
+                            .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
+                            .await?;
+                    }
+                    // grant_ownership and grant_privileges_to_role will modify the kv in meta.
+                    // So we need invalidate the role cache.
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
+            }
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

@@ -76,183 +76,185 @@ impl Interpreter for AddTableColumnInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let tbl = catalog
-            .get_table_with_branch(
-                &self.ctx.get_tenant(),
-                db_name,
-                tbl_name,
-                self.plan.branch.as_deref(),
-            )
-            .await?;
-        // check mutability
-        tbl.check_mutable()?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let tbl = catalog
+                .get_table_with_branch(
+                    &self.ctx.get_tenant(),
+                    db_name,
+                    tbl_name,
+                    self.plan.branch.as_deref(),
+                )
+                .await?;
+            // check mutability
+            tbl.check_mutable()?;
 
-        let mut table_info = tbl.get_table_info().clone();
-        let engine = table_info.engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support alter",
-                &self.plan.database, &self.plan.table, engine
-            )));
-        }
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                &self.plan.database, &self.plan.table
-            )));
-        }
-        let field = self.plan.field.clone();
-        let index = match &self.plan.option {
-            AddColumnOption::First => 0,
-            AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
-            AddColumnOption::End => table_info.meta.schema.num_fields(),
-        };
-        if self.plan.if_not_exists {
-            if table_info
-                .meta
-                .schema
-                .index_of(self.plan.field.name())
-                .is_ok()
-            {
-                return Ok(PipelineBuildResult::create());
+            let mut table_info = tbl.get_table_info().clone();
+            let engine = table_info.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
+                )));
             }
-        }
-        if field.computed_expr().is_some() {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
-        }
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
+            let field = self.plan.field.clone();
+            let index = match &self.plan.option {
+                AddColumnOption::First => 0,
+                AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
+                AddColumnOption::End => table_info.meta.schema.num_fields(),
+            };
+            if self.plan.if_not_exists {
+                if table_info
+                    .meta
+                    .schema
+                    .index_of(self.plan.field.name())
+                    .is_ok()
+                {
+                    return Ok(PipelineBuildResult::create());
+                }
+            }
+            if field.computed_expr().is_some() {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+            }
 
-        let num_rows = table_info.meta.statistics.number_of_rows;
-        if self.plan.is_nextval && num_rows > 0 {
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot add column '{}' with `nextval` as default value to non-empty table '{}'",
-                &self.plan.field.name, &self.plan.table
-            )));
-        }
-        if self.plan.is_autoincrement && num_rows > 0 {
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot add column '{}' with `AUTOINCREMENT` to non-empty table '{}'",
-                &self.plan.field.name, &self.plan.table
-            )));
-        }
-        if field.default_expr().is_some() {
-            let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
-        }
-        is_valid_column(field.name())?;
-        table_info
-            .meta
-            .add_column(&field, &self.plan.comment, index)?;
-
-        // if the new column is a stored computed field and table is non-empty,
-        // need rebuild the table to generate stored computed column.
-        if num_rows > 0 && matches!(field.computed_expr, Some(ComputedExpr::Stored(_))) {
-            let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
-            if fuse_table.change_tracking_enabled() {
+            let num_rows = table_info.meta.statistics.number_of_rows;
+            if self.plan.is_nextval && num_rows > 0 {
                 return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot add stored computed column to table '{}' with change tracking enabled",
+                    "Cannot add column '{}' with `nextval` as default value to non-empty table '{}'",
+                    &self.plan.field.name, &self.plan.table
+                )));
+            }
+            if self.plan.is_autoincrement && num_rows > 0 {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot add column '{}' with `AUTOINCREMENT` to non-empty table '{}'",
+                    &self.plan.field.name, &self.plan.table
+                )));
+            }
+            if field.default_expr().is_some() {
+                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
+            }
+            is_valid_column(field.name())?;
+            table_info
+                .meta
+                .add_column(&field, &self.plan.comment, index)?;
+
+            // if the new column is a stored computed field and table is non-empty,
+            // need rebuild the table to generate stored computed column.
+            if num_rows > 0 && matches!(field.computed_expr, Some(ComputedExpr::Stored(_))) {
+                let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+                if fuse_table.change_tracking_enabled() {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot add stored computed column to table '{}' with change tracking enabled",
+                        table_info.desc
+                    )));
+                }
+                let base_snapshot = fuse_table.read_table_snapshot().await?;
+                let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
+                let table_meta_timestamps = self
+                    .ctx
+                    .get_table_meta_timestamps(tbl.as_ref(), base_snapshot)?;
+
+                // computed columns will generated from other columns.
+                let new_schema = table_info.meta.schema.remove_computed_fields();
+                let query_fields = new_schema
+                    .fields()
+                    .iter()
+                    .map(|field| format!("`{}`", field.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let table_ref = if let Some(branch) = &self.plan.branch {
+                    format!(
+                        "`{}`.`{}`/`{}`",
+                        self.plan.database, self.plan.table, branch
+                    )
+                } else {
+                    format!("`{}`.`{}`", self.plan.database, self.plan.table)
+                };
+
+                let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
+                return build_select_insert_plan(
+                    self.ctx.clone(),
+                    sql,
+                    table_info.clone(),
+                    new_schema.into(),
+                    prev_snapshot_id,
+                    table_meta_timestamps,
+                )
+                .await;
+            }
+
+            let need_update = num_rows > 0 && !self.plan.is_deterministic;
+            if self.plan.branch.is_some() && need_update {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot add non-deterministic default column to branch table '{}', UPDATE is not supported on branch tables yet",
                     table_info.desc
                 )));
             }
-            let base_snapshot = fuse_table.read_table_snapshot().await?;
-            let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
-            let table_meta_timestamps = self
-                .ctx
-                .get_table_meta_timestamps(tbl.as_ref(), base_snapshot)?;
-
-            // computed columns will generated from other columns.
-            let new_schema = table_info.meta.schema.remove_computed_fields();
-            let query_fields = new_schema
-                .fields()
-                .iter()
-                .map(|field| format!("`{}`", field.name))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            let table_ref = if let Some(branch) = &self.plan.branch {
-                format!(
-                    "`{}`.`{}`/`{}`",
-                    self.plan.database, self.plan.table, branch
-                )
-            } else {
-                format!("`{}`.`{}`", self.plan.database, self.plan.table)
-            };
-
-            let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
-            return build_select_insert_plan(
-                self.ctx.clone(),
-                sql,
-                table_info.clone(),
-                new_schema.into(),
-                prev_snapshot_id,
-                table_meta_timestamps,
-            )
-            .await;
-        }
-
-        let need_update = num_rows > 0 && !self.plan.is_deterministic;
-        if self.plan.branch.is_some() && need_update {
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot add non-deterministic default column to branch table '{}', UPDATE is not supported on branch tables yet",
-                table_info.desc
-            )));
-        }
-        if need_update && tbl.change_tracking_enabled() {
-            // Rebuild table while change tracking is active may break the consistency
-            // of tracked changes, leading to incorrect change records.
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot add non-deterministic default column to table '{}' with change tracking enabled",
-                table_info.desc
-            )));
-        }
-
-        commit_table_meta(
-            &self.ctx,
-            tbl.as_ref(),
-            table_info.meta.clone(),
-            catalog,
-            |snapshot_opt, _| {
-                if let Some(snapshot) = snapshot_opt {
-                    snapshot.schema = table_info.meta.schema.as_ref().clone();
-                }
-            },
-        )
-        .await?;
-
-        // If the column is not deterministic and table is non-empty,
-        // update to refresh the value with default expr.
-        if need_update {
-            self.ctx
-                .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
-            let query = format!(
-                "UPDATE `{}`.`{}` SET `{}` = {};",
-                db_name,
-                tbl_name,
-                field.name(),
-                field.default_expr().unwrap()
-            );
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = planner.plan_sql(&query).await?;
-            if let Plan::DataMutation { s_expr, schema, .. } = plan {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
-                let interpreter = MutationInterpreter::try_create(
-                    self.ctx.clone(),
-                    *s_expr,
-                    schema,
-                    mutation.metadata.clone(),
-                )?;
-                let _ = interpreter
-                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
-                    .await?;
-                return Ok(PipelineBuildResult::create());
+            if need_update && tbl.change_tracking_enabled() {
+                // Rebuild table while change tracking is active may break the consistency
+                // of tracked changes, leading to incorrect change records.
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot add non-deterministic default column to table '{}' with change tracking enabled",
+                    table_info.desc
+                )));
             }
-        }
-        Ok(PipelineBuildResult::create())
+
+            commit_table_meta(
+                &self.ctx,
+                tbl.as_ref(),
+                table_info.meta.clone(),
+                catalog,
+                |snapshot_opt, _| {
+                    if let Some(snapshot) = snapshot_opt {
+                        snapshot.schema = table_info.meta.schema.as_ref().clone();
+                    }
+                },
+            )
+            .await?;
+
+            // If the column is not deterministic and table is non-empty,
+            // update to refresh the value with default expr.
+            if need_update {
+                self.ctx
+                    .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+                let query = format!(
+                    "UPDATE `{}`.`{}` SET `{}` = {};",
+                    db_name,
+                    tbl_name,
+                    field.name(),
+                    field.default_expr().unwrap()
+                );
+                let mut planner = Planner::new(self.ctx.clone());
+                let (plan, _) = planner.plan_sql(&query).await?;
+                if let Plan::DataMutation { s_expr, schema, .. } = plan {
+                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                    let interpreter = MutationInterpreter::try_create(
+                        self.ctx.clone(),
+                        *s_expr,
+                        schema,
+                        mutation.metadata.clone(),
+                    )?;
+                    let _ = interpreter
+                        .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+                        .await?;
+                    return Ok(PipelineBuildResult::create());
+                }
+            }
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

@@ -62,24 +62,26 @@ impl Interpreter for DropNotificationInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let config = GlobalConfig::instance();
-        if config
-            .query
-            .common
-            .cloud_control_grpc_server_address
-            .is_none()
-        {
-            return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot drop notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        }
-        let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_notification_client();
-        let req = self.build_request();
-        let config = get_notification_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
-        task_client.drop_notification(req).await?;
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let config = GlobalConfig::instance();
+            if config
+                .query
+                .common
+                .cloud_control_grpc_server_address
+                .is_none()
+            {
+                return Err(ErrorCode::CloudControlNotEnabled(
+                    "cannot drop notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                ));
+            }
+            let cloud_api = CloudControlApiProvider::instance();
+            let task_client = cloud_api.get_notification_client();
+            let req = self.build_request();
+            let config = get_notification_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+            let req = make_request(req, config);
+            task_client.drop_notification(req).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

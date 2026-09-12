@@ -65,39 +65,41 @@ impl Interpreter for CreateWorkloadGroupInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let mut workload_quotas = HashMap::with_capacity(self.plan.quotas.len());
+            let mut workload_quotas = HashMap::with_capacity(self.plan.quotas.len());
 
-        for (key, value) in &self.plan.quotas {
-            workload_quotas.insert(key.clone(), to_quota_value(value));
-        }
-
-        let workload_group = WorkloadGroup {
-            id: String::new(),
-            name: self.plan.name.clone(),
-            quotas: workload_quotas,
-        };
-
-        let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
-        match workload_manager.create(workload_group).await {
-            Ok(_) => {
-                let user_info = self.ctx.get_current_user()?;
-                log::info!(
-                    target: "databend::log::audit",
-                    "{}",
-                    serde_json::to_string(&AuditElement::create(&user_info, "create_workload", &self.plan))?
-                );
-                Ok(PipelineBuildResult::create())
+            for (key, value) in &self.plan.quotas {
+                workload_quotas.insert(key.clone(), to_quota_value(value));
             }
-            Err(cause) => match self.plan.if_not_exists
-                && cause.code() == ErrorCode::ALREADY_EXISTS_WORKLOAD
-            {
-                true => Ok(PipelineBuildResult::create()),
-                false => Err(cause),
-            },
-        }
+
+            let workload_group = WorkloadGroup {
+                id: String::new(),
+                name: self.plan.name.clone(),
+                quotas: workload_quotas,
+            };
+
+            let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
+            match workload_manager.create(workload_group).await {
+                Ok(_) => {
+                    let user_info = self.ctx.get_current_user()?;
+                    log::info!(
+                        target: "databend::log::audit",
+                        "{}",
+                        serde_json::to_string(&AuditElement::create(&user_info, "create_workload", &self.plan))?
+                    );
+                    Ok(PipelineBuildResult::create())
+                }
+                Err(cause) => match self.plan.if_not_exists
+                    && cause.code() == ErrorCode::ALREADY_EXISTS_WORKLOAD
+                {
+                    true => Ok(PipelineBuildResult::create()),
+                    false => Err(cause),
+                },
+            }
+        })
     }
 }

@@ -55,42 +55,44 @@ impl Interpreter for CreateConnectionInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_connection_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_connection_execute");
 
-        let plan = self.plan.clone();
-        let user_mgr = UserApiProvider::instance();
-        let conn = UserDefinedConnection::new(
-            &plan.name,
-            plan.storage_type.clone(),
-            plan.storage_params.clone(),
-        );
+            let plan = self.plan.clone();
+            let user_mgr = UserApiProvider::instance();
+            let conn = UserDefinedConnection::new(
+                &plan.name,
+                plan.storage_type.clone(),
+                plan.storage_params.clone(),
+            );
 
-        let tenant = self.ctx.get_tenant();
-        let _create_file_format = user_mgr
-            .add_connection(&tenant, conn, &plan.create_option)
-            .await?;
+            let tenant = self.ctx.get_tenant();
+            user_mgr
+                .add_connection(&tenant, conn, &plan.create_option)
+                .await?;
 
-        // Grant ownership as the current role
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Connection {
-                            name: self.plan.name.clone(),
-                        },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
+            // Grant ownership as the current role
+            if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+            {
+                if let Some(current_role) = self.ctx.get_current_role() {
+                    let role_api = UserApiProvider::instance().role_api(&tenant);
+                    role_api
+                        .grant_ownership(
+                            &OwnershipObject::Connection {
+                                name: self.plan.name.clone(),
+                            },
+                            &current_role.name,
+                        )
+                        .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
             }
-        }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

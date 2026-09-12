@@ -62,9 +62,11 @@ impl Interpreter for CommitInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        execute_commit_statement(self.ctx.clone()).await?;
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            execute_commit_statement(self.ctx.clone()).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

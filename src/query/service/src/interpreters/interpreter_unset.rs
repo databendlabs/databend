@@ -155,18 +155,20 @@ impl Interpreter for UnSetInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        match self.unset.unset_type {
-            SetType::SettingsSession | SetType::SettingsGlobal => {
-                self.execute_unset_settings().await?
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            match self.unset.unset_type {
+                SetType::SettingsSession | SetType::SettingsGlobal => {
+                    self.execute_unset_settings().await?
+                }
+                SetType::Variable => self.execute_unset_variables().await?,
+                SetType::SettingsQuery => {
+                    return Err(ErrorCode::BadArguments(
+                        "Query level setting can not be unset",
+                    ));
+                }
             }
-            SetType::Variable => self.execute_unset_variables().await?,
-            SetType::SettingsQuery => {
-                return Err(ErrorCode::BadArguments(
-                    "Query level setting can not be unset",
-                ));
-            }
-        }
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

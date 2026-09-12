@@ -47,24 +47,26 @@ impl Interpreter for DropDictionaryInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let tenant = self.ctx.get_tenant();
-        let db_id = self.plan.database_id;
-        let dict_name = self.plan.dictionary.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let dict_ident = DictionaryNameIdent::new(
-            tenant,
-            DictionaryIdentity::new(db_id, dict_name.to_string()),
-        );
-        let reply = catalog.drop_dictionary(dict_ident.clone()).await?;
-        if self.plan.if_exists || reply.is_some() {
-            return Ok(PipelineBuildResult::create());
-        } else {
-            return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown dictionary {}",
-                dict_name,
-            )));
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let tenant = self.ctx.get_tenant();
+            let db_id = self.plan.database_id;
+            let dict_name = self.plan.dictionary.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let dict_ident = DictionaryNameIdent::new(
+                tenant,
+                DictionaryIdentity::new(db_id, dict_name.to_string()),
+            );
+            let reply = catalog.drop_dictionary(dict_ident.clone()).await?;
+            if self.plan.if_exists || reply.is_some() {
+                return Ok(PipelineBuildResult::create());
+            } else {
+                return Err(ErrorCode::UnknownDictionary(format!(
+                    "Unknown dictionary {}",
+                    dict_name,
+                )));
+            }
+        })
     }
 }

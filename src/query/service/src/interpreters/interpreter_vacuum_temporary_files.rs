@@ -51,29 +51,31 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
-        let handler = get_vacuum_handler();
+            let handler = get_vacuum_handler();
 
-        let temporary_files_prefix = self.ctx.query_tenant_spill_prefix();
-        let removed_files = handler
-            .do_vacuum_temporary_files(
-                self.ctx.clone().get_abort_checker(),
-                temporary_files_prefix,
-                &VacuumTempOptions::VacuumCommand(self.plan.retain),
-                self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
-            )
-            .await?;
+            let temporary_files_prefix = self.ctx.query_tenant_spill_prefix();
+            let removed_files = handler
+                .do_vacuum_temporary_files(
+                    self.ctx.clone().get_abort_checker(),
+                    temporary_files_prefix,
+                    &VacuumTempOptions::VacuumCommand(self.plan.retain),
+                    self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
+                )
+                .await?;
 
-        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let session_limit = self
-            .plan
-            .limit
-            .map(|limit| limit.saturating_sub(removed_files as u64));
-        vacuum_inactive_temp_tables(&table_ctx, session_limit).await?;
+            let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+            let session_limit = self
+                .plan
+                .limit
+                .map(|limit| limit.saturating_sub(removed_files as u64));
+            vacuum_inactive_temp_tables(&table_ctx, session_limit).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

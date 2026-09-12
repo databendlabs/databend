@@ -49,11 +49,13 @@ impl Interpreter for AlterTaskInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
         TaskInterpreterManager::build(self.ctx.as_ref())?
             .alter_task(&self.ctx, &self.plan)
             .await?;
 
         Ok(PipelineBuildResult::create())
+        })
     }
 }

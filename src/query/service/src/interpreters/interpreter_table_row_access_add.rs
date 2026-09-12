@@ -57,108 +57,110 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), RowAccessPolicy)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), RowAccessPolicy)?;
 
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+            let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
-        table.check_mutable()?;
+            table.check_mutable()?;
 
-        let table_info = table.get_table_info();
+            let table_info = table.get_table_info();
 
-        if table.is_temp() {
-            return Err(ErrorCode::StorageOther(format!(
-                "Table {} is temporary table, setting row access policy not allowed",
-                table.name()
-            )));
-        }
-        let engine = table.engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support alter",
-                db_name, tbl_name, engine
-            )));
-        }
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                db_name, tbl_name
-            )));
-        }
-
-        let policy_name = self.plan.policy.to_string();
-
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
-        let (policy_id, policy) = handler
-            .get_row_access_policy(meta_api, &self.ctx.get_tenant(), policy_name.clone())
-            .await?;
-
-        // check if column type match to the input type
-        let mut policy_data_types = Vec::new();
-        for (_, type_str) in &policy.args {
-            let table_data_type = resolve_type_name_by_str(type_str, false)?;
-            policy_data_types.push(table_data_type.remove_nullable());
-        }
-
-        let mut columns_ids = vec![];
-        let schema = table.schema();
-        let table_info = table.get_table_info();
-        let columns = self.plan.columns.clone();
-
-        if columns.len() != policy_data_types.len() {
-            return Err(ErrorCode::UnmatchColumnDataType(format!(
-                "Number of columns ({}) does not match the number of row access policy arguments ({})",
-                columns.len(),
-                policy_data_types.len()
-            )));
-        }
-
-        for (column, policy_data_type) in columns.iter().zip(policy_data_types.into_iter()) {
-            if let Some((_, data_field)) = schema.column_with_name(column) {
-                if table
-                    .get_table_info()
-                    .meta
-                    .is_column_reference_policy(&data_field.column_id)
-                {
-                    return Err(ErrorCode::AlterTableError(format!(
-                        "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
-                        data_field.name
-                    )));
-                }
-                let column_type = data_field.data_type();
-                if policy_data_type != column_type.remove_nullable() {
-                    return Err(ErrorCode::UnmatchColumnDataType(format!(
-                        "Column '{}' data type {} does not match to the row access policy {}",
-                        column, column_type, policy_name,
-                    )));
-                } else {
-                    columns_ids.push(data_field.column_id);
-                }
-            } else {
-                return Err(ErrorCode::UnknownColumn(format!(
-                    "Cannot find column {}",
-                    column
+            if table.is_temp() {
+                return Err(ErrorCode::StorageOther(format!(
+                    "Table {} is temporary table, setting row access policy not allowed",
+                    table.name()
                 )));
             }
-        }
+            let engine = table.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support alter",
+                    db_name, tbl_name, engine
+                )));
+            }
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    db_name, tbl_name
+                )));
+            }
 
-        let table_id = table_info.ident.table_id;
+            let policy_name = self.plan.policy.to_string();
 
-        let req = SetTableRowAccessPolicyReq {
-            tenant: self.ctx.get_tenant(),
-            table_id,
-            action: SetSecurityPolicyAction::Set(*policy_id.data, columns_ids),
-        };
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            let handler = get_row_access_policy_handler();
+            let (policy_id, policy) = handler
+                .get_row_access_policy(meta_api, &self.ctx.get_tenant(), policy_name.clone())
+                .await?;
 
-        let _resp = catalog.set_table_row_access_policy(req).await?;
+            // check if column type match to the input type
+            let mut policy_data_types = Vec::new();
+            for (_, type_str) in &policy.args {
+                let table_data_type = resolve_type_name_by_str(type_str, false)?;
+                policy_data_types.push(table_data_type.remove_nullable());
+            }
 
-        Ok(PipelineBuildResult::create())
+            let mut columns_ids = vec![];
+            let schema = table.schema();
+            let table_info = table.get_table_info();
+            let columns = self.plan.columns.clone();
+
+            if columns.len() != policy_data_types.len() {
+                return Err(ErrorCode::UnmatchColumnDataType(format!(
+                    "Number of columns ({}) does not match the number of row access policy arguments ({})",
+                    columns.len(),
+                    policy_data_types.len()
+                )));
+            }
+
+            for (column, policy_data_type) in columns.iter().zip(policy_data_types.into_iter()) {
+                if let Some((_, data_field)) = schema.column_with_name(column) {
+                    if table
+                        .get_table_info()
+                        .meta
+                        .is_column_reference_policy(&data_field.column_id)
+                    {
+                        return Err(ErrorCode::AlterTableError(format!(
+                            "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
+                            data_field.name
+                        )));
+                    }
+                    let column_type = data_field.data_type();
+                    if policy_data_type != column_type.remove_nullable() {
+                        return Err(ErrorCode::UnmatchColumnDataType(format!(
+                            "Column '{}' data type {} does not match to the row access policy {}",
+                            column, column_type, policy_name,
+                        )));
+                    } else {
+                        columns_ids.push(data_field.column_id);
+                    }
+                } else {
+                    return Err(ErrorCode::UnknownColumn(format!(
+                        "Cannot find column {}",
+                        column
+                    )));
+                }
+            }
+
+            let table_id = table_info.ident.table_id;
+
+            let req = SetTableRowAccessPolicyReq {
+                tenant: self.ctx.get_tenant(),
+                table_id,
+                action: SetSecurityPolicyAction::Set(*policy_id.data, columns_ids),
+            };
+
+            let _resp = catalog.set_table_row_access_policy(req).await?;
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

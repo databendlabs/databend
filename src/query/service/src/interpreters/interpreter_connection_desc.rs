@@ -50,24 +50,26 @@ impl Interpreter for DescConnectionInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        let mut connection = user_mgr
-            .get_connection(&tenant, self.plan.name.as_str())
-            .await?;
+            let mut connection = user_mgr
+                .get_connection(&tenant, self.plan.name.as_str())
+                .await?;
 
-        let names = vec![connection.name.clone()];
-        let types = vec![connection.storage_type.clone()];
-        let conn = Connection::new(connection.storage_params).mask();
-        connection.storage_params = conn.conns;
-        let params = vec![connection.storage_params_display().clone()];
+            let names = vec![connection.name.clone()];
+            let types = vec![connection.storage_type.clone()];
+            let conn = Connection::new(connection.storage_params).mask();
+            connection.storage_params = conn.conns;
+            let params = vec![connection.storage_params_display().clone()];
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(types),
-            StringType::from_data(params),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(types),
+                StringType::from_data(params),
+            ])])
+        })
     }
 }

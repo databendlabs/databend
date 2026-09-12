@@ -47,39 +47,41 @@ impl Interpreter for DropTableClusterKeyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let plan = &self.plan;
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-        let table = catalog
-            .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+            let table = catalog
+                .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+                .await?;
+            check_maintenance_target(table.as_ref(), &plan.target)?;
+
+            if table.cluster_key_meta().is_none() {
+                return Ok(PipelineBuildResult::create());
+            }
+
+            commit_table_meta(
+                self.ctx.as_ref(),
+                table.as_ref(),
+                table.get_table_info().meta.clone(),
+                catalog,
+                |snapshot_opt, meta| {
+                    if let Some(snapshot) = snapshot_opt {
+                        snapshot.cluster_key_meta = None;
+                        snapshot.cluster_type = None;
+                        snapshot.summary.cluster_stats = None;
+                    }
+                    if plan.branch.is_none() {
+                        meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+                        meta.cluster_key = None;
+                        meta.cluster_key_v2 = None;
+                    }
+                },
+            )
             .await?;
-        check_maintenance_target(table.as_ref(), &plan.target)?;
-
-        if table.cluster_key_meta().is_none() {
-            return Ok(PipelineBuildResult::create());
-        }
-
-        commit_table_meta(
-            self.ctx.as_ref(),
-            table.as_ref(),
-            table.get_table_info().meta.clone(),
-            catalog,
-            |snapshot_opt, meta| {
-                if let Some(snapshot) = snapshot_opt {
-                    snapshot.cluster_key_meta = None;
-                    snapshot.cluster_type = None;
-                    snapshot.summary.cluster_stats = None;
-                }
-                if plan.branch.is_none() {
-                    meta.options.remove(OPT_KEY_CLUSTER_TYPE);
-                    meta.cluster_key = None;
-                    meta.cluster_key_v2 = None;
-                }
-            },
-        )
-        .await?;
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

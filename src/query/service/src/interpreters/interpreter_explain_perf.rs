@@ -381,8 +381,10 @@ impl Interpreter for ExplainPerfInterpreter {
         false
     }
 
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let data_blocks = self.perf().await?;
-        PipelineBuildResult::from_blocks(data_blocks)
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let data_blocks = self.perf().await?;
+            PipelineBuildResult::from_blocks(data_blocks)
+        })
     }
 }

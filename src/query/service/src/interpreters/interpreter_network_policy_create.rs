@@ -51,25 +51,27 @@ impl Interpreter for CreateNetworkPolicyInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_network_policy_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_network_policy_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        let network_policy = NetworkPolicy {
-            name: plan.name,
-            allowed_ip_list: plan.allowed_ip_list,
-            blocked_ip_list: plan.blocked_ip_list,
-            comment: plan.comment,
-            create_on: Utc::now(),
-            update_on: None,
-        };
-        user_mgr
-            .add_network_policy(&tenant, network_policy, &plan.create_option)
-            .await?;
+            let network_policy = NetworkPolicy {
+                name: plan.name,
+                allowed_ip_list: plan.allowed_ip_list,
+                blocked_ip_list: plan.blocked_ip_list,
+                comment: plan.comment,
+                create_on: Utc::now(),
+                update_on: None,
+            };
+            user_mgr
+                .add_network_policy(&tenant, network_policy, &plan.create_option)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

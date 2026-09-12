@@ -49,17 +49,19 @@ impl Interpreter for DropPasswordPolicyInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_password_policy_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_password_policy_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
 
-        let user_mgr = UserApiProvider::instance();
-        user_mgr
-            .drop_password_policy(&tenant, plan.name.as_str(), plan.if_exists)
-            .await?;
+            let user_mgr = UserApiProvider::instance();
+            user_mgr
+                .drop_password_policy(&tenant, plan.name.as_str(), plan.if_exists)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -47,32 +47,34 @@ impl Interpreter for CreateTableIndexInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let index_name = self.plan.index_name.clone();
-        let column_ids = self.plan.column_ids.clone();
-        let sync_creation = self.plan.sync_creation;
-        let table_id = self.plan.table_id;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-        let index_type = match self.plan.index_type {
-            ast::TableIndexType::Inverted => TableIndexType::Inverted,
-            ast::TableIndexType::Ngram => TableIndexType::Ngram,
-            ast::TableIndexType::Vector => TableIndexType::Vector,
-            ast::TableIndexType::Spatial => TableIndexType::Spatial,
-        };
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let index_name = self.plan.index_name.clone();
+            let column_ids = self.plan.column_ids.clone();
+            let sync_creation = self.plan.sync_creation;
+            let table_id = self.plan.table_id;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let tenant = self.ctx.get_tenant();
+            let index_type = match self.plan.index_type {
+                ast::TableIndexType::Inverted => TableIndexType::Inverted,
+                ast::TableIndexType::Ngram => TableIndexType::Ngram,
+                ast::TableIndexType::Vector => TableIndexType::Vector,
+                ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            };
 
-        let create_index_req = CreateTableIndexReq {
-            create_option: self.plan.create_option,
-            index_type,
-            tenant,
-            table_id,
-            name: index_name,
-            column_ids,
-            sync_creation,
-            options: self.plan.index_options.clone(),
-        };
+            let create_index_req = CreateTableIndexReq {
+                create_option: self.plan.create_option,
+                index_type,
+                tenant,
+                table_id,
+                name: index_name,
+                column_ids,
+                sync_creation,
+                options: self.plan.index_options.clone(),
+            };
 
-        let _ = catalog.create_table_index(create_index_req).await?;
-        Ok(PipelineBuildResult::create())
+            catalog.create_table_index(create_index_req).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

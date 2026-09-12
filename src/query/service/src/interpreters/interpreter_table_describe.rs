@@ -54,42 +54,44 @@ impl Interpreter for DescribeTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.plan.catalog.as_str();
-        let database = self.plan.database.as_str();
-        let table = self.plan.table.as_str();
-        let table = self.ctx.get_table(catalog, database, table).await?;
-        let tbl_info = table.get_table_info();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.plan.catalog.as_str();
+            let database = self.plan.database.as_str();
+            let table = self.plan.table.as_str();
+            let table = self.ctx.get_table(catalog, database, table).await?;
+            let tbl_info = table.get_table_info();
 
-        if is_materialized_view_engine(tbl_info.engine()) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "DESCRIBE is not supported for MATERIALIZED VIEW {}.{}",
-                &self.plan.database, &self.plan.table
-            )));
-        }
-
-        let schema = if tbl_info.engine() == VIEW_ENGINE {
-            if let Some(query) = tbl_info.options().get(QUERY) {
-                let mut planner = Planner::new(self.ctx.clone());
-                let (plan, _) = planner.plan_sql(query).await?;
-                infer_table_schema(&plan.schema())
-            } else {
-                return Err(ErrorCode::Internal(
-                    "Logical error, View Table must have a SelectQuery inside.",
-                ));
+            if is_materialized_view_engine(tbl_info.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "DESCRIBE is not supported for MATERIALIZED VIEW {}.{}",
+                    &self.plan.database, &self.plan.table
+                )));
             }
-        } else {
-            Ok(table.schema())
-        }?;
 
-        let (names, types, nulls, default_exprs, extras) = generate_desc_schema(schema);
+            let schema = if tbl_info.engine() == VIEW_ENGINE {
+                if let Some(query) = tbl_info.options().get(QUERY) {
+                    let mut planner = Planner::new(self.ctx.clone());
+                    let (plan, _) = planner.plan_sql(query).await?;
+                    infer_table_schema(&plan.schema())
+                } else {
+                    return Err(ErrorCode::Internal(
+                        "Logical error, View Table must have a SelectQuery inside.",
+                    ));
+                }
+            } else {
+                Ok(table.schema())
+            }?;
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(types),
-            StringType::from_data(nulls),
-            StringType::from_data(default_exprs),
-            StringType::from_data(extras),
-        ])])
+            let (names, types, nulls, default_exprs, extras) = generate_desc_schema(schema);
+
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(types),
+                StringType::from_data(nulls),
+                StringType::from_data(default_exprs),
+                StringType::from_data(extras),
+            ])])
+        })
     }
 }

@@ -54,46 +54,48 @@ impl Interpreter for ShowConnectionsInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "show_connections_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "show_connections_execute");
 
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.ctx.get_tenant();
-        let mut formats = user_mgr.get_connections(&tenant).await?;
+            let user_mgr = UserApiProvider::instance();
+            let tenant = self.ctx.get_tenant();
+            let mut formats = user_mgr.get_connections(&tenant).await?;
 
-        formats.sort_by(|a, b| a.name.cmp(&b.name));
+            formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            let visibility_checker = self
+            if self
                 .ctx
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
-        }
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+            {
+                let visibility_checker = self
+                    .ctx
+                    .get_visibility_checker(false, Object::Connection)
+                    .await?;
+                formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
+            }
 
-        // Merge three independent 'map().collect()' into one iteration.
-        let capacity = formats.len();
-        let mut names = Vec::with_capacity(capacity);
-        let mut types = Vec::with_capacity(capacity);
-        let mut options = Vec::with_capacity(capacity);
+            // Merge three independent 'map().collect()' into one iteration.
+            let capacity = formats.len();
+            let mut names = Vec::with_capacity(capacity);
+            let mut types = Vec::with_capacity(capacity);
+            let mut options = Vec::with_capacity(capacity);
 
-        for c in formats.iter_mut() {
-            names.push(c.name.clone());
-            types.push(c.storage_type.clone());
+            for c in formats.iter_mut() {
+                names.push(c.name.clone());
+                types.push(c.storage_type.clone());
 
-            let conn = Connection::new(c.storage_params.clone()).mask();
-            c.storage_params = conn.conns;
-            options.push(c.storage_params_display().clone());
-        }
+                let conn = Connection::new(c.storage_params.clone()).mask();
+                c.storage_params = conn.conns;
+                options.push(c.storage_params_display().clone());
+            }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(types),
-            StringType::from_data(options),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(types),
+                StringType::from_data(options),
+            ])])
+        })
     }
 }

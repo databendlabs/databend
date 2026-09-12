@@ -49,25 +49,27 @@ impl Interpreter for CreateMaterializedViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
 
-        let table_interpreter =
-            CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
+            let table_interpreter =
+                CreateTableInterpreter::try_create(self.ctx.clone(), self.plan.table_plan.clone())?;
 
-        let materialized_view = CreateMaterializedViewMeta {
-            definition: self.plan.mv_definition.clone(),
-            expected_source_generation: self.plan.expected_source_generation,
-        };
-        let catalog = self.ctx.get_catalog(&self.plan.table_plan.catalog).await?;
-        let mut req = table_interpreter.build_request(None)?;
-        req.source_table_option = self.plan.source_table_option.clone();
-        req.materialized_view = Some(materialized_view);
-        // MV tables deliberately have no independent ownership. Reuse table
-        // validation/request construction, then publish directly through the catalog.
-        catalog.create_table(req).await?;
+            let materialized_view = CreateMaterializedViewMeta {
+                definition: self.plan.mv_definition.clone(),
+                expected_source_generation: self.plan.expected_source_generation,
+            };
+            let catalog = self.ctx.get_catalog(&self.plan.table_plan.catalog).await?;
+            let mut req = table_interpreter.build_request(None)?;
+            req.source_table_option = self.plan.source_table_option.clone();
+            req.materialized_view = Some(materialized_view);
+            // MV tables deliberately have no independent ownership. Reuse table
+            // validation/request construction, then publish directly through the catalog.
+            catalog.create_table(req).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

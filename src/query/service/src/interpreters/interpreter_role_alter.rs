@@ -51,34 +51,36 @@ impl Interpreter for AlterRoleInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_role_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_role_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        // Update role based on action
-        match &plan.action {
-            databend_common_sql::plans::AlterRoleAction::Comment(comment) => {
-                match user_mgr
-                    .update_role_comment(&tenant, &plan.role_name, comment.clone())
-                    .await
-                {
-                    Ok(_) => {
-                        // Force reload role cache after altering
-                        RoleCacheManager::instance().force_reload(&tenant).await?;
-                        Ok(PipelineBuildResult::create())
-                    }
-                    Err(e) => {
-                        if e.code() == ErrorCode::UNKNOWN_ROLE && plan.if_exists {
+            // Update role based on action
+            match &plan.action {
+                databend_common_sql::plans::AlterRoleAction::Comment(comment) => {
+                    match user_mgr
+                        .update_role_comment(&tenant, &plan.role_name, comment.clone())
+                        .await
+                    {
+                        Ok(_) => {
+                            // Force reload role cache after altering
+                            RoleCacheManager::instance().force_reload(&tenant).await?;
                             Ok(PipelineBuildResult::create())
-                        } else {
-                            Err(e.add_message_back("(while updating role comment)"))
+                        }
+                        Err(e) => {
+                            if e.code() == ErrorCode::UNKNOWN_ROLE && plan.if_exists {
+                                Ok(PipelineBuildResult::create())
+                            } else {
+                                Err(e.add_message_back("(while updating role comment)"))
+                            }
                         }
                     }
                 }
             }
-        }
+        })
     }
 }

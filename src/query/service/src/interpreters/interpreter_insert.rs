@@ -400,114 +400,252 @@ impl Interpreter for InsertInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            self.ctx.attach_query_lineage(None);
-            return Ok(PipelineBuildResult::create());
-        }
-        let table = if let Some(table_info) = &self.plan.table_info {
-            // if table_info is provided, we should instantiated table with it.
-            self.ctx
-                .get_catalog(&self.plan.catalog)
-                .await?
-                .get_table_by_info(table_info)?
-        } else {
-            self.ctx
-                .get_table_with_branch(
-                    &self.plan.catalog,
-                    &self.plan.database,
-                    &self.plan.table,
-                    self.plan.branch.as_deref(),
-                )
-                .await?
-        };
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
+            let table = if let Some(table_info) = &self.plan.table_info {
+                // if table_info is provided, we should instantiated table with it.
+                self.ctx
+                    .get_catalog(&self.plan.catalog)
+                    .await?
+                    .get_table_by_info(table_info)?
+            } else {
+                self.ctx
+                    .get_table_with_branch(
+                        &self.plan.catalog,
+                        &self.plan.database,
+                        &self.plan.table,
+                        self.plan.branch.as_deref(),
+                    )
+                    .await?
+            };
 
-        self.ctx.update_query_lineage_target_id(
-            &self.plan.catalog,
-            &self.plan.database,
-            &self.plan.table,
-            table.get_table_info().ident.table_id,
-        );
+            self.ctx.update_query_lineage_target_id(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                table.get_table_info().ident.table_id,
+            );
 
-        let mut table_constraints = Vec::new();
-        // check mutability
-        if self.materialized_view_refresh_target != Some(table.get_id()) {
-            table.check_mutable()?;
-        }
+            let mut table_constraints = Vec::new();
+            // check mutability
+            if self.materialized_view_refresh_target != Some(table.get_id()) {
+                table.check_mutable()?;
+            }
 
-        let table_meta_timestamps = if is_fuse_backed_engine(table.engine()) {
-            let fuse_table =
-                databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
+            let table_meta_timestamps = if is_fuse_backed_engine(table.engine()) {
+                let fuse_table =
+                    databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
 
-            // bind constraints
-            let dest_schema = self.plan.dest_schema();
-            let mut expr_binder = ConstraintExprBinder::try_new(self.ctx.clone(), dest_schema)?;
-            for (constraint_name, constraint) in fuse_table.get_table_info().meta.constraints.iter()
-            {
-                match &constraint {
-                    Constraint::Check(expr) => {
-                        let constraint_expr = expr_binder.get_expr(constraint_name, expr)?;
-                        table_constraints.push((constraint_name.clone(), constraint_expr))
+                // bind constraints
+                let dest_schema = self.plan.dest_schema();
+                let mut expr_binder = ConstraintExprBinder::try_new(self.ctx.clone(), dest_schema)?;
+                for (constraint_name, constraint) in
+                    fuse_table.get_table_info().meta.constraints.iter()
+                {
+                    match &constraint {
+                        Constraint::Check(expr) => {
+                            let constraint_expr = expr_binder.get_expr(constraint_name, expr)?;
+                            table_constraints.push((constraint_name.clone(), constraint_expr))
+                        }
                     }
                 }
-            }
 
-            let snapshot = fuse_table.read_table_snapshot().await?;
-            self.ctx
-                .get_table_meta_timestamps(table.as_ref(), snapshot)?
-        } else {
-            // For non-fuse table, the table meta timestamps does not matter,
-            // just passes a placeholder value here
-            TableMetaTimestamps::new(None, Duration::hours(1))
-        };
+                let snapshot = fuse_table.read_table_snapshot().await?;
+                self.ctx
+                    .get_table_meta_timestamps(table.as_ref(), snapshot)?
+            } else {
+                // For non-fuse table, the table meta timestamps does not matter,
+                // just passes a placeholder value here
+                TableMetaTimestamps::new(None, Duration::hours(1))
+            };
 
-        let hook_lock_opt = if self.materialized_view_refresh_target.is_some() {
-            // Materialized-view refresh holds its lifecycle lock across this pipeline.
-            LockTableOption::NoLock
-        } else {
-            LockTableOption::LockNoRetry
-        };
-        let mut build_res = PipelineBuildResult::create();
+            let hook_lock_opt = if self.materialized_view_refresh_target.is_some() {
+                // Materialized-view refresh holds its lifecycle lock across this pipeline.
+                LockTableOption::NoLock
+            } else {
+                LockTableOption::LockNoRetry
+            };
+            let mut build_res = PipelineBuildResult::create();
 
-        match &self.plan.source {
-            InsertInputSource::Stage(_) => {
-                unreachable!()
-            }
-            InsertInputSource::Values(InsertValue::Values { rows }) => {
-                // Fixed-bucket PK Paimon tables need route + GlobalHash Exchange; unify with
-                // the SELECT insert physical plan so single-node uses local channel repartition.
-                if is_fixed_bucket_primary_key(&table)? {
-                    let insert_schema = self.plan.dest_schema();
-                    let (values_plan, bindings) =
-                        values_to_constant_scan(rows, insert_schema.clone())?;
-                    let select_schema = values_plan.output_schema()?;
-                    let mut insert_plan = build_insert_select_physical_plan(
-                        values_plan,
-                        select_schema,
-                        bindings,
-                        insert_schema,
-                        table.clone(),
-                        false,
-                        false,
-                        table_meta_timestamps,
-                        self.ctx.get_cluster().get_nodes().len() > 1,
+            match &self.plan.source {
+                InsertInputSource::Stage(_) => {
+                    unreachable!()
+                }
+                InsertInputSource::Values(InsertValue::Values { rows }) => {
+                    // Fixed-bucket PK Paimon tables need route + GlobalHash Exchange; unify with
+                    // the SELECT insert physical plan so single-node uses local channel repartition.
+                    if is_fixed_bucket_primary_key(&table)? {
+                        let insert_schema = self.plan.dest_schema();
+                        let (values_plan, bindings) =
+                            values_to_constant_scan(rows, insert_schema.clone())?;
+                        let select_schema = values_plan.output_schema()?;
+                        let mut insert_plan = build_insert_select_physical_plan(
+                            values_plan,
+                            select_schema,
+                            bindings,
+                            insert_schema,
+                            table.clone(),
+                            false,
+                            false,
+                            table_meta_timestamps,
+                            self.ctx.get_cluster().get_nodes().len() > 1,
+                        )?;
+                        insert_plan.adjust_plan_id(&mut 0);
+                        let mut build_res =
+                            build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan)
+                                .await?;
+
+                        table.commit_insertion(
+                            self.ctx.clone(),
+                            &mut build_res.main_pipeline,
+                            None,
+                            vec![],
+                            self.plan.overwrite,
+                            None,
+                            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                            table_meta_timestamps,
+                        )?;
+
+                        if self.plan.branch.is_none() {
+                            let hook_operator = HookOperator::create(
+                                self.ctx.clone(),
+                                self.plan.catalog.clone(),
+                                self.plan.database.clone(),
+                                self.plan.table.clone(),
+                                MutationKind::Insert,
+                                hook_lock_opt.clone(),
+                            );
+                            hook_operator.execute(&mut build_res.main_pipeline).await;
+                        }
+
+                        return Ok(build_res);
+                    }
+
+                    build_res.main_pipeline.add_source(
+                        |output| {
+                            let inner = ValueSource::new(rows.clone(), self.plan.dest_schema());
+                            AsyncSourcer::create(self.ctx.get_scan_progress(), output, inner)
+                        },
+                        1,
                     )?;
-                    insert_plan.adjust_plan_id(&mut 0);
-                    let mut build_res =
-                        build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan)
-                            .await?;
+                }
+                InsertInputSource::Values(InsertValue::RawValues { data, start }) => {
+                    build_res.main_pipeline.add_source(
+                        |output| {
+                            let name_resolution_ctx = NameResolutionContext {
+                                deny_column_reference: true,
+                                ..Default::default()
+                            };
+                            let inner = RawValueSource::new(
+                                data.to_string(),
+                                self.ctx.clone(),
+                                name_resolution_ctx,
+                                self.plan.dest_schema(),
+                                *start,
+                            );
+                            AsyncSourcer::create(self.ctx.get_scan_progress(), output, inner)
+                        },
+                        1,
+                    )?;
+                }
+                InsertInputSource::SelectPlan(plan) => {
+                    let table1 = table.clone();
+                    let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+                        Plan::Query {
+                            s_expr,
+                            metadata,
+                            bind_context,
+                            ..
+                        } => {
+                            let mut builder1 =
+                                PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                            (
+                                builder1.build(s_expr, bind_context.column_set()).await?,
+                                bind_context.columns.clone(),
+                                metadata,
+                            )
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let explain_plan = {
+                        let metadata = metadata.read();
+                        select_plan
+                            .format(&metadata, Default::default())?
+                            .format_pretty()?
+                    };
+
+                    info!("Insert select plan: \n{}", explain_plan);
+
+                    let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+
+                    let select_schema = plan.schema();
+                    let insert_schema = self.plan.dest_schema();
+                    let cast_needed = self.check_schema_cast(plan)?;
+                    let distributed = self.ctx.get_cluster().get_nodes().len() > 1;
+                    let (select_plan, input_prepared) = if distributed {
+                        if table1.support_distributed_insert()
+                            && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
+                        {
+                            let (input, input_prepared) = self.build_hash_distributed_input(
+                                exchange.input.clone(),
+                                &table1,
+                                &select_schema,
+                                &insert_schema,
+                                &select_column_bindings,
+                                metadata,
+                                cast_needed,
+                            )?;
+                            (exchange.derive(vec![input]), input_prepared)
+                        } else {
+                            self.build_hash_distributed_input(
+                                select_plan,
+                                &table1,
+                                &select_schema,
+                                &insert_schema,
+                                &select_column_bindings,
+                                metadata,
+                                cast_needed,
+                            )?
+                        }
+                    } else {
+                        (select_plan, false)
+                    };
+                    let mut insert_select_plan = build_insert_select_physical_plan(
+                        select_plan,
+                        select_schema,
+                        select_column_bindings,
+                        insert_schema,
+                        table1,
+                        cast_needed,
+                        input_prepared,
+                        table_meta_timestamps,
+                        distributed,
+                    )?;
+
+                    insert_select_plan.adjust_plan_id(&mut 0);
+                    let mut build_res = build_query_pipeline_without_render_result_set(
+                        &self.ctx,
+                        &insert_select_plan,
+                    )
+                    .await?;
 
                     table.commit_insertion(
                         self.ctx.clone(),
                         &mut build_res.main_pipeline,
                         None,
-                        vec![],
+                        update_stream_meta,
                         self.plan.overwrite,
                         None,
                         unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                         table_meta_timestamps,
                     )?;
 
+                    //  Execute the hook operator.
                     if self.plan.branch.is_none() {
                         let hook_operator = HookOperator::create(
                             self.ctx.clone(),
@@ -522,209 +660,76 @@ impl Interpreter for InsertInterpreter {
 
                     return Ok(build_res);
                 }
-
-                build_res.main_pipeline.add_source(
-                    |output| {
-                        let inner = ValueSource::new(rows.clone(), self.plan.dest_schema());
-                        AsyncSourcer::create(self.ctx.get_scan_progress(), output, inner)
-                    },
-                    1,
-                )?;
-            }
-            InsertInputSource::Values(InsertValue::RawValues { data, start }) => {
-                build_res.main_pipeline.add_source(
-                    |output| {
-                        let name_resolution_ctx = NameResolutionContext {
-                            deny_column_reference: true,
-                            ..Default::default()
-                        };
-                        let inner = RawValueSource::new(
-                            data.to_string(),
-                            self.ctx.clone(),
-                            name_resolution_ctx,
-                            self.plan.dest_schema(),
-                            *start,
-                        );
-                        AsyncSourcer::create(self.ctx.get_scan_progress(), output, inner)
-                    },
-                    1,
-                )?;
-            }
-            InsertInputSource::SelectPlan(plan) => {
-                let table1 = table.clone();
-                let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
-                    Plan::Query {
-                        s_expr,
-                        metadata,
-                        bind_context,
-                        ..
-                    } => {
-                        let mut builder1 =
-                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                        (
-                            builder1.build(s_expr, bind_context.column_set()).await?,
-                            bind_context.columns.clone(),
-                            metadata,
-                        )
-                    }
-                    _ => unreachable!(),
-                };
-
-                let explain_plan = {
-                    let metadata = metadata.read();
-                    select_plan
-                        .format(&metadata, Default::default())?
-                        .format_pretty()?
-                };
-
-                info!("Insert select plan: \n{}", explain_plan);
-
-                let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
-
-                let select_schema = plan.schema();
-                let insert_schema = self.plan.dest_schema();
-                let cast_needed = self.check_schema_cast(plan)?;
-                let distributed = self.ctx.get_cluster().get_nodes().len() > 1;
-                let (select_plan, input_prepared) = if distributed {
-                    if table1.support_distributed_insert()
-                        && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
-                    {
-                        let (input, input_prepared) = self.build_hash_distributed_input(
-                            exchange.input.clone(),
-                            &table1,
-                            &select_schema,
-                            &insert_schema,
-                            &select_column_bindings,
-                            metadata,
-                            cast_needed,
-                        )?;
-                        (exchange.derive(vec![input]), input_prepared)
-                    } else {
-                        self.build_hash_distributed_input(
-                            select_plan,
-                            &table1,
-                            &select_schema,
-                            &insert_schema,
-                            &select_column_bindings,
-                            metadata,
-                            cast_needed,
-                        )?
-                    }
-                } else {
-                    (select_plan, false)
-                };
-                let mut insert_select_plan = build_insert_select_physical_plan(
-                    select_plan,
-                    select_schema,
-                    select_column_bindings,
-                    insert_schema,
-                    table1,
-                    cast_needed,
-                    input_prepared,
-                    table_meta_timestamps,
-                    distributed,
-                )?;
-
-                insert_select_plan.adjust_plan_id(&mut 0);
-                let mut build_res =
-                    build_query_pipeline_without_render_result_set(&self.ctx, &insert_select_plan)
-                        .await?;
-
-                table.commit_insertion(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    None,
-                    update_stream_meta,
-                    self.plan.overwrite,
-                    None,
-                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-                    table_meta_timestamps,
-                )?;
-
-                //  Execute the hook operator.
-                if self.plan.branch.is_none() {
-                    let hook_operator = HookOperator::create(
+                #[cfg(feature = "storage-stage")]
+                InsertInputSource::StreamingLoad(plan) => {
+                    build_streaming_load_pipeline(
                         self.ctx.clone(),
-                        self.plan.catalog.clone(),
-                        self.plan.database.clone(),
-                        self.plan.table.clone(),
-                        MutationKind::Insert,
-                        hook_lock_opt.clone(),
-                    );
-                    hook_operator.execute(&mut build_res.main_pipeline).await;
+                        &mut build_res.main_pipeline,
+                        &plan.file_format,
+                        plan.receiver.clone(),
+                        plan.required_source_schema.clone(),
+                        plan.default_exprs.clone(),
+                        plan.block_thresholds,
+                    )?;
+                    if !plan.values_consts.is_empty() {
+                        let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));
+                        build_res.main_pipeline.try_add_transformer(|| {
+                            let ctx = self.ctx.get_function_context()?;
+                            TransformAddConstColumns::try_new(
+                                ctx,
+                                input_schema.clone(),
+                                plan.required_values_schema.clone(),
+                                plan.values_consts.clone(),
+                            )
+                        })?;
+                    }
                 }
-
-                return Ok(build_res);
-            }
-            #[cfg(feature = "storage-stage")]
-            InsertInputSource::StreamingLoad(plan) => {
-                build_streaming_load_pipeline(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    &plan.file_format,
-                    plan.receiver.clone(),
-                    plan.required_source_schema.clone(),
-                    plan.default_exprs.clone(),
-                    plan.block_thresholds,
-                )?;
-                if !plan.values_consts.is_empty() {
-                    let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));
-                    build_res.main_pipeline.try_add_transformer(|| {
-                        let ctx = self.ctx.get_function_context()?;
-                        TransformAddConstColumns::try_new(
-                            ctx,
-                            input_schema.clone(),
-                            plan.required_values_schema.clone(),
-                            plan.values_consts.clone(),
-                        )
+                #[cfg(not(feature = "storage-stage"))]
+                InsertInputSource::StreamingLoad(_) => {
+                    return Err(ErrorCode::Unimplemented(
+                        "Streaming load support is disabled, rebuild with cargo feature 'storage-stage'",
+                    ));
+                }
+            };
+            if !table_constraints.is_empty() {
+                build_res
+                    .main_pipeline
+                    .try_add_async_accumulating_transformer(|| {
+                        Ok(TransformConstraintVerify::new(
+                            table_constraints.clone(),
+                            self.ctx.get_function_context()?,
+                            table.name().to_string(),
+                        ))
                     })?;
-                }
             }
-            #[cfg(not(feature = "storage-stage"))]
-            InsertInputSource::StreamingLoad(_) => {
-                return Err(ErrorCode::Unimplemented(
-                    "Streaming load support is disabled, rebuild with cargo feature 'storage-stage'",
-                ));
-            }
-        };
-        if !table_constraints.is_empty() {
-            build_res
-                .main_pipeline
-                .try_add_async_accumulating_transformer(|| {
-                    Ok(TransformConstraintVerify::new(
-                        table_constraints.clone(),
-                        self.ctx.get_function_context()?,
-                        table.name().to_string(),
-                    ))
-                })?;
-        }
 
-        PipelineBuilder::build_append2table_with_commit_pipeline(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            table.clone(),
-            self.plan.dest_schema(),
-            None,
-            vec![],
-            self.plan.overwrite,
-            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-            table_meta_timestamps,
-        )?;
-
-        //  Execute the hook operator.
-        if self.plan.branch.is_none() {
-            let hook_operator = HookOperator::create(
+            PipelineBuilder::build_append2table_with_commit_pipeline(
                 self.ctx.clone(),
-                self.plan.catalog.clone(),
-                self.plan.database.clone(),
-                self.plan.table.clone(),
-                MutationKind::Insert,
-                hook_lock_opt,
-            );
-            hook_operator.execute(&mut build_res.main_pipeline).await;
-        }
+                &mut build_res.main_pipeline,
+                table.clone(),
+                self.plan.dest_schema(),
+                None,
+                vec![],
+                self.plan.overwrite,
+                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                table_meta_timestamps,
+            )?;
 
-        Ok(build_res)
+            //  Execute the hook operator.
+            if self.plan.branch.is_none() {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    self.plan.catalog.clone(),
+                    self.plan.database.clone(),
+                    self.plan.table.clone(),
+                    MutationKind::Insert,
+                    hook_lock_opt,
+                );
+                hook_operator.execute(&mut build_res.main_pipeline).await;
+            }
+
+            Ok(build_res)
+        })
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
