@@ -151,6 +151,7 @@ impl Plan {
 
             // Dynamic Tables
             Plan::CreateDynamicTable(_) => Ok("CreateDynamicTable".to_string()),
+            Plan::RefreshDynamicTable(_) => Ok("RefreshDynamicTable".to_string()),
 
             // Indexes
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),

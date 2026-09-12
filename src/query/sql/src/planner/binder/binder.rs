@@ -718,6 +718,19 @@ impl Binder {
 
             // Dynamic Table
             Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
+            Statement::RefreshDynamicTable(stmt) => {
+                let (catalog, database, table) = self.normalize_object_identifier_triple(
+                    &stmt.catalog,
+                    &stmt.database,
+                    &stmt.table,
+                );
+                Plan::RefreshDynamicTable(Box::new(crate::plans::RefreshDynamicTablePlan {
+                    tenant: self.ctx.get_tenant(),
+                    catalog,
+                    database,
+                    table,
+                }))
+            }
 
             Statement::CreatePipe(_) => {
                 todo!()

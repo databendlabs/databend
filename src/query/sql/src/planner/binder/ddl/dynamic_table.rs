@@ -13,9 +13,13 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use databend_common_ast::ast::CreateDynamicTableStmt;
 use databend_common_ast::ast::CreateTableSource;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::Query;
+use databend_common_ast::visit::WalkMut;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,13 +30,15 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use databend_storages_common_table_meta::table::OPT_KEY_TARGET_LAG;
+use databend_storages_common_table_meta::table::is_fuse_engine;
 
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ddl::table::AnalyzeCreateTableResult;
+use crate::planner::semantic::ViewRewriter;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::Plan;
 
@@ -50,9 +56,7 @@ impl Binder {
             source,
             cluster_by,
             target_lag,
-            refresh_mode,
             warehouse_opts,
-            initialize,
             table_options,
             as_query,
         } = stmt;
@@ -66,9 +70,6 @@ impl Binder {
             if *transient {
                 options.insert("TRANSIENT".to_owned(), "T".to_owned());
             }
-
-            options.insert(OPT_KEY_AS_QUERY.to_owned(), format!("{as_query}"));
-            options.insert(OPT_KEY_TARGET_LAG.to_owned(), format!("{target_lag}"));
 
             let catalog = self.ctx.get_catalog(&catalog_name).await?;
             let db = catalog
@@ -138,6 +139,24 @@ impl Binder {
 
         let mut init_bind_context = BindContext::new();
         let (_, bind_context) = self.bind_query(&mut init_bind_context, as_query)?;
+        for source_entry in self.metadata.read().tables() {
+            let source_table = source_entry.table();
+            if source_entry.catalog() != catalog_name
+                || source_table.is_temp()
+                || source_table.is_stream()
+                || source_table.is_read_only()
+                || !is_fuse_engine(source_table.engine())
+            {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "Dynamic Table sources must be persistent writable FUSE tables in catalog '{}', but '{}.{}.{}' uses engine {}",
+                    catalog_name,
+                    source_entry.catalog(),
+                    source_entry.database(),
+                    source_entry.name(),
+                    source_table.engine(),
+                )));
+            }
+        }
         let query_fields = bind_context
             .columns
             .iter()
@@ -183,21 +202,73 @@ impl Binder {
             }
         }
 
-        let plan = CreateDynamicTablePlan {
+        if !matches!(target_lag, databend_common_ast::ast::TargetLag::Manual) {
+            return Err(ErrorCode::Unimplemented(
+                "Dynamic Table scheduling is not implemented; omit TARGET_LAG",
+            ));
+        }
+        // The parser accepts WAREHOUSE for the eventual scheduled-refresh design. Refresh runs in
+        // the caller's session today, so honouring it is impossible; reject it rather than
+        // silently ignoring a warehouse the user explicitly asked for.
+        if warehouse_opts.warehouse.is_some() {
+            return Err(ErrorCode::Unimplemented(
+                "Dynamic Table WAREHOUSE is not implemented; refresh runs in the current session",
+            ));
+        }
+
+        let mut canonical_query: Query = as_query.as_ref().clone();
+        canonical_query.walk_mut(&mut ViewRewriter {
+            current_database: database.clone(),
+        })?;
+        options.insert(OPT_KEY_AS_QUERY.to_owned(), canonical_query.to_string());
+        let source_table_ids = self
+            .metadata
+            .read()
+            .tables()
+            .iter()
+            .map(|entry| entry.table().get_id())
+            .collect::<BTreeSet<_>>();
+        if source_table_ids.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "Dynamic Table definition must reference at least one source table",
+            ));
+        }
+        let source_table_ids = source_table_ids
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        options.insert(OPT_KEY_SOURCE_TABLE_IDS.to_owned(), source_table_ids);
+
+        // Dynamic Table initialization is performed by its dedicated interpreter so that the
+        // first successful refresh also publishes the source endpoint checkpoint.
+        let as_select = None;
+        let table_plan = crate::plans::CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
             catalog: catalog_name.clone(),
             database: database.clone(),
             table,
             schema: schema.clone(),
+            engine: Engine::DynamicTable,
+            engine_options: BTreeMap::new(),
+            storage_params: None,
             options,
+            table_properties: None,
+            table_partition: None,
             field_comments,
+            field_stats_truncate_len: vec![],
             cluster_key,
-            as_query: as_query.to_string(),
+            as_select,
+            table_indexes: None,
+            table_constraints: None,
+            attached_columns: None,
+        };
+        let plan = CreateDynamicTablePlan {
+            table_plan,
+            as_query: canonical_query.to_string(),
             target_lag: target_lag.clone(),
             warehouse_opts: warehouse_opts.clone(),
-            refresh_mode: refresh_mode.clone(),
-            initialize: initialize.clone(),
         };
         Ok(Plan::CreateDynamicTable(Box::new(plan)))
     }

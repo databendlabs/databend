@@ -2,6 +2,7 @@ query TT
 SHOW ENGINES
 ----
 DELTA DELTA Storage Engine
+DYNAMIC_TABLE Dynamic Table (Fuse-backed)
 FUSE FUSE Storage Engine
 ICEBERG ICEBERG Storage Engine
 MATERIALIZED_VIEW Materialized View (Fuse-backed)

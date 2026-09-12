@@ -381,6 +381,7 @@ pub enum Statement {
     ShowTasks(ShowTasksStmt),
 
     CreateDynamicTable(CreateDynamicTableStmt),
+    RefreshDynamicTable(RefreshDynamicTableStmt),
 
     // pipes
     CreatePipe(CreatePipeStmt),
@@ -693,6 +694,7 @@ impl Statement {
             | Statement::AlterTask(..)
             | Statement::DropTask(..)
             | Statement::CreateDynamicTable(..)
+            | Statement::RefreshDynamicTable(..)
             | Statement::DropPipe(..)
             | Statement::AlterPipe(..)
             | Statement::CreateNotification(..)
@@ -1192,6 +1194,7 @@ impl Display for Statement {
                 write!(f, "DESC SEQUENCE {name}")?;
             }
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshDynamicTable(stmt) => write!(f, "{stmt}")?,
             Statement::SetPriority {
                 priority,
                 object_id,

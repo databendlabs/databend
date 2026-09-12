@@ -28,6 +28,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::is_materialized_view_engine;
@@ -41,6 +42,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -176,6 +178,7 @@ impl ShowCreateTableInterpreter {
                 )
                 .await
             }
+            DYNAMIC_TABLE_ENGINE => Self::show_create_dynamic_table_query(table, database),
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
                 None => Self::show_create_table_query(table.get_table_info(), settings),
@@ -402,6 +405,31 @@ impl ShowCreateTableInterpreter {
             );
         }
         Ok(table_create_sql)
+    }
+
+    fn show_create_dynamic_table_query(table: &dyn Table, database: &str) -> Result<String> {
+        let query = table
+            .options()
+            .get(OPT_KEY_AS_QUERY)
+            .ok_or_else(|| ErrorCode::InvalidOperation("dynamic table definition is missing"))?;
+        // Refresh is always full, so there is no policy to echo back. Emitting one would produce
+        // a statement the parser no longer accepts.
+        let sql = match table.get_table_info().meta.cluster_key_str() {
+            Some(cluster_key) => format!(
+                "CREATE DYNAMIC TABLE `{}`.`{}` CLUSTER BY {} AS {}",
+                database,
+                table.name(),
+                cluster_key,
+                query
+            ),
+            None => format!(
+                "CREATE DYNAMIC TABLE `{}`.`{}` AS {}",
+                database,
+                table.name(),
+                query
+            ),
+        };
+        Ok(sql)
     }
 
     fn show_create_view_query(table: &dyn Table, database: &str) -> Result<String> {

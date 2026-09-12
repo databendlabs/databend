@@ -21,8 +21,11 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 
+use super::dynamic_table_keys::OPT_KEY_AS_QUERY;
+use super::dynamic_table_keys::OPT_KEY_SOURCE_TABLE_IDS;
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
@@ -118,7 +121,9 @@ pub fn is_fuse_engine(engine: &str) -> bool {
 }
 
 pub fn is_fuse_backed_engine(engine: &str) -> bool {
-    is_fuse_engine(engine) || is_materialized_view_engine(engine)
+    is_fuse_engine(engine)
+        || is_materialized_view_engine(engine)
+        || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
 }
 
 /// Table option keys that reserved for internal usage only
@@ -135,10 +140,12 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
 
-/// Table option keys that Should not be shown in `show create table` statement
+/// Table option keys that should not be shown in `show create table` statement.
 pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
@@ -153,6 +160,8 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
 
@@ -246,6 +255,12 @@ mod tests {
         assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key("CLUSTER_TYPE"));
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+    }
+
+    #[test]
+    fn test_dynamic_table_source_table_ids_are_reserved_and_internal() {
+        assert!(is_reserved_opt_key(OPT_KEY_SOURCE_TABLE_IDS));
+        assert!(is_internal_opt_key(OPT_KEY_SOURCE_TABLE_IDS));
     }
 
     #[test]

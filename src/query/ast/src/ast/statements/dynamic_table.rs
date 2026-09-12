@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -30,6 +32,8 @@ use crate::ast::write_space_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TargetLag {
+    /// No automatic refresh policy was requested.
+    Manual,
     IntervalSecs(u64),
     Downstream,
 }
@@ -37,53 +41,12 @@ pub enum TargetLag {
 impl Display for TargetLag {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            TargetLag::Manual => write!(f, "MANUAL"),
             TargetLag::IntervalSecs(secs) => {
                 write!(f, "{} SECOND", secs)
             }
             TargetLag::Downstream => {
                 write!(f, "DOWNSTREAM")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum RefreshMode {
-    Auto,
-    Full,
-    Incremental,
-}
-
-impl Display for RefreshMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            RefreshMode::Auto => {
-                write!(f, "AUTO")
-            }
-            RefreshMode::Full => {
-                write!(f, "FULL")
-            }
-            RefreshMode::Incremental => {
-                write!(f, "INCREMENTAL")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum InitializeMode {
-    OnCreate,
-    OnSchedule,
-}
-
-impl Display for InitializeMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            InitializeMode::OnCreate => {
-                write!(f, "ON_CREATE")
-            }
-            InitializeMode::OnSchedule => {
-                write!(f, "ON_SCHEDULE")
             }
         }
     }
@@ -101,11 +64,29 @@ pub struct CreateDynamicTableStmt {
 
     pub target_lag: TargetLag,
     pub warehouse_opts: WarehouseOptions,
-    pub refresh_mode: RefreshMode,
-    pub initialize: InitializeMode,
 
     pub table_options: BTreeMap<String, String>,
     pub as_query: Box<Query>,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct RefreshDynamicTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for RefreshDynamicTableStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REFRESH DYNAMIC TABLE ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )
+    }
 }
 
 impl Display for CreateDynamicTableStmt {
@@ -137,12 +118,12 @@ impl Display for CreateDynamicTableStmt {
             write!(f, " {cluster_by}")?;
         }
 
-        write!(f, " TARGET_LAG = {}", self.target_lag)?;
+        if self.target_lag != TargetLag::Manual {
+            write!(f, " TARGET_LAG = {}", self.target_lag)?;
+        }
         if self.warehouse_opts.warehouse.is_some() {
             write!(f, " {}", self.warehouse_opts)?;
         }
-        write!(f, " REFRESH_MODE = {}", self.refresh_mode)?;
-        write!(f, " INITIALIZE = {}", self.initialize)?;
 
         // Format table options
         if !self.table_options.is_empty() {

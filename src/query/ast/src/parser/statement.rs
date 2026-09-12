@@ -1858,6 +1858,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let refresh_dynamic_table = map(
+        rule! {
+            REFRESH ~ DYNAMIC ~ TABLE ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, table))| {
+            Statement::RefreshDynamicTable(RefreshDynamicTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
     let refresh_lineage = map(
         rule! {
             REFRESH ~ LINEAGE ~ ^FOR ~ ^ALL ~ ^VIEWS ~ ( DRY ~ ^RUN )?
@@ -3220,6 +3232,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         REFRESH => rule!(
             #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
             | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view> [LIMIT <rows>]`"
+            | #refresh_dynamic_table: "`REFRESH DYNAMIC TABLE [<database>.]<table>`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),

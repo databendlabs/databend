@@ -5,6 +5,7 @@ DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEn
 | Column 0            | Column 1                          |
 +---------------------+-----------------------------------+
 | 'DELTA'             | 'DELTA Storage Engine'            |
+| 'DYNAMIC_TABLE'     | 'Dynamic Table (Fuse-backed)'     |
 | 'FUSE'              | 'FUSE Storage Engine'             |
 | 'ICEBERG'           | 'ICEBERG Storage Engine'          |
 | 'MATERIALIZED_VIEW' | 'Materialized View (Fuse-backed)' |

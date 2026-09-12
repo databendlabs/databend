@@ -368,6 +368,9 @@ impl Binder {
                 sample,
                 cte_suffix_name,
             ),
+            // A Dynamic Table is read exactly like a physical table: queries always see the
+            // result materialized by the last refresh, however stale that is. It therefore needs
+            // no arm of its own and falls through to the ordinary base-table path below.
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog.clone(),

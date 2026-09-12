@@ -57,6 +57,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORI
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_TOP_N_SIZE;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -75,6 +76,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -263,6 +265,11 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
         Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
         Engine::MaterializedView => CREATE_MATERIALIZED_VIEW_OPTIONS.contains(opt_key),
+        Engine::DynamicTable => {
+            CREATE_FUSE_OPTIONS.contains(opt_key)
+                || opt_key == OPT_KEY_AS_QUERY
+                || opt_key == OPT_KEY_SOURCE_TABLE_IDS
+        }
     }
 }
 
