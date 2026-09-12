@@ -339,6 +339,17 @@ pub struct AggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     payload_writers: AggregatePayloadWriters,
 }
 
+impl AggregateSpiller<LocalPartitionStream> {
+    /// Take buffered states only if this round has not written any blocks. Once
+    /// a writer exists, the tails must stay with the spilled states for merging.
+    pub(super) fn take_pending_if_unspilled(&mut self) -> Option<Vec<(usize, DataBlock)>> {
+        if self.payload_writers.writers.iter().any(Option::is_some) {
+            return None;
+        }
+        Some(self.partition_stream.finish())
+    }
+}
+
 impl<P: PartitionStream> AggregateSpiller<P> {
     pub fn try_create(
         ctx: Arc<QueryContext>,

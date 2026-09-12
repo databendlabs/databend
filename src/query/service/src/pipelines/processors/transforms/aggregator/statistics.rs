@@ -18,6 +18,13 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_expression::AggregateHashTable;
 
+#[derive(Debug)]
+pub enum FinalAggregateFinishMode {
+    InMemory,
+    Buffered,
+    Spilled,
+}
+
 pub struct AggregationStatistics {
     stage: &'static str,
     start: Instant,
@@ -60,23 +67,19 @@ impl AggregationStatistics {
         );
     }
 
-    pub fn log_finish_statistics_values(&mut self, output_rows: usize, hash_index_resizes: usize) {
-        self.log_finish(output_rows, hash_index_resizes, None);
-    }
-
-    pub fn log_task_finish_statistics(
+    pub fn log_final_finish_statistics(
         &mut self,
-        task_id: u64,
+        task_id: Option<u64>,
         processor_id: usize,
         spill_depth: usize,
         output_rows: usize,
         hash_index_resizes: usize,
-        spilled: bool,
+        finish_mode: FinalAggregateFinishMode,
     ) {
         self.log_finish(
             output_rows,
             hash_index_resizes,
-            Some((task_id, processor_id, spill_depth, spilled)),
+            Some((task_id, processor_id, spill_depth, finish_mode)),
         );
     }
 
@@ -84,7 +87,7 @@ impl AggregationStatistics {
         &mut self,
         output_rows: usize,
         hash_index_resizes: usize,
-        task: Option<(u64, usize, usize, bool)>,
+        task: Option<(Option<u64>, usize, usize, FinalAggregateFinishMode)>,
     ) {
         let elapsed = self.start.elapsed().as_secs_f64();
         let real_elapsed = self
@@ -94,14 +97,16 @@ impl AggregationStatistics {
             .unwrap_or(elapsed);
 
         match task {
-            Some((task_id, processor_id, spill_depth, spilled)) => {
+            Some((task_id, processor_id, spill_depth, finish_mode)) => {
+                let task_id = task_id.map_or_else(|| "input".to_string(), |id| id.to_string());
                 log::info!(
-                    "{}[{}] Task completed: task_id={}, spill_depth={}, spilled={}, {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
+                    "{}[{}] Task completed: task_id={}, spill_depth={}, spilled={}, finish_mode={:?}, {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
                     self.stage,
                     processor_id,
                     task_id,
                     spill_depth,
-                    spilled,
+                    matches!(finish_mode, FinalAggregateFinishMode::Spilled),
+                    finish_mode,
                     self.processed_rows,
                     output_rows,
                     elapsed,

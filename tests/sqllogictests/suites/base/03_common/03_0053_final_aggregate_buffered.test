@@ -1,0 +1,78 @@
+statement ok
+SET max_threads = 1;
+
+statement ok
+SET max_block_size = 1024;
+
+statement ok
+SET max_block_bytes = 2097152;
+
+statement ok
+SET force_aggregate_shuffle_mode = 'row';
+
+statement ok
+SET max_aggregate_spill_level = 3;
+
+statement ok
+SET force_aggregate_data_spill = 0;
+
+# Each group occurs three times across input blocks; groups 0 and 1 occur four times.
+query III
+SELECT count(), count(DISTINCT k),
+       count_if(c != if(k < 2, 4, 3)
+                OR s != 3 * k + 3 * 16385 + if(k < 2, k + 3 * 16385, 0)
+                OR d != c OR lo != k OR hi != k + if(k < 2, 3, 2) * 16385)
+FROM (
+    SELECT number % 16385 AS k, count() AS c, sum(number) AS s,
+           count(DISTINCT number) AS d, min(number) AS lo, max(number) AS hi
+    FROM numbers_mt(49157)
+    GROUP BY k
+);
+----
+16385 16385 0
+
+statement ok
+SET force_aggregate_data_spill = 1;
+
+# Force sustained spill pressure. Final buckets stay below the stream threshold,
+# but contain enough groups for multiple result batches, including their tails.
+query III
+SELECT count(), count(DISTINCT k),
+       count_if(c != if(k < 2, 4, 3)
+                OR s != 3 * k + 3 * 16385 + if(k < 2, k + 3 * 16385, 0)
+                OR d != c OR lo != k OR hi != k + if(k < 2, 3, 2) * 16385)
+FROM (
+    SELECT number % 16385 AS k, count() AS c, sum(number) AS s,
+           count(DISTINCT number) AS d, min(number) AS lo, max(number) AS hi
+    FROM numbers_mt(49157)
+    GROUP BY k
+);
+----
+16385 16385 0
+
+query III
+SELECT number, count(), sum(number) FROM numbers(1) GROUP BY number;
+----
+0 1 0
+
+query II
+SELECT number, count() FROM numbers(0) GROUP BY number;
+----
+
+statement ok
+UNSET force_aggregate_data_spill;
+
+statement ok
+UNSET max_aggregate_spill_level;
+
+statement ok
+UNSET force_aggregate_shuffle_mode;
+
+statement ok
+UNSET max_block_bytes;
+
+statement ok
+UNSET max_block_size;
+
+statement ok
+UNSET max_threads;
