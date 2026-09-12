@@ -15,6 +15,7 @@
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataSchemaRef;
 
 pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;
@@ -91,5 +92,10 @@ impl BlockMetaInfo for AggregateSerdeMeta {
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
+    }
+
+    fn override_block_schema(&self) -> Option<DataSchemaRef> {
+        (self.typ == SPILLED_TYPE)
+            .then(|| std::sync::Arc::new(super::exchange_defines::spilled_schema()))
     }
 }
