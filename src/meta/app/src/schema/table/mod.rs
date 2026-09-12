@@ -813,7 +813,10 @@ pub struct UpdateTableMetaReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableLvtCheck {
     pub tenant: Tenant,
-    pub time: DateTime<Utc>,
+    /// `Some` requires the current LVT not to exceed the snapshot timestamp.
+    /// `None` is used by legacy snapshots without timestamps and requires LVT
+    /// to remain unset.
+    pub time: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

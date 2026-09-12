@@ -36,6 +36,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
 use opendal::Operator;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
@@ -95,6 +96,7 @@ struct GcRootSnapshotCtx {
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
     snapshots_to_gc: Vec<String>,
+    flashback_barrier_to_clear: Option<DateTime<Utc>>,
 }
 
 #[async_backtrace::framed]
@@ -120,6 +122,7 @@ pub async fn do_vacuum2(
         gc_root_meta_ts,
         protected_segments,
         snapshots_to_gc,
+        flashback_barrier_to_clear,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
@@ -291,6 +294,19 @@ pub async fn do_vacuum2(
         start.elapsed(),
         removed_files,
     ));
+
+    if let Some(barrier) = flashback_barrier_to_clear {
+        if let Err(err) = fuse_table
+            .clear_vacuum2_flashback_barrier(ctx.as_ref(), barrier)
+            .await
+        {
+            // Cleanup is best effort. Keeping the barrier only makes later vacuum conservative.
+            warn!(
+                "Failed to clear flashback barrier for table {} after vacuum: {}",
+                table_info.desc, err
+            );
+        }
+    }
 
     Ok(())
 }
@@ -531,6 +547,7 @@ async fn vacuum_base_snapshot_phase(
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
         snapshots_to_gc: selection.snapshots_to_gc,
+        flashback_barrier_to_clear: selection.flashback_barrier_to_clear,
     }))
 }
 
