@@ -618,5 +618,8 @@ tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7" 
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "3cda3c6" }
 tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "760ddb7", package = "tantivy-query-grammar" }
+# Temporary backport of https://github.com/tokio-rs/tokio/pull/8331 to Tokio 1.52.3.
+# Remove this patch after upgrading to an official Tokio release containing the fix.
+tokio = { git = "https://github.com/datafuse-extras/tokio", rev = "15daf43deb6e7104f21f5e37581fc3904eb4dab7" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

@@ -1,0 +1,14 @@
+name: "Test Query Flight Reconnect with TPC-H"
+description: "Verify New Flight reconnects after a random temporary network partition"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: meta,query,sqllogictests
+
+    - uses: ./.github/actions/setup_minio
+
+    - name: Run TPC-H Flight reconnect test
+      shell: bash
+      run: ./scripts/ci/ci-run-query-flight-reconnect-tpch.sh

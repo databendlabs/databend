@@ -57,12 +57,23 @@ pub fn via_exchange_source(
         )));
     }
 
-    let exchange_params = ExchangeParams::MergeExchange(params.clone());
     let exchange_manager = ctx.get_exchange_manager();
-    let flight_receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
+    let exchange_params = ExchangeParams::MergeExchange(params.clone());
+    let remote_items = exchange_manager
+        .take_packet_receivers(&exchange_params)?
+        .into_iter()
+        .map(|flight_exchange| {
+            let output = OutputPort::create();
+            PipeItem::create(
+                ExchangeSourceReader::create(output.clone(), flight_exchange),
+                vec![],
+                vec![output],
+            )
+        })
+        .collect::<Vec<_>>();
 
     let last_output_len = pipeline.output_len();
-    let mut items = Vec::with_capacity(last_output_len + flight_receivers.len());
+    let mut items = Vec::with_capacity(last_output_len + remote_items.len());
 
     for _index in 0..last_output_len {
         let input = InputPort::create();
@@ -75,14 +86,7 @@ pub fn via_exchange_source(
         ));
     }
 
-    for flight_exchange in flight_receivers {
-        let output = OutputPort::create();
-        items.push(PipeItem::create(
-            ExchangeSourceReader::create(output.clone(), flight_exchange),
-            vec![],
-            vec![output],
-        ));
-    }
+    items.extend(remote_items);
 
     pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
 
@@ -110,7 +114,7 @@ pub fn via_hash_exchange_source(
     let waker = pipeline.get_waker();
 
     let last_output_len = pipeline.output_len();
-    let num_receivers = channel_set.channels.len();
+    let num_receivers = channel_set.receivers.len();
     let mut items = Vec::with_capacity(last_output_len + num_receivers);
 
     for _index in 0..last_output_len {
