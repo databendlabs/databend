@@ -639,10 +639,7 @@ impl ReclusterMutator {
                     total_compressed,
                     level: candidate.base_level,
                     input_level_stats: candidate.input_level_stats.clone(),
-                    kind: match self.properties.cluster_key_info.cluster_type {
-                        ClusterType::Linear => candidate.kind,
-                        ClusterType::Hilbert => ReclusterTaskKind::SortBlocks,
-                    },
+                    kind: candidate.kind,
                     virtual_column_layout,
                 });
                 selected_block_count += block_metas.len() as u64;
@@ -760,7 +757,13 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            return Ok(vec![task_candidate(group, score, &indices, blocks)]);
+            return Ok(vec![task_candidate(
+                self.strategy.supports_ordered_merge(),
+                group,
+                score,
+                &indices,
+                blocks,
+            )]);
         }
 
         if self.properties.split_sort_tasks
@@ -792,6 +795,7 @@ impl ReclusterMutator {
                     continue;
                 }
                 candidates.push(task_candidate(
+                    self.strategy.supports_ordered_merge(),
                     group,
                     CandidateScore {
                         selected_total_bytes: bytes,

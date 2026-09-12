@@ -120,7 +120,7 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
-            split_sort_tasks: cluster_key_info.cluster_type == ClusterType::Linear
+            split_sort_tasks: strategy.supports_ordered_merge()
                 && !is_materialized_view_engine(table.engine()),
             cluster_key_info,
             partition_key_count: table.partition_key_count(),
@@ -167,7 +167,7 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
-            split_sort_tasks: cluster_key_info.cluster_type == ClusterType::Linear,
+            split_sort_tasks: strategy.supports_ordered_merge(),
             cluster_key_info,
             partition_key_count,
             memory_threshold,
@@ -180,6 +180,13 @@ impl ReclusterProperties {
 
 /// Algorithm-specific behavior used by the recluster workflow.
 pub(crate) trait ReclusterStrategy: Send + Sync {
+    /// Only scalar linear clustering preserves source row order during merging.
+    /// The persisted ClusterType::Linear also covers vector clustering and is
+    /// not sufficient to select the merge-only execution path.
+    fn supports_ordered_merge(&self) -> bool {
+        false
+    }
+
     /// Select windows from a partition-local segment slice. ReclusterMutator performs partition
     /// grouping and filters segments without exact partition metadata before calling strategies.
     fn select_segments(
@@ -411,6 +418,7 @@ pub struct SelectedReclusterSegment {
 }
 
 pub(crate) fn task_candidate(
+    supports_ordered_merge: bool,
     group: ReclusterGroup,
     score: CandidateScore,
     task_indices: &[usize],
@@ -447,9 +455,10 @@ pub(crate) fn task_candidate(
         stats.block_size = stats.block_size.saturating_add(block.meta.block_size);
         stats.file_size = stats.file_size.saturating_add(block.meta.file_size);
     }
-    let kind = match task_indices
-        .iter()
-        .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original))
+    let kind = match supports_ordered_merge
+        && task_indices
+            .iter()
+            .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original))
     {
         true => ReclusterTaskKind::MergeBlocks,
         false => ReclusterTaskKind::SortBlocks,

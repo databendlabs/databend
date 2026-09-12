@@ -1610,42 +1610,52 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
     )
     .await?;
 
-    let vector_cluster_info = VectorClusterInfo {
-        key_index: 1,
-        column_id: 1,
-        column_name: "embedding".to_string(),
-        dimension: 2,
-        distance_type: VectorDistanceType::L2,
-    };
-    let mutator = ReclusterMutator::new(
-        ctx,
-        data_accessor,
-        schema,
-        vec![test_cluster_key_expr(), test_vector_cluster_key_expr()],
-        1.0,
-        thresholds,
-        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
-        0,
-        1,
-        ReclusterMode::Conservative,
-        Some(vector_cluster_info),
-    );
+    // Cover both the vector overlap strategy and the shared small-block shortcut,
+    // with current and obsolete cluster-key statistics. Vector inputs must never
+    // be split into scalar singleton sort tasks.
+    for (current_key_id, thresholds) in [
+        (cluster_key_id, thresholds),
+        (cluster_key_id + 1, thresholds),
+        (cluster_key_id, BlockThresholds::new(10000, 10000, 10000, 1)),
+    ] {
+        let vector_cluster_info = VectorClusterInfo {
+            key_index: 1,
+            column_id: 1,
+            column_name: "embedding".to_string(),
+            dimension: 2,
+            distance_type: VectorDistanceType::L2,
+        };
+        let mutator = ReclusterMutator::new(
+            ctx.clone(),
+            data_accessor.clone(),
+            schema.clone(),
+            vec![test_cluster_key_expr(), test_vector_cluster_key_expr()],
+            1.0,
+            thresholds,
+            ClusterKeyInfo::new((current_key_id, "(c0)".to_string()), ClusterType::Linear),
+            0,
+            1,
+            ReclusterMode::Conservative,
+            Some(vector_cluster_info),
+        );
 
-    let segment_windows = mutator.select_segments(&compact_segments, 8)?;
-    let vector_window = segment_windows
-        .into_iter()
-        .find(|window| {
-            window
-                .iter()
-                .map(|segment| segment.loc.segment_idx)
-                .collect::<HashSet<_>>()
-                == HashSet::from([0, 1])
-        })
-        .unwrap();
-    let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
-    assert_eq!(block_num, 2);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(task_part_counts(&parts), vec![2]);
+        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        let vector_window = segment_windows
+            .into_iter()
+            .find(|window| {
+                window
+                    .iter()
+                    .map(|segment| segment.loc.segment_idx)
+                    .collect::<HashSet<_>>()
+                    == HashSet::from([0, 1])
+            })
+            .unwrap();
+        let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
+        assert_eq!(block_num, 2);
+        assert_eq!(parts.tasks.len(), 1);
+        assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+        assert_eq!(task_part_counts(&parts), vec![2]);
+    }
 
     Ok(())
 }
@@ -1725,6 +1735,7 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
     let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
     assert_eq!(block_num, 2);
     assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
     assert_eq!(task_part_counts(&parts), vec![2]);
 
     Ok(())

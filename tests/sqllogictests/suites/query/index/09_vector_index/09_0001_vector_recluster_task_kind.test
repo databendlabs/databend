@@ -1,0 +1,59 @@
+# Vector keys use the persisted Linear cluster type, but require the vector
+# layout transform and full sort even when source cluster statistics are current.
+statement ok
+create or replace database vector_recluster_task_kind
+
+statement ok
+use vector_recluster_task_kind
+
+statement ok
+create table vectors(id int, embedding vector(2), vector index idx(embedding) distance='l2') cluster by(embedding) row_per_block=100
+
+statement ok
+insert into vectors values (1, [1, 0]), (2, [0, 1])
+
+statement ok
+insert into vectors values (3, [1, 0]), (4, [0, 1])
+
+statement ok
+alter table vectors recluster
+
+query II
+select count(), sum(id) from vectors
+----
+4 10
+
+statement ok
+create table mixed(id int, category int, embedding vector(2), vector index idx(embedding) distance='l2') cluster by(category, embedding) row_per_block=100
+
+statement ok
+insert into mixed values (1, 1, [1, 0]), (2, 1, [0, 1])
+
+statement ok
+insert into mixed values (3, 1, [1, 0]), (4, 1, [0, 1])
+
+statement ok
+alter table mixed recluster
+
+query II
+select count(), sum(id) from mixed
+----
+4 10
+
+# Obsolete key statistics must not send vector tasks through scalar splitting.
+statement ok
+alter table mixed cluster by(-category, embedding)
+
+statement ok
+insert into mixed values (5, 1, [1, 0]), (6, 1, [0, 1])
+
+statement ok
+alter table mixed recluster final
+
+query II
+select count(), sum(id) from mixed
+----
+6 21
+
+statement ok
+drop database vector_recluster_task_kind
