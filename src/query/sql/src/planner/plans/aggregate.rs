@@ -350,12 +350,18 @@ impl Operator for Aggregate {
             output_columns.insert(agg.index);
         }
 
-        // Derive outer columns
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        // GROUPING SETS rewrites use local producer symbols that are not necessarily
+        // exposed by the child property. Treating those symbols as outer references
+        // makes unrelated full outer joins fail during decorrelation.
+        let outer_columns = if self.grouping_sets.is_some() {
+            input_prop
+                .outer_columns
+                .difference(&output_columns)
+                .cloned()
+                .collect()
+        } else {
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns)
+        };
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;

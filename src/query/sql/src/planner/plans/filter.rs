@@ -58,11 +58,8 @@ impl Operator for Filter {
         let output_columns = input_prop.output_columns.clone();
 
         // Derive outer columns
-        let mut outer_columns = input_prop.outer_columns.clone();
-        for scalar in &self.predicates {
-            scalar.collect_used_columns(&mut outer_columns);
-        }
-        outer_columns.retain(|column| !output_columns.contains(column));
+        let outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
