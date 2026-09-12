@@ -23,7 +23,7 @@ def test_json_response_errors():
     result1 = execute_query('{"sql": "select a", "pagination": { "wait_time_secs": 5}}')
     assert result1.get("state", "Unknown") == "Failed"
     assert result1["error"] == json.loads(
-        """{"code": 1065, "message": "error: \\n  --> SQL:1:8\\n  |\\n1 | select a\\n  |        ^ column a doesn't exist\\n\\n"}"""
+        """{"code": 1058, "message": "error: \\n  --> SQL:1:8\\n  |\\n1 | select a\\n  |        ^ column a doesn't exist\\n\\n"}"""
     )
 
     # Test 2: Malformed JSON - missing quote before sql key

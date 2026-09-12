@@ -59,7 +59,7 @@ SELECT * FROM kv WHERE k IN (SELECT k FROM kv)
 5 6
 7 8
 
-statement error 1065
+statement error 1058
 SELECT * FROM kv WHERE nonexistent = 1
 
 # query B

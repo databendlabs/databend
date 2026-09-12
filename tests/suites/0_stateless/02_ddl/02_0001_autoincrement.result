@@ -45,7 +45,7 @@ Error: APIError: QueryFailed: [1065]AUTOINCREMENT only supports Decimal or Numer
 >>>> 
 alter table test_autoincrement add column c4 int default autoincrement;
 
-Error: APIError: QueryFailed: [1065]error: 
+Error: APIError: QueryFailed: [1058]error: 
   --> SQL:1:58
   |
 1 | alter table test_autoincrement add column c4 int default autoincrement

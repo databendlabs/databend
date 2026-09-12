@@ -720,16 +720,24 @@ impl Binder {
             Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
 
             Statement::CreatePipe(_) => {
-                todo!()
+                return Err(ErrorCode::Unimplemented(
+                    "CREATE PIPE binding is not implemented",
+                ));
             }
             Statement::DescribePipe(_) => {
-                todo!()
+                return Err(ErrorCode::Unimplemented(
+                    "DESCRIBE PIPE binding is not implemented",
+                ));
             }
             Statement::AlterPipe(_) => {
-                todo!()
+                return Err(ErrorCode::Unimplemented(
+                    "ALTER PIPE binding is not implemented",
+                ));
             }
             Statement::DropPipe(_) => {
-                todo!()
+                return Err(ErrorCode::Unimplemented(
+                    "DROP PIPE binding is not implemented",
+                ));
             }
             Statement::CreateNotification(stmt) => self.bind_create_notification(stmt).await?,
             Statement::DropNotification(stmt) => self.bind_drop_notification(stmt).await?,

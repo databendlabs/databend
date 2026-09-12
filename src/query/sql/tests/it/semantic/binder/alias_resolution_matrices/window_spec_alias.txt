@@ -73,7 +73,7 @@ matrix: window_spec_alias
 key: W0N1G0_3_
 sql: SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k
 status: error
-code: 1065
+code: 1058
 message: column k doesn't exist
 
 === window_spec_alias__window_spec_qualified_name_does_not_consume_aggregate_alias ===
@@ -81,6 +81,6 @@ matrix: window_spec_alias
 key: W0N1S2_3_
 sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY t.s) FROM t AS t
 status: error
-code: 1065
+code: 1058
 message: column s doesn't exist
 

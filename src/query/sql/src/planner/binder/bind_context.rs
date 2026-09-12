@@ -593,11 +593,11 @@ impl BindContext {
             Ok(result)
         } else {
             let err = if column.is_quoted() {
-                ErrorCode::SemanticError(format!(
+                ErrorCode::UnknownColumn(format!(
                     "column {name} doesn't exist, do you mean '{name}'?"
                 ))
             } else {
-                ErrorCode::SemanticError(format!("column {name} doesn't exist"))
+                ErrorCode::UnknownColumn(format!("column {name} doesn't exist"))
             };
             Err(err.set_span(column.span))
         }
@@ -624,7 +624,7 @@ impl BindContext {
 
         if result.is_empty() {
             Err(
-                ErrorCode::SemanticError(format!("column position {column} doesn't exist"))
+                ErrorCode::UnknownColumn(format!("column position {column} doesn't exist"))
                     .set_span(span),
             )
         } else {
@@ -931,7 +931,11 @@ impl BindContext {
         let metadata = metadata.read();
         let table = metadata.table(table_index);
         if !table.table().supported_internal_column(column_id) {
-            return Err(ErrorCode::SemanticError(format!(
+            // Use `UnknownColumn` (not `SemanticError`) so this is treated as a
+            // missing/unavailable object rather than a hard semantic error. The column
+            // may become available later (e.g. `change$row_id` once change tracking is
+            // enabled), and task SQL validation tolerates missing objects on purpose.
+            return Err(ErrorCode::UnknownColumn(format!(
                 "Unsupported internal column '{}' in table '{}'.",
                 column_binding.internal_column.column_name(),
                 table.table().name()

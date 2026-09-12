@@ -211,7 +211,7 @@ select count(distinct created) > 1 from db2.test55;
 ----
 1
 
-statement error 1065
+statement error 1058
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
 
 statement ok
@@ -494,7 +494,7 @@ create or replace table IF NOT EXISTS replace_test(b int);
 statement ok
 create or replace table replace_test(b int);
 
-statement error 1065
+statement error 1058
 select a from replace_test;
 
 statement ok

@@ -70,7 +70,7 @@ INSERT FIRST
 SELECT * from s;
 
 # The source column in into clause must be a column ref of the source table
-statement error 1065
+statement error 1058
 INSERT FIRST
   WHEN c3 > 4 THEN
     INTO t1 (c1,c2) VALUES(c1,c4)
@@ -82,7 +82,7 @@ INSERT FIRST
 SELECT * from s;
 
 # test alias
-statement error 1065
+statement error 1058
 INSERT FIRST
   WHEN c3 > 4 THEN
     INTO t1 (c1,c2) VALUES(c3,c4)
@@ -94,7 +94,7 @@ INSERT FIRST
 SELECT c3,c4 as c5 from s;
 
 # column ref in when clause must be a column ref of the source table
-statement error 1065
+statement error 1058
 INSERT FIRST
   WHEN c1 > 4 THEN
     INTO t1 (c1,c2) VALUES(c3,c4)
