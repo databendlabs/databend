@@ -318,3 +318,129 @@ select avg_merge(tuple(to_decimal(4500, 38, 0), 10::uint64, true));
 
 statement ok
 drop table legacy_aggregate_state_combinator_test
+
+# Nullable sum keeps both the non-NULL and input-presence state flags.
+query III
+select s.1, s.2::int, s.3::int
+from (select sum_state(if(number = 0, NULL, number::int64)) as s from numbers(4));
+----
+6 1 1
+
+query I
+select sum_merge(s)
+from (
+    select sum_merge_state(s) as s
+    from (
+        select number % 2 as g,
+               sum_state(if(number = 0, NULL, number::int64)) as s
+        from numbers(4)
+        group by g
+    )
+);
+----
+6
+
+# Native nullable aggregates retain the outer v1 presence flag.
+query II
+select s.2::int, (abs(stddev_pop_merge(s) - sqrt(1.25)) < 0.000000001)::int
+from (select stddev_pop_state(number) as s from numbers(4))
+group by s.2;
+----
+1 1
+
+query TII
+select s.1, s.2::int, s.3::int
+from (select string_agg_state(if(number = 0, NULL, 'x')) as s from numbers(2));
+----
+x 1 1
+
+# String states retain a nullable value column; Decimal state metadata describes
+# raw storage integers and must not cause rescaling when merged.
+query TT
+select min_merge(s), max_merge(t)
+from (select min_state('x') as s, max_state('y') as t);
+----
+x y
+
+query III
+select (min_merge(s) = 1.10)::int,
+       (max_merge(t) = 1.10)::int,
+       (any_merge(u) = 1.10)::int
+from (
+    select min_state('1.10'::decimal(15, 2)) as s,
+           max_state('1.10'::decimal(30, 5)) as t,
+           any_state('1.10'::decimal(50, 8)) as u
+);
+----
+1 1 1
+
+# Median persists a typed array of samples, including Decimal raw values.
+query II
+select length(s.1), (median_merge(s) = 1.5)::int
+from (select median_state(number) as s from numbers(4))
+group by length(s.1);
+----
+4 1
+
+query I
+select (median_merge(s) = 1.10)::int
+from (select median_state('1.10'::decimal(30, 5)) as s);
+----
+1
+
+query T
+select json_object_agg(k, v)
+from (select 'a' as k, NULL::int as v union all select 'b', NULL::int);
+----
+{}
+
+query T
+select json_object_agg(k, v)
+from (select NULL::string as k, 1 as v);
+----
+{}
+
+query T
+select json_object_agg_merge(s)
+from (select json_object_agg_state(number::string, number) as s from numbers(0));
+----
+{}
+
+# Uniq persists only its set; overlapping partial states must not add counts.
+query I
+select uniq_merge(s)
+from (
+    select uniq_state(k) as s from (select 'a' as k union all select 'b')
+    union all
+    select uniq_state(k) as s from (select 'b' as k union all select 'c')
+);
+----
+3
+
+query I
+select length(s.1)
+from (select uniq_state(number % 2) as s from numbers(6));
+----
+2
+
+# Geographic states retain the outer flag and st_collect's typed geometry array.
+query II
+select length(s.1), s.2::int
+from (select st_collect_state(to_geometry('SRID=4326;POINT(1 2)')) as s from numbers(2));
+----
+2 1
+
+query I
+select st_srid(st_collect_merge(s))
+from (select st_collect_state(to_geometry('SRID=4326;POINT(1 2)')) as s from numbers(2));
+----
+4326
+
+query II
+select (st_area(st_union_agg_merge(s)) = 4)::int, st_srid(st_union_agg_merge(s))
+from (
+    select st_union_agg_state(to_geometry('SRID=4326;POLYGON((0 0,2 0,2 2,0 2,0 0))')) as s
+    from numbers(2)
+);
+----
+1 4326

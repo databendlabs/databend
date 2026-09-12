@@ -39,6 +39,16 @@ where database = 'test_mv_ddl' and name = 'source'
 ----
 0
 
+# Combined aggregate names without a state route must fail the support check.
+statement error Materialized View only supports simple SELECT queries
+create materialized view mv_sum_if as select sum_if(amount, active) from source
+
+statement error Materialized View only supports simple SELECT queries
+create materialized view mv_sum_state as select sum_state(amount) from source
+
+statement error Materialized View only supports simple SELECT queries
+create materialized view mv_count_distinct as select count_distinct(amount) from source
+
 # Explicit MV column names are exposed to users. CREATE atomically enables source change tracking.
 statement ok
 create materialized view mv_detail (item_id, doubled_amount) as

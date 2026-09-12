@@ -101,6 +101,8 @@ pub use crate::row_encoding::*;
 pub use crate::schema::*;
 pub use crate::stat_evaluator::*;
 pub use crate::symbol::*;
+pub use crate::types::type_name::resolve_type_name;
+pub use crate::types::type_name::resolve_type_name_by_str;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;

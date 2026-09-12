@@ -1,0 +1,748 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use databend_common_column::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
+use databend_common_expression::aggregate::AggrState;
+pub use databend_common_expression::aggregate::aggregate_function::*;
+use databend_common_expression::types::DataType;
+
+mod array_collect;
+mod build_context;
+mod combinator;
+pub(crate) mod if_combinator;
+mod input_rows;
+pub(super) mod merge_combinator;
+pub(crate) mod multi_arg_nullable;
+mod name_route;
+mod null_argument_result;
+mod sort_combinator;
+pub(crate) mod state_combinator;
+mod unary;
+mod unary_distinct;
+mod unary_nullable;
+
+pub(super) use array_collect::ArrayCollectEval;
+pub(super) use array_collect::ArrayCollectState;
+pub(super) use combinator::Combinator;
+pub(super) use combinator::IfCombinator;
+pub(super) use combinator::PlainCombinator;
+pub(super) use combinator::StateCombinator;
+pub(super) use combinator::UnaryDistinctCombinator;
+pub(super) use merge_combinator::LegacySignatureResolver;
+pub(super) use multi_arg_nullable::MultiArgOrNullEval;
+pub(super) use multi_arg_nullable::MultiArgSkipNullEval;
+pub(super) use name_route::*;
+pub(super) use null_argument_result::try_create_null_argument_result_function;
+pub(super) use unary::*;
+pub(super) use unary_distinct::create_unary_distinct;
+pub(super) use unary_nullable::UnaryOrNull;
+
+/// Builds an implementation while retaining the complete external call contract.
+pub(super) struct UnaryBuildContext<'a, C> {
+    // Keep the complete call unchanged when adapting implementation inputs.
+    call: RawAggregateCall<'a>,
+    metadata: AggregateMetadata,
+    combinator: C,
+    input_type: DataType,
+}
+
+pub(super) struct MultiArgBuildContext<'a, C> {
+    call: RawAggregateCall<'a>,
+    metadata: AggregateMetadata,
+    combinator: C,
+    input_types: Vec<DataType>,
+}
+
+pub(super) struct DirectBuildContext<'a, C> {
+    call: RawAggregateCall<'a>,
+    metadata: AggregateMetadata,
+    combinator: C,
+    // Includes nullable types when the implementation handles NULL itself.
+    input_types: &'a [DataType],
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum NullInput {
+    #[default]
+    /// The routing adaptors filter NULLs before invoking the implementation.
+    Filter,
+    /// The implementation owns NULL input handling; this does not imply retaining NULLs.
+    Native,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct StateCombinatorPlan {
+    pub(crate) strip_nullable_input: bool,
+    pub(crate) nullable_input_result_flag: bool,
+}
+
+pub(super) type UnaryBuildFn<C> = for<'a> fn(UnaryBuildContext<'a, C>) -> Result<AggregateCallRef>;
+
+pub(super) type MultiArgBuildFn<C> =
+    for<'a> fn(MultiArgBuildContext<'a, C>) -> Result<AggregateCallRef>;
+
+pub(super) type DirectBuildFn<C> =
+    for<'a> fn(DirectBuildContext<'a, C>) -> Result<AggregateCallRef>;
+
+fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
+where T: Send + 'static {
+    state.addr.next(state.loc[index].offset()).get::<T>()
+}
+
+fn write_state_at<T>(state: AggrState<'_>, index: usize, value: T)
+where T: Send + 'static {
+    state
+        .addr
+        .next(state.loc[index].offset())
+        .write_state(value)
+}
+
+fn serialized_field_count(state: &BlockEntry) -> usize {
+    match state.data_type() {
+        DataType::Tuple(fields) => fields.len(),
+        _ => 1,
+    }
+}
+
+fn project_serialized_fields(state: &BlockEntry, start: usize, end: usize) -> BlockEntry {
+    debug_assert!(start < end);
+    match state {
+        BlockEntry::Column(Column::Tuple(fields)) => {
+            if end - start == 1 {
+                fields[start].clone().into()
+            } else {
+                Column::Tuple(fields[start..end].to_vec()).into()
+            }
+        }
+        BlockEntry::Const(Scalar::Tuple(values), DataType::Tuple(data_types), num_rows) => {
+            if end - start == 1 {
+                BlockEntry::new_const_column(
+                    data_types[start].clone(),
+                    values[start].clone(),
+                    *num_rows,
+                )
+            } else {
+                BlockEntry::new_const_column(
+                    DataType::Tuple(data_types[start..end].to_vec()),
+                    Scalar::Tuple(values[start..end].to_vec()),
+                    *num_rows,
+                )
+            }
+        }
+        _ => {
+            debug_assert_eq!(start, 0);
+            debug_assert_eq!(end, 1);
+            state.clone()
+        }
+    }
+}
+
+pub(crate) fn serialized_scalar_at(state: &BlockEntry, row: usize, field: usize) -> ScalarRef<'_> {
+    let scalar = state.index(row).unwrap();
+    match scalar {
+        ScalarRef::Tuple(fields) => fields[field].clone(),
+        _ => {
+            debug_assert_eq!(field, 0);
+            scalar
+        }
+    }
+}
+
+pub(crate) fn serialized_bool_at(state: &BlockEntry, row: usize, field: usize) -> bool {
+    match serialized_scalar_at(state, row, field) {
+        ScalarRef::Boolean(value) => value,
+        other => unreachable!("expected serialized boolean field, got {other:?}"),
+    }
+}
+
+pub(crate) fn serialized_binary_at(state: &BlockEntry, row: usize, field: usize) -> &[u8] {
+    match serialized_scalar_at(state, row, field) {
+        ScalarRef::Binary(value) => value,
+        other => unreachable!("expected serialized binary field, got {other:?}"),
+    }
+}
+
+fn combined_serialized_flag_filter(
+    state: &BlockEntry,
+    filter: Option<&Bitmap>,
+    field: usize,
+) -> Option<Bitmap> {
+    let mut values = Vec::with_capacity(state.len());
+    let mut has_false = false;
+    for row in 0..state.len() {
+        let value = filter.is_none_or(|filter| filter.get(row).unwrap())
+            && serialized_bool_at(state, row, field);
+        has_false |= !value;
+        values.push(value);
+    }
+    has_false.then(|| Bitmap::from(values))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::alloc::Layout;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::Result;
+    use databend_common_expression::FromData;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::aggregate::AggrStateType;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::UInt64Type;
+
+    use super::super::uniq::TypedUniqSet;
+    use super::sort_combinator::AggregateSortState;
+    use super::sort_combinator::SortEval;
+    use super::unary_distinct::UnaryDistinctEval;
+    use super::*;
+
+    struct SumState {
+        value: u64,
+    }
+
+    #[derive(Clone)]
+    enum SumDropCounter {
+        Shared(Arc<AtomicUsize>),
+    }
+
+    impl SumDropCounter {
+        fn increment(&self) {
+            match self {
+                Self::Shared(drop_count) => {
+                    drop_count.fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        }
+    }
+
+    struct SumInfo {
+        drop_count: SumDropCounter,
+    }
+
+    struct SumEval {
+        function_info: Arc<SumInfo>,
+    }
+
+    impl SumEval {
+        fn new(function_info: Arc<SumInfo>) -> Self {
+            Self { function_info }
+        }
+
+        fn add_value(state: &mut SumState, value: ScalarRef<'_>) {
+            let ScalarRef::Number(NumberScalar::UInt64(value)) = value else {
+                unreachable!()
+            };
+            state.value += value;
+        }
+    }
+
+    impl AggregateEval for SumEval {
+        fn init_state(&self, state: AggrState<'_>) {
+            state.write(|| SumState { value: 0 });
+        }
+
+        fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
+            let state = input.state.get::<SumState>();
+            let values = input.columns[0].downcast::<UInt64Type>().unwrap();
+            for row in 0..input.columns.num_rows() {
+                if input
+                    .validity
+                    .is_some_and(|validity| !validity.get(row).unwrap())
+                {
+                    continue;
+                }
+                state.value += values.index(row).unwrap();
+            }
+            Ok(())
+        }
+
+        fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
+            for (row, state) in input.states.iter().enumerate() {
+                self.accumulate_row(AccumulateRowInput {
+                    state,
+                    columns: input.columns,
+                    row,
+                })?;
+            }
+            Ok(())
+        }
+
+        fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
+            let value = input.columns[0].index(input.row).unwrap();
+            Self::add_value(input.state.get::<SumState>(), value);
+            Ok(())
+        }
+
+        fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+            for state in input.states.iter() {
+                input.builders[0].push(ScalarRef::Number(NumberScalar::UInt64(
+                    state.get::<SumState>().value,
+                )));
+            }
+            Ok(())
+        }
+
+        fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
+            for (row, state) in input.states.iter().enumerate() {
+                if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
+                    continue;
+                }
+                Self::add_value(
+                    state.get::<SumState>(),
+                    serialized_scalar_at(input.state, row, 0),
+                );
+            }
+            Ok(())
+        }
+
+        fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
+            input.state.get::<SumState>().value += input.rhs.get::<SumState>().value;
+            Ok(())
+        }
+
+        fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+            input.builder.push(ScalarRef::Number(NumberScalar::UInt64(
+                input.state.get::<SumState>().value,
+            )));
+            Ok(())
+        }
+
+        unsafe fn drop_state(&self, state: AggrState<'_>) {
+            self.function_info.drop_count.increment();
+            unsafe { std::ptr::drop_in_place(state.get::<SumState>()) };
+        }
+    }
+
+    fn plain_sum(drop_count: Arc<AtomicUsize>) -> impl AggregateEval {
+        plain_sum_with_counter(SumDropCounter::Shared(drop_count))
+    }
+
+    fn plain_sum_with_counter(drop_count: SumDropCounter) -> impl AggregateEval {
+        let function_info = sum_function_info(drop_count);
+        SumEval::new(function_info)
+    }
+
+    fn sum_function_info(drop_count: SumDropCounter) -> Arc<SumInfo> {
+        Arc::new(SumInfo { drop_count })
+    }
+
+    fn distinct_sum(drop_count: Arc<AtomicUsize>) -> impl AggregateEval {
+        UnaryDistinctEval::<TypedUniqSet<UInt64Type>, false>::new(
+            Box::new(plain_sum(drop_count)),
+            UInt64Type::data_type(),
+        )
+    }
+
+    fn distinct_sum_state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
+            vec![
+                AggrStateType::Custom(Layout::new::<
+                    unary_distinct::UnaryDistinctState<
+                        super::super::uniq::TypedUniqSet<UInt64Type>,
+                    >,
+                >()),
+                AggrStateType::Custom(Layout::new::<SumState>()),
+            ],
+            vec![StateSerdeItem::DataType(DataType::Array(Box::new(
+                UInt64Type::data_type(),
+            )))],
+        )
+        .with_manual_drop(true)
+    }
+
+    fn full_modifier_state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
+            vec![
+                AggrStateType::Custom(Layout::new::<AggregateSortState>()),
+                AggrStateType::Custom(Layout::new::<
+                    unary_distinct::UnaryDistinctState<
+                        super::super::uniq::TypedUniqSet<UInt64Type>,
+                    >,
+                >()),
+                AggrStateType::Custom(Layout::new::<SumState>()),
+                AggrStateType::Bool,
+            ],
+            vec![
+                StateSerdeItem::Binary(None),
+                StateSerdeItem::DataType(DataType::Array(Box::new(UInt64Type::data_type()))),
+                StateSerdeItem::DataType(DataType::Boolean),
+            ],
+        )
+        .with_manual_drop(true)
+    }
+
+    fn or_null_sum_state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
+            vec![
+                AggrStateType::Custom(Layout::new::<SumState>()),
+                AggrStateType::Bool,
+            ],
+            vec![
+                StateSerdeItem::DataType(UInt64Type::data_type()),
+                StateSerdeItem::DataType(DataType::Boolean),
+            ],
+        )
+        .with_manual_drop(true)
+    }
+
+    fn state_serde_data_type(item: &StateSerdeItem) -> DataType {
+        match item {
+            StateSerdeItem::DataType(data_type) => data_type.clone(),
+            StateSerdeItem::Binary(_) => DataType::Binary,
+        }
+    }
+
+    fn serialize_state(
+        function: &AggregateCallRef,
+        owner: &AggregateStateOwner,
+    ) -> Result<BlockEntry> {
+        let data_types = function
+            .state()
+            .serde_items()
+            .iter()
+            .map(state_serde_data_type)
+            .collect::<Vec<_>>();
+        let mut builders = data_types
+            .iter()
+            .map(|data_type| ColumnBuilder::with_capacity(data_type, 1))
+            .collect::<Vec<_>>();
+        function.serialize(SerializeInput {
+            states: owner.state_set(0),
+            builders: &mut builders,
+        })?;
+        let columns = builders
+            .into_iter()
+            .map(ColumnBuilder::build)
+            .collect::<Vec<_>>();
+        Ok(if columns.len() == 1 {
+            columns.into_iter().next().unwrap().into()
+        } else {
+            Column::Tuple(columns).into()
+        })
+    }
+
+    fn full_modifier_order_by() -> Vec<AggregateRuntimeOrderByItem> {
+        vec![AggregateRuntimeOrderByItem {
+            input: AggregateRuntimeOrderByInput::SortKey { offset: 1 },
+            data_type: UInt64Type::data_type(),
+            asc: true,
+            nulls_first: false,
+        }]
+    }
+
+    fn full_modifier_function(
+        drop_count: Arc<AtomicUsize>,
+        order_by: Vec<AggregateRuntimeOrderByItem>,
+    ) -> AggregateCallRef {
+        let eval = MultiArgOrNullEval::new(SortEval::new(
+            distinct_sum(drop_count),
+            vec![UInt64Type::data_type(), UInt64Type::data_type()],
+            order_by,
+        ));
+        Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
+                name: "sum_probe_full_modifiers".to_string(),
+                params: vec![],
+                args_type: vec![UInt64Type::data_type()],
+                distinct: true,
+                order_by: vec![],
+                return_type: UInt64Type::data_type().wrap_nullable(),
+            },
+            FunctionInputLayout::Identity,
+            AggregateFeatures {
+                eager_aggregation: EagerAggregation::Unsupported,
+                supports_filter: false,
+                sort_policy: SortPolicy::Required,
+                distinct_policy: DistinctPolicy::Unsupported,
+                ..Default::default()
+            },
+            full_modifier_state_description(),
+            eval,
+        ))
+    }
+
+    fn full_modifier_entries() -> Vec<BlockEntry> {
+        vec![
+            UInt64Type::from_data(vec![2, 2, 5, 9, 0, 1]).into(),
+            UInt64Type::from_data(vec![3, 1, 2, 0, 4, 5]).into(),
+        ]
+    }
+
+    #[test]
+    fn test_or_null_emits_null_without_input_rows() -> Result<()> {
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let function: AggregateCallRef = Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
+                name: "sum_probe_or_null".to_string(),
+                params: vec![],
+                args_type: vec![UInt64Type::data_type()],
+                distinct: false,
+                order_by: vec![],
+                return_type: UInt64Type::data_type().wrap_nullable(),
+            },
+            FunctionInputLayout::Identity,
+            AggregateFeatures::default(),
+            or_null_sum_state_description(),
+            MultiArgOrNullEval::new(plain_sum(drop_count.clone())),
+        ));
+
+        {
+            let owner = AggregateStateOwner::new(vec![function.clone()])?;
+            let mut builder =
+                ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
+            function.merge_result(MergeResultInput {
+                state: owner.state(0),
+                builder: &mut builder,
+            })?;
+            let column = builder.build();
+            assert_eq!(unsafe { column.index_unchecked(0) }, ScalarRef::Null);
+        }
+
+        assert_eq!(drop_count.load(Ordering::SeqCst), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_distinct_serialized_merge_restores_key_set() -> Result<()> {
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let function: AggregateCallRef = Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
+                name: "sum_probe_distinct".to_string(),
+                params: vec![],
+                args_type: vec![UInt64Type::data_type()],
+                distinct: true,
+                order_by: vec![],
+                return_type: UInt64Type::data_type(),
+            },
+            FunctionInputLayout::Identity,
+            AggregateFeatures {
+                distinct_policy: DistinctPolicy::Unsupported,
+                ..Default::default()
+            },
+            distinct_sum_state_description(),
+            distinct_sum(drop_count.clone()),
+        ));
+
+        {
+            let source_owner = AggregateStateOwner::new(vec![function.clone()])?;
+            let entries = [UInt64Type::from_data(vec![2, 2, 5]).into()];
+            function.accumulate(AccumulateInput {
+                state: source_owner.state(0),
+                columns: (&entries).into(),
+                validity: None,
+            })?;
+            let mut snapshot = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
+            function.merge_result_read_only(MergeResultInput {
+                state: source_owner.state(0),
+                builder: &mut snapshot,
+            })?;
+            assert_eq!(
+                snapshot.build().index(0).unwrap(),
+                ScalarRef::Number(NumberScalar::UInt64(7))
+            );
+            let more = [UInt64Type::from_data(vec![5, 3]).into()];
+            function.accumulate(AccumulateInput {
+                state: source_owner.state(0),
+                columns: (&more).into(),
+                validity: None,
+            })?;
+            let mut snapshot = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
+            function.merge_result_read_only(MergeResultInput {
+                state: source_owner.state(0),
+                builder: &mut snapshot,
+            })?;
+            assert_eq!(
+                snapshot.build().index(0).unwrap(),
+                ScalarRef::Number(NumberScalar::UInt64(10))
+            );
+            let serialized_state = serialize_state(&function, &source_owner)?;
+
+            let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
+            function.merge_serialized(MergeSerializedInput {
+                states: serialized_owner.state_set(0),
+                state: &serialized_state,
+                filter: None,
+            })?;
+
+            let mut builder = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
+            function.merge_result(MergeResultInput {
+                state: serialized_owner.state(0),
+                builder: &mut builder,
+            })?;
+            let column = builder.build();
+            assert_eq!(
+                unsafe { column.index_unchecked(0) },
+                ScalarRef::Number(NumberScalar::UInt64(10))
+            );
+        }
+
+        assert_eq!(drop_count.load(Ordering::SeqCst), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn test_intrusive_modifiers_compose_as_concrete_evals() -> Result<()> {
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
+
+        {
+            let owner = AggregateStateOwner::new(vec![function.clone()])?;
+            let entries = full_modifier_entries();
+
+            function.accumulate(AccumulateInput {
+                state: owner.state(0),
+                columns: (&entries).into(),
+                validity: None,
+            })?;
+
+            let mut builder =
+                ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
+            function.merge_result(MergeResultInput {
+                state: owner.state(0),
+                builder: &mut builder,
+            })?;
+            let column = builder.build();
+            assert_eq!(
+                unsafe { column.index_unchecked(0) },
+                ScalarRef::Number(NumberScalar::UInt64(17))
+            );
+        }
+
+        {
+            let left = AggregateStateOwner::new(vec![function.clone()])?;
+            let right = AggregateStateOwner::new(vec![function.clone()])?;
+            let left_entries: Vec<BlockEntry> = vec![
+                UInt64Type::from_data(vec![2, 5]).into(),
+                UInt64Type::from_data(vec![1, 2]).into(),
+            ];
+            function.accumulate(AccumulateInput {
+                state: left.state(0),
+                columns: (&left_entries).into(),
+                validity: None,
+            })?;
+
+            let right_entries: Vec<BlockEntry> = vec![
+                UInt64Type::from_data(vec![2, 1]).into(),
+                UInt64Type::from_data(vec![0, 3]).into(),
+            ];
+            function.accumulate(AccumulateInput {
+                state: right.state(0),
+                columns: (&right_entries).into(),
+                validity: None,
+            })?;
+
+            function.merge_states(MergeStatesInput {
+                state: left.state(0),
+                rhs: right.state(0),
+            })?;
+
+            let mut builder =
+                ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
+            function.merge_result(MergeResultInput {
+                state: left.state(0),
+                builder: &mut builder,
+            })?;
+            let column = builder.build();
+            assert_eq!(
+                unsafe { column.index_unchecked(0) },
+                ScalarRef::Number(NumberScalar::UInt64(8))
+            );
+        }
+
+        {
+            let source_owner = AggregateStateOwner::new(vec![function.clone()])?;
+            let entries: Vec<BlockEntry> = vec![
+                UInt64Type::from_data(vec![2, 2, 5, 9, 0, 1]).into(),
+                UInt64Type::from_data(vec![3, 1, 2, 0, 4, 5]).into(),
+            ];
+
+            function.accumulate(AccumulateInput {
+                state: source_owner.state(0),
+                columns: (&entries).into(),
+                validity: None,
+            })?;
+            let serialized_state = serialize_state(&function, &source_owner)?;
+
+            let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
+            function.merge_serialized(MergeSerializedInput {
+                states: serialized_owner.state_set(0),
+                state: &serialized_state,
+                filter: None,
+            })?;
+
+            let mut builder =
+                ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
+            function.merge_result(MergeResultInput {
+                state: serialized_owner.state(0),
+                builder: &mut builder,
+            })?;
+            let column = builder.build();
+            assert_eq!(
+                unsafe { column.index_unchecked(0) },
+                ScalarRef::Number(NumberScalar::UInt64(17))
+            );
+        }
+
+        assert_eq!(drop_count.load(Ordering::SeqCst), 8);
+        Ok(())
+    }
+
+    #[test]
+    fn test_sorted_window_results_drop_previous_inner_state() -> Result<()> {
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let function = full_modifier_function(drop_count.clone(), full_modifier_order_by());
+        let owner = AggregateStateOwner::new(vec![function.clone()])?;
+        let entries = full_modifier_entries();
+        let mut builder =
+            ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 12);
+
+        let expected = [2, 2, 7, 16, 16, 17];
+        for (row, expected) in expected.into_iter().enumerate() {
+            function.accumulate_row(AccumulateRowInput {
+                state: owner.state(0),
+                columns: (&entries).into(),
+                row,
+            })?;
+            // Repeated reads must preserve the sort buffer while releasing each
+            // previous inner state, including the initial empty state.
+            for read in 0..2 {
+                function.merge_result_read_only(MergeResultInput {
+                    state: owner.state(0),
+                    builder: &mut builder,
+                })?;
+                assert_eq!(drop_count.load(Ordering::SeqCst), row * 2 + read + 1);
+            }
+            let column = builder.clone().build();
+            assert_eq!(
+                column.index(row * 2),
+                Some(ScalarRef::Number(NumberScalar::UInt64(expected)))
+            );
+            assert_eq!(column.index(row * 2), column.index(row * 2 + 1));
+        }
+        drop(owner);
+        assert_eq!(drop_count.load(Ordering::SeqCst), 13);
+        Ok(())
+    }
+}

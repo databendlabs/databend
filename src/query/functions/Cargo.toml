@@ -33,7 +33,9 @@ databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
 glob = { workspace = true }
+hashbrown = { workspace = true }
 hex = { workspace = true }
+inventory = { workspace = true }
 itertools = { workspace = true }
 jaq-core = { workspace = true }
 jaq-json = { workspace = true }

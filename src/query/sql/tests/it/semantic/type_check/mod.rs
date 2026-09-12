@@ -26,9 +26,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -205,8 +206,8 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         self.settings.clone()
     }
 
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        AggregateFunctionFactory::instance()
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry {
+        &AGGR_REGISTRY
     }
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter> {

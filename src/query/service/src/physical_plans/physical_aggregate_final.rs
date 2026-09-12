@@ -556,20 +556,6 @@ fn build_aggregate_function(
                         }
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let sort_desc_indices = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| {
-                        if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                            Ok(col.column.index)
-                        } else {
-                            Err(ErrorCode::Internal(
-                                "Aggregate function sort description must be a BoundColumnRef"
-                                    .to_string(),
-                            ))
-                        }
-                    })
-                    .collect::<Result<_>>()?;
                 let args = arg_indices
                     .iter()
                     .map(|i| {
@@ -579,11 +565,6 @@ fn build_aggregate_function(
                             .clone())
                     })
                     .collect::<Result<_>>()?;
-                let sort_descs = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| desc.try_into())
-                    .collect::<Result<_>>()?;
                 Ok(AggregateFunctionDesc {
                     sig: AggregateFunctionSignature {
                         name: agg.func_name.clone(),
@@ -591,11 +572,10 @@ fn build_aggregate_function(
                         return_type: *agg.return_type.clone(),
                         args,
                         params: agg.params.clone(),
-                        sort_descs,
+                        order_by: agg.bound_order_by()?,
                     },
                     output_column: v.index,
                     arg_indices,
-                    sort_desc_indices,
                     display: v.scalar.as_expr()?.sql_display(),
                 })
             }
@@ -630,11 +610,10 @@ fn build_aggregate_function(
                         return_type: *udaf.return_type.clone(),
                         args,
                         params: vec![],
-                        sort_descs: vec![],
+                        order_by: vec![],
                     },
                     output_column: v.index,
                     arg_indices,
-                    sort_desc_indices: vec![],
                     display: v.scalar.as_expr()?.sql_display(),
                 })
             }

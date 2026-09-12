@@ -14,6 +14,7 @@
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
 
@@ -32,10 +33,13 @@ use num_traits::float::FloatCore;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::AccessType;
 use super::ArgType;
+use super::BuilderMut;
 use super::DataType;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::ValueType;
 use super::decimal::DecimalSize;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
@@ -298,6 +302,177 @@ pub enum NumberDomain {
     Int64(SimpleDomain<i64>),
     Float32(SimpleDomain<F32>),
     Float64(SimpleDomain<F64>),
+}
+
+/// A runtime-erased number type backed by [`NumberScalar`] and [`NumberColumn`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyNumberType;
+
+pub struct NumberColumnIterator<'a> {
+    column: &'a NumberColumn,
+    index: usize,
+}
+
+impl Iterator for NumberColumnIterator<'_> {
+    type Item = NumberScalar;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.column.index(self.index)?;
+        self.index += 1;
+        Some(item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.column.len() - self.index;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for NumberColumnIterator<'_> {}
+
+unsafe impl TrustedLen for NumberColumnIterator<'_> {}
+
+impl AccessType for AnyNumberType {
+    type Scalar = NumberScalar;
+    type ScalarRef<'a> = NumberScalar;
+    type Column = NumberColumn;
+    type Domain = NumberDomain;
+    type ColumnIterator<'a> = NumberColumnIterator<'a>;
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar.as_number().copied().ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!("failed to downcast scalar {scalar:?} into number"))
+        })
+    }
+
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_number().cloned().ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!("failed to downcast column {col:?} into number"))
+        })
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        domain.as_number().cloned().ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!("failed to downcast domain {domain:?} into number"))
+        })
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.index(index)
+    }
+
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { col.index_unchecked(index) }
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.slice(range)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        NumberColumnIterator {
+            column: col,
+            index: 0,
+        }
+    }
+
+    fn column_memory_size(col: &Self::Column, _gc: bool) -> usize {
+        crate::with_number_mapped_type!(|NUM| match col {
+            NumberColumn::NUM(values) => values.len() * std::mem::size_of::<NUM>(),
+        })
+    }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.partial_cmp(&rhs)
+            .expect("number columns must contain a single number type")
+    }
+}
+
+impl ValueType for AnyNumberType {
+    type ColumnBuilder = NumberColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
+
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert_eq!(DataType::Number(scalar.data_type()), *data_type);
+        Scalar::Number(scalar)
+    }
+
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(matches!(data_type, DataType::Number(_)));
+        Domain::Number(domain)
+    }
+
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        debug_assert_eq!(DataType::Number(col.data_type()), *data_type);
+        Column::Number(col)
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        match builder {
+            ColumnBuilder::Number(builder) => builder.into(),
+            _ => unreachable!("expected number column builder"),
+        }
+    }
+
+    fn try_upcast_column_builder(
+        builder: Self::ColumnBuilder,
+        data_type: &DataType,
+    ) -> Option<ColumnBuilder> {
+        (DataType::Number(builder.data_type()) == *data_type)
+            .then(|| ColumnBuilder::Number(builder))
+    }
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        NumberColumnBuilder::from_column(col)
+    }
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
+    }
+
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
+        builder.push(item);
+    }
+
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
+        builder.push_repeat(item, n);
+    }
+
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        builder.push_default();
+    }
+
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
+    }
+
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
+    }
+
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

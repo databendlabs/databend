@@ -34,6 +34,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -63,7 +64,6 @@ use crate::plans::ExecuteImmediatePlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
-use crate::resolve_type_name;
 
 impl Binder {
     #[async_backtrace::framed]

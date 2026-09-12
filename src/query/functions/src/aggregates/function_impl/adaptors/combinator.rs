@@ -1,0 +1,389 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Arc;
+
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::StateSerdeType;
+use databend_common_expression::types::DataType;
+
+use super::AggregateBoundOrderByItem;
+use super::AggregateBoundOrderBySource;
+use super::AggregateCallInstance;
+use super::AggregateCallRef;
+use super::AggregateEval;
+use super::AggregateMetadata;
+use super::AggregateSignature;
+use super::AggregateStateDescription;
+use super::FunctionInputLayout;
+use super::StateCombinatorPlan;
+use super::if_combinator;
+use super::sort_combinator;
+use super::state_combinator;
+
+/// Aggregate composition is part of each concrete function's build context.
+///
+/// Name routes select a combinator and pass it into a `UnaryBuildContext`,
+/// `MultiArgBuildContext`, or `DirectBuildContext`. The function builder chooses
+/// its evaluator, result type, state layout, and NULL handling, then invokes the
+/// context's creation method to complete the composition. All combinations must
+/// be assembled within this construction path, before returning the final
+/// `AggregateCallRef`.
+///
+/// A universal wrapper around an already built `AggregateCall` loses this
+/// construction boundary. It must infer how to change NULL handling, input
+/// projection, ordering, and serialized state from an opaque inner call. Those
+/// policies are function-specific: array DISTINCT orders the unique values
+/// during replay, while MERGE consumes serialized states instead of raw inputs.
+/// Guessing these policies in an outer wrapper is error-prone and makes new
+/// combinations difficult to extend. Add the combination to the function's
+/// build context and update the evaluator and its state description together.
+///
+/// Keep concrete evaluator types through the remaining composition steps and
+/// erase the final call at the execution boundary. Deliberate internal erasure
+/// can limit monomorphization, such as DISTINCT's nested evaluator; it must not
+/// force callers to wrap a completed call or erase an evaluator merely to return
+/// it from a type-dispatch helper.
+pub(crate) trait Combinator {
+    /// The evaluator consumes nullable columns itself. Retain them through
+    /// input adaptors so input-presence and non-null presence stay distinct.
+    fn with_native_null_input(self) -> Self
+    where Self: Sized {
+        self
+    }
+
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef>;
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct PlainCombinator;
+
+#[derive(Debug, Clone)]
+pub(crate) struct IfCombinator {
+    pub(crate) nested_args_type: Vec<DataType>,
+    pub(crate) condition_index: usize,
+    pub(crate) always_false: bool,
+    pub(crate) strip_nullable_input: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UnaryDistinctCombinator<const SKIP_NULLS: bool> {
+    pub(crate) arg_type: DataType,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct StateCombinator {
+    pub(crate) plan: StateCombinatorPlan,
+}
+
+fn finish<I>(
+    signature: AggregateSignature,
+    call_metadata: AggregateMetadata,
+    state: AggregateStateDescription,
+    eval: I,
+) -> AggregateCallRef
+where
+    I: AggregateEval,
+{
+    Arc::new(AggregateCallInstance::new(
+        signature,
+        FunctionInputLayout::Identity,
+        call_metadata.into_features(),
+        state,
+        eval,
+    ))
+}
+
+fn finish_with_input_layout<I>(
+    signature: AggregateSignature,
+    input_layout: FunctionInputLayout,
+    call_metadata: AggregateMetadata,
+    state: AggregateStateDescription,
+    eval: I,
+) -> AggregateCallRef
+where
+    I: AggregateEval,
+{
+    Arc::new(AggregateCallInstance::new(
+        signature,
+        input_layout,
+        call_metadata.into_features(),
+        state,
+        eval,
+    ))
+}
+
+fn finish_with_order_by<I>(
+    signature: AggregateSignature,
+    call_metadata: AggregateMetadata,
+    state: AggregateStateDescription,
+    eval: I,
+) -> AggregateCallRef
+where
+    I: AggregateEval,
+{
+    if signature.order_by.is_empty() {
+        return finish(signature, call_metadata, state, eval);
+    }
+
+    let (input_types, order_by) =
+        sort_combinator::sort_runtime_inputs(&signature.args_type, &signature.order_by);
+    let state = sort_combinator::sort_state_description(&state);
+    let eval = sort_combinator::SortEval::new(eval, input_types, order_by);
+    finish(signature, call_metadata, state, eval)
+}
+
+impl Combinator for PlainCombinator {
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        call_metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        if ORDERED {
+            Ok(finish_with_order_by(signature, call_metadata, state, eval))
+        } else {
+            Ok(finish(signature, call_metadata, state, eval))
+        }
+    }
+}
+
+impl Combinator for IfCombinator {
+    fn with_native_null_input(mut self) -> Self {
+        self.strip_nullable_input = false;
+        self
+    }
+
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        call_metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        if !ORDERED || signature.order_by.is_empty() {
+            let eval = if_combinator::IfEval::new(
+                eval,
+                self.condition_index,
+                self.nested_args_type.len(),
+                self.always_false,
+                self.strip_nullable_input,
+            );
+            return Ok(finish(signature, call_metadata, state, eval));
+        }
+
+        // Runtime inputs place the condition last, making the nested ordered
+        // inputs a contiguous prefix: [args..., derived keys..., condition].
+        let derived_key_count = signature
+            .order_by
+            .iter()
+            .filter(|item| matches!(item.source, AggregateBoundOrderBySource::Derived))
+            .count();
+        let logical_input_len = signature.args_type.len() + derived_key_count;
+        let mut projection = Vec::with_capacity(logical_input_len);
+        projection.extend(0..self.condition_index);
+        projection.extend(signature.args_type.len()..logical_input_len);
+        projection.push(self.condition_index);
+        let input_layout = FunctionInputLayout::new(logical_input_len, projection)?;
+        let runtime_condition_index = logical_input_len - 1;
+
+        // After FILTER, ordering by the condition is constant and can be
+        // removed. References after it shift left because condition is absent
+        // from the nested Sort input.
+        let nested_order_by = signature
+            .order_by
+            .iter()
+            .filter_map(|item| {
+                let source = match item.source {
+                    AggregateBoundOrderBySource::Argument { index }
+                        if index == self.condition_index =>
+                    {
+                        return None;
+                    }
+                    AggregateBoundOrderBySource::Argument { index } => {
+                        AggregateBoundOrderBySource::Argument {
+                            index: index - usize::from(index > self.condition_index),
+                        }
+                    }
+                    AggregateBoundOrderBySource::Derived => AggregateBoundOrderBySource::Derived,
+                };
+                Some(AggregateBoundOrderByItem {
+                    source,
+                    ..item.clone()
+                })
+            })
+            .collect::<Vec<_>>();
+        if nested_order_by.is_empty() {
+            let eval = if_combinator::IfEval::new(
+                eval,
+                runtime_condition_index,
+                self.nested_args_type.len(),
+                self.always_false,
+                self.strip_nullable_input,
+            );
+            return Ok(finish_with_input_layout(
+                signature,
+                input_layout,
+                call_metadata,
+                state,
+                eval,
+            ));
+        }
+
+        let (input_types, order_by) =
+            sort_combinator::sort_runtime_inputs(&self.nested_args_type, &nested_order_by);
+        let state = sort_combinator::sort_state_description(&state);
+        let eval = sort_combinator::SortEval::new(eval, input_types, order_by);
+        let eval = if_combinator::IfEval::new(
+            eval,
+            runtime_condition_index,
+            self.nested_args_type.len(),
+            self.always_false,
+            self.strip_nullable_input,
+        );
+        Ok(finish_with_input_layout(
+            signature,
+            input_layout,
+            call_metadata,
+            state,
+            eval,
+        ))
+    }
+}
+
+impl<const SKIP_NULLS: bool> Combinator for UnaryDistinctCombinator<SKIP_NULLS> {
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        call_metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        // No values can enter the distinct set for a statically NULL argument.
+        if SKIP_NULLS && self.arg_type.is_null() {
+            return PlainCombinator.create::<ORDERED>(signature, call_metadata, state, eval);
+        }
+        if ORDERED && !signature.order_by.is_empty() {
+            // DISTINCT retains only the argument; independent sort keys cannot
+            // be reconstructed when the unique values are replayed.
+            if signature.order_by.iter().any(|item| {
+                !matches!(item.source, AggregateBoundOrderBySource::Argument {
+                    index: 0
+                })
+            }) {
+                return Err(ErrorCode::BadArguments(
+                    "DISTINCT aggregate ORDER BY must reference its argument",
+                ));
+            }
+            let (input_types, order_by) = sort_combinator::sort_runtime_inputs(
+                std::slice::from_ref(&self.arg_type),
+                &signature.order_by,
+            );
+            let state = sort_combinator::sort_state_description(&state);
+            let eval = sort_combinator::SortEval::new(eval, input_types, order_by);
+            return super::create_unary_distinct::<SKIP_NULLS, _>(
+                PlainCombinator,
+                signature,
+                call_metadata,
+                eval,
+                &state,
+                self.arg_type,
+            );
+        }
+        super::create_unary_distinct::<SKIP_NULLS, _>(
+            PlainCombinator,
+            signature,
+            call_metadata,
+            eval,
+            &state,
+            self.arg_type,
+        )
+    }
+}
+
+impl Combinator for StateCombinator {
+    fn with_native_null_input(mut self) -> Self {
+        self.plan.strip_nullable_input = false;
+        self
+    }
+
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        call_metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        let (signature, state, eval) = self.wrap(signature, state, eval)?;
+        if ORDERED {
+            Ok(finish_with_order_by(signature, call_metadata, state, eval))
+        } else {
+            Ok(finish(signature, call_metadata, state, eval))
+        }
+    }
+}
+
+impl StateCombinator {
+    fn wrap<I>(
+        self,
+        signature: AggregateSignature,
+        state: AggregateStateDescription,
+        eval: I,
+    ) -> Result<(
+        AggregateSignature,
+        AggregateStateDescription,
+        state_combinator::StateEval<I>,
+    )>
+    where
+        I: AggregateEval,
+    {
+        let state = if self.plan.nullable_input_result_flag {
+            state_combinator::nullable_input_state_description(&state)
+        } else {
+            state
+        };
+        let physical_type = StateSerdeType::new(state.serde_items().to_vec()).data_type();
+        let function_name = signature
+            .name
+            .strip_suffix("_state")
+            .expect("state combinator names must end with _state");
+        let return_type = state_combinator::aggregate_state_data_type(
+            function_name,
+            &signature.params,
+            signature.args_type.clone(),
+            physical_type,
+        )?;
+        let signature = AggregateSignature {
+            return_type,
+            ..signature
+        };
+        Ok((
+            signature,
+            state,
+            state_combinator::StateEval::new(
+                eval,
+                self.plan.strip_nullable_input,
+                self.plan.nullable_input_result_flag,
+            ),
+        ))
+    }
+}

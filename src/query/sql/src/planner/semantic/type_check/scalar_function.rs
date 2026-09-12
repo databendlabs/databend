@@ -28,6 +28,7 @@ use databend_common_expression::Expr as EExpr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -57,7 +58,6 @@ use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
 use crate::binder::AliasLookup;
 use crate::binder::NameResolutionResult;
-use crate::planner::semantic::resolve_type_name;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -161,7 +161,11 @@ where A: TypeCheckAdapter
         let all_funcs = BUILTIN_FUNCTIONS
             .all_function_names()
             .into_iter()
-            .chain(self.adapter.aggregate_function_factory().registered_names())
+            .chain(
+                self.adapter
+                    .aggregate_function_registry()
+                    .registered_names(),
+            )
             .chain(
                 GENERAL_WINDOW_FUNCTIONS
                     .iter()
