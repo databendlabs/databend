@@ -207,8 +207,24 @@ impl PrivateTaskCancelSource {
 impl AsyncSource for PrivateTaskCancelSource {
     const NAME: &'static str = FUNCTION_NAME;
 
+    fn generate<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> futures::future::BoxFuture<'async_trait, Result<Option<DataBlock>>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        self.generate_boxed()
+    }
+}
+impl PrivateTaskCancelSource {
+    fn generate_boxed<'a>(
+        &'a mut self,
+    ) -> futures::future::BoxFuture<'a, Result<Option<DataBlock>>> {
+        Box::pin(self.generate_inner())
+    }
     #[async_backtrace::framed]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    async fn generate_inner(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
         }
