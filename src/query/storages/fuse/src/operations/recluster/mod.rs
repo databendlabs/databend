@@ -23,6 +23,7 @@ mod vector_recluster;
 
 pub(crate) use hilbert_recluster::HilbertReclusterStrategy;
 pub(crate) use linear_recluster::LinearReclusterStrategy;
+pub(crate) use linear_recluster::ReclusterDepthStats;
 pub(crate) use linear_recluster::select_scalar_segments;
 pub use recluster_mutator::ReclusterCandidateWindow;
 pub use recluster_mutator::ReclusterFinalCarry;

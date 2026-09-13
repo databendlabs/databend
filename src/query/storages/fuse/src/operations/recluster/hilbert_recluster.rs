@@ -171,6 +171,7 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
         indices: &[usize],
         blocks: &[&ReclusterBlock],
         task_budget: usize,
+        _depth_stats: Option<&super::ReclusterDepthStats>,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         if indices.len() < 2 || task_budget == 0 {
             return Ok(Vec::new());
@@ -271,8 +272,16 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
                     group,
                     CandidateScore {
                         selected_total_bytes: task_bytes,
+                        selected_block_count: task_indices.len(),
                         max_depth: core_depth,
                         average_depth: core_depth as f64,
+                        // The witness core is `core_depth` blocks deep; rewriting it
+                        // leaves one ordered run behind. Blocks absorbed afterwards
+                        // overlap the core rectangle without deepening the hotspot.
+                        estimated_depth_gain: core_depth.saturating_sub(1) as i64,
+                        task_threshold_bytes: properties.memory_threshold,
+                        // Filled in by `task_candidate`, which groups blocks by segment.
+                        touched_segment_count: 0,
                     },
                     &task_indices,
                     blocks,

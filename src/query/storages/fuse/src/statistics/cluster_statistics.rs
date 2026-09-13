@@ -555,10 +555,16 @@ pub(crate) struct RangeMaxTree {
 
 impl RangeMaxTree {
     pub(crate) fn build(values: &[usize]) -> Self {
+        Self::from_iter(values.iter().copied())
+    }
+
+    pub(crate) fn from_iter(values: impl ExactSizeIterator<Item = usize>) -> Self {
         let size = values.len();
         debug_assert!(size > 0, "RangeMaxTree requires a non-empty input");
         let mut tree = vec![0usize; size * 2];
-        tree[size..(size * 2)].copy_from_slice(values);
+        for (leaf, value) in tree[size..].iter_mut().zip(values) {
+            *leaf = value;
+        }
         for i in (1..size).rev() {
             tree[i] = tree[i * 2].max(tree[i * 2 + 1]);
         }
