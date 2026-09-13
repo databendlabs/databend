@@ -59,138 +59,140 @@ impl Interpreter for DropTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let maybe_table = async {
-            let catalog = self
-                .ctx
-                .get_catalog(catalog_name)
-                .await?
-                .disable_table_info_refresh()?;
+            let maybe_table = async {
+                let catalog = self
+                    .ctx
+                    .get_catalog(catalog_name)
+                    .await?
+                    .disable_table_info_refresh()?;
 
-            catalog
-                .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-                .await
-        };
-
-        let tbl = match maybe_table.await {
-            Ok(table) => table,
-            Err(error) => {
-                if (error.code() == ErrorCode::UNKNOWN_TABLE
-                    || error.code() == ErrorCode::UNKNOWN_CATALOG
-                    || error.code() == ErrorCode::UNKNOWN_DATABASE)
-                    && self.plan.if_exists
-                {
-                    return Ok(PipelineBuildResult::create());
-                } else {
-                    return Err(error);
-                }
-            }
-        };
-        let is_temp = tbl.is_temp();
-        let table_id = tbl.get_table_info().ident.table_id;
-        let delete_lineage = !is_temp
-            && FuseTable::try_from_table(tbl.as_ref()).is_ok_and(|table| table.is_transient());
-
-        let engine = tbl.get_table_info().engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {}, use `DROP {} {}.{}` instead",
-                &self.plan.database,
-                &self.plan.table,
-                engine,
-                engine,
-                &self.plan.database,
-                &self.plan.table
-            )));
-        }
-        if is_materialized_view_engine(tbl.engine()) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW {}.{}` instead",
-                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
-            )));
-        }
-        if tbl.as_any().is::<SharedTable>() {
-            tbl.check_mutable()?;
-        }
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-
-        // Although even if data is in READ_ONLY mode,
-        // as a catalog object, the table itself is allowed to be dropped (and undropped later),
-        // `drop table ALL` is NOT allowed, which implies that the table data need to be truncated.
-        if self.plan.all {
-            // check mutability, if the table is read only, we cannot truncate the data
-            tbl.check_mutable().map_err(|e| {
-                    e.add_message(" drop table ALL is not allowed for read only table, please consider remove the option ALL")
-                })?
-        }
-
-        let tenant = self.ctx.get_tenant();
-        let db = catalog.get_database(&tenant, &self.plan.database).await?;
-        // actually drop table
-        let _resp = catalog
-            .drop_table_by_id(DropTableByIdReq {
-                if_exists: self.plan.if_exists,
-                tenant: tenant.clone(),
-                table_name: tbl_name.to_string(),
-                tb_id: tbl.get_table_info().ident.table_id,
-                db_id: db.get_db_info().database_id.db_id,
-                db_name: db.name().to_string(),
-                engine: tbl.engine().to_string(),
-                temp_prefix: tbl
-                    .options()
-                    .get(OPT_KEY_TEMP_PREFIX)
-                    .cloned()
-                    .unwrap_or_default(),
-            })
-            .await?;
-        if delete_lineage {
-            log_lineage_object_deletion(&self.ctx, table_id);
-        }
-
-        if !is_temp && !catalog.is_external() {
-            // iceberg table do not need to generate ownership
-            // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
-            // but the table still exists, in the interval maybe some unexpected things will happen.
-            // drop the ownership
-            let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-            let owner_object = OwnershipObject::Table {
-                catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().database_id.db_id,
-                table_id,
+                catalog
+                    .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+                    .await
             };
 
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+            let tbl = match maybe_table.await {
+                Ok(table) => table,
+                Err(error) => {
+                    if (error.code() == ErrorCode::UNKNOWN_TABLE
+                        || error.code() == ErrorCode::UNKNOWN_CATALOG
+                        || error.code() == ErrorCode::UNKNOWN_DATABASE)
+                        && self.plan.if_exists
+                    {
+                        return Ok(PipelineBuildResult::create());
+                    } else {
+                        return Err(error);
+                    }
+                }
+            };
+            let is_temp = tbl.is_temp();
+            let table_id = tbl.get_table_info().ident.table_id;
+            let delete_lineage = !is_temp
+                && FuseTable::try_from_table(tbl.as_ref()).is_ok_and(|table| table.is_transient());
 
-        let mut build_res = PipelineBuildResult::create();
-        // if `plan.all`, truncate, then purge the historical data
-        if self.plan.all {
-            // the above `catalog.drop_table` operation changed the table meta version,
-            // thus if we do not refresh the table instance, `truncate` will fail
-            let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
-            let maybe_fuse_table = FuseTable::try_from_table(latest.as_ref());
-            // if target table if of type FuseTable, purge its historical data
-            // otherwise, plain truncate
-            if let Ok(fuse_table) = maybe_fuse_table {
-                fuse_table
-                    .do_truncate(
-                        self.ctx.clone(),
-                        &mut build_res.main_pipeline,
-                        TruncateMode::DropAll,
-                    )
-                    .await?
-            } else {
-                latest
-                    .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
-                    .await?
+            let engine = tbl.get_table_info().engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {}, use `DROP {} {}.{}` instead",
+                    &self.plan.database,
+                    &self.plan.table,
+                    engine,
+                    engine,
+                    &self.plan.database,
+                    &self.plan.table
+                )));
             }
-        }
+            if is_materialized_view_engine(tbl.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW {}.{}` instead",
+                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                )));
+            }
+            if tbl.as_any().is::<SharedTable>() {
+                tbl.check_mutable()?;
+            }
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        Ok(build_res)
+            // Although even if data is in READ_ONLY mode,
+            // as a catalog object, the table itself is allowed to be dropped (and undropped later),
+            // `drop table ALL` is NOT allowed, which implies that the table data need to be truncated.
+            if self.plan.all {
+                // check mutability, if the table is read only, we cannot truncate the data
+                tbl.check_mutable().map_err(|e| {
+                    e.add_message(" drop table ALL is not allowed for read only table, please consider remove the option ALL")
+                })?
+            }
+
+            let tenant = self.ctx.get_tenant();
+            let db = catalog.get_database(&tenant, &self.plan.database).await?;
+            // actually drop table
+            let _resp = catalog
+                .drop_table_by_id(DropTableByIdReq {
+                    if_exists: self.plan.if_exists,
+                    tenant: tenant.clone(),
+                    table_name: tbl_name.to_string(),
+                    tb_id: tbl.get_table_info().ident.table_id,
+                    db_id: db.get_db_info().database_id.db_id,
+                    db_name: db.name().to_string(),
+                    engine: tbl.engine().to_string(),
+                    temp_prefix: tbl
+                        .options()
+                        .get(OPT_KEY_TEMP_PREFIX)
+                        .cloned()
+                        .unwrap_or_default(),
+                })
+                .await?;
+            if delete_lineage {
+                log_lineage_object_deletion(&self.ctx, table_id);
+            }
+
+            if !is_temp && !catalog.is_external() {
+                // iceberg table do not need to generate ownership
+                // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
+                // but the table still exists, in the interval maybe some unexpected things will happen.
+                // drop the ownership
+                let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+                let owner_object = OwnershipObject::Table {
+                    catalog_name: self.plan.catalog.clone(),
+                    db_id: db.get_db_info().database_id.db_id,
+                    table_id,
+                };
+
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+
+            let mut build_res = PipelineBuildResult::create();
+            // if `plan.all`, truncate, then purge the historical data
+            if self.plan.all {
+                // the above `catalog.drop_table` operation changed the table meta version,
+                // thus if we do not refresh the table instance, `truncate` will fail
+                let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
+                let maybe_fuse_table = FuseTable::try_from_table(latest.as_ref());
+                // if target table if of type FuseTable, purge its historical data
+                // otherwise, plain truncate
+                if let Ok(fuse_table) = maybe_fuse_table {
+                    fuse_table
+                        .do_truncate(
+                            self.ctx.clone(),
+                            &mut build_res.main_pipeline,
+                            TruncateMode::DropAll,
+                        )
+                        .await?
+                } else {
+                    latest
+                        .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
+                        .await?
+                }
+            }
+
+            Ok(build_res)
+        })
     }
 }

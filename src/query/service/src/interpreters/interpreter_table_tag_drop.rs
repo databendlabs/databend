@@ -46,18 +46,20 @@ impl Interpreter for DropTableTagInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
-        table.check_mutable()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            table.check_mutable()?;
 
-        let handler = get_table_ref_handler();
-        handler
-            .do_drop_table_tag(self.ctx.clone(), &self.plan)
-            .await?;
+            let handler = get_table_ref_handler();
+            handler
+                .do_drop_table_tag(self.ctx.clone(), &self.plan)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

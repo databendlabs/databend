@@ -50,34 +50,36 @@ impl Interpreter for DropTableIndexInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let index_name = self.plan.index_name.clone();
-        let table_id = self.plan.table_id;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let index_type = match self.plan.index_type {
-            ast::TableIndexType::Inverted => TableIndexType::Inverted,
-            ast::TableIndexType::Ngram => TableIndexType::Ngram,
-            ast::TableIndexType::Vector => TableIndexType::Vector,
-            ast::TableIndexType::Spatial => TableIndexType::Spatial,
-        };
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let index_name = self.plan.index_name.clone();
+            let table_id = self.plan.table_id;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let index_type = match self.plan.index_type {
+                ast::TableIndexType::Inverted => TableIndexType::Inverted,
+                ast::TableIndexType::Ngram => TableIndexType::Ngram,
+                ast::TableIndexType::Vector => TableIndexType::Vector,
+                ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            };
 
-        if matches!(index_type, TableIndexType::Vector)
-            && let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await?
-        {
-            validate_drop_vector_index(&table_meta.data, &index_name)?;
-        }
+            if matches!(index_type, TableIndexType::Vector)
+                && let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await?
+            {
+                validate_drop_vector_index(&table_meta.data, &index_name)?;
+            }
 
-        let drop_index_req = DropTableIndexReq {
-            index_type,
-            tenant: self.ctx.get_tenant(),
-            if_exists: self.plan.if_exists,
-            table_id,
-            name: index_name,
-        };
+            let drop_index_req = DropTableIndexReq {
+                index_type,
+                tenant: self.ctx.get_tenant(),
+                if_exists: self.plan.if_exists,
+                table_id,
+                name: index_name,
+            };
 
-        let _ = catalog.drop_table_index(drop_index_req).await?;
+            catalog.drop_table_index(drop_index_req).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

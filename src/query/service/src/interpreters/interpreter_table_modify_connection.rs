@@ -58,92 +58,93 @@ impl Interpreter for ModifyTableConnectionInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let table = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+            let table = self
+                .ctx
+                .get_catalog(catalog_name)
+                .await?
+                .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+                .await?;
+
+            // check mutability
+            table.check_mutable()?;
+
+            let table_info = table.get_table_info();
+            let engine = table.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
+                )));
+            }
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
+            let Some(old_sp) = table_info.meta.storage_params.clone() else {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is not an external table, cannot alter connection",
+                    &self.plan.database, &self.plan.table
+                )));
+            };
+
+            debug!("old storage params before update: {old_sp:?}");
+
+            // This location is used to parse the storage parameters from the URI.
+            //
+            // We don't really this this location to replace the old one, we just parse it out and change the storage parameters on needs.
+            let mut location = UriLocation::new(
+                // The storage type is not changeable, we just use the old one.
+                old_sp.storage_type().to_string(),
+                // name is not changeable, we just use a dummy value here.
+                "test".to_string(),
+                // root is not changeable, we just use a dummy value here.
+                "/".to_string(),
+                self.plan.new_connection.clone(),
+            );
+            // NOTE: never use this storage params directly.
+            let updated_sp = StageResolver::from_table_context(
+                self.ctx.clone(),
+                UserApiProvider::instance(),
+                GlobalConfig::instance().storage.allow_insecure,
+            )?
+            .resolve_storage_params_from_uri(&mut location, "when ALTER TABLE CONNECTION")
             .await?;
 
-        // check mutability
-        table.check_mutable()?;
+            debug!("storage params used for update: {updated_sp:?}");
+            let new_sp = old_sp.apply_update(updated_sp)?;
+            debug!("new storage params been updated: {new_sp:?}");
 
-        let table_info = table.get_table_info();
-        let engine = table.engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support alter",
-                &self.plan.database, &self.plan.table, engine
-            )));
-        }
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                &self.plan.database, &self.plan.table
-            )));
-        }
-        let Some(old_sp) = table_info.meta.storage_params.clone() else {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is not an external table, cannot alter connection",
-                &self.plan.database, &self.plan.table
-            )));
-        };
+            // Check the storage params via init operator.
+            let op = init_operator_with_policy_scope(&new_sp, EndpointPolicyScope::External)
+                .map_err(|err| {
+                    ErrorCode::InvalidConfig(format!(
+                        "Input storage config for stage is invalid: {err:?}"
+                    ))
+                })?;
+            check_operator(&op, &new_sp).await?;
 
-        debug!("old storage params before update: {old_sp:?}");
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+            let mut new_table_meta = table_info.meta.clone();
+            new_table_meta.storage_params = Some(new_sp);
 
-        // This location is used to parse the storage parameters from the URI.
-        //
-        // We don't really this this location to replace the old one, we just parse it out and change the storage parameters on needs.
-        let mut location = UriLocation::new(
-            // The storage type is not changeable, we just use the old one.
-            old_sp.storage_type().to_string(),
-            // name is not changeable, we just use a dummy value here.
-            "test".to_string(),
-            // root is not changeable, we just use a dummy value here.
-            "/".to_string(),
-            self.plan.new_connection.clone(),
-        );
-        // NOTE: never use this storage params directly.
-        let updated_sp = StageResolver::from_table_context(
-            self.ctx.clone(),
-            UserApiProvider::instance(),
-            GlobalConfig::instance().storage.allow_insecure,
-        )?
-        .resolve_storage_params_from_uri(&mut location, "when ALTER TABLE CONNECTION")
-        .await?;
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                new_table_meta,
+                catalog,
+                |_, _| {},
+            )
+            .await?;
 
-        debug!("storage params used for update: {updated_sp:?}");
-        let new_sp = old_sp.apply_update(updated_sp)?;
-        debug!("new storage params been updated: {new_sp:?}");
-
-        // Check the storage params via init operator.
-        let op = init_operator_with_policy_scope(&new_sp, EndpointPolicyScope::External).map_err(
-            |err| {
-                ErrorCode::InvalidConfig(format!(
-                    "Input storage config for stage is invalid: {err:?}"
-                ))
-            },
-        )?;
-        check_operator(&op, &new_sp).await?;
-
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let mut new_table_meta = table_info.meta.clone();
-        new_table_meta.storage_params = Some(new_sp);
-
-        commit_table_meta(
-            &self.ctx,
-            table.as_ref(),
-            new_table_meta,
-            catalog,
-            |_, _| {},
-        )
-        .await?;
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

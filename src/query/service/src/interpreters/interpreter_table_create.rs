@@ -147,61 +147,65 @@ impl Interpreter for CreateTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = &self.plan.tenant;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = &self.plan.tenant;
 
-        let has_computed_column = self
-            .plan
-            .schema
-            .fields()
-            .iter()
-            .any(|f| f.computed_expr().is_some());
-        if has_computed_column {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
-        }
-
-        let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        let engine = self.plan.engine;
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        if quota.max_tables_per_database > 0 {
-            // Note:
-            // max_tables_per_database is a config quota. Default is 0.
-            // If a database has lot of tables, list_tables will be slow.
-            // So We check get it when max_tables_per_database != 0
-            let tables = catalog
-                .list_tables(&self.plan.tenant, &self.plan.database)
-                .await?;
-            if tables.len() >= quota.max_tables_per_database as usize {
-                return Err(ErrorCode::TenantQuotaExceeded(format!(
-                    "Max tables per database quota exceeded: {}",
-                    quota.max_tables_per_database
-                )));
+            let has_computed_column = self
+                .plan
+                .schema
+                .fields()
+                .iter()
+                .any(|f| f.computed_expr().is_some());
+            if has_computed_column {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
             }
-        }
 
-        let engine_desc: Option<StorageDescription> = catalog
-            .get_table_engines()
-            .iter()
-            .find(|desc| {
-                desc.engine_name.to_string().to_lowercase() == engine.to_string().to_lowercase()
-            })
-            .cloned();
-
-        if let Some(engine) = engine_desc {
-            if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
-                return Err(ErrorCode::UnsupportedEngineParams(format!(
-                    "Unsupported cluster key for engine: {}",
-                    engine.engine_name
-                )));
+            let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
+            let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+            let engine = self.plan.engine;
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+            if quota.max_tables_per_database > 0 {
+                // Note:
+                // max_tables_per_database is a config quota. Default is 0.
+                // If a database has lot of tables, list_tables will be slow.
+                // So We check get it when max_tables_per_database != 0
+                let tables = catalog
+                    .list_tables(&self.plan.tenant, &self.plan.database)
+                    .await?;
+                if tables.len() >= quota.max_tables_per_database as usize {
+                    return Err(ErrorCode::TenantQuotaExceeded(format!(
+                        "Max tables per database quota exceeded: {}",
+                        quota.max_tables_per_database
+                    )));
+                }
             }
-        }
 
-        match &self.plan.as_select {
-            Some(select_plan_node) => self.create_table_as_select(select_plan_node.clone()).await,
-            None => self.create_table().await,
-        }
+            let engine_desc: Option<StorageDescription> = catalog
+                .get_table_engines()
+                .iter()
+                .find(|desc| {
+                    desc.engine_name.to_string().to_lowercase() == engine.to_string().to_lowercase()
+                })
+                .cloned();
+
+            if let Some(engine) = engine_desc {
+                if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "Unsupported cluster key for engine: {}",
+                        engine.engine_name
+                    )));
+                }
+            }
+
+            match &self.plan.as_select {
+                Some(select_plan_node) => {
+                    self.create_table_as_select(select_plan_node.clone()).await
+                }
+                None => self.create_table().await,
+            }
+        })
     }
 }
 

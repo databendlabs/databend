@@ -60,37 +60,40 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let OptimizeCompactBlock {
-            catalog,
-            database,
-            table,
-            ..
-        } = self.s_expr.plan().clone().try_into()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let OptimizeCompactBlock {
+                catalog,
+                database,
+                table,
+                ..
+            } = self.s_expr.plan().clone().try_into()?;
 
-        // try add lock table.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
-            .await?;
+            // try add lock table.
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
+                .await?;
 
-        let mut build_res = PipelineBuildResult::create();
-        let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-        match builder.build(&self.s_expr, ColumnSet::new()).await {
-            Ok(physical_plan) => {
-                build_res =
-                    build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
-                        .await?;
-                build_res.main_pipeline.add_lock_guard(lock_guard);
-            }
-            Err(e) => {
-                if e.code() != ErrorCode::NO_NEED_TO_COMPACT {
-                    return Err(e);
+            let mut build_res = PipelineBuildResult::create();
+            let mut builder =
+                PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
+            match builder.build(&self.s_expr, ColumnSet::new()).await {
+                Ok(physical_plan) => {
+                    build_res =
+                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
+                            .await?;
+                    build_res.main_pipeline.add_lock_guard(lock_guard);
+                }
+                Err(e) => {
+                    if e.code() != ErrorCode::NO_NEED_TO_COMPACT {
+                        return Err(e);
+                    }
                 }
             }
-        }
 
-        Ok(build_res)
+            Ok(build_res)
+        })
     }
 }

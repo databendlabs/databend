@@ -56,42 +56,44 @@ impl Interpreter for DropRoleInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_role_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_role_execute");
 
-        // TODO: add privilege check about DROP role
-        let plan = self.plan.clone();
-        let role_name = plan.role_name.clone();
-        if role_name.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN
-            || role_name.to_lowercase() == BUILTIN_ROLE_PUBLIC
-        {
-            return Err(ErrorCode::IllegalRole(
-                "Illegal Drop Role command. Can not drop built-in role [ account_admin | public ]",
-            ));
-        }
-        let tenant = self.ctx.get_tenant();
-        UserApiProvider::instance()
-            .drop_role(&tenant, plan.role_name.clone(), plan.if_exists)
+            // TODO: add privilege check about DROP role
+            let plan = self.plan.clone();
+            let role_name = plan.role_name.clone();
+            if role_name.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN
+                || role_name.to_lowercase() == BUILTIN_ROLE_PUBLIC
+            {
+                return Err(ErrorCode::IllegalRole(
+                    "Illegal Drop Role command. Can not drop built-in role [ account_admin | public ]",
+                ));
+            }
+            let tenant = self.ctx.get_tenant();
+            UserApiProvider::instance()
+                .drop_role(&tenant, plan.role_name.clone(), plan.if_exists)
+                .await?;
+
+            let session = self.ctx.get_current_session();
+            if let Some(current_role) = session.get_current_role() {
+                if current_role.name == role_name {
+                    warn!(
+                        "Will drop session current role {}, session current role will be set public role",
+                        role_name
+                    );
+                    session.unset_current_role().await?;
+                }
+            }
+
+            RoleCacheManager::instance().force_reload(&tenant).await?;
+
+            cleanup_object_tags(&tenant, TaggableObject::Role {
+                name: plan.role_name,
+            })
             .await?;
 
-        let session = self.ctx.get_current_session();
-        if let Some(current_role) = session.get_current_role() {
-            if current_role.name == role_name {
-                warn!(
-                    "Will drop session current role {}, session current role will be set public role",
-                    role_name
-                );
-                session.unset_current_role().await?;
-            }
-        }
-
-        RoleCacheManager::instance().force_reload(&tenant).await?;
-
-        cleanup_object_tags(&tenant, TaggableObject::Role {
-            name: plan.role_name,
+            Ok(PipelineBuildResult::create())
         })
-        .await?;
-
-        Ok(PipelineBuildResult::create())
     }
 }

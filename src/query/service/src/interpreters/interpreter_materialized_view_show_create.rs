@@ -50,27 +50,29 @@ impl Interpreter for ShowCreateMaterializedViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.view_name)
-            .await?;
-        if !is_materialized_view_engine(table.engine()) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "`{}`.`{}` is not a MATERIALIZED VIEW",
-                self.plan.database, self.plan.view_name
-            )));
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let table = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.view_name)
+                .await?;
+            if !is_materialized_view_engine(table.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "`{}`.`{}` is not a MATERIALIZED VIEW",
+                    self.plan.database, self.plan.view_name
+                )));
+            }
 
-        ShowCreateTableInterpreter::build_result(
-            self.ctx.as_ref(),
-            catalog.as_ref(),
-            &tenant,
-            &self.plan.database,
-            table.as_ref(),
-            false,
-        )
-        .await
+            ShowCreateTableInterpreter::build_result(
+                self.ctx.as_ref(),
+                catalog.as_ref(),
+                &tenant,
+                &self.plan.database,
+                table.as_ref(),
+                false,
+            )
+            .await
+        })
     }
 }

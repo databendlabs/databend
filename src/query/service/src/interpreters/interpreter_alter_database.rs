@@ -53,130 +53,131 @@ impl Interpreter for AlterDatabaseInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_database_execute");
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let database = match catalog
-            .get_database(&self.plan.tenant, &self.plan.database)
-            .await
-        {
-            Ok(db) => db,
-            Err(err) => {
-                if self.plan.if_exists
-                    && err.code() == databend_common_exception::ErrorCode::UNKNOWN_DATABASE
-                {
-                    return Ok(PipelineBuildResult::create());
-                }
-                return Err(err);
-            }
-        };
-
-        // Merge provided options with the existing database options
-        let mut merged_options = database.options().clone();
-        for (key, value) in &self.plan.options {
-            merged_options.insert(key.clone(), value.clone());
-        }
-
-        let connection_value = merged_options.get(DEFAULT_STORAGE_CONNECTION).cloned();
-        let path_value = merged_options.get(DEFAULT_STORAGE_PATH).cloned();
-
-        // Check if both options are present together in the final merged state
-        // This ensures that after ALTER, the database still has both options configured
-        if connection_value.is_some() != path_value.is_some() {
-            return Err(databend_common_exception::ErrorCode::BadArguments(
-                "DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together",
-            ));
-        }
-
-        let connection = if let Some(ref connection_name) = connection_value {
-            match StageResolver::from_table_context(
-                self.ctx.clone(),
-                databend_common_users::UserApiProvider::instance(),
-                databend_common_config::GlobalConfig::instance()
-                    .storage
-                    .allow_insecure,
-            )?
-            .resolve_connection(connection_name)
-            .await
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_database_execute");
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let database = match catalog
+                .get_database(&self.plan.tenant, &self.plan.database)
+                .await
             {
-                Ok(conn) => Some(conn),
-                Err(_) => {
-                    return Err(databend_common_exception::ErrorCode::BadArguments(format!(
-                        "Connection '{}' does not exist. Please create the connection first using CREATE CONNECTION",
-                        connection_name
-                    )));
+                Ok(db) => db,
+                Err(err) => {
+                    if self.plan.if_exists
+                        && err.code() == databend_common_exception::ErrorCode::UNKNOWN_DATABASE
+                    {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    return Err(err);
                 }
-            }
-        } else {
-            None
-        };
+            };
 
-        if let (Some(connection), Some(path)) = (connection, path_value.clone()) {
-            let connection_name = connection_value
-                .as_deref()
-                .expect("connection name must exist when connection is Some");
-
-            let uri_for_scheme =
-                databend_common_ast::ast::UriLocation::from_uri(path.clone(), BTreeMap::new())
-                    .map_err(|e| {
-                        databend_common_exception::ErrorCode::BadArguments(format!(
-                            "Invalid storage path '{}': {}",
-                            path, e
-                        ))
-                    })?;
-
-            let path_protocol = uri_for_scheme.protocol.to_ascii_lowercase();
-            let connection_protocol = connection.storage_type.to_ascii_lowercase();
-
-            if path_protocol != connection_protocol {
-                return Err(databend_common_exception::ErrorCode::BadArguments(format!(
-                    "{} protocol '{}' does not match connection '{}' protocol '{}'",
-                    DEFAULT_STORAGE_PATH,
-                    uri_for_scheme.protocol,
-                    connection_name,
-                    connection.storage_type
-                )));
+            // Merge provided options with the existing database options
+            let mut merged_options = database.options().clone();
+            for (key, value) in &self.plan.options {
+                merged_options.insert(key.clone(), value.clone());
             }
 
-            let mut uri_location = databend_common_ast::ast::UriLocation::from_uri(
-                path.clone(),
-                connection.storage_params,
-            )?;
+            let connection_value = merged_options.get(DEFAULT_STORAGE_CONNECTION).cloned();
+            let path_value = merged_options.get(DEFAULT_STORAGE_PATH).cloned();
 
-            let storage_params = databend_common_sql::binder::parse_storage_params_from_uri(
-                &mut uri_location,
-                "when setting database DEFAULT_STORAGE_PATH",
-            )
-            .await
-            .map_err(|e| {
-                databend_common_exception::ErrorCode::BadArguments(format!(
-                    "Invalid storage path '{}': {}",
-                    path, e
-                ))
-            })?;
-
-            if !storage_params.is_secure()
-                && !databend_common_config::GlobalConfig::instance()
-                    .storage
-                    .allow_insecure
-            {
-                return Err(databend_common_exception::ErrorCode::StorageInsecure(
-                    "Database default storage path points to insecure storage, which is not allowed",
+            // Check if both options are present together in the final merged state
+            // This ensures that after ALTER, the database still has both options configured
+            if connection_value.is_some() != path_value.is_some() {
+                return Err(databend_common_exception::ErrorCode::BadArguments(
+                    "DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together",
                 ));
             }
 
-            let operator = databend_common_storage::init_operator_with_policy_scope(
-                &storage_params,
-                EndpointPolicyScope::External,
-            )
-            .map_err(|e| {
-                databend_common_exception::ErrorCode::BadArguments(format!(
-                    "Failed to access storage location '{}': {}",
-                    path, e
-                ))
-            })?;
+            let connection = if let Some(ref connection_name) = connection_value {
+                match StageResolver::from_table_context(
+                    self.ctx.clone(),
+                    databend_common_users::UserApiProvider::instance(),
+                    databend_common_config::GlobalConfig::instance()
+                        .storage
+                        .allow_insecure,
+                )?
+                .resolve_connection(connection_name)
+                .await
+                {
+                    Ok(conn) => Some(conn),
+                    Err(_) => {
+                        return Err(databend_common_exception::ErrorCode::BadArguments(format!(
+                            "Connection '{}' does not exist. Please create the connection first using CREATE CONNECTION",
+                            connection_name
+                        )));
+                    }
+                }
+            } else {
+                None
+            };
 
-            databend_common_sql::binder::verify_external_location_privileges(operator)
+            if let (Some(connection), Some(path)) = (connection, path_value.clone()) {
+                let connection_name = connection_value
+                    .as_deref()
+                    .expect("connection name must exist when connection is Some");
+
+                let uri_for_scheme =
+                    databend_common_ast::ast::UriLocation::from_uri(path.clone(), BTreeMap::new())
+                        .map_err(|e| {
+                            databend_common_exception::ErrorCode::BadArguments(format!(
+                                "Invalid storage path '{}': {}",
+                                path, e
+                            ))
+                        })?;
+
+                let path_protocol = uri_for_scheme.protocol.to_ascii_lowercase();
+                let connection_protocol = connection.storage_type.to_ascii_lowercase();
+
+                if path_protocol != connection_protocol {
+                    return Err(databend_common_exception::ErrorCode::BadArguments(format!(
+                        "{} protocol '{}' does not match connection '{}' protocol '{}'",
+                        DEFAULT_STORAGE_PATH,
+                        uri_for_scheme.protocol,
+                        connection_name,
+                        connection.storage_type
+                    )));
+                }
+
+                let mut uri_location = databend_common_ast::ast::UriLocation::from_uri(
+                    path.clone(),
+                    connection.storage_params,
+                )?;
+
+                let storage_params = databend_common_sql::binder::parse_storage_params_from_uri(
+                    &mut uri_location,
+                    "when setting database DEFAULT_STORAGE_PATH",
+                )
+                .await
+                .map_err(|e| {
+                    databend_common_exception::ErrorCode::BadArguments(format!(
+                        "Invalid storage path '{}': {}",
+                        path, e
+                    ))
+                })?;
+
+                if !storage_params.is_secure()
+                    && !databend_common_config::GlobalConfig::instance()
+                        .storage
+                        .allow_insecure
+                {
+                    return Err(databend_common_exception::ErrorCode::StorageInsecure(
+                        "Database default storage path points to insecure storage, which is not allowed",
+                    ));
+                }
+
+                let operator = databend_common_storage::init_operator_with_policy_scope(
+                    &storage_params,
+                    EndpointPolicyScope::External,
+                )
+                .map_err(|e| {
+                    databend_common_exception::ErrorCode::BadArguments(format!(
+                        "Failed to access storage location '{}': {}",
+                        path, e
+                    ))
+                })?;
+
+                databend_common_sql::binder::verify_external_location_privileges(operator)
                 .await
                 .map_err(|e| {
                     databend_common_exception::ErrorCode::BadArguments(format!(
@@ -184,15 +185,16 @@ impl Interpreter for AlterDatabaseInterpreter {
                     path, e
                 ))
                 })?;
-        }
+            }
 
-        let expected_meta_seq = database.get_db_info().meta.seq;
+            let expected_meta_seq = database.get_db_info().meta.seq;
 
-        // Persist the fully merged options with CAS semantics in the meta store
-        database
-            .update_options(expected_meta_seq, merged_options)
-            .await?;
+            // Persist the fully merged options with CAS semantics in the meta store
+            database
+                .update_options(expected_meta_seq, merged_options)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -116,168 +116,177 @@ impl Interpreter for SetOptionsInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // valid_options_check and do request to meta_srv
-        let mut options_map = HashMap::new();
-        // check block_per_segment
-        is_valid_block_per_segment(&self.plan.set_options)?;
-        // check row_per_block
-        is_valid_row_per_block(&self.plan.set_options)?;
-        is_valid_recluster_depth(&self.plan.set_options)?;
-        // check data_retention_period
-        is_valid_data_retention_period(&self.plan.set_options)?;
-        // check enable_parquet_encoding
-        is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
-        is_valid_data_page_rows(&self.plan.set_options)?;
-        is_valid_data_page_bytes(&self.plan.set_options)?;
-        is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
-        is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
-        is_valid_analyze_top_n_size(&self.plan.set_options)?;
-        is_valid_analyze_count_min_sketch_error_rate(&self.plan.set_options)?;
-        if let Some(compression) = self.plan.set_options.get(OPT_KEY_TABLE_COMPRESSION) {
-            let _: TableCompression = compression.as_str().try_into()?;
-        }
-
-        // check storage_format
-        let error_str = "invalid opt for fuse table in alter table statement";
-        if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_STORAGE_FORMAT
-            )));
-        }
-
-        if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_DATABASE_ID
-            )));
-        }
-        if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_TEMP_PREFIX
-            )));
-        }
-        if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_CLUSTER_TYPE
-            )));
-        }
-        if self.plan.set_options.contains_key(OPT_KEY_PARTITION_BY) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_PARTITION_BY
-            )));
-        }
-
-        for key in self.plan.set_options.keys() {
-            if is_reserved_opt_key(key) {
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option '{}' is reserved and cannot be modified",
-                    key
-                )));
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // valid_options_check and do request to meta_srv
+            let mut options_map = HashMap::new();
+            // check block_per_segment
+            is_valid_block_per_segment(&self.plan.set_options)?;
+            // check row_per_block
+            is_valid_row_per_block(&self.plan.set_options)?;
+            is_valid_recluster_depth(&self.plan.set_options)?;
+            // check data_retention_period
+            is_valid_data_retention_period(&self.plan.set_options)?;
+            // check enable_parquet_encoding
+            is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
+            is_valid_data_page_rows(&self.plan.set_options)?;
+            is_valid_data_page_bytes(&self.plan.set_options)?;
+            is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
+            is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
+            is_valid_analyze_top_n_size(&self.plan.set_options)?;
+            is_valid_analyze_count_min_sketch_error_rate(&self.plan.set_options)?;
+            if let Some(compression) = self.plan.set_options.get(OPT_KEY_TABLE_COMPRESSION) {
+                let _: TableCompression = compression.as_str().try_into()?;
             }
-        }
 
-        // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
-        is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
-        is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER)?;
-        is_valid_option_of_type::<u64>(
-            &self.plan.set_options,
-            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
-        )?;
-
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let database = self.plan.database.as_str();
-        let table_name = self.plan.table.as_str();
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), database, table_name)
-            .await?;
-        check_maintenance_target(table.as_ref(), &self.plan.target)?;
-
-        if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
-            let mode = mode.parse::<WriteDistributionMode>()?;
-            if mode == WriteDistributionMode::Hash
-                && !table.options().contains_key(OPT_KEY_PARTITION_BY)
-            {
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
-                )));
-            }
-        }
-
-        let engine = Engine::from(table.engine());
-        for table_option in self.plan.set_options.iter() {
-            let key = table_option.0.to_lowercase();
-            if matches!(
-                &self.plan.target,
-                MaintenanceTarget::MaterializedView { .. }
-            ) && key == OPT_KEY_COMMENT
-            {
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option {key} is invalid for alter materialized view statement; use COMMENT = ... instead",
-                )));
-            }
-            if !is_valid_create_opt(&key, &engine) {
+            // check storage_format
+            let error_str = "invalid opt for fuse table in alter table statement";
+            if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
                 error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option {key} is invalid for alter table statement",
+                    "can't change {} for alter table statement",
+                    OPT_KEY_STORAGE_FORMAT
                 )));
             }
-            options_map.insert(key, Some(table_option.1.clone()));
-        }
 
-        // check enable_virtual_column
-        is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
-        is_valid_virtual_column_layout_options(&self.plan.set_options)?;
-
-        let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
-
-        let table_version = table.get_table_info().ident.seq;
-        if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
-            let change_tracking = value.to_lowercase().parse::<bool>()?;
-            if table.change_tracking_enabled() != change_tracking {
-                let begin_version = if change_tracking {
-                    Some(table_version.to_string())
-                } else {
-                    None
-                };
-                options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
+            if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
+                error!("{}", &error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_DATABASE_ID
+                )));
             }
-        }
+            if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
+                error!("{}", &error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_TEMP_PREFIX
+                )));
+            }
+            if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
+                error!("{}", &error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_CLUSTER_TYPE
+                )));
+            }
+            if self.plan.set_options.contains_key(OPT_KEY_PARTITION_BY) {
+                error!("{}", &error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_PARTITION_BY
+                )));
+            }
 
-        // check bloom_index_columns.
-        is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
-        is_valid_bloom_index_type(&self.plan.set_options)?;
-        is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
-        is_valid_analyze_frequency_columns(&self.plan.set_options, table.schema())?;
+            for key in self.plan.set_options.keys() {
+                if is_reserved_opt_key(key) {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "table option '{}' is reserved and cannot be modified",
+                        key
+                    )));
+                }
+            }
 
-        if let Some(new_snapshot_location) =
-            set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
-        {
-            options_map.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_string(),
-                Some(new_snapshot_location),
-            );
-        }
+            // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
+            is_valid_option_of_type::<u32>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_ENABLE_AUTO_VACUUM,
+            )?;
+            is_valid_option_of_type::<u32>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER,
+            )?;
+            is_valid_option_of_type::<u64>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+            )?;
 
-        let req = UpsertTableOptionReq {
-            table_id: table.get_id(),
-            seq: MatchSeq::Exact(table_version),
-            options: options_map,
-        };
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+            let database = self.plan.database.as_str();
+            let table_name = self.plan.table.as_str();
+            let table = catalog
+                .get_table(&self.ctx.get_tenant(), database, table_name)
+                .await?;
+            check_maintenance_target(table.as_ref(), &self.plan.target)?;
 
-        let _resp = catalog
-            .upsert_table_option(&self.ctx.get_tenant(), database, req)
-            .await?;
-        Ok(PipelineBuildResult::create())
+            if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+                let mode = mode.parse::<WriteDistributionMode>()?;
+                if mode == WriteDistributionMode::Hash
+                    && !table.options().contains_key(OPT_KEY_PARTITION_BY)
+                {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                    )));
+                }
+            }
+
+            let engine = Engine::from(table.engine());
+            for table_option in self.plan.set_options.iter() {
+                let key = table_option.0.to_lowercase();
+                if matches!(
+                    &self.plan.target,
+                    MaintenanceTarget::MaterializedView { .. }
+                ) && key == OPT_KEY_COMMENT
+                {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "table option {key} is invalid for alter materialized view statement; use COMMENT = ... instead",
+                    )));
+                }
+                if !is_valid_create_opt(&key, &engine) {
+                    error!("{}", &error_str);
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "table option {key} is invalid for alter table statement",
+                    )));
+                }
+                options_map.insert(key, Some(table_option.1.clone()));
+            }
+
+            // check enable_virtual_column
+            is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
+            is_valid_virtual_column_layout_options(&self.plan.set_options)?;
+
+            let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
+
+            let table_version = table.get_table_info().ident.seq;
+            if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
+                let change_tracking = value.to_lowercase().parse::<bool>()?;
+                if table.change_tracking_enabled() != change_tracking {
+                    let begin_version = if change_tracking {
+                        Some(table_version.to_string())
+                    } else {
+                        None
+                    };
+                    options_map
+                        .insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
+                }
+            }
+
+            // check bloom_index_columns.
+            is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
+            is_valid_bloom_index_type(&self.plan.set_options)?;
+            is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
+            is_valid_analyze_frequency_columns(&self.plan.set_options, table.schema())?;
+
+            if let Some(new_snapshot_location) =
+                set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
+            {
+                options_map.insert(
+                    OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+                    Some(new_snapshot_location),
+                );
+            }
+
+            let req = UpsertTableOptionReq {
+                table_id: table.get_id(),
+                seq: MatchSeq::Exact(table_version),
+                options: options_map,
+            };
+
+            let _resp = catalog
+                .upsert_table_option(&self.ctx.get_tenant(), database, req)
+                .await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

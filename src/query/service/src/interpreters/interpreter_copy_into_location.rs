@@ -124,37 +124,39 @@ impl Interpreter for CopyIntoLocationInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
 
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            self.ctx.attach_query_lineage(None);
-            return Ok(PipelineBuildResult::create());
-        }
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
 
-        let (mut pipeline_build_result, update_stream_reqs) = self
-            .build_local_copy_into_stage_pipeline(&self.plan.from, &self.plan.info)
-            .await?;
+            let (mut pipeline_build_result, update_stream_reqs) = self
+                .build_local_copy_into_stage_pipeline(&self.plan.from, &self.plan.info)
+                .await?;
 
-        // We are going to consuming streams, which are all of the default catalog
-        let catalog = self.ctx.get_default_catalog()?;
-        let tenant = self.ctx.get_tenant();
+            // We are going to consuming streams, which are all of the default catalog
+            let catalog = self.ctx.get_default_catalog()?;
+            let tenant = self.ctx.get_tenant();
 
-        // Add a commit sink to the pipeline does not work, since the pipeline emits result set,
-        // `inject_result` should work, but is cumbersome for this case
-        pipeline_build_result.main_pipeline.set_on_finished(
-            move |info: &ExecutionInfo| match &info.res {
-                Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                    info!("Updating the stream meta for COPY INTO LOCATION statement",);
-                    catalog
-                        .update_stream_metas(&tenant, update_stream_reqs)
-                        .await?;
-                    Ok(())
-                }),
-                Err(e) => Err(e.clone()),
-            },
-        );
+            // Add a commit sink to the pipeline does not work, since the pipeline emits result set,
+            // `inject_result` should work, but is cumbersome for this case
+            pipeline_build_result
+                .main_pipeline
+                .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                    Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                        info!("Updating the stream meta for COPY INTO LOCATION statement",);
+                        catalog
+                            .update_stream_metas(&tenant, update_stream_reqs)
+                            .await?;
+                        Ok(())
+                    }),
+                    Err(e) => Err(e.clone()),
+                });
 
-        Ok(pipeline_build_result)
+            Ok(pipeline_build_result)
+        })
     }
 }

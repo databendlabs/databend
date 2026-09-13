@@ -45,13 +45,15 @@ impl Interpreter for CreateTableBranchInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        check_table_ref_access(self.ctx.as_ref())?;
-        let handler = get_table_ref_handler();
-        handler
-            .do_create_table_branch(self.ctx.clone(), &self.plan)
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            check_table_ref_access(self.ctx.as_ref())?;
+            let handler = get_table_ref_handler();
+            handler
+                .do_create_table_branch(self.ctx.clone(), &self.plan)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
