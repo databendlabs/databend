@@ -1328,7 +1328,7 @@ dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "h2 0.3.26",
- "h2 0.4.13",
+ "h2 0.4.17",
  "http 0.2.12",
  "http 1.3.1",
  "http-body 0.4.6",
@@ -3016,9 +3016,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.18"
+version = "0.9.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e"
+checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -9223,9 +9223,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.13"
+version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f44da3a8150a6703ed5d34e164b875fd14c2cdab9af1252a9a1020bde2bdc54"
+checksum = "9f877e75f39e9827ec50a572dd592684ac28c029578726c85f1b2aa6ab807449"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -9761,7 +9761,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-core",
- "h2 0.4.13",
+ "h2 0.4.17",
  "http 1.3.1",
  "http-body 1.0.1",
  "httparse",
@@ -11244,11 +11244,11 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
-version = "0.11.3"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75761162ae2b0e580d7e7c390558127e5f01b4194debd6221fd8c207fc80e3f5"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 dependencies = [
- "twox-hash 1.6.3",
+ "twox-hash 2.1.0",
 ]
 
 [[package]]
@@ -12530,7 +12530,7 @@ dependencies = [
  "flate2",
  "futures",
  "futures-util",
- "lz4_flex 0.11.3",
+ "lz4_flex 0.11.6",
  "lzokay-native",
  "num",
  "prost 0.13.5",
@@ -12557,7 +12557,7 @@ dependencies = [
  "futures",
  "futures-util",
  "log",
- "lz4_flex 0.11.3",
+ "lz4_flex 0.11.6",
  "lzokay-native",
  "num",
  "prost 0.13.5",
@@ -12789,7 +12789,7 @@ dependencies = [
  "futures",
  "half",
  "hashbrown 0.15.3",
- "lz4_flex 0.11.3",
+ "lz4_flex 0.11.6",
  "num",
  "num-bigint",
  "object_store",
@@ -14116,9 +14116,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.12"
+version = "0.11.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49df843a9161c85bb8aae55f101bc0bac8bcafd637a620d9122fd7e0b2f7422e"
+checksum = "4fcb935c5bec503c2f0e306bdd3e58bb9029dcb14fa8d9ac76e3a5256ac0763e"
 dependencies = [
  "bytes",
  "getrandom 0.3.3",
@@ -14602,7 +14602,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2 0.4.13",
+ "h2 0.4.17",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -17391,7 +17391,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "flate2",
- "h2 0.4.13",
+ "h2 0.4.17",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -17420,7 +17420,7 @@ dependencies = [
  "axum 0.8.7",
  "base64 0.22.1",
  "bytes",
- "h2 0.4.13",
+ "h2 0.4.17",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
