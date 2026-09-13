@@ -455,6 +455,21 @@ impl ClusterLevelLogStats {
     }
 }
 
+/// Work performed by the row-sort stage of a recluster task.
+///
+/// Task plans are exchanged only between query processes running the same version;
+/// this enum is not part of persisted FUSE metadata.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ReclusterTaskKind {
+    /// Establish row order. For ordinary linear FUSE tasks, the inputs are one
+    /// unordered block or a size-bounded group of small blocks. Other layouts
+    /// retain their layout-specific sorting and re-aggregation semantics.
+    SortBlocks,
+    /// Merge blocks already ordered by the current linear cluster key, without
+    /// sorting their rows again.
+    MergeBlocks,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterTask {
     pub parts: Partitions,
@@ -467,9 +482,7 @@ pub struct ReclusterTask {
     /// Effective input levels under the current cluster key, not historical stored levels.
     #[serde(default)]
     pub input_level_stats: Vec<ClusterLevelLogStats>,
-    // All input blocks in this task are already ordered by the current cluster key.
-    #[serde(default)]
-    pub all_ordered: bool,
+    pub kind: ReclusterTaskKind,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 

@@ -365,6 +365,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 .map(|local_idx| indices[local_idx])
                 .collect::<Vec<_>>();
             candidates.push(task_candidate(
+                self.supports_ordered_merge(),
                 group,
                 CandidateScore {
                     selected_total_bytes: task_bytes,

@@ -268,6 +268,7 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
                     .map(|local_idx| ordered_indices[local_idx])
                     .collect::<Vec<_>>();
                 tasks.push(task_candidate(
+                    self.supports_ordered_merge(),
                     group,
                     CandidateScore {
                         selected_total_bytes: task_bytes,

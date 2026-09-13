@@ -1,0 +1,118 @@
+# SortBlocks establishes the current key order; MergeBlocks consumes ordered
+# blocks. Index construction and persisted FUSE formats are unchanged.
+statement ok
+create or replace database db_recluster_task_kinds
+
+statement ok
+use db_recluster_task_kinds
+
+statement ok
+set max_threads = 1
+
+statement ok
+create table t(k int, payload string) row_per_block=3 block_per_segment=2
+
+statement ok
+insert into t values (6, 'f'), (1, 'a'), (5, 'e'), (3, 'c'), (2, 'b'), (4, 'd')
+
+statement ok
+alter table t cluster by(k)
+
+# Ordinary recluster is still a single round; it need not finish both kinds.
+statement ok
+alter table t recluster
+
+query IT rowsort
+select * from t
+----
+1 a
+2 b
+3 c
+4 d
+5 e
+6 f
+
+statement ok
+alter table t recluster final
+
+query IT rowsort
+select * from t
+----
+1 a
+2 b
+3 c
+4 d
+5 e
+6 f
+
+# Already ordered small inputs may merge without reaching an overlap-depth gate.
+statement ok
+create table small(k int, payload string) cluster by(k) row_per_block=100
+
+statement ok
+insert into small values (1, 'a'), (3, 'c')
+
+statement ok
+insert into small values (2, 'b'), (4, 'd')
+
+statement ok
+alter table small recluster
+
+query IT rowsort
+select * from small
+----
+1 a
+2 b
+3 c
+4 d
+
+# Changing the key invalidates its ordering proof, not the data or indexes.
+statement ok
+alter table t cluster by(-k)
+
+statement ok
+insert into t values (NULL, 'n'), (2, 'duplicate'), (7, 'g')
+
+# Keep the existing spill path available to both task kinds.
+statement ok
+set force_sort_data_spill = 1
+
+statement ok
+set max_block_size = 2
+
+statement ok
+alter table t recluster final
+
+statement ok
+unset max_block_size
+
+statement ok
+unset force_sort_data_spill
+
+query IT rowsort
+select * from t
+----
+1 a
+2 b
+2 duplicate
+3 c
+4 d
+5 e
+6 f
+7 g
+NULL n
+
+# A second FINAL must terminate on the already processed layout.
+statement ok
+alter table t recluster final
+
+query III
+select count(), count(k), sum(k) from t
+----
+9 8 30
+
+statement ok
+unset max_threads
+
+statement ok
+drop database db_recluster_task_kinds
