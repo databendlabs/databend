@@ -28,7 +28,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::StageFilesInfo;
 
 use super::util::TableIdentifier;
@@ -37,6 +36,7 @@ use crate::DefaultExprBinder;
 use crate::binder::Binder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
+use crate::binder::parse_file_format;
 use crate::binder::validate_stage_files_path_traversal;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
@@ -200,15 +200,8 @@ impl Binder {
                 location,
             } => {
                 let settings = self.ctx.get_settings();
-                let file_format_params = FileFormatParams::try_from_reader(
-                    FileFormatOptionsReader::from_ast(&format_options),
-                    false,
-                )?;
-                if matches!(file_format_params, FileFormatParams::Lance(_)) {
-                    return Err(ErrorCode::IllegalFileFormat(
-                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
-                    ));
-                }
+                let file_format_params =
+                    parse_file_format(FileFormatOptionsReader::from_ast(&format_options))?;
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
@@ -254,16 +247,19 @@ impl Binder {
                                 "Insert into branch from stage is not supported yet",
                             ));
                         }
-                        let (mut stage_info, path) = StageResolver::from_table_context(
+                        let (stage_info, path) = StageResolver::from_table_context(
                             self.ctx.clone(),
                             databend_common_users::UserApiProvider::instance(),
                             databend_common_config::GlobalConfig::instance()
                                 .storage
                                 .allow_insecure,
                         )?
-                        .resolve_stage_location(loc, StagePathAccess::Read)
+                        .resolve_data_stage_location(
+                            loc,
+                            StagePathAccess::Read,
+                            Some(file_format_params),
+                        )
                         .await?;
-                        stage_info.file_format_params = file_format_params;
 
                         let files_info = StageFilesInfo {
                             path,

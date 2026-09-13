@@ -127,10 +127,7 @@ impl Join for OuterLeftHashJoin {
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
-        let valids = match self.desc.from_correlated_subquery {
-            true => None,
-            false => self.desc.build_valids_by_keys(&keys)?,
-        };
+        let valids = self.desc.build_valids_by_keys(&keys)?;
 
         self.desc.remove_keys_nullable(&mut keys);
         let probe_block = data.project(&self.desc.probe_projection);

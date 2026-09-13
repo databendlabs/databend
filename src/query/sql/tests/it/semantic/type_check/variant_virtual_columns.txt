@@ -9,8 +9,8 @@ second_type: Variant NULL
 third_scalar: CAST(t2.v['b']['c'] (#3) AS String NULL)
 third_type: String NULL
 bound_virtual_columns:
-- v['a'][0] -> #2
-- v['b']['c'] -> #3
+- a[0] -> #2
+- b.c -> #3
 metadata_columns:
 - #0 base a
 - #1 base v

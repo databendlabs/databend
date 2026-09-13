@@ -53,9 +53,16 @@ pub trait FilterBuilder {
     /// This methods can be called more than once.
     fn add_keys<K: Hash>(&mut self, keys: &[K]);
 
-    /// Populate with pre-compute collection of 64-bit digests.
-    fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I);
+    /// Populate with one pre-computed 64-bit digest.
+    fn add_digest(&mut self, digest: u64);
+
+    /// Populate with pre-computed 64-bit digests.
+    fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
+        for digest in digests {
+            self.add_digest(*digest);
+        }
+    }
 
     /// Build the filter with added keys.
-    fn build(&mut self) -> Result<Self::Filter, Self::Error>;
+    fn build(self) -> Result<Self::Filter, Self::Error>;
 }

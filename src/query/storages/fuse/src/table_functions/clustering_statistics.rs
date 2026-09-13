@@ -39,8 +39,7 @@ use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::statistics::BlockOverlapDepth;
-use crate::statistics::calculate_block_overlap_depths;
+use crate::statistics::calculate_block_depths;
 use crate::statistics::cluster_key_types_for_depth;
 use crate::statistics::get_min_max_stats;
 use crate::statistics::prepare_cluster_key_exprs;
@@ -175,9 +174,9 @@ impl TableMetaFunc for ClusteringStatistics {
 
         let block_depths = if calculate_depth {
             Some(if scalar_cluster_key_types.is_empty() {
-                vec![BlockOverlapDepth::default(); ranges.len()]
+                vec![0; ranges.len()]
             } else {
-                calculate_block_overlap_depths(&ranges, &scalar_cluster_key_types)?
+                calculate_block_depths(&ranges, &scalar_cluster_key_types)?
             })
         } else {
             None
@@ -196,11 +195,7 @@ impl TableMetaFunc for ClusteringStatistics {
             min.push(format_vec(&ranges[row_idx].0));
             max.push(format_vec(&ranges[row_idx].1));
             level.push(levels[row_idx]);
-            block_depth.push(
-                block_depths
-                    .as_ref()
-                    .map(|depths| depths[row_idx].depth as u64),
-            );
+            block_depth.push(block_depths.as_ref().map(|depths| depths[row_idx] as u64));
         }
 
         Ok(DataBlock::new(

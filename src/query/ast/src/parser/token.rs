@@ -392,6 +392,8 @@ pub enum TokenKind {
     //    so, uncomment the keyword in the reserved list.
     #[token("ACCOUNT", ignore(ascii_case))]
     ACCOUNT,
+    #[token("ACCOUNTS", ignore(ascii_case))]
+    ACCOUNTS,
     #[token("ALL", ignore(ascii_case))]
     ALL,
     #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
@@ -404,8 +406,6 @@ pub enum TokenKind {
     ADD,
     #[token("AFTER", ignore(ascii_case))]
     AFTER,
-    #[token("AGGREGATING", ignore(ascii_case))]
-    AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("APPEND_ONLY", ignore(ascii_case))]
@@ -1482,8 +1482,6 @@ pub enum TokenKind {
     COALESCE,
     #[token("RANDOM", ignore(ascii_case))]
     RANDOM,
-    #[token("PROXY", ignore(ascii_case))]
-    PROXY,
     #[token("IFNULL", ignore(ascii_case))]
     IFNULL,
     #[token("NULLS", ignore(ascii_case))]

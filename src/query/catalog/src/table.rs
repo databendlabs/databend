@@ -311,19 +311,6 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, num_snapshot_limit, dry_run);
-
-        Ok(None)
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -447,6 +434,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn plan_can_be_cached(&self) -> bool {
+        true
+    }
+
     fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
@@ -472,11 +463,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _index_id: u64,
-    ) -> Result<u64> {
+    async fn remove_aggregating_index_files(&self, _ctx: Arc<dyn TableContext>) -> Result<u64> {
         Ok(0)
     }
 

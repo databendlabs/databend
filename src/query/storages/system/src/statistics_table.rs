@@ -234,38 +234,6 @@ impl StatisticsTable {
                         histogram,
                     })
                 }
-                // add virtual column statistics
-                let table_info = table.get_table_info();
-                if let Some(virtual_schema) = &table_info.meta.virtual_schema {
-                    for virtual_field in virtual_schema.fields() {
-                        if let (Ok(source_field), Some(column_statistics)) = (
-                            schema.field_of_column_id(virtual_field.source_column_id),
-                            columns_statistics.column_statistics(virtual_field.column_id),
-                        ) {
-                            let column_name =
-                                format!("{}{}", source_field.name, virtual_field.name);
-                            columns.push(TableColumnStatistics {
-                                database_name: database.to_string(),
-                                table_name: table.name().into(),
-                                column_name,
-                                stats_row_count,
-                                actual_row_count,
-                                distinct_count: column_statistics.ndv,
-                                null_count: Some(column_statistics.null_count),
-                                min: column_statistics
-                                    .min
-                                    .clone()
-                                    .map(|v| v.to_string().unwrap()),
-                                max: column_statistics
-                                    .max
-                                    .clone()
-                                    .map(|v| v.to_string().unwrap()),
-                                avg_size: columns_statistics.average_size(virtual_field.column_id),
-                                histogram: "".to_string(),
-                            })
-                        }
-                    }
-                }
             }
         }
         Ok(columns)

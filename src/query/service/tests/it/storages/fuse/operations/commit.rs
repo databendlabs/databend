@@ -63,8 +63,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -76,7 +74,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -86,8 +83,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -120,8 +115,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -787,6 +780,15 @@ impl TableContextTableAccess for CtxDelegation {
         todo!()
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        todo!()
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
@@ -861,14 +863,6 @@ impl TableContextPartitionStats for CtxDelegation {
     }
 
     fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
-        todo!()
-    }
-
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        todo!()
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {
         todo!()
     }
 
@@ -1186,26 +1180,6 @@ impl Catalog for FakedCatalog {
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         todo!()
-    }
-
-    #[async_backtrace::framed]
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unimplemented!()
     }
 
     fn as_any(&self) -> &dyn Any {

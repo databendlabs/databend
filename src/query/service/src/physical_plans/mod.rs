@@ -62,6 +62,7 @@ mod physical_union_all;
 mod physical_window;
 mod physical_window_partition;
 mod runtime_filter;
+mod runtime_scan_filter;
 
 pub use databend_common_sql::executor::physical_plans::window::*;
 pub use physical_add_stream_column::AddStreamColumn;

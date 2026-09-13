@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::ir::StatContext;
 
 use super::table_statistics;
 use crate::framework::LiteTableContext;
@@ -54,12 +55,16 @@ async fn write_distributed_case(
 
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;
-    writeln!(file, "{}", raw_plan.format_indent(Default::default())?)?;
+    writeln!(
+        file,
+        "{}",
+        raw_plan.format_indent(Default::default(), &StatContext::default())?
+    )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default())?
+        optimized_plan.format_indent(Default::default(), &StatContext::default())?
     )?;
     writeln!(file)?;
 

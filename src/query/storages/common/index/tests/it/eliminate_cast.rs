@@ -16,6 +16,7 @@ use std::io::Write;
 
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
@@ -64,7 +65,7 @@ fn run_text(file: &mut impl Write, text: &str, ctx: &[(&str, DataType, Domain)])
         .iter()
         .map(|(name, _, domain)| (name.to_string(), domain.clone()))
         .collect();
-    match eliminate_cast(&expr, input_domains) {
+    match eliminate_cast(&expr, input_domains, &FunctionContext::default()) {
         Some(new_expr) => {
             writeln!(file, "rewrited  : {new_expr}").unwrap(); // typos:disable-line
         }

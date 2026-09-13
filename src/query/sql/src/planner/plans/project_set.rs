@@ -21,6 +21,7 @@ use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -90,8 +91,15 @@ impl Operator for ProjectSet {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
-        let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
+    fn derive_stats(
+        &self,
+        rel_expr: &RelExpr,
+        stat_ctx: &StatContext,
+    ) -> databend_common_exception::Result<Arc<StatInfo>> {
+        let mut input_stat = rel_expr
+            .derive_cardinality_child(0, stat_ctx)?
+            .deref()
+            .clone();
         self.derive_project_set_stats(&mut input_stat)
     }
 }

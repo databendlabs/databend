@@ -16,9 +16,7 @@ use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -33,7 +31,6 @@ use crate::BlockingTransformer;
 
 /// Filter the input [`DataBlock`] with the predicate `expr`.
 pub struct TransformFilter<const GC: bool = false> {
-    projections: BTreeSet<usize>,
     output_data_blocks: VecDeque<DataBlock>,
     max_block_size: usize,
     filter: FilterExecutor,
@@ -57,7 +54,6 @@ impl<const GC: bool> TransformFilter<GC> {
             false,
         );
         BlockingTransformer::create(input, output, TransformFilter::<GC> {
-            projections,
             output_data_blocks: VecDeque::new(),
             max_block_size,
             filter,
@@ -69,26 +65,15 @@ impl<const GC: bool> BlockingTransform for TransformFilter<GC> {
     const NAME: &'static str = "TransformFilter";
 
     fn consume(&mut self, input: DataBlock) -> Result<()> {
-        let num_evals = input
-            .get_meta()
-            .and_then(AggIndexMeta::downcast_ref_from)
-            .map(|a| a.num_evals);
-
-        if let Some(num_evals) = num_evals {
-            // It's from aggregating index.
-            self.output_data_blocks
-                .push_back(input.project_with_agg_index(&self.projections, num_evals));
-        } else {
-            let blocks = input.split_by_rows_no_tail(self.max_block_size);
-            for block in blocks.into_iter() {
-                let mut data_block = self.filter.filter(block)?;
-                if data_block.num_rows() > 0 {
-                    if GC {
-                        data_block = data_block.maybe_gc();
-                    }
-
-                    self.output_data_blocks.push_back(data_block);
+        let blocks = input.split_by_rows_no_tail(self.max_block_size);
+        for block in blocks.into_iter() {
+            let mut data_block = self.filter.filter(block)?;
+            if data_block.num_rows() > 0 {
+                if GC {
+                    data_block = data_block.maybe_gc();
                 }
+
+                self.output_data_blocks.push_back(data_block);
             }
         }
 

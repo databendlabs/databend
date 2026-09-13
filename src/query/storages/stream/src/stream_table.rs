@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
@@ -42,9 +41,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::SnapshotHistoryReader;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -54,7 +50,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use databend_storages_common_table_meta::table::StreamMode;
-use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
 
@@ -170,93 +165,20 @@ impl StreamTable {
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(source_desc, self.offset()?)?;
 
-        let base_snapshot = if let Some(base_loc) = self.snapshot_loc() {
-            let base = fuse_table.changes_read_offset_snapshot(&base_loc).await?;
-            Some(base)
-        } else {
-            None
-        };
-        let base_row_count = base_snapshot
-            .as_ref()
-            .map_or(0, |snapshot| snapshot.summary.row_count);
-        let base_timestamp = base_snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.timestamp);
-
-        let start = Instant::now();
-        if enable_snapshot_forward_scan && self.mode() == StreamMode::AppendOnly {
-            match fuse_table
-                .try_find_stream_batch_snapshot_v4(base_snapshot.as_deref(), batch_limit)
-                .await
-            {
-                Ok(Some((snapshot, format_version))) => {
-                    log::info!(
-                        "Stream {} searched UUID-v7 snapshots of source table {} forward, cost:{:?}",
-                        stream_desc,
-                        source_desc,
-                        start.elapsed(),
-                    );
-                    return Ok(fuse_table.load_table_by_snapshot(
-                        snapshot.as_ref(),
-                        format_version,
-                        s3_storage_class,
-                    )?);
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    log::warn!(
-                        "Stream {} failed to search UUID-v7 snapshots of source table {} forward, fallback to snapshot history traversal: {}",
-                        stream_desc,
-                        source_desc,
-                        error
-                    );
-                }
-            }
-        }
-
-        let Some(location) = fuse_table.snapshot_loc() else {
+        let Some((batch_table, _)) = fuse_table
+            .find_stream_batch_snapshot(
+                self.snapshot_loc().as_ref(),
+                &self.mode(),
+                batch_limit,
+                enable_snapshot_forward_scan,
+                s3_storage_class,
+            )
+            .await?
+        else {
             return Ok(source);
         };
-        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-        let mut snapshot_stream = reader.snapshot_history(
-            location,
-            snapshot_version,
-            fuse_table.meta_location_generator().clone(),
-        );
 
-        let mut instant = None;
-        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            if snapshot_with_version.0.timestamp <= base_timestamp {
-                break;
-            }
-
-            let change_row_count = snapshot_with_version
-                .0
-                .summary
-                .row_count
-                .abs_diff(base_row_count);
-            instant = Some(snapshot_with_version);
-            if change_row_count <= batch_limit {
-                break;
-            }
-        }
-        log::info!(
-            "Stream {} traversed the snapshot history of source table {}, cost:{:?}",
-            stream_desc,
-            source_desc,
-            start.elapsed(),
-        );
-
-        if let Some((snapshot, format_version)) = instant {
-            Ok(fuse_table.load_table_by_snapshot(
-                snapshot.as_ref(),
-                format_version,
-                s3_storage_class,
-            )?)
-        } else {
-            Ok(source)
-        }
+        Ok(batch_table)
     }
 
     pub fn max_batch_size(&self) -> Option<u64> {

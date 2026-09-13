@@ -30,6 +30,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::EvalScalar;
@@ -67,6 +68,7 @@ impl UnionAll {
         &self,
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
+        stat_ctx: &StatContext,
     ) -> Result<Arc<StatInfo>> {
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
 
@@ -103,18 +105,24 @@ impl UnionAll {
                     let left = {
                         let statistics = &left_stat_info.statistics;
                         match left_expr.as_ref() {
-                            Some(expr) => {
-                                EvalScalar::derive_item_stat(expr, statistics, left_cardinality)?
-                            }
+                            Some(expr) => EvalScalar::derive_item_stat(
+                                expr,
+                                statistics,
+                                &stat_ctx.function_context,
+                                left_cardinality,
+                            )?,
                             None => statistics.column_stats.get(left_output).cloned(),
                         }
                     };
                     let right = {
                         let statistics = &right_stat_info.statistics;
                         match right_expr.as_ref() {
-                            Some(expr) => {
-                                EvalScalar::derive_item_stat(expr, statistics, right_cardinality)?
-                            }
+                            Some(expr) => EvalScalar::derive_item_stat(
+                                expr,
+                                statistics,
+                                &stat_ctx.function_context,
+                                right_cardinality,
+                            )?,
                             None => statistics.column_stats.get(right_output).cloned(),
                         }
                     };
@@ -291,10 +299,10 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let left_stat_info = rel_expr.derive_cardinality_child(0)?;
-        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        self.derive_union_stats(left_stat_info, right_stat_info)
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
+        self.derive_union_stats(left_stat_info, right_stat_info, stat_ctx)
     }
 
     fn compute_required_prop_child(

@@ -180,6 +180,15 @@ pub enum Statement {
         database: Identifier,
     },
 
+    // Shares
+    CreateShare(CreateShareStmt),
+    DropShare(DropShareStmt),
+    AlterShare(AlterShareStmt),
+    GrantShare(GrantShareStmt),
+    RevokeShare(RevokeShareStmt),
+    ShowShares(ShowSharesStmt),
+    DescShare(DescShareStmt),
+
     // Tables
     ShowTables(ShowTablesStmt),
     ShowCreateTable(ShowCreateTableStmt),
@@ -195,6 +204,8 @@ pub enum Statement {
     TruncateTable(TruncateTableStmt),
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
+    VacuumTables(VacuumTablesStmt),
+    VacuumAll(VacuumAllStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
     VacuumVirtualColumn(VacuumVirtualColumnStmt),
@@ -235,9 +246,6 @@ pub enum Statement {
     DescribeStream(DescribeStreamStmt),
 
     // Indexes
-    CreateIndex(CreateIndexStmt),
-    DropIndex(DropIndexStmt),
-    RefreshIndex(RefreshIndexStmt),
     CreateTableIndex(CreateTableIndexStmt),
     DropTableIndex(DropTableIndexStmt),
     RefreshTableIndex(RefreshTableIndexStmt),
@@ -544,6 +552,8 @@ impl Statement {
             | Statement::ShowDatabases(..)
             | Statement::ShowDropDatabases(..)
             | Statement::ShowCreateDatabase(..)
+            | Statement::ShowShares(..)
+            | Statement::DescShare(..)
             | Statement::UseDatabase { .. }
             | Statement::ShowCreateMaterializedView(..)
             | Statement::ShowTables(..)
@@ -554,6 +564,8 @@ impl Statement {
             | Statement::ShowDropTables(..)
             | Statement::OptimizeTable(..)
             | Statement::VacuumTable(..)
+            | Statement::VacuumTables(..)
+            | Statement::VacuumAll(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
             | Statement::VacuumVirtualColumn(..)
@@ -568,7 +580,6 @@ impl Statement {
             | Statement::ShowMaterializedViews(..)
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
-            | Statement::RefreshIndex(..)
             | Statement::RefreshTableIndex(..)
             | Statement::RefreshVirtualColumn(..)
             | Statement::ShowVirtualColumns(..)
@@ -614,9 +625,13 @@ impl Statement {
             | Statement::InspectWarehouse(..) => true,
 
             Statement::CreateDatabase(..)
+            | Statement::CreateShare(..)
+            | Statement::DropShare(..)
+            | Statement::AlterShare(..)
+            | Statement::GrantShare(..)
+            | Statement::RevokeShare(..)
             | Statement::CreateTable(..)
             | Statement::CreateView(..)
-            | Statement::CreateIndex(..)
             | Statement::CreateStage(..)
             | Statement::AlterStage(..)
             | Statement::CreateSequence(..)
@@ -635,7 +650,6 @@ impl Statement {
             | Statement::DropMaterializedView(..)
             | Statement::CreateMaterializedView(..)
             | Statement::RefreshMaterializedView(..)
-            | Statement::DropIndex(..)
             | Statement::DropSequence(..)
             | Statement::DropDictionary(..)
             | Statement::TruncateTable(..)
@@ -917,6 +931,13 @@ impl Display for Statement {
             Statement::UndropDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
+            Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterShare(stmt) => write!(f, "{stmt}")?,
+            Statement::GrantShare(stmt) => write!(f, "{stmt}")?,
+            Statement::RevokeShare(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
+            Statement::DescShare(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
             Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
@@ -933,6 +954,8 @@ impl Display for Statement {
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTables(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumAll(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,
@@ -959,9 +982,6 @@ impl Display for Statement {
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,
             Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateTableIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropTableIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshTableIndex(stmt) => write!(f, "{stmt}")?,

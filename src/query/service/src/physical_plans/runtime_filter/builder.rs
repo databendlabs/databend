@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -420,8 +421,12 @@ fn normalize_probe_target(
         return Ok(None);
     }
     let expr = check_cast(expr.span(), false, expr, target_type, &BUILTIN_FUNCTIONS)?;
-    let expr =
-        databend_common_expression::ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS).0;
+    let expr = databend_common_expression::ConstantFolder::fold(
+        Cow::Owned(expr),
+        func_ctx,
+        &BUILTIN_FUNCTIONS,
+    )
+    .0;
     Ok(Some(expr.as_remote_expr()))
 }
 

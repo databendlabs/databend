@@ -196,7 +196,7 @@ pub(super) fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
     check_number::<T, usize>(
         None,
         &FunctionContext::default(),
-        &Constant {
+        Constant {
             span: None,
             data_type: param.as_ref().infer_data_type(),
             scalar: param,

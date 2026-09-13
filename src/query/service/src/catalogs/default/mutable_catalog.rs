@@ -49,8 +49,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -66,7 +64,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -80,9 +77,6 @@ use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
-use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
 use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -91,13 +85,10 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableTagReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
@@ -129,8 +120,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -139,12 +128,9 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::index_id_ident::IndexId;
-use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_meta_client::types::Change;
@@ -390,53 +376,6 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
-        Ok(self.ctx.meta.create_index(req).await?)
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        let res = self.ctx.meta.drop_index(&req.name_ident).await;
-        let dropped = res.map_err(KVAppError::from)?;
-
-        if dropped.is_none() {
-            if req.if_exists {
-                // Alright
-            } else {
-                return Err(AppError::from(req.name_ident.unknown_error("drop_index")).into());
-            }
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
-        let got = self
-            .ctx
-            .meta
-            .get_index(&req.name_ident)
-            .await
-            .map_err(meta_service_error)?;
-        let got = got.ok_or_else(|| AppError::from(req.name_ident.unknown_error("get_index")))?;
-        Ok(got)
-    }
-
-    #[async_backtrace::framed]
-    async fn list_marked_deleted_indexes(
-        &self,
-        tenant: &Tenant,
-        table_id: Option<u64>,
-    ) -> Result<GetMarkedDeletedIndexesReply> {
-        let res = self
-            .ctx
-            .meta
-            .list_marked_deleted_indexes(tenant, table_id)
-            .await
-            .map_err(meta_service_error)?;
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
     async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
@@ -448,21 +387,6 @@ impl Catalog for MutableCatalog {
             .list_marked_deleted_table_indexes(tenant, table_id)
             .await
             .map_err(meta_service_error)?)
-    }
-
-    #[async_backtrace::framed]
-    async fn remove_marked_deleted_index_ids(
-        &self,
-        tenant: &Tenant,
-        table_id: u64,
-        index_ids: &[u64],
-    ) -> Result<()> {
-        Ok(self
-            .ctx
-            .meta
-            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
-            .await
-            .map_err(meta_txn_error)?)
     }
 
     #[async_backtrace::framed]
@@ -478,58 +402,6 @@ impl Catalog for MutableCatalog {
             .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
             .await
             .map_err(meta_txn_error)?)
-    }
-
-    #[async_backtrace::framed]
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        let tenant = &req.tenant;
-        let index_id = IndexId::new(req.index_id);
-        let id_ident = IndexIdIdent::new_generic(tenant, index_id);
-
-        let change = self
-            .ctx
-            .meta
-            .update_index(id_ident, req.index_meta)
-            .await
-            .map_err(meta_service_error)?;
-
-        if !change.is_changed() {
-            Err(
-                KVAppError::AppError(AppError::UnknownIndex(UnknownError::new(
-                    index_id.to_string(),
-                    func_name!(),
-                )))
-                .into(),
-            )
-        } else {
-            Ok(UpdateIndexReply {})
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let name_id_values = self.ctx.meta.list_indexes(req).await?;
-        Ok(name_id_values
-            .into_iter()
-            .map(|(name, id, v)| (*id, name, v))
-            .collect())
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        let req = ListIndexesReq::new(req.tenant, Some(req.table_id));
-        let name_id_values = self.ctx.meta.list_indexes(req).await?;
-
-        Ok(name_id_values.into_iter().map(|(_, id, _)| *id).collect())
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let req = ListIndexesReq::new(req.tenant, Some(req.table_id));
-        self.list_indexes(req).await
     }
 
     #[async_backtrace::framed]

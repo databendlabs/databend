@@ -1,0 +1,112 @@
+## EXECUTE IMMEDIATE settings: inheritance, overrides, isolation, and planning contexts.
+
+statement ok
+CREATE OR REPLACE DATABASE test_execute_immediate_settings
+
+statement ok
+USE test_execute_immediate_settings
+
+## Query-level settings on EXECUTE IMMEDIATE propagate into script statements.
+
+statement ok
+SET max_threads = 13
+
+query TT
+SETTINGS (max_threads = 7) EXECUTE IMMEDIATE $$
+BEGIN
+    RETURN TABLE(
+        SELECT value, level FROM system.settings WHERE name = 'max_threads'
+    );
+END;
+$$;
+----
+7 SESSION
+
+## A script statement's own query-level settings override the outer settings.
+
+query TT
+EXECUTE IMMEDIATE $$
+    SETTINGS (max_threads = 5)
+    SELECT value, level FROM system.settings WHERE name = 'max_threads'
+$$;
+----
+5 SESSION
+
+query TT
+SETTINGS (max_threads = 7) EXECUTE IMMEDIATE $$
+BEGIN
+    LET res RESULTSET := SETTINGS (max_threads = 5)
+        SELECT value, level FROM system.settings WHERE name = 'max_threads';
+    RETURN TABLE(res);
+END;
+$$;
+----
+5 SESSION
+
+## A script statement's settings do not leak into the next script statement.
+
+query TT
+SETTINGS (max_threads = 7) EXECUTE IMMEDIATE $$
+BEGIN
+    LET ignored RESULTSET := SETTINGS (max_threads = 5)
+        SELECT value FROM system.settings WHERE name = 'max_threads';
+    RETURN TABLE(
+        SELECT value, level FROM system.settings WHERE name = 'max_threads'
+    );
+END;
+$$;
+----
+7 SESSION
+
+## Query-level settings do not change the session setting.
+
+query TT
+SELECT value, level FROM system.settings WHERE name = 'max_threads';
+----
+13 SESSION
+
+statement ok
+UNSET max_threads
+
+## Statistics folding must use the inner timezone rather than the outer UTC context.
+
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+CREATE TABLE execute_immediate_stats AS
+SELECT DATE '2022-02-02' AS d FROM numbers(10)
+
+query I
+EXECUTE IMMEDIATE $$
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT count(*) FROM execute_immediate_stats
+WHERE to_timestamp(d) < 1643745600000000::TIMESTAMP
+$$;
+----
+10
+
+statement ok
+DROP TABLE execute_immediate_stats
+
+statement ok
+UNSET timezone
+
+## Inner statement settings must take effect before name resolution.
+
+statement ok
+SET unquoted_ident_case_sensitive = 1
+
+query I
+EXECUTE IMMEDIATE $$
+SETTINGS (unquoted_ident_case_sensitive = 0)
+SELECT a FROM (SELECT 1 AS A)
+$$;
+----
+1
+
+statement ok
+UNSET unquoted_ident_case_sensitive
+
+statement ok
+DROP DATABASE test_execute_immediate_settings

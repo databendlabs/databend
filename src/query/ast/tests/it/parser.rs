@@ -130,8 +130,6 @@ fn test_statement() {
         r#"explain analyze select * from t;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
-        r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
-        r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);"#,
         r#"CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b);"#,
         r#"create table a (c decimal(38, 0))"#,
@@ -366,8 +364,8 @@ SELECT * from s;"#,
         r#"drop role if exists 'test'"#,
         r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
-        r#"OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;"#,
-        r#"OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;"#,
+        r#"OPTIMIZE TABLE t PURGE;"#,
+        r#"OPTIMIZE TABLE db.t PURGE;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);"#,
         r#"ALTER TABLE t1 swap with t2;"#,
@@ -426,20 +424,20 @@ SELECT * from s;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c refresh cache;"#,
         r#"VACUUM TABLE t;"#,
-        r#"VACUUM TABLE t DRY RUN;"#,
-        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
+        r#"VACUUM TABLE db.t;"#,
+        r#"VACUUM TABLES;"#,
+        r#"VACUUM TABLES FROM db;"#,
+        r#"VACUUM ALL;"#,
         r#"VACUUM DROP TABLE;"#,
-        r#"VACUUM DROP TABLE DRY RUN;"#,
-        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
-        r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
+        r#"VACUUM DROPPED OBJECTS;"#,
+        r#"VACUUM DROPPED OBJECTS FROM db;"#,
         r#"VACUUM TEMPORARY FILES RETAIN 7 DAYS LIMIT 10;"#,
         r#"ATTACH TABLE db.attached (c1, c2) 's3://testbucket/data/' CONNECTION=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE DICTIONARY IF NOT EXISTS db.dict1 (id int, name string) PRIMARY KEY id SOURCE(mysql(host='127.0.0.1' port='3306')) COMMENT 'test dictionary';"#,
         r#"SHOW CREATE DICTIONARY db.dict1;"#,
         r#"DROP DICTIONARY IF EXISTS db.dict1;"#,
         r#"RENAME DICTIONARY IF EXISTS db.dict1 TO db.dict2;"#,
-        r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
         r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
         r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
         r#"REFRESH LINEAGE FOR ALL VIEWS;"#,
@@ -480,6 +478,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';"#,
+        r#"DROP SHARE IF EXISTS share1;"#,
+        r#"ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE share1;"#,
+        r#"GRANT SELECT ON TABLE db1.t1 TO SHARE share1;"#,
         r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
@@ -497,6 +500,8 @@ SELECT * from s;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE share1;"#,
+        r#"REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;"#,
         r#"drop role 'role1';"#,
         r#"GRANT ROLE test TO ROLE 'test-user';"#,
         r#"GRANT ROLE test TO ROLE `test-user`;"#,
@@ -993,7 +998,6 @@ SELECT * from s;"#,
         r#"SHOW LOCKS IN ACCOUNT"#,
         r#"SHOW STATISTICS FROM TABLE test_db.test"#,
         r#"SHOW DICTIONARIES FROM db LIKE 'dict%'"#,
-        r#"DROP AGGREGATING INDEX IF EXISTS idx1"#,
         r#"DROP INVERTED INDEX IF EXISTS idx2 ON test_db.test"#,
         r#"SHOW VIRTUAL COLUMNS FROM test FROM test_db LIKE 'v%'"#,
         // pipes
@@ -1370,6 +1374,38 @@ fn test_statement_error() {
 }
 
 #[test]
+fn test_removed_vacuum_syntax() {
+    let cases = [
+        "VACUUM TABLE t DRY RUN",
+        "VACUUM TABLE t DRY RUN SUMMARY",
+        "VACUUM TABLE catalog.db.t",
+        "VACUUM TABLES FROM catalog.db",
+        "VACUUM TABLES FROM db LIMIT 10",
+        "VACUUM ALL FROM db",
+        "VACUUM ALL LIMIT 10",
+        "VACUUM DROP TABLE DRY RUN",
+        "VACUUM DROP TABLE DRY RUN SUMMARY",
+        "VACUUM DROP TABLE FROM db LIMIT 10",
+        "VACUUM DROP TABLE FROM catalog.db",
+        "VACUUM DROPPED OBJECTS FROM db LIMIT 10",
+        "VACUUM DROPPED OBJECTS FROM catalog.db",
+        "VACUUM TEMPORARY TABLES",
+        "OPTIMIZE TABLE t ALL",
+        "OPTIMIZE TABLE t PURGE LIMIT 10",
+        "OPTIMIZE TABLE catalog.db.t PURGE",
+        "OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')",
+    ];
+
+    for case in cases {
+        let tokens = tokenize_sql(case).unwrap();
+        assert!(
+            parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+            "removed syntax should fail to parse: {case}"
+        );
+    }
+}
+
+#[test]
 fn test_file_format_trim_space_option() {
     let sql = r#"
         COPY INTO mytable
@@ -1406,6 +1442,24 @@ fn test_create_table_options_before_partition_by() {
                 assert!(partition_pos < option_pos);
             }
         }
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
+fn test_ngram_index_accepts_float_options() {
+    let cases = [
+        "CREATE NGRAM INDEX idx ON t(a) false_positive_rate=0.02",
+        "CREATE TABLE t(a STRING, NGRAM INDEX idx(a) false_positive_rate=0.02)",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let displayed = stmt.to_string();
+        assert!(displayed.contains("false_positive_rate = '0.02'"));
 
         let tokens = tokenize_sql(&displayed).unwrap();
         parse_sql(&tokens, Dialect::PostgreSQL).unwrap();

@@ -396,7 +396,11 @@ impl Binder {
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            let opt_ctx = OptimizerContext::new(
+                self.ctx.clone(),
+                self.metadata.clone(),
+                self.ctx.get_function_context()?,
+            );
             let mut decorrelator = SubqueryDecorrelatorOptimizer::new(opt_ctx, Some(self.clone()));
             let (flatten_plan, derived_columns) = decorrelator.flatten_plan(
                 &left_child,

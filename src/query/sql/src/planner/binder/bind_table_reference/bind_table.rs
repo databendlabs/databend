@@ -226,7 +226,6 @@ impl Binder {
                         branch_name,
                         table_name_alias,
                         !bind_context.binding_views.is_empty(),
-                        bind_context.planning_agg_index,
                         false,
                         cte_suffix_name,
                     );
@@ -273,14 +272,13 @@ impl Binder {
                 .cte_context
                 .set_cte_context(new_bind_context.cte_context.clone());
 
-            let cols = table_meta
+            for (field, column) in table_meta
                 .schema()
                 .fields()
                 .iter()
-                .map(|f| f.name().clone())
-                .collect::<Vec<_>>();
-            for (index, column_name) in cols.iter().enumerate() {
-                new_bind_context.columns[index].column_name = column_name.clone();
+                .zip(new_bind_context.columns.iter_mut())
+            {
+                column.column_name.clone_from(field.name());
             }
 
             if let Some(alias) = alias {
@@ -320,7 +318,6 @@ impl Binder {
                         table_meta.clone(),
                         branch_name.clone(),
                         table_name_alias.clone(),
-                        false,
                         false,
                         false,
                         None,
@@ -379,7 +376,6 @@ impl Binder {
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
-                    bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
                 );

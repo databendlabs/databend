@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
@@ -79,39 +81,25 @@ macro_rules! with_weekday_mapped_name {
 
 macro_rules! transform_interval_add_sub {
     ($span: expr, $columns: expr, $builtin_functions: expr, $op: expr, $unit: expr, $date: expr, $interval: expr) => {
-        if $op == BinaryOperator::Plus {
-            with_interval_mapped_name!(|INTERVAL| match $unit {
-                IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: $span,
-                    name: concat!("add_", INTERVAL, "s").to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*$date, $columns, $builtin_functions),
-                        transform_expr(*$interval, $columns, $builtin_functions),
-                    ],
-                },
-                kind => {
-                    unimplemented!("{kind:?} is not supported for interval")
-                }
-            })
-        } else if $op == BinaryOperator::Minus {
-            with_interval_mapped_name!(|INTERVAL| match $unit {
-                IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span: $span,
-                    name: concat!("subtract_", INTERVAL, "s").to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*$date, $columns, $builtin_functions),
-                        transform_expr(*$interval, $columns, $builtin_functions),
-                    ],
-                },
-                kind => {
-                    unimplemented!("{kind:?} is not supported for interval")
-                }
-            })
-        } else {
-            unimplemented!("operator {} is not supported for interval", $op)
-        }
+        with_interval_mapped_name!(|INTERVAL| match $unit {
+            IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                span: $span,
+                name: $op.to_func_name(),
+                params: vec![],
+                args: vec![
+                    transform_expr(*$date, $columns, $builtin_functions),
+                    RawExpr::FunctionCall {
+                        span: $span,
+                        name: concat!("to_", INTERVAL, "s").to_string(),
+                        params: vec![],
+                        args: vec![transform_expr(*$interval, $columns, $builtin_functions,)],
+                    },
+                ],
+            },
+            kind => {
+                unimplemented!("{kind:?} is not supported for interval")
+            }
+        })
     };
 }
 
@@ -186,9 +174,12 @@ fn transform_expr(
                 .map(|param| {
                     let raw_expr = transform_expr(param, &[], builtin_functions);
                     let expr = type_check::check(&raw_expr, builtin_functions).unwrap();
-                    let (expr, _) =
-                        ConstantFolder::fold(&expr, &FunctionContext::default(), builtin_functions);
-                    expr.into_constant().unwrap().scalar
+                    let (expr, _) = ConstantFolder::fold(
+                        Cow::Owned(expr),
+                        &FunctionContext::default(),
+                        builtin_functions,
+                    );
+                    expr.into_owned().into_constant().unwrap().scalar
                 })
                 .collect(),
         },

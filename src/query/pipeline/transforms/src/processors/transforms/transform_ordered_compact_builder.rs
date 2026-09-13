@@ -15,27 +15,9 @@
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline::core::Pipeline;
 
 use crate::processors::AccumulatingTransform;
 use crate::processors::BlockCompactMeta;
-use crate::processors::TransformCompactBlock;
-use crate::processors::TransformPipelineHelper;
-
-pub fn build_ordered_compact_pipeline(
-    pipeline: &mut Pipeline,
-    thresholds: BlockThresholds,
-    max_threads: usize,
-    extra_key_num: usize,
-) -> Result<()> {
-    pipeline.try_resize(1)?;
-    pipeline.add_accumulating_transformer(move || {
-        OrderedBlockCompactBuilder::new(thresholds, extra_key_num)
-    });
-    pipeline.try_resize(max_threads)?;
-    pipeline.add_block_meta_transformer(|| TransformCompactBlock);
-    Ok(())
-}
 
 pub struct OrderedBlockCompactBuilder {
     thresholds: BlockThresholds,
@@ -171,6 +153,7 @@ mod tests {
 
     use super::*;
     use crate::processors::BlockMetaTransform;
+    use crate::processors::TransformCompactBlock;
 
     fn block_with_rows(rows: usize) -> DataBlock {
         DataBlock::new_from_columns(vec![Int32Type::from_data(

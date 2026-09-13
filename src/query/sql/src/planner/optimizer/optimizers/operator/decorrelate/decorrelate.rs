@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -277,7 +278,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let join_type = if matches!(subquery.contain_agg, Some(true)) && {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                     rel_expr
-                        .derive_cardinality()?
+                        .derive_cardinality(self.ctx.get_stat_context())?
                         .statistics
                         .precise_cardinality
                         .is_some()
@@ -352,7 +353,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
-                    self.metadata.write().add_derived_column(
+                    self.ctx.get_metadata().write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
                     )
@@ -439,7 +440,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
-                    self.metadata.write().add_derived_column(
+                    self.ctx.get_metadata().write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
                     )
@@ -487,7 +488,7 @@ impl SubqueryDecorrelatorOptimizer {
         let mut correlated_columns = correlated_columns.iter().copied().collect::<Vec<_>>();
         correlated_columns.sort();
         for correlated_column in correlated_columns {
-            let metadata = self.metadata.read();
+            let metadata = self.ctx.metadata_read();
             let column_entry = metadata.column(correlated_column);
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
@@ -624,13 +625,13 @@ impl SubqueryDecorrelatorOptimizer {
                 let scalar_expr = &eval.items[0].scalar;
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
-                    let func_ctx = self.ctx.get_function_context()?;
+                    let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
                     let (folded, _) = ConstantFolder::fold(
-                        &scalar_expr.as_expr()?,
+                        Cow::Owned(scalar_expr.as_expr()?),
                         &func_ctx,
                         &BUILTIN_FUNCTIONS,
                     );
-                    if let EExpr::Constant(constant) = folded {
+                    if let EExpr::Constant(constant) = folded.into_owned() {
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),
@@ -767,11 +768,23 @@ impl SubqueryDecorrelatorOptimizer {
                             })));
                         }
                         // If the number of values more than `inlist_to_join_threshold`, need convert to join.
-                        if values.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
+                        if values.len()
+                            >= self
+                                .ctx
+                                .get_table_ctx()
+                                .get_settings()
+                                .get_inlist_to_join_threshold()?
+                        {
                             return Ok(None);
                         }
                         // If the number of values more than `max_inlist_to_or`, use contains function instead of or.
-                        if values.len() > self.ctx.get_settings().get_max_inlist_to_or()? as usize {
+                        if values.len()
+                            > self
+                                .ctx
+                                .get_table_ctx()
+                                .get_settings()
+                                .get_max_inlist_to_or()? as usize
+                        {
                             let value_type = values.first().unwrap().as_ref().infer_data_type();
                             let mut builder =
                                 ColumnBuilder::with_capacity(&value_type, values.len());

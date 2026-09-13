@@ -12,6 +12,8 @@ databend-common-exception = { workspace = true }
 display-more = { workspace = true }
 jwt-simple = { workspace = true }
 serde = { workspace = true }
+
+[dev-dependencies]
 serde_json = { workspace = true }
 
 [lints]

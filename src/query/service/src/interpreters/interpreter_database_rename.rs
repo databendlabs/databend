@@ -46,19 +46,21 @@ impl Interpreter for RenameDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        for entity in &self.plan.entities {
-            let catalog = self.ctx.get_catalog(&entity.catalog).await?;
-            let tenant = self.plan.tenant.clone();
-            let _reply = catalog
-                .rename_database(RenameDatabaseReq {
-                    if_exists: entity.if_exists,
-                    name_ident: DatabaseNameIdent::new(tenant, &entity.database),
-                    new_db_name: entity.new_database.clone(),
-                })
-                .await?;
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            for entity in &self.plan.entities {
+                let catalog = self.ctx.get_catalog(&entity.catalog).await?;
+                let tenant = self.plan.tenant.clone();
+                let _reply = catalog
+                    .rename_database(RenameDatabaseReq {
+                        if_exists: entity.if_exists,
+                        name_ident: DatabaseNameIdent::new(tenant, &entity.database),
+                        new_db_name: entity.new_database.clone(),
+                    })
+                    .await?;
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -441,22 +441,6 @@ impl Catalog for DummyCatalog {
         unsupported("catalog::undrop_database")
     }
 
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unsupported("catalog::create_index")
-    }
-
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
-        unsupported("catalog::drop_index")
-    }
-
-    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
-        unsupported("catalog::get_index")
-    }
-
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unsupported("catalog::update_index")
-    }
-
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         unsupported("catalog::rename_database")
     }
@@ -1476,6 +1460,7 @@ impl LiteTableContext {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
         let metadata = Metadata::default_ref();
+        databend_common_sql::apply_statement_settings(self.clone(), &extras.statement)?;
         let name_resolution_ctx = NameResolutionContext::try_from(self.get_settings().as_ref())?;
         let binder = databend_common_sql::Binder::new(
             self.clone(),
@@ -1492,7 +1477,7 @@ impl LiteTableContext {
             _ => Metadata::default_ref(),
         };
         let settings = self.get_settings();
-        let opt_ctx = OptimizerContext::new(self.clone(), metadata)
+        let opt_ctx = OptimizerContext::new(self.clone(), metadata, self.get_function_context()?)
             .with_settings(&settings)?
             .set_enable_distributed_optimization(true)
             .clone();
@@ -1938,6 +1923,15 @@ impl TableContextTableAccess for LiteTableContext {
         Ok(None)
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        Ok(None)
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         Ok("lite_temp".to_string())
     }
@@ -2043,12 +2037,6 @@ impl TableContextPartitionStats for LiteTableContext {
         Ok(())
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        false
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {}
-
     fn get_enable_sort_spill(&self) -> bool {
         false
     }
@@ -2145,6 +2133,7 @@ impl TableContextVariables for LiteTableContext {
 mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_sql::FormatOptions;
+    use databend_common_sql::optimizer::ir::StatContext;
 
     use super::*;
 
@@ -2331,7 +2320,8 @@ $$
 
         let raw_plan = ctx.bind_sql("SELECT a FROM t").await?;
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let formatted = optimized_plan.format_indent(FormatOptions::default())?;
+        let formatted =
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             formatted.contains("ROW ACCESS POLICY APPLIED"),
             "formatted plan:\n{formatted}"
@@ -2373,14 +2363,16 @@ $$
             SELECT a FROM c UNION ALL SELECT a FROM c
         "#;
         let raw_plan = ctx.bind_sql(sql).await?;
-        let raw_formatted = raw_plan.format_indent(FormatOptions::default())?;
+        let raw_formatted =
+            raw_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             raw_formatted.contains("MaterializedCTE"),
             "formatted plan:\n{raw_formatted}"
         );
 
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+        let optimized =
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             optimized.contains("Scan") && optimized.contains("default.t"),
             "formatted plan:\n{optimized}"

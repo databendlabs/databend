@@ -22,6 +22,7 @@ use crate::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SelectivityEstimator;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -80,8 +81,8 @@ impl Operator for Filter {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let stat_info = rel_expr.derive_cardinality_child(0)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         // Derive cardinality
         let input_cardinality = stat_info
             .statistics
@@ -92,7 +93,7 @@ impl Operator for Filter {
             SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality)
                 .with_top_n(stat_info.statistics.top_n.clone())
                 .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone());
-        let cardinality = sb.apply(&self.predicates)?;
+        let cardinality = sb.apply(&self.predicates, &stat_ctx.function_context)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
             HashMap::new()

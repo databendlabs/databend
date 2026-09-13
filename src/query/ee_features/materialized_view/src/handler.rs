@@ -54,6 +54,7 @@ pub trait MaterializedViewHandler: Sync + Send {
         catalog: &str,
         database: &str,
         view_name: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<()>;
 }
 
@@ -111,9 +112,10 @@ impl MaterializedViewHandlerWrapper {
         catalog: &str,
         database: &str,
         view_name: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<()> {
         self.handler
-            .do_refresh_materialized_view(ctx, table, catalog, database, view_name)
+            .do_refresh_materialized_view(ctx, table, catalog, database, view_name, max_batch_size)
             .await
     }
 }

@@ -1032,7 +1032,7 @@ fn column_id(column: &ColumnEntry) -> ColumnId {
     match column {
         ColumnEntry::BaseTableColumn(base) => base.column_id,
         ColumnEntry::InternalColumn(internal) => internal.internal_column.column_id(),
-        ColumnEntry::VirtualColumn(virtual_column) => virtual_column.column_id,
+        ColumnEntry::VirtualColumn(virtual_column) => virtual_column.query_column_id,
         ColumnEntry::DerivedColumn(derived) => derived.column_index.as_usize() as ColumnId,
     }
 }
@@ -1783,7 +1783,6 @@ mod tests {
             None,
             false,
             false,
-            false,
             None,
         )
     }
@@ -1801,7 +1800,6 @@ mod tests {
             fake_stream_table(table_id, table_name, lineage_source.clone()),
             None,
             None,
-            false,
             false,
             false,
             None,
@@ -1867,7 +1865,6 @@ mod tests {
             }),
             None,
             None,
-            false,
             false,
             true,
             None,

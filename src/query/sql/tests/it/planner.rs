@@ -27,6 +27,7 @@ use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -138,6 +139,12 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         default_node_num: 1,
     },
     LiteReplayCaseSpec {
+        name: "20379_non_nullable_reflexive_equality",
+        warehouse_distribution: false,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
         name: "q17_histogram_join_order",
         warehouse_distribution: true,
         optimizer_skip_list: &[],
@@ -213,7 +220,8 @@ async fn write_statistics_trace_case(
     case: &StatisticsTraceGoldenCase,
 ) -> Result<()> {
     let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
-    let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+    let optimized =
+        optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "trace: {}", case.trace_file)?;
@@ -435,7 +443,7 @@ async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result
         )
         .await?;
     let plan = ctx.optimize_plan(plan).await?;
-    let plan = plan.format_indent(Default::default())?;
+    let plan = plan.format_indent(Default::default(), &StatContext::default())?;
     assert!(
         plan.contains("split(documents.s"),
         "ProjectSet should keep the lambda UDF body bound to documents.s:\n{plan}"
@@ -456,6 +464,17 @@ async fn test_execute_immediate_binds_session_variable_script() -> Result<()> {
     );
 
     ctx.bind_sql("EXECUTE IMMEDIATE $exec_script").await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_execute_immediate_applies_statement_settings() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    ctx.bind_sql("EXECUTE IMMEDIATE 'SETTINGS (enable_auto_materialize_cte = 1) SELECT 1'")
+        .await?;
+
+    assert!(ctx.get_settings().get_enable_auto_materialize_cte()?);
     Ok(())
 }
 
@@ -510,6 +529,35 @@ async fn test_srf_rejects_window_argument_before_project_set_binding() -> Result
 
     let err = ctx
         .bind_sql("SELECT unnest(first_value('aa') OVER (PARTITION BY 'bb'))")
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), 1065, "unexpected error: {err:?}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_unpivot_binds_as_table_reference_output() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql(
+        "CREATE TABLE repro(game_id UINT64, level UINT32, game_cnt DECIMAL(18, 2), rtp DECIMAL(18, 2))",
+    )
+    .await?;
+    ctx.register_setup_sql("CREATE TABLE all_values(jan INT, feb INT)")
+        .await?;
+
+    for sql in [
+        "SELECT game_id, level, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp))",
+        "SELECT game_id, metric, value FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE metric = 'rtp'",
+        "SELECT src.game_id, src.metric, src.value FROM repro AS src(game_id, level, game_cnt, rtp) UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE src.metric = 'rtp'",
+        "SELECT default.repro.* FROM default.repro UNPIVOT(value FOR metric IN (game_cnt, rtp)) WHERE default.repro.metric = 'rtp'",
+        "SELECT repro.game_id FROM (SELECT * FROM repro) UNPIVOT(value FOR metric IN (game_cnt, rtp))",
+        "SELECT _row_id, metric, value FROM all_values UNPIVOT(value FOR metric IN (jan, feb))",
+    ] {
+        ctx.bind_sql(sql).await?;
+    }
+
+    let err = ctx
+        .bind_sql("SELECT game_cnt FROM repro UNPIVOT(value FOR metric IN (game_cnt, rtp))")
         .await
         .unwrap_err();
     assert_eq!(err.code(), 1065, "unexpected error: {err:?}");

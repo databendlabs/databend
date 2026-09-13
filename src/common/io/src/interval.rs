@@ -104,30 +104,30 @@ impl IntervalToStringCast {
                 buffer[length] = b' ';
                 length += 1;
             }
-            let mut micros = interval.micros;
+            let mut micros = i128::from(interval.micros);
             if micros < 0 {
                 buffer[length] = b'-';
                 length += 1;
                 micros = -micros;
             }
-            let hour = micros / MICROS_PER_HOUR;
-            micros -= hour * MICROS_PER_HOUR;
-            let min = micros / MICROS_PER_MINUTE;
-            micros -= min * MICROS_PER_MINUTE;
-            let sec = micros / MICROS_PER_SEC;
-            micros -= sec * MICROS_PER_SEC;
+            let hour = micros / i128::from(MICROS_PER_HOUR);
+            micros -= hour * i128::from(MICROS_PER_HOUR);
+            let min = micros / i128::from(MICROS_PER_MINUTE);
+            micros -= min * i128::from(MICROS_PER_MINUTE);
+            let sec = micros / i128::from(MICROS_PER_SEC);
+            micros -= sec * i128::from(MICROS_PER_SEC);
 
-            Self::format_signed_number(hour, buffer, &mut length);
+            Self::format_signed_number(hour as i64, buffer, &mut length);
             buffer[length] = b':';
             length += 1;
-            Self::format_two_digits(min, buffer, &mut length);
+            Self::format_two_digits(min as i64, buffer, &mut length);
             buffer[length] = b':';
             length += 1;
-            Self::format_two_digits(sec, buffer, &mut length);
+            Self::format_two_digits(sec as i64, buffer, &mut length);
             if micros != 0 {
                 buffer[length] = b'.';
                 length += 1;
-                Self::format_micros(micros, buffer, &mut length);
+                Self::format_micros(micros as i64, buffer, &mut length);
             }
         } else if length == 0 {
             buffer[..8].copy_from_slice(b"00:00:00");
@@ -189,7 +189,7 @@ impl Interval {
                     let (specifier, next_pos) = parse_identifier(&str[pos..]);
 
                     pos += next_pos;
-                    let _ = apply_specifier(&mut result, number, fraction, &specifier);
+                    apply_specifier(&mut result, number, fraction, &specifier)?;
                     found_any = true;
                 }
                 b'-' => {
@@ -203,7 +203,7 @@ impl Interval {
                     let (specifier, next_pos) = parse_identifier(&str[pos..]);
 
                     pos += next_pos;
-                    let _ = apply_specifier(&mut result, number, fraction, &specifier);
+                    apply_specifier(&mut result, number, fraction, &specifier)?;
                     found_any = true;
                 }
                 b'a' | b'A' => {
@@ -228,9 +228,18 @@ impl Interval {
                             }
                         }
                     }
-                    result.months = -result.months;
-                    result.days = -result.days;
-                    result.micros = -result.micros;
+                    result.months = result
+                        .months
+                        .checked_neg()
+                        .ok_or(ErrorCode::BadArguments("Interval overflow"))?;
+                    result.days = result
+                        .days
+                        .checked_neg()
+                        .ok_or(ErrorCode::BadArguments("Interval overflow"))?;
+                    result.micros = result
+                        .micros
+                        .checked_neg()
+                        .ok_or(ErrorCode::BadArguments("Interval overflow"))?;
                     return Ok(result);
                 }
                 _ => {
@@ -251,18 +260,22 @@ impl Interval {
     }
 }
 
-fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
-    let mut number: i64 = 0;
-    let mut fraction: i64 = 0;
+fn parse_integer(bytes: &[u8]) -> Result<(i64, usize)> {
+    let mut value: i64 = 0;
     let mut pos = 0;
-
     while pos < bytes.len() && bytes[pos].is_ascii_digit() {
-        number = number
+        value = value
             .checked_mul(10)
-            .ok_or(ErrorCode::BadArguments("Number too large"))?
-            + (bytes[pos] - b'0') as i64;
+            .and_then(|value| value.checked_add(i64::from(bytes[pos] - b'0')))
+            .ok_or(ErrorCode::BadArguments("Number too large"))?;
         pos += 1;
     }
+    Ok((value, pos))
+}
+
+fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
+    let (number, mut pos) = parse_integer(bytes)?;
+    let mut fraction: i64 = 0;
 
     if pos < bytes.len() && bytes[pos] == b'.' {
         pos += 1;
@@ -278,12 +291,12 @@ fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
     if pos < bytes.len() && bytes[pos] == b':' {
         let time_bytes = &bytes[pos..];
         let mut time_pos = 0;
-        let mut total_micros: i64 = number * 60 * 60 * MICROS_PER_SEC;
+        let mut total_micros = i128::from(number) * i128::from(MICROS_PER_HOUR);
         let mut colon_count = 0;
 
         while colon_count < 2 && time_bytes.len() > time_pos {
             let (minute, _, next_pos) = parse_time_part(&time_bytes[time_pos..])?;
-            let minute_nanos = minute * 60 * MICROS_PER_SEC;
+            let minute_nanos = i128::from(minute) * i128::from(MICROS_PER_MINUTE);
             total_micros += minute_nanos;
             time_pos += next_pos;
 
@@ -296,9 +309,11 @@ fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
         }
         if time_bytes.len() > time_pos {
             let (seconds, micros, next_pos) = parse_time_part_with_micros(&time_bytes[time_pos..])?;
-            total_micros += seconds * MICROS_PER_SEC + micros;
+            total_micros += i128::from(seconds) * i128::from(MICROS_PER_SEC) + i128::from(micros);
             time_pos += next_pos;
         }
+        let total_micros = i64::try_from(total_micros)
+            .map_err(|_| ErrorCode::BadArguments("Interval overflow"))?;
         return Ok((total_micros, 0, pos + time_pos));
     }
 
@@ -310,30 +325,13 @@ fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
 }
 
 fn parse_time_part(bytes: &[u8]) -> Result<(i64, i64, usize)> {
-    let mut number: i64 = 0;
-    let mut pos = 0;
-    while pos < bytes.len() && bytes[pos].is_ascii_digit() {
-        number = number
-            .checked_mul(10)
-            .ok_or(ErrorCode::BadArguments("Number too large"))?
-            + (bytes[pos] - b'0') as i64;
-        pos += 1;
-    }
+    let (number, pos) = parse_integer(bytes)?;
     Ok((number, 0, pos))
 }
 
 fn parse_time_part_with_micros(bytes: &[u8]) -> Result<(i64, i64, usize)> {
-    let mut number: i64 = 0;
+    let (number, mut pos) = parse_integer(bytes)?;
     let mut fraction: i64 = 0;
-    let mut pos = 0;
-
-    while pos < bytes.len() && bytes[pos].is_ascii_digit() {
-        number = number
-            .checked_mul(10)
-            .ok_or(ErrorCode::BadArguments("Number too large"))?
-            + (bytes[pos] - b'0') as i64;
-        pos += 1;
-    }
 
     if pos < bytes.len() && bytes[pos] == b'.' {
         pos += 1;

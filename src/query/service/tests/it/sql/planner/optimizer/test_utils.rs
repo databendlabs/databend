@@ -28,6 +28,7 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
 use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
+use databend_common_sql::apply_statement_settings;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::planner::Binder;
 use databend_common_sql::planner::Metadata;
@@ -71,13 +72,12 @@ pub async fn execute_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<()> {
 
 /// Get raw plan from SQL
 pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
-    let settings = ctx.get_settings();
     let planner = Planner::new(ctx.clone());
     let extras = planner.parse_sql(sql)?;
 
     let metadata = Arc::new(parking_lot::RwLock::new(Metadata::default()));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-
+    apply_statement_settings(ctx.clone(), &extras.statement)?;
+    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let binder = Binder::new(
         ctx.clone(),
         CatalogManager::instance(),

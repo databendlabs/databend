@@ -331,10 +331,10 @@ async fn optimize_query_inner(
         // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
         // Eliminate unnecessary scalar calculations to clean up the final plan
-        .add_if(
-            !opt_ctx.get_planning_agg_index(),
-            RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
-        )
+        .add(RecursiveRuleOptimizer::new(
+            opt_ctx.clone(),
+            [RuleID::EliminateEvalScalar].as_slice(),
+        ))
         // Clean up unused CTEs
         .add(CleanupUnusedCTEOptimizer)
         // Finalize derived join annotations after all logical rewrites.

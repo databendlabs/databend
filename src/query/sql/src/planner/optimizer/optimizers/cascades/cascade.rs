@@ -66,10 +66,10 @@ impl CascadesOptimizer {
                 .with_degree_of_parallelism(settings.get_max_threads()? as usize),
         );
 
-        // Create optimizer
+        let memo = Memo::new(opt_ctx.get_stat_context().clone());
         Ok(Self {
             opt_ctx,
-            memo: Memo::create(),
+            memo,
             cost_model,
             explore_rule_set,
         })

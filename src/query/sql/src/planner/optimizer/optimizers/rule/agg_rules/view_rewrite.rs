@@ -372,8 +372,6 @@ pub(crate) struct ViewRewriteMatch {
     pub(crate) predicates: Vec<ScalarExpr>,
     pub(crate) post_aggregate_predicates: Vec<ScalarExpr>,
     pub(crate) selection: Vec<ScalarItem>,
-    pub(crate) is_aggregate: bool,
-    pub(crate) num_aggregate_functions: usize,
     pub(crate) requires_aggregate_rollup: bool,
 }
 
@@ -865,13 +863,6 @@ impl ViewMatcher {
             predicates: new_predicates,
             post_aggregate_predicates: self.query_info.post_aggregate_predicates.clone(),
             selection,
-            is_aggregate: self.query_info.aggregate.is_some(),
-            num_aggregate_functions: self
-                .query_info
-                .aggregate
-                .as_ref()
-                .map(|aggregate| aggregate.aggregate_functions.len())
-                .unwrap_or_default(),
             requires_aggregate_rollup: self.requires_aggregate_rollup(view_info),
         }))
     }

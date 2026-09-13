@@ -144,6 +144,7 @@ impl Rule for RuleTryApplyMaterializedView {
             s_expr,
             &candidates,
             required_output_columns,
+            self.ctx.get_stat_context(),
         )? {
             if let Some(candidate) = candidates
                 .iter()

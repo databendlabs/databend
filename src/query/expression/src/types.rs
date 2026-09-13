@@ -230,6 +230,30 @@ impl AggregateStateDataType {
     }
 }
 
+pub(crate) fn collect_physical_types<T, F>(fields: &[T], physical_type: F) -> Option<Vec<T>>
+where
+    T: Clone + PartialEq,
+    F: for<'a> Fn(&'a T) -> Cow<'a, T>,
+{
+    let (index, physical_field) = fields.iter().enumerate().find_map(|(index, field)| {
+        let physical_field = physical_type(field);
+        (physical_field.as_ref() != field).then_some((index, physical_field))
+    })?;
+
+    Some(
+        fields[..index]
+            .iter()
+            .cloned()
+            .chain(std::iter::once(physical_field.into_owned()))
+            .chain(
+                fields[index + 1..]
+                    .iter()
+                    .map(|field| physical_type(field).into_owned()),
+            )
+            .collect(),
+    )
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
@@ -290,23 +314,10 @@ impl DataType {
                     Cow::Owned(DataType::Map(Box::new(physical_inner.into_owned())))
                 }
             }
-            DataType::Tuple(fields) => {
-                let physical_fields = fields
-                    .iter()
-                    .map(|field| field.physical_type())
-                    .collect::<Vec<_>>();
-                if physical_fields
-                    .iter()
-                    .zip(fields)
-                    .all(|(physical, logical)| physical.as_ref() == logical)
-                {
-                    Cow::Borrowed(self)
-                } else {
-                    Cow::Owned(DataType::Tuple(
-                        physical_fields.into_iter().map(Cow::into_owned).collect(),
-                    ))
-                }
-            }
+            DataType::Tuple(fields) => match collect_physical_types(fields, Self::physical_type) {
+                Some(fields) => Cow::Owned(DataType::Tuple(fields)),
+                None => Cow::Borrowed(self),
+            },
             _ => Cow::Borrowed(self),
         }
     }

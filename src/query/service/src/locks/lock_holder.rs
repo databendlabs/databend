@@ -13,13 +13,10 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use backoff::backoff::Backoff;
-use databend_common_base::runtime::GlobalIORuntime;
+use async_trait::async_trait;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,27 +27,49 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
-use databend_common_storages_fuse::operations::set_backoff;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::watch_request::FilterType;
-use futures::future::Either;
-use futures::future::select;
 use futures_util::StreamExt;
-use rand::Rng;
-use rand::thread_rng;
-use tokio::sync::Notify;
-use tokio::time::sleep;
 use tokio::time::timeout;
 
+use crate::locks::lease_keeper::LeaseKeeper;
+use crate::locks::lease_keeper::LeaseOps;
 use crate::meta_service_error;
 use crate::sessions::SessionManager;
 
+struct TableLockLeaseOps {
+    catalog: Arc<dyn Catalog>,
+    extend_req: ExtendLockRevReq,
+    description: String,
+}
+
+#[async_trait]
+impl LeaseOps for TableLockLeaseOps {
+    async fn extend(&self) -> Result<()> {
+        self.catalog
+            .extend_lock_revision(self.extend_req.clone())
+            .await
+    }
+
+    async fn delete(&self) -> Result<()> {
+        self.catalog
+            .delete_lock_revision(DeleteLockRevReq::new(
+                self.extend_req.lock_key.clone(),
+                self.extend_req.revision,
+            ))
+            .await
+    }
+
+    fn description(&self) -> &str {
+        &self.description
+    }
+}
+
 #[derive(Default)]
 pub struct LockHolder {
-    shutdown_flag: AtomicBool,
-    shutdown_notify: Notify,
+    keeper: Arc<LeaseKeeper>,
 }
 
 impl LockHolder {
@@ -90,8 +109,8 @@ impl LockHolder {
                 .position(|(rev, _)| *rev == revision)
                 .ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
-                ErrorCode::TableLockExpired(format!(
-                    "The acquired table lock with revision '{}' maybe expired(elapsed: {:?})",
+                ErrorCode::LeaseExpired(format!(
+                    "The acquired table lock lease with revision '{}' may have expired (elapsed: {:?})",
                     revision,
                     start.elapsed(),
                 )))?;
@@ -140,10 +159,10 @@ impl LockHolder {
             // Add a timeout period for watch.
             if let Err(_cause) = timeout(acquire_timeout.abs_diff(elapsed), async move {
                 while let Some(Ok(resp)) = watch_stream.next().await {
-                    if let Some(event) = resp.event {
-                        if event.current.is_none() {
-                            break;
-                        }
+                    if let Some(event) = resp.event
+                        && event.current.is_none()
+                    {
+                        break;
                     }
                 }
             })
@@ -178,160 +197,35 @@ impl LockHolder {
         let lock_key = req.lock_key.clone();
         let query_id = req.query_id.clone();
         let ttl = req.ttl;
-        let sleep_range = (ttl / 3)..=(ttl * 2 / 3);
 
-        // get a new table lock revision.
+        // A queued lock revision is itself a lease, so start keeping it alive before waiting for
+        // ownership. Otherwise a long queue wait could expire this revision before acquisition.
         let res = catalog.create_lock_revision(req).await?;
         let revision = res.revision;
-        // metrics.
         record_created_lock_nums(lock_key.lock_type().to_string(), 1);
         log::debug!("create table lock success, revision={}", revision);
 
-        let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
-        let extend_table_lock_req = ExtendLockRevReq::new(lock_key.clone(), revision, ttl, false);
-
-        GlobalIORuntime::instance().spawn({
-            let self_clone = self.clone();
-            async move {
-                let mut notified = Box::pin(self_clone.shutdown_notify.notified());
-                while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
-                    let rand_sleep_duration = {
-                        let mut rng = thread_rng();
-                        rng.gen_range(sleep_range.clone())
-                    };
-
-                    let sleep_range = Box::pin(sleep(rand_sleep_duration));
-                    match select(notified, sleep_range).await {
-                        Either::Left((_, _)) => {
-                            // shutdown.
-                            break;
-                        }
-                        Either::Right((_, new_notified)) => {
-                            notified = new_notified;
-                            if let Err(e) = self_clone
-                                .try_extend_lock(
-                                    catalog.clone(),
-                                    extend_table_lock_req.clone(),
-                                    Some(ttl - rand_sleep_duration),
-                                )
-                                .await
-                            {
-                                // Force kill the query if extend lock failure.
-                                if let Some(session) =
-                                    SessionManager::instance().get_session_by_id(&query_id)
-                                {
-                                    session.force_kill_query(e.clone());
-                                }
-                                return Err(e);
-                            }
-                        }
-                    }
-                }
-
-                Self::try_delete_lock(catalog, delete_table_lock_req, Some(ttl)).await
+        let ops = TableLockLeaseOps {
+            catalog,
+            extend_req: ExtendLockRevReq::new(lock_key.clone(), revision, ttl, false),
+            description: format!(
+                "table lock for table {} revision {}",
+                lock_key.get_table_id(),
+                revision
+            ),
+        };
+        self.keeper.start(ttl, ops, move |error| {
+            if let Some(session) = SessionManager::instance().get_session_by_id(&query_id) {
+                session.force_kill_query(error);
             }
+            // The keeper does not delete after renewal failure. Retain the lease until TTL expiry
+            // while query cancellation propagates.
         });
 
         Ok(revision)
     }
 
     pub fn shutdown(&self) {
-        self.shutdown_flag.store(true, Ordering::SeqCst);
-        self.shutdown_notify.notify_one();
-    }
-}
-
-impl LockHolder {
-    async fn try_extend_lock(
-        self: &Arc<Self>,
-        catalog: Arc<dyn Catalog>,
-        req: ExtendLockRevReq,
-        max_retry_elapsed: Option<Duration>,
-    ) -> Result<()> {
-        let mut backoff = set_backoff(Some(Duration::from_millis(2)), None, max_retry_elapsed);
-        let mut extend_notified = Box::pin(self.shutdown_notify.notified());
-        while !self.shutdown_flag.load(Ordering::SeqCst) {
-            match catalog.extend_lock_revision(req.clone()).await {
-                Ok(_) => {
-                    break;
-                }
-                Err(e) if e.code() == ErrorCode::TABLE_LOCK_EXPIRED => {
-                    log::error!("failed to extend the lock. cause {:?}", e);
-                    return Err(e);
-                }
-                Err(e) => match backoff.next_backoff() {
-                    Some(duration) => {
-                        log::debug!(
-                            "failed to extend the lock, tx will be retried {} ms later. table id {}, revision {}",
-                            duration.as_millis(),
-                            req.lock_key.get_table_id(),
-                            req.revision,
-                        );
-                        let sleep_gap = Box::pin(sleep(duration));
-                        match select(extend_notified, sleep_gap).await {
-                            Either::Left((_, _)) => {
-                                // shutdown.
-                                break;
-                            }
-                            Either::Right((_, new_notified)) => {
-                                extend_notified = new_notified;
-                            }
-                        }
-                    }
-                    None => {
-                        let error_info = format!(
-                            "failed to extend the lock after retries {} ms, aborted. cause {:?}",
-                            Instant::now()
-                                .duration_since(backoff.start_time)
-                                .as_millis(),
-                            e,
-                        );
-                        log::error!("{}", error_info);
-                        return Err(ErrorCode::OCCRetryFailure(error_info));
-                    }
-                },
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn try_delete_lock(
-        catalog: Arc<dyn Catalog>,
-        req: DeleteLockRevReq,
-        max_retry_elapsed: Option<Duration>,
-    ) -> Result<()> {
-        let mut backoff = set_backoff(Some(Duration::from_millis(2)), None, max_retry_elapsed);
-        loop {
-            match catalog.delete_lock_revision(req.clone()).await {
-                Ok(_) => {
-                    log::debug!("delete table lock success, revision={}", req.revision);
-                    break;
-                }
-                Err(e) => match backoff.next_backoff() {
-                    Some(duration) => {
-                        log::debug!(
-                            "failed to delete the lock, tx will be retried {} ms later. table id {}, revision {}",
-                            duration.as_millis(),
-                            req.lock_key.get_table_id(),
-                            req.revision,
-                        );
-                        sleep(duration).await;
-                    }
-                    None => {
-                        let error_info = format!(
-                            "failed to delete the lock after retries {} ms, aborted. cause {:?}",
-                            Instant::now()
-                                .duration_since(backoff.start_time)
-                                .as_millis(),
-                            e,
-                        );
-                        log::error!("{}", error_info);
-                        return Err(ErrorCode::OCCRetryFailure(error_info));
-                    }
-                },
-            }
-        }
-        Ok(())
+        self.keeper.shutdown();
     }
 }

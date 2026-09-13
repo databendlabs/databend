@@ -1,0 +1,197 @@
+# When several materialized views can answer the same query, rewrite must pick
+# the cheaper plan rather than the first matching candidate.
+
+statement ok
+drop database if exists test_materialized_view_cost
+
+statement ok
+create database test_materialized_view_cost
+
+statement ok
+use test_materialized_view_cost
+
+statement ok
+create table source (
+    a int,
+    b int,
+    t int
+)
+
+statement ok
+insert into source values
+    (1, 10, 5),
+    (1, 20, 9),
+    (1, 30, 100),
+    (2, 10, 7),
+    (2, 20, 70),
+    (2, 30, 3),
+    (3, 10, 8),
+    (3, 20, 4)
+
+# Create the more expensive fine-grained MV first so first-match would pick it.
+statement ok
+create materialized view mv_by_ab (
+    a,
+    b,
+    sum_t
+) as
+select a, b, sum(t)
+from source
+group by a, b
+
+statement ok
+refresh materialized view mv_by_ab
+
+statement ok
+create materialized view mv_by_a (
+    a,
+    sum_t
+) as
+select a, sum(t)
+from source
+group by a
+
+statement ok
+refresh materialized view mv_by_a
+
+# GROUP BY a can use either MV. The exact-granularity MV has fewer stored rows
+# and needs no extra rollup, so it must win on cost.
+query T
+explain select a, sum(t)
+from source
+group by a
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_by_a<slt:ignore>
+
+query II rowsort
+select a, sum(t)
+from source
+group by a
+----
+1 114
+2 80
+3 12
+
+statement ok
+create table detail_source (
+    id int,
+    amount int
+)
+
+statement ok
+insert into detail_source values
+    (1, 10),
+    (2, 15),
+    (3, 20),
+    (4, 25),
+    (5, 30),
+    (6, 35)
+
+# Create the wider predicate first so first-match would pick the larger scan.
+statement ok
+create materialized view mv_amount_gt_10 (id, amount) as
+select id, amount from detail_source where amount > 10
+
+statement ok
+refresh materialized view mv_amount_gt_10
+
+statement ok
+create materialized view mv_amount_gt_20 (id, amount) as
+select id, amount from detail_source where amount > 20
+
+statement ok
+refresh materialized view mv_amount_gt_20
+
+# amount > 20 can use either MV. The tighter MV stores fewer rows and needs no
+# compensating filter, so it must win on cost.
+query T
+explain select id, amount from detail_source where amount > 20
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_amount_gt_20<slt:ignore>
+
+query II rowsort
+select id, amount from detail_source where amount > 20
+----
+4 25
+5 30
+6 35
+
+statement ok
+create table spans_source (
+    start_time timestamp,
+    trace_id string,
+    chat_id string,
+    span_id string,
+    payload variant
+) row_per_block=1 block_per_segment=2
+
+statement ok
+insert into spans_source values
+    ('2024-01-01 00:00:00', 'trace-1', 'chat-1', 'span-1', parse_json('{"route":"source"}')),
+    ('2024-01-01 00:00:01', 'trace-2', 'chat-2', 'span-2', parse_json('{"route":"source"}')),
+    ('2024-01-01 00:00:02', 'trace-1', 'chat-3', 'span-3', parse_json('{"route":"source"}')),
+    ('2024-01-01 00:00:03', 'trace-3', 'chat-2', 'span-4', parse_json('{"route":"source"}'))
+
+# This preserves the old routing coverage with materialized views: two equivalent
+# projections are stored with different cluster keys, and rewrite should pick the
+# candidate whose cluster key prefix matches the query predicate.
+statement ok
+create materialized view mv_spans_by_trace (
+    start_time,
+    trace_id,
+    chat_id,
+    span_id,
+    payload
+) cluster by(trace_id) as
+select start_time, trace_id, chat_id, span_id, payload
+from spans_source
+
+statement ok
+refresh materialized view mv_spans_by_trace
+
+statement ok
+create materialized view mv_spans_by_chat (
+    start_time,
+    trace_id,
+    chat_id,
+    span_id,
+    payload
+) cluster by(chat_id) as
+select start_time, trace_id, chat_id, span_id, payload
+from spans_source
+
+statement ok
+refresh materialized view mv_spans_by_chat
+
+query T
+explain select trace_id, span_id
+from spans_source
+where trace_id = 'trace-1'
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_spans_by_trace<slt:ignore>
+
+query TT rowsort
+select trace_id, span_id
+from spans_source
+where trace_id = 'trace-1'
+----
+trace-1 span-1
+trace-1 span-3
+
+query T
+explain select chat_id, span_id
+from spans_source
+where chat_id = 'chat-2'
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_spans_by_chat<slt:ignore>
+
+query TT rowsort
+select chat_id, span_id
+from spans_source
+where chat_id = 'chat-2'
+----
+chat-2 span-2
+chat-2 span-4
+
+statement ok
+drop database test_materialized_view_cost

@@ -18,6 +18,7 @@ use std::mem;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
@@ -36,6 +37,11 @@ use opendal::raw::HttpBody;
 use opendal::raw::HttpFetch;
 use opendal::raw::parse_content_encoding;
 use opendal::raw::parse_content_length;
+use rand::seq::SliceRandom;
+use reqwest::dns::Addrs;
+use reqwest::dns::Name;
+use reqwest::dns::Resolve;
+use reqwest::dns::Resolving;
 use url::Url;
 
 use crate::EndpointPolicyScope;
@@ -62,6 +68,24 @@ struct PinnedClientCacheKey {
     resolved_addrs: Vec<SocketAddr>,
 }
 
+struct PinnedEndpointResolver {
+    host: String,
+    resolved_addrs: Vec<SocketAddr>,
+    fallback: Arc<dyn Resolve>,
+}
+
+impl Resolve for PinnedEndpointResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        if name.as_str().eq_ignore_ascii_case(&self.host) {
+            let mut addrs = self.resolved_addrs.clone();
+            addrs.shuffle(&mut rand::thread_rng());
+            Box::pin(future::ready(Ok(Box::new(addrs.into_iter()) as Addrs)))
+        } else {
+            self.fallback.resolve(name)
+        }
+    }
+}
+
 pub struct StorageHttpClient {
     client: reqwest::Client,
     pool_max_idle_per_host: usize,
@@ -70,16 +94,9 @@ pub struct StorageHttpClient {
     endpoint_policy_scope: EndpointPolicyScope,
     // Per-endpoint pinned clients keyed by (scheme, host, port, resolved_addrs).
     //
-    // We cannot reuse `client` for External-scope endpoints because reqwest
-    // would perform a fresh DNS lookup for every request, reopening the TOCTOU
-    // window between policy validation and the actual connection. An attacker
-    // who controls DNS could pass validation with a public IP and then switch
-    // the record to an internal address before reqwest connects.
-    //
-    // Instead, after check_storage_endpoint_url resolves and validates the IPs,
-    // we build a dedicated client with resolve_to_addrs pinned to those checked
-    // addresses. That client never re-resolves the host, so the connection is
-    // guaranteed to reach the validated IP regardless of subsequent DNS changes.
+    // Each client's endpoint resolver uses the validated address set and shuffles
+    // it for each new connection. Pinning connections to checked addresses
+    // protects against DNS rebinding between validation and connection setup.
     pinned_clients: Mutex<LruCache<PinnedClientCacheKey, reqwest::Client>>,
     // TTL cache for endpoint check results keyed by (scheme, host, port).
     // Avoids calling resolve_global_dns on every HttpFetch::fetch for the same
@@ -142,11 +159,14 @@ impl StorageHttpClient {
                 let mut builder = storage_http_client_builder()
                     .http1_only()
                     .use_native_tls()
-                    .dns_resolver(get_global_hickory_resolver())
+                    .dns_resolver(Arc::new(PinnedEndpointResolver {
+                        host: host.clone(),
+                        resolved_addrs: resolved_addrs.to_vec(),
+                        fallback: get_global_hickory_resolver(),
+                    }))
                     .redirect(reqwest::redirect::Policy::none())
                     .pool_max_idle_per_host(self.pool_max_idle_per_host)
-                    .connect_timeout(Duration::from_secs(self.connect_timeout))
-                    .resolve_to_addrs(&host, resolved_addrs);
+                    .connect_timeout(Duration::from_secs(self.connect_timeout));
 
                 if self.keepalive != 0 {
                     builder = builder.tcp_keepalive(Duration::from_secs(self.keepalive));
@@ -349,6 +369,56 @@ mod tests {
 
     fn addr(value: &str) -> SocketAddr {
         value.parse().unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_pinned_resolver_shuffles_checked_addresses() {
+        use std::collections::HashSet;
+        use std::future;
+        use std::sync::Arc;
+
+        use reqwest::dns::Addrs;
+        use reqwest::dns::Name;
+        use reqwest::dns::Resolve;
+        use reqwest::dns::Resolving;
+
+        struct ProxyResolver;
+
+        impl Resolve for ProxyResolver {
+            fn resolve(&self, name: Name) -> Resolving {
+                assert_eq!(name.as_str(), "proxy.example");
+                let addrs: Addrs = Box::new(std::iter::once(addr("127.0.0.1:8080")));
+                Box::pin(future::ready(Ok(addrs)))
+            }
+        }
+
+        let expected: Vec<_> = (1..=8)
+            .map(|last| SocketAddr::from(([192, 0, 2, last], 443)))
+            .collect();
+        let resolver = super::PinnedEndpointResolver {
+            host: "storage.example".to_string(),
+            resolved_addrs: expected.clone(),
+            fallback: Arc::new(ProxyResolver),
+        };
+        let mut first_addresses = HashSet::new();
+        for _ in 0..32 {
+            let mut actual: Vec<_> = resolver
+                .resolve("STORAGE.EXAMPLE".parse().unwrap())
+                .await
+                .unwrap()
+                .collect();
+            first_addresses.insert(actual[0]);
+            actual.sort_unstable();
+            assert_eq!(actual, expected);
+        }
+        assert!(first_addresses.len() > 1);
+
+        let proxy: Vec<_> = resolver
+            .resolve("proxy.example".parse().unwrap())
+            .await
+            .unwrap()
+            .collect();
+        assert_eq!(proxy, [addr("127.0.0.1:8080")]);
     }
 
     fn make_client(scope: EndpointPolicyScope) -> StorageHttpClient {

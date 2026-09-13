@@ -548,7 +548,6 @@ impl Binder {
             None,
             table_name_alias,
             !bind_context.binding_views.is_empty(),
-            bind_context.planning_agg_index,
             false,
             cte_suffix_name,
         );
@@ -846,7 +845,6 @@ impl Binder {
             None,
             table_name_alias,
             !bind_context.binding_views.is_empty(),
-            bind_context.planning_agg_index,
             false,
             cte_suffix_name,
         );

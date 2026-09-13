@@ -250,7 +250,7 @@ impl SubqueryDecorrelatorOptimizer {
             derived_columns,
         )?;
 
-        let metadata = self.metadata.clone();
+        let metadata = self.ctx.get_metadata();
         let metadata = metadata.read();
         let mut output_columns = ColumnSet::new();
         let mut items: Vec<ScalarItem> = eval_scalar
@@ -356,7 +356,7 @@ impl SubqueryDecorrelatorOptimizer {
             };
             srfs.push(new_item);
         }
-        let metadata = self.metadata.read();
+        let metadata = self.ctx.metadata_read();
         let scalar_items = derived_columns
             .visible_symbols()
             .into_iter()
@@ -580,8 +580,7 @@ impl SubqueryDecorrelatorOptimizer {
             derived_columns,
         )?;
 
-        let metadata = self.metadata.clone();
-        let metadata = metadata.read();
+        let metadata = self.ctx.metadata_read();
         let group_items = aggregate
             .group_items
             .iter()
@@ -658,7 +657,7 @@ impl SubqueryDecorrelatorOptimizer {
         )?;
         // Check if sort contains `count() or distinct count()`.
         if sort.items.iter().any(|item| {
-            let metadata = self.metadata.read();
+            let metadata = self.ctx.metadata_read();
             let col = metadata.column(item.index);
             if let ColumnEntry::DerivedColumn(derived_col) = col {
                 // A little tricky here, we'll check if a sort item is a count aggregation function later.
@@ -697,7 +696,7 @@ impl SubqueryDecorrelatorOptimizer {
                 )?;
 
                 if sort.items.iter().any(|item| {
-                    let metadata = self.metadata.read();
+                    let metadata = self.ctx.metadata_read();
                     let col = metadata.column(item.index);
                     if let ColumnEntry::DerivedColumn(derived_col) = col {
                         derived_col.alias.to_lowercase().starts_with("count")
@@ -708,7 +707,7 @@ impl SubqueryDecorrelatorOptimizer {
                     flatten_info.from_count_func = false;
                 }
 
-                let metadata = self.metadata.read();
+                let metadata = self.ctx.metadata_read();
                 let order_by = sort
                     .items
                     .iter()
@@ -740,7 +739,7 @@ impl SubqueryDecorrelatorOptimizer {
             return Ok((flatten_plan, derived_columns));
         }
 
-        let metadata = self.metadata.read();
+        let metadata = self.ctx.metadata_read();
         let partition_by = correlated_columns
             .iter()
             .copied()
@@ -755,12 +754,12 @@ impl SubqueryDecorrelatorOptimizer {
         drop(metadata);
 
         let row_number_type = DataType::Number(NumberDataType::UInt64);
-        let row_number_index = self.metadata.write().add_derived_column(
+        let row_number_index = self.ctx.get_metadata().write().add_derived_column(
             "correlated_limit_row_number".to_string(),
             row_number_type.clone(),
         );
 
-        let sort_settings = self.ctx.get_settings();
+        let sort_settings = self.ctx.get_table_ctx().get_settings();
         let default_nulls_first = sort_settings.get_nulls_first();
 
         let mut sort_items = Vec::with_capacity(partition_by.len() + order_by.len());
@@ -894,7 +893,7 @@ impl SubqueryDecorrelatorOptimizer {
             true,
             derived_columns,
         )?;
-        let metadata = self.metadata.read();
+        let metadata = self.ctx.metadata_read();
         let partition_by = window
             .partition_by
             .iter()
@@ -949,7 +948,7 @@ impl SubqueryDecorrelatorOptimizer {
             derived_columns,
         )?;
 
-        let metadata = self.metadata.read();
+        let metadata = self.ctx.metadata_read();
         let windows = window_group
             .windows
             .iter()
@@ -1042,7 +1041,8 @@ impl SubqueryDecorrelatorOptimizer {
             &right_derived,
         )?;
 
-        let mut metadata = self.metadata.write();
+        let metadata = self.ctx.get_metadata();
+        let mut metadata = metadata.write();
         let mut derived_columns = DerivedColumnScope::default();
         union_all
             .output_indexes
@@ -1114,7 +1114,7 @@ impl SubqueryDecorrelatorOptimizer {
         let outer = self.clone_outer_recursive(outer, &mut derived_columns)?;
 
         // Wrap logical get with distinct to eliminate duplicates rows.
-        let metadata = self.metadata.read();
+        let metadata = self.ctx.metadata_read();
         let group_items = correlated_columns
             .iter()
             .copied()
@@ -1203,7 +1203,8 @@ impl SubqueryDecorrelatorOptimizer {
                     }
                 })?;
                 if let Some(mark) = &mut join.marker_index {
-                    let mut metadata = self.metadata.write();
+                    let metadata = self.ctx.get_metadata();
+                    let mut metadata = metadata.write();
                     let column_entry = metadata.column(*mark);
                     let name = column_entry.name();
                     let data_type = column_entry.data_type();
@@ -1215,7 +1216,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
             RelOperator::Aggregate(aggregate) => {
                 let mut aggregate = aggregate.clone();
-                let metadata = self.metadata.clone();
+                let metadata = self.ctx.get_metadata();
                 let mut metadata = metadata.write();
                 for item in &mut aggregate.group_items {
                     *item = self.clone_outer_scalar_item(item, &mut metadata, derived_columns)?;
@@ -1246,7 +1247,8 @@ impl SubqueryDecorrelatorOptimizer {
         scan: &ConstantTableScan,
         derived_columns: &mut DerivedColumnScope,
     ) -> Result<RelOperator> {
-        let mut metadata = self.metadata.write();
+        let metadata = self.ctx.get_metadata();
+        let mut metadata = metadata.write();
         let ((values, fields), columns) = scan
             .columns
             .iter()
@@ -1276,7 +1278,8 @@ impl SubqueryDecorrelatorOptimizer {
         scan: &Scan,
         derived_columns: &mut DerivedColumnScope,
     ) -> Result<RelOperator> {
-        let mut metadata = self.metadata.write();
+        let metadata_ref = self.ctx.get_metadata();
+        let mut metadata = metadata_ref.write();
         let original_columns = Self::secure_scan_columns(scan);
         let columns = original_columns
             .iter()
@@ -1309,7 +1312,8 @@ impl SubqueryDecorrelatorOptimizer {
         scan: &RecursiveCteScan,
         derived_columns: &mut DerivedColumnScope,
     ) -> Result<RelOperator> {
-        let mut metadata = self.metadata.write();
+        let metadata_ref = self.ctx.get_metadata();
+        let mut metadata = metadata_ref.write();
         let fields = scan
             .fields
             .iter()
@@ -1367,7 +1371,8 @@ impl SubqueryDecorrelatorOptimizer {
             })
             .collect::<Result<_>>()?;
 
-        let mut metadata = self.metadata.write();
+        let metadata_ref = self.ctx.get_metadata();
+        let mut metadata = metadata_ref.write();
         union_all.output_indexes = union_all
             .output_indexes
             .iter()
@@ -1394,8 +1399,8 @@ impl SubqueryDecorrelatorOptimizer {
         eval: &EvalScalar,
         derived_columns: &mut DerivedColumnScope,
     ) -> Result<RelOperator> {
-        let metadata = self.metadata.clone();
-        let mut metadata = metadata.write();
+        let metadata_ref = self.ctx.get_metadata();
+        let mut metadata = metadata_ref.write();
         let items = eval
             .items
             .iter()

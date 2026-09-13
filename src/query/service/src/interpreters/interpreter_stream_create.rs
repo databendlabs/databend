@@ -47,15 +47,17 @@ impl Interpreter for CreateStreamInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
-        let handler = get_stream_handler();
-        let _ = handler
-            .do_create_stream(self.ctx.clone(), &self.plan)
-            .await?;
+            let handler = get_stream_handler();
+            let _ = handler
+                .do_create_stream(self.ctx.clone(), &self.plan)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

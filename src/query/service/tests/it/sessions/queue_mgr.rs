@@ -413,6 +413,18 @@ async fn test_heavy_actions() -> anyhow::Result<()> {
             add_to_queue: true,
         },
         Query {
+            sql: "vacuum tables",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "vacuum all",
+            add_to_queue: true,
+        },
+        Query {
+            sql: "vacuum drop table",
+            add_to_queue: true,
+        },
+        Query {
             sql: "vacuum temporary files",
             add_to_queue: true,
         },

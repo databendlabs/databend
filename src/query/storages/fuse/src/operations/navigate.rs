@@ -39,12 +39,10 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
-use log::info;
 use opendal::EntryMode;
 
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
-use crate::fuse_table::RetentionPolicy;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
@@ -127,20 +125,6 @@ impl FuseTable {
             } else {
                 false
             }
-        })
-        .await
-    }
-
-    pub async fn navigate_back_with_limit(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        location: String,
-        limit: usize,
-    ) -> Result<Arc<FuseTable>> {
-        let mut counter = 0;
-        self.find(ctx, location, |_snapshot| {
-            counter += 1;
-            counter >= limit
         })
         .await
     }
@@ -409,198 +393,6 @@ impl FuseTable {
             }
             Err(e) => Err(e),
         }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn navigate_for_purge(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        navigation_point: Option<NavigationPoint>,
-    ) -> Result<(Arc<FuseTable>, Vec<String>)> {
-        let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
-        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
-            snapshot
-        } else {
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            ));
-        };
-
-        assert!(root_snapshot.timestamp.is_some());
-
-        match retention_policy {
-            RetentionPolicy::ByTimePeriod(time_delta) => {
-                info!("navigate by time period, {:?}", time_delta);
-                let mut time_point = root_snapshot.timestamp.unwrap() - time_delta;
-                let (candidate_snapshot_path, files) = match navigation_point {
-                    Some(NavigationPoint::TimePoint(point)) => {
-                        time_point = std::cmp::min(point, time_point);
-                        self.list_by_time_point(time_point).await
-                    }
-                    Some(NavigationPoint::SnapshotID(snapshot_id)) => {
-                        self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
-                            .await
-                    }
-                    Some(NavigationPoint::StreamInfo(info)) => {
-                        self.list_by_stream(info, time_point).await
-                    }
-                    Some(NavigationPoint::TableTag(tag_name)) => {
-                        let snapshot_loc = self.get_tag_snapshot_location(ctx, &tag_name).await?;
-                        self.list_by_location(snapshot_loc, time_point).await
-                    }
-                    None => self.list_by_time_point(time_point).await,
-                }?;
-
-                let table = self
-                    .navigate_to_time_point(ctx, candidate_snapshot_path, time_point)
-                    .await?;
-
-                Ok((table, files))
-            }
-            RetentionPolicy::ByNumOfSnapshotsToKeep(num) => {
-                assert!(num > 0);
-                info!("navigate by number of snapshots, {:?}", num);
-                let table = self
-                    .navigate_back_with_limit(ctx, self.snapshot_loc().unwrap(), num)
-                    .await?;
-
-                // Safe to unwrap: table snapshot and snapshot timestamp exist, otherwise we should not be here
-                let timestamp = table
-                    .read_table_snapshot()
-                    .await?
-                    .unwrap()
-                    .timestamp
-                    .unwrap();
-
-                let (_candidate_snapshot_path, files) = self.list_by_time_point(timestamp).await?;
-
-                Ok((table, files))
-            }
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn list_by_time_point(
-        &self,
-        time_point: DateTime<Utc>,
-    ) -> Result<(String, Vec<String>)> {
-        let Some(location) = self.snapshot_loc() else {
-            return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
-        };
-
-        let prefix = self.snapshot_prefix();
-
-        let files = self
-            .list_files(prefix, |_, modified| modified <= time_point)
-            .await?;
-        if files.is_empty() {
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            ));
-        }
-
-        Ok((location, files))
-    }
-
-    #[async_backtrace::framed]
-    pub async fn list_by_snapshot_id(
-        &self,
-        snapshot_id: &str,
-        retention_point: DateTime<Utc>,
-    ) -> Result<(String, Vec<String>)> {
-        // TODO(Sky): unify location related logic into a single place
-        let mut location = None;
-        let prefix = self.snapshot_prefix();
-        let prefix_loc = format!("{}{}", prefix, snapshot_id);
-        let prefix_loc_v5 = format!("{}{}{}", prefix, VACUUM2_OBJECT_KEY_PREFIX, snapshot_id);
-
-        let files = self
-            .list_files(prefix, |loc, modified| {
-                if loc.starts_with(&prefix_loc) || loc.starts_with(&prefix_loc_v5) {
-                    location = Some(loc);
-                }
-                modified <= retention_point
-            })
-            .await?;
-        let location = location.ok_or_else(|| {
-            ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
-        })?;
-        Ok((location, files))
-    }
-
-    #[async_backtrace::framed]
-    async fn list_by_stream(
-        &self,
-        stream_info: TableInfo,
-        retention_point: DateTime<Utc>,
-    ) -> Result<(String, Vec<String>)> {
-        let snapshot_loc = self
-            .stream_snapshot_location(&stream_info)?
-            .ok_or_else(|| {
-                ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
-            })?;
-        self.list_by_location(snapshot_loc, retention_point).await
-    }
-
-    #[async_backtrace::framed]
-    async fn list_by_location(
-        &self,
-        snapshot_loc: String,
-        retention_point: DateTime<Utc>,
-    ) -> Result<(String, Vec<String>)> {
-        let mut found = false;
-        let prefix = self.snapshot_prefix();
-
-        let files = self
-            .list_files(prefix, |loc, modified| {
-                if loc == snapshot_loc {
-                    found = true;
-                }
-                modified <= retention_point
-            })
-            .await?;
-
-        if !found {
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            ));
-        }
-        Ok((snapshot_loc, files))
-    }
-
-    #[async_backtrace::framed]
-    pub async fn list_files<F>(&self, prefix: String, mut f: F) -> Result<Vec<String>>
-    where F: FnMut(String, DateTime<Utc>) -> bool {
-        let mut file_list = vec![];
-        let op = self.operator.clone();
-        let mut ds = op.lister_with(&prefix).await?;
-        while let Some(de) = ds.try_next().await? {
-            let meta = de.metadata();
-            match meta.mode() {
-                EntryMode::FILE => {
-                    let modified = if let Some(v) = meta.last_modified() {
-                        Some(v)
-                    } else {
-                        let meta = op.stat(de.path()).await?;
-                        meta.last_modified()
-                    };
-
-                    let location = de.path().to_string();
-                    if let Some(modified) = modified {
-                        if f(location.clone(), modified) {
-                            file_list.push((location, modified));
-                        }
-                    }
-                }
-                _ => {
-                    continue;
-                }
-            }
-        }
-
-        file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));
-
-        Ok(file_list.into_iter().map(|v| v.0).collect())
     }
 
     #[fastrace::trace]

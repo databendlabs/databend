@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_base::runtime::Runtime;
@@ -49,7 +50,6 @@ use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
-use databend_common_storages_fuse::operations::VirtualSchemaMode;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
@@ -142,8 +142,6 @@ impl IPhysicalPlan for MutationSource {
                         table_id: table.get_id(),
                         logical_updated_rows: 0,
                         logical_deleted_rows: 0,
-                        virtual_schema: None,
-                        virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
                         top_n: HashMap::new(),
                     };
@@ -333,7 +331,8 @@ pub fn create_push_down_filters(
         })?
         .unwrap();
     let expr = cast_expr_to_non_null_boolean(expr)?;
-    let (filter, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+    let (filter, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
+    let filter = filter.into_owned();
     let remote_filter = filter.as_remote_expr();
 
     // prepare the inverse filter expression

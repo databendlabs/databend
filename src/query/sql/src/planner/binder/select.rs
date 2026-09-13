@@ -871,15 +871,14 @@ impl Binder {
             metadata.add_non_lazy_columns(non_lazy_cols);
         }
 
-        let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
+        let limit_threshold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
         let where_cols = where_scalar
             .as_ref()
             .map(|w| w.used_columns())
             .unwrap_or_default();
 
-        if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
-        {
+        if limit == 0 || limit > limit_threshold || (order_by.is_empty() && where_cols.is_empty()) {
             return Ok(());
         }
 

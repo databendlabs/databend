@@ -111,7 +111,10 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
 
     let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(0.0));
     let estimated_rows = estimator
-        .apply(&[expr])
+        .apply(
+            &[expr],
+            &databend_common_expression::FunctionContext::default(),
+        )
         .expect("zero-cardinality comparison should estimate");
 
     assert_eq!(estimated_rows, 0.0);
@@ -136,7 +139,10 @@ fn float_full_domain_arithmetic_selectivity_is_not_empty() {
     let mut estimator =
         SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(10.0));
     let estimated_rows = estimator
-        .apply(&[expr])
+        .apply(
+            &[expr],
+            &databend_common_expression::FunctionContext::default(),
+        )
         .expect("float arithmetic comparison should estimate");
 
     assert!(
@@ -641,7 +647,7 @@ proptest! {
         };
 
         let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(cardinality));
-        let estimated_rows = estimator.apply(&[expr]).expect("selectivity estimation should not fail for valid comparison variants");
+        let estimated_rows = estimator.apply(&[expr], &databend_common_expression::FunctionContext::default()).expect("selectivity estimation should not fail for valid comparison variants");
         assert_estimator_smoke_invariants(&estimator, estimated_rows, cardinality, &case.data_type)?;
     }
 }

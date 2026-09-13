@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -309,13 +310,13 @@ fn prune_by_statistics(
             input_domains.insert(name.to_string(), domain.clone());
 
             let (new_expr, _) = ConstantFolder::fold_with_domain(
-                filter,
+                Cow::Borrowed(filter),
                 &input_domains,
                 func_ctx,
                 &BUILTIN_FUNCTIONS,
             );
             return matches!(
-                new_expr,
+                new_expr.as_ref(),
                 Expr::Constant(Constant {
                     scalar: Scalar::Boolean(false),
                     ..

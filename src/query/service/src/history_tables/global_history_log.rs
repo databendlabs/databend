@@ -458,7 +458,7 @@ impl GlobalHistoryLog {
                         // only around every 30 seconds; this check enables faster failover.
                         if e.code() == ErrorCode::DUPLICATED_UPSERT_FILES
                             || e.code() == ErrorCode::TABLE_ALREADY_LOCKED
-                            || e.code() == ErrorCode::TABLE_LOCK_EXPIRED
+                            || e.code() == ErrorCode::LEASE_EXPIRED
                             || e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
                         {
                             if let Ok(valid) =
@@ -509,7 +509,7 @@ impl GlobalHistoryLog {
 
         let cluster_id = dummy_cluster.get_cluster_id()?;
         let session = create_session(&self.tenant_id, &cluster_id).await?;
-        session.create_query_context_with_cluster(dummy_cluster, self.version)
+        session.create_query_context_with_cluster(dummy_cluster, self.version, None)
     }
 }
 

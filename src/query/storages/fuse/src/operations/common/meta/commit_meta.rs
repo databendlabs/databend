@@ -18,20 +18,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::VirtualDataSchema;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotChanges;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum VirtualSchemaMode {
-    #[default]
-    Merge,
-    Replace,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
@@ -40,8 +32,6 @@ pub struct CommitMeta {
     pub table_id: u64,
     pub logical_updated_rows: u64,
     pub logical_deleted_rows: u64,
-    pub virtual_schema: Option<VirtualDataSchema>,
-    pub virtual_schema_mode: VirtualSchemaMode,
     pub hll: BlockHLL,
     pub top_n: BlockTopN,
 }
@@ -56,8 +46,6 @@ impl CommitMeta {
             table_id,
             logical_updated_rows: 0,
             logical_deleted_rows: 0,
-            virtual_schema: None,
-            virtual_schema_mode: VirtualSchemaMode::Merge,
             hll: HashMap::new(),
             top_n: HashMap::new(),
         }
@@ -69,8 +57,6 @@ impl CommitMeta {
         table_id: u64,
         logical_updated_rows: u64,
         logical_deleted_rows: u64,
-        virtual_schema: Option<VirtualDataSchema>,
-        virtual_schema_mode: VirtualSchemaMode,
         hll: BlockHLL,
         top_n: BlockTopN,
     ) -> Self {
@@ -80,8 +66,6 @@ impl CommitMeta {
             table_id,
             logical_updated_rows,
             logical_deleted_rows,
-            virtual_schema,
-            virtual_schema_mode,
             hll,
             top_n,
         }

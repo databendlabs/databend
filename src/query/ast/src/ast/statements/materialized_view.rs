@@ -152,6 +152,7 @@ pub struct RefreshMaterializedViewStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub view: Identifier,
+    pub limit: Option<u64>,
 }
 
 impl Display for RefreshMaterializedViewStmt {
@@ -163,7 +164,11 @@ impl Display for RefreshMaterializedViewStmt {
                 .iter()
                 .chain(&self.database)
                 .chain(Some(&self.view)),
-        )
+        )?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+        Ok(())
     }
 }
 

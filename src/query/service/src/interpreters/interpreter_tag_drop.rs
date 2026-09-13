@@ -49,25 +49,27 @@ impl Interpreter for DropTagInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let meta_client = UserApiProvider::instance().get_meta_store_client();
-        let result = meta_client
-            .drop_tag(&TagNameIdent::new(&self.plan.tenant, &self.plan.name))
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let meta_client = UserApiProvider::instance().get_meta_store_client();
+            let result = meta_client
+                .drop_tag(&TagNameIdent::new(&self.plan.tenant, &self.plan.name))
+                .await?;
 
-        match result {
-            Ok(Some(_)) => Ok(PipelineBuildResult::create()),
-            Ok(None) => {
-                if self.plan.if_exists {
-                    Ok(PipelineBuildResult::create())
-                } else {
-                    Err(ErrorCode::UnknownTag(format!(
-                        "TAG `{}` not found.",
-                        self.plan.name
-                    )))
+            match result {
+                Ok(Some(_)) => Ok(PipelineBuildResult::create()),
+                Ok(None) => {
+                    if self.plan.if_exists {
+                        Ok(PipelineBuildResult::create())
+                    } else {
+                        Err(ErrorCode::UnknownTag(format!(
+                            "TAG `{}` not found.",
+                            self.plan.name
+                        )))
+                    }
                 }
+                Err(e) => Err(ErrorCode::from(e)),
             }
-            Err(e) => Err(ErrorCode::from(e)),
-        }
+        })
     }
 }

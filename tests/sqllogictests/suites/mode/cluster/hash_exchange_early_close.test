@@ -1,0 +1,106 @@
+# Keep the probe distributed across many blocks. Only the node receiving key 0
+# produces matches and reaches its local LIMIT; the other nodes must receive EOF.
+# A finished sender must release channels even when a destination closed early.
+statement ok
+set max_threads = 1
+
+statement ok
+set max_block_size = 1024
+
+statement ok
+set enforce_shuffle_join = 1
+
+statement ok
+set disable_join_reorder = 1
+
+statement ok
+set enable_experimental_new_join = 1
+
+# Keep unmatched probe rows flowing after the matching destination finishes.
+statement ok
+set enable_join_runtime_filter = 0
+
+# Flush partitions while the scan is running, before all producers reach EOF.
+statement ok
+set hash_shuffle_rows_threshold = 1
+
+statement ok
+set hash_shuffle_bytes_threshold = 1
+
+# A hang must fail this test instead of waiting for the whole CI job to time out.
+statement ok
+set max_execute_time_in_seconds = 30
+
+statement ok
+drop table if exists t_hash_exchange_early_close_build
+
+statement ok
+drop table if exists t_hash_exchange_early_close_probe
+
+statement ok
+create table t_hash_exchange_early_close_build(k UInt64, v UInt64)
+
+statement ok
+create table t_hash_exchange_early_close_probe(k UInt64, v UInt64) row_per_block = 1024
+
+# Give every destination a nonempty build, but amplify matches only for key 0.
+statement ok
+insert into t_hash_exchange_early_close_build
+select if(number < 1000, 0, number - 999), number from numbers(1100)
+
+statement ok
+insert into t_hash_exchange_early_close_probe
+select if(number % 1024 = 0, 0, 1000 + number % 100), number from numbers(100000)
+
+# The full join is small and terminates without early receiver closure.
+query I
+select count(*)
+from t_hash_exchange_early_close_probe p
+inner join t_hash_exchange_early_close_build b on p.k = b.k
+----
+98000
+
+# Check terminal success as well as the result: the buggy query returns 100
+# before getting stuck waiting for remote EOF and eventually being aborted.
+query I
+select count(*) from (
+    select p.v as pv, b.v as bv
+    from t_hash_exchange_early_close_probe p
+    inner join t_hash_exchange_early_close_build b on p.k = b.k
+    limit 100
+)
+----
+100
+
+statement ok
+drop table t_hash_exchange_early_close_build
+
+statement ok
+drop table t_hash_exchange_early_close_probe
+
+statement ok
+unset max_threads
+
+statement ok
+unset max_block_size
+
+statement ok
+unset enforce_shuffle_join
+
+statement ok
+unset disable_join_reorder
+
+statement ok
+unset enable_experimental_new_join
+
+statement ok
+unset enable_join_runtime_filter
+
+statement ok
+unset hash_shuffle_rows_threshold
+
+statement ok
+unset hash_shuffle_bytes_threshold
+
+statement ok
+unset max_execute_time_in_seconds

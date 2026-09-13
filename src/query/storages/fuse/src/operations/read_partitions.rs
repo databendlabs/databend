@@ -58,7 +58,9 @@ use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_index::NgramHashAlgorithm;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -171,21 +173,15 @@ fn deterministic_prune_cache_key(
     segments_location: &[SegmentLocation],
     push_downs: &Option<PushDownInfo>,
     pruning_mode: ReadPartitionsPruningMode,
-    enable_proxy_bloom_pruning: bool,
 ) -> Option<String> {
     let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
         return None;
     }
     push_downs.read_partitions_pruning_mode = pruning_mode;
-    let lightweight_bloom_pruning =
-        pruning_mode == ReadPartitionsPruningMode::Lightweight && enable_proxy_bloom_pruning;
     Some(format!(
         "{:x}",
-        Sha256::digest(format!(
-            "{:?}_{:?}_{:?}",
-            segments_location, push_downs, lightweight_bloom_pruning
-        ))
+        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
     ))
 }
 
@@ -482,12 +478,8 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key = deterministic_prune_cache_key(
-            &segments_location,
-            &push_downs,
-            pruning_mode,
-            ctx.get_settings().get_enable_proxy_bloom_pruning()?,
-        );
+        let derterministic_cache_key =
+            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache
             && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)
@@ -648,8 +640,15 @@ impl FuseTable {
         )?;
 
         let pruning_cost = pruner.pruning_ctx.pruning_cost.clone();
+        let pruning_ctx = pruner.pruning_ctx.clone();
         prune_pipeline.add_transform(|input, output| {
-            ExtractSegmentTransform::create(input, output, true, pruning_cost.clone())
+            ExtractSegmentTransform::create(
+                input,
+                output,
+                true,
+                pruning_ctx.clone(),
+                pruning_cost.clone(),
+            )
         })?;
         let sample_probability = table_sample(&pruner.push_down)?;
         if let Some(probability) = sample_probability {
@@ -1022,6 +1021,14 @@ impl FuseTable {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
+            let false_positive_rate = match index.options.get("false_positive_rate") {
+                None => DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
+                Some(s) => s.parse::<f64>()?,
+            };
+            let hash_algorithm = match index.options.get("hash_algorithm") {
+                None => NgramHashAlgorithm::City64V0,
+                Some(s) => NgramHashAlgorithm::parse(s)?,
+            };
 
             for column_id in &index.column_ids {
                 let Some((pos, field)) = table_schema
@@ -1031,7 +1038,14 @@ impl FuseTable {
                 else {
                     continue;
                 };
-                ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
+                ngram_index_args.push(NgramArgs::new(
+                    pos,
+                    field.clone(),
+                    gram_size,
+                    bloom_size,
+                    false_positive_rate,
+                    hash_algorithm,
+                ));
             }
         }
         Ok(ngram_index_args)

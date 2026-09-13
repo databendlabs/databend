@@ -23,7 +23,6 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
@@ -34,7 +33,6 @@ use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
 
-use super::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::Symbol;
@@ -48,6 +46,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::optimizer::ir::TopNSet;
@@ -64,29 +63,6 @@ pub struct Prewhere {
     pub prewhere_columns: ColumnSet,
     // prewhere filter predicates
     pub predicates: Vec<ScalarExpr>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AggIndexInfo {
-    pub index_id: u64,
-    pub schema: TableSchemaRef,
-    pub selection: Vec<ScalarItem>,
-    pub predicates: Vec<ScalarExpr>,
-    pub is_agg: bool,
-    pub num_agg_funcs: usize,
-}
-
-impl AggIndexInfo {
-    pub fn used_columns(&self) -> ColumnSet {
-        let mut used_columns = ColumnSet::new();
-        for item in &self.selection {
-            item.scalar.collect_used_columns(&mut used_columns);
-        }
-        for pred in &self.predicates {
-            pred.collect_used_columns(&mut used_columns);
-        }
-        used_columns
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -115,7 +91,6 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
-    pub agg_index: Option<AggIndexInfo>,
     pub change_type: Option<ChangeType>,
     // Whether to update stream columns.
     pub update_stream_columns: bool,
@@ -176,7 +151,6 @@ impl Scan {
                 count_min_sketch,
             }),
             prewhere,
-            agg_index: self.agg_index.clone(),
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
@@ -212,7 +186,6 @@ impl Scan {
             limit: None,
             order_by: None,
             prewhere: None,
-            agg_index: None,
             statistics: Arc::new(Statistics::default()),
         }
     }
@@ -307,24 +280,11 @@ impl Operator for Scan {
             .iter()
             .flat_map(|prewhere| prewhere.predicates.iter());
 
-        let agg_index_pred_iter = self
-            .agg_index
-            .iter()
-            .flat_map(|agg_index| agg_index.predicates.iter());
-
-        let agg_index_selection_iter = self
-            .agg_index
-            .iter()
-            .flat_map(|agg_index| agg_index.selection.iter())
-            .map(|selection| &selection.scalar);
-
         // Chain all iterators together
         Box::new(
             push_down_iter
                 .chain(secure_predicates_iter)
-                .chain(prewhere_iter)
-                .chain(agg_index_pred_iter)
-                .chain(agg_index_selection_iter),
+                .chain(prewhere_iter),
         )
     }
 
@@ -348,7 +308,7 @@ impl Operator for Scan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
         let num_rows = self
@@ -422,7 +382,7 @@ impl Operator for Scan {
                 )
                 .with_top_n(std::mem::take(&mut output_top_n))
                 .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
-                let cardinality = sb.apply(&prewhere.predicates)?;
+                let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
                 column_stats = sb.into_column_stats();
                 cardinality
             }
@@ -454,7 +414,7 @@ impl Operator for Scan {
                     SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
                         .with_count_min_sketch(output_count_min_sketch)
-                        .apply(preds)?
+                        .apply(preds, &stat_ctx.function_context)?
                 }
                 _ => cardinality,
             };
@@ -558,7 +518,6 @@ mod tests {
         assert!(derived.limit.is_none());
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
-        assert!(derived.agg_index.is_none());
     }
 
     #[test]
@@ -588,7 +547,7 @@ mod tests {
         };
         let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
         let rel_expr = RelExpr::with_s_expr(&s_expr);
-        let stats = scan.derive_stats(&rel_expr)?;
+        let stats = scan.derive_stats(&rel_expr, &StatContext::default())?;
         assert!(stats.statistics.top_n.contains_key(&column));
         assert_eq!(stats.statistics.precise_cardinality, Some(100));
 
@@ -601,7 +560,8 @@ mod tests {
         };
         let sampled_s_expr = SExpr::create_leaf(RelOperator::Scan(sampled_scan.clone()));
         let sampled_rel_expr = RelExpr::with_s_expr(&sampled_s_expr);
-        let sampled_stats = sampled_scan.derive_stats(&sampled_rel_expr)?;
+        let sampled_stats =
+            sampled_scan.derive_stats(&sampled_rel_expr, &StatContext::default())?;
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 

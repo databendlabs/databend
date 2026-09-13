@@ -60,78 +60,80 @@ impl Interpreter for CreatePasswordPolicyInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_password_policy_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_password_policy_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        let min_length = plan
-            .set_options
-            .min_length
-            .unwrap_or(DEFAULT_PASSWORD_MIN_LENGTH);
-        let max_length = plan
-            .set_options
-            .max_length
-            .unwrap_or(DEFAULT_PASSWORD_MAX_LENGTH);
-        let min_upper_case_chars = plan
-            .set_options
-            .min_upper_case_chars
-            .unwrap_or(DEFAULT_PASSWORD_MIN_CHARS);
-        let min_lower_case_chars = plan
-            .set_options
-            .min_lower_case_chars
-            .unwrap_or(DEFAULT_PASSWORD_MIN_CHARS);
-        let min_numeric_chars = plan
-            .set_options
-            .min_numeric_chars
-            .unwrap_or(DEFAULT_PASSWORD_MIN_CHARS);
-        let min_special_chars = plan
-            .set_options
-            .min_special_chars
-            .unwrap_or(DEFAULT_PASSWORD_MIN_SPECIAL_CHARS);
-        let min_age_days = plan
-            .set_options
-            .min_age_days
-            .unwrap_or(DEFAULT_PASSWORD_MIN_AGE_DAYS);
-        let max_age_days = plan
-            .set_options
-            .max_age_days
-            .unwrap_or(DEFAULT_PASSWORD_MAX_AGE_DAYS);
-        let max_retries = plan
-            .set_options
-            .max_retries
-            .unwrap_or(DEFAULT_PASSWORD_MAX_RETRIES);
-        let lockout_time_mins = plan
-            .set_options
-            .lockout_time_mins
-            .unwrap_or(DEFAULT_PASSWORD_LOCKOUT_TIME_MINS);
-        let history = plan.set_options.history.unwrap_or(DEFAULT_PASSWORD_HISTORY);
+            let min_length = plan
+                .set_options
+                .min_length
+                .unwrap_or(DEFAULT_PASSWORD_MIN_LENGTH);
+            let max_length = plan
+                .set_options
+                .max_length
+                .unwrap_or(DEFAULT_PASSWORD_MAX_LENGTH);
+            let min_upper_case_chars = plan
+                .set_options
+                .min_upper_case_chars
+                .unwrap_or(DEFAULT_PASSWORD_MIN_CHARS);
+            let min_lower_case_chars = plan
+                .set_options
+                .min_lower_case_chars
+                .unwrap_or(DEFAULT_PASSWORD_MIN_CHARS);
+            let min_numeric_chars = plan
+                .set_options
+                .min_numeric_chars
+                .unwrap_or(DEFAULT_PASSWORD_MIN_CHARS);
+            let min_special_chars = plan
+                .set_options
+                .min_special_chars
+                .unwrap_or(DEFAULT_PASSWORD_MIN_SPECIAL_CHARS);
+            let min_age_days = plan
+                .set_options
+                .min_age_days
+                .unwrap_or(DEFAULT_PASSWORD_MIN_AGE_DAYS);
+            let max_age_days = plan
+                .set_options
+                .max_age_days
+                .unwrap_or(DEFAULT_PASSWORD_MAX_AGE_DAYS);
+            let max_retries = plan
+                .set_options
+                .max_retries
+                .unwrap_or(DEFAULT_PASSWORD_MAX_RETRIES);
+            let lockout_time_mins = plan
+                .set_options
+                .lockout_time_mins
+                .unwrap_or(DEFAULT_PASSWORD_LOCKOUT_TIME_MINS);
+            let history = plan.set_options.history.unwrap_or(DEFAULT_PASSWORD_HISTORY);
 
-        let comment = plan.set_options.comment.clone().unwrap_or_default();
+            let comment = plan.set_options.comment.clone().unwrap_or_default();
 
-        let password_policy = PasswordPolicy {
-            name: plan.name,
-            min_length,
-            max_length,
-            min_upper_case_chars,
-            min_lower_case_chars,
-            min_numeric_chars,
-            min_special_chars,
-            min_age_days,
-            max_age_days,
-            max_retries,
-            lockout_time_mins,
-            history,
-            comment,
-            create_on: Utc::now(),
-            update_on: None,
-        };
-        user_mgr
-            .add_password_policy(&tenant, password_policy, &plan.create_option)
-            .await?;
+            let password_policy = PasswordPolicy {
+                name: plan.name,
+                min_length,
+                max_length,
+                min_upper_case_chars,
+                min_lower_case_chars,
+                min_numeric_chars,
+                min_special_chars,
+                min_age_days,
+                max_age_days,
+                max_retries,
+                lockout_time_mins,
+                history,
+                comment,
+                create_on: Utc::now(),
+                update_on: None,
+            };
+            user_mgr
+                .add_password_policy(&tenant, password_policy, &plan.create_option)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

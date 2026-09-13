@@ -7,14 +7,14 @@ Exchange
     │       ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307), d1.d_year (#113), d2.d_year (#141), d3.d_year (#169)]
     │       ├── group by: [i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number, ca_street_name, ca_city, ca_zip, d_year, d_year, d_year]
     │       ├── aggregate functions: []
-    │       ├── estimated rows: 40561773.90
+    │       ├── estimated rows: 40561782.71
     │       └── Exchange
     │           ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307), d1.d_year (#113), d2.d_year (#141), d3.d_year (#169)]
     │           ├── exchange type: Hash(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
     │           └── AggregatePartial
     │               ├── group by: [i_product_name, i_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number, ca_street_name, ca_city, ca_zip, d_year, d_year, d_year]
     │               ├── aggregate functions: []
-    │               ├── estimated rows: 40561773.90
+    │               ├── estimated rows: 40561782.71
     │               └── HashJoin
     │                   ├── output columns: [item.i_product_name (#338), item.i_item_sk (#317), d1.d_year (#113), store.s_store_name (#196), store.s_zip (#216), ad1.ca_street_number (#287), ad1.ca_street_name (#288), ad1.ca_city (#291), ad1.ca_zip (#294), d2.d_year (#141), d3.d_year (#169), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307)]
     │                   ├── join type: INNER
@@ -24,7 +24,7 @@ Exchange
     │                   ├── filters: [cd1.cd_marital_status (#240) <> cd2.cd_marital_status (#249)]
     │                   ├── build join filters:
     │                   │   └── filter id:19, build key:customer.c_customer_sk (#220), probe targets:[store_sales.ss_customer_sk (#3)@scan0], filter type:bloom,inlist,min_max
-    │                   ├── estimated rows: 40561773.90
+    │                   ├── estimated rows: 40561782.71
     │                   ├── Exchange(Build)
     │                   │   ├── output columns: [cd2.cd_marital_status (#249), customer.c_customer_sk (#220), d2.d_year (#141), d3.d_year (#169), ad2.ca_street_number (#300), ad2.ca_street_name (#301), ad2.ca_city (#304), ad2.ca_zip (#307)]
     │                   │   ├── exchange type: Broadcast
@@ -489,19 +489,19 @@ Exchange
         │   ├── filter id:20, build key:cs2.item_sk (#1003), probe targets:[cs1.item_sk (#660)@scan37], filter type:bloom,inlist,min_max
         │   ├── filter id:21, build key:cs2.store_name (#882), probe targets:[cs1.store_name (#539)@scan26], filter type:bloom,inlist,min_max
         │   └── filter id:22, build key:cs2.store_zip (#902), probe targets:[cs1.store_zip (#559)@scan26], filter type:bloom,inlist,min_max
-        ├── estimated rows: 90932904074.89
+        ├── estimated rows: 90932943580.15
         ├── Exchange(Build)
         │   ├── output columns: [store.s_store_name (#882), store.s_zip (#902), item.i_item_sk (#1003)]
         │   ├── exchange type: Hash(cs2.item_sk (#1003), cs2.store_name (#882), cs2.store_zip (#902))
         │   └── MaterializeCTERef
         │       ├── cte_name: cross_sales
         │       ├── cte_schema: [s_store_name (#882), s_zip (#902), i_item_sk (#1003)]
-        │       └── estimated rows: 40561773.90
+        │       └── estimated rows: 40561782.71
         └── Exchange(Probe)
             ├── output columns: [store.s_store_name (#539), store.s_zip (#559), item.i_item_sk (#660)]
             ├── exchange type: Hash(cs1.item_sk (#660), cs1.store_name (#539), cs1.store_zip (#559))
             └── MaterializeCTERef
                 ├── cte_name: cross_sales
                 ├── cte_schema: [s_store_name (#539), s_zip (#559), i_item_sk (#660)]
-                └── estimated rows: 40561773.90
+                └── estimated rows: 40561782.71
 
