@@ -109,3 +109,82 @@ select c1VARCHAR, c2VARCHAR, ts2 from t0 order by ts2 desc limit 2;
 
 statement ok
 drop table t0
+
+# Regression for https://github.com/databendlabs/databend/issues/20420.
+# This base-suite case runs in standalone and cluster CI. Small blocks and
+# multiple threads exercise the parallel missing-default-column path.
+statement ok
+SET max_threads = 4
+
+statement ok
+SET max_block_size = 1024
+
+statement ok
+CREATE TABLE default_time_stability (
+    batch UInt8,
+    n UInt64,
+    explicit_ts Timestamp,
+    explicit_date Date,
+    default_ts Timestamp DEFAULT now(),
+    default_date Date DEFAULT today()
+)
+
+# Capture a boundary AFTER CREATE TABLE, then delay INSERT so a default frozen
+# at DDL time cannot pass the timestamp comparison below.
+statement ok
+CREATE TABLE default_time_boundary AS SELECT now() AS ts
+
+statement ok
+SELECT sleep(1)
+
+statement ok
+INSERT INTO default_time_stability(batch, n, explicit_ts, explicit_date)
+SELECT 1, number, now(), today() FROM numbers_mt(65536)
+
+query IIIII
+SELECT count(*), count(DISTINCT default_ts), count(DISTINCT default_date),
+       count_if(default_ts != explicit_ts), count_if(default_date != explicit_date)
+FROM default_time_stability WHERE batch = 1
+----
+65536 1 1 0 0
+
+query B
+SELECT min(default_ts) > (SELECT ts FROM default_time_boundary)
+FROM default_time_stability
+----
+1
+
+# A separate statement must capture a new timestamp, while every processor
+# within that statement still agrees with its explicit projection.
+statement ok
+SELECT sleep(1)
+
+statement ok
+INSERT INTO default_time_stability(batch, n, explicit_ts, explicit_date)
+SELECT 2, number, now(), today() FROM numbers_mt(65536)
+
+query IIIII rowsort
+SELECT batch, count(*), count(DISTINCT default_ts),
+       count_if(default_ts != explicit_ts), count_if(default_date != explicit_date)
+FROM default_time_stability GROUP BY batch
+----
+1 65536 1 0 0
+2 65536 1 0 0
+
+query B
+SELECT (SELECT max(default_ts) FROM default_time_stability WHERE batch = 1)
+     < (SELECT min(default_ts) FROM default_time_stability WHERE batch = 2)
+----
+1
+
+statement ok
+DROP TABLE default_time_stability
+
+statement ok
+DROP TABLE default_time_boundary
+
+statement ok
+UNSET max_block_size
+
+statement ok
+UNSET max_threads

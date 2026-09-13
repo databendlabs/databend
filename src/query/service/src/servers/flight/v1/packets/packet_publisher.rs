@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use databend_common_base::runtime::PerfConfig;
 use databend_common_catalog::cluster_info::Cluster;
@@ -156,6 +157,7 @@ impl DataflowDiagramBuilder {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
     pub query_id: String,
+    pub query_created_time: SystemTime,
     pub cluster: Arc<Cluster>,
     pub settings: Arc<Settings>,
     pub query_kind: QueryKind,
@@ -206,6 +208,7 @@ impl QueryEnv {
                 local_id: GlobalConfig::instance().query.node_id.clone(),
             }),
             GlobalConfig::version(),
+            Some(self.query_created_time),
         )?;
 
         query_ctx.update_init_query_id(self.query_id.clone());
