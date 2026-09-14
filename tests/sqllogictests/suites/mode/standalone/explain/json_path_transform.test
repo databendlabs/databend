@@ -1,0 +1,25 @@
+statement ok
+create or replace table t_json_path_transform(doc variant null, max_len int)
+
+# The displayed argument order keeps the signature `(json, path, lambda)`:
+# columns captured by the lambda body are appended after json and path.
+query T
+explain select json_path_transform(doc, '$.a', v -> to_variant(left(v::String, max_len))) from t_json_path_transform
+----
+EvalScalar
+├── output columns: [json_path_transform(doc, '$.a', v -> to_variant(left(v::STRING, max_len))) (#2)]
+├── expressions: [json_path_transform(t_json_path_transform.doc (#0), '$.a', t_json_path_transform.max_len (#1), ["v"] -> to_variant(left(CAST(v (#2) AS String NULL), CAST(t_json_path_transform.max_len (#1) AS UInt64 NULL))))]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t_json_path_transform
+    ├── scan id: 0
+    ├── output columns: [doc (#0), max_len (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+drop table t_json_path_transform all

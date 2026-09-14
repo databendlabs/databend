@@ -32,8 +32,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -46,7 +44,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -59,9 +56,6 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
-use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
 use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -69,12 +63,9 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
@@ -83,6 +74,8 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -103,8 +96,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -204,34 +195,6 @@ impl Catalog for SessionCatalog {
         self.inner.undrop_database(req).await
     }
 
-    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
-        if is_temp_table_id(req.meta.table_id) {
-            return Err(ErrorCode::StorageUnsupported(format!(
-                "CreateIndex: table id {} is a temporary table id",
-                req.meta.table_id
-            )));
-        }
-        self.inner.create_index(req).await
-    }
-
-    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        self.inner.drop_index(req).await
-    }
-
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
-        self.inner.get_index(req).await
-    }
-
-    async fn list_marked_deleted_indexes(
-        &self,
-        tenant: &Tenant,
-        table_id: Option<u64>,
-    ) -> Result<GetMarkedDeletedIndexesReply> {
-        self.inner
-            .list_marked_deleted_indexes(tenant, table_id)
-            .await
-    }
-
     async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
@@ -239,18 +202,6 @@ impl Catalog for SessionCatalog {
     ) -> Result<GetMarkedDeletedTableIndexesReply> {
         self.inner
             .list_marked_deleted_table_indexes(tenant, table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    async fn remove_marked_deleted_index_ids(
-        &self,
-        tenant: &Tenant,
-        table_id: u64,
-        index_ids: &[u64],
-    ) -> Result<()> {
-        self.inner
-            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
             .await
     }
 
@@ -264,34 +215,6 @@ impl Catalog for SessionCatalog {
         self.inner
             .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
             .await
-    }
-
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        self.inner.update_index(req).await
-    }
-
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        if req.table_id.is_some_and(is_temp_table_id) {
-            return Ok(vec![]);
-        }
-        self.inner.list_indexes(req).await
-    }
-
-    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        if is_temp_table_id(req.table_id) {
-            return Ok(vec![]);
-        }
-        self.inner.list_index_ids_by_table_id(req).await
-    }
-
-    async fn list_indexes_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        if is_temp_table_id(req.table_id) {
-            return Ok(vec![]);
-        }
-        self.inner.list_indexes_by_table_id(req).await
     }
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
@@ -319,6 +242,45 @@ impl Catalog for SessionCatalog {
         } else {
             self.inner.get_table_meta_by_id(table_id).await
         }
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.inner.get_mv_definition(tenant, mv_table_id).await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.inner
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.inner
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        self.inner
+            .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
     }
 
     async fn mget_table_names_by_ids(
@@ -543,7 +505,10 @@ impl Catalog for SessionCatalog {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
-            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix.clone()),
+            Some(_) if req.source_table_option.is_some() => Err(ErrorCode::Unimplemented(
+                "Atomic source option update is not supported for temporary tables",
+            )),
+            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix),
             None => self.inner.create_table(req).await,
         }
     }
@@ -605,6 +570,7 @@ impl Catalog for SessionCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         let state = self.txn_mgr.lock().state();
@@ -614,7 +580,9 @@ impl Catalog for SessionCatalog {
                 let reply = if req.is_empty() {
                     Ok(Default::default())
                 } else {
-                    self.inner.retryable_update_multi_table_meta(req).await?
+                    self.inner
+                        .retryable_update_multi_table_meta(tenant, req)
+                        .await?
                 };
                 self.temp_tbl_mgr
                     .lock()
@@ -622,7 +590,7 @@ impl Catalog for SessionCatalog {
                 Ok(reply)
             }
             TxnState::Active => {
-                self.txn_mgr.lock().update_multi_table_meta(req);
+                self.txn_mgr.lock().update_multi_table_meta(tenant, req)?;
                 Ok(Ok(Default::default()))
             }
             TxnState::Fail => unreachable!(),

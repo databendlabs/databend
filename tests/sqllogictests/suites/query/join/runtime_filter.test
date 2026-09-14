@@ -117,14 +117,24 @@ statement ok
 create table rf_expr_probe_t3(a bigint);
 
 statement ok
-insert into rf_expr_probe_t1 values (3), (5);
+insert into rf_expr_probe_t1 values (3), (5), (11);
 
 statement ok
 insert into rf_expr_probe_t2 values (1, 2), (2, 3);
 
 statement ok
-insert into rf_expr_probe_t3 values (3);
+insert into rf_expr_probe_t3 values (3), (11);
 
+# A single-column expression is a leaf probe target of the connector t1.a.
+query I
+select count(*)
+from rf_expr_probe_t1 t1
+join rf_expr_probe_t2 t2 on t1.a = cast(t2.x + 10 as bigint)
+join rf_expr_probe_t3 t3 on t1.a = t3.a;
+----
+1
+
+# Multiple physical columns remain unsupported as a runtime-filter target.
 query I
 select count(*)
 from rf_expr_probe_t1 t1

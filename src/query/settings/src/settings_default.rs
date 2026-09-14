@@ -188,6 +188,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=3)),
                 }),
+                ("storage_delete_batch_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Sets the number of object keys deleted per batch delete request (e.g. S3 DeleteObjects). Larger values reduce request count; defaults to the S3 batch limit of 1000.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1000)),
+                }),
                 ("max_memory_usage", DefaultSettingValue {
                     value: UserSettingValue::UInt64(max_memory_usage),
                     desc: "Sets the maximum memory usage in bytes for processing a single query.",
@@ -244,13 +251,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
-                }),
-                ("enable_group_by_column_first", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Resolve GROUP BY names to input columns before SELECT aliases. Disabled by default for compatibility.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
@@ -470,6 +470,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_top_n", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables the fused TopN algorithm for ORDER BY with LIMIT.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -652,6 +659,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_cascading_grouping_sets", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Builds hierarchical grouping sets from the closest available parent grouping.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
@@ -668,7 +682,7 @@ impl DefaultSettings {
                 }),
                 ("hide_options_in_show_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of the result of SHOW TABLE CREATE.",
+                    desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of SHOW CREATE TABLE and SHOW CREATE MATERIALIZED VIEW.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -946,6 +960,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_materialized_view_rewrite", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables rewriting queries to scan matching materialized views.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
@@ -1139,6 +1160,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_table_schema_refresh", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh table schemas from storage when listing system.tables, system.columns, or system.statistics, and refresh system.tables statistics. This reflects changes invisible to the meta server (currently only read-only ATTACH tables). Disabled by default; refreshing an ATTACH table may require multiple storage requests.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_experimental_row_access_policy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable row access policy(disable by default).",
@@ -1196,8 +1224,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh aggregating index after new data written",
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Deprecated: aggregating index refresh is disabled",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1527,20 +1555,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_proxy_bloom_pruning", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable bloom index pruning during PROXY lightweight route estimation. Disabled by default to keep routing cheap.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Session,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("proxy_routing_model", DefaultSettingValue {
-                    value: UserSettingValue::String("statistics".to_string()),
-                    desc: "Controls how PROXY chooses a target table. 'statistics' estimates route cost with lightweight pruning; 'prefix' matches predicates against the target cluster key prefix.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Session,
-                    range: Some(SettingRange::String(vec!["statistics".into(), "prefix".into()])),
                 }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

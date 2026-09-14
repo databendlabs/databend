@@ -497,6 +497,7 @@ impl DataBlockVec {
                 N => TypeHandler::typed::<OpaqueType<N>>(false),
                 _ => unreachable!("Unsupported opaque size: {}", size),
             }),
+            DataType::AggregateState(state) => Self::handler_for_non_nullable(&state.state_type),
             DataType::Generic(_) | DataType::StageLocation => unreachable!(),
             DataType::Nullable(_) => unreachable!(),
         }
@@ -547,6 +548,7 @@ impl DataBlockVec {
                 N => TypeHandler::nullable::<OpaqueType<N>>(),
                 _ => unreachable!("Unsupported opaque size: {}", size),
             }),
+            DataType::AggregateState(state) => Self::handler_for_nullable(&state.state_type),
             DataType::Null
             | DataType::Nullable(_)
             | DataType::Generic(_)

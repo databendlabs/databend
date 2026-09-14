@@ -19,11 +19,15 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContextQueryIdentity;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::SortSpiller;
+use databend_common_storage::DataOperator;
+use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_cache::TempPath;
 use opendal::Operator;
 
@@ -34,6 +38,7 @@ use super::inner::*;
 use super::serialize::Layout;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextSpillProgress;
 
 #[derive(Clone)]
@@ -274,6 +279,60 @@ impl SortSpillerImpl {
 
     pub fn remove_local_file(&self, local: &TempPath) -> Option<Layout> {
         self.0.adapter.local_files.write().unwrap().remove(local)
+    }
+}
+
+/// Spiller for Hilbert recluster buffered input; spills through the query context so spilled
+/// files participate in the standard query-scoped cleanup and progress accounting.
+#[derive(Clone)]
+pub struct ReclusterSpiller {
+    inner: Arc<SpillerInner<Arc<QueryContext>>>,
+    memory_settings: MemorySettings,
+}
+
+impl ReclusterSpiller {
+    pub fn create(ctx: Arc<QueryContext>) -> Result<Self> {
+        let settings = ctx.get_settings();
+        let disk_bytes_limit = GlobalConfig::instance().spill.sort_spill_bytes_limit();
+        let enable_dio = settings.get_enable_dio()?;
+        let disk_spill = TempDirManager::instance()
+            .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
+            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+            .transpose()?;
+        let config = SpillerConfig {
+            spiller_type: SpillerType::Recluster,
+            location_prefix: ctx.query_id_spill_prefix(),
+            disk_spill,
+            use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            writer_pool_bytes: settings
+                .get_spill_writer_memory_pool_size_mb()?
+                .saturating_mul(1024 * 1024),
+        };
+        let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
+        let inner = Arc::new(SpillerInner::new(
+            ctx,
+            DataOperator::instance().spill_operator(),
+            config,
+        )?);
+        Ok(Self {
+            inner,
+            memory_settings,
+        })
+    }
+
+    pub fn memory_settings(&self) -> &MemorySettings {
+        &self.memory_settings
+    }
+}
+
+#[async_trait::async_trait]
+impl DataBlockSpill for ReclusterSpiller {
+    async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+        self.inner.spill(data_block).await
+    }
+
+    async fn restore(&self, location: &Location) -> Result<DataBlock> {
+        self.inner.read_spilled_file(location).await
     }
 }
 

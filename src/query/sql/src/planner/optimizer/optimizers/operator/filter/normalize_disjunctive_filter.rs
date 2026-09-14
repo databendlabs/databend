@@ -14,9 +14,10 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use itertools::Itertools;
 
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -41,9 +42,9 @@ impl NormalizeDisjunctiveFilterOptimizer {
             let rewritten_predicate_scalar = rewrite_predicate_ors(predicate_scalar);
             rewritten_predicates.push(normalize_predicate_scalar(rewritten_predicate_scalar));
         }
-        let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
-        for predicate in rewritten_predicates.iter() {
-            split_predicates.extend_from_slice(&split_conjunctions(predicate));
+        let mut split_predicates = Vec::with_capacity(rewritten_predicates.len());
+        for predicate in rewritten_predicates {
+            split_predicates.extend(into_conjunctions(predicate));
         }
         Ok(split_predicates)
     }
@@ -115,6 +116,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
                 func_name: "and_filters".to_string(),
                 params: vec![],
                 arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
+                return_type: Box::new(DataType::Boolean),
             })
         }
         PredicateScalar::Or(args) => {
@@ -124,6 +126,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
                 func_name: "or_filters".to_string(),
                 params: vec![],
                 arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
+                return_type: Box::new(DataType::Boolean),
             })
         }
         PredicateScalar::Other(expr) => *expr,
@@ -157,6 +160,7 @@ mod tests {
             func_name: func_name.to_string(),
             params: vec![],
             arguments: vec![lhs, rhs],
+            return_type: Box::new(DataType::Boolean),
         })
     }
 

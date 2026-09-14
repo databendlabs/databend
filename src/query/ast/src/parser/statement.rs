@@ -97,6 +97,28 @@ fn match_ident_text(text: &'static str) -> impl FnMut(Input) -> IResult<()> {
     }
 }
 
+pub fn cluster_type(i: Input) -> IResult<ClusterType> {
+    alt((
+        value(ClusterType::Linear, rule! { LINEAR }),
+        value(ClusterType::Hilbert, rule! { HILBERT }),
+    ))
+    .parse(i)
+}
+
+/// Parse a cluster key together with its physical clustering type.
+pub fn cluster_option(i: Input) -> IResult<ClusterOption> {
+    map(
+        rule! {
+            #cluster_type? ~ "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(cluster_type, _, cluster_exprs, _)| ClusterOption {
+            cluster_type: cluster_type.unwrap_or(ClusterType::Linear),
+            cluster_exprs,
+        },
+    )
+    .parse(i)
+}
+
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain_options = map(
         rule! {
@@ -913,6 +935,117 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let show_shares = map(
+        rule! { SHOW ~ SHARES ~ #show_options? },
+        |(_, _, show_options)| Statement::ShowShares(ShowSharesStmt { show_options }),
+    );
+
+    let desc_share = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ SHARE ~ #share_ref
+        },
+        |(_, _, name)| Statement::DescShare(DescShareStmt { name }),
+    );
+
+    let create_share = map_res(
+        rule! {
+            CREATE
+            ~ ( OR ~ ^REPLACE )?
+            ~ SHARE
+            ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ ( CONNECTION ~ ^"=" ~ ^#ident )?
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, opt_or_replace, _, opt_if_not_exists, name, connection, comment)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok::<_, nom::Err<ErrorKind>>(Statement::CreateShare(CreateShareStmt {
+                create_option,
+                name,
+                connection: connection.map(|(_, _, connection)| connection),
+                comment: comment.map(|(_, _, comment)| comment),
+            }))
+        },
+    );
+
+    let drop_share = map(
+        rule! {
+            DROP ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, name)| {
+            Statement::DropShare(DropShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+            })
+        },
+    );
+
+    let alter_share_add_remove = map(
+        rule! {
+            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ #share_accounts
+        },
+        |(_, _, opt_if_exists, name, add, accounts)| {
+            let action = if add {
+                AlterShareAction::AddAccounts { accounts }
+            } else {
+                AlterShareAction::RemoveAccounts { accounts }
+            };
+            Statement::AlterShare(AlterShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                action,
+            })
+        },
+    );
+
+    let alter_share_set = map(
+        rule! {
+            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ SET
+            ~ #share_accounts?
+            ~ ( CONNECTION ~ ^"=" ~ ^#ident )?
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, _, opt_if_exists, name, _, accounts, connection, comment)| {
+            Statement::AlterShare(AlterShareStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                action: AlterShareAction::Set {
+                    accounts,
+                    connection: connection.map(|(_, _, connection)| connection),
+                    comment: comment.map(|(_, _, comment)| comment),
+                },
+            })
+        },
+    );
+    let alter_share = alt((alter_share_add_remove, alter_share_set));
+
+    let grant_share = map(
+        rule! {
+            GRANT ~ #priv_share_type ~ ON ~ #share_grant_object ~ TO ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::GrantShare(GrantShareStmt {
+                privilege,
+                object,
+                share,
+            })
+        },
+    );
+
+    let revoke_share = map(
+        rule! {
+            REVOKE ~ #priv_share_type ~ ON ~ #share_grant_object ~ FROM ~ SHARE ~ #ident
+        },
+        |(_, privilege, _, object, _, _, share)| {
+            Statement::RevokeShare(RevokeShareStmt {
+                privilege,
+                object,
+                share,
+            })
+        },
+    );
+
     let create_database = map_res(
         rule! {
             CREATE
@@ -920,13 +1053,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( DATABASE | SCHEMA )
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #database_ref
+            ~ ( FROM ~ ^SHARE ~ ^#share_ref )?
             ~ ( ENGINE ~ ^"=" ~ ^#database_engine )?
             ~ ( OPTIONS ~ ^"(" ~ ^#sql_property_list ~ ^")" )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, database, engine_opt, options_opt)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            database,
+            share_opt,
+            engine_opt,
+            options_opt,
+        )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
+            let from_share = share_opt.map(|(_, _, share)| share);
             let engine = engine_opt.map(|(_, _, engine)| engine);
             let options = options_opt
                 .map(|(_, _, options, _)| options)
@@ -935,6 +1079,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             let statement = Statement::CreateDatabase(CreateDatabaseStmt {
                 create_option,
                 database,
+                from_share,
                 engine,
                 options,
             });
@@ -1131,6 +1276,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let create_table_partition_by = map(
+        rule! {
+            #table_option ~ PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+        },
+        |(table_options, _, _, _, exprs, _)| (table_options, exprs),
+    );
     let create_table = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ (TEMP| TEMPORARY|TRANSIENT)? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -1138,9 +1289,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
-            ~ ( CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ #create_table_partition_by?
+            ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
             ~ ( #table_option )?
-            ~ ( PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
         },
@@ -1154,9 +1305,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             source,
             engine,
             uri_location,
+            opt_partition_by,
             opt_cluster_by,
             opt_table_options,
-            opt_iceberg_table_partition_by,
             opt_table_properties,
             opt_as_query,
         )| {
@@ -1168,6 +1319,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 Some(TEMP) | Some(TEMPORARY) => TableType::Temporary,
                 _ => unreachable!(),
             };
+            let (mut table_options, partition_by) = opt_partition_by
+                .map(|(options, exprs)| (options, Some(exprs)))
+                .unwrap_or_default();
+            table_options.extend(opt_table_options.unwrap_or_default());
             Ok(Statement::CreateTable(CreateTableStmt {
                 create_option,
                 catalog,
@@ -1176,12 +1331,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 source,
                 engine,
                 uri_location,
-                cluster_by: opt_cluster_by.map(|(_, _, _, _, exprs, _)| ClusterOption {
-                    cluster_exprs: exprs,
-                }),
-                table_options: opt_table_options.unwrap_or_default(),
-                iceberg_table_partition: opt_iceberg_table_partition_by
-                    .map(|(_, _, _, cols, _)| cols),
+                cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
+                table_options,
+                partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 table_type,
@@ -1261,20 +1413,30 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let optimize_table = map(
-        rule! {
-            OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, (catalog, database, table), action, opt_limit)| {
-            Statement::OptimizeTable(OptimizeTableStmt {
-                catalog,
-                database,
-                table,
-                action,
-                limit: opt_limit.map(|(_, limit)| limit),
-            })
-        },
-    );
+    let optimize_table = alt((
+        map(
+            rule! {
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ PURGE
+            },
+            |(_, _, (database, table), _)| {
+                Statement::VacuumTable(VacuumTableStmt { database, table })
+            },
+        ),
+        map(
+            rule! {
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+            },
+            |(_, _, (database, table), action, opt_limit)| {
+                Statement::OptimizeTable(OptimizeTableStmt {
+                    catalog: None,
+                    database,
+                    table,
+                    action,
+                    limit: opt_limit.map(|(_, limit)| limit),
+                })
+            },
+        ),
+    ));
     let vacuum_temp_files = map(
         rule! {
             VACUUM ~ TEMPORARY ~ FILES ~ (RETAIN ~ #literal_duration)? ~ (LIMIT ~ #literal_u64)?
@@ -1288,30 +1450,40 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let vacuum_table = map(
         rule! {
-            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #vacuum_table_option
+            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_2
         },
-        |(_, _, (catalog, database, table), option)| {
-            Statement::VacuumTable(VacuumTableStmt {
-                catalog,
-                database,
-                table,
-                option,
+        |(_, _, (database, table))| Statement::VacuumTable(VacuumTableStmt { database, table }),
+    );
+    let vacuum_tables = map(
+        rule! {
+            VACUUM ~ TABLES ~ (FROM ~ ^#ident)?
+        },
+        |(_, _, database)| {
+            Statement::VacuumTables(VacuumTablesStmt {
+                database: database.map(|(_, database)| database),
             })
         },
     );
+    let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
         },
-        |(_, _, _, database_option, option)| {
-            let (catalog, database) = database_option.map_or_else(
-                || (None, None),
-                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
-            );
+        |(_, _, _, database_option)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
-                catalog,
-                database,
-                option,
+                database: database_option.map(|(_, database)| database),
+            })
+        },
+    );
+    let dropped_keyword = match_ident_text("DROPPED");
+    let objects_keyword = match_ident_text("OBJECTS");
+    let vacuum_dropped_objects = map(
+        rule! {
+            VACUUM ~ #dropped_keyword ~ #objects_keyword ~ (FROM ~ ^#ident)?
+        },
+        |(_, _, _, database_option)| {
+            Statement::VacuumDropTable(VacuumDropTableStmt {
+                database: database_option.map(|(_, database)| database),
             })
         },
     );
@@ -1604,49 +1776,124 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_index = map_res(
+    let create_materialized_view = map_res(
         rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ ASYNC?
-            ~ AGGREGATING ~ INDEX
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident
+            CREATE ~ ( OR ~ ^REPLACE )? ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+            ~ (#table_option)?
             ~ AS ~ #query
         },
-        |(_, opt_or_replace, opt_async, _, _, opt_if_not_exists, index_name, _, query)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            _,
+            opt_if_not_exists,
+            (catalog, database, view),
+            opt_columns,
+            opt_cluster_by,
+            opt_comment,
+            opt_table_options,
+            _,
+            query,
+        )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateIndex(CreateIndexStmt {
-                index_type: TableIndexType::Aggregating,
-                create_option,
-                index_name,
-                query: Box::new(query),
-                sync_creation: opt_async.is_none(),
-            }))
+            Ok(Statement::CreateMaterializedView(
+                CreateMaterializedViewStmt {
+                    create_option,
+                    catalog,
+                    database,
+                    view,
+                    columns: opt_columns
+                        .map(|(_, columns, _)| columns)
+                        .unwrap_or_default(),
+                    cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
+                    comment: opt_comment.map(|(_, _, comment)| comment),
+                    table_options: opt_table_options.unwrap_or_default(),
+                    query: Box::new(query),
+                },
+            ))
         },
     );
-
-    let drop_index = map(
+    let alter_materialized_view = map(
         rule! {
-            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            ALTER ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #alter_table_action
         },
-        |(_, _, _, opt_if_exists, index)| {
-            Statement::DropIndex(DropIndexStmt {
-                if_exists: opt_if_exists.is_some(),
-                index,
+        |(_, _, _, (catalog, database, view), action)| {
+            Statement::AlterMaterializedView(AlterMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+                action,
             })
         },
     );
-
-    let refresh_index = map(
+    let drop_materialized_view = map(
         rule! {
-            REFRESH ~ AGGREGATING ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
+            DROP ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, index, opt_limit)| {
-            Statement::RefreshIndex(RefreshIndexStmt {
-                index,
-                limit: opt_limit.map(|(_, limit)| limit),
+        |(_, _, _, opt_if_exists, (catalog, database, view))| {
+            Statement::DropMaterializedView(DropMaterializedViewStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let refresh_materialized_view = map(
+        rule! {
+            REFRESH ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(_, _, _, (catalog, database, view), limit)| {
+            Statement::RefreshMaterializedView(RefreshMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+                limit: limit.map(|(_, value)| value),
+            })
+        },
+    );
+    let refresh_lineage = map(
+        rule! {
+            REFRESH ~ LINEAGE ~ ^FOR ~ ^ALL ~ ^VIEWS ~ ( DRY ~ ^RUN )?
+        },
+        |(_, _, _, _, _, dry_run)| {
+            Statement::RefreshLineage(RefreshLineageStmt {
+                dry_run: dry_run.is_some(),
+            })
+        },
+    );
+    let show_create_materialized_view = map(
+        rule! {
+            SHOW ~ CREATE ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, view))| {
+            Statement::ShowCreateMaterializedView(ShowCreateMaterializedViewStmt {
+                catalog,
+                database,
+                view,
+            })
+        },
+    );
+    let show_materialized_views = map(
+        rule! {
+            SHOW ~ MATERIALIZED ~ ^VIEWS ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
+        },
+        |(_, _, _, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowMaterializedViews(ShowMaterializedViewsStmt {
+                catalog,
+                database,
+                limit,
             })
         },
     );
@@ -2274,18 +2521,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, name, _, args, _)| Statement::Call(CallStmt { name, args }),
     );
 
-    let vacuum_temporary_tables = map(
-        rule! {
-            VACUUM ~ TEMPORARY ~ TABLES ~ ( LIMIT ~ ^#literal_u64 )?
-        },
-        |(_, _, _, opt_limit)| {
-            Statement::Call(CallStmt {
-                name: Identifier::from_name(None, "fuse_vacuum_temporary_table"),
-                args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
-            })
-        },
-    );
-
     let presign = map(
         rule! {
             PRESIGN ~ ( #presign_action )?
@@ -2894,6 +3129,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
                 | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
                 | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+                | #show_shares : "`SHOW SHARES [LIKE '<pattern>'] [LIMIT <rows>]`"
             )
             | (
                 #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
@@ -2904,6 +3140,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
                 | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
                 | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
+                | #show_materialized_views : "`SHOW MATERIALIZED VIEWS [FROM [<catalog>.]<database>] [<show_limit>]`"
+                | #show_create_materialized_view : "`SHOW CREATE MATERIALIZED VIEW [<database>.]<view>`"
                 | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             )
             | (
@@ -2958,14 +3196,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (PURGE | COMPACT [SEGMENT])`"
             ).parse(i),
         VACUUM => rule!(
-            #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            #vacuum_all : "`VACUUM ALL`"
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #vacuum_tables : "`VACUUM TABLES [FROM <database>]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table>`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM <database>]`"
+            | #vacuum_dropped_objects : "`VACUUM DROPPED OBJECTS [FROM <database>]`"
             | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
-            | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             ).parse(i),
@@ -2978,7 +3218,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ATTACH => rule!(#attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             ).parse(i),
         REFRESH => rule!(
-            #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
+            | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view> [LIMIT <rows>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),
@@ -2997,10 +3238,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
         ).parse(i),
         GRANT => rule!(
-            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
+            #grant_share : "`GRANT { USAGE ON DATABASE <db> | SELECT ON TABLE [<db>.]<table> } TO SHARE <share>`"
+            | #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
         ).parse(i),
-        REVOKE => rule!(#revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+        REVOKE => rule!(
+            #revoke_share : "`REVOKE { USAGE ON DATABASE <db> | SELECT ON TABLE [<db>.]<table> } FROM SHARE <share>`"
+            | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
             ).parse(i),
         COMMENT => rule!(#comment).parse(i),
         DESC | DESCRIBE => rule!(
@@ -3017,6 +3261,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
             | #describe_stream : "`DESCRIBE STREAM [<database>.]<stream>`"
+            | #desc_share : "`DESC[RIBE] SHARE [<provider_tenant>.]<share>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #sequence
         ).parse(i),
@@ -3036,11 +3281,12 @@ AS
                 | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
                 | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name> [WITH <key>=<value> [, ...]]`"
                 | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
-                | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
+                | #create_share : "`CREATE [OR REPLACE] SHARE [IF NOT EXISTS] <name> [CONNECTION = <connection>] [COMMENT = '<string_literal>']`"
+                | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [FROM SHARE <provider>.<share>] [ENGINE = <engine>]`"
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
                 | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
                 | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-                | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+                | #create_materialized_view : "`CREATE [OR REPLACE] MATERIALIZED VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] [CLUSTER BY [LINEAR] (...)] [COMMENT = '<string_literal>'] AS SELECT ...`"
                 | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
             )
             | (
@@ -3084,11 +3330,12 @@ AS
                 | #drop_worker: "`DROP WORKER [IF EXISTS] <name>`"
                 | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
                 | #drop_workload_group: "`DROP WORKLOAD GROUP [ IF EXISTS ] <name>`"
+                | #drop_share : "`DROP SHARE [IF EXISTS] <name>`"
                 | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
                 | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
                 | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
                 | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
-                | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
+                | #drop_materialized_view : "`DROP MATERIALIZED VIEW [IF EXISTS] [<database>.]<view>`"
                 | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
             )
             | (
@@ -3125,7 +3372,11 @@ AS
             | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            | (
+                #alter_materialized_view : "`ALTER MATERIALIZED VIEW [<database>.]<view> {CLUSTER BY (...) | DROP CLUSTER KEY | RECLUSTER [FINAL] [LIMIT <limit>] | SET OPTIONS (...) | UNSET OPTIONS ... | COMMENT = '<string_literal>'}`"
+                | #alter_share : "`ALTER SHARE [IF EXISTS] <name> { ADD | REMOVE } ACCOUNTS = <tenant> [, ...] | SET [ACCOUNTS = <tenant> [, ...]] [CONNECTION = <connection>] [COMMENT = '<string_literal>']`"
+                | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            )
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
@@ -3145,11 +3396,7 @@ AS
         SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`").parse(i),
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
-    );
-    Err(nom::Err::Error(Error::from_error_kind(
-        i,
-        ErrorKind::other("expecting SQL statement"),
-    )))
+    )
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
@@ -4163,6 +4410,36 @@ pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
     .parse(i)
 }
 
+pub fn share_ref(i: Input) -> IResult<ShareRef> {
+    map(rule! { #dot_separated_idents_1_to_2 }, |(tenant, share)| {
+        ShareRef { tenant, share }
+    })
+    .parse(i)
+}
+
+pub fn share_accounts(i: Input) -> IResult<Vec<Identifier>> {
+    map(
+        rule! {
+            ACCOUNTS ~ ^"=" ~ ^#comma_separated_list1(ident)
+        },
+        |(_, _, accounts)| accounts,
+    )
+    .parse(i)
+}
+
+pub fn share_grant_object(i: Input) -> IResult<ShareGrantObjectName> {
+    alt((
+        map(rule! { DATABASE ~ #ident }, |(_, database)| {
+            ShareGrantObjectName::Database(database)
+        }),
+        map(
+            rule! { TABLE ~ #dot_separated_idents_1_to_2 },
+            |(_, (database, table))| ShareGrantObjectName::Table(database, table),
+        ),
+    ))
+    .parse(i)
+}
+
 pub fn alter_add_share_accounts(i: Input) -> IResult<bool> {
     alt((value(true, rule! { ADD }), value(false, rule! { REMOVE }))).parse(i)
 }
@@ -4240,26 +4517,27 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
-    // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let global_or_current_database = map(rule! { "*" ~ ( "." ~ ^"*" )? }, |(_, global)| {
+        if global.is_some() {
+            AccountMgrLevel::Global
+        } else {
+            AccountMgrLevel::Database(None)
+        }
+    });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     let masking_policy = map(rule! { MASKING ~ POLICY ~ #ident }, |(_, _, name)| {
         AccountMgrLevel::MaskingPolicy(name.to_string())
@@ -4271,8 +4549,8 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
     );
 
     rule!(
-        #global : "*.*"
-        | #db : "<database>.*"
+        #global_or_current_database : "* | *.*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #masking_policy : "MASKING POLICY <policy_name>"
         | #row_access_policy : "ROW ACCESS POLICY <policy_name>"
@@ -4281,26 +4559,27 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
 }
 
 pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
-    // *.*
-    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let global_or_current_database = map(rule! { "*" ~ ( "." ~ ^"*" )? }, |(_, global)| {
+        if global.is_some() {
+            AccountMgrLevel::Global
+        } else {
+            AccountMgrLevel::Database(None)
+        }
+    });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
         AccountMgrLevel::Stage(stage_name.to_string())
@@ -4310,8 +4589,8 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         AccountMgrLevel::Warehouse(w.to_string())
     });
     rule!(
-        #global : "*.*"
-        | #db : "<database>.*"
+        #global_or_current_database : "* | *.*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
@@ -4320,24 +4599,21 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
 }
 
 pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
-    // db.*
-    // "*": as current db or "table" with current db
-    let db = map(
-        rule! {
-            ( #grant_ident ~ "." )? ~ "*"
-        },
-        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
-    );
+    let current_database = value(AccountMgrLevel::Database(None), rule! { "*" });
 
-    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
-    let table = map(
-        rule! {
-            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
-        },
-        |(database, table)| {
-            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+    let database_qualifier = followed_by_text(grant_ident, ".");
+    let database = value(None, rule! { "*" });
+    let table = map(parameter_to_grant_string, Some);
+    let qualified = map(
+        rule! { #database_qualifier ~ "." ~ ^(#database | #table) },
+        |(database, _, table)| match table {
+            None => AccountMgrLevel::Database(Some(database.name)),
+            Some(table) => AccountMgrLevel::Table(Some(database.name), table),
         },
     );
+    let table = map(parameter_to_grant_string, |table| {
+        AccountMgrLevel::Table(None, table)
+    });
 
     #[derive(Clone)]
     enum Object {
@@ -4386,7 +4662,8 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         },
     );
     rule!(
-        #db : "<database>.*"
+        #current_database : "*"
+        | #qualified : "<database>.* | <database>.<table>"
         | #table : "<database>.<table>"
         | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
@@ -4397,21 +4674,21 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
 pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
     let grant_role = map(
         rule! {
-            FOR ~ #grant_option
+            FOR ~ ^#grant_option
         },
         |(_, opt_principal)| ShowGrantOption::PrincipalIdentity(opt_principal),
     );
 
     let share_object_name = map(
         rule! {
-            ON ~ #on_object_name
+            ON ~ ^#on_object_name
         },
         |(_, object_name)| ShowGrantOption::GrantObjectName(object_name),
     );
 
     let role_granted = map(
         rule! {
-            OF ~ ROLE ~ #role_name
+            OF ~ ^ROLE ~ ^#role_name
         },
         |(_, _, role_name)| ShowGrantOption::OfRole(role_name),
     );
@@ -4950,11 +5227,16 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let alter_table_cluster_key = map(
         rule! {
-            CLUSTER ~ ^BY ~ LINEAR? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            CLUSTER ~ ^BY ~ ^#cluster_option
         },
-        |(_, _, _, _, cluster_exprs, _)| AlterTableAction::AlterTableClusterKey {
-            cluster_by: ClusterOption { cluster_exprs },
+        |(_, _, cluster_by)| AlterTableAction::AlterTableClusterKey { cluster_by },
+    );
+
+    let alter_table_partition_by = map(
+        rule! {
+            PARTITION ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
         },
+        |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
     let drop_table_cluster_key = map(
@@ -5058,6 +5340,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #create_table_tag
             | #drop_table_branch
             | #drop_table_tag
+            | #alter_table_partition_by
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
@@ -5195,20 +5478,11 @@ pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
-    alt((
-        value(OptimizeTableAction::All, rule! { ALL }),
-        map(
-            rule! { PURGE ~ (BEFORE ~ ^#travel_point)? },
-            |(_, opt_travel_point)| OptimizeTableAction::Purge {
-                before: opt_travel_point.map(|(_, p)| p),
-            },
-        ),
-        map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
-            OptimizeTableAction::Compact {
-                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-            }
-        }),
-    ))
+    map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
+        OptimizeTableAction::Compact {
+            target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+        }
+    })
     .parse(i)
 }
 
@@ -5231,31 +5505,6 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
         #days
         | #seconds
     )
-    .parse(i)
-}
-
-pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
-    alt((map(
-        rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
-        },
-        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
-            limit: opt_limit.map(|(_, limit)| limit as usize),
-        },
-    ),))
-    .parse(i)
-}
-
-pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
-    alt((map(
-        rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)?
-        },
-        |opt_dry_run| VacuumTableOption {
-            dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
-        },
-    ),))
     .parse(i)
 }
 
@@ -5678,9 +5927,12 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
 
 pub fn option_to_string(i: Input) -> IResult<String> {
     let bool_to_string = |i| map(literal_bool, |v| v.to_string()).parse(i);
+    let float_to_string =
+        |i| map(rule! { LiteralFloat }, |token| token.text().to_string()).parse(i);
 
     rule!(
         #bool_to_string
+        | #float_to_string
         | #parameter_to_string
     )
     .parse(i)
@@ -5696,7 +5948,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::Iceberg, rule! { ICEBERG }),
         value(Engine::Delta, rule! { DELTA }),
         value(Engine::Paimon, rule! { PAIMON }),
-        value(Engine::Proxy, rule! { PROXY }),
     ));
 
     map(
@@ -5869,7 +6120,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~ "'%'" )?
+            #parameter_to_string ~ ( "@" ~ ^"'%'" )?
         },
         |(username, _)| {
             let hostname = "%".to_string();
@@ -5931,7 +6182,7 @@ pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     map(
         rule! {
             #ident
-            ~ #type_name
+            ~ ^#type_name
             : "`<state name> <type>`"
         },
         |(name, type_name)| UDAFStateField { name, type_name },
@@ -5977,6 +6228,20 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         Table(Vec<(Identifier, TypeName)>),
     }
 
+    fn table_return_types(i: Input) -> IResult<Vec<(Identifier, TypeName)>> {
+        if i.tokens.first().is_some_and(|token| token.kind == RParen) {
+            return Ok((i, vec![]));
+        }
+
+        match comma_separated_list1(udtf_arg).parse(i) {
+            Err(nom::Err::Error(mut error)) if error.span.start == i.tokens[0].span.start => {
+                error.errors.push(ErrorKind::ExpectText(")"));
+                Err(nom::Err::Error(error))
+            }
+            result => result,
+        }
+    }
+
     fn return_body(i: Input) -> IResult<ReturnBody> {
         let scalar = map(
             rule! {
@@ -5986,7 +6251,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         );
         let table = map(
             rule! {
-                TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+                TABLE ~ "(" ~ #table_return_types ~ ")"
             },
             |(_, _, arg_types, _)| ReturnBody::Table(arg_types),
         );
@@ -6269,7 +6534,7 @@ fn udf_args(i: Input) -> IResult<UDFArgs> {
 }
 
 fn udtf_arg(i: Input) -> IResult<(Identifier, TypeName)> {
-    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty)).parse(i)
+    map(rule! { #ident ~ #type_name }, |(name, ty)| (name, ty)).parse(i)
 }
 
 fn udf_immutable(i: Input) -> IResult<bool> {

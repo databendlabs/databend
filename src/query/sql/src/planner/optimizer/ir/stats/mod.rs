@@ -12,15 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cardinality;
 mod column_stat;
 mod constraint;
 mod join;
+mod join_column;
+mod join_condition;
 mod selectivity;
 
+pub(crate) use cardinality::cap_stat_info_by_rows;
 pub use column_stat::*;
-pub use databend_common_statistics::UniformSampleSet;
-pub(crate) use join::JoinConditionColumns;
-pub(crate) use join::JoinKeyStatUpdate;
+use databend_common_expression::FunctionContext;
 pub(crate) use join::JoinStatsEstimator;
 pub use selectivity::MAX_SELECTIVITY;
+pub(crate) use selectivity::Selectivity;
 pub use selectivity::SelectivityEstimator;
+pub(crate) use selectivity::SelectivityVisitor;
+
+#[derive(Clone, Debug, Default)]
+pub struct StatContext {
+    pub function_context: FunctionContext,
+}
+
+impl StatContext {
+    pub fn new(function_context: FunctionContext) -> Self {
+        Self { function_context }
+    }
+}

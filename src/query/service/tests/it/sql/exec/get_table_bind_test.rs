@@ -64,8 +64,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -77,7 +75,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -87,24 +84,20 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListDictionaryReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -123,8 +116,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -358,44 +349,6 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    #[async_backtrace::framed]
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        _req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
     fn as_any(&self) -> &dyn Any {
         todo!()
     }
@@ -449,6 +402,35 @@ impl Catalog for FakedCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         self.cat.get_table_meta_by_id(table_id).await
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat.get_mv_definition(tenant, mv_id).await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.cat
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.cat
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
     }
 
     async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
@@ -958,6 +940,15 @@ impl TableContextTableAccess for CtxDelegation {
         todo!()
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        todo!()
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
@@ -1035,14 +1026,6 @@ impl TableContextPartitionStats for CtxDelegation {
         todo!()
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        self.ctx.get_can_scan_from_agg_index()
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {
-        todo!()
-    }
-
     fn get_enable_sort_spill(&self) -> bool {
         todo!()
     }
@@ -1065,10 +1048,6 @@ impl TableContextRuntimeFilter for CtxDelegation {
         todo!()
     }
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        Ok(())
-    }
-
     fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
         Vec::<RuntimeFilterEntry>::new()
     }
@@ -1077,7 +1056,10 @@ impl TableContextRuntimeFilter for CtxDelegation {
         HashMap::new()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        _id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         todo!()
     }
 

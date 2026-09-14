@@ -62,6 +62,7 @@ use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::binder::AliasLookup;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::plans::DictGetFunctionArgument;
@@ -463,8 +464,8 @@ impl<'a> TypeChecker<'a, FullTypeCheckAdapter> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        aliases: &'a [(String, ScalarExpr)],
-        fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
+        aliases: AliasLookup<'a>,
+        fallback_aliases: Option<AliasLookup<'a>>,
         forbid_udf: bool,
     ) -> Result<Self> {
         Self::try_create_with_adapter_and_alias_fallback(

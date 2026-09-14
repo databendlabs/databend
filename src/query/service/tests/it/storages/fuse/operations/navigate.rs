@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use chrono::Utc;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
@@ -24,6 +24,8 @@ use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -132,8 +134,10 @@ async fn test_fuse_navigate() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_navigate_for_purge() -> anyhow::Result<()> {
-    // 1. Setup
+async fn test_no_check_timestamp_maps_missing_prev_snapshot() -> anyhow::Result<()> {
+    // When NO_CHECK TIMESTAMP finds a later snapshot whose predecessor object is gone
+    // (vacuumed), it should return TableHistoricalDataNotFound instead of StorageNotFound.
+
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
@@ -141,7 +145,7 @@ async fn test_navigate_for_purge() -> anyhow::Result<()> {
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
-    // 1.1 first commit
+    // first snapshot
     let qry = format!(
         "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
         db, tbl
@@ -149,78 +153,50 @@ async fn test_navigate_for_purge() -> anyhow::Result<()> {
     let strm = fixture.execute_query(qry.as_str()).await?;
     strm.try_collect::<Vec<DataBlock>>().await?;
 
-    // keep the first snapshot of the insertion
     let table = fixture.latest_default_table().await?;
-    let _first_snapshot = FuseTable::try_from_table(table.as_ref())?
+    let first_snapshot = FuseTable::try_from_table(table.as_ref())?
         .snapshot_loc()
         .unwrap();
 
-    // take a nap
-    tokio::time::sleep(Duration::from_millis(2)).await;
-
-    // 1.2 second commit
+    // second snapshot
     let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
     let strm = fixture.execute_query(qry.as_str()).await?;
     strm.try_collect::<Vec<DataBlock>>().await?;
-    // keep the snapshot of the second insertion
-    let table = fixture.latest_default_table().await?;
-    let second_snapshot = FuseTable::try_from_table(table.as_ref())?
-        .snapshot_loc()
-        .unwrap();
 
-    // take a nap
-    tokio::time::sleep(Duration::from_millis(2)).await;
-
-    // 1.3 third commit
-    let qry = format!("insert into {}.{} values (4, (8, 12)) ", db, tbl);
-    let strm = fixture.execute_query(qry.as_str()).await?;
-    strm.try_collect::<Vec<DataBlock>>().await?;
-    let table = fixture.latest_default_table().await?;
-    let third_snapshot = FuseTable::try_from_table(table.as_ref())?
-        .snapshot_loc()
-        .unwrap();
-
-    // 2. grab the history
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let loc = fuse_table.snapshot_loc().unwrap();
-    assert_eq!(third_snapshot, loc);
-    let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
-    let snapshots: Vec<_> = reader
-        .snapshot_history(
-            loc.clone(),
-            version,
-            fuse_table.meta_location_generator().clone(),
-        )
-        .try_collect()
-        .await?;
+    let second_snapshot = fuse_table.snapshot_loc().unwrap();
+    assert_ne!(second_snapshot, first_snapshot);
 
-    // 3. there should be three snapshots
-    assert_eq!(3, snapshots.len());
+    // Simulate vacuum: remove the predecessor snapshot object and drop its cache entry.
+    fuse_table.get_operator().delete(&first_snapshot).await?;
+    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
+        cache.evict(&first_snapshot);
+    }
 
-    // 4. navigate by the time point
-    let meta = fuse_table.get_operator().stat(&loc).await?;
-    let modified = meta.last_modified();
-    assert!(modified.is_some());
-    let millis = modified.unwrap().timestamp_millis();
-    let seconds = millis / 1000;
-    let nanos = ((millis % 1000) * 1_000_000) as u32;
-    let base_time = chrono::DateTime::<Utc>::from_timestamp(seconds as i64, nanos)
-        .expect("valid timestamp from operator metadata");
-    let time_point = base_time - chrono::Duration::milliseconds(1);
-    // navigate from the instant that is just one ms before the timestamp of the latest snapshot.
-    let (navigate, files) = fuse_table.list_by_time_point(time_point).await?;
-    assert_eq!(2, files.len());
-    assert_eq!(navigate, third_snapshot);
+    // Navigate with NO_CHECK to a time between the two snapshots.
+    // The path should list the second snapshot and try to load its prev_snapshot_id,
+    // which now 404s and must be mapped to TABLE_HISTORICAL_DATA_NOT_FOUND.
+    let second = fuse_table
+        .read_table_snapshot()
+        .await?
+        .expect("second snapshot should exist");
+    let time_point = second.timestamp.unwrap() - chrono::Duration::milliseconds(1);
 
-    // 5. navigate by snapshot id.
-    let snapshot_id = snapshots[1].0.snapshot_id.simple().to_string();
-    let (navigate, files) = fuse_table
-        .list_by_snapshot_id(&snapshot_id, time_point)
-        .await?;
-    assert_eq!(2, files.len());
-    assert_eq!(navigate, second_snapshot);
+    let ctx = fixture.new_query_ctx().await?;
+    let tbl_ctx: std::sync::Arc<dyn TableContext> = ctx.clone();
+    let res = fuse_table
+        .navigate_to_point_unchecked(&tbl_ctx, &NavigationPoint::TimePoint(time_point))
+        .await;
+
+    match res {
+        Ok(_) => panic!("expected historical data not found when prev snapshot is missing"),
+        Err(e) => assert_eq!(
+            e.code(),
+            ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND,
+            "unexpected error: {e}"
+        ),
+    }
 
     Ok(())
 }

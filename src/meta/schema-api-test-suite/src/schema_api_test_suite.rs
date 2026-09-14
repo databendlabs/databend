@@ -37,6 +37,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
+use databend_common_meta_api::MaterializedViewApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -50,6 +51,7 @@ use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::util::IdempotentKVTxnSender;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
@@ -69,6 +71,7 @@ use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateMaterializedViewMeta;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
@@ -115,7 +118,11 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -124,6 +131,8 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -304,13 +313,21 @@ impl SchemaApiTestSuite {
             + DatabaseApi
             + TableApi
             + GarbageCollectionApi
+            + MaterializedViewApi
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
+        self.table_commit_after_drop_different_engine(&b.build().await)
+            .await?;
+        self.table_commit_table_meta_engine_mismatch(&b.build().await)
+            .await?;
         self.concurrent_commit_table_meta(b.clone()).await?;
         self.database_drop_out_of_retention_time_history(&b.build().await)
             .await?;
         self.table_create_get_drop(&b.build().await).await?;
+        self.table_create_with_source_option_atomicity(&b.build().await)
+            .await?;
+        self.materialized_view_lifecycle(&b.build().await).await?;
         self.table_drop_without_db_id_to_name(&b.build().await)
             .await?;
         self.list_db_without_db_id_list(&b.build().await).await?;
@@ -1648,6 +1665,572 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    async fn table_create_with_source_option_atomicity<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_create_with_source_option_atomicity";
+        let db_name = "db";
+        let mut source = DbTableHarness::new(mt, tenant_name, db_name, "source", "FUSE");
+        source.create_db().await?;
+        let (source_id, _) = source.create_table().await?;
+        let tenant = source.tenant();
+
+        let create_req =
+            |name: &str,
+             create_option: CreateOption,
+             engine: &str,
+             source_table_option: Option<UpsertTableOptionReq>| CreateTableReq {
+                create_option,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, db_name, name),
+                table_meta: TableMeta {
+                    engine: engine.to_string(),
+                    ..Default::default()
+                },
+                source_table_option,
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
+        let source_update = |table_id, seq| UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(seq),
+            options: HashMap::from([
+                ("change_tracking".to_string(), Some("true".to_string())),
+                ("begin_version".to_string(), Some(seq.to_string())),
+            ]),
+        };
+
+        // Publishing the target and updating the source happen together.
+        let source_before = source.get_table().await?;
+        let reply = mt
+            .create_table(create_req(
+                "stream",
+                CreateOption::Create,
+                "STREAM",
+                Some(source_update(source_id, source_before.ident.seq)),
+            ))
+            .await?;
+        assert!(reply.new_table);
+        let source_after = source.get_table().await?;
+        assert!(source_after.ident.seq > source_before.ident.seq);
+        assert_eq!(
+            source_after.meta.options.get("change_tracking"),
+            Some(&"true".to_string())
+        );
+        assert_eq!(
+            source_after.meta.options.get("begin_version"),
+            Some(&source_before.ident.seq.to_string())
+        );
+        assert_eq!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stream"))
+                .await?
+                .meta
+                .engine,
+            "STREAM"
+        );
+
+        // CREATE IF NOT EXISTS is a no-op, including the attached source update.
+        let mut second_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "second_source", "FUSE");
+        let (second_source_id, _) = second_source.create_table().await?;
+        let second_before = second_source.get_table().await?;
+        let reply = mt
+            .create_table(create_req(
+                "stream",
+                CreateOption::CreateIfNotExists,
+                "STREAM",
+                Some(source_update(second_source_id, second_before.ident.seq)),
+            ))
+            .await?;
+        assert!(!reply.new_table);
+        assert_eq!(second_source.get_table().await?, second_before);
+
+        // A rejected cross-engine replacement leaves the source unchanged.
+        let mut third_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "third_source", "FUSE");
+        let (third_source_id, _) = third_source.create_table().await?;
+        let third_before = third_source.get_table().await?;
+        let err = mt
+            .create_table(create_req(
+                "stream",
+                CreateOption::CreateOrReplace,
+                "FUSE",
+                Some(source_update(third_source_id, third_before.ident.seq)),
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableEngineMismatch(_))
+        ));
+        assert_eq!(third_source.get_table().await?, third_before);
+
+        // A stale source condition rejects the entire transaction and does not publish the target.
+        let mut fourth_source =
+            DbTableHarness::new(mt, tenant_name, db_name, "fourth_source", "FUSE");
+        let (fourth_source_id, _) = fourth_source.create_table().await?;
+        let fourth_before = fourth_source.get_table().await?;
+        let err = mt
+            .create_table(create_req(
+                "stale_stream",
+                CreateOption::Create,
+                "STREAM",
+                Some(source_update(fourth_source_id, fourth_before.ident.seq + 1)),
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableVersionMismatched(_))
+        ));
+        assert_eq!(fourth_source.get_table().await?, fourth_before);
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, db_name, "stale_stream"))
+                .await
+                .is_err()
+        );
+
+        Ok(())
+    }
+
+    async fn materialized_view_lifecycle<
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + MaterializedViewApi
+            + TableApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let mut util =
+            DbTableHarness::new(mt, "tenant_mv_meta", "db_mv_meta", "source_table", "FUSE");
+        util.create_db().await?;
+        let (source_table_id, _) = util.create_table().await?;
+
+        let tenant = util.tenant();
+        let db_name = util.db_name();
+        let source_table_name = util.tbl_name();
+        let replacement_source_name = "replacement_source";
+        let replacement_source_table_id = {
+            let mut replacement_source = DbTableHarness::new(
+                mt,
+                tenant.tenant_name(),
+                &db_name,
+                replacement_source_name,
+                "FUSE",
+            );
+            replacement_source.create_table().await?.0
+        };
+        let mv_name = "mv_table";
+        let new_definition = |source_table_name: &str| MVDefinition {
+            original_query: format!("SELECT number FROM {source_table_name}"),
+            query: format!("SELECT number FROM default.{db_name}.{source_table_name}"),
+            logical_schema: TableSchema::empty(),
+            sync_creation: true,
+        };
+        let definition = new_definition(&source_table_name);
+        let replacement_definition = new_definition(replacement_source_name);
+        let enable_change_tracking = |table_id, seq| UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(seq),
+            options: HashMap::from([
+                ("change_tracking".to_string(), Some("true".to_string())),
+                ("begin_version".to_string(), Some(seq.to_string())),
+            ]),
+        };
+        let source_generation_ident = MVSourceBindingVersionIdent::new(&tenant, source_table_id);
+        assert!(mt.get_pb(&source_generation_ident).await?.is_none());
+        let initial_source_binding_generation = 0;
+        let new_mv_req = |name,
+                          create_option,
+                          source_table_id: u64,
+                          source_binding_generation: u64,
+                          definition: &MVDefinition| {
+            let mut table_meta = TableMeta {
+                schema: util.schema(),
+                engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+                ..TableMeta::default()
+            };
+            table_meta.options.insert(
+                OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID.to_string(),
+                source_table_id.to_string(),
+            );
+
+            CreateTableReq {
+                create_option,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, &db_name, name),
+                table_meta,
+                source_table_option: None,
+                as_dropped: false,
+                materialized_view: Some(CreateMaterializedViewMeta {
+                    definition: definition.clone(),
+                    expected_source_generation: source_binding_generation,
+                }),
+                table_properties: None,
+                table_partition: None,
+            }
+        };
+        let source_mv_ident = |source_table_id, mv_table_id| {
+            SourceTableMVIdent::new_generic(
+                &tenant,
+                SourceTableMV::new(source_table_id, mv_table_id),
+            )
+        };
+
+        // A missing source rejects CREATE.
+        {
+            let missing_source_id = u64::MAX;
+            let invalid_definition = new_definition("missing_source");
+            let err = mt
+                .create_table(new_mv_req(
+                    "mv_missing_source",
+                    CreateOption::Create,
+                    missing_source_id,
+                    0,
+                    &invalid_definition,
+                ))
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::InvalidMaterializedView(_))
+            ));
+        }
+
+        // The legacy hidden-table CREATE path is not valid for an MV.
+        {
+            let mut hidden_req = new_mv_req(
+                "mv_hidden",
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            hidden_req.as_dropped = true;
+            hidden_req.table_meta.drop_on = Some(Utc::now());
+            let err = mt.create_table(hidden_req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::InvalidMaterializedView(_))
+            ));
+        }
+
+        let source_before_create = util.get_table().await?;
+
+        // Creating an MV publishes its definition and binding together with the source update.
+        let created = {
+            let mut req = new_mv_req(
+                mv_name,
+                CreateOption::Create,
+                source_table_id,
+                initial_source_binding_generation,
+                &definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                source_table_id,
+                source_before_create.ident.seq,
+            ));
+            let created = mt.create_table(req).await?;
+            let source_after_create = util.get_table().await?;
+            assert!(source_after_create.ident.seq > source_before_create.ident.seq);
+            assert_eq!(
+                source_after_create.meta.options.get("change_tracking"),
+                Some(&"true".to_string())
+            );
+            assert_eq!(
+                source_after_create.meta.options.get("begin_version"),
+                Some(&source_before_create.ident.seq.to_string())
+            );
+            assert_eq!(
+                mt.get_mv_definition(&tenant, created.table_id)
+                    .await?
+                    .expect("MV definition must exist")
+                    .data,
+                definition
+            );
+            let binding = mt
+                .get_pb(&source_mv_ident(source_table_id, created.table_id))
+                .await?
+                .expect("MV source binding must exist");
+            let current_generation = mt
+                .get_pb(&source_generation_ident)
+                .await?
+                .expect("the first MV must initialize its source binding version")
+                .data
+                .current_source_generation;
+            assert_eq!(current_generation, initial_source_binding_generation);
+            assert_eq!(binding.data.bound_source_generation, current_generation);
+            let mvs = mt
+                .list_mvs_by_source_table_id(&tenant, source_table_id)
+                .await?;
+            let [mv] = mvs.as_slice() else {
+                panic!("one complete MV must be returned");
+            };
+            assert_eq!(mv.mv_id, created.table_id);
+            created
+        };
+        let mv_id = created.table_id;
+
+        // ADD COLUMN and ordinary metadata changes preserve existing MV bindings.
+        {
+            let source_table = mt
+                .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
+                .await?;
+            let generation_before = mt
+                .get_pb(&source_generation_ident)
+                .await?
+                .expect("source binding version must exist")
+                .data
+                .current_source_generation;
+            let mut new_source_meta = source_table.meta.clone();
+            let mut new_schema = new_source_meta.schema.as_ref().clone();
+            new_schema.add_column(
+                &TableField::new("added", TableDataType::String),
+                new_schema.num_fields(),
+            )?;
+            new_source_meta.schema = Arc::new(new_schema);
+            new_source_meta.comment = "ordinary metadata update".to_string();
+            new_source_meta
+                .options
+                .insert("snapshot_location".to_string(), "snapshot-v1".to_string());
+
+            let result = mt
+                .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(
+                        UpdateTableMetaReq {
+                            table_id: source_table_id,
+                            seq: MatchSeq::Exact(source_table.ident.seq),
+                            new_table_meta: new_source_meta,
+                            base_snapshot_location: None,
+                            lvt_check: None,
+                        },
+                        source_table.as_ref().clone(),
+                    )],
+                    ..Default::default()
+                })
+                .await?;
+            assert!(result.is_ok());
+
+            let updated_source = mt
+                .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
+                .await?;
+            assert!(updated_source.meta.schema.has_field("added"));
+            assert_eq!(updated_source.meta.comment, "ordinary metadata update");
+            assert_eq!(
+                updated_source
+                    .meta
+                    .options
+                    .get("snapshot_location")
+                    .map(String::as_str),
+                Some("snapshot-v1")
+            );
+            assert_eq!(
+                mt.get_pb(&source_generation_ident)
+                    .await?
+                    .expect("source binding version must exist")
+                    .data
+                    .current_source_generation,
+                generation_before
+            );
+        }
+
+        // Renaming a source column advances the generation and invalidates the old binding.
+        let current_source_generation = {
+            let source_table = mt
+                .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
+                .await?;
+            let generation_before = mt
+                .get_pb(&source_generation_ident)
+                .await?
+                .expect("source binding version must exist")
+                .data
+                .current_source_generation;
+            let mut new_source_meta = source_table.meta.clone();
+            let mut new_schema = new_source_meta.schema.as_ref().clone();
+            let renamed_index = new_schema.index_of("number")?;
+            new_schema.rename_field(renamed_index, "renamed_number");
+            new_source_meta.schema = Arc::new(new_schema);
+            let result = mt
+                .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(
+                        UpdateTableMetaReq {
+                            table_id: source_table_id,
+                            seq: MatchSeq::Exact(source_table.ident.seq),
+                            new_table_meta: new_source_meta,
+                            base_snapshot_location: None,
+                            lvt_check: None,
+                        },
+                        source_table.as_ref().clone(),
+                    )],
+                    ..Default::default()
+                })
+                .await?;
+            assert!(result.is_ok());
+
+            let updated_source = mt
+                .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
+                .await?;
+            assert!(updated_source.meta.schema.has_field("renamed_number"));
+            assert!(!updated_source.meta.schema.has_field("number"));
+
+            let generation_after = mt
+                .get_pb(&source_generation_ident)
+                .await?
+                .expect("source binding version must exist")
+                .data
+                .current_source_generation;
+            assert_eq!(generation_after, generation_before + 1);
+            let definition_snapshot = mt
+                .get_mv_definition_snapshot(&tenant, source_table_id, mv_id)
+                .await?;
+            assert!(definition_snapshot.definition.is_some());
+            assert_eq!(
+                definition_snapshot.bound_source_generation,
+                Some(initial_source_binding_generation)
+            );
+            assert_eq!(
+                definition_snapshot.current_source_generation,
+                Some(generation_after)
+            );
+            generation_after
+        };
+
+        // CREATE rejects a generation observed before the source DDL.
+        {
+            let err = mt
+                .create_table(new_mv_req(
+                    "mv_stale_source_binding",
+                    CreateOption::Create,
+                    source_table_id,
+                    initial_source_binding_generation,
+                    &definition,
+                ))
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::InvalidMaterializedView(_))
+            ));
+        }
+
+        // CREATE accepts the current generation and source snapshots filter out the stale MV.
+        let current_mv = mt
+            .create_table(new_mv_req(
+                "mv_current_source_binding",
+                CreateOption::Create,
+                source_table_id,
+                current_source_generation,
+                &definition,
+            ))
+            .await?;
+        let active_snapshot = mt
+            .get_mv_source_binding_snapshot(&tenant, source_table_id)
+            .await?;
+        assert_eq!(active_snapshot.generation, current_source_generation);
+        let [active_mv] = active_snapshot.materialized_views.as_slice() else {
+            panic!("only the MV bound to the current generation must be active");
+        };
+        assert_eq!(active_mv.mv_id, current_mv.table_id);
+        assert_eq!(
+            mt.list_mvs_by_source_table_id(&tenant, source_table_id)
+                .await?
+                .iter()
+                .map(|mv| mv.mv_id)
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([mv_id, current_mv.table_id]),
+            "the unfiltered list must retain the stale dependency"
+        );
+
+        // Dropping an MV removes its definition and source relationship.
+        let current_relationship_ident = source_mv_ident(source_table_id, current_mv.table_id);
+        mt.drop_table_by_id(DropTableByIdReq {
+            if_exists: false,
+            tenant: tenant.clone(),
+            db_id: current_mv.db_id,
+            table_name: "mv_current_source_binding".to_string(),
+            tb_id: current_mv.table_id,
+            engine: MATERIALIZED_VIEW_ENGINE.to_string(),
+            temp_prefix: "".to_string(),
+            db_name: db_name.clone(),
+        })
+        .await?;
+        assert!(
+            mt.get_mv_definition(&tenant, current_mv.table_id)
+                .await?
+                .is_none()
+        );
+        assert!(mt.get_pb(&current_relationship_ident).await?.is_none());
+
+        // Replacing with another source removes the old definition and moves the source index.
+        let replacement = {
+            let replacement = mt
+                .create_table(new_mv_req(
+                    mv_name,
+                    CreateOption::CreateOrReplace,
+                    replacement_source_table_id,
+                    0,
+                    &replacement_definition,
+                ))
+                .await?;
+
+            assert!(mt.get_mv_definition(&tenant, mv_id).await?.is_none());
+            assert!(
+                mt.get_pb(&source_mv_ident(source_table_id, mv_id))
+                    .await?
+                    .is_none()
+            );
+
+            let mvs = mt
+                .list_mvs_by_source_table_id(&tenant, replacement_source_table_id)
+                .await?;
+            let [mv] = mvs.as_slice() else {
+                panic!("the new-source replacement MV must be returned");
+            };
+            assert_eq!(mv.mv_id, replacement.table_id);
+            assert_eq!(mv.definition.data, replacement_definition);
+            replacement
+        };
+
+        // Source DROP preserves relationships and generations until source GC.
+        {
+            let relationship_ident =
+                source_mv_ident(replacement_source_table_id, replacement.table_id);
+            let binding_generation_ident =
+                MVSourceBindingVersionIdent::new(&tenant, replacement_source_table_id);
+            mt.drop_table_by_id(DropTableByIdReq {
+                if_exists: false,
+                tenant: tenant.clone(),
+                db_id: replacement.db_id,
+                table_name: replacement_source_name.to_string(),
+                tb_id: replacement_source_table_id,
+                engine: util.engine(),
+                temp_prefix: "".to_string(),
+                db_name: db_name.clone(),
+            })
+            .await?;
+            assert!(mt.get_pb(&relationship_ident).await?.is_some());
+            assert!(mt.get_pb(&binding_generation_ident).await?.is_some());
+
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: vec![DroppedId::new_table(
+                    replacement.db_id,
+                    replacement_source_table_id,
+                    replacement_source_name,
+                )],
+            })
+            .await?;
+            assert!(mt.get_pb(&relationship_ident).await?.is_none());
+            assert!(mt.get_pb(&binding_generation_ident).await?.is_none());
+        }
+
+        Ok(())
+    }
+
     async fn table_create_get_drop<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -1693,7 +2276,9 @@ impl SchemaApiTestSuite {
                 },
 
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: false,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -1810,7 +2395,9 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: false,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -2037,6 +2624,73 @@ impl SchemaApiTestSuite {
             let ret_table_name_ident: DBIdTableName =
                 get_kv_data(mt, &key_table_id_to_name).await?;
             assert_eq!(ret_table_name_ident, key_dbid_tbname);
+
+            // Engine names are case-insensitive.
+            util.create_table_with(
+                |mut meta| {
+                    meta.engine = "json".to_string();
+                    meta
+                },
+                |mut req| {
+                    req.create_option = CreateOption::CreateOrReplace;
+                    req.name_ident.table_name = table.to_string();
+                    req
+                },
+            )
+            .await?;
+            assert_eq!("json", util.get_table_by_name(table).await?.meta.engine);
+
+            // Restore the upper-case engine for the mismatch cases below.
+            let (table_id, _) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.engine = "JSON".to_string();
+                        meta
+                    },
+                    |mut req| {
+                        req.create_option = CreateOption::CreateOrReplace;
+                        req.name_ident.table_name = table.to_string();
+                        req
+                    },
+                )
+                .await?;
+
+            // Replacing a table with a different engine must fail without changing
+            // the existing table or its name mapping.
+            let mismatched_req = CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
+                name_ident: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db_name.to_string(),
+                    table_name: table.to_string(),
+                },
+                table_meta: TableMeta {
+                    engine: "STREAM".to_string(),
+                    ..Default::default()
+                },
+                source_table_option: None,
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
+            let expected = KVAppError::AppError(AppError::from(TableEngineMismatch::new(
+                table, "JSON", "STREAM",
+            )));
+            let err = mt.create_table(mismatched_req.clone()).await.unwrap_err();
+            assert_eq!(err, expected);
+            assert_eq!(table_id, get_kv_u64_data(mt, &key_dbid_tbname).await?);
+            assert_eq!("JSON", util.get_table_by_name(table).await?.meta.engine);
+
+            // The same validation applies when CTAS creates its replacement as a
+            // hidden dropped table.
+            let mut as_dropped_req = mismatched_req;
+            as_dropped_req.as_dropped = true;
+            as_dropped_req.table_meta.drop_on = Some(Utc::now());
+            let err = mt.create_table(as_dropped_req).await.unwrap_err();
+            assert_eq!(err, expected);
+            assert_eq!(table_id, get_kv_u64_data(mt, &key_dbid_tbname).await?);
         }
 
         {
@@ -2061,7 +2715,9 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: tbl_meta,
+                source_table_option: None,
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -2798,7 +3454,7 @@ impl SchemaApiTestSuite {
                     lvt_check: None,
                 };
 
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
                     ..Default::default()
                 })
@@ -2813,8 +3469,13 @@ impl SchemaApiTestSuite {
             {
                 let table = util.get_table().await.unwrap();
 
-                let new_table_meta = table.meta.clone();
                 let table_id = table.ident.table_id;
+                let generation_ident = MVSourceBindingVersionIdent::new(&tenant, table_id);
+                let generation_before = mt.get_pb(&generation_ident).await?;
+                let mut new_table_meta = table.meta.clone();
+                let mut new_schema = new_table_meta.schema.as_ref().clone();
+                new_schema.rename_field(0, "stale_rename");
+                new_table_meta.schema = Arc::new(new_schema);
                 let table_version = table.ident.seq;
                 let req = UpdateTableMetaReq {
                     table_id,
@@ -2824,7 +3485,7 @@ impl SchemaApiTestSuite {
                     lvt_check: None,
                 };
                 let res = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                    .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                         update_table_metas: vec![(req, table.as_ref().clone())],
                         ..Default::default()
                     })
@@ -2832,6 +3493,8 @@ impl SchemaApiTestSuite {
 
                 let err = res.unwrap_err();
                 assert!(!err.is_empty());
+                assert_eq!(util.get_table().await?.meta, table.meta);
+                assert_eq!(mt.get_pb(&generation_ident).await?, generation_before);
             }
 
             info!("--- update table meta: simulate kv txn retried after commit");
@@ -2852,6 +3515,7 @@ impl SchemaApiTestSuite {
                 };
                 let res = mt
                     .update_multi_table_meta_with_sender(
+                        &tenant,
                         UpdateMultiTableMetaReq {
                             update_table_metas: vec![(req.clone(), table.as_ref().clone())],
                             ..Default::default()
@@ -2882,6 +3546,7 @@ impl SchemaApiTestSuite {
                 // For the convenience of reviewing, using explicit type signature
                 let _r: databend_common_meta_app::schema::UpdateTableMetaReply = mt
                     .update_multi_table_meta_with_sender(
+                        &tenant,
                         UpdateMultiTableMetaReq {
                             update_table_metas: vec![(req, table.as_ref().clone())],
                             ..Default::default()
@@ -2932,7 +3597,7 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: None,
                 };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
                     copied_files: vec![(table_id, upsert_source_table)],
                     ..Default::default()
@@ -2983,7 +3648,7 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: None,
                 };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
                     copied_files: vec![(table_id, upsert_source_table)],
                     ..Default::default()
@@ -3035,7 +3700,7 @@ impl SchemaApiTestSuite {
                     lvt_check: None,
                 };
                 let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                    .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                         update_table_metas: vec![(req, table.as_ref().clone())],
                         copied_files: vec![(table_id, upsert_source_table)],
                         ..Default::default()
@@ -3068,7 +3733,7 @@ impl SchemaApiTestSuite {
                     }),
                 };
                 let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                    .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                         update_table_metas: vec![(req, table.as_ref().clone())],
                         ..Default::default()
                     })
@@ -3095,7 +3760,7 @@ impl SchemaApiTestSuite {
                     }),
                 };
                 let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                    .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                         update_table_metas: vec![(req, table.as_ref().clone())],
                         ..Default::default()
                     })
@@ -3116,7 +3781,7 @@ impl SchemaApiTestSuite {
                         time: big_time,
                     }),
                 };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
                     ..Default::default()
                 })
@@ -4360,7 +5025,9 @@ impl SchemaApiTestSuite {
             catalog_name: None,
             name_ident,
             table_meta: create_table_meta.clone(),
+            source_table_option: None,
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -4478,7 +5145,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            mt.update_multi_table_meta(req).await?.unwrap();
+            mt.update_multi_table_meta(&tenant, req).await?.unwrap();
 
             let key = TableCopiedFileNameIdent {
                 table_id,
@@ -4620,7 +5287,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            mt.update_multi_table_meta(req).await?.unwrap();
+            mt.update_multi_table_meta(&tenant, req).await?.unwrap();
 
             let key = TableCopiedFileNameIdent {
                 table_id,
@@ -5187,7 +5854,9 @@ impl SchemaApiTestSuite {
                     },
 
                     table_meta: table_meta(created_on),
+                    source_table_option: None,
                     as_dropped: false,
+                    materialized_view: None,
                     table_properties: None,
                     table_partition: None,
                 };
@@ -5675,7 +6344,9 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            source_table_option: None,
             as_dropped: true,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -5795,7 +6466,9 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5815,7 +6488,9 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5851,7 +6526,9 @@ impl SchemaApiTestSuite {
                     table_name: tbl_name.to_string(),
                 },
                 table_meta: drop_table_meta(created_on),
+                source_table_option: None,
                 as_dropped: true,
+                materialized_view: None,
                 table_properties: None,
                 table_partition: None,
             };
@@ -5900,6 +6577,138 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    async fn table_commit_after_drop_different_engine<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_commit_after_drop_different_engine";
+        let db_name = "db";
+        let table_name = "table";
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "STREAM");
+        util.create_db().await?;
+        let (dropped_table_id, _) = util.create_table().await?;
+        util.drop_table_by_id().await?;
+
+        let mut replacement_meta = util.table_meta();
+        replacement_meta.engine = "JSON".to_string();
+        replacement_meta.drop_on = Some(Utc::now());
+        let create_req = CreateTableReq {
+            create_option: CreateOption::Create,
+            catalog_name: None,
+            name_ident: TableNameIdent {
+                tenant: util.tenant(),
+                db_name: db_name.to_string(),
+                table_name: table_name.to_string(),
+            },
+            table_meta: replacement_meta,
+            source_table_option: None,
+            as_dropped: true,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+        let create_reply = mt.create_table(create_req.clone()).await?;
+        assert_eq!(create_reply.prev_table_id, Some(dropped_table_id));
+
+        mt.commit_table_meta(CommitTableMetaReq {
+            name_ident: create_req.name_ident,
+            db_id: create_reply.db_id,
+            table_id: create_reply.table_id,
+            prev_table_id: create_reply.prev_table_id,
+            orphan_table_name: create_reply.orphan_table_name,
+        })
+        .await?;
+
+        let table = util.get_table_by_name(table_name).await?;
+        assert_eq!(table.ident.table_id, create_reply.table_id);
+        assert_eq!(table.meta.engine, "JSON");
+
+        Ok(())
+    }
+
+    async fn table_commit_table_meta_engine_mismatch<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
+        let tenant_name = "table_commit_table_meta_engine_mismatch";
+        let db_name = "db";
+        let table_name = "table";
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "JSON");
+        util.create_db().await?;
+        let (previous_table_id, previous_meta) = util.create_table().await?;
+
+        let mut replacement_meta = previous_meta.clone();
+        replacement_meta.drop_on = Some(Utc::now());
+        let create_req = CreateTableReq {
+            create_option: CreateOption::CreateOrReplace,
+            catalog_name: Some("default".to_string()),
+            name_ident: TableNameIdent {
+                tenant: util.tenant(),
+                db_name: db_name.to_string(),
+                table_name: table_name.to_string(),
+            },
+            table_meta: replacement_meta,
+            source_table_option: None,
+            as_dropped: true,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+        let create_reply = mt.create_table(create_req.clone()).await?;
+        assert_eq!(create_reply.prev_table_id, Some(previous_table_id));
+
+        let previous_tbid = TableId::new(previous_table_id);
+        let mut changed_previous_meta = previous_meta;
+        changed_previous_meta.engine = "STREAM".to_string();
+        // Simulate an arbitrary metadata client updating the full visible TableMeta
+        // after CTAS prepare.
+        upsert_test_data(mt, &previous_tbid, serialize_struct(&changed_previous_meta)).await?;
+
+        let dbid_tbname = DBIdTableName {
+            db_id: create_reply.db_id,
+            table_name: table_name.to_string(),
+        };
+        let history_ident = TableIdHistoryIdent {
+            database_id: create_reply.db_id,
+            table_name: table_name.to_string(),
+        };
+        let orphan_history_ident = TableIdHistoryIdent {
+            database_id: create_reply.db_id,
+            table_name: create_reply.orphan_table_name.clone().unwrap(),
+        };
+        let replacement_tbid = TableId::new(create_reply.table_id);
+
+        let name_before = mt.get_pb(&dbid_tbname).await?;
+        let history_before = mt.get_pb(&history_ident).await?;
+        let orphan_history_before = mt.get_pb(&orphan_history_ident).await?;
+        let previous_before = mt.get_pb(&previous_tbid).await?;
+        let replacement_before = mt.get_pb(&replacement_tbid).await?;
+
+        let err = mt
+            .commit_table_meta(CommitTableMetaReq {
+                name_ident: create_req.name_ident,
+                db_id: create_reply.db_id,
+                table_id: create_reply.table_id,
+                prev_table_id: create_reply.prev_table_id,
+                orphan_table_name: create_reply.orphan_table_name,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err,
+            KVAppError::AppError(AppError::from(TableEngineMismatch::new(
+                table_name, "STREAM", "JSON"
+            )))
+        );
+
+        assert_eq!(mt.get_pb(&dbid_tbname).await?, name_before);
+        assert_eq!(mt.get_pb(&history_ident).await?, history_before);
+        assert_eq!(
+            mt.get_pb(&orphan_history_ident).await?,
+            orphan_history_before
+        );
+        assert_eq!(mt.get_pb(&previous_tbid).await?, previous_before);
+        assert_eq!(mt.get_pb(&replacement_tbid).await?, replacement_before);
+
+        Ok(())
+    }
+
     async fn concurrent_commit_table_meta<
         B: kvapi::ApiBuilder<MT>,
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + 'static,
@@ -5944,7 +6753,9 @@ impl SchemaApiTestSuite {
                 table_name: tbl_name.to_string(),
             },
             table_meta: drop_table_meta(created_on),
+            source_table_option: None,
             as_dropped: true,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -6408,6 +7219,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -6431,7 +7243,7 @@ impl SchemaApiTestSuite {
         };
         let created_on = Utc::now();
         let tbl_name_ident = TableNameIdent {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+            tenant: tenant.clone(),
             db_name: db_name.to_string(),
             table_name: tbl_name.to_string(),
         };
@@ -6484,7 +7296,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            mt.update_multi_table_meta(req).await?.unwrap();
+            mt.update_multi_table_meta(&tenant, req).await?.unwrap();
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -6536,7 +7348,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            mt.update_multi_table_meta(req).await?.unwrap();
+            mt.update_multi_table_meta(&tenant, req).await?.unwrap();
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -8005,6 +8817,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -8031,7 +8844,7 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db and table");
         let tbl_name_ident = TableNameIdent {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+            tenant: tenant.clone(),
             db_name: db_name.to_string(),
             table_name: tbl_name.to_string(),
         };
@@ -8083,7 +8896,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            mt.update_multi_table_meta(req).await?.unwrap();
+            mt.update_multi_table_meta(&tenant, req).await?.unwrap();
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -8143,7 +8956,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            let result = mt.update_multi_table_meta(req).await;
+            let result = mt.update_multi_table_meta(&tenant, req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
             assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
@@ -8200,7 +9013,7 @@ impl SchemaApiTestSuite {
                 ..Default::default()
             };
 
-            mt.update_multi_table_meta(req).await?.unwrap();
+            mt.update_multi_table_meta(&tenant, req).await?.unwrap();
 
             let req = GetTableCopiedFileReq {
                 table_id,

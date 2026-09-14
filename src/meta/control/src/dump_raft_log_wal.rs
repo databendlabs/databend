@@ -20,14 +20,14 @@ use std::sync::Arc;
 
 use databend_common_meta_process::pb_value_decoder::decode_cmd_values;
 use databend_common_meta_process::pb_value_decoder::raw_cmd_values;
-use databend_meta::raft_store::raft_log::Config;
-use databend_meta::raft_store::raft_log::Dump;
-use databend_meta::raft_store::raft_log::DumpApi;
-use databend_meta::raft_store::raft_log::RaftLogAction;
-use databend_meta::raft_store::raft_log::WALRecord;
-use databend_meta::raft_store::raft_log::dump_writer::write_record_display;
-use databend_meta::raft_store::raft_log_v004::RaftLogTypes;
+use databend_meta::log_store::RaftLogTypes;
 use databend_meta::types::raft_types::EntryPayload;
+use raft_log::Config;
+use raft_log::Dump;
+use raft_log::DumpApi;
+use raft_log::RaftLogAction;
+use raft_log::WALRecord;
+use raft_log::dump_writer::write_record_display;
 
 use crate::args::DumpRaftLogWalArgs;
 
@@ -91,17 +91,17 @@ mod tests {
     use chrono::Utc;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_proto_conv::FromToProto;
-    use databend_meta::raft_store::raft_log::Config;
-    use databend_meta::raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
-    use databend_meta::raft_store::raft_log_v004::Cw;
-    use databend_meta::raft_store::raft_log_v004::RaftLogV004;
-    use databend_meta::raft_store::raft_log_v004::util::blocking_flush;
+    use databend_meta::log_store::Cw;
+    use databend_meta::log_store::RaftLog;
+    use databend_meta::log_store::util::blocking_flush;
     use databend_meta::types::Cmd;
     use databend_meta::types::LogEntry;
     use databend_meta::types::UpsertKV;
     use databend_meta::types::raft_types::EntryPayload;
     use databend_meta::types::raft_types::new_log_id;
     use prost::Message;
+    use raft_log::Config;
+    use raft_log::api::raft_log_writer::RaftLogWriter;
 
     use super::*;
 
@@ -113,7 +113,7 @@ mod tests {
 
         let config = Arc::new(Config::new(wal_dir.to_string_lossy().to_string()));
 
-        let mut log = RaftLogV004::open(config)?;
+        let mut log = RaftLog::open(config)?;
         log.append([(Cw(new_log_id(1, 0, 0)), Cw(EntryPayload::Blank))])?;
         blocking_flush(&mut log).await?;
         drop(log);
@@ -164,7 +164,7 @@ mod tests {
         let log_entry = LogEntry::new(cmd);
         let payload = EntryPayload::Normal(log_entry);
 
-        let mut log = RaftLogV004::open(config)?;
+        let mut log = RaftLog::open(config)?;
         log.append([(Cw(new_log_id(1, 0, 0)), Cw(payload))])?;
         blocking_flush(&mut log).await?;
         drop(log);
@@ -224,7 +224,7 @@ mod tests {
         let log_entry = LogEntry::new(cmd);
         let payload = EntryPayload::Normal(log_entry);
 
-        let mut log = RaftLogV004::open(config)?;
+        let mut log = RaftLog::open(config)?;
         log.append([(Cw(new_log_id(1, 0, 0)), Cw(payload))])?;
         blocking_flush(&mut log).await?;
         drop(log);

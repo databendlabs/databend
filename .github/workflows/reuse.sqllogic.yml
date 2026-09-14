@@ -74,8 +74,29 @@ jobs:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
           parallel: ${{ matrix.tests.parallel }}
+      # Reuse the Query/Meta processes and test binary initialized by the preceding
+      # standalone/http step; this small suite does not justify another runner.
+      - name: Run native UDF sqllogic tests
+        id: udf_native
+        if: matrix.tests.dirs == 'standalone' && matrix.handler == 'http'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          # prepare_stage.sh creates @data in the current tenant, so enabling
+          # per-test sandbox tenants here would hide the stage from the UDFs.
+          target/${BUILD_PROFILE}/databend-sqllogictests \
+            --handlers http \
+            --run_dir udf_native \
+            --parallel 1
+          python3 scripts/ci/ci-check-query-log-duplicates.py \
+            .databend/logs_1/query-details
+      - name: Upload native UDF failure
+        if: failure() && steps.udf_native.outcome == 'failure'
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-udf-native-http
       - name: Upload failure
-        if: failure()
+        if: failure() && steps.udf_native.outcome != 'failure'
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-${{ matrix.tests.dirs }}-${{ matrix.handler }}

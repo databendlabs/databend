@@ -23,6 +23,7 @@ pub mod data_mask;
 pub mod enterprise_services;
 pub mod fail_safe;
 pub mod license;
+pub mod materialized_view;
 pub mod resource_management;
 pub mod row_access_policy;
 pub mod storage_encryption;

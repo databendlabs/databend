@@ -182,12 +182,13 @@ async fn collect_statistics_trace(ctx: &Arc<QueryContext>, sql: &str) -> Result<
     };
 
     let settings = ctx.get_settings();
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata).with_settings(&settings)?;
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata, ctx.get_function_context()?)
+        .with_settings(&settings)?;
     let trace_collector = StatisticsTraceCollector::default();
     let mut optimizer =
         CollectStatisticsOptimizer::new(opt_ctx).with_trace_collector(trace_collector.clone());
 
-    let _ = optimizer.optimize(&s_expr).await?;
+    let _ = optimizer.optimize(*s_expr).await?;
     trace_collector
         .take()
         .ok_or_else(|| ErrorCode::Internal("statistics trace was not collected"))

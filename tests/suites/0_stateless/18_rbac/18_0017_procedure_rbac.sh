@@ -182,6 +182,36 @@ echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_curr
 
 echo "SET GLOBAL enable_experimental_rbac_check = 0;" | bendsql_connect_root
 
+# Test procedure type normalization in RBAC paths
+echo "=== Testing procedure type normalization for RBAC ==="
+echo "Creating normalize_text with STRING argument..."
+echo "CREATE PROCEDURE normalize_text(v STRING) RETURNS STRING NOT NULL LANGUAGE SQL AS \$\$
+BEGIN
+    RETURN v;
+END;
+\$\$;" | bendsql_connect_root
+
+echo "Granting dev_role access to normalize_text with STRING signature..."
+echo "GRANT ACCESS PROCEDURE ON PROCEDURE normalize_text(STRING) TO ROLE dev_role;" | bendsql_connect_root
+
+echo "dev_user calls normalize_text (should succeed)..."
+echo "CALL procedure normalize_text('Hello');" | $USER_DEV_USER_CONNECT
+
+echo "Showing grants for normalize_text with STRING signature..."
+echo "SHOW GRANTS ON PROCEDURE normalize_text(STRING);" | bendsql_connect_root > /dev/null
+
+echo "Revoking dev_role access to normalize_text with STRING signature..."
+echo "REVOKE ACCESS PROCEDURE ON PROCEDURE normalize_text(STRING) FROM ROLE dev_role;" | bendsql_connect_root
+
+echo "dev_user calls normalize_text after revoke (should fail)..."
+echo "CALL procedure normalize_text('Hello');" | $USER_DEV_USER_CONNECT
+
+echo "Transferring ownership of normalize_text with STRING signature to dev_role..."
+echo "GRANT OWNERSHIP ON PROCEDURE normalize_text(STRING) TO ROLE dev_role;" | bendsql_connect_root
+
+echo "dev_user describes normalize_text (should succeed)..."
+echo "DESC PROCEDURE normalize_text(STRING);" | $USER_DEV_USER_CONNECT
+
 # Cleanup
 echo "=== Cleaning up test environment ==="
 echo "34. Dropping users..."
@@ -200,6 +230,7 @@ echo "DROP PROCEDURE IF EXISTS add_numbers(int, int);" | bendsql_connect_root
 echo "DROP PROCEDURE IF EXISTS get_current_time();" | bendsql_connect_root
 echo "DROP PROCEDURE IF EXISTS multiply_numbers(int, int);" | bendsql_connect_root
 echo "DROP PROCEDURE IF EXISTS greet();" | bendsql_connect_root
+echo "DROP PROCEDURE IF EXISTS normalize_text(STRING);" | bendsql_connect_root
 
 echo "unset global enable_experimental_procedure;" | bendsql_connect_root
 echo "=== Test script completed ==="

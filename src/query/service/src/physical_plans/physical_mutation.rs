@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,9 +40,12 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline::basic::create_resize_item;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ColumnEntry;
@@ -63,13 +67,13 @@ use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::TransformMatchedBlockMutation;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
-use tokio::sync::Semaphore;
 
 use super::ColumnMutation;
 use super::CommitType;
@@ -170,7 +174,6 @@ impl IPhysicalPlan for Mutation {
             table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
@@ -206,7 +209,6 @@ impl IPhysicalPlan for Mutation {
             pipe_items.push(table.rowid_aggregate_mutator(
                 builder.ctx.clone(),
                 cluster_stats_gen.clone(),
-                io_request_semaphore,
                 self.segments.clone(),
                 false,
                 self.table_meta_timestamps,
@@ -234,8 +236,36 @@ impl IPhysicalPlan for Mutation {
             pipe_items,
         ));
 
+        if self.need_match {
+            add_matched_mutation_workers(&mut builder.main_pipeline, serialize_len, max_threads);
+        }
+
         Ok(())
     }
+}
+
+fn add_matched_mutation_workers(
+    pipeline: &mut Pipeline,
+    passthrough_width: usize,
+    worker_width: usize,
+) {
+    let mut items = Vec::with_capacity(passthrough_width + 1);
+    items.push(create_resize_item(1, worker_width));
+    items.extend((0..passthrough_width).map(|_| create_dummy_item()));
+    pipeline.add_pipe(Pipe::create(
+        passthrough_width + 1,
+        passthrough_width + worker_width,
+        items,
+    ));
+
+    let mut items = Vec::with_capacity(passthrough_width + worker_width);
+    items.extend((0..worker_width).map(|_| TransformMatchedBlockMutation::into_pipe_item()));
+    items.extend((0..passthrough_width).map(|_| create_dummy_item()));
+    pipeline.add_pipe(Pipe::create(
+        passthrough_width + worker_width,
+        passthrough_width + worker_width,
+        items,
+    ));
 }
 
 impl PhysicalPlanBuilder {
@@ -272,11 +302,11 @@ impl PhysicalPlanBuilder {
         let mut maybe_udfs = BTreeSet::new();
         for matched_evaluator in matched_evaluators {
             if let Some(condition) = &matched_evaluator.condition {
-                maybe_udfs.extend(condition.used_columns());
+                condition.collect_used_columns(&mut maybe_udfs);
             }
             if let Some(update_list) = &matched_evaluator.update {
                 for update_scalar in update_list.values() {
-                    maybe_udfs.extend(update_scalar.used_columns());
+                    update_scalar.collect_used_columns(&mut maybe_udfs);
                 }
             }
         }
@@ -285,17 +315,17 @@ impl PhysicalPlanBuilder {
         let mut unmatched_required = BTreeSet::new();
         for unmatched_evaluator in unmatched_evaluators {
             if let Some(condition) = &unmatched_evaluator.condition {
-                maybe_udfs.extend(condition.used_columns());
-                unmatched_required.extend(condition.used_columns());
+                condition.collect_used_columns(&mut maybe_udfs);
+                condition.collect_used_columns(&mut unmatched_required);
             }
             for value in &unmatched_evaluator.values {
-                maybe_udfs.extend(value.used_columns());
-                unmatched_required.extend(value.used_columns());
+                value.collect_used_columns(&mut maybe_udfs);
+                value.collect_used_columns(&mut unmatched_required);
             }
         }
         required.extend(unmatched_required);
         for filter_value in direct_filter {
-            maybe_udfs.extend(filter_value.used_columns());
+            filter_value.collect_used_columns(&mut maybe_udfs);
         }
 
         let udf_ids = s_expr.get_udfs_col_ids()?;
@@ -523,7 +553,7 @@ impl PhysicalPlanBuilder {
                     .scalar_expr_to_remote_expr(condition, output_schema.clone())?
                     .as_expr(&BUILTIN_FUNCTIONS);
                 let (expr, _) = ConstantFolder::fold(
-                    &expr,
+                    Cow::Owned(expr),
                     &self.ctx.get_function_context()?,
                     &BUILTIN_FUNCTIONS,
                 );
@@ -682,7 +712,7 @@ impl PhysicalPlanBuilder {
             .type_check(schema.as_ref())?
             .project_column_ref(|index| schema.index_of(&index.to_string()))?;
         let (filer, _) = ConstantFolder::fold(
-            &scalar_expr,
+            Cow::Owned(scalar_expr),
             &self.ctx.get_function_context().unwrap(),
             &BUILTIN_FUNCTIONS,
         );
@@ -812,6 +842,7 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
+        populate_cache: false,
         enable_block_id_repartition: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),
@@ -842,14 +873,14 @@ pub fn generate_update_list(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
-            let data_type = scalar.data_type()?;
+            let data_type = scalar.data_type();
             let target_type = field.data_type();
 
             let scalar = if col_indices.is_empty() {
                 // The condition is always true.
                 // Replace column to the result of the following expression:
                 // CAST(expression, type)
-                if data_type != *target_type {
+                if data_type.as_ref() != target_type {
                     wrap_cast(scalar, target_type)
                 } else {
                     scalar.clone()
@@ -881,12 +912,12 @@ pub fn generate_update_list(
                 })?;
 
                 // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
-                let target_type = if right.data_type()?.is_nullable() {
+                let target_type = if right.data_type().is_nullable() {
                     target_type.wrap_nullable()
                 } else {
                     target_type.clone()
                 };
-                let left = if data_type != target_type {
+                let left = if data_type.as_ref() != &target_type {
                     wrap_cast(scalar, &target_type)
                 } else {
                     scalar.clone()
@@ -901,13 +932,17 @@ pub fn generate_update_list(
                     func_name: "if".to_string(),
                     params: vec![],
                     arguments: vec![predicate.clone(), left, right],
+                    return_type: Box::new(target_type),
                 })
             };
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| Ok(col.index.to_string()))?;
-            let (expr, _) =
-                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
             acc.push((*index, expr.as_remote_expr()));
             Ok::<_, ErrorCode>(acc)
         },
@@ -945,7 +980,7 @@ pub fn mutation_update_expr(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
-            let data_type = scalar.data_type()?;
+            let data_type = scalar.data_type();
             let target_type = field.data_type();
 
             // Replace column to the result of the following expression:
@@ -972,12 +1007,12 @@ pub fn mutation_update_expr(
             })?;
 
             // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
-            let target_type = if right.data_type()?.is_nullable() {
+            let target_type = if right.data_type().is_nullable() {
                 target_type.wrap_nullable()
             } else {
                 target_type.clone()
             };
-            let left = if data_type != target_type {
+            let left = if data_type.as_ref() != &target_type {
                 wrap_cast(scalar, &target_type)
             } else {
                 scalar.clone()
@@ -988,12 +1023,16 @@ pub fn mutation_update_expr(
                 func_name: "if".to_string(),
                 params: vec![],
                 arguments: vec![predicate.clone(), left, right],
+                return_type: Box::new(target_type),
             });
             let expr = scalar
                 .type_check(input_schema.as_ref())?
                 .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-            let (expr, _) =
-                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            let (expr, _) = ConstantFolder::fold(
+                Cow::Owned(expr),
+                &ctx.get_function_context()?,
+                &BUILTIN_FUNCTIONS,
+            );
             acc.push((*index, expr.as_remote_expr()));
             Ok::<_, ErrorCode>(acc)
         },
@@ -1040,8 +1079,11 @@ pub fn generate_stored_computed_list(
                     }
                     input_schema.index_of(&column_index.unwrap().to_string())
                 })?;
-                let (expr, _) =
-                    ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(
+                    Cow::Owned(expr),
+                    &ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
                 remote_exprs.push((i, expr.as_remote_expr()));
             }
         }
@@ -1076,5 +1118,28 @@ fn build_field_id_to_schema_index(
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod mutation_worker_tests {
+    use super::*;
+
+    #[test]
+    fn test_matched_mutation_worker_width() -> Result<()> {
+        for worker_width in [1, 4] {
+            let mut pipeline = Pipeline::create();
+            pipeline.add_source(databend_common_pipeline::sources::EmptySource::create, 1)?;
+            add_matched_mutation_workers(&mut pipeline, 0, worker_width);
+
+            let worker_count = pipeline
+                .graph
+                .node_weights()
+                .filter(|node| unsafe { node.proc.name() == "MatchedBlockMutationWorker" })
+                .count();
+            assert_eq!(worker_count, worker_width);
+            assert_eq!(pipeline.output_len(), worker_width);
+        }
+        Ok(())
     }
 }

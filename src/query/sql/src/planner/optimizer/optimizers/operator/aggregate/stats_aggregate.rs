@@ -51,24 +51,24 @@ impl RuleStatsAggregateOptimizer {
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
-    pub async fn optimize_async(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.arity());
-        for child in s_expr.children() {
-            let child = self.optimize_async(child).await?;
+    pub async fn optimize_async(&self, mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            let child = self.optimize_async(Arc::unwrap_or_clone(child)).await?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
         if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
-            self.normalize_aggregate(&s_expr).await
+            self.normalize_aggregate(s_expr).await
         } else {
             Ok(s_expr)
         }
     }
 
-    async fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn normalize_aggregate(&self, mut s_expr: SExpr) -> Result<SExpr> {
         let agg: Aggregate = s_expr.plan().clone().try_into()?;
         if s_expr.arity() != 1 || agg.grouping_sets.is_some() || !agg.group_items.is_empty() {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         // agg --> eval scalar --> scan
@@ -76,12 +76,12 @@ impl RuleStatsAggregateOptimizer {
         if arg_eval_scalar.arity() != 1
             || arg_eval_scalar.plan.as_ref().rel_op() != RelOp::EvalScalar
         {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         let child = arg_eval_scalar.child(0)?;
         if child.arity() != 0 {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         if let RelOperator::Scan(scan) = child.plan.as_ref() {
@@ -100,7 +100,7 @@ impl RuleStatsAggregateOptimizer {
                         if ["min", "max"].contains(&function.func_name.as_str())
                             && function.args.len() == 1
                             && !function.distinct
-                            && Self::supported_stat_type(&function.args[0].data_type()?)
+                            && Self::supported_stat_type(function.args[0].data_type().as_ref())
                         {
                             if let ScalarExpr::BoundColumnRef(b) = &function.args[0] {
                                 if let Ok(col_id) =
@@ -119,7 +119,7 @@ impl RuleStatsAggregateOptimizer {
                 }
 
                 if column_ids.is_empty() {
-                    return Ok(s_expr.clone());
+                    return Ok(s_expr);
                 }
 
                 let mut eval_scalar_results = Vec::with_capacity(agg.aggregate_functions.len());
@@ -188,7 +188,7 @@ impl RuleStatsAggregateOptimizer {
                     }
                 }
                 if eval_scalar_results.is_empty() {
-                    return Ok(s_expr.clone());
+                    return Ok(s_expr);
                 }
 
                 let eval_scalar = EvalScalar {
@@ -211,10 +211,9 @@ impl RuleStatsAggregateOptimizer {
                         aggregate_functions: agg_results,
                         ..agg.clone()
                     };
-                    let child = SExpr::create_unary(
-                        Arc::new(agg.into()),
-                        Arc::new(arg_eval_scalar.clone()),
-                    );
+                    assert_eq!(s_expr.children.len(), 1);
+                    let arg_eval_scalar = s_expr.children.pop().unwrap();
+                    let child = SExpr::create_unary(Arc::new(agg.into()), arg_eval_scalar);
                     return Ok(SExpr::create_unary(
                         Arc::new(eval_scalar.into()),
                         Arc::new(child),
@@ -222,7 +221,7 @@ impl RuleStatsAggregateOptimizer {
                 }
             }
         }
-        Ok(s_expr.clone())
+        Ok(s_expr)
     }
 
     // from RangeIndex::supported_stat_type
@@ -245,7 +244,7 @@ impl Optimizer for RuleStatsAggregateOptimizer {
         "RuleStatsAggregateOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_async(s_expr).await
     }
 }

@@ -466,6 +466,7 @@ impl AvroSchemaBuilder {
                 json!({"type": "array", "items": avro_vector_item_type(vector_ty)})
             }
             TableDataType::StageLocation => json!("string"),
+            TableDataType::AggregateState { state_type, .. } => self.avro_type(state_type)?,
         };
         Ok(value)
     }

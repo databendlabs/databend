@@ -220,11 +220,10 @@ async fn vacuum_by_duration(
 
 /// Read `last_modified` for a single object path via `stat`.
 async fn stat_last_modified(operator: &Operator, path: &str) -> Option<i64> {
-    operator
-        .stat(path)
-        .await
-        .ok()
-        .and_then(|meta| meta.last_modified().map(|v| v.timestamp_millis()))
+    operator.stat(path).await.ok().and_then(|meta| {
+        meta.last_modified()
+            .map(|v| v.into_inner().as_millisecond())
+    })
 }
 
 /// Resolve a file's `last_modified`, preferring list metadata and falling back to `stat`.
@@ -234,7 +233,7 @@ async fn resolve_file_last_modified(
     metadata: &opendal::Metadata,
 ) -> Option<i64> {
     if let Some(last_modified) = metadata.last_modified() {
-        return Some(last_modified.timestamp_millis());
+        return Some(last_modified.into_inner().as_millisecond());
     }
 
     if let Some(last_modified) = stat_last_modified(operator, path).await {
@@ -252,7 +251,7 @@ async fn resolve_dir_last_modified(
     meta_path: &str,
 ) -> Option<i64> {
     if let Some(last_modified) = metadata.last_modified() {
-        return Some(last_modified.timestamp_millis());
+        return Some(last_modified.into_inner().as_millisecond());
     }
 
     if let Some(last_modified) = stat_last_modified(operator, dir_path).await {
@@ -296,7 +295,7 @@ async fn vacuum_dir_with_probe(
 
         paths.push(entry.path().to_string());
         first_entry_last_modified = if let Some(last_modified) = entry.metadata().last_modified() {
-            Some(last_modified.timestamp_millis())
+            Some(last_modified.into_inner().as_millisecond())
         } else {
             stat_last_modified(operator, entry.path()).await
         };

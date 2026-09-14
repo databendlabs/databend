@@ -15,6 +15,7 @@
 use std::str;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
@@ -30,6 +31,9 @@ use crate::sql::Planner;
 
 /// If you no need to care the ctx please use TestFixture.execute_query().
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
+    // A reused context must not leak runtime filter state from a previous
+    // plan into this one: scan ids restart per plan.
+    ctx.clear_runtime_filter();
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;

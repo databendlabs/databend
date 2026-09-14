@@ -44,6 +44,7 @@ impl Config {
     pub fn with_mask(self) -> Self {
         Config {
             query: self.query.mask_display(),
+            lineage: self.lineage,
             log: self.log,
             task: self.task,
             meta: self.meta.mask_display(),

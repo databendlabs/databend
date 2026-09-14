@@ -226,6 +226,77 @@ $$;
 ----
 390
 
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET watermark_ts := (
+        SELECT COALESCE(
+            (SELECT w.number
+             FROM numbers(3) AS w
+             WHERE w.number = 1),
+            7
+        )
+    );
+    RETURN watermark_ts;
+END;
+$$;
+----
+1
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET fallback := 7;
+    LET watermark_ts := (
+        SELECT COALESCE(
+            (SELECT w.number
+             FROM numbers(3) AS w
+             WHERE w.number = 1),
+            :fallback
+        )
+    );
+    RETURN watermark_ts;
+END;
+$$;
+----
+1
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET x := (SELECT t.number FROM numbers(3) AS t WHERE t.number = 1);
+    RETURN x;
+END;
+$$;
+----
+1
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET rs RESULTSET := SELECT * FROM numbers(3);
+    FOR r IN rs DO
+        LET y := (SELECT r.number FROM numbers(3) AS r WHERE r.number = 1);
+        RETURN y;
+    END FOR;
+END;
+$$;
+----
+1
+
+query error `fallback` is not defined
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET missing := (
+        SELECT COALESCE(
+            (SELECT w.number FROM numbers(3) AS w WHERE w.number = 1),
+            :fallback
+        )
+    );
+    RETURN missing;
+END;
+$$;
+
 statement ok
 unset variable exec_script;
 

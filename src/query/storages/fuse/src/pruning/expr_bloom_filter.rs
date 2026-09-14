@@ -37,8 +37,9 @@ impl<'a> ExprBloomFilter<'a> {
         let group_columns = entries.into();
         let mut hashes = Vec::with_capacity(num_rows);
         hash_by_method_for_bloom(&method, group_columns, num_rows, &mut hashes)?;
-        let iter = hashes.iter().map(|&hash| self.filter.check_hash(hash));
-        // SAFETY: iter length equals hashes.len()
-        Ok(unsafe { MutableBitmap::from_trusted_len_iter_unchecked(iter) })
+        let mut bitmap = MutableBitmap::from_len_zeroed(hashes.len());
+        self.filter
+            .check_hash_batch(&hashes, |index| bitmap.set(index, true));
+        Ok(bitmap)
     }
 }

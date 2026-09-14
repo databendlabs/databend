@@ -105,7 +105,9 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -133,7 +135,9 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -154,7 +158,9 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -175,7 +181,9 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -219,7 +227,9 @@ fn test_resolvable_delete_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
     assert_eq!(actual, expected);
@@ -260,7 +270,9 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -288,7 +300,9 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -309,7 +323,9 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -330,7 +346,9 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
 
@@ -379,7 +397,9 @@ fn test_resolvable_replace_conflict() {
         virtual_col_stats: None,
         spatial_stats: None,
         cluster_stats: None,
+        partition_stats: None,
         virtual_block_count: None,
+        virtual_segment_schema: None,
         additional_stats_meta: None,
     };
     assert_eq!(actual, expected);

@@ -146,14 +146,17 @@ thread_local! {
 }
 
 pub fn init_testing_globals() {
+    init_testing_globals_with_config(InnerConfig::default());
+}
+
+pub fn init_testing_globals_with_config(config: InnerConfig) {
     #[cfg(debug_assertions)]
     {
         INIT_TESTING_GLOBALS.with(|init| {
             init.call_once(|| {
                 let thread_name = std::thread::current().name().unwrap().to_string();
                 GlobalInstance::init_testing(&thread_name);
-                GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                    .expect("init global config");
+                GlobalConfig::init(&config, &TEST_BUILD_INFO).expect("init global config");
                 LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
                 SecurityPolicyCacheManager::init().unwrap();
             });
@@ -165,8 +168,7 @@ pub fn init_testing_globals() {
         static INIT_GLOBALS: std::sync::Once = std::sync::Once::new();
         INIT_GLOBALS.call_once(|| {
             GlobalInstance::init_production();
-            GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                .expect("init global config");
+            GlobalConfig::init(&config, &TEST_BUILD_INFO).expect("init global config");
             LiteLicenseManager::init("default".to_string()).expect("init lite license manager");
             SecurityPolicyCacheManager::init().expect("init security policy cache manager");
         });
@@ -262,6 +264,7 @@ impl DummyCatalog {
 #[derive(Debug, Clone)]
 struct FakeTable {
     table_info: TableInfo,
+    stream_source_table_info: Option<TableInfo>,
     warehouse_distribution: bool,
     table_stats: Option<TableStatistics>,
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
@@ -325,6 +328,10 @@ impl Table for FakeTable {
         &self.table_info
     }
 
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        self.stream_source_table_info.as_ref()
+    }
+
     fn distribution_level(&self) -> DistributionLevel {
         if self.warehouse_distribution {
             DistributionLevel::Cluster
@@ -344,6 +351,25 @@ impl Table for FakeTable {
 
     fn has_exact_total_row_count(&self) -> bool {
         true
+    }
+
+    async fn generate_changes_query(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_name: &str,
+        table_name: &str,
+        _with_options: &str,
+    ) -> Result<String> {
+        if self.stream_source_table_info.is_none() {
+            return Err(ErrorCode::Unimplemented(format!(
+                "change query is not supported for test table {database_name}.{table_name}"
+            )));
+        }
+
+        let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
+        Ok(format!(
+            "SELECT * FROM {quote}{database_name}{quote}.{quote}{table_name}{quote} AS _change_append$ffffffff"
+        ))
     }
 
     async fn table_statistics(
@@ -413,22 +439,6 @@ impl Catalog for DummyCatalog {
 
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         unsupported("catalog::undrop_database")
-    }
-
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unsupported("catalog::create_index")
-    }
-
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
-        unsupported("catalog::drop_index")
-    }
-
-    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
-        unsupported("catalog::get_index")
-    }
-
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unsupported("catalog::update_index")
     }
 
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
@@ -646,6 +656,31 @@ impl Catalog for DummyCatalog {
 
     async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         Ok(None)
+    }
+
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        unsupported("catalog::get_mv_definition")
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+        _mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        unsupported("catalog::get_active_mv_definition")
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        unsupported("catalog::get_mv_source_generation")
     }
 
     async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
@@ -878,6 +913,7 @@ impl LiteTableContext {
                 catalog_info: self.default_catalog.info(),
                 db_type: DatabaseType::NormalDB,
             },
+            stream_source_table_info: None,
             warehouse_distribution,
             table_stats,
             column_stats,
@@ -1094,6 +1130,72 @@ impl LiteTableContext {
     }
 
     fn register_replay_view(&self, view: &ReplayView) -> Result<()> {
+        self.register_view(view, Arc::new(TableSchema::new(vec![])))
+    }
+
+    pub async fn register_view_sql(
+        self: &Arc<Self>,
+        database: &str,
+        view_name: &str,
+        query: &str,
+    ) -> Result<()> {
+        let plan = self.bind_sql(query).await?;
+        let Plan::Query { bind_context, .. } = plan else {
+            return unsupported("lite sql harness view registration from non-query SQL");
+        };
+        if bind_context.columns.is_empty() {
+            return unsupported("lite sql harness view registration from empty query output");
+        }
+
+        self.register_view(
+            &ReplayView {
+                catalog: self.current_catalog.clone(),
+                database: database.to_string(),
+                view: view_name.to_string(),
+                query: query.to_string(),
+            },
+            // Production View TableMeta stores the query but no schema. Keep the harness aligned
+            // so lineage tests cannot accidentally depend on persisted view fields.
+            Arc::new(TableSchema::default()),
+        )
+    }
+
+    pub async fn register_lineage_stream(
+        self: &Arc<Self>,
+        database: &str,
+        stream_name: &str,
+        source_table_name: &str,
+    ) -> Result<()> {
+        let source = self
+            .get_table(&self.current_catalog, database, source_table_name)
+            .await?;
+        let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
+        let table = Arc::new(FakeTable {
+            table_info: TableInfo {
+                ident: TableIdent::new(table_id, 0),
+                desc: format!("'{database}'.'{stream_name}'"),
+                name: stream_name.to_string(),
+                meta: TableMeta {
+                    schema: source.schema(),
+                    engine: "STREAM".to_string(),
+                    ..Default::default()
+                },
+                catalog_info: self.default_catalog.info(),
+                db_type: DatabaseType::NormalDB,
+            },
+            stream_source_table_info: Some(source.get_table_info().clone()),
+            warehouse_distribution: false,
+            table_stats: None,
+            column_stats: HashMap::new(),
+            histograms: HashMap::new(),
+            top_n: HashMap::new(),
+            count_min_sketch: HashMap::new(),
+        });
+        self.default_catalog.insert_table(database, table);
+        Ok(())
+    }
+
+    fn register_view(&self, view: &ReplayView, schema: Arc<TableSchema>) -> Result<()> {
         let mut options = BTreeMap::new();
         options.insert(LITE_VIEW_QUERY_KEY.to_string(), view.query.clone());
 
@@ -1104,7 +1206,7 @@ impl LiteTableContext {
                 desc: format!("'{}'.'{}'", view.database, view.view),
                 name: view.view.clone(),
                 meta: TableMeta {
-                    schema: Arc::new(TableSchema::new(vec![])),
+                    schema,
                     engine: LITE_VIEW_ENGINE.to_string(),
                     options,
                     ..Default::default()
@@ -1112,6 +1214,7 @@ impl LiteTableContext {
                 catalog_info: self.default_catalog.info(),
                 db_type: DatabaseType::NormalDB,
             },
+            stream_source_table_info: None,
             warehouse_distribution: false,
             table_stats: None,
             column_stats: HashMap::new(),
@@ -1357,6 +1460,7 @@ impl LiteTableContext {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
         let metadata = Metadata::default_ref();
+        databend_common_sql::apply_statement_settings(self.clone(), &extras.statement)?;
         let name_resolution_ctx = NameResolutionContext::try_from(self.get_settings().as_ref())?;
         let binder = databend_common_sql::Binder::new(
             self.clone(),
@@ -1373,7 +1477,7 @@ impl LiteTableContext {
             _ => Metadata::default_ref(),
         };
         let settings = self.get_settings();
-        let opt_ctx = OptimizerContext::new(self.clone(), metadata)
+        let opt_ctx = OptimizerContext::new(self.clone(), metadata, self.get_function_context()?)
             .with_settings(&settings)?
             .set_enable_distributed_optimization(true)
             .clone();
@@ -1819,6 +1923,15 @@ impl TableContextTableAccess for LiteTableContext {
         Ok(None)
     }
 
+    async fn acquire_table_lock_by_id(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _table_id: u64,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        Ok(None)
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         Ok("lite_temp".to_string())
     }
@@ -1924,12 +2037,6 @@ impl TableContextPartitionStats for LiteTableContext {
         Ok(())
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        false
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {}
-
     fn get_enable_sort_spill(&self) -> bool {
         false
     }
@@ -1964,7 +2071,10 @@ impl TableContextRuntimeFilter for LiteTableContext {
         vec![]
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        _id: usize,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         vec![]
     }
 
@@ -2023,6 +2133,7 @@ impl TableContextVariables for LiteTableContext {
 mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_sql::FormatOptions;
+    use databend_common_sql::optimizer::ir::StatContext;
 
     use super::*;
 
@@ -2209,7 +2320,8 @@ $$
 
         let raw_plan = ctx.bind_sql("SELECT a FROM t").await?;
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let formatted = optimized_plan.format_indent(FormatOptions::default())?;
+        let formatted =
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             formatted.contains("ROW ACCESS POLICY APPLIED"),
             "formatted plan:\n{formatted}"
@@ -2251,14 +2363,16 @@ $$
             SELECT a FROM c UNION ALL SELECT a FROM c
         "#;
         let raw_plan = ctx.bind_sql(sql).await?;
-        let raw_formatted = raw_plan.format_indent(FormatOptions::default())?;
+        let raw_formatted =
+            raw_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             raw_formatted.contains("MaterializedCTE"),
             "formatted plan:\n{raw_formatted}"
         );
 
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let optimized = optimized_plan.format_indent(FormatOptions::default())?;
+        let optimized =
+            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
         assert!(
             optimized.contains("Scan") && optimized.contains("default.t"),
             "formatted plan:\n{optimized}"

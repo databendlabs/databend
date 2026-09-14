@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::query_kind::QueryKind;
@@ -43,6 +44,8 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
+use databend_storages_common_pruner::ProjectedVirtualPath;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
@@ -51,6 +54,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -67,6 +71,8 @@ use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
+use crate::pruning::PartitionPruner;
+use crate::pruning::PartitionPruningInfo;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
@@ -77,6 +83,8 @@ use crate::pruning::segment_pruner::SegmentPruner;
 
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
+use databend_common_catalog::plan::VirtualPredicateRef;
+
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
     pub dal: Operator,
@@ -86,22 +94,45 @@ pub struct PruningContext {
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
+    pub partition_pruner: Option<PartitionPruner>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
     pub spatial_index_pruner: Option<Arc<SpatialIndexPruner>>,
+
+    /// All virtual paths requested by the query, including precomputed lookup
+    /// prefixes. Used to project each segment's virtual schema once before
+    /// pruning its blocks.
+    pub virtual_column_paths: Option<Arc<[(ColumnId, ProjectedVirtualPath)]>>,
+
+    /// Virtual columns referenced by the pushed-down filter. Used to build
+    /// block-local range statistics for virtual column range pruning.
+    pub virtual_predicate_refs: Option<Arc<[VirtualPredicateRef]>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
     pub pruning_cost: PruningCostController,
 }
 
 impl PruningContext {
+    pub fn project_virtual_segment_schema(
+        &self,
+        schema: Option<&VirtualSegmentSchema>,
+    ) -> Option<Arc<ProjectedVirtualSegmentSchema>> {
+        let schema = schema?;
+        let requested_paths = self.virtual_column_paths.as_deref()?;
+        Some(Arc::new(ProjectedVirtualSegmentSchema::project(
+            schema,
+            requested_paths,
+        )))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -117,6 +148,11 @@ impl PruningContext {
                 .effective_filters(&BUILTIN_FUNCTIONS)
                 .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
+        let partition_pruner = PartitionPruner::try_create(
+            func_ctx.clone(),
+            filter_expr.as_ref(),
+            partition_pruning_info,
+        );
 
         // Limit pruner.
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
@@ -162,9 +198,7 @@ impl PruningContext {
         let lightweight_pruning = push_down.as_ref().is_some_and(|push_down| {
             push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::Lightweight
         });
-        let enable_proxy_bloom_pruning = ctx.get_settings().get_enable_proxy_bloom_pruning()?;
-
-        let bloom_pruner = if lightweight_pruning && !enable_proxy_bloom_pruning {
+        let bloom_pruner = if lightweight_pruning {
             None
         } else {
             BloomPrunerCreator::create(
@@ -193,6 +227,31 @@ impl PruningContext {
         } else {
             VirtualColumnPruner::try_create(dal.clone(), push_down)?
         };
+
+        let virtual_column_paths: Option<Arc<[(ColumnId, ProjectedVirtualPath)]>> = push_down
+            .as_ref()
+            .and_then(|push_down| push_down.virtual_column.as_ref())
+            .map(|virtual_column| {
+                let mut seen = HashSet::with_capacity(virtual_column.virtual_column_fields.len());
+                let mut paths = Vec::with_capacity(virtual_column.virtual_column_fields.len());
+                for field in &virtual_column.virtual_column_fields {
+                    if !seen.insert((field.source_column_id, &field.key_paths)) {
+                        continue;
+                    }
+                    paths.push((
+                        field.source_column_id,
+                        ProjectedVirtualPath::new(&field.key_paths),
+                    ));
+                }
+                paths
+            })
+            .filter(|paths| !paths.is_empty())
+            .map(Arc::from);
+        let virtual_predicate_refs = push_down
+            .as_ref()
+            .map(|push_down| push_down.virtual_predicate_refs(filter_expr.as_ref()))
+            .filter(|refs| !refs.is_empty())
+            .map(Arc::from);
 
         let spatial_index_pruner = if lightweight_pruning {
             None
@@ -229,10 +288,13 @@ impl PruningContext {
             limit_pruner,
             range_pruner,
             bloom_pruner,
+            partition_pruner,
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,
             spatial_index_pruner,
+            virtual_column_paths,
+            virtual_predicate_refs,
             pruning_stats,
             pruning_cost,
         });
@@ -257,6 +319,7 @@ impl FusePruner {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -267,6 +330,7 @@ impl FusePruner {
             dal,
             table_schema,
             push_down,
+            partition_pruning_info,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -280,6 +344,7 @@ impl FusePruner {
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
@@ -308,6 +373,7 @@ impl FusePruner {
             dal,
             table_schema.clone(),
             push_down,
+            partition_pruning_info,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -417,9 +483,17 @@ impl FusePruner {
                                 populate_block_meta_cache,
                                 &pruning_cost,
                             )?;
+                            let projected_virtual_schema = pruning_ctx
+                                .project_virtual_segment_schema(
+                                    compact_segment_info.summary.virtual_segment_schema.as_ref(),
+                                );
                             res.extend(
                                 block_pruner
-                                    .pruning(segment_location.clone(), block_metas)
+                                    .pruning(
+                                        segment_location.clone(),
+                                        block_metas,
+                                        projected_virtual_schema,
+                                    )
                                     .await?,
                             );
                         }
@@ -467,7 +541,19 @@ impl FusePruner {
                                     block_metas = Arc::new(sample_block_metas);
                                 }
                             }
-                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
+                            let projected_virtual_schema = pruning_ctx
+                                .project_virtual_segment_schema(
+                                    info.summary.virtual_segment_schema.as_ref(),
+                                );
+                            res.extend(
+                                block_pruner
+                                    .pruning(
+                                        location.clone(),
+                                        block_metas,
+                                        projected_virtual_schema,
+                                    )
+                                    .await?,
+                            );
                         }
                     }
                     Result::<_>::Ok((res, deleted_segments))
@@ -550,6 +636,11 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             Arc::new(batch),
+                            // Change-tracking stream pruning receives detached block metadata
+                            // without its segment summary, so no segment projection is available.
+                            // Virtual-column pruning remains conservative and uses footer/source
+                            // fallback instead of assuming segment-local IDs.
+                            None,
                         )
                         .await?;
 
@@ -670,7 +761,7 @@ impl FusePruner {
     }
 
     // Pruning stats.
-    pub fn pruning_stats(&self) -> databend_common_catalog::plan::PruningStatistics {
+    pub fn pruning_stats(&self) -> PruningStatistics {
         let stats = self.pruning_ctx.pruning_stats.clone();
 
         let segments_read_cost = stats.get_segments_read_cost();
@@ -711,7 +802,7 @@ impl FusePruner {
         let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
         let blocks_topn_pruning_cost = stats.get_blocks_topn_pruning_cost();
 
-        databend_common_catalog::plan::PruningStatistics {
+        PruningStatistics {
             segments_read_cost,
             segments_decompress_cost,
             segments_range_pruning_before,

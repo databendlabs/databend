@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index;
 mod block;
 pub mod bloom;
 mod index_loader;
@@ -26,7 +25,6 @@ mod utils;
 mod vector_index;
 mod virtual_column;
 
-pub use agg_index::AggIndexReader;
 pub use block::BlockReadContext;
 pub use block::BlockReadResult;
 pub use block::BlockReader;

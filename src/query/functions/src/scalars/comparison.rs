@@ -29,6 +29,7 @@ use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::LikePattern;
+use databend_common_expression::PartialEvalPolicy;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
@@ -84,7 +85,7 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::deserialize_bitmap;
-use databend_common_statistics::Histogram;
+use databend_common_statistics::BorrowedHistogram;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
 use databend_functions_scalar_decimal::register_decimal_compare;
@@ -439,7 +440,7 @@ impl_simple_domain_stat_type!(
 );
 
 struct HistogramComparison<'a, T, Op> {
-    histogram: &'a Histogram,
+    histogram: BorrowedHistogram<'a>,
     constant: &'a T,
     non_null_cardinality: f64,
     _op: PhantomData<fn(Op)>,
@@ -459,7 +460,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
 
     fn selected_count(&self) -> Result<StatEstimate, String> {
         match self.histogram {
-            Histogram::Int(histogram) => {
+            BorrowedHistogram::Int(histogram) => {
                 let constant = self
                     .constant
                     .histogram_i64()
@@ -473,7 +474,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 }
                 .selected_count(HistogramBucketComparison::number_selected_count))
             }
-            Histogram::UInt(histogram) => {
+            BorrowedHistogram::UInt(histogram) => {
                 let constant = self
                     .constant
                     .histogram_u64()
@@ -487,7 +488,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 }
                 .selected_count(HistogramBucketComparison::number_selected_count))
             }
-            Histogram::Float(histogram) => {
+            BorrowedHistogram::Float(histogram) => {
                 let constant = self
                     .constant
                     .histogram_f64()
@@ -501,7 +502,7 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 }
                 .selected_count(HistogramBucketComparison::number_selected_count))
             }
-            Histogram::Bytes(histogram) => {
+            BorrowedHistogram::Bytes(histogram) => {
                 let Some(constant) = self.constant.histogram_bytes() else {
                     return Err(unexpected_histogram_constant("Bytes", self.constant));
                 };
@@ -1908,12 +1909,9 @@ fn register_like(registry: &mut FunctionRegistry) {
             FunctionDomain::Full
         },
         |arg1, arg2, ctx| {
-            vectorize_like(|str, pattern_type| pattern_type.compare(str))(
-                arg1,
-                arg2,
-                Value::Scalar("".to_string()),
-                ctx,
-            )
+            vectorize_like(PartialEvalPolicy::SkipInactiveRows, |str, pattern_type| {
+                pattern_type.compare(str)
+            })(arg1, arg2, Value::Scalar("".to_string()), ctx)
         },
     );
 
@@ -1934,7 +1932,10 @@ fn register_like(registry: &mut FunctionRegistry) {
             FunctionDomain::Full
         },
         |arg1, arg2, arg3, ctx| {
-            vectorize_like(|str, pattern_type| pattern_type.compare(str))(
+            vectorize_like(
+                PartialEvalPolicy::SkipInactiveRows,
+                |str, pattern_type| pattern_type.compare(str),
+            )(
                 arg1,
                 arg2,
                 arg3,
@@ -1993,10 +1994,15 @@ fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomai
         LikePattern::Constant(true) if is_all_percent_pattern => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
-        LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
-            min: pattern.clone(),
-            max: Some(pattern),
-        })),
+        LikePattern::OrdinalStr(literal) => {
+            // Use the exact literal used by runtime matching. `pattern` may still
+            // contain LIKE escape sequences.
+            let literal = String::from_utf8(literal.into_owned()).ok()?;
+            Some(lhs.domain_eq(&StringDomain {
+                min: literal.clone(),
+                max: Some(literal),
+            }))
+        }
         LikePattern::EndOfPercent(v) => {
             let pat_str = std::str::from_utf8(v.as_ref()).ok()?.to_string();
             let pat_len = pat_str.chars().count();
@@ -2025,11 +2031,17 @@ fn variant_vectorize_like_jsonb() -> impl Fn(
 ) -> Value<BooleanType>
 + Copy
 + Sized {
-    variant_vectorize_like(|val, pattern_type| match pattern_type {
-        LikePattern::OrdinalStr(_)
-        | LikePattern::StartOfPercent(_)
-        | LikePattern::EndOfPercent(_)
-        | LikePattern::Constant(_) => {
+    variant_vectorize_like(|val, pattern_type, requires_traversal| {
+        if requires_traversal {
+            let raw_jsonb = RawJsonb::new(val);
+            match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
+                Ok(res) => res,
+                Err(_) => {
+                    let s = raw_jsonb.to_string();
+                    pattern_type.compare(s.as_bytes())
+                }
+            }
+        } else {
             let raw_jsonb = RawJsonb::new(val);
             match raw_jsonb.as_str() {
                 Ok(Some(s)) => pattern_type.compare(s.as_bytes()),
@@ -2040,20 +2052,29 @@ fn variant_vectorize_like_jsonb() -> impl Fn(
                 }
             }
         }
-        _ => {
-            let raw_jsonb = RawJsonb::new(val);
-            match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
-                Ok(res) => res,
-                Err(_) => {
-                    let s = raw_jsonb.to_string();
-                    pattern_type.compare(s.as_bytes())
-                }
-            }
-        }
     })
 }
 
+fn variant_like_requires_traversal(pattern: &[u8], pattern_type: &LikePattern) -> bool {
+    if !matches!(
+        pattern_type,
+        LikePattern::OrdinalStr(_)
+            | LikePattern::StartOfPercent(_)
+            | LikePattern::EndOfPercent(_)
+            | LikePattern::Constant(_)
+    ) {
+        return true;
+    }
+
+    // Escaped exact, prefix, and suffix patterns used ComplexPattern before the
+    // specialized matchers were added, so preserve their nested VARIANT traversal.
+    pattern
+        .windows(2)
+        .any(|window| window[0] == b'\\' && matches!(window[1], b'%' | b'_' | b'\\'))
+}
+
 fn vectorize_like(
+    policy: PartialEvalPolicy,
     func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
 ) -> impl Fn(
     Value<StringType>,
@@ -2062,12 +2083,19 @@ fn vectorize_like(
     &mut EvalContext,
 ) -> Value<BooleanType>
 + Copy {
-    move |arg1, arg2, arg3, _ctx| {
+    move |arg1, arg2, arg3, ctx| {
         let Value::Scalar(escape) = arg3 else {
             unreachable!()
         };
+        let active_rows = policy.active_rows(ctx);
         match (arg1, arg2) {
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
+                if active_rows
+                    .as_ref()
+                    .is_some_and(|validity| validity.null_count() == validity.len())
+                {
+                    return Value::Scalar(false);
+                }
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
                 Value::Scalar(func(arg1.as_bytes(), &pattern_type))
@@ -2078,7 +2106,22 @@ fn vectorize_like(
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type =
                     generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
-                if let LikePattern::SurroundByPercent(searcher) = pattern_type {
+                if let Some(validity) = active_rows.as_ref() {
+                    if let LikePattern::SurroundByPercent(searcher) = pattern_type {
+                        for (index, arg1) in arg1_iter.enumerate() {
+                            builder.push(
+                                validity.get_bit(index)
+                                    && searcher.search(arg1.as_bytes()).is_some(),
+                            );
+                        }
+                    } else {
+                        for (index, arg1) in arg1_iter.enumerate() {
+                            builder.push(
+                                validity.get_bit(index) && func(arg1.as_bytes(), &pattern_type),
+                            );
+                        }
+                    }
+                } else if let LikePattern::SurroundByPercent(searcher) = pattern_type {
                     for arg1 in arg1_iter {
                         builder.push(searcher.search(arg1.as_bytes()).is_some());
                     }
@@ -2093,7 +2136,15 @@ fn vectorize_like(
             (Value::Scalar(arg1), Value::Column(arg2)) => {
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
-                for arg2 in arg2_iter {
+                for (index, arg2) in arg2_iter.enumerate() {
+                    if active_rows
+                        .as_ref()
+                        .map(|validity| !validity.get_bit(index))
+                        .unwrap_or(false)
+                    {
+                        builder.push(false);
+                        continue;
+                    }
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
                     let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
                     builder.push(func(arg1.as_bytes(), &pattern_type));
@@ -2104,7 +2155,15 @@ fn vectorize_like(
                 let arg1_iter = StringType::iter_column(&arg1);
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
-                for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                for (index, (arg1, arg2)) in arg1_iter.zip(arg2_iter).enumerate() {
+                    if active_rows
+                        .as_ref()
+                        .map(|validity| !validity.get_bit(index))
+                        .unwrap_or(false)
+                    {
+                        builder.push(false);
+                        continue;
+                    }
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
                     let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
                     builder.push(func(arg1.as_bytes(), &pattern_type));
@@ -2205,7 +2264,9 @@ fn like_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType>
         .unwrap_or(Value::Scalar("".to_string()));
 
     let result = if let Ok(value) = arg.try_downcast::<StringType>() {
-        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
+        let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |str, pattern_type| {
+            pattern_type.compare(str)
+        });
         patterns
             .iter()
             .map(|pattern| {
@@ -2311,7 +2372,7 @@ fn ilike_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType
 }
 
 fn variant_vectorize_like(
-    func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
+    func: impl Fn(&[u8], &LikePattern, bool) -> bool + Copy,
 ) -> impl Fn(
     Value<VariantType>,
     Value<StringType>,
@@ -2327,7 +2388,9 @@ fn variant_vectorize_like(
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-                Value::Scalar(func(&arg1, &pattern_type))
+                let requires_traversal =
+                    variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
+                Value::Scalar(func(&arg1, &pattern_type, requires_traversal))
             }
             (Value::Column(arg1), Value::Scalar(arg2)) => {
                 let arg1_iter = VariantType::iter_column(&arg1);
@@ -2335,9 +2398,11 @@ fn variant_vectorize_like(
                 let pattern = convert_escape_pattern(&escape, arg2);
                 let pattern_type =
                     generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                let requires_traversal =
+                    variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 for arg1 in arg1_iter {
-                    builder.push(func(arg1, &pattern_type));
+                    builder.push(func(arg1, &pattern_type, requires_traversal));
                 }
                 Value::Column(builder.into())
             }
@@ -2347,7 +2412,9 @@ fn variant_vectorize_like(
                 for arg2 in arg2_iter {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
                     let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-                    builder.push(func(&arg1, &pattern_type));
+                    let requires_traversal =
+                        variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
+                    builder.push(func(&arg1, &pattern_type, requires_traversal));
                 }
                 Value::Column(builder.into())
             }
@@ -2358,7 +2425,9 @@ fn variant_vectorize_like(
                 for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
                     let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-                    builder.push(func(arg1, &pattern_type));
+                    let requires_traversal =
+                        variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
+                    builder.push(func(arg1, &pattern_type, requires_traversal));
                 }
                 Value::Column(builder.into())
             }
@@ -2471,6 +2540,10 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering as AtomicOrdering;
+
+    use databend_common_expression::FromData;
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
     use databend_common_expression::stat_distribution::NdvEstimate;
@@ -2483,8 +2556,186 @@ mod tests {
     use databend_common_expression::types::nullable::NullableDomain;
     use databend_common_expression::types::string::StringDomain;
     use jsonb::OwnedJsonb;
+    use proptest::prelude::*;
 
     use super::*;
+
+    fn jsonb_scalar(value: &str) -> Vec<u8> {
+        value.parse::<OwnedJsonb>().unwrap().to_vec()
+    }
+
+    fn variant_column(values: &[&str]) -> <VariantType as AccessType>::Column {
+        let Column::Variant(column) = VariantType::from_data(
+            values
+                .iter()
+                .map(|value| jsonb_scalar(value))
+                .collect::<Vec<_>>(),
+        ) else {
+            unreachable!()
+        };
+        column
+    }
+
+    fn string_column(values: &[&str]) -> <StringType as AccessType>::Column {
+        let Column::String(column) = StringType::from_data(values.to_vec()) else {
+            unreachable!()
+        };
+        column
+    }
+
+    fn assert_boolean_value(value: Value<BooleanType>, expected: &[bool]) {
+        match value {
+            Value::Scalar(value) => assert_eq!(expected, &[value]),
+            Value::Column(column) => assert_eq!(column.iter().collect::<Vec<_>>(), expected),
+        }
+    }
+
+    #[test]
+    fn test_vectorized_like_skips_rows_excluded_by_validity() {
+        let calls = AtomicUsize::new(0);
+        let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |value, pattern| {
+            calls.fetch_add(1, AtomicOrdering::Relaxed);
+            pattern.compare(value)
+        });
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 4,
+            func_ctx: &func_ctx,
+            validity: Some(Bitmap::from_iter([true, false, true, false])),
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let escape = Value::<StringType>::Scalar("".to_string());
+
+        let result = like(
+            Value::<StringType>::Column(string_column(&[
+                "prefix-abc-suffix",
+                "prefix-abc-suffix",
+                "prefix-axc-suffix",
+                "prefix-axc-suffix",
+            ])),
+            Value::<StringType>::Scalar("%a_c%".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(result, &[true, false, true, false]);
+        assert_eq!(calls.load(AtomicOrdering::Relaxed), 2);
+
+        calls.store(0, AtomicOrdering::Relaxed);
+        let result = like(
+            Value::<StringType>::Scalar("prefix-abc-suffix".to_string()),
+            Value::<StringType>::Column(string_column(&["%a_c%", "%a_c%", "%z_z%", "%a_c%"])),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(result, &[true, false, false, false]);
+        assert_eq!(calls.load(AtomicOrdering::Relaxed), 2);
+
+        calls.store(0, AtomicOrdering::Relaxed);
+        let result = like(
+            Value::<StringType>::Column(string_column(&[
+                "prefix-abc-suffix",
+                "prefix-abc-suffix",
+                "prefix-zzz-suffix",
+                "prefix-abc-suffix",
+            ])),
+            Value::<StringType>::Column(string_column(&["%a_c%", "%a_c%", "%z_z%", "%a_c%"])),
+            escape,
+            &mut ctx,
+        );
+        assert_boolean_value(result, &[true, false, true, false]);
+        assert_eq!(calls.load(AtomicOrdering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_vectorized_like_keeps_dense_and_surround_paths() {
+        let calls = AtomicUsize::new(0);
+        let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |value, pattern| {
+            calls.fetch_add(1, AtomicOrdering::Relaxed);
+            pattern.compare(value)
+        });
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 4,
+            func_ctx: &func_ctx,
+            validity: Some(Bitmap::new_constant(true, 4)),
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let values = ["prefix-abc-suffix", "zzzz", "abc", "yyyy"];
+
+        let result = like(
+            Value::<StringType>::Column(string_column(&values)),
+            Value::<StringType>::Scalar("%a_c%".to_string()),
+            Value::<StringType>::Scalar("".to_string()),
+            &mut ctx,
+        );
+        assert_boolean_value(result, &[true, false, true, false]);
+        assert_eq!(calls.load(AtomicOrdering::Relaxed), 4);
+
+        calls.store(0, AtomicOrdering::Relaxed);
+        ctx.validity = Some(Bitmap::from_iter([true, false, true, false]));
+        let result = like(
+            Value::<StringType>::Column(string_column(&values)),
+            Value::<StringType>::Scalar("%abc%".to_string()),
+            Value::<StringType>::Scalar("".to_string()),
+            &mut ctx,
+        );
+        assert_boolean_value(result, &[true, false, true, false]);
+        assert_eq!(calls.load(AtomicOrdering::Relaxed), 0);
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(128))]
+
+        #[test]
+        fn vectorized_like_validity_preserves_active_row_results(
+            rows in prop::collection::vec(("[a-z]{0,48}", any::<bool>()), 1..64),
+            pattern in "[a-z_%\\\\]{0,24}",
+        ) {
+            let values = rows.iter().map(|(value, _)| value.as_str()).collect::<Vec<_>>();
+            let validity = rows.iter().map(|(_, valid)| *valid).collect::<Vec<_>>();
+            let like = vectorize_like(PartialEvalPolicy::SkipInactiveRows, |value, pattern| pattern.compare(value));
+            let func_ctx = FunctionContext::default();
+            let mut dense_ctx = EvalContext {
+                generics: &[],
+                num_rows: rows.len(),
+                func_ctx: &func_ctx,
+                validity: None,
+                errors: None,
+                suppress_error: false,
+                strict_eval: false,
+            };
+            let mut sparse_ctx = EvalContext {
+                validity: Some(Bitmap::from_iter(validity.iter().copied())),
+                ..dense_ctx.clone()
+            };
+
+            let dense = like(
+                Value::<StringType>::Column(string_column(&values)),
+                Value::<StringType>::Scalar(pattern.clone()),
+                Value::<StringType>::Scalar("".to_string()),
+                &mut dense_ctx,
+            );
+            let sparse = like(
+                Value::<StringType>::Column(string_column(&values)),
+                Value::<StringType>::Scalar(pattern),
+                Value::<StringType>::Scalar("".to_string()),
+                &mut sparse_ctx,
+            );
+            let (Value::Column(dense), Value::Column(sparse)) = (dense, sparse) else {
+                unreachable!()
+            };
+
+            for (index, dense_result) in dense.iter().enumerate() {
+                prop_assert_eq!(sparse.get_bit(index), validity[index] && dense_result);
+            }
+        }
+    }
 
     #[test]
     fn test_numeric_histogram_partial_bucket_reserves_equality_mass() {
@@ -2599,6 +2850,59 @@ mod tests {
     }
 
     #[test]
+    fn test_calc_like_domain_exact_pattern_matches_equality_domain() {
+        let mut cases = vec![
+            ("plain".to_string(), "plain".to_string()),
+            ("%".to_string(), "\\%".to_string()),
+            ("_".to_string(), "\\_".to_string()),
+            ("\\".to_string(), "\\\\".to_string()),
+            (
+                "alpha%_\\beta".to_string(),
+                "alpha\\%\\_\\\\beta".to_string(),
+            ),
+            ("你好_100%".to_string(), "你好\\_100\\%".to_string()),
+        ];
+        cases.extend([
+            (
+                "alpha_beta".to_string(),
+                type_check::convert_escape_pattern("alpha$_beta", '$'),
+            ),
+            (
+                "100%".to_string(),
+                type_check::convert_escape_pattern("100!%", '!'),
+            ),
+            (
+                "path\\file".to_string(),
+                type_check::convert_escape_pattern("path#\\file", '#'),
+            ),
+        ]);
+
+        for (literal, pattern) in cases {
+            let literal_domain = StringDomain {
+                min: literal.clone(),
+                max: Some(literal.clone()),
+            };
+            for domain in [
+                literal_domain.clone(),
+                StringDomain {
+                    min: "different".to_string(),
+                    max: Some("different".to_string()),
+                },
+                StringDomain {
+                    min: "".to_string(),
+                    max: None,
+                },
+            ] {
+                assert_eq!(
+                    calc_like_domain(&domain, pattern.clone()),
+                    Some(domain.domain_eq(&literal_domain)),
+                    "domain {domain:?} with LIKE pattern {pattern:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_calc_like_domain_all_percent_matches_single_percent() {
         let domain = StringDomain {
             min: "".to_string(),
@@ -2613,17 +2917,116 @@ mod tests {
     }
 
     #[test]
-    fn test_calc_like_domain_empty_pattern_does_not_fold_to_all_true() {
+    fn test_calc_like_domain_empty_pattern_matches_empty_string() {
         let domain = StringDomain {
             min: "".to_string(),
             max: Some("zzz".to_string()),
         };
+        let empty = StringDomain {
+            min: "".to_string(),
+            max: Some("".to_string()),
+        };
 
         assert_eq!(
             calc_like_domain(&domain, "".to_string()),
-            None,
-            "empty patterns should not reuse repeated all-% folding"
+            Some(domain.domain_eq(&empty)),
+            "empty patterns should use empty-string equality semantics"
         );
+    }
+
+    #[test]
+    fn test_variant_escaped_literal_like_preserves_nested_traversal() {
+        let like = variant_vectorize_like_jsonb();
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 1,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+
+        for (value, pattern, escape, expected) in [
+            (r#"{"name":"alpha_beta"}"#, r"alpha\_beta", "", true),
+            (r#"["alpha_beta_tail"]"#, r"alpha\_beta%", "", true),
+            (r#"{"name":"head_alpha_beta"}"#, r"%alpha\_beta", "", true),
+            (
+                r#"{"name":"head_alpha_beta_tail"}"#,
+                r"%alpha\_beta%",
+                "",
+                true,
+            ),
+            (r#"{"name":"alpha%beta"}"#, r"alpha\%beta", "", true),
+            (r#"{"name":"alpha\\beta"}"#, r"alpha\\beta", "", true),
+            (r#"{"name":"alpha_beta"}"#, "alpha$_beta", "$", true),
+            (r#"{"name":"alphaXbeta"}"#, r"alpha\_beta", "", false),
+            (r#""alpha_beta""#, r"alpha\_beta", "", true),
+            (r#"{"name":"alphabeta"}"#, "alphabeta", "", false),
+            (r#"{"name":"alphabetatail"}"#, "alphabeta%", "", false),
+            (r#"{"name":"headalphabeta"}"#, "%alphabeta", "", false),
+        ] {
+            let result = like(
+                Value::<VariantType>::Scalar(jsonb_scalar(value)),
+                Value::<StringType>::Scalar(pattern.to_string()),
+                Value::<StringType>::Scalar(escape.to_string()),
+                &mut ctx,
+            );
+            assert_boolean_value(result, &[expected]);
+        }
+    }
+
+    #[test]
+    fn test_variant_escaped_literal_like_preserves_all_value_layouts() {
+        let like = variant_vectorize_like_jsonb();
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 2,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let matching = r#"{"name":"alpha_beta"}"#;
+        let non_matching = r#"{"name":"alphaXbeta"}"#;
+        let pattern = "alpha$_beta";
+        let other_pattern = "other$_value";
+        let escape = Value::<StringType>::Scalar("$".to_string());
+
+        let scalar_scalar = like(
+            Value::<VariantType>::Scalar(jsonb_scalar(matching)),
+            Value::<StringType>::Scalar(pattern.to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(scalar_scalar, &[true]);
+
+        let column_scalar = like(
+            Value::<VariantType>::Column(variant_column(&[matching, non_matching])),
+            Value::<StringType>::Scalar(pattern.to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(column_scalar, &[true, false]);
+
+        let scalar_column = like(
+            Value::<VariantType>::Scalar(jsonb_scalar(matching)),
+            Value::<StringType>::Column(string_column(&[pattern, other_pattern])),
+            escape.clone(),
+            &mut ctx,
+        );
+        assert_boolean_value(scalar_column, &[true, false]);
+
+        let column_column = like(
+            Value::<VariantType>::Column(variant_column(&[matching, non_matching])),
+            Value::<StringType>::Column(string_column(&[pattern, pattern])),
+            escape,
+            &mut ctx,
+        );
+        assert_boolean_value(column_column, &[true, false]);
     }
 
     #[test]

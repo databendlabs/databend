@@ -263,7 +263,7 @@ pub async fn do_refresh_table_index(
             fuse_table,
             ctx.clone(),
             snapshot.segments.clone(),
-            vec![],
+            Default::default(),
             vec![],
             Statistics::default(),
             MutationKind::Refresh,
@@ -278,13 +278,14 @@ pub async fn do_refresh_table_index(
             fuse_table,
             ctx.clone(),
             None,
-            vec![],
+            Default::default(),
             snapshot_gen.clone(),
             input,
             None,
             Some(prev_snapshot_id),
             None,
             table_meta_timestamps,
+            false,
         )
     })?;
 
@@ -317,6 +318,7 @@ fn build_refresh_index_arg(
                         arg.column_id(),
                         arg.gram_size(),
                         arg.bloom_size(),
+                        arg.hash_algorithm(),
                     )
                 })
                 .collect::<Vec<_>>();

@@ -1,0 +1,171 @@
+# Supported statements: capture object lineage for INSERT, multi-table INSERT, REPLACE, and COPY.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_statements
+
+statement ok
+DROP STAGE IF EXISTS lineage_history_statements_stage
+
+statement ok
+CREATE DATABASE lineage_history_statements
+
+statement ok
+CREATE TABLE lineage_history_statements.src(a INT, b INT, c INT)
+
+statement ok
+INSERT INTO lineage_history_statements.src VALUES (1, 2, 3)
+
+# The self source must be removed without dropping the other source edge.
+statement ok
+CREATE TABLE lineage_history_statements.self_insert_dst(a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_statements.self_insert_dst VALUES (10, 100)
+
+statement ok
+INSERT INTO lineage_history_statements.self_insert_dst
+SELECT d.a + s.a, s.b
+FROM lineage_history_statements.self_insert_dst AS d
+CROSS JOIN lineage_history_statements.src AS s
+
+statement ok
+CREATE TABLE lineage_history_statements.insert_dst(x INT, y INT)
+
+statement ok
+INSERT INTO lineage_history_statements.insert_dst
+SELECT a, b FROM lineage_history_statements.src
+
+# Explicit materialized CTE outputs must resolve through the temporary table to the producer.
+statement ok
+CREATE TABLE lineage_history_statements.mcte_dst(x INT)
+
+statement ok
+INSERT INTO lineage_history_statements.mcte_dst
+WITH q(x, filter_col) AS MATERIALIZED (
+  SELECT a + b, c FROM lineage_history_statements.src
+)
+SELECT x FROM q WHERE filter_col > 0
+
+statement ok
+CREATE TABLE lineage_history_statements.mcte_tuple_src(t TUPLE(a INT, b INT))
+
+statement ok
+CREATE TABLE lineage_history_statements.mcte_tuple_dst(x INT)
+
+statement ok
+INSERT INTO lineage_history_statements.mcte_tuple_dst
+WITH q(t) AS MATERIALIZED (
+  SELECT t FROM lineage_history_statements.mcte_tuple_src
+)
+SELECT t.1 FROM q
+
+# EXPLAIN PIPELINE builds the inner DML pipeline without executing it, so it must not leak
+# captured inner lineage into the outer EXPLAIN query finish log.
+statement ok
+CREATE TABLE lineage_history_statements.explain_pipeline_dst(x INT, y INT)
+
+statement ok
+EXPLAIN PIPELINE INSERT INTO lineage_history_statements.explain_pipeline_dst
+SELECT a, b FROM lineage_history_statements.src
+
+statement ok
+CREATE TABLE lineage_history_statements.multi_a(x INT, y INT)
+
+statement ok
+CREATE TABLE lineage_history_statements.multi_b(x INT, y INT)
+
+statement ok
+INSERT ALL
+  INTO lineage_history_statements.multi_a(x, y) VALUES(a, b)
+  INTO lineage_history_statements.multi_b(x, y) VALUES(b, c)
+SELECT a, b, c FROM lineage_history_statements.src
+
+statement ok
+CREATE TABLE lineage_history_statements.replace_dst(x INT, y INT)
+
+statement ok
+REPLACE INTO lineage_history_statements.replace_dst ON(x)
+SELECT a, b FROM lineage_history_statements.src
+
+# MERGE INTO is a DataMutation. Both the matched UPDATE and the unmatched INSERT clauses contribute
+# column lineage, so merge_dst.m is fed by src.c (matched) and src.b (unmatched) at once.
+statement ok
+CREATE TABLE lineage_history_statements.merge_dst(k INT, m INT, n INT)
+
+statement ok
+INSERT INTO lineage_history_statements.merge_dst VALUES (1, 0, 0)
+
+statement ok
+MERGE INTO lineage_history_statements.merge_dst AS t
+USING lineage_history_statements.src AS s
+ON t.k = s.a
+WHEN MATCHED THEN UPDATE SET m = s.c
+WHEN NOT MATCHED THEN INSERT (k, m, n) VALUES (s.a, s.b, s.c)
+
+# A Stream is transparent for lineage: its data columns belong to the backing table.
+statement ok
+CREATE TABLE lineage_history_statements.stream_src(a INT, b INT)
+
+statement ok
+CREATE STREAM lineage_history_statements.src_stream
+ON TABLE lineage_history_statements.stream_src APPEND_ONLY = TRUE
+
+statement ok
+INSERT INTO lineage_history_statements.stream_src VALUES (1, 2)
+
+statement ok
+CREATE TABLE lineage_history_statements.stream_dst(x INT)
+
+statement ok
+INSERT INTO lineage_history_statements.stream_dst
+SELECT a + 1 FROM lineage_history_statements.src_stream
+
+statement ok
+CREATE STAGE lineage_history_statements_stage FILE_FORMAT = (TYPE = PARQUET)
+
+statement ok
+COPY INTO @lineage_history_statements_stage
+FROM (SELECT a, b FROM lineage_history_statements.src)
+FILE_FORMAT = (TYPE = PARQUET)
+
+statement ok
+CREATE TABLE lineage_history_statements.copy_dst(a INT, b INT)
+
+statement ok
+COPY INTO lineage_history_statements.copy_dst
+FROM @lineage_history_statements_stage
+FILE_FORMAT = (TYPE = PARQUET)
+FORCE = TRUE
+
+# A Stage scan inside a regular SELECT must remain a Stage lineage endpoint.
+statement ok
+CREATE TABLE lineage_history_statements.insert_select_stage_dst(a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_statements.insert_select_stage_dst
+SELECT a, b FROM @lineage_history_statements_stage
+
+# Built-in metadata sources are intentionally omitted from persisted lineage.
+statement ok
+CREATE TABLE lineage_history_statements.system_source_dst(x UInt8)
+
+statement ok
+INSERT INTO lineage_history_statements.system_source_dst
+SELECT dummy FROM system.one
+
+statement ok
+CREATE TABLE lineage_history_statements.information_schema_source_dst AS
+SELECT table_name FROM information_schema.views
+
+statement ok
+CREATE VIEW lineage_history_statements.system_source_view AS
+SELECT dummy FROM system.one
+
+# INSERT FROM Stage uses the COPY plan path and purges input files, so keep it last.
+statement ok
+CREATE TABLE lineage_history_statements.insert_stage_dst(a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_statements.insert_stage_dst
+FROM @lineage_history_statements_stage
+FILE_FORMAT = (TYPE = PARQUET)

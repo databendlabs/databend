@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -216,14 +217,15 @@ impl PhysicalPlanBuilder {
         let column_projections = required.clone();
         let mut used = vec![];
         // Only keep columns needed by parent plan.
-        for s in eval_scalar.items.iter() {
+        for s in &eval_scalar.items {
             if !required.contains(&s.index) {
                 continue;
             }
             used.push(s.clone());
-            s.scalar.used_columns().iter().for_each(|c| {
-                required.insert(*c);
-            })
+            // The item defines this output index. Only request the child column
+            // when the defining expression itself references that index.
+            required.remove(&s.index);
+            s.scalar.collect_used_columns(&mut required);
         }
         // 2. Build physical plan.
         if used.is_empty() {
@@ -262,7 +264,8 @@ impl PhysicalPlanBuilder {
                     .scalar
                     .type_check(input_schema.as_ref())?
                     .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok((expr.as_remote_expr(), item.index))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -392,12 +395,14 @@ impl PhysicalPlanBuilder {
                         }
                     }
 
-                    srf_item.scalar = ScalarExpr::FunctionCall(FunctionCall {
+                    let function = FunctionCall {
                         span: srf_func.span,
                         func_name: srf_func.func_name.clone(),
-                        params: visitor.params.into_iter().collect::<Vec<_>>(),
+                        params: visitor.params.into_iter().collect(),
                         arguments: srf_func.arguments.clone(),
-                    });
+                        return_type: srf_func.return_type.clone(),
+                    };
+                    srf_item.scalar = ScalarExpr::FunctionCall(function);
                 }
             }
         }

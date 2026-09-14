@@ -36,6 +36,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -93,11 +94,44 @@ pub struct ColumnStats {
     pub null_count: Option<u64>,
 }
 
+impl ColumnStats {
+    pub fn to_basic_column_statistics(&self) -> BasicColumnStatistics {
+        BasicColumnStatistics {
+            min: to_datum(&self.min),
+            max: to_datum(&self.max),
+            ndv: self.ndv,
+            null_count: self.null_count.unwrap_or(0),
+            in_memory_size: 0,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HistogramStats {
     pub accuracy: bool,
     pub buckets: Vec<HistogramBucketStats>,
     pub avg_spacing: Option<f64>,
+}
+
+impl HistogramStats {
+    pub fn to_histogram(&self) -> Result<Histogram> {
+        let buckets = self
+            .buckets
+            .iter()
+            .map(|bucket| {
+                HistogramBucket::try_from_bounds(
+                    bucket.lower_bound.clone(),
+                    bucket.upper_bound.clone(),
+                    bucket.num_values,
+                    bucket.num_distinct,
+                )
+                .map_err(|err| ErrorCode::Internal(format!("invalid histogram bucket: {err}")))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Histogram::try_from_buckets(self.accuracy, buckets, self.avg_spacing)
+            .map_err(|err| ErrorCode::Internal(format!("invalid histogram: {err}")))
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -416,6 +450,7 @@ fn to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
                     .and_then(|f| Scalar::Number(NumberScalar::Float64(f.into())).to_datum())
             }),
         serde_json::Value::String(s) => Scalar::String(s.clone()).to_datum(),
+        serde_json::Value::Object(_) => serde_json::from_value(v.clone()).ok(),
         _ => None,
     })
 }
@@ -507,7 +542,7 @@ impl StatsApplier<'_> {
     ) -> HashMap<Symbol, Option<BasicColumnStatistics>> {
         let mut result = HashMap::new();
 
-        for column in metadata.columns_by_table_index(table_index).iter() {
+        for column in metadata.columns_by_table_index(table_index) {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,
                 column_name,
@@ -516,18 +551,10 @@ impl StatsApplier<'_> {
             {
                 let full_name = format!("{table_name}.{column_name}");
                 if let Some(stats) = self.column_stats.get(&full_name) {
-                    result.insert(
-                        *column_index,
-                        Some(BasicColumnStatistics {
-                            min: to_datum(&stats.min)
-                                .or_else(|| default_min_datum(&column.data_type())),
-                            max: to_datum(&stats.max)
-                                .or_else(|| default_max_datum(&column.data_type())),
-                            ndv: stats.ndv,
-                            null_count: stats.null_count.unwrap_or(0),
-                            in_memory_size: 0,
-                        }),
-                    );
+                    let mut stats = stats.to_basic_column_statistics();
+                    stats.min = stats.min.or_else(|| default_min_datum(&column.data_type()));
+                    stats.max = stats.max.or_else(|| default_max_datum(&column.data_type()));
+                    result.insert(*column_index, Some(stats));
                 }
             }
         }
@@ -543,7 +570,7 @@ impl StatsApplier<'_> {
     ) -> Result<HashMap<Symbol, Option<Histogram>>> {
         let mut result = HashMap::new();
 
-        for column in metadata.columns_by_table_index(table_index).iter() {
+        for column in metadata.columns_by_table_index(table_index) {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_index,
                 column_name,
@@ -552,32 +579,13 @@ impl StatsApplier<'_> {
             {
                 let full_name = format!("{table_name}.{column_name}");
                 if let Some(stats) = self.histogram_stats.get(&full_name) {
-                    result.insert(*column_index, Some(histogram_from_stats(stats)?));
+                    result.insert(*column_index, Some(stats.to_histogram()?));
                 }
             }
         }
 
         Ok(result)
     }
-}
-
-pub(crate) fn histogram_from_stats(stats: &HistogramStats) -> Result<Histogram> {
-    let buckets = stats
-        .buckets
-        .iter()
-        .map(|bucket| {
-            HistogramBucket::try_from_bounds(
-                bucket.lower_bound.clone(),
-                bucket.upper_bound.clone(),
-                bucket.num_values,
-                bucket.num_distinct,
-            )
-            .map_err(|err| ErrorCode::Internal(format!("invalid histogram bucket: {err}")))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    Histogram::try_from_buckets(stats.accuracy, buckets, stats.avg_spacing)
-        .map_err(|err| ErrorCode::Internal(format!("invalid histogram: {err}")))
 }
 
 fn write_result<F>(mint: &mut Mint, name: &str, f: F) -> Result<()>
@@ -612,13 +620,19 @@ where
         &case.column_stats,
         &case.histogram_stats,
     )?;
-    let raw = raw_plan.format_indent(databend_common_sql::FormatOptions { verbose: false })?;
+    let raw = raw_plan.format_indent(
+        databend_common_sql::FormatOptions { verbose: false },
+        &StatContext::default(),
+    )?;
     write_result(mint, &format!("{}_raw.txt", case.stem), |f| {
         writeln!(f, "{}", raw).map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))
     })?;
 
     let optimized_plan = runner.optimize_plan(raw_plan).await?;
-    let optimized = optimized_plan.format_indent(databend_common_sql::FormatOptions::default())?;
+    let optimized = optimized_plan.format_indent(
+        databend_common_sql::FormatOptions::default(),
+        &StatContext::default(),
+    )?;
     write_result(mint, &format!("{}_optimized.txt", case.stem), |f| {
         writeln!(f, "{}", optimized)
             .map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))

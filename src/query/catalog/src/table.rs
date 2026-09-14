@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Histogram;
 use databend_common_storage::StorageMetrics;
@@ -108,6 +109,15 @@ pub trait Table: Sync + Send {
     fn as_any(&self) -> &dyn Any;
 
     fn get_table_info(&self) -> &TableInfo;
+
+    /// Returns the source table whose data columns a stream exposes.
+    ///
+    /// Lineage intentionally passes through a stream to its source table.
+    /// Views are lineage boundaries and must not use this relation-level hook;
+    /// their output columns are annotated separately by the planner.
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        None
+    }
 
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::TableSource(self.get_table_info().clone())
@@ -301,19 +311,6 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, num_snapshot_limit, dry_run);
-
-        Ok(None)
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -437,6 +434,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn plan_can_be_cached(&self) -> bool {
+        true
+    }
+
     fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
@@ -453,15 +454,16 @@ pub trait Table: Sync + Send {
         self.engine() == "STREAM"
     }
 
+    /// Whether this table instance represents a CHANGE_TRACKING data source.
+    fn has_changes_source(&self) -> bool {
+        false
+    }
+
     fn use_own_sample_block(&self) -> bool {
         false
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _index_id: u64,
-    ) -> Result<u64> {
+    async fn remove_aggregating_index_files(&self, _ctx: Arc<dyn TableContext>) -> Result<u64> {
         Ok(0)
     }
 
@@ -522,6 +524,18 @@ pub trait TableExt: Table {
         } else {
             Ok(())
         }
+    }
+
+    /// Compact is storage maintenance, not a user DML write. Materialized views are marked
+    /// read-only so INSERT/UPDATE stay blocked, but compact may still rewrite physical blocks.
+    fn check_mutable_or_materialized_view(&self) -> Result<()> {
+        self.check_mutable().or_else(|error| {
+            if is_materialized_view_engine(self.engine()) {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
     }
 }
 impl<T: ?Sized> TableExt for T where T: Table {}

@@ -208,3 +208,73 @@ mod dummy {
         Column::String(builder.build())
     }
 }
+
+// Compare legacy and rolling NGRAM hashing through the complete builder path.
+#[divan::bench_group(sample_count = 2, max_time = 3.0)]
+mod rolling_hash_experiment {
+    use std::collections::BTreeMap;
+
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_storages_common_index::BloomIndexBuilder;
+    use databend_storages_common_index::BloomIndexType;
+    use databend_storages_common_index::NgramArgs;
+    use databend_storages_common_index::NgramHashAlgorithm;
+
+    const ROWS: usize = 2_500;
+    const ROW_LEN: usize = 3_294;
+    const BLOOM_SIZE: u64 = 1024 * 1024;
+    const TEMPLATE: &[u8] = b" ERROR request failed service=apm trace_id=0123456789abcdef stack=java.lang.RuntimeException at com.example.Service.run ";
+
+    fn column() -> Column {
+        let mut builder = StringColumnBuilder::with_capacity(ROWS);
+        let mut row = Vec::with_capacity(ROW_LEN);
+        while row.len() < ROW_LEN {
+            let remaining = ROW_LEN - row.len();
+            row.extend_from_slice(&TEMPLATE[..remaining.min(TEMPLATE.len())]);
+        }
+        for _ in 0..ROWS {
+            builder.put_slice(&row);
+            builder.commit_row();
+        }
+        Column::String(builder.build())
+    }
+
+    fn build(column: &Column, gram_size: usize, hash_algorithm: NgramHashAlgorithm) {
+        let args = [NgramArgs::new(
+            0,
+            TableField::new("message", TableDataType::String),
+            gram_size,
+            BLOOM_SIZE,
+            0.1,
+            hash_algorithm,
+        )];
+        let mut builder = BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::default(),
+            BTreeMap::new(),
+            &args,
+        )
+        .unwrap();
+        builder
+            .add_block(&DataBlock::new_from_columns(vec![column.clone()]))
+            .unwrap();
+        divan::black_box(builder.finalize().unwrap());
+    }
+
+    #[divan::bench(args = [4, 8, 20, 30])]
+    fn city64_v0(bencher: divan::Bencher, gram_size: usize) {
+        let column = column();
+        bencher.bench_local(|| build(&column, gram_size, NgramHashAlgorithm::City64V0));
+    }
+
+    #[divan::bench(args = [4, 8, 20, 30])]
+    fn rolling_v1(bencher: divan::Bencher, gram_size: usize) {
+        let column = column();
+        bencher.bench_local(|| build(&column, gram_size, NgramHashAlgorithm::RollingV1));
+    }
+}

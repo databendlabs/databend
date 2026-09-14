@@ -331,7 +331,7 @@ impl Binder {
             uri_location: None,
             cluster_by: None,
             table_options: Default::default(),
-            iceberg_table_partition: None,
+            partition_by: None,
             table_properties: Default::default(),
             as_query: Some(as_query),
             table_type: TableType::Temporary,

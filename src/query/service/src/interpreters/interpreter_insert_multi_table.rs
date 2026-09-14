@@ -26,6 +26,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
@@ -103,30 +104,32 @@ impl Interpreter for InsertMultiTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let physical_plan = self.build_physical_plan(false).await?;
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        // Execute hook.
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_compact_after_multi_table_insert()?
-        {
-            for (_, (db, tbl)) in &self.plan.target_tables {
-                let hook_operator = HookOperator::create(
-                    self.ctx.clone(),
-                    // multi table insert only support default catalog
-                    CATALOG_DEFAULT.to_string(),
-                    db.to_string(),
-                    tbl.to_string(),
-                    MutationKind::Insert,
-                    LockTableOption::LockNoRetry,
-                );
-                hook_operator.execute(&mut build_res.main_pipeline).await;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let physical_plan = self.build_physical_plan(false).await?;
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+            // Execute hook.
+            if self
+                .ctx
+                .get_settings()
+                .get_enable_compact_after_multi_table_insert()?
+            {
+                for (_, (db, tbl)) in &self.plan.target_tables {
+                    let hook_operator = HookOperator::create(
+                        self.ctx.clone(),
+                        // multi table insert only support default catalog
+                        CATALOG_DEFAULT.to_string(),
+                        db.to_string(),
+                        tbl.to_string(),
+                        MutationKind::Insert,
+                        LockTableOption::LockNoRetry,
+                    );
+                    hook_operator.execute(&mut build_res.main_pipeline).await;
+                }
             }
-        }
-        Ok(build_res)
+            Ok(build_res)
+        })
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
@@ -447,8 +450,16 @@ impl InsertMultiTableInterpreter {
                 table,
                 casted_schema,
                 source_scalar_exprs,
+                ..
             } = into;
-            let table = self.ctx.get_table(catalog, database, table).await?;
+            let table_name = table;
+            let table = self.ctx.get_table(catalog, database, table_name).await?;
+            self.ctx.update_query_lineage_target_id(
+                catalog,
+                database,
+                table_name,
+                table.get_table_info().ident.table_id,
+            );
             branches.push(
                 table,
                 condition,
@@ -462,20 +473,24 @@ impl InsertMultiTableInterpreter {
 }
 
 fn and(left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
+    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "and".to_string(),
         params: vec![],
         arguments: vec![left, right],
+        return_type: Box::new(return_type),
     })
 }
 
 fn not(expr: ScalarExpr) -> ScalarExpr {
+    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&expr]);
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "not".to_string(),
         params: vec![],
         arguments: vec![expr],
+        return_type: Box::new(return_type),
     })
 }
 

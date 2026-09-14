@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -130,7 +131,6 @@ impl Binder {
             .with_column("database")
             .with_column("table")
             .with_column("source_column")
-            .with_column("virtual_column_id")
             .with_column("virtual_column_name")
             .with_column("virtual_column_type");
 
@@ -291,7 +291,7 @@ impl Binder {
         bind_context: &BindContext,
         with: &mut With,
         body: &mut SetExpr,
-    ) -> HashMap<String, HashSet<String>> {
+    ) -> HashMap<String, BTreeSet<String>> {
         if !bind_context.allow_virtual_column || with.recursive {
             return HashMap::new();
         }

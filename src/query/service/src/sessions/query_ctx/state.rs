@@ -144,16 +144,6 @@ impl TableContextPartitionStats for QueryContext {
         Ok(())
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
-    }
-
-    fn set_can_scan_from_agg_index(&self, enable: bool) {
-        self.shared
-            .can_scan_from_agg_index
-            .store(enable, Ordering::Release);
-    }
-
     fn get_enable_sort_spill(&self) -> bool {
         self.shared.enable_sort_spill.load(Ordering::Acquire)
     }
@@ -217,10 +207,14 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.clear();
     }
 
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        self.shared
-            .runtime_filter_state
-            .assert_empty(&self.get_id())
+    fn register_runtime_scan_filter(&self, scan_id: usize, filter: Arc<dyn RuntimeScanFilter>) {
+        let state = &self.shared.runtime_filter_state;
+        state.register_runtime_scan_filter(scan_id, filter);
+    }
+
+    fn get_runtime_scan_filters(&self, scan_id: usize) -> RuntimeScanFilters {
+        let state = &self.shared.runtime_filter_state;
+        state.get_runtime_scan_filters(scan_id)
     }
 
     fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
@@ -243,7 +237,10 @@ impl TableContextRuntimeFilter for QueryContext {
         self.shared.runtime_filter_state.get_runtime_filters(id)
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
+    fn get_bloom_runtime_filter_with_id(
+        &self,
+        id: IndexType,
+    ) -> Vec<(Expr<String>, RuntimeBloomFilter)> {
         self.shared
             .runtime_filter_state
             .get_bloom_runtime_filter_with_id(id)

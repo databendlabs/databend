@@ -18,4 +18,5 @@ pub mod optimizer;
 pub use lite_context::FrequencyStatsMap;
 pub use lite_context::LiteTableContext;
 pub use lite_context::init_testing_globals;
+pub use lite_context::init_testing_globals_with_config;
 pub use optimizer::*;

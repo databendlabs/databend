@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
+
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::optimizer::ir::SExpr;
@@ -97,7 +99,6 @@ fn scan_signature(scan: &Scan, metadata: &Metadata) -> Option<IndexType> {
     });
     if has_internal_column
         || scan.prewhere.is_some()
-        || scan.agg_index.is_some()
         || scan.change_type.is_some()
         || scan.update_stream_columns
         || scan.inverted_index.is_some()
@@ -111,7 +112,7 @@ fn scan_signature(scan: &Scan, metadata: &Metadata) -> Option<IndexType> {
 
     let table_entry = metadata.table(scan.table_index);
     let table = table_entry.table();
-    if table.engine() != "FUSE" {
+    if !is_fuse_backed_engine(table.engine()) {
         return None;
     }
 

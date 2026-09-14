@@ -15,18 +15,19 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
@@ -39,10 +40,11 @@ pub struct RuleFilterNulls {
     id: RuleID,
     matchers: Vec<Matcher>,
     is_distributed: bool,
+    stat_context: StatContext,
 }
 
 impl RuleFilterNulls {
-    pub fn new(is_distributed: bool) -> Self {
+    pub fn new(is_distributed: bool, stat_context: StatContext) -> Self {
         Self {
             id: RuleID::FilterNulls,
             // Join
@@ -53,6 +55,7 @@ impl RuleFilterNulls {
                 children: vec![Matcher::Leaf, Matcher::Leaf],
             }],
             is_distributed,
+            stat_context,
         }
     }
 
@@ -81,7 +84,7 @@ impl RuleFilterNulls {
             return None;
         }
 
-        if (column_stats.null_count.expected() / cardinality) >= NULL_THRESHOLD_RATIO {
+        if (column_stats.null_count().expected() / cardinality) >= NULL_THRESHOLD_RATIO {
             Some(join_key_null_filter(key_expr))
         } else {
             None
@@ -99,7 +102,7 @@ impl Rule for RuleFilterNulls {
             state.add_result(s_expr.clone());
             return Ok(());
         }
-        let join: Join = s_expr.plan().clone().try_into()?;
+        let join = s_expr.plan().as_join().unwrap();
         if !matches!(
             join.join_type,
             JoinType::Inner | JoinType::LeftSemi | JoinType::RightSemi
@@ -108,11 +111,12 @@ impl Rule for RuleFilterNulls {
             state.add_result(s_expr.clone());
             return Ok(());
         }
-        let mut left_child = s_expr.child(0)?.clone();
-        let mut right_child = s_expr.child(1)?.clone();
+        let left_child = s_expr.child(0)?;
+        let right_child = s_expr.child(1)?;
 
-        let left_stat = RelExpr::with_s_expr(&left_child).derive_cardinality()?;
-        let right_stat = RelExpr::with_s_expr(&right_child).derive_cardinality()?;
+        let left_stat = RelExpr::with_s_expr(left_child).derive_cardinality(&self.stat_context)?;
+        let right_stat =
+            RelExpr::with_s_expr(right_child).derive_cardinality(&self.stat_context)?;
         let mut left_null_predicates = vec![];
         let mut right_null_predicates = vec![];
         for join_key in join.equi_conditions.iter() {
@@ -122,7 +126,7 @@ impl Rule for RuleFilterNulls {
 
             let left_key = &join_key.left;
             let right_key = &join_key.right;
-            if single_plan(&left_child) {
+            if single_plan(left_child) {
                 if let Some(filter) = Self::should_filter_nulls(
                     left_key,
                     &left_stat.statistics,
@@ -131,7 +135,7 @@ impl Rule for RuleFilterNulls {
                     left_null_predicates.push(filter);
                 }
             }
-            if single_plan(&right_child) {
+            if single_plan(right_child) {
                 if let Some(filter) = Self::should_filter_nulls(
                     right_key,
                     &right_stat.statistics,
@@ -141,25 +145,29 @@ impl Rule for RuleFilterNulls {
                 }
             }
         }
-        if !left_null_predicates.is_empty() {
+        let left_child = if !left_null_predicates.is_empty() {
             let left_null_filter = Filter {
                 predicates: left_null_predicates,
             };
-            left_child = SExpr::create_unary(
+            SExpr::create_unary(
                 Arc::new(RelOperator::Filter(left_null_filter)),
                 Arc::new(left_child.clone()),
-            );
-        }
+            )
+        } else {
+            left_child.clone()
+        };
 
-        if !right_null_predicates.is_empty() {
+        let right_child = if !right_null_predicates.is_empty() {
             let right_null_filter = Filter {
                 predicates: right_null_predicates,
             };
-            right_child = SExpr::create_unary(
+            SExpr::create_unary(
                 Arc::new(RelOperator::Filter(right_null_filter)),
                 Arc::new(right_child.clone()),
-            );
-        }
+            )
+        } else {
+            right_child.clone()
+        };
 
         let mut res = s_expr.replace_children(vec![Arc::new(left_child), Arc::new(right_child)]);
         res.set_applied_rule(&self.id());
@@ -180,6 +188,7 @@ fn join_key_null_filter(key: &ScalarExpr) -> ScalarExpr {
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![key.clone()],
+        return_type: Box::new(DataType::Boolean),
     })
 }
 

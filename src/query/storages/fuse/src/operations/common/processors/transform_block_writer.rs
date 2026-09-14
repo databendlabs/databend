@@ -263,7 +263,11 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                     &extended_block_meta.draft_virtual_block_meta
                 {
                     (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta.virtual_column_size) as usize
+                        + draft_virtual_block_meta
+                            .virtual_columns
+                            .as_ref()
+                            .map(|meta| meta.virtual_column_size)
+                            .unwrap_or_default()) as usize
                 } else {
                     extended_block_meta.block_meta.block_size as usize
                 };
@@ -294,6 +298,7 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                     DataBlock::empty_with_meta(Box::new(MutationLogs {
                         entries: vec![MutationLogEntry::AppendBlock {
                             block_meta: Arc::new(extended_block_meta),
+                            merge_hll: false,
                         }],
                         ..Default::default()
                     }))

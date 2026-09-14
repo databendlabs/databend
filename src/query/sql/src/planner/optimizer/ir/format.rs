@@ -52,6 +52,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Aggregate(_) => "Aggregate".to_string(),
         RelOperator::Sort(_) => "Sort".to_string(),
         RelOperator::Limit(_) => "Limit".to_string(),
+        RelOperator::TopN(_) => "TopN".to_string(),
         RelOperator::UnionAll(_) => "UnionAll".to_string(),
         RelOperator::Exchange(op) => {
             format!("Exchange: ({})", match op {

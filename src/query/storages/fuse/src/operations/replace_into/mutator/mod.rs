@@ -21,4 +21,8 @@ pub use column_hash::row_hash_of_columns;
 pub use deletion_accumulator::BlockDeletionKeys;
 pub use deletion_accumulator::DeletionAccumulator;
 pub use replace_into_mutator::ReplaceIntoMutator;
+pub(crate) use replace_into_operation_agg::PreparedReplaceMutation;
+pub(crate) use replace_into_operation_agg::ReplaceBatchCompletion;
+pub(crate) use replace_into_operation_agg::ReplaceBlockMutationTask;
+pub use replace_into_operation_agg::ReplaceIntoMutatorParams;
 pub use replace_into_operation_agg::ReplaceIntoOperationAggregator;

@@ -144,6 +144,10 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
                 Ok(Event::NeedData)
             }
             Step::Output => {
+                if self.buffer.need_spill() {
+                    return Ok(Event::Sync);
+                }
+
                 if !self.output.can_push() {
                     return Ok(Event::NeedConsume);
                 }
@@ -176,6 +180,11 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
                 Ok(())
             }
             Step::Output => {
+                if self.buffer.need_spill() {
+                    self.buffer.spill()?;
+                    return Ok(());
+                }
+
                 // Restore next non-empty partition and process it.
                 let restored = self.buffer.restore()?;
                 if !restored.is_empty() {

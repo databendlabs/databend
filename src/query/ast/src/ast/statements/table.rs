@@ -138,14 +138,33 @@ impl Display for ShowDropTablesStmt {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
+pub enum ClusterType {
+    Linear,
+    Hilbert,
+}
+
+impl Display for ClusterType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ClusterType::Linear => write!(f, "LINEAR"),
+            ClusterType::Hilbert => write!(f, "HILBERT"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ClusterOption {
+    pub cluster_type: ClusterType,
     pub cluster_exprs: Vec<Expr>,
 }
 
 impl Display for ClusterOption {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CLUSTER BY (")?;
+        match self.cluster_type {
+            ClusterType::Linear => write!(f, "CLUSTER BY (")?,
+            ClusterType::Hilbert => write!(f, "CLUSTER BY HILBERT(")?,
+        }
         write_comma_separated_list(f, &self.cluster_exprs)?;
         write!(f, ")")
     }
@@ -162,7 +181,7 @@ pub struct CreateTableStmt {
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Option<ClusterOption>,
     pub table_options: BTreeMap<String, String>,
-    pub iceberg_table_partition: Option<Vec<Identifier>>,
+    pub partition_by: Option<Vec<Expr>>,
     pub table_properties: Option<BTreeMap<String, String>>,
     pub as_query: Option<Box<Query>>,
     pub table_type: TableType,
@@ -211,6 +230,12 @@ impl Display for CreateTableStmt {
             write!(f, " {uri_location}")?;
         }
 
+        if let Some(partition_by) = &self.partition_by {
+            write!(f, " PARTITION BY(")?;
+            write_comma_separated_list(f, partition_by)?;
+            write!(f, ")")?;
+        }
+
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
         }
@@ -219,12 +244,6 @@ impl Display for CreateTableStmt {
         if !self.table_options.is_empty() {
             write!(f, " ")?;
             write_space_separated_string_map(f, &self.table_options)?;
-        }
-
-        if let Some(iceberg_table_partition) = &self.iceberg_table_partition {
-            write!(f, " PARTITION BY(")?;
-            write_comma_separated_list(f, iceberg_table_partition)?;
-            write!(f, ")")?;
         }
 
         if let Some(table_properties) = &self.table_properties {
@@ -454,6 +473,9 @@ pub enum AlterTableAction {
     AlterTableClusterKey {
         cluster_by: ClusterOption,
     },
+    AlterTablePartitionBy {
+        partition_by: Vec<Expr>,
+    },
     DropTableClusterKey,
     ReclusterTable {
         is_final: bool,
@@ -535,6 +557,11 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 write!(f, "{cluster_by}")?;
+            }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                write!(f, "PARTITION BY (")?;
+                write_comma_separated_list(f, partition_by)?;
+                write!(f, ")")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -709,45 +736,52 @@ impl Display for TruncateTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumTableStmt {
-    pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub option: VacuumTableOption,
 }
 
 impl Display for VacuumTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM TABLE ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
-        write!(f, " {}", &self.option)?;
+        write_dot_separated_list(f, self.database.iter().chain(Some(&self.table)))
+    }
+}
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct VacuumTablesStmt {
+    pub database: Option<Identifier>,
+}
+
+impl Display for VacuumTablesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TABLES")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct VacuumAllStmt;
+
+impl Display for VacuumAllStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM ALL")
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumDropTableStmt {
-    pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    pub option: VacuumDropTableOption,
 }
 
 impl Display for VacuumDropTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "VACUUM DROP TABLE ")?;
-        if self.catalog.is_some() || self.database.is_some() {
-            write!(f, "FROM ")?;
-            write_dot_separated_list(f, self.catalog.iter().chain(&self.database))?;
-            write!(f, " ")?;
+        write!(f, "VACUUM DROP TABLE")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
         }
-        write!(f, "{}", &self.option)?;
-
         Ok(())
     }
 }
@@ -792,7 +826,13 @@ pub struct OptimizeTableStmt {
 
 impl Display for OptimizeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "OPTIMIZE TABLE ")?;
+        self.fmt_with_target(f, "TABLE")
+    }
+}
+
+impl OptimizeTableStmt {
+    pub(super) fn fmt_with_target(&self, f: &mut Formatter, target: &str) -> std::fmt::Result {
+        write!(f, "OPTIMIZE {target} ")?;
         write_dot_separated_list(
             f,
             self.catalog
@@ -879,12 +919,12 @@ pub enum Engine {
     Null,
     Memory,
     Fuse,
+    MaterializedView,
     View,
     Random,
     Iceberg,
     Delta,
     Paimon,
-    Proxy,
 }
 
 impl Display for Engine {
@@ -893,12 +933,12 @@ impl Display for Engine {
             Engine::Null => write!(f, "NULL"),
             Engine::Memory => write!(f, "MEMORY"),
             Engine::Fuse => write!(f, "FUSE"),
+            Engine::MaterializedView => write!(f, "MATERIALIZED_VIEW"),
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
             Engine::Delta => write!(f, "DELTA"),
             Engine::Paimon => write!(f, "PAIMON"),
-            Engine::Proxy => write!(f, "PROXY"),
         }
     }
 }
@@ -909,12 +949,12 @@ impl From<&str> for Engine {
             "null" => Engine::Null,
             "memory" => Engine::Memory,
             "fuse" => Engine::Fuse,
+            "materialized_view" => Engine::MaterializedView,
             "view" => Engine::View,
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,
             "delta" => Engine::Delta,
             "paimon" => Engine::Paimon,
-            "proxy" => Engine::Proxy,
             _ => unreachable!("invalid engine: {}", s),
         }
     }
@@ -926,75 +966,18 @@ pub enum CompactTarget {
     Segment,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct VacuumTableOption {
-    // Some(true) means dry run with summary option
-    pub dry_run: Option<bool>,
-}
-
-impl Display for VacuumTableOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(summary) = self.dry_run {
-            write!(f, "DRY RUN")?;
-            if summary {
-                write!(f, " SUMMARY")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct VacuumDropTableOption {
-    // Some(true) means dry run with summary option
-    pub dry_run: Option<bool>,
-    pub limit: Option<usize>,
-}
-
-impl Display for VacuumDropTableOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(summary) = self.dry_run {
-            write!(f, "DRY RUN")?;
-            if summary {
-                write!(f, " SUMMARY")?;
-            }
-        }
-        if let Some(limit) = self.limit {
-            write!(f, " LIMIT {}", limit)?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
-    All,
-    Purge { before: Option<TimeTravelPoint> },
     Compact { target: CompactTarget },
 }
 
 impl Display for OptimizeTableAction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            OptimizeTableAction::All => write!(f, "ALL"),
-            OptimizeTableAction::Purge { before } => {
-                write!(f, "PURGE")?;
-                if let Some(point) = before {
-                    write!(f, " BEFORE {}", point)?;
-                }
-                Ok(())
-            }
-            OptimizeTableAction::Compact { target } => {
-                match target {
-                    CompactTarget::Block => {
-                        write!(f, "COMPACT")?;
-                    }
-                    CompactTarget::Segment => {
-                        write!(f, "COMPACT SEGMENT")?;
-                    }
-                }
-                Ok(())
-            }
+            OptimizeTableAction::Compact { target } => match target {
+                CompactTarget::Block => write!(f, "COMPACT"),
+                CompactTarget::Segment => write!(f, "COMPACT SEGMENT"),
+            },
         }
     }
 }

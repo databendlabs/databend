@@ -22,6 +22,7 @@
 mod append;
 pub(crate) mod cache;
 mod catalog;
+mod credential;
 mod database;
 mod iceberg_inspect;
 mod partition;

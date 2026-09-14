@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::local_block_meta_serde;
@@ -28,6 +29,7 @@ use crate::operations::mutation::DeletedSegmentInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SerializeDataMeta {
     SerializeBlock(SerializeBlock),
+    SerializeAppend,
     DeletedSegment(DeletedSegmentInfo),
     CompactExtras(CompactExtraInfo),
 }
@@ -53,6 +55,8 @@ pub enum ClusterStatsGenType {
 pub struct SerializeBlock {
     pub index: BlockMetaIndex,
     pub stats_type: ClusterStatsGenType,
+    #[serde(default)]
+    pub virtual_column_layout: Option<VirtualColumnLayout>,
     /// Rows affected by the logical UPDATE operation.
     #[serde(default)]
     pub logical_updated_rows: u64,
@@ -67,9 +71,26 @@ impl SerializeBlock {
         logical_updated_rows: u64,
         logical_deleted_rows: u64,
     ) -> Self {
+        Self::create_with_virtual_layout(
+            index,
+            stats_type,
+            logical_updated_rows,
+            logical_deleted_rows,
+            None,
+        )
+    }
+
+    pub fn create_with_virtual_layout(
+        index: BlockMetaIndex,
+        stats_type: ClusterStatsGenType,
+        logical_updated_rows: u64,
+        logical_deleted_rows: u64,
+        virtual_column_layout: Option<VirtualColumnLayout>,
+    ) -> Self {
         SerializeBlock {
             index,
             stats_type,
+            virtual_column_layout,
             logical_updated_rows,
             logical_deleted_rows,
         }
@@ -81,6 +102,7 @@ pub enum CompactSourceMeta {
         read_res: Vec<BlockReadResult>,
         metas: Vec<Arc<BlockMeta>>,
         index: BlockMetaIndex,
+        virtual_column_layout: Option<VirtualColumnLayout>,
     },
     Extras(CompactExtraInfo),
 }

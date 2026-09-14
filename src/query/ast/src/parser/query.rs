@@ -47,17 +47,16 @@ pub fn query(i: Input) -> IResult<Query> {
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
     let (rest, mut set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
-    if set_operation_elements.len() == 1 {
-        let elem = set_operation_elements.pop().unwrap();
-        if matches!(
-            &elem.elem,
-            SetOperationElement::Group(_)
-                | SetOperationElement::SelectStmt { .. }
-                | SetOperationElement::Values(_)
-        ) {
-            return Ok((rest, set_operation_primary(elem)));
-        }
-        set_operation_elements.push(elem);
+    if matches!(set_operation_elements.as_slice(), [WithSpan {
+        elem: SetOperationElement::Group(_)
+            | SetOperationElement::SelectStmt { .. }
+            | SetOperationElement::Values(_),
+        ..
+    }]) {
+        return Ok((
+            rest,
+            set_operation_primary(set_operation_elements.pop().unwrap()),
+        ));
     }
     run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
@@ -461,13 +460,13 @@ pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
 #[allow(clippy::type_complexity)]
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
     fn qualified_wildcard_transform(
-        res: Option<(Identifier, &Token<'_>, Option<(Identifier, &Token<'_>)>)>,
+        res: Option<(Identifier, Option<Identifier>)>,
         star: &Token<'_>,
         opt_exclude: Option<(&Token<'_>, Vec<Identifier>)>,
     ) -> SelectTarget {
         let column_filter = opt_exclude.map(|(_, exclude)| ColumnFilter::Excludes(exclude));
         match res {
-            Some((fst, _, Some((snd, _)))) => SelectTarget::StarColumns {
+            Some((fst, Some(snd))) => SelectTarget::StarColumns {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Identifier(snd),
@@ -475,7 +474,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
                 ],
                 column_filter,
             },
-            Some((fst, _, None)) => SelectTarget::StarColumns {
+            Some((fst, None)) => SelectTarget::StarColumns {
                 qualified: vec![
                     Indirection::Identifier(fst),
                     Indirection::Star(Some(star.span)),
@@ -493,14 +492,14 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         // select * exclude ...
         map(
             rule! {
-               ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
+               #wildcard_qualification ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
             },
             |(res, star, opt_exclude)| qualified_wildcard_transform(res, star, opt_exclude),
         ),
         // select columns(* exclude ...)
         map(
             rule! {
-              COLUMNS ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )? ~ ")"
+              COLUMNS ~ "(" ~ #wildcard_qualification ~ "*" ~ ( EXCLUDE ~ #exclude_col )? ~ ")"
             },
             |(_, _, res, star, opt_exclude, _)| {
                 qualified_wildcard_transform(res, star, opt_exclude)
@@ -700,7 +699,7 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     let short_alias = map(
         rule! {
             #ident
-            ~ #error_hint(
+            ~ ^#error_hint(
                 rule! { AS },
                 "an alias without `AS` keyword has already been defined before this one, \
                     please remove one of them"
@@ -806,19 +805,18 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
     let (rest, mut table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
-    if table_reference_elements.len() == 1 {
-        let elem = table_reference_elements.pop().unwrap();
-        if matches!(
-            &elem.elem,
-            TableReferenceElement::Group(_)
-                | TableReferenceElement::Table { .. }
-                | TableReferenceElement::TableFunction { .. }
-                | TableReferenceElement::Subquery { .. }
-                | TableReferenceElement::Stage { .. }
-        ) {
-            return Ok((rest, table_reference_primary(elem)));
-        }
-        table_reference_elements.push(elem);
+    if matches!(table_reference_elements.as_slice(), [WithSpan {
+        elem: TableReferenceElement::Group(_)
+            | TableReferenceElement::Table { .. }
+            | TableReferenceElement::TableFunction { .. }
+            | TableReferenceElement::Subquery { .. }
+            | TableReferenceElement::Stage { .. },
+        ..
+    }]) {
+        return Ok((
+            rest,
+            table_reference_primary(table_reference_elements.pop().unwrap()),
+        ));
     }
     run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
 }

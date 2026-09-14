@@ -29,32 +29,24 @@ impl SingleToInnerOptimizer {
         SingleToInnerOptimizer {}
     }
 
-    pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         Self::single_to_inner(s_expr)
     }
 
     #[recursive::recursive]
-    fn single_to_inner(s_expr: &SExpr) -> Result<SExpr> {
-        let mut s_expr = if let RelOperator::Join(join) = s_expr.plan.as_ref()
+    fn single_to_inner(mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            children.push(Arc::new(Self::single_to_inner(Arc::unwrap_or_clone(
+                child,
+            ))?));
+        }
+        let mut s_expr = s_expr.replace_children(children);
+
+        if let RelOperator::Join(join) = Arc::make_mut(&mut s_expr.plan)
             && join.single_to_inner.is_some()
         {
-            let mut join = join.clone();
             join.join_type = JoinType::Inner;
-            s_expr.replace_plan(Arc::new(RelOperator::Join(join)))
-        } else {
-            s_expr.clone()
-        };
-        let mut children_changed = false;
-        let mut children = Vec::with_capacity(s_expr.arity());
-        for child in s_expr.children() {
-            let new_child = Self::single_to_inner(child)?;
-            if !new_child.eq(child) {
-                children_changed = true;
-            }
-            children.push(Arc::new(new_child));
-        }
-        if children_changed {
-            s_expr = s_expr.replace_children(children);
         }
 
         Ok(s_expr)
@@ -73,7 +65,7 @@ impl Optimizer for SingleToInnerOptimizer {
         "SingleToInnerOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 }

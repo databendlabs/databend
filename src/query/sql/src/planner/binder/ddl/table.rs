@@ -23,6 +23,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -34,7 +35,10 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
+use databend_common_ast::ast::Expr as AstExpr;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
@@ -55,8 +59,10 @@ use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::ast::VacuumAllStmt;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
+use databend_common_ast::ast::VacuumTablesStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
@@ -97,16 +103,23 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::WriteDistributionMode;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use derive_visitor::Visitor;
 use log::debug;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -135,6 +148,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTablePartitionByPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -147,13 +161,13 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::ModifyTableConnectionPlan;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::OptimizeCompactSegmentPlan;
-use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshTableCachePlan;
@@ -168,13 +182,34 @@ use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
-use crate::plans::VacuumDropTableOption;
+use crate::plans::VacuumAllPlan;
 use crate::plans::VacuumDropTablePlan;
-use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 
-const FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
+#[derive(Visitor)]
+#[visitor(FunctionCall(enter))]
+struct PartitionBucketValidator {
+    invalid: bool,
+}
+
+impl PartitionBucketValidator {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        if func.name.name.eq_ignore_ascii_case("bucket") {
+            self.invalid |= !matches!(
+                func.args.as_slice(),
+                [
+                    AstExpr::Literal {
+                        value: Literal::UInt64(buckets),
+                        ..
+                    },
+                    _
+                ] if (1..=u32::MAX as u64).contains(buckets)
+            );
+        }
+    }
+}
 
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
@@ -545,7 +580,10 @@ impl Binder {
         }
     }
 
-    async fn as_query_plan(&mut self, query: &Query) -> Result<Plan> {
+    pub(in crate::planner::binder) async fn as_query_plan(
+        &mut self,
+        query: &Query,
+    ) -> Result<Plan> {
         let stmt = Statement::Query(Box::new(query.clone()));
         let mut bind_context = BindContext::new();
         self.bind_statement(&mut bind_context, &stmt).await
@@ -568,7 +606,7 @@ impl Binder {
             table_type,
             engine,
             uri_location,
-            iceberg_table_partition,
+            partition_by,
             table_properties,
         } = stmt;
 
@@ -587,6 +625,14 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        // CREATE TABLE ... ENGINE = MATERIALIZED_VIEW is still parseable via Engine::MaterializedView,
+        // but it would bypass CREATE MATERIALIZED VIEW (definition, source binding, generation).
+        // Reject here so MV can only be published through bind_create_materialized_view.
+        if engine == Engine::MaterializedView {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",
+            ));
+        }
         let stage_resolver = StageResolver::from_table_context(
             self.ctx.clone(),
             UserApiProvider::instance(),
@@ -676,12 +722,36 @@ impl Binder {
             None => None,
         };
 
-        let table_partition = iceberg_table_partition.as_ref().map(|partitions| {
-            partitions
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<String>>()
-        });
+        if partition_by.is_some() && !matches!(engine, Engine::Fuse | Engine::Iceberg) {
+            return Err(ErrorCode::UnsupportedEngineParams(format!(
+                "PARTITION BY is not supported for engine {engine}"
+            )));
+        }
+
+        // Iceberg currently supports identity partition columns. Fuse partition expressions
+        // are normalized after the table schema has been bound below.
+        let table_partition = if matches!(engine, Engine::Iceberg) {
+            partition_by
+                .as_ref()
+                .map(|partitions| {
+                    partitions
+                        .iter()
+                        .map(|partition| match partition {
+                            AstExpr::ColumnRef { column, .. }
+                                if column.database.is_none() && column.table.is_none() =>
+                            {
+                                Ok(column.column.to_string())
+                            }
+                            _ => Err(ErrorCode::BadArguments(format!(
+                                "Iceberg PARTITION BY only supports column identifiers, got `{partition:#}`"
+                            ))),
+                        })
+                        .collect::<Result<Vec<_>>>()
+                })
+                .transpose()?
+        } else {
+            None
+        };
 
         let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
@@ -940,14 +1010,46 @@ impl Binder {
             )));
         }
 
+        if matches!(engine, Engine::Fuse) {
+            if let Some(mode) = options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+                let mode = mode.parse::<WriteDistributionMode>()?;
+                if mode == WriteDistributionMode::Hash && partition_by.is_none() {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                    )));
+                }
+            }
+        }
+
+        if matches!(engine, Engine::Fuse)
+            && let Some(partition_exprs) = partition_by
+        {
+            let keys = self
+                .analyze_table_keys(partition_exprs, schema.clone(), None, "PARTITION BY", false)
+                .await?;
+            options.insert(
+                OPT_KEY_PARTITION_BY.to_owned(),
+                format!("({})", keys.join(", ")),
+            );
+        }
+
         let mut cluster_key = None;
         if let Some(cluster_opt) = cluster_by {
             let keys = self
-                .analyze_cluster_keys(cluster_opt, schema.clone(), table_indexes.as_ref())
+                .analyze_cluster_keys(
+                    cluster_opt,
+                    schema.clone(),
+                    table_indexes.as_ref(),
+                    partition_by.is_none(),
+                )
                 .await?;
             if !keys.is_empty() {
+                options.insert(
+                    OPT_KEY_CLUSTER_TYPE.to_owned(),
+                    cluster_opt.cluster_type.to_string().to_lowercase(),
+                );
                 options
-                    .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                    .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
                     .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
@@ -1168,6 +1270,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::ModifyConnection { new_connection } => Ok(
@@ -1386,6 +1489,10 @@ impl Binder {
                         cluster_by,
                         tbl.schema(),
                         Some(&tbl.get_table_info().meta.indexes),
+                        !tbl.get_table_info()
+                            .meta
+                            .options
+                            .contains_key(OPT_KEY_PARTITION_BY),
                     )
                     .await?;
 
@@ -1395,8 +1502,69 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        target: MaintenanceTarget::Table,
                         branch,
                         cluster_keys,
+                        cluster_type: cluster_by.cluster_type.to_string().parse()?,
+                    },
+                )))
+            }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => tbl,
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        return Ok(Plan::AlterTablePartitionBy(Box::new(
+                            AlterTablePartitionByPlan {
+                                if_exists: true,
+                                catalog,
+                                database,
+                                table,
+                                table_id: None,
+                                partition_keys: vec![],
+                            },
+                        )));
+                    }
+                    Err(e) => return Err(e),
+                };
+
+                let engine = Engine::from(tbl.engine());
+                if !matches!(engine, Engine::Fuse) {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "ALTER TABLE PARTITION BY is not supported for engine {engine}"
+                    )));
+                }
+
+                if let Some(cluster_keys) = tbl.resolve_cluster_keys() {
+                    self.analyze_table_keys(
+                        &cluster_keys,
+                        tbl.schema(),
+                        Some(&tbl.get_table_info().meta.indexes),
+                        "CLUSTER BY with PARTITION BY",
+                        false,
+                    )
+                    .await?;
+                }
+
+                let partition_keys = self
+                    .analyze_table_keys(partition_by, tbl.schema(), None, "PARTITION BY", false)
+                    .await?;
+
+                Ok(Plan::AlterTablePartitionBy(Box::new(
+                    AlterTablePartitionByPlan {
+                        if_exists: *if_exists,
+                        catalog,
+                        database,
+                        table,
+                        table_id: Some(tbl.get_id()),
+                        partition_keys,
                     },
                 )))
             }
@@ -1406,6 +1574,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                     branch,
                 },
             ))),
@@ -1417,6 +1586,7 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                target: MaintenanceTarget::Table,
                 limit: limit.map(|v| v as usize),
                 selection: selection.clone(),
                 is_final: *is_final,
@@ -1437,6 +1607,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::UnsetOptions { targets } => {
@@ -1445,6 +1616,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    target: MaintenanceTarget::Table,
                 })))
             }
             AlterTableAction::RefreshTableCache => {
@@ -1623,7 +1795,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
-        bind_context: &mut BindContext,
+        _bind_context: &mut BindContext,
         stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
@@ -1638,37 +1810,6 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
-            AstOptimizeTableAction::All => {
-                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
-                    catalog,
-                    database,
-                    table,
-                    limit: CompactionLimits {
-                        segment_limit: limit,
-                        block_limit: None,
-                    },
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
-                Plan::OptimizeCompactBlock {
-                    s_expr: Box::new(s_expr),
-                    need_purge: true,
-                }
-            }
-            AstOptimizeTableAction::Purge { before } => {
-                let instant = if let Some(point) = before {
-                    let point = self.resolve_data_travel_point(bind_context, point)?;
-                    Some(point)
-                } else {
-                    None
-                };
-                Plan::OptimizePurge(Box::new(OptimizePurgePlan {
-                    catalog,
-                    database,
-                    table,
-                    instant,
-                    num_snapshot_limit: limit,
-                }))
-            }
             AstOptimizeTableAction::Compact { target } => match target {
                 CompactTarget::Block => {
                     let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
@@ -1683,7 +1824,6 @@ impl Binder {
                     let s_expr = SExpr::create_leaf(Arc::new(compact_block));
                     Plan::OptimizeCompactBlock {
                         s_expr: Box::new(s_expr),
-                        need_purge: false,
                     }
                 }
                 CompactTarget::Segment => {
@@ -1706,24 +1846,45 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &VacuumTableStmt,
     ) -> Result<Plan> {
-        let VacuumTableStmt {
-            catalog,
-            database,
-            table,
-            option,
-        } = stmt;
+        let database = stmt
+            .database
+            .as_ref()
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = normalize_identifier(&stmt.table, &self.name_resolution_ctx).name;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
-
-        let option = VacuumTableOption {
-            dry_run: option.dry_run,
-        };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
-            catalog,
+            catalog: self.ctx.get_current_catalog(),
             database,
             table,
-            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_tables(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTablesStmt,
+    ) -> Result<Plan> {
+        let database = stmt
+            .database
+            .as_ref()
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name);
+
+        Ok(Plan::VacuumTables(Box::new(VacuumTablesPlan {
+            catalog: self.ctx.get_current_catalog(),
+            database,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_all(
+        &mut self,
+        _bind_context: &mut BindContext,
+        _stmt: &VacuumAllStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::VacuumAll(Box::new(VacuumAllPlan {
+            catalog: self.ctx.get_current_catalog(),
         })))
     }
 
@@ -1733,31 +1894,15 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &VacuumDropTableStmt,
     ) -> Result<Plan> {
-        let VacuumDropTableStmt {
-            catalog,
-            database,
-            option,
-        } = stmt;
-
-        let catalog = catalog
+        let database = stmt
+            .database
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| "".to_string());
+            .map(|database| normalize_identifier(database, &self.name_resolution_ctx).name)
+            .unwrap_or_default();
 
-        let option = {
-            VacuumDropTableOption {
-                dry_run: option.dry_run,
-                limit: option.limit,
-            }
-        };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
-            catalog,
+            catalog: self.ctx.get_current_catalog(),
             database,
-            option,
         })))
     }
 
@@ -1976,17 +2121,16 @@ impl Binder {
             if let Some(len) = column.stats_truncate_len {
                 let inner_type = schema_data_type.remove_nullable();
                 if inner_type != databend_common_expression::TableDataType::String {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!(
-                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
-                            name, inner_type
-                        ),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                        name, inner_type
+                    )));
                 }
                 if len == 0 || len > 4096 {
-                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
-                    ));
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "STATS_TRUNCATE_LEN must be in range [1, 4096], got {}",
+                        len
+                    )));
                 }
             }
             fields_stats_truncate_len.push(column.stats_truncate_len);
@@ -2175,7 +2319,6 @@ impl Binder {
                         self.validate_spatial_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Spatial, column_ids, options)
                 }
-                AstTableIndexType::Aggregating => unreachable!(),
             };
 
             let table_index = TableIndex {
@@ -2328,10 +2471,39 @@ impl Binder {
         cluster_opt: &ClusterOption,
         schema: TableSchemaRef,
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
+        allow_vector: bool,
     ) -> Result<Vec<String>> {
-        let ClusterOption { cluster_exprs } = cluster_opt;
+        if cluster_opt.cluster_type == AstClusterType::Hilbert
+            && cluster_opt.cluster_exprs.len() != 2
+        {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering requires exactly two dimensions",
+            ));
+        }
+        let allow_vector = allow_vector && cluster_opt.cluster_type == AstClusterType::Linear;
+        self.analyze_table_keys(
+            &cluster_opt.cluster_exprs,
+            schema,
+            table_indexes,
+            if allow_vector {
+                "CLUSTER BY"
+            } else {
+                "CLUSTER BY with PARTITION BY"
+            },
+            allow_vector,
+        )
+        .await
+    }
 
-        let expr_len = cluster_exprs.len();
+    async fn analyze_table_keys(
+        &mut self,
+        key_exprs: &[AstExpr],
+        schema: TableSchemaRef,
+        table_indexes: Option<&BTreeMap<String, TableIndex>>,
+        key_name: &str,
+        allow_vector: bool,
+    ) -> Result<Vec<String>> {
+        let expr_len = key_exprs.len();
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
@@ -2357,7 +2529,7 @@ impl Binder {
             metadata,
             &[],
         );
-        // cluster keys cannot be a udf expression.
+        // Table keys cannot be a UDF expression.
         scalar_binder.forbid_udf();
 
         let mut normalizer = ClusterKeyNormalizer {
@@ -2366,31 +2538,42 @@ impl Binder {
             quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
             sql_dialect: self.dialect,
         };
-        let mut cluster_keys = Vec::with_capacity(expr_len);
+        let mut table_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
-        for cluster_expr in cluster_exprs.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
-            if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
+        for key_expr in key_exprs {
+            let mut validator = PartitionBucketValidator { invalid: false };
+            key_expr.drive(&mut validator);
+            if validator.invalid {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Cluster by expression `{:#}` is invalid",
-                    cluster_expr
+                    "{key_name} expression `{key_expr:#}` must use bucket with a constant count between 1 and {}",
+                    u32::MAX
                 )));
             }
 
-            let expr = cluster_key.as_expr()?;
+            let (table_key, _) = scalar_binder.bind(key_expr)?;
+            if table_key.used_columns().len() != 1 || !table_key.evaluable() {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "{key_name} expression `{key_expr:#}` is invalid"
+                )));
+            }
+
+            let expr = table_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Cluster by expression `{:#}` is not deterministic",
-                    cluster_expr
+                    "{key_name} expression `{key_expr:#}` is not deterministic"
                 )));
             }
 
             let data_type = expr.data_type();
             let (is_valid_type, is_vector_type) = Self::valid_cluster_key_type(data_type);
+            if is_vector_type && !allow_vector {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Vector data type is not supported for {key_name}"
+                )));
+            }
             if !is_valid_type {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
-                    "Unsupported data type '{}' for cluster by expression `{:#}`",
-                    data_type, cluster_expr
+                    "Unsupported data type '{data_type}' for {key_name} expression `{key_expr:#}`"
                 )));
             }
             if is_vector_type {
@@ -2408,8 +2591,7 @@ impl Binder {
                 };
                 let Ok(field) = schema.field_with_name(&id.column_name) else {
                     return Err(ErrorCode::InvalidClusterKeys(format!(
-                        "Cluster by expression `{:#}` is invalid",
-                        cluster_expr
+                        "{key_name} expression `{key_expr:#}` is invalid"
                     )));
                 };
                 let distances = table_indexes
@@ -2423,12 +2605,12 @@ impl Binder {
                 VectorDistanceType::from_index_options(field.name(), distances)?;
             }
 
-            let mut cluster_expr = cluster_expr.clone();
-            cluster_expr.drive_mut(&mut normalizer);
-            cluster_keys.push(format!("{:#}", &cluster_expr));
+            let mut key_expr = key_expr.clone();
+            key_expr.drive_mut(&mut normalizer);
+            table_keys.push(format!("{key_expr:#}"));
         }
 
-        Ok(cluster_keys)
+        Ok(table_keys)
     }
 
     pub(crate) fn valid_cluster_key_type(data_type: &DataType) -> (bool, bool) {

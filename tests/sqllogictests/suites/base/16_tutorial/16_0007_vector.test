@@ -1,0 +1,63 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/005-vector.sql
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE TABLE frame_embeddings (
+    frame_id      STRING,
+    video_id      STRING,
+    sensor_view   STRING,
+    embedding     VECTOR(8),
+    encoder_build STRING,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    VECTOR INDEX idx_frame_embeddings (embedding) distance = 'cosine'
+)
+
+statement ok
+INSERT INTO frame_embeddings VALUES
+                                 ('FRAME-0101','VID-20250101-001','roof_cam',
+                                     [0.10,0.22,0.31,0.44,0.15,0.28,0.37,0.41],'clip-lite-v1',DEFAULT),
+                                 ('FRAME-0102','VID-20250101-001','roof_cam',
+                                     [0.11,0.21,0.30,0.43,0.14,0.30,0.35,0.40],'clip-lite-v1',DEFAULT),
+                                 ('FRAME-0201','VID-20250101-002','front_cam',
+                                     [0.50,0.45,0.55,0.60,0.52,0.48,0.57,0.62],'night-fusion-v2',DEFAULT),
+                                 ('FRAME-0401','VID-20250103-001','rear_cam',
+                                     [0.12,0.23,0.33,0.45,0.16,0.29,0.38,0.42],'night-fusion-v2',DEFAULT)
+
+query TTTR
+SELECT frame_id,
+       video_id,
+       sensor_view,
+       COSINE_DISTANCE(
+               embedding,
+           [0.10,0.22,0.31,0.44,0.15,0.28,0.37,0.41]::VECTOR(8)
+       ) AS distance
+FROM frame_embeddings
+ORDER BY distance
+    LIMIT 3
+----
+FRAME-0401 VID-20250103-001 rear_cam 0.09757733
+FRAME-0101 VID-20250101-001 roof_cam 0.098127365
+FRAME-0102 VID-20250101-001 roof_cam 0.098986864
+
+query TTTR
+SELECT frame_id,
+       video_id,
+       sensor_view,
+       COSINE_DISTANCE(
+               embedding,
+           [0.10,0.22,0.31,0.44,0.15,0.28,0.37,0.41]::VECTOR(8)
+       ) AS distance
+FROM frame_embeddings
+WHERE sensor_view = 'rear_cam'
+ORDER BY distance
+    LIMIT 5
+----
+FRAME-0401 VID-20250103-001 rear_cam 0.09757733
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo

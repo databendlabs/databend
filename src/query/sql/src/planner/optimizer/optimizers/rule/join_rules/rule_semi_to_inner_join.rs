@@ -117,7 +117,7 @@ impl Rule for RuleSemiToInnerJoin {
     }
 }
 
-fn visit_group_by_keys(child: &SExpr, visitor: &mut impl FnMut(Symbol, DataType)) -> Result<()> {
+fn visit_group_by_keys(child: &SExpr, visitor: &mut impl FnMut(Symbol, &DataType)) -> Result<()> {
     match child.plan() {
         RelOperator::EvalScalar(_)
         | RelOperator::Filter(_)
@@ -127,11 +127,12 @@ fn visit_group_by_keys(child: &SExpr, visitor: &mut impl FnMut(Symbol, DataType)
         }
         RelOperator::Aggregate(agg) => {
             for item in agg.group_items.iter() {
-                visitor(item.index, item.scalar.data_type()?);
+                visitor(item.index, item.scalar.data_type().as_ref());
             }
         }
         RelOperator::Sort(_)
         | RelOperator::Limit(_)
+        | RelOperator::TopN(_)
         | RelOperator::Exchange(_)
         | RelOperator::UnionAll(_)
         | RelOperator::DummyTableScan(_)

@@ -20,12 +20,14 @@ use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use log::info;
 use opendal::Operator;
 
@@ -33,9 +35,12 @@ use crate::TableContext;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::build_virtual_segment_schema;
 use crate::io::read::read_segment_stats_in_parallel;
 use crate::operations::CompactOptions;
+use crate::statistics::reducers::generate_virtual_column_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
 #[derive(Default)]
@@ -60,7 +65,8 @@ pub struct SegmentCompactMutator {
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
+    pub(crate) partition_key_count: usize,
     table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -70,7 +76,7 @@ impl SegmentCompactMutator {
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         Ok(Self {
@@ -79,7 +85,8 @@ impl SegmentCompactMutator {
             data_accessor: operator,
             location_generator,
             compaction: Default::default(),
-            default_cluster_key_id,
+            cluster_key_info,
+            partition_key_count: 0,
             table_meta_timestamps,
         })
     }
@@ -131,15 +138,16 @@ impl SegmentCompactMutator {
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
-        let compactor = SegmentCompactor::new(
+        let mut compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
-            self.default_cluster_key_id,
+            self.cluster_key_info.clone(),
             chunk_size,
             &fuse_segment_io,
             &self.data_accessor,
             &self.location_generator,
             self.table_meta_timestamps,
         );
+        compactor.partition_key_count = self.partition_key_count;
 
         self.compaction = compactor
             .compact(base_segment_locations, limit, |status| {
@@ -167,7 +175,8 @@ pub struct SegmentCompactor<'a> {
     // Size of compacted segment should be in range R == [threshold, 2 * threshold)
     // within R, smaller one is preferred
     threshold: u64,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
+    partition_key_count: usize,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
     fragmented_segments: Vec<(usize, SegmentInfo, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
@@ -185,7 +194,7 @@ pub struct SegmentCompactor<'a> {
 impl<'a> SegmentCompactor<'a> {
     pub fn new(
         threshold: u64,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         chunk_size: usize,
         segment_reader: &'a SegmentsIO,
         operator: &'a Operator,
@@ -194,7 +203,8 @@ impl<'a> SegmentCompactor<'a> {
     ) -> Self {
         Self {
             threshold,
-            default_cluster_key_id,
+            cluster_key_info,
+            partition_key_count: 0,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
             chunk_size,
@@ -238,7 +248,8 @@ impl<'a> SegmentCompactor<'a> {
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            if let Some(default_cluster_key) = self.default_cluster_key_id {
+            if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
+                let default_cluster_key = cluster_key_info.cluster_key_id();
                 // sort ascending.
                 segment_infos.sort_by(|a, b| {
                     sort_by_cluster_stats(
@@ -322,6 +333,16 @@ impl<'a> SegmentCompactor<'a> {
             return Ok(());
         }
 
+        if let Some((_, previous, _)) = self.fragmented_segments.last()
+            && !same_partition(
+                previous.summary.partition_stats.as_ref(),
+                segment_info.summary.partition_stats.as_ref(),
+                self.partition_key_count,
+            )
+        {
+            self.compact_fragments().await?;
+        }
+
         let s = self.accumulated_num_blocks + num_blocks_current_segment;
 
         if s < self.threshold {
@@ -369,6 +390,7 @@ impl<'a> SegmentCompactor<'a> {
         // 2. build (and write down the compacted segment
         // 2.1 merge fragmented segments into new segment, and update the statistics
         let mut blocks = Vec::with_capacity(self.threshold as usize);
+        let mut virtual_inputs = Vec::with_capacity(self.threshold as usize);
         let mut new_statistics = Statistics::default();
         let mut stats_locations = Vec::with_capacity(fragments.len());
         let mut hlls_has_none = false;
@@ -380,7 +402,13 @@ impl<'a> SegmentCompactor<'a> {
             merge_statistics_mut(
                 &mut new_statistics,
                 &segment.summary,
-                self.default_cluster_key_id,
+                self.cluster_key_info.as_ref(),
+            );
+            let virtual_schema = segment.summary.virtual_segment_schema.clone().map(Arc::new);
+            virtual_inputs.extend(
+                (0..segment.blocks.len()).map(|_| VirtualBlockInput::Existing {
+                    schema: virtual_schema.clone(),
+                }),
             );
             blocks.append(&mut segment.blocks.clone());
             match segment.summary.additional_stats_meta.map(|m| m.location) {
@@ -389,10 +417,33 @@ impl<'a> SegmentCompactor<'a> {
             }
         }
 
+        let virtual_segment_schema =
+            build_virtual_segment_schema(&mut blocks, &mut virtual_inputs)?;
+        new_statistics.virtual_col_stats = if blocks
+            .iter()
+            .all(|block| block.virtual_block_meta.is_some())
+        {
+            Some(generate_virtual_column_statistics(
+                &blocks
+                    .iter()
+                    .map(|block| {
+                        &block
+                            .virtual_block_meta
+                            .as_ref()
+                            .unwrap()
+                            .virtual_column_metas
+                    })
+                    .collect::<Vec<_>>(),
+            ))
+        } else {
+            None
+        };
+        new_statistics.virtual_segment_schema = virtual_segment_schema;
+
         merge_statistics_mut(
             &mut self.compacted_state.removed_statistics,
             &new_statistics,
-            self.default_cluster_key_id,
+            self.cluster_key_info.as_ref(),
         );
 
         let location = self

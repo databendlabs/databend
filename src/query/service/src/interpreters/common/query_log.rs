@@ -53,28 +53,13 @@ fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i3
     match err {
         None => (log_type, 0, "".to_string(), "".to_string()),
         Some(e) => {
-            if e.code() == ErrorCode::ABORTED_QUERY {
-                (
-                    LogType::Aborted,
-                    e.code().into(),
-                    e.to_string(),
-                    e.backtrace_str(),
-                )
-            } else if e.code() == ErrorCode::ABORTED_QUERY {
-                (
-                    LogType::Closed,
-                    e.code().into(),
-                    e.to_string(),
-                    e.backtrace_str(),
-                )
-            } else {
-                (
-                    LogType::Error,
-                    e.code().into(),
-                    e.to_string(),
-                    e.backtrace_str(),
-                )
-            }
+            let log_type = match e.code() {
+                ErrorCode::ABORTED_QUERY => LogType::Aborted,
+                ErrorCode::CLOSED_QUERY => LogType::Closed,
+                _ => LogType::Error,
+            };
+
+            (log_type, e.code().into(), e.to_string(), e.backtrace_str())
         }
     }
 }
@@ -171,7 +156,7 @@ impl InterpreterQueryLog {
         // Stats.
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
-        let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
+        let query_start_time = convert_query_log_timestamp(ctx.get_query_created_time());
         let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
 
         let written_rows = 0u64;
@@ -336,7 +321,7 @@ impl InterpreterQueryLog {
         // Stats.
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
-        let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
+        let query_start_time = convert_query_log_timestamp(ctx.get_query_created_time());
         let query_duration_ms = ctx.get_query_duration_ms();
         let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
         let data_metrics = ctx.get_data_metrics();

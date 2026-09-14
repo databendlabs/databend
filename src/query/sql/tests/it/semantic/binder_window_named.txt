@@ -40,7 +40,7 @@ EvalScalar
         ├── window top: NONE
         ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
         └── EvalScalar
-            ├── scalars: [sum(salary) (#2) AS (#2), sum(salary) (#2) AS (#2), 1 AS (#3)]
+            ├── scalars: [sum(salary) (#2) AS (#2), 1 AS (#3)]
             └── Aggregate(Initial)
                 ├── group items: [empsalary.depname (#0) AS (#0)]
                 ├── aggregate functions: [sum(empsalary.salary (#1)) AS (#2)]
@@ -70,7 +70,7 @@ EvalScalar
         ├── window top: NONE
         ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
         └── EvalScalar
-            ├── scalars: [sum(salary) (#2) AS (#2), sum(salary) (#2) AS (#2), 1 AS (#3)]
+            ├── scalars: [sum(salary) (#2) AS (#2), 1 AS (#3)]
             └── Aggregate(Initial)
                 ├── group items: [empsalary.depname (#0) AS (#0)]
                 ├── aggregate functions: [sum(empsalary.salary (#1)) AS (#2)]

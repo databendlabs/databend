@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE,RUST_MIN_STACK,DATABEND_TEST_S3_BUCKET,DATABEND_TEST_S3_REGION,DATABEND_TEST_S3_ROOT
 
     - shell: bash
       run: |
@@ -22,9 +22,25 @@ runs:
         grep ' Compiled in ' target/sccache.log || true
       env:
         RUST_LOG: ERROR
-        # 1GiB
-        # RUST_MIN_STACK: 1073741824
+        RUST_MIN_STACK: 33554432
         # RUST_BACKTRACE: 1
+
+    - name: Test vacuum2 streaming GC against AWS S3
+      if: env.RUNNER_PROVIDER == 'aws'
+      shell: bash
+      run: |
+        cargo nextest run \
+          --no-fail-fast \
+          --hide-progress-bar \
+          --run-ignored only \
+          --workspace \
+          real_s3::streaming_block_gc_across_list_pages
+      env:
+        DATABEND_TEST_S3_BUCKET: databend-ci
+        DATABEND_TEST_S3_REGION: us-east-2
+        DATABEND_TEST_S3_ROOT: stateful/vacuum2-ci/github-${{ github.run_id }}-${{ github.run_attempt }}
+        RUST_LOG: ERROR
+        RUST_MIN_STACK: 33554432
 
     - name: Upload failure
       if: failure()

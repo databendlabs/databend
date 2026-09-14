@@ -22,6 +22,7 @@ databend-common-expression = { workspace = true }
 databend-common-frozen-api = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
 databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-vector = { workspace = true }

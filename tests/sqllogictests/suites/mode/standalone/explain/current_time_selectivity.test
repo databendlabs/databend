@@ -1,0 +1,65 @@
+statement ok
+CREATE OR REPLACE DATABASE current_time_selectivity
+
+statement ok
+USE current_time_selectivity
+
+statement ok
+CREATE TABLE fact_events AS
+SELECT number % 1000 + 1 AS customer_id,
+       add_seconds(to_timestamp('2024-01-01 00:00:00'), number) AS event_time
+FROM numbers(10000)
+
+statement ok
+CREATE TABLE customers AS
+SELECT number + 1 AS customer_id,
+       number % 100 + 1 AS segment_id
+FROM numbers(1000)
+
+statement ok
+CREATE TABLE segments AS
+SELECT number + 1 AS segment_id
+FROM numbers(100)
+
+# CTAS records row counts and min/max statistics, so this case does not need ANALYZE TABLE.
+# All events are historical. The recent-time filter should make fact_events the first join input.
+query T
+EXPLAIN optimized
+SELECT count()
+FROM fact_events AS e
+JOIN customers AS c ON e.customer_id = c.customer_id
+JOIN segments AS s ON c.segment_id = s.segment_id
+WHERE e.event_time >= subtract_hours(now(), 24)
+----
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#5)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#5)]
+    └── Join(Inner)
+        ├── build keys: [customers.segment_id (#3)]
+        ├── probe keys: [segments.segment_id (#4)]
+        ├── other filters: []
+        ├── Join(Inner)
+        │   ├── build keys: [fact_events.customer_id (#0)]
+        │   ├── probe keys: [customers.customer_id (#2)]
+        │   ├── other filters: []
+        │   ├── Scan
+        │   │   ├── table: current_time_selectivity.fact_events (#0)
+        │   │   ├── filters: [gte(fact_events.event_time (#1), subtract_hours(now(), 24))]
+        │   │   ├── order by: []
+        │   │   └── limit: NONE
+        │   └── Scan
+        │       ├── table: current_time_selectivity.customers (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: current_time_selectivity.segments (#2)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+statement ok
+DROP DATABASE current_time_selectivity

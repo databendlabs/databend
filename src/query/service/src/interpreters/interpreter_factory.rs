@@ -16,19 +16,19 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::plans::Mutation;
 use log::error;
+use log::warn;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_dictionary_create::CreateDictionaryInterpreter;
 use super::interpreter_dictionary_drop::DropDictionaryInterpreter;
 use super::interpreter_dictionary_show_create::ShowCreateDictionaryInterpreter;
-use super::interpreter_index_create::CreateIndexInterpreter;
-use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
@@ -156,6 +156,18 @@ impl InterpreterFactory {
         let mut access_logger = AccessLogger::create(ctx.clone());
         access_logger.log(plan);
         access_logger.output();
+
+        if lineage_enabled() {
+            match plan.query_lineage() {
+                Ok(lineage) => ctx.attach_query_lineage(lineage),
+                Err(err) => {
+                    warn!("Failed to extract query lineage: {:?}", err);
+                    ctx.attach_query_lineage(None);
+                }
+            }
+        } else {
+            ctx.attach_query_lineage(None);
+        }
         Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
     }
 
@@ -351,6 +363,9 @@ impl InterpreterFactory {
             Plan::CreateDatabase(create_database) => Ok(Arc::new(
                 CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())?,
             )),
+            Plan::CreateDatabaseFromShare(create_database) => Ok(Arc::new(
+                CreateDatabaseFromShareInterpreter::try_create(ctx, *create_database.clone())?,
+            )),
             Plan::DropDatabase(drop_database) => Ok(Arc::new(DropDatabaseInterpreter::try_create(
                 ctx,
                 *drop_database.clone(),
@@ -363,6 +378,34 @@ impl InterpreterFactory {
             Plan::RenameDatabase(rename_database) => Ok(Arc::new(
                 RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
             )),
+            Plan::CreateShare(plan) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DropShare(plan) => Ok(Arc::new(DropShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::AlterShare(plan) => Ok(Arc::new(AlterShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::GrantShare(plan) => Ok(Arc::new(GrantShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::RevokeShare(plan) => Ok(Arc::new(RevokeShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::ShowShares(plan) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DescShare(plan) => Ok(Arc::new(DescShareInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
 
             // Tables
             Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
@@ -426,6 +469,12 @@ impl InterpreterFactory {
             Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
             )),
+            Plan::AlterTablePartitionBy(alter_table_partition_by) => {
+                Ok(Arc::new(AlterTablePartitionByInterpreter::try_create(
+                    ctx,
+                    *alter_table_partition_by.clone(),
+                )?))
+            }
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
@@ -435,29 +484,32 @@ impl InterpreterFactory {
             Plan::ReclusterTable(recluster) => Ok(Arc::new(ReclusterTableInterpreter::try_create(
                 ctx,
                 *recluster.clone(),
-                LockTableOption::LockWithRetry,
+                true,
             )?)),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
-                ctx,
-                *purge.clone(),
-            )?)),
             Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
                 OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
-            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+            Plan::OptimizeCompactBlock { s_expr } => {
                 Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
                     ctx,
                     *s_expr.clone(),
                     LockTableOption::LockWithRetry,
-                    *need_purge,
                 )?))
             }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
+            )?)),
+            Plan::VacuumTables(vacuum_tables) => Ok(Arc::new(VacuumTablesInterpreter::try_create(
+                ctx,
+                *vacuum_tables.clone(),
+            )?)),
+            Plan::VacuumAll(vacuum_all) => Ok(Arc::new(VacuumAllInterpreter::try_create(
+                ctx,
+                *vacuum_all.clone(),
             )?)),
             Plan::VacuumDropTable(vacuum_drop_table) => Ok(Arc::new(
                 VacuumDropTablesInterpreter::try_create(ctx, *vacuum_drop_table.clone())?,
@@ -516,6 +568,23 @@ impl InterpreterFactory {
                 ctx,
                 *describe_view.clone(),
             )?)),
+            Plan::RefreshLineage(refresh_lineage) => Ok(Arc::new(
+                RefreshLineageInterpreter::try_create(ctx, *refresh_lineage.clone())?,
+            )),
+
+            // Materialized Views
+            Plan::CreateMaterializedView(create_view) => Ok(Arc::new(
+                CreateMaterializedViewInterpreter::try_create(ctx, *create_view.clone())?,
+            )),
+            Plan::DropMaterializedView(drop_view) => Ok(Arc::new(
+                DropMaterializedViewInterpreter::try_create(ctx, *drop_view.clone())?,
+            )),
+            Plan::RefreshMaterializedView(refresh_view) => Ok(Arc::new(
+                RefreshMaterializedViewInterpreter::try_create(ctx, *refresh_view.clone())?,
+            )),
+            Plan::ShowCreateMaterializedView(plan) => Ok(Arc::new(
+                ShowCreateMaterializedViewInterpreter::try_create(ctx, *plan.clone())?,
+            )),
 
             // Streams
             Plan::CreateStream(create_stream) => Ok(Arc::new(CreateStreamInterpreter::try_create(
@@ -531,18 +600,6 @@ impl InterpreterFactory {
             Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
 
             // Indexes
-            Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
-            Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
-            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
-                ctx,
-                *index.clone(),
-            )?)),
             Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
                 ctx,
                 *index.clone(),
@@ -936,4 +993,8 @@ impl InterpreterFactory {
             ))),
         }
     }
+}
+
+fn lineage_enabled() -> bool {
+    GlobalConfig::instance().lineage.enabled()
 }

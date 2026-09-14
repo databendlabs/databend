@@ -51,31 +51,33 @@ impl Interpreter for GrantRoleInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_role_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_role_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        // TODO: check privileges
+            // TODO: check privileges
 
-        // Check if the grant role exists.
-        user_mgr.get_role(&tenant, plan.role.clone()).await?;
-        match plan.principal {
-            PrincipalIdentity::User(user) => {
-                user_mgr
-                    .grant_role_to_user(&tenant, user, plan.role)
-                    .await?;
+            // Check if the grant role exists.
+            user_mgr.get_role(&tenant, plan.role.clone()).await?;
+            match plan.principal {
+                PrincipalIdentity::User(user) => {
+                    user_mgr
+                        .grant_role_to_user(&tenant, user, plan.role)
+                        .await?;
+                }
+                PrincipalIdentity::Role(role) => {
+                    user_mgr
+                        .grant_role_to_role(&tenant, &role, plan.role)
+                        .await?;
+                }
             }
-            PrincipalIdentity::Role(role) => {
-                user_mgr
-                    .grant_role_to_role(&tenant, &role, plan.role)
-                    .await?;
-            }
-        }
 
-        RoleCacheManager::instance().force_reload(&tenant).await?;
-        Ok(PipelineBuildResult::create())
+            RoleCacheManager::instance().force_reload(&tenant).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -27,6 +27,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_settings::Settings;
 
 use super::basic::BasicHashJoin;
@@ -128,10 +129,7 @@ impl Join for InnerHashJoin {
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
-        let valids = match self.desc.from_correlated_subquery {
-            true => None,
-            false => self.desc.build_valids_by_keys(&keys)?,
-        };
+        let valids = self.desc.build_valids_by_keys(&keys)?;
 
         self.desc.remove_keys_nullable(&mut keys);
         let probe_block = data.project(&self.desc.probe_projection);
@@ -292,6 +290,8 @@ impl<'a> InnerHashJoinFilterStream<'a> {
 impl<'a> JoinStream for InnerHashJoinFilterStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         loop {
+            check_interrupt()?;
+
             let Some(data_block) = self.inner.next()? else {
                 return Ok(None);
             };

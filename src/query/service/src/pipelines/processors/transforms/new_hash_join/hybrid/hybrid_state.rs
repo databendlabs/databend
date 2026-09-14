@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use concurrent_queue::ConcurrentQueue;
@@ -44,6 +45,9 @@ pub struct HybridHashJoinState {
     // Once set, it should never be cleared, so runtime filters stay disabled
     // for the lifetime of this join.
     pub ever_spilled: AtomicBool,
+    // Count logical build input before spill repartitioning so the runtime-filter packet can
+    // globalize build-side emptiness without depending on in-memory state that spill resets.
+    build_input_rows: AtomicUsize,
 
     pub transition_queue: ConcurrentQueue<DataBlock>,
 }
@@ -71,6 +75,7 @@ impl HybridHashJoinState {
             factory,
             spilled: AtomicBool::new(false),
             ever_spilled: AtomicBool::new(false),
+            build_input_rows: AtomicUsize::new(0),
             transition_queue: ConcurrentQueue::unbounded(),
         }))
     }
@@ -90,6 +95,14 @@ impl HybridHashJoinState {
 
     pub fn has_spilled_once(&self) -> bool {
         self.ever_spilled.load(Ordering::Acquire)
+    }
+
+    pub fn add_build_input_rows(&self, rows: usize) {
+        self.build_input_rows.fetch_add(rows, Ordering::AcqRel);
+    }
+
+    pub fn build_input_rows(&self) -> usize {
+        self.build_input_rows.load(Ordering::Acquire)
     }
 
     pub fn create_grace_state(&self) -> Result<Arc<GraceHashJoinState>> {

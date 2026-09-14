@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
@@ -127,7 +129,7 @@ where A: super::TypeCheckAdapter
         let result = self
             .fold_or_levels(span, predicate_levels)?
             .expect("IN list should not be empty");
-        let data_type = result.data_type()?;
+        let data_type = result.data_type().into_owned();
         if not {
             self.resolve_scalar_function_call(span, "not", vec![], vec![result])
         } else {
@@ -164,8 +166,9 @@ where A: super::TypeCheckAdapter
             let scalar = if *data_type != common_type {
                 let cast = wrap_cast(&scalar, &common_type);
                 let expr = cast.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                match expr.into_constant() {
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+                match expr.into_owned().into_constant() {
                     Ok(constant) => ScalarExpr::ConstantExpr(ConstantExpr {
                         span: scalar.span(),
                         value: constant.scalar,

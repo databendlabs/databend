@@ -50,9 +50,8 @@ use databend_common_sql::plans::FunctionCall as ScalarFunctionCall;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::F64;
-use databend_common_statistics::Histogram;
+use databend_common_statistics::StatBounds;
 use databend_common_statistics::TypedHistogram;
-use databend_common_statistics::TypedHistogramBucket;
 use proptest::prelude::*;
 
 fn column_binding(name: &str, index: usize, data_type: DataType) -> ColumnBinding {
@@ -75,23 +74,31 @@ fn constant_expr(value: Scalar) -> ScalarExpr {
 }
 
 fn comparison_expr(func_name: &str, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    function_expr(func_name, vec![left, right])
+    ScalarExpr::FunctionCall(ScalarFunctionCall {
+        span: None,
+        func_name: func_name.to_string(),
+        params: vec![],
+        arguments: vec![left, right],
+        return_type: Box::new(DataType::Boolean),
+    })
 }
 
 fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+    let return_type = arguments[0].data_type().into_owned();
     ScalarExpr::FunctionCall(ScalarFunctionCall {
         span: None,
         func_name: func_name.to_string(),
         params: vec![],
         arguments,
+        return_type: Box::new(return_type),
     })
 }
 
 #[test]
 fn zero_cardinality_comparison_selectivity_is_finite() {
-    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(10),
+    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 0,
+        max: 10,
         ndv: NdvEstimate::exact(0.0),
         null_count: StatCount::exact(0),
         histogram: None,
@@ -104,47 +111,14 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
 
     let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(0.0));
     let estimated_rows = estimator
-        .apply(&[expr])
+        .apply(
+            &[expr],
+            &databend_common_expression::FunctionContext::default(),
+        )
         .expect("zero-cardinality comparison should estimate");
 
     assert_eq!(estimated_rows, 0.0);
     assert!(estimated_rows.is_finite());
-}
-
-#[test]
-fn distorted_histogram_comparison_estimate_narrows_range() {
-    let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(1000),
-        ndv: NdvEstimate::exact(100.0),
-        null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Float(TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(
-                F64::from(0.0),
-                F64::from(1000.0),
-                100.0,
-                100.0,
-            )],
-            avg_spacing: Some(1e13),
-        })),
-    })]);
-    let expr = comparison_expr(
-        "gt",
-        column_expr("a", 0, DataType::Number(NumberDataType::UInt64)),
-        constant_expr(Scalar::Number(NumberScalar::UInt64(100))),
-    );
-
-    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(100.0));
-    let estimated_rows = estimator
-        .apply(&[expr])
-        .expect("distorted histogram comparison should estimate");
-    let stat = &estimator.column_stats()[&Symbol::new(0)];
-
-    assert!((estimated_rows - 50.0).abs() < f64::EPSILON);
-    assert_eq!(stat.min, Datum::UInt(101));
-    assert_eq!(stat.max, Datum::UInt(1000));
 }
 
 #[test]
@@ -165,7 +139,10 @@ fn float_full_domain_arithmetic_selectivity_is_not_empty() {
     let mut estimator =
         SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(10.0));
     let estimated_rows = estimator
-        .apply(&[expr])
+        .apply(
+            &[expr],
+            &databend_common_expression::FunctionContext::default(),
+        )
         .expect("float arithmetic comparison should estimate");
 
     assert!(
@@ -366,37 +343,33 @@ fn smoke_scalar(data_type: &DataType) -> Option<Scalar> {
 
 fn smoke_column_stat(data_type: &DataType) -> Option<ColumnStat> {
     let inner = data_type.remove_nullable();
-    let (min, max) = match &inner {
-        DataType::Boolean => (Datum::Bool(false), Datum::Bool(true)),
-        DataType::String => (
-            Datum::Bytes(b"s00000000000000000000".to_vec()),
-            Datum::Bytes(b"s00000000000000000009".to_vec()),
-        ),
-        DataType::Binary => (
-            Datum::Bytes(b"s00000000000000000000".to_vec()),
-            Datum::Bytes(b"s00000000000000000009".to_vec()),
-        ),
-        DataType::Date | DataType::Timestamp => (Datum::Int(0), Datum::Int(9)),
+    let bounds = match &inner {
+        DataType::Boolean => StatBounds::Bool {
+            min: false,
+            max: true,
+        },
+        DataType::String | DataType::Binary => StatBounds::Bytes {
+            min: b"s00000000000000000000".to_vec(),
+            max: b"s00000000000000000009".to_vec(),
+        },
+        DataType::Date | DataType::Timestamp => StatBounds::Int { min: 0, max: 9 },
         DataType::Number(NumberDataType::UInt8)
         | DataType::Number(NumberDataType::UInt16)
         | DataType::Number(NumberDataType::UInt32)
-        | DataType::Number(NumberDataType::UInt64) => (Datum::UInt(0), Datum::UInt(9)),
+        | DataType::Number(NumberDataType::UInt64) => StatBounds::UInt { min: 0, max: 9 },
         DataType::Number(NumberDataType::Int8)
         | DataType::Number(NumberDataType::Int16)
         | DataType::Number(NumberDataType::Int32)
-        | DataType::Number(NumberDataType::Int64) => (Datum::Int(0), Datum::Int(9)),
+        | DataType::Number(NumberDataType::Int64) => StatBounds::Int { min: 0, max: 9 },
         DataType::Number(NumberDataType::Float32) | DataType::Number(NumberDataType::Float64) => {
-            (Datum::Float(F64::from(0.0)), Datum::Float(F64::from(9.0)))
+            StatBounds::Float {
+                min: F64::from(0.0),
+                max: F64::from(9.0),
+            }
         }
         _ => return None,
     };
-    Some(ColumnStat {
-        min,
-        max,
-        ndv: NdvEstimate::exact(10.0),
-        null_count: StatCount::exact(0),
-        histogram: None,
-    })
+    Some(ColumnStat::new(bounds, NdvEstimate::exact(10.0), StatCount::exact(0), None).unwrap())
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -529,12 +502,12 @@ fn assert_estimator_smoke_invariants(
     );
 
     for stat in estimator.column_stats().values() {
-        if let Some(expected) = stat.ndv.expected {
+        if let Some(expected) = stat.ndv().expected {
             prop_assert!(expected.is_finite(), "ndv must stay finite");
             prop_assert!(expected >= 0.0, "ndv must stay non-negative");
         }
         prop_assert!(
-            stat.null_count.expected() <= cardinality.ceil(),
+            stat.null_count().expected() <= cardinality.ceil(),
             "null count must not exceed input cardinality"
         );
         let arg_stat = stat.to_arg_stat(data_type).map_err(|err| {
@@ -543,26 +516,62 @@ fn assert_estimator_smoke_invariants(
         arg_stat
             .check_consistency_with_type(Some(data_type))
             .map_err(|err| TestCaseError::fail(format!("ArgStat invariant failed: {err}")))?;
-        if let Some(histogram) = &stat.histogram {
-            prop_assert!(
-                histogram.num_values().is_finite(),
-                "histogram row count must stay finite"
-            );
-            prop_assert!(
-                histogram.num_values() >= 0.0,
-                "histogram row count must stay non-negative"
-            );
-            prop_assert!(
-                histogram.ndv().expected.is_some_and(f64::is_finite),
-                "histogram ndv must stay finite"
-            );
-            prop_assert!(
-                histogram.ndv().expected.is_some_and(|ndv| ndv >= 0.0),
-                "histogram ndv must stay non-negative"
-            );
+        match stat {
+            ColumnStat::Int {
+                histogram: Some(histogram),
+                ..
+            } => assert_histogram_smoke_invariants(histogram)?,
+            ColumnStat::UInt {
+                histogram: Some(histogram),
+                ..
+            } => assert_histogram_smoke_invariants(histogram)?,
+            ColumnStat::Float {
+                histogram: Some(histogram),
+                ..
+            } => assert_histogram_smoke_invariants(histogram)?,
+            ColumnStat::Bytes {
+                histogram: Some(histogram),
+                ..
+            } => assert_histogram_smoke_invariants(histogram)?,
+            ColumnStat::Boolean { .. }
+            | ColumnStat::Int {
+                histogram: None, ..
+            }
+            | ColumnStat::UInt {
+                histogram: None, ..
+            }
+            | ColumnStat::Float {
+                histogram: None, ..
+            }
+            | ColumnStat::Bytes {
+                histogram: None, ..
+            }
+            | ColumnStat::AllNull { .. } => {}
         }
     }
 
+    Ok(())
+}
+
+fn assert_histogram_smoke_invariants<T>(
+    histogram: &TypedHistogram<T>,
+) -> std::result::Result<(), TestCaseError> {
+    prop_assert!(
+        histogram.num_values().is_finite(),
+        "histogram row count must stay finite"
+    );
+    prop_assert!(
+        histogram.num_values() >= 0.0,
+        "histogram row count must stay non-negative"
+    );
+    prop_assert!(
+        histogram.ndv().expected.is_some_and(f64::is_finite),
+        "histogram ndv must stay finite"
+    );
+    prop_assert!(
+        histogram.ndv().expected.is_some_and(|ndv| ndv >= 0.0),
+        "histogram ndv must stay non-negative"
+    );
     Ok(())
 }
 
@@ -611,13 +620,16 @@ proptest! {
         } else {
             None
         };
-        let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-            min,
-            max,
-            ndv: NdvEstimate::exact(ndv as f64),
-            null_count: StatCount::exact(null_count),
-            histogram,
-        })]);
+        let column_stats = ColumnStatSet::from_iter([(
+            Symbol::new(0),
+            ColumnStat::new(
+                StatBounds::new(min, max).unwrap(),
+                NdvEstimate::exact(ndv as f64),
+                StatCount::exact(null_count),
+                histogram,
+            )
+            .unwrap(),
+        )]);
         for stat in column_stats.values() {
             let arg_stat = stat
                 .to_arg_stat(&case.data_type)
@@ -635,7 +647,7 @@ proptest! {
         };
 
         let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(cardinality));
-        let estimated_rows = estimator.apply(&[expr]).expect("selectivity estimation should not fail for valid comparison variants");
+        let estimated_rows = estimator.apply(&[expr], &databend_common_expression::FunctionContext::default()).expect("selectivity estimation should not fail for valid comparison variants");
         assert_estimator_smoke_invariants(&estimator, estimated_rows, cardinality, &case.data_type)?;
     }
 }

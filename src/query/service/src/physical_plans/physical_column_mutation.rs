@@ -193,7 +193,7 @@ impl IPhysicalPlan for ColumnMutation {
             let input_schema = DataSchema::from(table.schema_with_stream()).into();
             table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?
         } else {
-            table.cluster_gen_for_append(
+            table.cluster_gen_for_update(
                 builder.ctx.clone(),
                 &mut builder.main_pipeline,
                 block_thresholds,

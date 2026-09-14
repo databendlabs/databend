@@ -33,6 +33,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
@@ -86,7 +87,11 @@ impl MaterializedCteSpilledPayload {
         )?;
 
         let mut blocks = Vec::new();
-        while let Some(block) = reader.read()? {
+        loop {
+            check_interrupt()?;
+            let Some(block) = reader.read()? else {
+                break;
+            };
             blocks.push(block);
         }
 
@@ -163,6 +168,7 @@ impl MaterializedCteSink {
         let mut row_group_ranges = Vec::with_capacity(data_blocks.len());
         let mut next_row_group = 0;
         for block in data_blocks {
+            check_interrupt()?;
             writer.write(block)?;
             let row_group_count = writer.flush_row_groups()?;
             row_group_ranges.push(next_row_group..row_group_count);
@@ -207,13 +213,17 @@ impl MaterializedCteSink {
         Ok(())
     }
 
-    async fn send_payload(&self, payload: MaterializedCtePayload) -> Result<()> {
-        for sender in self.senders.iter() {
-            sender.send(payload.clone()).await.map_err(|_| {
-                ErrorCode::Internal("Failed to send blocks to materialized cte consumer")
-            })?;
+    async fn send_payload(&mut self, payload: MaterializedCtePayload) {
+        let mut index = 0;
+        while index < self.senders.len() {
+            if self.senders[index].send(payload.clone()).await.is_err() {
+                // A consumer can finish early (e.g. LIMIT), including while a
+                // bounded send is waiting. Other consumers still need this payload.
+                self.senders.remove(index);
+            } else {
+                index += 1;
+            }
         }
-        Ok(())
     }
 
     fn flush_spilling_blocks(&mut self) -> Result<()> {
@@ -257,6 +267,12 @@ impl Processor for MaterializedCteSink {
     }
 
     fn event(&mut self) -> Result<Event> {
+        self.senders.retain(|sender| !sender.is_closed());
+        if self.senders.is_empty() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
         if !self.pending_payloads.is_empty() {
             self.input.set_not_need_data();
             return Ok(Event::Async);
@@ -305,14 +321,14 @@ impl Processor for MaterializedCteSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         while let Some(payload) = self.pending_payloads.pop_front() {
-            self.send_payload(payload).await?;
+            self.send_payload(payload).await;
         }
         Ok(())
     }
 }
 
 pub struct CTESource {
-    receiver: Receiver<MaterializedCtePayload>,
+    receiver: Option<Receiver<MaterializedCtePayload>>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
     received_payload: Option<MaterializedCtePayload>,
@@ -327,7 +343,7 @@ impl CTESource {
         receiver: Receiver<MaterializedCtePayload>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
-            receiver,
+            receiver: Some(receiver),
             output: output_port,
             scan_progress: ctx.get_scan_progress(),
             received_payload: None,
@@ -348,14 +364,12 @@ impl Processor for CTESource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.is_finished {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if self.output.is_finished() {
+        if self.is_finished || self.output.is_finished() {
             self.is_finished = true;
-            self.receiver.close();
+            // Dropping the last source's receiver closes the consumer's channel.
+            // Other sources sharing this consumer can keep reading until then.
+            self.receiver = None;
+            self.output.finish();
             return Ok(Event::Finished);
         }
 
@@ -400,7 +414,7 @@ impl Processor for CTESource {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match self.receiver.recv().await {
+        match self.receiver.as_ref().unwrap().recv().await {
             Ok(payload) => self.received_payload = Some(payload),
             Err(_) => self.is_finished = true,
         }

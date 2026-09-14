@@ -17,6 +17,8 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result as DatabendResult;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -24,6 +26,8 @@ use databend_common_expression::TableField;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::F32;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_vector::angular_distance;
@@ -78,6 +82,46 @@ pub struct ClusterStatistics {
         deserialize_with = "deserialize_index_scalar_option_vec"
     )]
     pub pages: Option<Vec<Scalar>>,
+}
+
+/// Exact values of the PARTITION BY expressions for a block or segment.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
+pub struct PartitionStatistics {
+    #[serde(
+        serialize_with = "serialize_index_scalar_vec",
+        deserialize_with = "deserialize_index_scalar_vec"
+    )]
+    pub values: Vec<Scalar>,
+}
+
+impl PartitionStatistics {
+    pub fn new(values: Vec<Scalar>) -> Self {
+        Self { values }
+    }
+}
+
+pub fn validate_segment_partition_statistics<'a>(
+    stats: impl IntoIterator<Item = Option<&'a PartitionStatistics>>,
+) -> databend_common_exception::Result<Option<PartitionStatistics>> {
+    let mut partition = None;
+    let mut has_unknown = false;
+    for stats in stats {
+        match (partition, stats) {
+            (Some(expected), Some(actual)) if expected != actual => {
+                return Err(ErrorCode::Internal(
+                    "segment contains blocks from different partitions",
+                ));
+            }
+            (None, Some(actual)) => partition = Some(actual),
+            (_, None) => has_unknown = true,
+            _ => {}
+        }
+    }
+    if has_unknown {
+        Ok(None)
+    } else {
+        Ok(partition.cloned())
+    }
 }
 
 /// Spatial statistics for geometry columns.
@@ -226,6 +270,81 @@ impl VectorColumnStatistics {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
+pub struct VirtualSegmentPath {
+    /// Canonical JSON path, e.g. `user.name`, `users[0].id`, `user.'a.b'`.
+    pub path: String,
+    /// Segment-local identity assigned to every retained path, regardless of
+    /// whether a particular block stores it directly, in shared data, or only
+    /// contributes path statistics.
+    pub column_id: ColumnId,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
+pub struct VirtualSegmentColumnPath {
+    pub source_column_id: ColumnId,
+    pub paths: Vec<VirtualSegmentPath>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
+pub struct VirtualSegmentSchema {
+    /// Grouped by `source_column_id` and sorted by canonical path.
+    pub column_paths: Vec<VirtualSegmentColumnPath>,
+}
+
+impl VirtualSegmentSchema {
+    pub fn is_empty(&self) -> bool {
+        self.column_paths
+            .iter()
+            .all(|column| column.paths.is_empty())
+    }
+
+    pub fn path_count(&self) -> usize {
+        self.column_paths
+            .iter()
+            .map(|column| column.paths.len())
+            .sum()
+    }
+
+    pub fn find_path_ref(
+        &self,
+        source_column_id: ColumnId,
+        path: &str,
+    ) -> Option<&VirtualSegmentPath> {
+        let paths = &self
+            .column_paths
+            .iter()
+            .find(|column| column.source_column_id == source_column_id)?
+            .paths;
+        let index = paths
+            .binary_search_by(|item| item.path.as_str().cmp(path))
+            .ok()?;
+        paths.get(index)
+    }
+
+    pub fn field_of_column_id(
+        &self,
+        column_id: ColumnId,
+    ) -> Option<(ColumnId, &VirtualSegmentPath)> {
+        for column in &self.column_paths {
+            let (Some(first), Some(last)) = (column.paths.first(), column.paths.last()) else {
+                continue;
+            };
+            // Schema builders assign ids while iterating canonical-path-sorted
+            // sources and paths, so each source owns one contiguous id range.
+            if column_id < first.column_id || column_id > last.column_id {
+                continue;
+            }
+            let index = column
+                .paths
+                .binary_search_by_key(&column_id, |path| path.column_id)
+                .ok()?;
+            return Some((column.source_column_id, &column.paths[index]));
+        }
+        None
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]
 pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
@@ -268,7 +387,14 @@ pub struct Statistics {
     pub virtual_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
     pub cluster_stats: Option<ClusterStatistics>,
+    #[serde(default)]
+    pub partition_stats: Option<PartitionStatistics>,
     pub virtual_block_count: Option<u64>,
+
+    /// Segment-local virtual column schema. This field must be cleared when
+    /// segment statistics are merged into a snapshot summary.
+    #[serde(default)]
+    pub virtual_segment_schema: Option<VirtualSegmentSchema>,
 
     pub additional_stats_meta: Option<AdditionalStatsMeta>,
 }
@@ -304,6 +430,12 @@ impl ColumnStatistics {
 
     pub fn max(&self) -> &Scalar {
         &self.max
+    }
+
+    /// Retag Decimal bounds after a metadata-only precision widening.
+    pub fn widen_decimal_size(&mut self, size: DecimalSize) -> DatabendResult<()> {
+        widen_decimal_scalar(&mut self.min, size)?;
+        widen_decimal_scalar(&mut self.max, size)
     }
 
     pub fn from_v0(
@@ -359,6 +491,27 @@ impl ClusterStatistics {
         self.min.eq(&self.max)
     }
 
+    /// Retag one Decimal cluster-key dimension after a metadata-only precision widening.
+    pub fn widen_decimal_dimension(
+        &mut self,
+        index: usize,
+        size: DecimalSize,
+    ) -> DatabendResult<()> {
+        let min = self.min.get_mut(index).ok_or_else(|| {
+            ErrorCode::Internal(format!("cluster statistics dimension {index} is missing"))
+        })?;
+        let max = self.max.get_mut(index).ok_or_else(|| {
+            ErrorCode::Internal(format!("cluster statistics dimension {index} is missing"))
+        })?;
+        widen_decimal_scalar(min, size)?;
+        widen_decimal_scalar(max, size)?;
+        // `pages` is a legacy per-page index whose entries are tuples containing every
+        // cluster-key dimension, not a vector indexed by cluster-key dimension. Page pruning
+        // has been removed, and the field is retained only for rollback decoding, so keep it
+        // byte-for-byte unchanged.
+        Ok(())
+    }
+
     pub fn from_v0(
         v0: crate::meta::v0::statistics::ClusterStatistics,
         data_type: &TableDataType,
@@ -398,7 +551,55 @@ impl ClusterStatistics {
     }
 }
 
+/// Change only the logical Decimal precision carried by a persisted scalar.
+/// The raw integer, physical Decimal kind, and scale remain unchanged.
+pub fn widen_decimal_scalar(scalar: &mut Scalar, target: DecimalSize) -> DatabendResult<()> {
+    if scalar.is_null() {
+        return Ok(());
+    }
+    let Scalar::Decimal(decimal) = scalar else {
+        return Err(ErrorCode::Internal(format!(
+            "expected Decimal statistics, got {}",
+            scalar.as_ref().infer_data_type()
+        )));
+    };
+    let source = decimal.size();
+    if source.scale() != target.scale()
+        || source.data_kind() != target.data_kind()
+        || source.precision() > target.precision()
+    {
+        return Err(ErrorCode::Internal(format!(
+            "cannot widen Decimal statistics from {source} to {target}"
+        )));
+    }
+    *decimal = match decimal {
+        DecimalScalar::Decimal64(value, _) => DecimalScalar::Decimal64(*value, target),
+        DecimalScalar::Decimal128(value, _) => DecimalScalar::Decimal128(*value, target),
+        DecimalScalar::Decimal256(value, _) => DecimalScalar::Decimal256(*value, target),
+    };
+    Ok(())
+}
+
 impl Statistics {
+    /// Retag the persisted bounds for one Decimal column after a precision widening.
+    pub fn widen_decimal_column(
+        &mut self,
+        column_id: ColumnId,
+        size: DecimalSize,
+    ) -> DatabendResult<()> {
+        if let Some(stats) = self.col_stats.get_mut(&column_id) {
+            stats.widen_decimal_size(size)?;
+        }
+        if let Some(stats) = self
+            .virtual_col_stats
+            .as_mut()
+            .and_then(|stats| stats.get_mut(&column_id))
+        {
+            stats.widen_decimal_size(size)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn convert_column_stats(
         v0: &HashMap<ColumnId, v0::statistics::ColumnStatistics>,
         fields: &[TableField],
@@ -432,7 +633,9 @@ impl Statistics {
             virtual_col_stats: None,
             spatial_stats: None,
             cluster_stats: None,
+            partition_stats: None,
             virtual_block_count: None,
+            virtual_segment_schema: None,
             additional_stats_meta: None,
         }
     }
@@ -624,6 +827,8 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::i256;
+
     use super::*;
 
     #[derive(serde::Serialize)]
@@ -662,5 +867,98 @@ mod tests {
         let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
 
         assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
+    }
+
+    #[test]
+    fn widens_decimal_statistics_without_changing_values() {
+        let old = DecimalSize::new_unchecked(1, 0);
+        let new = DecimalSize::new_unchecked(18, 0);
+        let mut column = ColumnStatistics::new(
+            Scalar::Decimal(DecimalScalar::Decimal64(-1, old)),
+            Scalar::Decimal(DecimalScalar::Decimal64(7, old)),
+            0,
+            16,
+            Some(2),
+        );
+
+        column.widen_decimal_size(new).unwrap();
+
+        assert_eq!(
+            column.min(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(-1, new))
+        );
+        assert_eq!(
+            column.max(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(7, new))
+        );
+
+        let old = DecimalSize::new_unchecked(19, 2);
+        let new = DecimalSize::new_unchecked(38, 2);
+        let mut cluster = ClusterStatistics::new(
+            3,
+            vec![Scalar::Decimal(DecimalScalar::Decimal128(100, old))],
+            vec![Scalar::Decimal(DecimalScalar::Decimal128(900, old))],
+            0,
+        );
+        cluster.pages = Some(vec![Scalar::Tuple(vec![Scalar::Decimal(
+            DecimalScalar::Decimal128(500, old),
+        )])]);
+        let legacy_pages = cluster.pages.clone();
+
+        cluster.widen_decimal_dimension(0, new).unwrap();
+
+        assert_eq!(cluster.min(), &vec![Scalar::Decimal(
+            DecimalScalar::Decimal128(100, new)
+        )]);
+        assert_eq!(cluster.max(), &vec![Scalar::Decimal(
+            DecimalScalar::Decimal128(900, new)
+        )]);
+        assert_eq!(cluster.pages, legacy_pages);
+
+        let old = DecimalSize::new_unchecked(39, 3);
+        let new = DecimalSize::new_unchecked(76, 3);
+        let mut scalar = Scalar::Decimal(DecimalScalar::Decimal256(i256::from(42), old));
+        widen_decimal_scalar(&mut scalar, new).unwrap();
+        assert_eq!(
+            scalar,
+            Scalar::Decimal(DecimalScalar::Decimal256(i256::from(42), new))
+        );
+    }
+
+    #[test]
+    fn rejects_incompatible_decimal_statistics_retag() {
+        let scalar = || {
+            Scalar::Decimal(DecimalScalar::Decimal64(
+                1,
+                DecimalSize::new_unchecked(10, 2),
+            ))
+        };
+
+        assert!(widen_decimal_scalar(&mut scalar(), DecimalSize::new_unchecked(9, 2)).is_err());
+        assert!(widen_decimal_scalar(&mut scalar(), DecimalSize::new_unchecked(15, 3)).is_err());
+        assert!(widen_decimal_scalar(&mut scalar(), DecimalSize::new_unchecked(19, 2)).is_err());
+        assert!(
+            widen_decimal_scalar(
+                &mut Scalar::Number(1_i64.into()),
+                DecimalSize::new_unchecked(15, 2),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn segment_partition_statistics_rejects_different_partitions() {
+        let left = PartitionStatistics::new(vec![Scalar::Number(1_i64.into())]);
+        let right = PartitionStatistics::new(vec![Scalar::Number(2_i64.into())]);
+
+        assert_eq!(
+            validate_segment_partition_statistics([Some(&left), Some(&left)]).unwrap(),
+            Some(left.clone())
+        );
+        assert!(validate_segment_partition_statistics([Some(&left), Some(&right)]).is_err());
+        assert_eq!(
+            validate_segment_partition_statistics([None, Some(&left)]).unwrap(),
+            None
+        );
     }
 }

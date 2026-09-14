@@ -43,6 +43,11 @@ pub trait Join: Send + Sync + 'static {
         false
     }
 
+    /// Whether probing can be skipped when the entire distributed build side is empty.
+    fn can_skip_probe(&self) -> bool {
+        false
+    }
+
     /// Probe with a single block and return a streaming iterator over results.
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>>;
 

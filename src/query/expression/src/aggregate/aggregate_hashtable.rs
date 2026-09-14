@@ -90,6 +90,45 @@ impl AggregateHashTable {
         }
     }
 
+    pub fn new_with_partitioned_arenas(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+    ) -> Self {
+        // Repartition transfers raw aggregate state addresses between payloads. Separate arenas
+        // are only safe for a final hash table whose partitions will never be repartitioned.
+        assert!(
+            !config.partial_agg,
+            "partition-local aggregate arenas cannot be used by a repartitioning hash table"
+        );
+        let capacity = Self::initial_capacity();
+        let partition_count = 1 << config.initial_radix_bits;
+        let arenas = (0..partition_count)
+            .map(|_| Arc::new(Bump::new()))
+            .collect();
+        Self {
+            direct_append: false,
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new_with_start_bit(
+                group_types,
+                aggrs,
+                partition_count,
+                config.partition_start_bit,
+                arenas,
+            ),
+            hash_index: HashIndex::with_capacity(capacity),
+            config,
+            hash_index_resize_count: 0,
+        }
+    }
+
+    pub fn into_payloads(self) -> Vec<Payload> {
+        self.payload
+            .into_bucket_payloads()
+            .map(|(_, payload)| payload)
+            .collect()
+    }
+
     pub fn new_directly(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
@@ -179,7 +218,7 @@ impl AggregateHashTable {
         #[cfg(debug_assertions)]
         {
             for (i, group_column) in group_columns.iter().enumerate() {
-                if group_column.data_type() != self.payload.group_types[i] {
+                if !self.payload.group_types[i].matches_physical_type(&group_column.data_type()) {
                     return Err(databend_common_exception::ErrorCode::UnknownException(
                         format!(
                             "group_column type not match in index {}, expect: {:?}, actual: {:?}",

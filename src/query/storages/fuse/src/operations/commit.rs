@@ -81,8 +81,11 @@ impl FuseTable {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
+        let preserve_lanes = self.use_hash_write_distribution();
 
-        pipeline.try_resize(1)?;
+        if !preserve_lanes {
+            pipeline.try_resize(1)?;
+        }
 
         pipeline.add_transform(|input, output| {
             new_serialize_segment_processor(
@@ -93,6 +96,10 @@ impl FuseTable {
                 table_meta_timestamps,
             )
         })?;
+
+        if preserve_lanes {
+            pipeline.try_resize(1)?;
+        }
 
         pipeline.add_async_accumulating_transformer(|| {
             TableMutationAggregator::create(
@@ -120,6 +127,7 @@ impl FuseTable {
                 prev_snapshot_id,
                 deduplicated_label.clone(),
                 table_meta_timestamps,
+                false,
             )
         })?;
 
@@ -272,7 +280,7 @@ impl FuseTable {
 
         // 3. let's roll
         catalog
-            .update_multi_table_meta(UpdateMultiTableMetaReq {
+            .update_multi_table_meta(&ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,
@@ -582,9 +590,5 @@ pub(crate) fn is_fresh_table_snapshot_top_n(
     snapshot: &TableSnapshot,
     stats: &TableSnapshotStatistics,
 ) -> bool {
-    stats.row_count == snapshot.summary.row_count
-        && snapshot
-            .prev_snapshot_id
-            .as_ref()
-            .is_none_or(|(snapshot_id, _)| *snapshot_id == stats.snapshot_id)
+    stats.is_fresh_for(snapshot)
 }

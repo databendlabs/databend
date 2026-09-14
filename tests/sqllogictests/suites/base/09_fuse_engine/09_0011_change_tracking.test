@@ -16,6 +16,9 @@ insert into t values(1),(2)
 statement error 1065
 select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 
+statement error 1065
+select change$row_id from t
+
 statement ok
 alter table t set options(change_tracking = true)
 
@@ -29,6 +32,26 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 2 1 1 NULL
 3 1 1 NULL
 4 1 1 NULL
+
+query I
+select count_if(change$row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
+----
+0
+
+query I
+select count(*) from t where length(change$row_id) = 38
+----
+4
+
+query I
+select count(*) from t where change$row_id = 'not-a-row-id'
+----
+0
+
+query I
+select count(*) from t as tracked where a = 2 and length(tracked.change$row_id) = 38
+----
+1
 
 statement ok
 delete from t where a = 3
@@ -52,6 +75,34 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 1 0 0 0
 2 0 0 1
 3 0 0 1
+
+query I
+select count_if(change$row_id != if(is_not_null(_origin_block_id), concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), _base_row_id)) from t
+----
+0
+
+statement ok
+create table t_column_oriented(a int) change_tracking = true
+row_per_block=1 block_per_segment=2 segment_format='column_oriented' storage_format='parquet'
+
+statement ok
+insert into t_column_oriented values(1),(2)
+
+statement ok
+set enable_prune_pipeline = 1
+
+query I
+select count(*) from t_column_oriented where length(change$row_id) = 38
+----
+2
+
+query III
+select count(*), count(distinct _block_name), count(distinct _segment_name) from t_column_oriented where length(_block_name) > 0 and length(_segment_name) > 0
+----
+2 2 1
+
+statement ok
+drop table t_column_oriented all
 
 statement ok
 insert into t values(5)

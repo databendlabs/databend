@@ -54,6 +54,12 @@ async fn test_type_check_aggregate_rewrites() -> Result<()> {
             sql: "sum(number) FILTER (WHERE flag)",
         },
         SqlTestCase {
+            name: "aggregate_filter_preserves_json_arrow_argument",
+            description: "A JSON-arrow argument before FILTER should remain an ordinary aggregate argument.",
+            setup_sqls: &[],
+            sql: "json_object_agg(text, parse_json(text) -> 'v') FILTER (WHERE flag)",
+        },
+        SqlTestCase {
             name: "count_star_filter_lowers_to_count_if",
             description: "COUNT(*) FILTER should add a constant count argument before the filter predicate.",
             setup_sqls: &[],

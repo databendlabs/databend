@@ -46,6 +46,7 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -147,6 +148,7 @@ pub struct TrackingPayload {
     pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
+    pub processor_interrupt: Option<Arc<AtomicBool>>,
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
 }
@@ -324,6 +326,7 @@ impl Clone for TrackingPayload {
             time_series_profile: self.time_series_profile.clone(),
             local_time_series_profile: self.local_time_series_profile.clone(),
             workload_group_resource: self.workload_group_resource.clone(),
+            processor_interrupt: self.processor_interrupt.clone(),
             perf_enabled: self.perf_enabled,
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
@@ -410,6 +413,7 @@ impl ThreadTracker {
                 time_series_profile: None,
                 local_time_series_profile: None,
                 workload_group_resource: None,
+                processor_interrupt: None,
                 perf_enabled: false,
                 process_rows: AtomicUsize::new(0),
             }),
@@ -482,6 +486,19 @@ impl ThreadTracker {
 
     pub fn new_tracking_payload() -> TrackingPayload {
         TRACKER.with(|x| x.borrow().payload.as_ref().clone())
+    }
+
+    pub fn is_interrupted() -> bool {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .processor_interrupt
+                    .as_ref()
+                    .is_some_and(|interrupt| interrupt.load(Ordering::Acquire))
+            })
+            .unwrap_or(false)
     }
 
     /// Replace the `out_of_limit_desc` with the current thread's.

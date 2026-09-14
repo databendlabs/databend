@@ -65,6 +65,7 @@ pub mod pipelines;
 pub mod schedulers;
 pub mod servers;
 pub mod sessions;
+pub mod share;
 pub mod spillers;
 pub mod stream;
 pub mod table_functions;

@@ -190,7 +190,9 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
                 table_name: self.tbl_name(),
             },
             table_meta: table_meta.clone(),
+            source_table_option: None,
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -216,7 +218,9 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
                 table_name: self.tbl_name(),
             },
             table_meta: table_meta.clone(),
+            source_table_option: None,
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };
@@ -279,7 +283,10 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             ..Default::default()
         };
 
-        self.mt.update_multi_table_meta(req).await?.unwrap();
+        self.mt
+            .update_multi_table_meta(&self.tenant(), req)
+            .await?
+            .unwrap();
 
         Ok(file_infos)
     }

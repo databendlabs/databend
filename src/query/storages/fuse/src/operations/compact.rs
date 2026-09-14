@@ -31,7 +31,6 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -69,15 +68,15 @@ impl FuseTable {
 
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(self, Some(compact_options.base_snapshot.clone()))?;
-
         let mut segment_compactor = SegmentCompactMutator::try_create(
             ctx.clone(),
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
-            self.cluster_key_id(),
+            self.cluster_key_info(),
             table_meta_timestamps,
         )?;
+        segment_compactor.partition_key_count = self.partition_key_count();
 
         if !segment_compactor.target_select().await? {
             return Ok(());
@@ -118,8 +117,6 @@ impl FuseTable {
             self.get_id(),
             0,
             0,
-            None,
-            VirtualSchemaMode::Merge,
             HashMap::new(),
             HashMap::new(),
         );
@@ -133,13 +130,14 @@ impl FuseTable {
                 self,
                 ctx.clone(),
                 None,
-                vec![],
+                Default::default(),
                 snapshot_gen.clone(),
                 input,
                 None,
                 None,
                 None,
                 table_meta_timestamps,
+                false,
             )
         })
     }
@@ -165,8 +163,10 @@ impl FuseTable {
             thresholds,
             compact_options,
             self.operator.clone(),
-            self.cluster_key_id(),
+            self.cluster_key_info(),
         );
+        mutator.partition_key_count = self.partition_key_count();
+        mutator.virtual_column_layout_policy = self.virtual_column_layout_policy();
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {

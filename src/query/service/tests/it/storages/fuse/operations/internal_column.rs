@@ -67,8 +67,13 @@ fn expected_data_block(
             matched_scores: block_meta.matched_scores.clone(),
             vector_scores: block_meta.vector_scores.clone(),
         };
+        let block = DataBlock::empty_with_rows(num_rows);
         for internal_column in internal_columns {
-            let column = internal_column.generate_column_values(&internal_column_meta, num_rows);
+            let column = internal_column.generate_column_values(
+                &internal_column_meta,
+                &block,
+                &Default::default(),
+            )?;
             columns.push(column);
         }
         data_blocks.push(DataBlock::new(columns, num_rows));

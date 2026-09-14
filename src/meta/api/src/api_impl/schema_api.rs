@@ -41,10 +41,13 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SourceTableMV;
+use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -57,6 +60,7 @@ use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -87,6 +91,7 @@ use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
 use super::lock_api2::LockApi2;
+use super::materialized_view_api::MaterializedViewApi;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
@@ -111,6 +116,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -132,6 +138,7 @@ where
     Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi2,
+    Self: MaterializedViewApi,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -164,26 +171,26 @@ pub async fn get_history_table_metas(
     Ok(tb_metas)
 }
 
-pub async fn construct_drop_table_txn_operations(
+pub(crate) struct VersionedTable {
+    pub id: TableId,
+    pub meta: SeqV<TableMeta>,
+}
+
+pub(crate) async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: &Tenant,
     catalog_name: Option<String>,
-    table_id: u64,
+    existing: VersionedTable,
     db_id: u64,
     if_exists: bool,
     if_delete: bool,
     txn: &mut TxnRequest,
 ) -> Result<(u64, u64), KVAppError> {
-    let tbid = TableId { table_id };
-
-    // Check if table exists.
-    let (tb_meta_seq, tb_meta) = kv_api.get_pb_seq_and_value(&tbid).await?;
-    if tb_meta_seq == 0 {
-        return Err(KVAppError::AppError(AppError::UnknownTableId(
-            UnknownTableId::new(table_id, "drop_table_by_id failed to find valid tb_meta"),
-        )));
-    }
+    let VersionedTable { id: tbid, meta } = existing;
+    let table_id = tbid.table_id;
+    let tb_meta_seq = meta.seq;
+    let mut tb_meta = meta.data;
 
     // Get db name, tenant name and related info for tx.
     let table_id_to_name = TableIdToName { table_id };
@@ -225,7 +232,6 @@ pub async fn construct_drop_table_txn_operations(
         "drop table by id"
     );
 
-    let mut tb_meta = tb_meta.unwrap();
     // drop a table with drop_on time
     if tb_meta.drop_on.is_some() {
         return if if_exists {
@@ -275,6 +281,19 @@ pub async fn construct_drop_table_txn_operations(
                     table_id,
                 },
             )));
+    }
+
+    if is_materialized_view_engine(&tb_meta.engine) {
+        // MVDefinition and the source relationship are immutable and owned by
+        // this table ID. The TableId seq condition below prevents a concurrent
+        // MV lifecycle change; txn_del is idempotent when either key is absent.
+        let source_table_id = tb_meta.materialized_view_source_table_id()?;
+        let def_ident = MVDefinitionIdent::new(tenant, table_id);
+        txn.if_then.push(txn_del(&def_ident));
+        txn.if_then.push(txn_del(&SourceTableMVIdent::new_generic(
+            tenant,
+            SourceTableMV::new(source_table_id, table_id),
+        )));
     }
 
     // There must NOT be concurrent txn(b) that list-then-delete tables:

@@ -61,7 +61,7 @@ impl<'a> CoreExprArena<'a> {
         &mut self,
         root_span: Span,
         root_expr: &'a Expr,
-        root_accessor: &MapAccessor,
+        root_accessor: &'a MapAccessor,
     ) -> Result<CoreExprId> {
         let mut current_span = root_span;
         let mut expr = root_expr;
@@ -83,12 +83,18 @@ impl<'a> CoreExprArena<'a> {
                 }
                 MapAccessor::Colon { key } => Literal::String(key.name.clone()),
                 MapAccessor::DotNumber { key } => Literal::UInt64(*key),
-                _ => {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Unsupported accessor: {:?}",
-                        accessor
-                    ))
-                    .set_span(current_span));
+                MapAccessor::Bracket { key } => {
+                    let expr = self.lower_call_expr(current_span, "get", [expr, key.as_ref()])?;
+                    return Ok(if paths.is_empty() {
+                        expr
+                    } else {
+                        self.alloc(CoreExpr::MapAccess {
+                            span: root_span,
+                            expr_span: current_span,
+                            expr,
+                            paths,
+                        })
+                    });
                 }
             };
             paths.push_front((current_span, path));
@@ -157,12 +163,12 @@ where A: super::TypeCheckAdapter
         span: Span,
         func_name: &str,
         args: &[ScalarExpr],
-        arg_types: &[DataType],
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self.should_try_rewrite_variant_function(func_name)
-            || arg_types.is_empty()
-            || arg_types[0].remove_nullable() != DataType::Variant
-        {
+        if !self.should_try_rewrite_variant_function(func_name) {
+            return None;
+        }
+        let first_arg_type = args.first()?.data_type();
+        if first_arg_type.remove_nullable() != DataType::Variant {
             return None;
         }
         if args.len() != 2 {
@@ -275,7 +281,7 @@ where A: super::TypeCheckAdapter
         paths: Vec<(CoreExprId, OwnedKeyPath)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let last_index = paths.len().saturating_sub(1);
-        let mut data_type = scalar.data_type()?;
+        let mut data_type = scalar.data_type().into_owned();
         for (index, (path, _)) in paths.into_iter().enumerate() {
             let box (path_scalar, _) = self.resolve_core(arena, path)?;
             let func_name = if string_result && index == last_index {
@@ -313,7 +319,7 @@ where A: super::TypeCheckAdapter
 
     fn get_function_keypath(value: &Scalar) -> Option<OwnedKeyPath> {
         let path = match value {
-            Scalar::String(path) => OwnedKeyPath::QuotedName(path.clone()),
+            Scalar::String(path) => OwnedKeyPath::Name(path.clone()),
             Scalar::Number(number) => {
                 let index = number.integer_to_i128()?;
                 if index < 0 {
@@ -360,6 +366,12 @@ where A: super::TypeCheckAdapter
         data_type: &TableDataType,
         is_try: bool,
     ) -> ScalarExpr {
+        let scalar_is_nullable = scalar.data_type().is_nullable_or_null();
+        let return_type = if is_try || data_type.is_nullable() || scalar_is_nullable {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
         match data_type.remove_nullable() {
             TableDataType::Tuple {
                 fields_name,
@@ -375,11 +387,14 @@ where A: super::TypeCheckAdapter
                     }
                     .into();
 
+                    let field_return_type =
+                        ScalarExpr::passthrough_nullable_type(DataType::from(field_type), [scalar]);
                     let value = FunctionCall {
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
+                        return_type: Box::new(field_return_type),
                     }
                     .into();
 
@@ -403,6 +418,11 @@ where A: super::TypeCheckAdapter
                     params: vec![],
                     arguments: args,
                     func_name,
+                    return_type: Box::new(if is_try {
+                        DataType::Variant.wrap_nullable()
+                    } else {
+                        DataType::Variant
+                    }),
                 }
                 .into()
             }
@@ -417,6 +437,7 @@ where A: super::TypeCheckAdapter
                     params: vec![],
                     arguments: vec![scalar.clone()],
                     func_name,
+                    return_type: Box::new(return_type),
                 }
                 .into()
             }
@@ -437,7 +458,7 @@ where A: super::TypeCheckAdapter
             return self.resolve_variant_map_access(span, scalar, &mut paths);
         }
 
-        let mut table_data_type = infer_schema_type(&data_type)?;
+        let mut table_data_type = infer_schema_type(&data_type)?.physical_type().into_owned();
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
@@ -447,7 +468,7 @@ where A: super::TypeCheckAdapter
                     column_entry
                 {
                     // Use data type from meta to get the field names of tuple type.
-                    table_data_type = data_type.clone();
+                    table_data_type = data_type.physical_type().into_owned();
                     if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
                         let box (inner_scalar, _inner_data_type) = self
                             .resolve_tuple_map_access_pushdown(
@@ -498,29 +519,41 @@ where A: super::TypeCheckAdapter
                     _ => unreachable!(),
                 };
                 table_data_type = fields_type.get(idx).unwrap().clone();
+                let return_type =
+                    ScalarExpr::passthrough_nullable_type(DataType::from(&table_data_type), [
+                        &scalar,
+                    ]);
                 scalar = FunctionCall {
                     span: expr_span,
                     func_name: "get".to_string(),
                     params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                     arguments: vec![scalar.clone()],
+                    return_type: Box::new(return_type),
                 }
                 .into();
                 continue;
             }
             let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
-            if let TableDataType::Array(inner_type) = table_data_type {
-                table_data_type = *inner_type;
-            }
+            table_data_type = match table_data_type {
+                TableDataType::Array(inner_type) => *inner_type,
+                TableDataType::Map(inner_type) => match inner_type.remove_nullable() {
+                    TableDataType::Tuple { fields_type, .. } => fields_type[1].clone(),
+                    _ => unreachable!("map inner type must be a tuple"),
+                },
+                TableDataType::EmptyArray | TableDataType::EmptyMap => TableDataType::Null,
+                data_type => data_type,
+            };
             table_data_type = table_data_type.wrap_nullable();
             scalar = FunctionCall {
                 span: path_scalar.span(),
                 func_name: "get".to_string(),
                 params: vec![],
                 arguments: vec![scalar.clone(), path_scalar],
+                return_type: Box::new(DataType::from(&table_data_type)),
             }
             .into();
         }
-        let return_type = scalar.data_type()?;
+        let return_type = scalar.data_type().into_owned();
         Ok(Box::new((scalar, return_type)))
     }
 
@@ -644,16 +677,21 @@ where A: super::TypeCheckAdapter
                 // inner column is not exist in view, desugar it into a `get` function.
                 let mut scalar: ScalarExpr = BoundColumnRef { span, column }.into();
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
+                    let return_type =
+                        ScalarExpr::passthrough_nullable_type(DataType::from(&table_data_type), [
+                            &scalar,
+                        ]);
                     scalar = FunctionCall {
                         span,
                         params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
+                        return_type: Box::new(return_type),
                     }
                     .into();
                     scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
-                let return_type = scalar.data_type()?;
+                let return_type = scalar.data_type().into_owned();
                 Ok(Box::new((scalar, return_type)))
             }
         }
@@ -677,7 +715,7 @@ where A: super::TypeCheckAdapter
         {
             return None;
         }
-        let key_name = Self::owned_keypaths_to_name(column_name, &owned_keypaths);
+        let key_name = owned_keypaths.to_canonical_path();
         let virtual_column_name = VirtualColumnName {
             table_index,
             source_column_id: column_id,
@@ -697,25 +735,6 @@ where A: super::TypeCheckAdapter
             BoundColumnRef { span, column }.into(),
             data_type,
         )))
-    }
-
-    fn owned_keypaths_to_name(column_name: &str, keypaths: &OwnedKeyPaths) -> String {
-        let mut name = column_name.to_string();
-        for path in &keypaths.paths {
-            name.push('[');
-            match path {
-                OwnedKeyPath::Index(idx) => {
-                    name.push_str(&idx.to_string());
-                }
-                OwnedKeyPath::QuotedName(field) | OwnedKeyPath::Name(field) => {
-                    name.push('\'');
-                    name.push_str(field.as_ref());
-                    name.push('\'');
-                }
-            }
-            name.push(']');
-        }
-        name
     }
 
     // Rewrite variant map access as `get_by_keypath` function
@@ -768,6 +787,7 @@ where A: super::TypeCheckAdapter
                 func_name: "get_by_keypath".to_string(),
                 params: vec![],
                 arguments: args,
+                return_type: Box::new(DataType::Nullable(Box::new(DataType::Variant))),
             }),
             DataType::Nullable(Box::new(DataType::Variant)),
         )))

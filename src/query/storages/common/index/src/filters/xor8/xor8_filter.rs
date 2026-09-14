@@ -93,11 +93,15 @@ impl FilterBuilder for Xor8Builder {
         self.builder.populate(keys)
     }
 
+    fn add_digest(&mut self, digest: u64) {
+        self.builder.populate_digests(std::iter::once(&digest))
+    }
+
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
         self.builder.populate_digests(digests)
     }
 
-    fn build(&mut self) -> Result<Self::Filter, Self::Error> {
+    fn build(mut self) -> Result<Self::Filter, Self::Error> {
         let f = self
             .builder
             .build()

@@ -38,14 +38,17 @@ AggregateFinal
 query T
 explain select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1
 ----
-Limit
+TopN(Final)
 ├── output columns: [numbers.number (#0)]
+├── sort keys: [number ASC NULLS LAST]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort(Single)
+└── TopN(Partial)
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
+    ├── limit: 1
+    ├── offset: 0
     ├── estimated rows: 1.00
     └── AggregateFinal
         ├── output columns: [numbers.number (#0)]

@@ -19,7 +19,6 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Window;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -65,7 +64,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
-        if func.lambda.is_some() || !self.aggregate_function_factory.contains(func_name) {
+        if func.has_explicit_lambda() || !self.aggregate_function_factory.contains(func_name) {
             return Ok(None);
         }
 
@@ -413,8 +412,8 @@ where A: TypeCheckAdapter
         {
             let max_num_buckets: u64 = check_number(
                 None,
-                &FunctionContext::default(),
-                &arguments[1].as_expr()?,
+                &self.func_ctx,
+                arguments[1].as_expr()?,
                 &BUILTIN_FUNCTIONS,
             )?;
 

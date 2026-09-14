@@ -20,6 +20,7 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COL_NAME;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FILE_BASENAME_COLUMN_NAME;
 use databend_common_expression::FILE_CONTENT_KEY_COLUMN_NAME;
 use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_NAME;
@@ -72,6 +73,11 @@ impl InternalColumnFactory {
         internal_columns.insert(
             BASE_BLOCK_IDS_COL_NAME.to_string(),
             InternalColumn::new(BASE_BLOCK_IDS_COL_NAME, InternalColumnType::BaseBlockIds),
+        );
+
+        internal_columns.insert(
+            CHANGE_ROW_ID_COL_NAME.to_string(),
+            InternalColumn::new(CHANGE_ROW_ID_COL_NAME, InternalColumnType::ChangeRowId),
         );
 
         internal_columns.insert(

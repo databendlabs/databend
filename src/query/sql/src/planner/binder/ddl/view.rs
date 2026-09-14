@@ -16,8 +16,10 @@ use databend_common_ast::ast::AlterViewStmt;
 use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
+use databend_common_ast::ast::RefreshLineageStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::WalkMut;
@@ -26,19 +28,33 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use log::debug;
+use log::warn;
 
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
+use crate::binder::lineage_enabled;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::CreateViewPlan;
 use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
+use crate::plans::RefreshLineagePlan;
+use crate::plans::RefreshLineageSelector;
 use crate::plans::RewriteKind;
 
 impl Binder {
+    pub(in crate::planner::binder) fn bind_refresh_lineage(
+        &self,
+        stmt: &RefreshLineageStmt,
+    ) -> Plan {
+        Plan::RefreshLineage(Box::new(RefreshLineagePlan {
+            selector: RefreshLineageSelector::AllViews,
+            dry_run: stmt.dry_run,
+        }))
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_view(
         &mut self,
@@ -65,6 +81,17 @@ impl Binder {
         };
         query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
+        let query_plan = if lineage_enabled() {
+            match self.view_query_plan(&query).await {
+                Ok(plan) => Some(Box::new(plan)),
+                Err(error) => {
+                    warn!("Failed to bind CREATE VIEW query for lineage: {:?}", error);
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         let plan = CreateViewPlan {
             create_option: create_option.clone().into(),
@@ -74,6 +101,7 @@ impl Binder {
             view_name,
             column_names,
             subquery,
+            query_plan,
         };
         Ok(Plan::CreateView(plan.into()))
     }
@@ -224,5 +252,10 @@ impl Binder {
             view_name,
             schema,
         })))
+    }
+    async fn view_query_plan(&mut self, query: &databend_common_ast::ast::Query) -> Result<Plan> {
+        let stmt = Statement::Query(Box::new(query.clone()));
+        let mut bind_context = BindContext::new();
+        self.bind_statement(&mut bind_context, &stmt).await
     }
 }

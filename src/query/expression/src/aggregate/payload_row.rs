@@ -77,6 +77,7 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) | DataType::Vector(_) => 4 + 8,
         DataType::Generic(_) | DataType::StageLocation => unreachable!(),
         DataType::Opaque(size) => size * 8,
+        DataType::AggregateState(state) => rowformat_size(state.physical_type()),
     }
 }
 

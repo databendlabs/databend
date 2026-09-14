@@ -2019,7 +2019,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp_tz(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP_TZ` strptime parsing failed: %Y failed: failed to parse year: invalid number, no digits found. while evaluating function `to_timestamp_tz('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS TimestampTz NULL)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP_TZ` Timestamp Parsing Error: The value 'abc' could not be parsed into a valid timestamp with timezone. while evaluating function `to_timestamp_tz('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS TimestampTz NULL)`
 
 
 

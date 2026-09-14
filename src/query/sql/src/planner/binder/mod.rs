@@ -54,7 +54,6 @@ mod set_priority;
 mod show;
 mod sort;
 mod stage_location;
-mod statement_settings;
 mod stream_column_factory;
 mod system;
 mod table;
@@ -79,13 +78,14 @@ pub use column_binding::ColumnBinding;
 pub use column_binding::ColumnBindingBuilder;
 pub use constraint_expr::ConstraintExprBinder;
 pub use constraint_expr::validate_constraints_by_schema;
+use databend_common_config::GlobalConfig;
 pub use databend_common_expression::DummyColumnType;
 pub use ddl::database::DEFAULT_STORAGE_CONNECTION;
 pub use ddl::database::DEFAULT_STORAGE_PATH;
-pub use ddl::index::validate_table_indexes_not_referencing_columns;
 pub use ddl::table::verify_external_location_privileges;
 pub use default_expr::DefaultExprBinder;
 pub use explain::ExplainConfig;
+pub use file_format::parse_file_format;
 pub use file_format::resolve_file_format;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::get_storage_params_from_options;
@@ -105,3 +105,7 @@ pub use stream_column_factory::STREAM_COLUMN_FACTORY;
 pub use window::WindowFunctionInfo;
 pub use window::WindowOrderByInfo;
 pub use window::bind_window_function_info;
+
+pub(crate) fn lineage_enabled() -> bool {
+    GlobalConfig::instance().lineage.enabled()
+}

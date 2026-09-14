@@ -12,16 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
-use databend_common_expression::VirtualDataField;
-use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 
@@ -29,26 +24,25 @@ use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
 use crate::operations::SnapshotChanges;
 use crate::operations::SnapshotMerged;
-use crate::operations::VirtualSchemaMode;
 use crate::statistics::merge_statistics;
 
 pub struct TransformMergeCommitMeta {
     to_merged: Vec<CommitMeta>,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
 }
 
 impl TransformMergeCommitMeta {
-    pub fn create(default_cluster_key_id: Option<u32>) -> Self {
+    pub fn create(cluster_key_info: Option<ClusterKeyInfo>) -> Self {
         TransformMergeCommitMeta {
             to_merged: vec![],
-            default_cluster_key_id,
+            cluster_key_info,
         }
     }
 
     fn merge_conflict_resolve_context(
         l: ConflictResolveContext,
         r: ConflictResolveContext,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
     ) -> Result<ConflictResolveContext> {
         match (l, r) {
             (
@@ -67,7 +61,7 @@ impl TransformMergeCommitMeta {
                         removed_statistics: merge_statistics(
                             l.removed_statistics.clone(),
                             &r.removed_statistics,
-                            default_cluster_key_id,
+                            cluster_key_info,
                         ),
                         appended_segments: l
                             .appended_segments
@@ -82,7 +76,7 @@ impl TransformMergeCommitMeta {
                         merged_statistics: merge_statistics(
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
-                            default_cluster_key_id,
+                            cluster_key_info,
                         ),
                     },
                 ))
@@ -106,7 +100,7 @@ impl TransformMergeCommitMeta {
                         merged_statistics: merge_statistics(
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
-                            default_cluster_key_id,
+                            cluster_key_info,
                         ),
                     },
                     l_schema,
@@ -119,129 +113,12 @@ impl TransformMergeCommitMeta {
         }
     }
 
-    pub(crate) fn merge_virtual_schema(
-        l_virtual_schema: Option<VirtualDataSchema>,
-        r_virtual_schema: Option<VirtualDataSchema>,
-    ) -> Option<VirtualDataSchema> {
-        match (l_virtual_schema, r_virtual_schema) {
-            (Some(l_schema), Some(r_schema)) => {
-                let mut merged_fields: Vec<VirtualDataField> = Vec::new();
-                let mut l_cursor = 0;
-                let mut r_cursor = 0;
-
-                let next_column_id = if l_schema.next_column_id > r_schema.next_column_id {
-                    l_schema.next_column_id
-                } else {
-                    r_schema.next_column_id
-                };
-                // TODO: Calculate the correct `number_of_blocks`
-                let number_of_blocks = if l_schema.number_of_blocks > r_schema.number_of_blocks {
-                    l_schema.number_of_blocks
-                } else {
-                    r_schema.number_of_blocks
-                };
-
-                while l_cursor < l_schema.fields.len() || r_cursor < r_schema.fields.len() {
-                    match (l_schema.fields.get(l_cursor), r_schema.fields.get(r_cursor)) {
-                        (Some(l_field), Some(r_field)) => {
-                            if l_field.column_id < r_field.column_id {
-                                merged_fields.push(l_field.clone());
-                                l_cursor += 1;
-                            } else if l_field.column_id > r_field.column_id {
-                                merged_fields.push(r_field.clone());
-                                r_cursor += 1;
-                            } else {
-                                // If column_id, source_column_id and name are same, we can merge the field,
-                                // otherwise there is a conflict in the column_id and we need to remove the field.
-                                if l_field.source_column_id == r_field.source_column_id
-                                    && l_field.name == r_field.name
-                                {
-                                    let mut combined_data_types = BTreeSet::new();
-                                    for dt in &l_field.data_types {
-                                        combined_data_types.insert(dt.clone());
-                                    }
-                                    for dt in &r_field.data_types {
-                                        combined_data_types.insert(dt.clone());
-                                    }
-                                    let mut merged_field = l_field.clone();
-                                    merged_field.data_types =
-                                        combined_data_types.into_iter().collect();
-                                    merged_fields.push(merged_field);
-                                }
-                                l_cursor += 1;
-                                r_cursor += 1;
-                            }
-                        }
-                        (Some(l_field), None) => {
-                            merged_fields.push(l_field.clone());
-                            l_cursor += 1;
-                        }
-                        (None, Some(r_field)) => {
-                            merged_fields.push(r_field.clone());
-                            r_cursor += 1;
-                        }
-                        (None, None) => break,
-                    }
-                }
-
-                let merged_virtual_schema = VirtualDataSchema {
-                    fields: merged_fields,
-                    metadata: BTreeMap::new(),
-                    next_column_id,
-                    number_of_blocks,
-                };
-                Some(Self::trim_virtual_schema_fields(merged_virtual_schema))
-            }
-            (Some(l_virtual_schema), None) => {
-                Some(Self::trim_virtual_schema_fields(l_virtual_schema))
-            }
-            (None, Some(r_virtual_schema)) => {
-                Some(Self::trim_virtual_schema_fields(r_virtual_schema))
-            }
-            (None, None) => None,
-        }
-    }
-
-    // Remove redundant virtual column fields to prevent TableMeta from becoming excessively large.
-    fn trim_virtual_schema_fields(mut virtual_schema: VirtualDataSchema) -> VirtualDataSchema {
-        if virtual_schema.fields.len() > VIRTUAL_COLUMNS_LIMIT {
-            virtual_schema.fields.truncate(VIRTUAL_COLUMNS_LIMIT);
-        }
-        virtual_schema
-    }
-
-    pub(crate) fn apply_virtual_schema(
-        old_virtual_schema: Option<VirtualDataSchema>,
-        new_virtual_schema: Option<VirtualDataSchema>,
-        mode: VirtualSchemaMode,
-    ) -> Option<VirtualDataSchema> {
-        match mode {
-            VirtualSchemaMode::Merge => {
-                Self::merge_virtual_schema(old_virtual_schema, new_virtual_schema)
-            }
-            VirtualSchemaMode::Replace => new_virtual_schema,
-        }
-    }
-
     pub fn merge_commit_meta(
         l: CommitMeta,
         r: CommitMeta,
-        default_cluster_key_id: Option<u32>,
+        cluster_key_info: Option<&ClusterKeyInfo>,
     ) -> Result<CommitMeta> {
         assert_eq!(l.table_id, r.table_id, "table id mismatch");
-
-        let (virtual_schema, virtual_schema_mode) =
-            match (l.virtual_schema_mode, r.virtual_schema_mode) {
-                (VirtualSchemaMode::Replace, _) | (_, VirtualSchemaMode::Replace) => {
-                    return Err(ErrorCode::Internal(
-                        "unexpected VirtualSchemaMode::Replace in merge_commit_meta".to_string(),
-                    ));
-                }
-                (VirtualSchemaMode::Merge, VirtualSchemaMode::Merge) => (
-                    Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
-                    VirtualSchemaMode::Merge,
-                ),
-            };
 
         let mut top_n = l.top_n;
         merge_column_top_n_mut(&mut top_n, r.top_n)?;
@@ -250,7 +127,7 @@ impl TransformMergeCommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
                 r.conflict_resolve_context,
-                default_cluster_key_id,
+                cluster_key_info,
             )?,
             new_segment_locs: l
                 .new_segment_locs
@@ -260,8 +137,6 @@ impl TransformMergeCommitMeta {
             table_id: l.table_id,
             logical_updated_rows: l.logical_updated_rows + r.logical_updated_rows,
             logical_deleted_rows: l.logical_deleted_rows + r.logical_deleted_rows,
-            virtual_schema,
-            virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),
             top_n,
         })
@@ -271,10 +146,7 @@ impl TransformMergeCommitMeta {
 impl AccumulatingTransform for TransformMergeCommitMeta {
     const NAME: &'static str = "TransformMergeCommitMeta";
 
-    fn transform(
-        &mut self,
-        data: databend_common_expression::DataBlock,
-    ) -> databend_common_exception::Result<Vec<databend_common_expression::DataBlock>> {
+    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         let commit_meta = CommitMeta::try_from(data)?;
         self.to_merged.push(commit_meta);
         Ok(vec![])
@@ -288,7 +160,7 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         let mut to_merged = to_merged.into_iter();
         let first = to_merged.next().unwrap();
         let merged = to_merged.try_fold(first, |acc, x| {
-            Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
+            Self::merge_commit_meta(acc, x, self.cluster_key_info.as_ref())
         })?;
         Ok(vec![merged.into()])
     }
@@ -296,125 +168,9 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::VariantDataType;
     use databend_storages_common_table_meta::meta::Statistics;
 
     use super::*;
-
-    // Verifies that merging two virtual schemas where the combined field count
-    // exceeds VIRTUAL_COLUMNS_LIMIT results in truncation to exactly the limit.
-    // This prevents TableMeta from growing unboundedly when many variant paths exist.
-    #[test]
-    fn test_merge_virtual_schema_truncate_to_limit() {
-        let l_fields = (0..(VIRTUAL_COLUMNS_LIMIT as u32))
-            .map(|i| VirtualDataField {
-                name: format!("v['left_{i}']"),
-                data_types: vec![VariantDataType::String],
-                source_column_id: 0,
-                column_id: i,
-            })
-            .collect::<Vec<_>>();
-
-        let r_fields = (VIRTUAL_COLUMNS_LIMIT as u32..(VIRTUAL_COLUMNS_LIMIT as u32 + 16))
-            .map(|i| VirtualDataField {
-                name: format!("v['right_{i}']"),
-                data_types: vec![VariantDataType::String],
-                source_column_id: 0,
-                column_id: i,
-            })
-            .collect::<Vec<_>>();
-
-        let l_schema = VirtualDataSchema {
-            fields: l_fields,
-            metadata: BTreeMap::new(),
-            next_column_id: VIRTUAL_COLUMNS_LIMIT as u32,
-            number_of_blocks: 1,
-        };
-        let r_schema = VirtualDataSchema {
-            fields: r_fields,
-            metadata: BTreeMap::new(),
-            next_column_id: VIRTUAL_COLUMNS_LIMIT as u32 + 16,
-            number_of_blocks: 1,
-        };
-
-        let merged = TransformMergeCommitMeta::merge_virtual_schema(Some(l_schema), Some(r_schema))
-            .expect("merged virtual schema should exist");
-
-        assert_eq!(merged.fields.len(), VIRTUAL_COLUMNS_LIMIT);
-        assert_eq!(merged.fields.first().unwrap().column_id, 0);
-        assert_eq!(
-            merged.fields.last().unwrap().column_id,
-            VIRTUAL_COLUMNS_LIMIT as u32 - 1
-        );
-    }
-
-    fn schema_with_column_ids(ids: &[u32]) -> VirtualDataSchema {
-        VirtualDataSchema {
-            fields: ids
-                .iter()
-                .map(|column_id| VirtualDataField {
-                    name: format!("v['{column_id}']"),
-                    data_types: vec![VariantDataType::String],
-                    source_column_id: 0,
-                    column_id: *column_id,
-                })
-                .collect(),
-            metadata: BTreeMap::new(),
-            next_column_id: ids.iter().max().map(|v| v + 1).unwrap_or(1),
-            number_of_blocks: 1,
-        }
-    }
-
-    fn commit_meta_with_virtual_schema(
-        table_id: u64,
-        mode: VirtualSchemaMode,
-        virtual_schema: Option<VirtualDataSchema>,
-    ) -> CommitMeta {
-        let mut meta = CommitMeta::empty(table_id);
-        meta.virtual_schema_mode = mode;
-        meta.virtual_schema = virtual_schema;
-        meta
-    }
-
-    // Replace mode is only used by vacuum's single-source pipeline, which never goes
-    // through TransformMergeCommitMeta. Any Replace in merge_commit_meta is unexpected.
-    #[test]
-    fn test_merge_commit_meta_error_on_replace() {
-        // Replace + Replace
-        let l = commit_meta_with_virtual_schema(
-            1,
-            VirtualSchemaMode::Replace,
-            Some(schema_with_column_ids(&[1])),
-        );
-        let r = commit_meta_with_virtual_schema(
-            1,
-            VirtualSchemaMode::Replace,
-            Some(schema_with_column_ids(&[2])),
-        );
-        assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
-
-        // Merge + Replace
-        let l = commit_meta_with_virtual_schema(
-            1,
-            VirtualSchemaMode::Merge,
-            Some(schema_with_column_ids(&[1])),
-        );
-        let r = commit_meta_with_virtual_schema(1, VirtualSchemaMode::Replace, None);
-        assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
-
-        // Replace + Merge
-        let l = commit_meta_with_virtual_schema(
-            1,
-            VirtualSchemaMode::Replace,
-            Some(schema_with_column_ids(&[1])),
-        );
-        let r = commit_meta_with_virtual_schema(
-            1,
-            VirtualSchemaMode::Merge,
-            Some(schema_with_column_ids(&[2])),
-        );
-        assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
-    }
 
     fn commit_meta_with_rows(added_rows: u64, removed_rows: u64, deleted_rows: u64) -> CommitMeta {
         let mut meta = CommitMeta::empty(1);
@@ -446,6 +202,18 @@ mod tests {
                 .conflict_resolve_context
                 .logical_insert_rows(merged.logical_deleted_rows),
             5
+        );
+    }
+
+    #[test]
+    fn test_logical_insert_rows_saturates_for_physical_row_reduction() {
+        let compacted = commit_meta_with_rows(1, 5, 0);
+
+        assert_eq!(
+            compacted
+                .conflict_resolve_context
+                .logical_insert_rows(compacted.logical_deleted_rows),
+            0
         );
     }
 }

@@ -18,17 +18,17 @@ use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::Finder;
+use super::Any;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::split_conjunctions;
+use crate::binder::into_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
-use crate::plans::Visitor;
+use crate::plans::Visitor as _;
 use crate::plans::VisitorMut as _;
 
 impl Binder {
@@ -57,9 +57,9 @@ impl Binder {
         bind_context.expr_context = ExprContext::HavingClause;
 
         let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
-        let mut finder = Finder::new(&f);
-        finder.visit(&having)?;
-        if !finder.scalars().is_empty() {
+        let mut any = Any::new(&f);
+        any.visit(&having)?;
+        if any.result() {
             return Err(ErrorCode::SemanticError(
                 "Having clause can't contain window functions".to_string(),
             )
@@ -83,7 +83,7 @@ impl Binder {
             having
         };
 
-        let predicates = split_conjunctions(&scalar);
+        let predicates = into_conjunctions(scalar).collect();
 
         let filter = Filter { predicates };
 

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
+use databend_common_grpc::is_in_process_grpc_address;
 use databend_common_storage::EndpointUrlPolicyRegistry;
 
 use crate::InnerConfig;
@@ -29,7 +30,13 @@ impl GlobalConfig {
         GlobalInstance::set(Arc::new(config.clone()));
         GlobalInstance::set(Arc::new(version));
         let mut endpoint_url_policy = config.storage.endpoint_url_policy.clone();
-        endpoint_url_policy.protected_sockets = config.meta.endpoints.clone();
+        endpoint_url_policy.protected_sockets = config
+            .meta
+            .endpoints
+            .iter()
+            .filter(|endpoint| !is_in_process_grpc_address(endpoint))
+            .cloned()
+            .collect();
         EndpointUrlPolicyRegistry::init(endpoint_url_policy)?;
         Ok(())
     }

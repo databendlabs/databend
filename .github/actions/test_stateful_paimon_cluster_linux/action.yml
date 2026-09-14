@@ -10,6 +10,13 @@ runs:
         distribution: "temurin"
         java-version: "17"
 
+    - name: Prefer Java 17 for Spark / Paimon prepare
+      shell: bash
+      run: |
+        echo "JAVA_HOME=${JAVA_HOME}" >> "$GITHUB_ENV"
+        echo "PATH=${JAVA_HOME}/bin:${PATH}" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=${JAVA_HOME}/lib/server:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
     - uses: astral-sh/setup-uv@v7
 
     - name: Test setup

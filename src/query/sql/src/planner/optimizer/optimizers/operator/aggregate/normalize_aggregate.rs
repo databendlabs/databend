@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 
 use crate::ColumnBinding;
 use crate::Visibility;
@@ -39,23 +41,23 @@ impl RuleNormalizeAggregateOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut children = Vec::with_capacity(s_expr.arity());
-        for child in s_expr.children() {
-            let child = self.optimize_sync(child)?;
+    pub fn optimize_sync(&self, mut s_expr: SExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(s_expr.children.len());
+        for child in std::mem::take(&mut s_expr.children) {
+            let child = self.optimize_sync(Arc::unwrap_or_clone(child))?;
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
         if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
-            self.normalize_aggregate(&s_expr)
+            self.normalize_aggregate(s_expr)
         } else {
             Ok(s_expr)
         }
     }
 
-    fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn normalize_aggregate(&self, mut s_expr: SExpr) -> Result<SExpr> {
         let aggregate: Aggregate = s_expr.plan().clone().try_into()?;
-        if let Some(rewritten) = self.rewrite_distinct_count(&aggregate, s_expr)? {
+        if let Some(rewritten) = self.rewrite_distinct_count(&aggregate, &s_expr)? {
             return Ok(rewritten);
         }
         let mut work_expr = None;
@@ -70,7 +72,7 @@ impl RuleNormalizeAggregateOptimizer {
                 if !function.distinct
                     && function.func_name == "count"
                     && (function.args.is_empty()
-                        || !function.args[0].data_type()?.is_nullable_or_null())
+                        || !function.args[0].data_type().is_nullable_or_null())
                 {
                     rewritten = true;
                     if work_expr.is_none() {
@@ -104,12 +106,10 @@ impl RuleNormalizeAggregateOptimizer {
                             false
                         }
                     })
-                    && function.args.iter().all(|expr| {
-                        !expr
-                            .data_type()
-                            .map(|t| t.is_nullable_or_null())
-                            .unwrap_or(true)
-                    });
+                    && function
+                        .args
+                        .iter()
+                        .all(|expr| !expr.data_type().is_nullable_or_null());
 
                 if distinct_on_group_key {
                     rewritten = true;
@@ -117,7 +117,7 @@ impl RuleNormalizeAggregateOptimizer {
                     // Grouping sets rewrite will wrap grouping keys into nullable and inject NULLs
                     // for sets where the key is absent, so treat them as nullable even if the
                     // original column type is non-nullable.
-                    let mut nullable = function.args[0].data_type()?.is_nullable_or_null();
+                    let mut nullable = function.args[0].data_type().is_nullable_or_null();
                     if !nullable {
                         if let Some(grouping_sets) = &aggregate.grouping_sets {
                             if !grouping_sets.sets.is_empty() {
@@ -132,6 +132,7 @@ impl RuleNormalizeAggregateOptimizer {
                             func_name: "is_not_null".to_string(),
                             params: vec![],
                             arguments: vec![function.args[0].clone()],
+                            return_type: Box::new(DataType::Boolean),
                         });
 
                         ScalarExpr::FunctionCall(FunctionCall {
@@ -149,6 +150,7 @@ impl RuleNormalizeAggregateOptimizer {
                                     value: 0u64.into(),
                                 }),
                             ],
+                            return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
                         })
                     } else {
                         ScalarExpr::ConstantExpr(ConstantExpr {
@@ -170,7 +172,7 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         if !rewritten {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         let new_aggregate = Aggregate {
@@ -182,10 +184,8 @@ impl RuleNormalizeAggregateOptimizer {
             grouping_sets: aggregate.grouping_sets,
         };
 
-        let mut new_aggregate = SExpr::create_unary(
-            Arc::new(new_aggregate.into()),
-            Arc::new(s_expr.child(0)?.clone()),
-        );
+        assert_eq!(s_expr.children.len(), 1);
+        let mut new_aggregate = SExpr::create_unary(new_aggregate, s_expr.children.pop().unwrap());
 
         let mut scalar_items = Vec::new();
 
@@ -260,11 +260,11 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         // Skip rewrite when any argument is nullable or Null, to preserve NULL-skipping semantics.
-        if function.args.iter().any(|expr| {
-            expr.data_type()
-                .map(|t| t.is_nullable_or_null())
-                .unwrap_or(true)
-        }) {
+        if function
+            .args
+            .iter()
+            .any(|expr| expr.data_type().is_nullable_or_null())
+        {
             return Ok(None);
         }
 
@@ -335,7 +335,7 @@ impl Optimizer for RuleNormalizeAggregateOptimizer {
         "RuleNormalizeAggregateOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
 }

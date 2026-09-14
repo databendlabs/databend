@@ -57,6 +57,8 @@ pub enum Feature {
     MaxCpuQuota(usize),
     #[serde(alias = "row_access_policy", alias = "ROW_ACCESS_POLICY")]
     RowAccessPolicy,
+    #[serde(alias = "materialized_view", alias = "MATERIALIZED_VIEW")]
+    MaterializedView,
     #[serde(other)]
     Unknown,
 }
@@ -85,6 +87,7 @@ impl fmt::Display for Feature {
             Feature::SystemHistory => write!(f, "system_history"),
             Feature::PrivateTask => write!(f, "private_task"),
             Feature::RowAccessPolicy => write!(f, "row_access_policy"),
+            Feature::MaterializedView => write!(f, "materialized_view"),
             Feature::Unknown => write!(f, "unknown"),
             Feature::MaxCpuQuota(v) => write!(f, "max_cpu_quota({})", v),
             Feature::MaxNodeQuota(v) => write!(f, "max_node_quota({})", v),
@@ -248,6 +251,11 @@ mod tests {
         assert_eq!(
             Feature::RowAccessPolicy,
             serde_json::from_str::<Feature>("\"RowAccessPolicy\"").unwrap()
+        );
+
+        assert_eq!(
+            Feature::MaterializedView,
+            serde_json::from_str::<Feature>("\"materialized_view\"").unwrap()
         );
 
         assert_eq!(

@@ -602,6 +602,12 @@ select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json
 ----
 {"abc":20.00,"de":10.00,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
 
+query T
+select json_object_agg(k, doc -> 'v') FILTER (WHERE ok)
+from (select 'k' as k, parse_json('{"v":"value"}') as doc, true as ok)
+----
+{"k":"value"}
+
 query TTTTTT
 select array_agg(a), array_agg(b), array_agg(c), array_agg(d), array_agg(e), array_agg('a') from d
 ----

@@ -16,10 +16,10 @@ use std::ops::Bound;
 
 use databend_common_exception::Result;
 use databend_common_statistics::Datum;
-use databend_common_statistics::HistogramBounds;
-use databend_common_statistics::HistogramRangeBounds;
 use databend_common_statistics::NdvEstimate;
+use databend_common_statistics::StatBounds;
 use databend_common_statistics::StatCount;
+use databend_common_statistics::StatRangeBounds;
 
 use crate::optimizer::ir::ColumnStat;
 use crate::plans::ComparisonOp;
@@ -52,33 +52,23 @@ impl ValueConstraint {
         match op {
             ComparisonOp::Equal => ValueConstraint::Eq(datum),
             ComparisonOp::NotEqual => ValueConstraint::NotEq,
-            ComparisonOp::GT => ValueConstraint::Range {
-                lower: Bound::Excluded(datum),
-                upper: Bound::Unbounded,
-            },
-            ComparisonOp::GTE => ValueConstraint::Range {
-                lower: Bound::Included(datum),
-                upper: Bound::Unbounded,
-            },
-            ComparisonOp::LT => ValueConstraint::Range {
-                lower: Bound::Unbounded,
-                upper: Bound::Excluded(datum),
-            },
-            ComparisonOp::LTE => ValueConstraint::Range {
-                lower: Bound::Unbounded,
-                upper: Bound::Included(datum),
-            },
+            op => {
+                let (lower, upper) = op.range_bounds(datum).unwrap();
+                ValueConstraint::Range { lower, upper }
+            }
         }
     }
 
     pub(super) fn apply(&self, column_stat: &mut ColumnStat) -> Result<()> {
         match self {
             ValueConstraint::NotNull => {
-                column_stat.null_count = StatCount::exact(0);
+                column_stat.set_null_count(StatCount::exact(0));
             }
             ValueConstraint::Eq(datum) => {
-                let bounds = HistogramBounds::new(column_stat.min.clone(), column_stat.max.clone());
-                if contains_bounds_datum(&bounds, datum)? {
+                if column_stat
+                    .bounds()
+                    .is_some_and(|bounds| bounds.contains_datum(datum))
+                {
                     *column_stat = ColumnStat::from_const(datum.clone());
                 } else {
                     clear_for_empty_result(column_stat);
@@ -86,24 +76,19 @@ impl ValueConstraint {
             }
             ValueConstraint::NotEq => {}
             ValueConstraint::Range { lower, upper } => {
-                let bounds = HistogramBounds::from_range_constraint(
-                    &column_stat.min,
-                    &column_stat.max,
-                    lower,
-                    upper,
-                )?;
+                let Some(bounds) = column_stat.bounds() else {
+                    clear_for_empty_result(column_stat);
+                    return Ok(());
+                };
+                let bounds = bounds.restrict_by_range(lower, upper);
                 match bounds {
-                    HistogramRangeBounds::Bounds(bounds) => {
-                        apply_range_bounds(
-                            column_stat,
-                            bounds.lower_bound().clone(),
-                            bounds.upper_bound().clone(),
-                        )?;
+                    StatRangeBounds::Bounds(bounds) => {
+                        apply_range_bounds(column_stat, bounds)?;
                     }
-                    HistogramRangeBounds::Empty => {
+                    StatRangeBounds::Empty => {
                         clear_for_empty_result(column_stat);
                     }
-                    HistogramRangeBounds::Imprecise => {}
+                    StatRangeBounds::Imprecise => {}
                 }
             }
         }
@@ -124,52 +109,21 @@ impl ValueConstraint {
     }
 }
 
-fn contains_bounds_datum(bounds: &HistogramBounds, datum: &Datum) -> Result<bool> {
-    Ok(
-        bounds.lower_bound().compare(datum)? != std::cmp::Ordering::Greater
-            && bounds.upper_bound().compare(datum)? != std::cmp::Ordering::Less,
-    )
-}
-
-fn apply_range_bounds(column_stat: &mut ColumnStat, new_min: Datum, new_max: Datum) -> Result<()> {
-    column_stat.min = new_min.clone();
-    column_stat.max = new_max.clone();
-    column_stat.null_count = StatCount::exact(0);
-    if let Some(ndv_upper) = finite_range_ndv_upper(&new_min, &new_max) {
-        column_stat.ndv = column_stat.ndv.reduce(ndv_upper);
+fn apply_range_bounds(column_stat: &mut ColumnStat, bounds: StatBounds) -> Result<()> {
+    if let ColumnStat::AllNull { null_count } = column_stat {
+        *null_count = StatCount::exact(0);
+        return Ok(());
     }
-
-    if let Some(histogram) = &column_stat.histogram {
-        let restricted_histogram = histogram.restrict_to_bounds(&new_min, &new_max)?;
-        if let Some(histogram) = &restricted_histogram {
-            column_stat.refine_ndv_from_histogram(histogram);
-        }
-        column_stat.histogram = restricted_histogram;
-    }
+    column_stat
+        .restrict_to_bounds(bounds)
+        .map_err(databend_common_exception::ErrorCode::Internal)?;
+    column_stat.set_null_count(StatCount::exact(0));
 
     Ok(())
 }
 
-fn finite_range_ndv_upper(min: &Datum, max: &Datum) -> Option<f64> {
-    if min == max {
-        return Some(1.0);
-    }
-    match (min, max) {
-        (Datum::Bool(false), Datum::Bool(true)) => Some(2.0),
-        (Datum::Int(min), Datum::Int(max)) => max
-            .checked_sub(*min)
-            .and_then(|diff| diff.checked_add(1))
-            .map(|value| value as f64),
-        (Datum::UInt(min), Datum::UInt(max)) => max
-            .checked_sub(*min)
-            .and_then(|diff| diff.checked_add(1))
-            .map(|value| value as f64),
-        _ => None,
-    }
-}
-
 pub(super) fn clear_for_empty_result(column_stat: &mut ColumnStat) {
-    column_stat.ndv = NdvEstimate::exact(0.0);
-    column_stat.null_count = StatCount::exact(0);
-    column_stat.histogram = None;
+    column_stat.set_ndv(NdvEstimate::exact(0.0));
+    column_stat.set_null_count(StatCount::exact(0));
+    column_stat.clear_histogram();
 }

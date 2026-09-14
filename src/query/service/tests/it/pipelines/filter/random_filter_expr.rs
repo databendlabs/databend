@@ -103,11 +103,17 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 let child_expr = convert_predicate_tree_to_scalar_expr(child, data_type);
                 and_args.push(child_expr);
             }
+            let return_type = if data_type.is_nullable_or_null() {
+                DataType::Boolean.wrap_nullable()
+            } else {
+                DataType::Boolean
+            };
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "and".to_string(),
                 params: vec![],
                 arguments: and_args,
+                return_type: Box::new(return_type),
             })
         }
         PredicateNode::Or(children) => {
@@ -116,20 +122,29 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 let child_expr = convert_predicate_tree_to_scalar_expr(child, data_type);
                 or_args.push(child_expr);
             }
+            let return_type = if data_type.is_nullable_or_null() {
+                DataType::Boolean.wrap_nullable()
+            } else {
+                DataType::Boolean
+            };
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],
                 arguments: or_args,
+                return_type: Box::new(return_type),
             })
         }
         PredicateNode::Not(child) => {
             let child_expr = convert_predicate_tree_to_scalar_expr(*child, data_type);
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&child_expr]);
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "not".to_string(),
                 params: vec![],
                 arguments: vec![child_expr],
+                return_type: Box::new(return_type),
             })
         }
         PredicateNode::Leaf => {
@@ -157,11 +172,16 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 column_name_lower: None,
             };
             let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+            let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                &scalar_expr,
+                &scalar_expr,
+            ]);
             ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: op.to_string(),
                 params: vec![],
                 arguments: vec![scalar_expr.clone(), scalar_expr],
+                return_type: Box::new(return_type),
             })
         }
     }

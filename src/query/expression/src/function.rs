@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops::BitAnd;
@@ -21,6 +22,9 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -30,10 +34,9 @@ use databend_common_io::GeometryDataType;
 use databend_common_io::prelude::BinaryDisplayFormat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
+use smallvec::SmallVec;
 
 use self::function_factory::FunctionFactoryHelper;
 use crate::Column;
@@ -133,8 +136,9 @@ pub enum FunctionEval {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionContext {
-    pub tz: TimeZone,
-    pub now: Zoned,
+    pub tz: Tz,
+    /// Instant the query started, used by `now()`, `today()` and friends.
+    pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
     pub enable_selector_executor: bool,
@@ -153,8 +157,8 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: TimeZone::UTC,
-            now: Default::default(),
+            tz: Tz::UTC,
+            now: DateTime::UNIX_EPOCH,
             rounding_mode: false,
             disable_variant_check: false,
             enable_selector_executor: true,
@@ -178,9 +182,9 @@ pub struct EvalContext<'a> {
     pub num_rows: usize,
 
     pub func_ctx: &'a FunctionContext,
-    /// Validity bitmap of outer nullable column. This is an optimization
-    /// to avoid recording errors on the NULL value which has a corresponding
-    /// default value in nullable's inner column.
+    /// Active rows propagated by nullable and conditional partial evaluation.
+    /// Functions evaluate all rows by default, but expensive functions may opt in to skipping
+    /// inactive rows with `PartialEvalPolicy::SkipInactiveRows`.
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,
@@ -223,6 +227,12 @@ pub struct FunctionRegistry {
     pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
     pub derive_stat: HashMap<String, DeriveStat>,
+    /// Function overloads whose evaluation or domain calculation reads [`FunctionContext`].
+    ///
+    /// The key is the canonical function name and the registry-local function ID. Keeping this
+    /// per overload avoids disabling context-free folding for unrelated overloads that share a
+    /// name, such as numeric and timestamp arithmetic.
+    context_dependent_functions: HashMap<String, HashSet<usize>>,
 }
 
 impl FunctionRegistry {
@@ -276,10 +286,10 @@ impl FunctionRegistry {
         name: &str,
         params: &[Scalar],
         args: &[Expr<Index>],
-    ) -> Vec<(FunctionID, Arc<Function>)> {
+    ) -> SmallVec<[(FunctionID, Arc<Function>); 1]> {
         let name = name.to_lowercase();
 
-        let mut candidates = Vec::new();
+        let mut candidates: SmallVec<[(FunctionID, Arc<Function>); 1]> = SmallVec::new();
 
         if let Some(funcs) = self.funcs.get(&name) {
             candidates.extend(funcs.iter().filter_map(|(func, id)| {
@@ -304,13 +314,27 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                factory.create(params, &args_type).map(|func| {
+                let mut factory_args_type = Cow::Borrowed(args_type.as_slice());
+                let mut func = factory.create(params, &factory_args_type);
+                if func.is_none() {
+                    let physical_args_type = args_type
+                        .iter()
+                        .map(|data_type| data_type.physical_type().into_owned())
+                        .collect::<Vec<_>>();
+                    if physical_args_type != args_type {
+                        factory_args_type = Cow::Owned(physical_args_type);
+                        func = factory.create(params, &factory_args_type);
+                    }
+                }
+
+                func.map(|func| {
+                    let factory_args_type = factory_args_type.into_owned();
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
                             id: *id,
                             params: params.to_vec(),
-                            args_type: args_type.clone(),
+                            args_type: factory_args_type,
                         },
                         func,
                     )
@@ -338,11 +362,54 @@ impl FunctionRegistry {
 
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
-        if self.contains(&func_name) {
-            Some(self.properties.get(&func_name).cloned().unwrap_or_default())
-        } else {
-            None
+        if !self.contains(&func_name) {
+            return None;
         }
+
+        // Properties are stored under canonical function names, and aliases point directly to
+        // their canonical functions.
+        let canonical_name = self.aliases.get(&func_name).unwrap_or(&func_name);
+
+        Some(
+            self.properties
+                .get(canonical_name)
+                .cloned()
+                .unwrap_or_default(),
+        )
+    }
+
+    /// Register a group of functions whose result or domain can depend on [`FunctionContext`].
+    ///
+    /// Only functions and factories added by `register` are marked. Existing overloads with the
+    /// same name remain context independent.
+    pub fn register_context_dependent(&mut self, register: impl FnOnce(&mut FunctionRegistry)) {
+        let existing = self.registered_function_ids();
+        register(self);
+
+        for (name, id) in self.registered_function_ids().difference(&existing) {
+            self.context_dependent_functions
+                .entry(name.clone())
+                .or_default()
+                .insert(*id);
+        }
+    }
+
+    pub fn is_context_dependent(&self, id: &FunctionID) -> bool {
+        self.context_dependent_functions
+            .get(id.name().as_ref())
+            .is_some_and(|ids| ids.contains(&id.id()))
+    }
+
+    fn registered_function_ids(&self) -> HashSet<(String, usize)> {
+        self.funcs
+            .iter()
+            .flat_map(|(name, funcs)| funcs.iter().map(|(_, id)| (name.clone(), *id)))
+            .chain(
+                self.factories
+                    .iter()
+                    .flat_map(|(name, funcs)| funcs.iter().map(|(_, id)| (name.clone(), *id))),
+            )
+            .collect()
     }
 
     pub fn register_function(&mut self, func: Function) {
@@ -554,13 +621,21 @@ impl EvalContext<'_> {
         };
 
         let first_error_row = match selection {
-            None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+            None => {
+                let Some((row, _)) = valids.iter().enumerate().find(|(_, valid)| !valid) else {
+                    return Ok(());
+                };
+                row
+            }
             Some(selection) if valids.len() == 1 => {
-                if valids.get(0) || selection.is_empty() {
+                if valids.get(0) {
                     return Ok(());
                 }
 
-                selection.first().map(|x| *x as usize).unwrap()
+                let Some(row) = selection.first() else {
+                    return Ok(());
+                };
+                *row as usize
             }
             Some(selection) => {
                 let Some(first_invalid) = selection.iter().find(|idx| !valids.get(**idx as usize))
@@ -612,5 +687,41 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
                 )),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::bitmap::MutableBitmap;
+
+    use super::EvalContext;
+
+    #[test]
+    fn render_error_ignores_error_channel_without_invalid_rows() {
+        let errors = Some((MutableBitmap::from_len_set(2), "error".to_string()));
+
+        assert!(EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", None).is_ok());
+    }
+
+    #[test]
+    fn render_error_ignores_empty_selection() {
+        let errors = Some((MutableBitmap::from_len_zeroed(1), "error".to_string()));
+
+        assert!(
+            EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", Some(&[])).is_ok()
+        );
+    }
+
+    #[test]
+    fn render_error_returns_sql_error_for_invalid_row() {
+        let errors = Some((MutableBitmap::from_len_zeroed(1), "error".to_string()));
+
+        let err = EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", None)
+            .expect_err("an invalid row must be reported as a SQL error");
+        assert_eq!(err.code(), 1006);
+        assert!(
+            err.message()
+                .contains("error while evaluating function `fn()`")
+        );
     }
 }

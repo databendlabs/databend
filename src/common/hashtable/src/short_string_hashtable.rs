@@ -21,7 +21,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::mem_allocator::DefaultAllocator;
+use databend_common_base::mem_allocator::TrackingAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -39,7 +39,7 @@ use crate::table_empty::TableEmptyIterMut;
 use crate::table0::Table0Iter;
 use crate::table0::Table0IterMut;
 
-pub struct ShortStringHashtable<K, V, A = DefaultAllocator>
+pub struct ShortStringHashtable<K, V, A = TrackingAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,

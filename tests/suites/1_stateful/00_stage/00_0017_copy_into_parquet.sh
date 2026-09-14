@@ -22,7 +22,7 @@ stmt "create stage s1;"
 # one file when #row is small even though multi-threads
 run_copy_count "copy into @s1/ from (select * from numbers(${SINGLE_ROW_COUNT})) max_file_size=${SMALL_FILE_SIZE} detailed_output=true;"
 
-# two files, the larger is 24960476
+# three files with conservative Parquet encodings
 run_copy_count "copy /*+ set_var(max_threads=1) */ into @s1/ from (select * from numbers(${DOUBLE_ROW_COUNT})) max_file_size=${DUAL_FILE_SIZE} detailed_output=true;"
 
 # one file

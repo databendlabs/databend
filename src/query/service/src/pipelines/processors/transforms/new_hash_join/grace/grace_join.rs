@@ -24,6 +24,7 @@ use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
@@ -85,6 +86,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         };
 
         for (id, data_block) in ready_partitions {
+            check_interrupt()?;
             self.partitions[id].writer.write(data_block)?;
             self.partitions[id].writer.flush()?;
         }
@@ -97,6 +99,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
 
         let mut ready_partitions = Vec::with_capacity(self.partitions.len());
         for id in 0..self.partitions.len() {
+            check_interrupt()?;
             let mut partition =
                 GraceJoinPartition::create(&self.location_prefix, self.writer_pool_bytes)?;
 
@@ -105,6 +108,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         }
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
+            check_interrupt()?;
             let path = partition.path;
             let (written, row_groups) = partition.writer.close()?;
 
@@ -141,6 +145,7 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
         let ready_partitions = self.partition_probe_data(data)?;
 
         for (id, data_block) in ready_partitions {
+            check_interrupt()?;
             self.partitions[id].writer.write(data_block)?;
             self.partitions[id].writer.flush()?;
         }
@@ -166,7 +171,9 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
             }
             RestoreStage::RestoreBuildFinal => {
                 self.stage = RestoreStage::RestoreProbe;
-                while let Some(_x) = self.memory_hash_join.final_build()? {}
+                while let Some(_x) = self.memory_hash_join.final_build()? {
+                    check_interrupt()?;
+                }
                 Ok(Some(Box::new(EmptyJoinStream)))
             }
             RestoreStage::RestoreProbe => {
@@ -294,7 +301,11 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
                 self.read_settings,
             )?;
 
-            while let Some(data_block) = reader.read()? {
+            loop {
+                check_interrupt()?;
+                let Some(data_block) = reader.read()? else {
+                    break;
+                };
                 self.memory_hash_join.add_block(Some(data_block))?;
             }
         }
@@ -359,6 +370,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let ready_partitions_id = self.probe_partition_stream.partition_ids();
 
         for id in ready_partitions_id {
+            check_interrupt()?;
             if let Some(data_block) = self.probe_partition_stream.finalize_partition(id) {
                 self.partitions[id].writer.write(data_block)?;
                 self.partitions[id].writer.flush()?;
@@ -369,6 +381,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let mut partitions_meta = Vec::with_capacity(self.partitions.len());
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
+            check_interrupt()?;
             let path = partition.path;
             let (written, row_groups) = partition.writer.close()?;
 
@@ -518,6 +531,7 @@ impl<'a, T: GraceMemoryJoin> JoinStream for RestoreProbeStream<'a, T> {
 impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
     fn next_probe_block(&mut self) -> Result<Option<DataBlock>> {
         loop {
+            check_interrupt()?;
             if self.spills_reader.is_none() {
                 while let Some(data) = self.steal_restore_probe_task() {
                     if data.row_groups.is_empty() {

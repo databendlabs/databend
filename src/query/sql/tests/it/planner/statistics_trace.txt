@@ -52,55 +52,53 @@ HAVING COUNT(*) > 0
 ORDER BY c.c_nationkey
 LIMIT 5
 optimized_plan:
-Limit
+TopN
+├── sort keys: [customer.c_nationkey (#1) ASC NULLS LAST]
 ├── limit: [5]
 ├── offset: [0]
-└── Sort
-    ├── sort keys: [customer.c_nationkey (#1) ASC NULLS LAST]
-    ├── limit: [5]
-    └── Filter
-        ├── filters: [gt(COUNT(*) (#10), 0)]
-        └── Aggregate(Final)
+└── Filter
+    ├── filters: [gt(COUNT(*) (#10), 0)]
+    └── Aggregate(Final)
+        ├── group items: [customer.c_nationkey (#1) AS (#1)]
+        ├── aggregate functions: [count() AS (#10), sum(SUM(l_quantity) (#9)) AS (#11)]
+        └── Aggregate(Partial)
             ├── group items: [customer.c_nationkey (#1) AS (#1)]
             ├── aggregate functions: [count() AS (#10), sum(SUM(l_quantity) (#9)) AS (#11)]
-            └── Aggregate(Partial)
-                ├── group items: [customer.c_nationkey (#1) AS (#1)]
-                ├── aggregate functions: [count() AS (#10), sum(SUM(l_quantity) (#9)) AS (#11)]
-                └── EvalScalar
-                    ├── scalars: [customer.c_nationkey (#1) AS (#1), SUM(l_quantity) (#9) AS (#9), o_orderdate (#12) AS (#14), customer.c_custkey (#0) AS (#15), orders.o_custkey (#4) AS (#16), orders.o_orderkey (#3) AS (#17), lineitem.l_orderkey (#6) AS (#18), customer.c_name (#2) AS (#19)]
-                    └── Join(Inner)
-                        ├── build keys: [orders.o_orderkey (#3)]
-                        ├── probe keys: [lineitem.l_orderkey (#6)]
-                        ├── other filters: []
-                        ├── Join(Inner)
-                        │   ├── build keys: [orders.o_custkey (#4)]
-                        │   ├── probe keys: [customer.c_custkey (#0)]
-                        │   ├── other filters: []
-                        │   ├── EvalScalar
-                        │   │   ├── scalars: [orders.o_orderkey (#3) AS (#3), orders.o_custkey (#4) AS (#4), orders.o_orderdate (#5) AS (#12)]
-                        │   │   └── Scan
-                        │   │       ├── table: default.orders (#1)
-                        │   │       ├── filters: [gte(orders.o_orderdate (#5), '1993-10-01'), lt(orders.o_orderdate (#5), '1994-01-01')]
-                        │   │       ├── order by: []
-                        │   │       └── limit: NONE
-                        │   └── Scan
-                        │       ├── table: default.customer (#0)
-                        │       ├── filters: [gte(customer.c_name (#2), 'Customer'), lt(customer.c_name (#2), 'Customes')]
-                        │       ├── order by: []
-                        │       └── limit: NONE
-                        └── Aggregate(Final)
+            └── EvalScalar
+                ├── scalars: [customer.c_nationkey (#1) AS (#1), SUM(l_quantity) (#9) AS (#9), o_orderdate (#12) AS (#14), customer.c_custkey (#0) AS (#15), orders.o_custkey (#4) AS (#16), orders.o_orderkey (#3) AS (#17), lineitem.l_orderkey (#6) AS (#18), customer.c_name (#2) AS (#19)]
+                └── Join(Inner)
+                    ├── build keys: [orders.o_orderkey (#3)]
+                    ├── probe keys: [lineitem.l_orderkey (#6)]
+                    ├── other filters: []
+                    ├── Join(Inner)
+                    │   ├── build keys: [orders.o_custkey (#4)]
+                    │   ├── probe keys: [customer.c_custkey (#0)]
+                    │   ├── other filters: []
+                    │   ├── EvalScalar
+                    │   │   ├── scalars: [orders.o_orderkey (#3) AS (#3), orders.o_custkey (#4) AS (#4), orders.o_orderdate (#5) AS (#12)]
+                    │   │   └── Scan
+                    │   │       ├── table: default.orders (#1)
+                    │   │       ├── filters: [gte(orders.o_orderdate (#5), '1993-10-01'), lt(orders.o_orderdate (#5), '1994-01-01')]
+                    │   │       ├── order by: []
+                    │   │       └── limit: NONE
+                    │   └── Scan
+                    │       ├── table: default.customer (#0)
+                    │       ├── filters: [gte(customer.c_name (#2), 'Customer'), lt(customer.c_name (#2), 'Customes')]
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── Aggregate(Final)
+                        ├── group items: [lineitem.l_orderkey (#6) AS (#6)]
+                        ├── aggregate functions: [sum(lineitem.l_quantity (#8)) AS (#9)]
+                        └── Aggregate(Partial)
                             ├── group items: [lineitem.l_orderkey (#6) AS (#6)]
                             ├── aggregate functions: [sum(lineitem.l_quantity (#8)) AS (#9)]
-                            └── Aggregate(Partial)
-                                ├── group items: [lineitem.l_orderkey (#6) AS (#6)]
-                                ├── aggregate functions: [sum(lineitem.l_quantity (#8)) AS (#9)]
-                                └── EvalScalar
-                                    ├── scalars: [lineitem.l_orderkey (#6) AS (#6), lineitem.l_quantity (#8) AS (#8), lineitem.l_returnflag (#7) AS (#13)]
-                                    └── Scan
-                                        ├── table: default.lineitem (#2)
-                                        ├── filters: [eq(lineitem.l_returnflag (#7), 'R')]
-                                        ├── order by: []
-                                        └── limit: NONE
+                            └── EvalScalar
+                                ├── scalars: [lineitem.l_orderkey (#6) AS (#6), lineitem.l_quantity (#8) AS (#8), lineitem.l_returnflag (#7) AS (#13)]
+                                └── Scan
+                                    ├── table: default.lineitem (#2)
+                                    ├── filters: [eq(lineitem.l_returnflag (#7), 'R')]
+                                    ├── order by: []
+                                    └── limit: NONE
 
 
 === customer_self_join ===

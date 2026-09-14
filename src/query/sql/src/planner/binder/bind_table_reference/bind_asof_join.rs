@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 
 use crate::BindContext;
@@ -161,7 +162,7 @@ impl Binder {
             partition_items.push(condition.right.clone());
         }
 
-        let return_type = asof_window_result_type(&left_column.data_type()?);
+        let return_type = asof_window_result_type(left_column.data_type().as_ref());
         let func_type = WindowFuncType::LagLead(LagLeadFunction {
             is_lag: false,
             return_type: Box::new(return_type),
@@ -202,11 +203,14 @@ fn make_asof_interval_end_condition(
     lead_key: ScalarExpr,
     func_name: &str,
 ) -> ScalarExpr {
+    let compare_return_type =
+        ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&probe_key, &lead_key]);
     let compare = ScalarExpr::FunctionCall(FunctionCall {
         span,
         func_name: func_name.to_string(),
         params: vec![],
         arguments: vec![probe_key, lead_key.clone()],
+        return_type: Box::new(compare_return_type.clone()),
     });
 
     ScalarExpr::FunctionCall(FunctionCall {
@@ -219,6 +223,7 @@ fn make_asof_interval_end_condition(
                 func_name: "is_not_null".to_string(),
                 params: vec![],
                 arguments: vec![lead_key],
+                return_type: Box::new(DataType::Boolean),
             }),
             compare,
             ScalarExpr::ConstantExpr(ConstantExpr {
@@ -226,6 +231,7 @@ fn make_asof_interval_end_condition(
                 value: Scalar::Boolean(true),
             }),
         ],
+        return_type: Box::new(compare_return_type),
     })
 }
 

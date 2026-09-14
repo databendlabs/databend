@@ -58,6 +58,7 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
             cluster_stats: value.cluster_stats.map(|v| v.into()),
+            partition_stats: None,
             location: value.location,
             bloom_filter_index_location: value.bloom_filter_index_location,
             bloom_filter_index_size: value.bloom_filter_index_size,
@@ -69,6 +70,7 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             spatial_index_location: None,
             spatial_stats: None,
             vector_stats: None,
+            virtual_path_statistics: None,
             virtual_block_meta: None,
             compression: value.compression.into(),
             create_on: None,

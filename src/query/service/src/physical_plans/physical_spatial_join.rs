@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -30,6 +31,7 @@ use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::Distribution;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::SpatialJoinCandidate;
 
@@ -181,11 +183,12 @@ impl PhysicalPlanBuilder {
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
         let max_build_rows = self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64;
+        let stat_ctx = StatContext::new(self.func_ctx.clone());
         let left_card = RelExpr::with_s_expr(s_expr.left_child())
-            .derive_cardinality()?
+            .derive_cardinality(&stat_ctx)?
             .cardinality;
         let right_card = RelExpr::with_s_expr(s_expr.right_child())
-            .derive_cardinality()?
+            .derive_cardinality(&stat_ctx)?
             .cardinality;
         let smaller_side = if left_card < right_card {
             SpatialBuildSide::Left
@@ -309,7 +312,7 @@ fn remote_expr_for_schema(
     let expr = scalar
         .type_check(schema.as_ref())?
         .project_column_ref(|index| schema.index_of(&index.to_string()))?;
-    let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
     Ok(expr.as_remote_expr())
 }
 

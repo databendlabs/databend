@@ -110,7 +110,7 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(BlockMetaTransformer::create(
                 transform_input_port,
                 transform_output_port,
-                TransformCompactBlock::default(),
+                TransformCompactBlock,
             )))
         })
     }

@@ -39,6 +39,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::string_value;
 
@@ -185,10 +186,13 @@ impl AsyncSource for StreamStatusDataSource {
             .await?;
         let tbl = StreamTable::try_from_table(tbl.as_ref())?;
 
-        let has_data = matches!(
-            tbl.check_stream_status(self.ctx.clone()).await?,
-            StreamStatus::MayHaveData
-        );
+        let base_table = tbl.source_table(self.ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(base_table.as_ref())?;
+        let stream_status = tbl.check_stream_status(
+            base_table.get_table_info().ident.seq,
+            fuse_table.snapshot_loc().as_deref(),
+        )?;
+        let has_data = matches!(stream_status, StreamStatus::MayHaveData);
 
         Ok(Some(DataBlock::new_from_columns(vec![
             BooleanType::from_data(vec![has_data]),

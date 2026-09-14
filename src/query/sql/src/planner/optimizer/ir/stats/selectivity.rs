@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
@@ -30,6 +31,7 @@ use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_statistics::TypedHistogram;
 
 use super::constraint::ConstraintContext;
 use super::constraint::ValueConstraint;
@@ -52,6 +54,7 @@ use crate::plans::ScalarExpr;
 pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 5f64;
 pub const UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND: f64 = 0.5_f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
+const BOOLEAN_VALUE_SELECTIVITY: f64 = 0.5;
 const HISTOGRAM_ROW_COUNT_TOLERANCE: f64 = 1e-9;
 
 /// Some constants for like predicate selectivity estimation.
@@ -107,7 +110,7 @@ impl SelectivityEstimator {
         merged
     }
 
-    pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
+    pub fn apply(&mut self, predicates: &[ScalarExpr], func_ctx: &FunctionContext) -> Result<f64> {
         if self.cardinality == StatCardinality::Exact(0) {
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
@@ -120,14 +123,15 @@ impl SelectivityEstimator {
                 func_name: "and_filters".to_string(),
                 params: vec![],
                 arguments: predicates.to_vec(),
+                return_type: Box::new(DataType::Boolean),
             }),
         };
         let expr = scalar_expr.as_expr()?;
         let input_domains = self.build_input_domains(&expr)?;
         let (expr, output_domain) = ConstantFolder::fold_with_domain(
-            &expr,
+            Cow::Owned(expr),
             &input_domains,
-            &FunctionContext::default(),
+            func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
@@ -135,7 +139,7 @@ impl SelectivityEstimator {
         // contradictions visible from input column domains. It can still leave
         // SQL-truthy constants such as `WHERE 1`, so handle constant predicates
         // here before falling through to estimation rules.
-        if let Expr::Constant(constant) = &expr {
+        if let Expr::Constant(constant) = expr.as_ref() {
             return match constant_filter_truthiness(&constant.scalar) {
                 Some(true) => Ok(self.cardinality.value()),
                 Some(false) => {
@@ -170,6 +174,8 @@ impl SelectivityEstimator {
             column_stats: &self.column_stats,
             top_n: &self.top_n,
             count_min_sketch: &self.count_min_sketch,
+            column_row_scales: None,
+            func_ctx,
             constraints: ValueConstraintState::default(),
         };
         visitor.visit_expr(&expr)?;
@@ -191,57 +197,7 @@ impl SelectivityEstimator {
         &self,
         expr: &Expr<ColumnBinding>,
     ) -> Result<HashMap<ColumnBinding, Domain>> {
-        expr.column_refs()
-            .into_iter()
-            .map(|(binding, data_type)| {
-                let Some(column_stat) = self.column_stats.get(&binding.index) else {
-                    return Ok((binding, Domain::full(&data_type)));
-                };
-
-                if matches!(data_type, DataType::Nullable(_))
-                    && let StatCardinality::Exact(cardinality) = self.cardinality
-                    && column_stat.null_count == StatCount::Exact(cardinality)
-                {
-                    return Ok((
-                        binding,
-                        Domain::Nullable(NullableDomain {
-                            has_null: true,
-                            value: None,
-                        }),
-                    ));
-                }
-
-                if !matches!(
-                    data_type.remove_nullable(),
-                    DataType::Boolean
-                        | DataType::String
-                        | DataType::Number(_)
-                        | DataType::Decimal(_)
-                        | DataType::Date
-                        | DataType::Timestamp
-                ) {
-                    return Ok((binding, Domain::full(&data_type)));
-                }
-
-                match Domain::from_datum(
-                    &data_type,
-                    column_stat.min.clone(),
-                    column_stat.max.clone(),
-                    column_stat.null_count.upper() > 0.0,
-                ) {
-                    Ok(domain) => Ok((binding, domain)),
-                    Err(msg) => {
-                        log::warn!(
-                            data_type:?,
-                            column_stat:?,
-                            msg;
-                            "Failed to build input domain"
-                        );
-                        Ok((binding, Domain::full(&data_type)))
-                    }
-                }
-            })
-            .collect()
+        build_input_domains(expr, &self.column_stats)
     }
 
     fn clear_column_stats_for_empty_result(&mut self) {
@@ -282,8 +238,29 @@ impl SelectivityEstimator {
         for (index, column_stat) in &self.column_stats {
             if let Some(override_stat) = self.overrides.get_mut(index) {
                 if not_null_columns.contains(index) {
-                    override_stat.null_count = StatCount::exact(0);
-                    override_stat.ndv = override_stat.ndv.reduce(estimated_cardinality);
+                    match override_stat {
+                        ColumnStat::Boolean {
+                            ndv, null_count, ..
+                        }
+                        | ColumnStat::Int {
+                            ndv, null_count, ..
+                        }
+                        | ColumnStat::UInt {
+                            ndv, null_count, ..
+                        }
+                        | ColumnStat::Float {
+                            ndv, null_count, ..
+                        }
+                        | ColumnStat::Bytes {
+                            ndv, null_count, ..
+                        } => {
+                            *null_count = StatCount::exact(0);
+                            *ndv = ndv.reduce(estimated_cardinality);
+                        }
+                        ColumnStat::AllNull { null_count } => {
+                            *null_count = StatCount::exact(0);
+                        }
+                    }
                     if let Some(aligned_cardinality) =
                         align_histogram_with_cardinality(override_stat, estimated_cardinality)
                     {
@@ -296,39 +273,101 @@ impl SelectivityEstimator {
                 // available, use it as the row-mass boundary for the output;
                 // otherwise only apply the remaining global selectivity to the
                 // coarse stats.
-                if override_stat.histogram.is_none() {
-                    if override_stat.min != override_stat.max {
-                        let input_non_null =
-                            non_null_values(input_cardinality, column_stat.null_count);
-                        override_stat.ndv = override_stat.ndv.min(
-                            column_stat
-                                .ndv
-                                .reduce_by_selectivity(input_non_null, selectivity),
-                        );
-                        override_stat.null_count =
-                            override_stat.null_count.reduce_by_selectivity(selectivity);
+                let input_non_null = non_null_values(input_cardinality, column_stat.null_count());
+                let reduced_input_ndv = column_stat
+                    .ndv()
+                    .reduce_by_selectivity(input_non_null, selectivity);
+                let coarse_fields = match override_stat {
+                    ColumnStat::Int {
+                        histogram: Some(_), ..
                     }
-                } else if let Some(aligned_cardinality) =
-                    align_histogram_with_cardinality(override_stat, estimated_cardinality)
-                {
-                    final_cardinality = final_cardinality.min(aligned_cardinality);
+                    | ColumnStat::UInt {
+                        histogram: Some(_), ..
+                    }
+                    | ColumnStat::Float {
+                        histogram: Some(_), ..
+                    }
+                    | ColumnStat::Bytes {
+                        histogram: Some(_), ..
+                    } => {
+                        if let Some(aligned_cardinality) =
+                            align_histogram_with_cardinality(override_stat, estimated_cardinality)
+                        {
+                            final_cardinality = final_cardinality.min(aligned_cardinality);
+                        }
+                        None
+                    }
+                    ColumnStat::Boolean {
+                        min,
+                        max,
+                        ndv,
+                        null_count,
+                    } if min != max => Some((ndv, null_count)),
+                    ColumnStat::Int {
+                        min,
+                        max,
+                        ndv,
+                        null_count,
+                        histogram: None,
+                    } if min != max => Some((ndv, null_count)),
+                    ColumnStat::UInt {
+                        min,
+                        max,
+                        ndv,
+                        null_count,
+                        histogram: None,
+                    } if min != max => Some((ndv, null_count)),
+                    ColumnStat::Float {
+                        min,
+                        max,
+                        ndv,
+                        null_count,
+                        histogram: None,
+                    } if min != max => Some((ndv, null_count)),
+                    ColumnStat::Bytes {
+                        min,
+                        max,
+                        ndv,
+                        null_count,
+                        histogram: None,
+                    } if min != max => Some((ndv, null_count)),
+                    ColumnStat::AllNull { null_count } => {
+                        *null_count = null_count.reduce_by_selectivity(selectivity);
+                        None
+                    }
+                    ColumnStat::Boolean { .. }
+                    | ColumnStat::Int { .. }
+                    | ColumnStat::UInt { .. }
+                    | ColumnStat::Float { .. }
+                    | ColumnStat::Bytes { .. } => None,
+                };
+                if let Some((ndv, null_count)) = coarse_fields {
+                    *ndv = ndv.min(reduced_input_ndv);
+                    *null_count = null_count.reduce_by_selectivity(selectivity);
                 }
                 continue;
             }
             let mut column_stat = column_stat.clone();
-            let input_non_null = non_null_values(input_cardinality, column_stat.null_count);
-            column_stat.null_count = column_stat.null_count.reduce_by_selectivity(selectivity);
-            if let Some(histogram) = &mut column_stat.histogram {
-                let ndv_upper = column_stat.ndv.upper;
-                histogram.scale_counts(selectivity);
-                column_stat.ndv = scaled_histogram_ndv(ndv_upper, histogram.ndv());
-                if column_stat.ndv.expected.is_some_and(|ndv| ndv <= 2.0) {
-                    column_stat.histogram = None;
+            let input_null_count = column_stat.null_count();
+            column_stat.set_null_count(input_null_count.reduce_by_selectivity(selectivity));
+            let input_non_null = non_null_values(input_cardinality, input_null_count);
+            match &mut column_stat {
+                ColumnStat::Int { ndv, histogram, .. } => {
+                    scale_histogram_after_selectivity(ndv, histogram, input_non_null, selectivity)
                 }
-            } else {
-                column_stat.ndv = column_stat
-                    .ndv
-                    .reduce_by_selectivity(input_non_null, selectivity);
+                ColumnStat::UInt { ndv, histogram, .. } => {
+                    scale_histogram_after_selectivity(ndv, histogram, input_non_null, selectivity)
+                }
+                ColumnStat::Float { ndv, histogram, .. } => {
+                    scale_histogram_after_selectivity(ndv, histogram, input_non_null, selectivity)
+                }
+                ColumnStat::Bytes { ndv, histogram, .. } => {
+                    scale_histogram_after_selectivity(ndv, histogram, input_non_null, selectivity)
+                }
+                ColumnStat::Boolean { ndv, .. } => {
+                    *ndv = ndv.reduce_by_selectivity(input_non_null, selectivity);
+                }
+                ColumnStat::AllNull { .. } => {}
             }
 
             self.overrides.insert(*index, column_stat);
@@ -338,11 +377,68 @@ impl SelectivityEstimator {
     }
 }
 
+fn build_input_domains(
+    expr: &Expr<ColumnBinding>,
+    column_stats: &ColumnStatSet,
+) -> Result<HashMap<ColumnBinding, Domain>> {
+    expr.column_refs()
+        .into_iter()
+        .map(|(binding, data_type)| {
+            let Some(column_stat) = column_stats.get(&binding.index) else {
+                return Ok((binding, Domain::full(&data_type)));
+            };
+
+            if !matches!(
+                data_type.remove_nullable(),
+                DataType::Boolean
+                    | DataType::String
+                    | DataType::Number(_)
+                    | DataType::Decimal(_)
+                    | DataType::Date
+                    | DataType::Timestamp
+            ) {
+                return Ok((binding, Domain::full(&data_type)));
+            }
+
+            match column_stat.to_arg_stat(&data_type) {
+                Ok(arg_stat) => Ok((binding, arg_stat.domain)),
+                Err(msg) => {
+                    log::warn!(
+                        data_type:?,
+                        column_stat:?,
+                        msg;
+                        "Failed to build input domain"
+                    );
+                    Ok((binding, Domain::full(&data_type)))
+                }
+            }
+        })
+        .collect()
+}
+
 fn scaled_histogram_ndv(original_upper: f64, histogram_ndv: NdvEstimate) -> NdvEstimate {
     let upper = histogram_ndv.upper.min(original_upper);
     match histogram_ndv.expected {
         Some(expected) => NdvEstimate::new(expected.min(upper), upper),
         None => NdvEstimate::upper_bound(upper),
+    }
+}
+
+fn scale_histogram_after_selectivity<T>(
+    ndv: &mut NdvEstimate,
+    histogram: &mut Option<TypedHistogram<T>>,
+    input_non_null: f64,
+    selectivity: f64,
+) {
+    if let Some(value_histogram) = histogram.as_mut() {
+        let ndv_upper = ndv.upper;
+        value_histogram.scale_counts(selectivity);
+        *ndv = scaled_histogram_ndv(ndv_upper, value_histogram.ndv());
+        if ndv.expected.is_some_and(|ndv| ndv <= 2.0) {
+            *histogram = None;
+        }
+    } else {
+        *ndv = ndv.reduce_by_selectivity(input_non_null, selectivity);
     }
 }
 
@@ -365,10 +461,35 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
     if !cardinality.is_finite() || cardinality < 0.0 {
         return None;
     }
-    let null_count = column_stat.null_count.expected().min(cardinality).max(0.0);
+    let null_count = column_stat.null_count();
+    let null_count = null_count.expected().min(cardinality).max(0.0);
     let target_num_values = cardinality - null_count;
 
-    let current_num_values = column_stat.histogram.as_ref()?.num_values();
+    match column_stat {
+        ColumnStat::Int { ndv, histogram, .. } => {
+            align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
+        }
+        ColumnStat::UInt { ndv, histogram, .. } => {
+            align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
+        }
+        ColumnStat::Float { ndv, histogram, .. } => {
+            align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
+        }
+        ColumnStat::Bytes { ndv, histogram, .. } => {
+            align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
+        }
+        ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => None,
+    }
+}
+
+fn align_typed_histogram<T>(
+    ndv: &mut NdvEstimate,
+    histogram: &mut Option<TypedHistogram<T>>,
+    target_num_values: f64,
+    null_count: f64,
+    cardinality: f64,
+) -> Option<f64> {
+    let current_num_values = histogram.as_ref()?.num_values();
     if current_num_values <= 0.0 {
         return None;
     }
@@ -377,11 +498,10 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
     }
 
     let factor = target_num_values / current_num_values;
-    let ndv_upper = column_stat.ndv.upper;
-    if let Some(histogram) = &mut column_stat.histogram {
-        histogram.scale_counts(factor);
-        column_stat.ndv = scaled_histogram_ndv(ndv_upper, histogram.ndv());
-    }
+    let ndv_upper = ndv.upper;
+    let histogram = histogram.as_mut()?;
+    histogram.scale_counts(factor);
+    *ndv = scaled_histogram_ndv(ndv_upper, histogram.ndv());
     Some(cardinality)
 }
 
@@ -397,6 +517,40 @@ fn constant_filter_truthiness(scalar: &Scalar) -> Option<bool> {
     }
 }
 
+fn deterministic_folded_selectivity(
+    expr: &Expr<ColumnBinding>,
+    output_domain: Option<&Domain>,
+) -> Option<Selectivity> {
+    if let Expr::Constant(constant) = expr {
+        return Some(
+            constant_filter_truthiness(&constant.scalar)
+                .map(|value| {
+                    if value {
+                        Selectivity::All
+                    } else {
+                        Selectivity::Zero
+                    }
+                })
+                .unwrap_or(Selectivity::Unknown),
+        );
+    }
+
+    match output_domain? {
+        Domain::Boolean(domain) if !domain.has_true => Some(Selectivity::Zero),
+        Domain::Boolean(domain) if !domain.has_false => Some(Selectivity::All),
+        Domain::Nullable(NullableDomain { value: None, .. }) => Some(Selectivity::Zero),
+        Domain::Nullable(NullableDomain {
+            value: Some(box Domain::Boolean(domain)),
+            ..
+        }) if !domain.has_true => Some(Selectivity::Zero),
+        Domain::Nullable(NullableDomain {
+            has_null: false,
+            value: Some(box Domain::Boolean(domain)),
+        }) if !domain.has_false => Some(Selectivity::All),
+        _ => None,
+    }
+}
+
 // SelectivityVisitor consumes the expression after ConstantFolder has applied
 // expression/domain reasoning. Deterministic predicate truth, boolean
 // short-circuiting, and contradictions visible from input domains should already
@@ -408,13 +562,15 @@ fn constant_filter_truthiness(scalar: &Scalar) -> Option<bool> {
 // they must not become a second deterministic solver for predicate truth or
 // filter cardinality.
 #[derive(Clone)]
-struct SelectivityVisitor<'a> {
+pub(crate) struct SelectivityVisitor<'a> {
     cardinality: StatCardinality,
     selectivity: Selectivity,
     constraint_context: ConstraintContext,
     column_stats: &'a ColumnStatSet,
     top_n: &'a TopNSet,
     count_min_sketch: &'a CountMinSketchSet,
+    column_row_scales: Option<&'a HashMap<Symbol, StatCardinality>>,
+    func_ctx: &'a FunctionContext,
     constraints: ValueConstraintState,
 }
 
@@ -509,26 +665,82 @@ fn constrained_column_cardinality(
     constrained_stat: &ColumnStat,
     input_cardinality: f64,
 ) -> Option<f64> {
-    if constrained_stat.ndv.upper == 0.0 {
+    if constrained_stat.ndv().upper == 0.0 {
         return Some(0.0);
     }
     if input_cardinality <= 0.0 {
         return Some(0.0);
     }
-    if let Some(histogram) = &constrained_stat.histogram {
-        return Some(histogram.num_values() + constrained_stat.null_count.expected());
+    if let Some(histogram) = constrained_stat.histogram() {
+        return Some(histogram.num_values() + constrained_stat.null_count().expected());
     }
-    let input_ndv = input_stat.ndv.expected?;
-    let constrained_ndv = constrained_stat.ndv.expected?;
+    let input_ndv = input_stat.ndv().expected?;
+    let constrained_ndv = constrained_stat.ndv().expected?;
     if input_ndv <= 0.0 {
         return None;
     }
 
-    let input_non_null = non_null_values(input_cardinality, input_stat.null_count);
-    Some(constrained_stat.null_count.expected() + input_non_null * (constrained_ndv / input_ndv))
+    let input_non_null = non_null_values(input_cardinality, input_stat.null_count());
+    Some(constrained_stat.null_count().expected() + input_non_null * (constrained_ndv / input_ndv))
 }
 
 impl SelectivityVisitor<'_> {
+    pub(crate) fn estimate(
+        predicate: &ScalarExpr,
+        cardinality: StatCardinality,
+        column_stats: &ColumnStatSet,
+        top_n: &TopNSet,
+        count_min_sketch: &CountMinSketchSet,
+        column_row_scales: &HashMap<Symbol, StatCardinality>,
+        func_ctx: &FunctionContext,
+    ) -> Result<Selectivity> {
+        if cardinality.is_zero() {
+            return Ok(Selectivity::Zero);
+        }
+        let expr = predicate.as_expr()?;
+        // This direct visitor entry is used for Join residuals, which do not pass through
+        // SelectivityEstimator::apply. Fold here so domain contradictions and tautologies retain
+        // their deterministic Zero/All semantics instead of becoming probability estimates.
+        let input_domains = build_input_domains(&expr, column_stats)?;
+        let (expr, output_domain) = ConstantFolder::fold_with_domain(
+            Cow::Owned(expr),
+            &input_domains,
+            func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
+        if let Some(selectivity) = deterministic_folded_selectivity(&expr, output_domain.as_ref()) {
+            return Ok(selectivity);
+        }
+        let mut visitor = SelectivityVisitor {
+            cardinality,
+            selectivity: Selectivity::Unknown,
+            constraint_context: ConstraintContext::And,
+            column_stats,
+            top_n,
+            count_min_sketch,
+            column_row_scales: Some(column_row_scales),
+            func_ctx,
+            constraints: ValueConstraintState::default(),
+        };
+        visitor.visit_expr(expr.as_ref())?;
+        Ok(visitor.selectivity)
+    }
+
+    fn column_row_scale(&self, index: Symbol) -> StatCardinality {
+        self.column_row_scales
+            .and_then(|scales| scales.get(&index))
+            .copied()
+            .unwrap_or_else(|| StatCardinality::exact(1))
+    }
+
+    fn column_stat_for_input(&self, index: Symbol, stat: &ColumnStat) -> ColumnStat {
+        let mut stat = stat.clone();
+        // Normalize a side-local distribution to the visitor's input population. For Join
+        // residuals the scale is the peer cardinality; ordinary filters leave it at one.
+        stat.scale_row_mass(self.column_row_scale(index));
+        stat
+    }
+
     fn materialize_column_stats(
         &self,
         expr: &Expr<ColumnBinding>,
@@ -547,7 +759,7 @@ impl SelectivityVisitor<'_> {
             let Some(column_stat) = self.column_stats.get(&binding.index) else {
                 return Ok(None);
             };
-            let mut input_stat = column_stat.clone();
+            let mut input_stat = self.column_stat_for_input(binding.index, column_stat);
             align_histogram_with_cardinality(&mut input_stat, self.cardinality.value());
             let constrained_stat = self
                 .constraints
@@ -633,14 +845,23 @@ impl SelectivityVisitor<'_> {
             (Expr::ColumnRef(column_ref), Expr::Constant(constant))
             | (Expr::Constant(constant), Expr::ColumnRef(column_ref)) => {
                 let column_index = column_ref.id.index;
+                let op = if left.is_constant() { op.reverse() } else { op };
                 if !self.column_stats.contains_key(&column_index) {
+                    if matches!(column_ref.data_type.remove_nullable(), DataType::Boolean)
+                        && let Scalar::Boolean(value) = constant.scalar
+                    {
+                        return if column_ref.data_type.is_nullable() {
+                            Ok(Selectivity::Unknown)
+                        } else {
+                            Ok(boolean_comparison_selectivity(op, value))
+                        };
+                    }
                     // The column is derived column, give a small selectivity currently.
                     // Need to improve it later.
                     // Another case: column is from system table, such as numbers. We shouldn't use numbers() table to test cardinality estimation.
                     return Ok(Selectivity::LowerBound);
                 }
                 let column_stat = &self.column_stats[&column_index];
-                let op = if left.is_constant() { op.reverse() } else { op };
 
                 let can_apply_constant_constraint = {
                     use DataType::*;
@@ -665,13 +886,13 @@ impl SelectivityVisitor<'_> {
                     return self.derive_function_selectivity(func);
                 };
 
+                let histogram_is_range_distorted = column_stat
+                    .histogram()
+                    .is_some_and(|histogram| histogram.is_range_distorted());
                 let distorted_range = matches!(
                     op,
                     ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE
-                ) && column_stat
-                    .histogram
-                    .as_ref()
-                    .is_some_and(|histogram| histogram.is_range_distorted());
+                ) && histogram_is_range_distorted;
                 if matches!(self.constraint_context, ConstraintContext::And) {
                     self.constraints.add(
                         self.column_stats,
@@ -760,11 +981,14 @@ impl SelectivityVisitor<'_> {
         let Some(column_stat) = self.column_stats.get(&column_index) else {
             return Ok(None);
         };
-        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count);
-        let upper_count = (entry.count as f64).min(non_null_cardinality);
-        let lower_count = (entry.count.saturating_sub(entry.error) as f64).min(upper_count);
+        let column_stat = self.column_stat_for_input(column_index, column_stat);
+        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count());
+        let row_scale = self.column_row_scale(column_index).value();
+        let upper_count = (entry.count as f64 * row_scale).min(non_null_cardinality);
+        let lower_count =
+            (entry.count.saturating_sub(entry.error) as f64 * row_scale).min(upper_count);
         if entry.error > 0
-            && let Some(ndv) = column_stat.ndv.expected
+            && let Some(ndv) = column_stat.ndv().expected
             && ndv > 0.0
             && lower_count <= non_null_cardinality / ndv
         {
@@ -793,15 +1017,16 @@ impl SelectivityVisitor<'_> {
         let Some(column_stat) = self.column_stats.get(&column_index) else {
             return Ok(None);
         };
+        let column_stat = self.column_stat_for_input(column_index, column_stat);
         let cardinality = self.cardinality.value();
         if cardinality == 0.0 {
             return Ok(Some(Selectivity::N(0.0)));
         }
-        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count);
+        let non_null_cardinality = non_null_values(cardinality, column_stat.null_count());
         if non_null_cardinality == 0.0 {
             return Ok(Some(Selectivity::N(0.0)));
         }
-        let Some(ndv) = column_stat.ndv.expected else {
+        let Some(ndv) = column_stat.ndv().expected else {
             return Ok(None);
         };
         if ndv <= 0.0 {
@@ -811,7 +1036,8 @@ impl SelectivityVisitor<'_> {
             return Ok(None);
         };
 
-        let upper_count = (estimated_count as f64).min(non_null_cardinality);
+        let row_scale = self.column_row_scale(column_index).value();
+        let upper_count = (estimated_count as f64 * row_scale).min(non_null_cardinality);
         let error_bound = count_min_sketch.error_bound(non_null_cardinality.ceil() as u64) as f64;
         let lower_count = (upper_count - error_bound).max(0.0);
         let average_count = non_null_cardinality / ndv;
@@ -844,7 +1070,7 @@ impl SelectivityVisitor<'_> {
         } = materialized;
         let stat_cardinality_value = column_stats
             .values()
-            .map(|stat| stat.null_count.expected())
+            .map(|stat| stat.null_count().expected())
             .fold(materialized_cardinality, f64::max);
         let stat_cardinality = if stat_cardinality_value > cardinality {
             StatCardinality::estimate(stat_cardinality_value)
@@ -864,7 +1090,7 @@ impl SelectivityVisitor<'_> {
 
         let Some(stat) = StatEvaluator::run(
             &expr,
-            &FunctionContext::default(),
+            self.func_ctx,
             &BUILTIN_FUNCTIONS,
             stat_cardinality,
             &input_stats,
@@ -926,19 +1152,20 @@ impl SelectivityVisitor<'_> {
         let Some(column_stat) = self.column_stats.get(&column_ref.id.index) else {
             return Ok(Selectivity::Unknown);
         };
+        let column_stat = self.column_stat_for_input(column_ref.id.index, column_stat);
         let column_stat = self
             .constraints
-            .apply_to_column_stat(column_ref.id.index, column_stat)?;
+            .apply_to_column_stat(column_ref.id.index, &column_stat)?;
         match self.cardinality {
             StatCardinality::Estimate(0.0) => Ok(Selectivity::N(0.0)),
             StatCardinality::Exact(cardinality) => {
                 let cardinality = cardinality as f64;
                 Selectivity::checked_estimate(
-                    (cardinality - column_stat.null_count.expected()) / cardinality,
+                    (cardinality - column_stat.null_count().expected()) / cardinality,
                 )
             }
             StatCardinality::Estimate(cardinality) => Selectivity::checked_estimate(
-                (cardinality - column_stat.null_count.expected()) / cardinality,
+                (cardinality - column_stat.null_count().expected()) / cardinality,
             ),
         }
     }
@@ -951,6 +1178,8 @@ impl SelectivityVisitor<'_> {
             column_stats: self.column_stats,
             top_n: self.top_n,
             count_min_sketch: self.count_min_sketch,
+            column_row_scales: self.column_row_scales,
+            func_ctx: self.func_ctx,
             constraints: self.constraints.clone(),
         }
     }
@@ -972,8 +1201,13 @@ impl SelectivityVisitor<'_> {
                     .unwrap_or(Selectivity::Unknown);
                 Ok(())
             }
-            Expr::ColumnRef(_) => {
-                self.selectivity = Selectivity::LowerBound;
+            Expr::ColumnRef(column_ref) => {
+                self.selectivity =
+                    if matches!(column_ref.data_type.remove_nullable(), DataType::Boolean) {
+                        Selectivity::N(BOOLEAN_VALUE_SELECTIVITY)
+                    } else {
+                        Selectivity::LowerBound
+                    };
                 Ok(())
             }
             Expr::Cast(cast) => self.visit_expr(&cast.expr),
@@ -1020,7 +1254,9 @@ impl SelectivityVisitor<'_> {
                             // the original input rows. Multiplying estimates
                             // for predicates on different columns would assume
                             // those columns are independent; without that proof,
-                            // keep the narrowest single estimate.
+                            // keep the narrowest single estimate. It takes
+                            // priority over fallbacks only when it is below
+                            // the lower-bound selectivity threshold.
                             acc = acc.min(n);
                         }
                     }
@@ -1029,16 +1265,16 @@ impl SelectivityVisitor<'_> {
 
                 self.selectivity = if has_zero {
                     Selectivity::Zero
-                } else if !has_unknown && !has_lower_bound && !has_n {
-                    Selectivity::All
-                } else if (!has_unknown && !has_lower_bound) || acc < DEFAULT_SELECTIVITY {
+                } else if has_n && acc < UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND {
                     Selectivity::N(acc)
                 } else if has_unknown {
                     Selectivity::Unknown
                 } else if has_lower_bound {
                     Selectivity::LowerBound
+                } else if has_n {
+                    Selectivity::N(acc)
                 } else {
-                    Selectivity::Unknown
+                    Selectivity::All
                 };
             }
 
@@ -1123,4 +1359,17 @@ impl SelectivityVisitor<'_> {
 
         Ok(())
     }
+}
+
+fn boolean_comparison_selectivity(op: ComparisonOp, constant: bool) -> Selectivity {
+    let selectivity = match (op, constant) {
+        (ComparisonOp::Equal | ComparisonOp::NotEqual, _) => BOOLEAN_VALUE_SELECTIVITY,
+        (ComparisonOp::GT, false)
+        | (ComparisonOp::LT, true)
+        | (ComparisonOp::GTE, true)
+        | (ComparisonOp::LTE, false) => BOOLEAN_VALUE_SELECTIVITY,
+        (ComparisonOp::GT, true) | (ComparisonOp::LT, false) => 0.0,
+        (ComparisonOp::GTE, false) | (ComparisonOp::LTE, true) => MAX_SELECTIVITY,
+    };
+    Selectivity::N(selectivity)
 }

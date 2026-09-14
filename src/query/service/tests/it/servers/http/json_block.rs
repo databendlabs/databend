@@ -150,8 +150,8 @@ fn test_driver_mode_data_block() -> anyhow::Result<()> {
     assert_eq!(
         serde_json::to_value(&display_serializer)?,
         serde_json::json!([[
-            date_to_string(1, &display.jiff_timezone).to_string(),
-            timestamp_to_string(1_000_000, &display.jiff_timezone).to_string(),
+            date_to_string(1),
+            timestamp_to_string(1_000_000, &display.timezone).to_string(),
             ts_tz.to_string(),
             "eA=="
         ]])

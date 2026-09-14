@@ -21,18 +21,26 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchemaRef;
 
 use crate::Transform;
 
 pub struct TransformAddInternalColumns {
     internal_columns: BTreeMap<FieldIndex, InternalColumn>,
+    schema: TableSchemaRef,
 }
 
 impl TransformAddInternalColumns
 where Self: Transform
 {
-    pub fn new(internal_columns: BTreeMap<FieldIndex, InternalColumn>) -> Self {
-        Self { internal_columns }
+    pub fn new(
+        internal_columns: BTreeMap<FieldIndex, InternalColumn>,
+        schema: TableSchemaRef,
+    ) -> Self {
+        Self {
+            internal_columns,
+            schema,
+        }
     }
 }
 
@@ -43,9 +51,12 @@ impl Transform for TransformAddInternalColumns {
         if let Some(meta) = block.take_meta() {
             let internal_column_meta = InternalColumnMeta::downcast_from(meta)
                 .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-            let num_rows = block.num_rows();
             for internal_column in self.internal_columns.values() {
-                let entry = internal_column.generate_column_values(&internal_column_meta, num_rows);
+                let entry = internal_column.generate_column_values(
+                    &internal_column_meta,
+                    &block,
+                    &self.schema,
+                )?;
                 block.add_entry(entry);
             }
             block = block.add_meta(internal_column_meta.inner)?;

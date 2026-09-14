@@ -57,6 +57,7 @@ pub fn gen_columns_statistics(
     column_distinct_count: Option<HashMap<ColumnId, usize>>,
     schema: &TableSchemaRef,
     col_stats_truncate_lens: &BTreeMap<ColumnId, usize>,
+    mut column_min_max: HashMap<ColumnId, (Option<Scalar>, Option<Scalar>)>,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let rows = data_block.num_rows();
@@ -89,28 +90,42 @@ pub fn gen_columns_statistics(
                 statistics.insert(column_id, col_stats);
             }
             Value::Column(col) => {
-                // later, during the evaluation of expressions, name of field does not matter
-                let (min, max) = if col.len() > 0 {
-                    let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
-                    let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
+                let (cached_min, cached_max) =
+                    column_min_max.remove(&column_id).unwrap_or_default();
+                let need_min = cached_min.is_none();
+                let need_max = cached_max.is_none();
+                let mut min = cached_min.unwrap_or(Scalar::Null);
+                let mut max = cached_max.unwrap_or(Scalar::Null);
 
-                    let Some(raw_min) = mins.index(0).map(|v| v.to_owned()) else {
-                        continue;
-                    };
-                    let Some(raw_max) = maxs.index(0).map(|v| v.to_owned()) else {
-                        continue;
-                    };
-                    let Some(min_max) = trim_column_min_max(
-                        raw_min,
-                        raw_max,
+                if col.len() > 0 {
+                    if need_min || need_max {
+                        let entries = [col.clone().into()];
+                        if need_min {
+                            let (mins, _) = eval_aggr("min", vec![], &entries, rows, vec![])?;
+                            let Some(value) = mins.index(0) else {
+                                continue;
+                            };
+                            min = value.to_owned();
+                        }
+                        if need_max {
+                            let (maxs, _) = eval_aggr("max", vec![], &entries, rows, vec![])?;
+                            let Some(value) = maxs.index(0) else {
+                                continue;
+                            };
+                            max = value.to_owned();
+                        }
+                    }
+
+                    let Some((trimmed_min, trimmed_max)) = trim_column_min_max(
+                        min,
+                        max,
                         col_stats_truncate_lens.get(&column_id).copied(),
                     ) else {
                         continue;
                     };
-                    min_max
-                } else {
-                    (Scalar::Null, Scalar::Null)
-                };
+                    min = trimmed_min;
+                    max = trimmed_max;
+                }
 
                 let (is_all_null, bitmap) = col.validity();
                 let unset_bits = match (is_all_null, bitmap) {
@@ -331,11 +346,22 @@ pub fn trim_string_max_with_len(s: String, len: usize) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::StringType;
 
     use super::MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN;
     use super::MAX_AUTO_STATS_STRING_PREFIX_LEN;
     use super::auto_stats_string_prefix_len;
+    use super::gen_columns_statistics;
     use crate::statistics::END_OF_UNICODE_RANGE;
     use crate::statistics::STATS_STRING_PREFIX_LEN;
     use crate::statistics::Trim;
@@ -372,6 +398,31 @@ mod tests {
                 &format!("{capped_prefix}乙"),
             ),
             MAX_AUTO_STATS_STRING_PREFIX_LEN
+        );
+    }
+
+    #[test]
+    fn test_cached_min_max_uses_adaptive_string_prefix() {
+        let prefix = "abcdefghijklmnop";
+        let min = [prefix, "a-min-suffix"].concat();
+        let max = [prefix, "z-max-suffix"].concat();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::String,
+        )]));
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
+            min.as_str(),
+            max.as_str(),
+        ])]);
+        let cached = HashMap::from([(0, (Some(Scalar::String(min)), Some(Scalar::String(max))))]);
+
+        let stats =
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), cached).unwrap();
+
+        assert_eq!(stats[&0].min(), &Scalar::String([prefix, "a"].concat()));
+        assert_eq!(
+            stats[&0].max(),
+            &Scalar::String([prefix, &END_OF_UNICODE_RANGE.to_string()].concat())
         );
     }
 

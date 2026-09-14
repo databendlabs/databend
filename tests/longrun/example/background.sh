@@ -7,6 +7,6 @@ for ((i=0; i<=3; i++)); do
     sleep 5
     log_command bendsql --dsn \"$DSN\" -q \"OPTIMIZE TABLE example COMPACT LIMIT 10\"
     sleep 5
-    log_command bendsql --dsn \"$DSN\" -q \"OPTIMIZE TABLE example purge \"
+    log_command bendsql --dsn \"$DSN\" -q \"VACUUM TABLE example\"
     sleep 5
 done

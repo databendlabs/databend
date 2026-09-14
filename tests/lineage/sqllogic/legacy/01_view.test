@@ -1,0 +1,14 @@
+# This suite runs against node 2, where lineage_history is intentionally disabled. The objects are
+# visible to node 1 through shared Meta but have no captured CREATE_VIEW edge before REFRESH.
+statement ok
+DROP DATABASE IF EXISTS lineage_history_legacy
+
+statement ok
+CREATE DATABASE lineage_history_legacy
+
+statement ok
+CREATE TABLE lineage_history_legacy.src(a INT)
+
+statement ok
+CREATE VIEW lineage_history_legacy.legacy_view AS
+SELECT a AS x FROM lineage_history_legacy.src

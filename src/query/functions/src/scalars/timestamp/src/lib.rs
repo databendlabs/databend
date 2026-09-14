@@ -27,7 +27,15 @@
 #![feature(str_internals)]
 #![feature(fmt_internals)]
 #![feature(formatting_options)]
+#![feature(int_roundings)]
 extern crate core;
+
+pub mod date_arithmetic;
+pub mod date_conversion;
+mod date_extract;
+mod date_format;
+mod date_round;
+mod date_time_slice;
 
 pub mod datetime;
 pub mod interval;

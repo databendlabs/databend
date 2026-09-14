@@ -63,6 +63,7 @@ use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::date::check_date;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
@@ -94,6 +95,7 @@ use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::variant::JSONB_NULL;
@@ -513,6 +515,7 @@ impl Scalar {
             DataType::Geometry => Scalar::Geometry(vec![]),
             DataType::Geography => Scalar::Geography(Geography::default()),
             DataType::Vector(ty) => Scalar::Vector(ty.default_value()),
+            DataType::AggregateState(state) => Scalar::default_value(state.physical_type()),
             _ => unimplemented!(),
         }
     }
@@ -891,6 +894,9 @@ impl ScalarRef<'_> {
             (ScalarRef::Null, DataType::Null) => true,
             (ScalarRef::Null, DataType::Nullable(_)) => true,
             _ => match (self, data_type.remove_nullable()) {
+                (_, DataType::AggregateState(state)) => {
+                    self.is_value_of_type(state.physical_type())
+                }
                 (ScalarRef::EmptyArray, DataType::EmptyArray) => true,
                 (ScalarRef::EmptyMap, DataType::EmptyMap) => true,
                 (ScalarRef::Number(_), DataType::Number(_)) => true,
@@ -1799,6 +1805,7 @@ impl Column {
                     _ => unreachable!("Unsupported Opaque size: {}", size),
                 })
             }
+            DataType::AggregateState(state) => Self::random(state.physical_type(), len, options),
         }
     }
 
@@ -2031,6 +2038,9 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        if let DataType::AggregateState(state) = data_type {
+            return Self::repeat(scalar, n, state.physical_type());
+        }
         if !scalar.is_null() {
             if let DataType::Nullable(ty) = data_type {
                 let mut builder = ColumnBuilder::with_capacity(ty, 1);
@@ -2307,6 +2317,9 @@ impl ColumnBuilder {
             DataType::StageLocation => {
                 unreachable!("unable to initialize column builder for stage location type")
             }
+            DataType::AggregateState(state) => {
+                Self::with_capacity_hint(state.physical_type(), capacity, enable_datasize_hint)
+            }
         }
     }
 
@@ -2385,6 +2398,7 @@ impl ColumnBuilder {
             DataType::StageLocation => {
                 unreachable!("unable to initialize column builder for stage location type")
             }
+            DataType::AggregateState(state) => Self::repeat_default(state.physical_type(), len),
         }
     }
 
@@ -2619,11 +2633,12 @@ impl ColumnBuilder {
             }
             ColumnBuilder::TimestampTz(builder) => {
                 let value = timestamp_tz(i128::de_binary(reader));
+                check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
                 builder.push(value);
             }
             ColumnBuilder::Date(builder) => {
                 let value: i32 = reader.read_scalar()?;
-                builder.push(value);
+                builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
             }
             ColumnBuilder::Interval(builder) => {
                 let value = months_days_micros(i128::de_binary(reader));
@@ -2749,14 +2764,16 @@ impl ColumnBuilder {
             ColumnBuilder::TimestampTz(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
-                    builder.push(timestamp_tz(i128::de_binary(&mut reader)));
+                    let value = timestamp_tz(i128::de_binary(&mut reader));
+                    check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
+                    builder.push(value);
                 }
             }
             ColumnBuilder::Date(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
                     let value: i32 = reader.read_scalar()?;
-                    builder.push(value);
+                    builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
                 }
             }
             ColumnBuilder::Interval(builder) => {

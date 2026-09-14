@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use databend_common_exception::Result;
 use log::info;
 use strength_reduce::StrengthReducedU64;
 
@@ -254,6 +255,35 @@ impl Payload {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.total_rows * self.tuple_size
+    }
+
+    pub fn merge_result(&self, flush_state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
+        if !self.flush(flush_state) {
+            return Ok(None);
+        }
+
+        let row_count = flush_state.row_count;
+        flush_state.aggregate_results.clear();
+        if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
+            for (aggr, loc) in self
+                .aggrs
+                .iter()
+                .zip(states_layout.states_loc.iter().cloned())
+            {
+                let return_type = aggr.return_type()?;
+                let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
+                aggr.batch_merge_result(
+                    &flush_state.state_places.as_slice()[0..row_count],
+                    loc,
+                    &mut builder,
+                )?;
+                flush_state.aggregate_results.push(builder.build().into());
+            }
+        }
+
+        let mut entries = flush_state.take_aggregate_results();
+        entries.extend(flush_state.take_group_columns());
+        Ok(Some(DataBlock::new(entries, row_count)))
     }
 
     pub(super) fn commit_transferred_state_offsets(

@@ -18,6 +18,7 @@ use std::mem;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
@@ -25,6 +26,7 @@ use std::time::Instant;
 use databend_common_base::http_client::GLOBAL_HICKORY_POSITIVE_MIN_TTL;
 use databend_common_base::http_client::get_global_hickory_resolver;
 use databend_common_base::http_client::get_global_http_client;
+use databend_common_base::http_client::storage_http_client_builder;
 use databend_common_metrics::storage::metrics_inc_storage_http_requests_count;
 use futures::TryStreamExt;
 use http::Request;
@@ -35,6 +37,11 @@ use opendal::raw::HttpBody;
 use opendal::raw::HttpFetch;
 use opendal::raw::parse_content_encoding;
 use opendal::raw::parse_content_length;
+use rand::seq::SliceRandom;
+use reqwest::dns::Addrs;
+use reqwest::dns::Name;
+use reqwest::dns::Resolve;
+use reqwest::dns::Resolving;
 use url::Url;
 
 use crate::EndpointPolicyScope;
@@ -61,6 +68,24 @@ struct PinnedClientCacheKey {
     resolved_addrs: Vec<SocketAddr>,
 }
 
+struct PinnedEndpointResolver {
+    host: String,
+    resolved_addrs: Vec<SocketAddr>,
+    fallback: Arc<dyn Resolve>,
+}
+
+impl Resolve for PinnedEndpointResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        if name.as_str().eq_ignore_ascii_case(&self.host) {
+            let mut addrs = self.resolved_addrs.clone();
+            addrs.shuffle(&mut rand::thread_rng());
+            Box::pin(future::ready(Ok(Box::new(addrs.into_iter()) as Addrs)))
+        } else {
+            self.fallback.resolve(name)
+        }
+    }
+}
+
 pub struct StorageHttpClient {
     client: reqwest::Client,
     pool_max_idle_per_host: usize,
@@ -69,16 +94,9 @@ pub struct StorageHttpClient {
     endpoint_policy_scope: EndpointPolicyScope,
     // Per-endpoint pinned clients keyed by (scheme, host, port, resolved_addrs).
     //
-    // We cannot reuse `client` for External-scope endpoints because reqwest
-    // would perform a fresh DNS lookup for every request, reopening the TOCTOU
-    // window between policy validation and the actual connection. An attacker
-    // who controls DNS could pass validation with a public IP and then switch
-    // the record to an internal address before reqwest connects.
-    //
-    // Instead, after check_storage_endpoint_url resolves and validates the IPs,
-    // we build a dedicated client with resolve_to_addrs pinned to those checked
-    // addresses. That client never re-resolves the host, so the connection is
-    // guaranteed to reach the validated IP regardless of subsequent DNS changes.
+    // Each client's endpoint resolver uses the validated address set and shuffles
+    // it for each new connection. Pinning connections to checked addresses
+    // protects against DNS rebinding between validation and connection setup.
     pinned_clients: Mutex<LruCache<PinnedClientCacheKey, reqwest::Client>>,
     // TTL cache for endpoint check results keyed by (scheme, host, port).
     // Avoids calling resolve_global_dns on every HttpFetch::fetch for the same
@@ -138,14 +156,17 @@ impl StorageHttpClient {
                 // window) and IP-literal endpoints (closing a 30x
                 // bounce-to-internal bypass), since check_url_with_dns now
                 // populates resolved_addrs for IP literals as well.
-                let mut builder = reqwest::ClientBuilder::new()
+                let mut builder = storage_http_client_builder()
                     .http1_only()
                     .use_native_tls()
-                    .dns_resolver(get_global_hickory_resolver())
+                    .dns_resolver(Arc::new(PinnedEndpointResolver {
+                        host: host.clone(),
+                        resolved_addrs: resolved_addrs.to_vec(),
+                        fallback: get_global_hickory_resolver(),
+                    }))
                     .redirect(reqwest::redirect::Policy::none())
                     .pool_max_idle_per_host(self.pool_max_idle_per_host)
-                    .connect_timeout(Duration::from_secs(self.connect_timeout))
-                    .resolve_to_addrs(&host, resolved_addrs);
+                    .connect_timeout(Duration::from_secs(self.connect_timeout));
 
                 if self.keepalive != 0 {
                     builder = builder.tcp_keepalive(Duration::from_secs(self.keepalive));
@@ -350,6 +371,56 @@ mod tests {
         value.parse().unwrap()
     }
 
+    #[tokio::test]
+    async fn test_pinned_resolver_shuffles_checked_addresses() {
+        use std::collections::HashSet;
+        use std::future;
+        use std::sync::Arc;
+
+        use reqwest::dns::Addrs;
+        use reqwest::dns::Name;
+        use reqwest::dns::Resolve;
+        use reqwest::dns::Resolving;
+
+        struct ProxyResolver;
+
+        impl Resolve for ProxyResolver {
+            fn resolve(&self, name: Name) -> Resolving {
+                assert_eq!(name.as_str(), "proxy.example");
+                let addrs: Addrs = Box::new(std::iter::once(addr("127.0.0.1:8080")));
+                Box::pin(future::ready(Ok(addrs)))
+            }
+        }
+
+        let expected: Vec<_> = (1..=8)
+            .map(|last| SocketAddr::from(([192, 0, 2, last], 443)))
+            .collect();
+        let resolver = super::PinnedEndpointResolver {
+            host: "storage.example".to_string(),
+            resolved_addrs: expected.clone(),
+            fallback: Arc::new(ProxyResolver),
+        };
+        let mut first_addresses = HashSet::new();
+        for _ in 0..32 {
+            let mut actual: Vec<_> = resolver
+                .resolve("STORAGE.EXAMPLE".parse().unwrap())
+                .await
+                .unwrap()
+                .collect();
+            first_addresses.insert(actual[0]);
+            actual.sort_unstable();
+            assert_eq!(actual, expected);
+        }
+        assert!(first_addresses.len() > 1);
+
+        let proxy: Vec<_> = resolver
+            .resolve("proxy.example".parse().unwrap())
+            .await
+            .unwrap()
+            .collect();
+        assert_eq!(proxy, [addr("127.0.0.1:8080")]);
+    }
+
     fn make_client(scope: EndpointPolicyScope) -> StorageHttpClient {
         use databend_common_base::http_client::get_global_http_client;
         StorageHttpClient {
@@ -361,6 +432,51 @@ mod tests {
             pinned_clients: Mutex::new(LruCache::new(NonZeroUsize::new(4).unwrap())),
             checked_endpoints: Mutex::new(LruCache::new(NonZeroUsize::new(4).unwrap())),
         }
+    }
+
+    // gzip of "raw storage object bytes\n"
+    const GZIP_BODY: &[u8] = &[
+        0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x2b, 0x4a, 0x2c, 0x57, 0x28,
+        0x2e, 0xc9, 0x2f, 0x4a, 0x4c, 0x4f, 0x55, 0xc8, 0x4f, 0xca, 0x4a, 0x4d, 0x2e, 0x51, 0x48,
+        0xaa, 0x2c, 0x49, 0x2d, 0xe6, 0x02, 0x00, 0xae, 0xc5, 0xf2, 0x24, 0x19, 0x00, 0x00, 0x00,
+    ];
+    const RAW_BODY: &[u8] = b"raw storage object bytes\n";
+
+    async fn serve_gzip_object() -> (SocketAddr, databend_common_base::runtime::JoinHandle<()>) {
+        use tokio::io::AsyncReadExt;
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+        use tokio::time::timeout;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = databend_common_base::runtime::spawn(async move {
+            timeout(Duration::from_secs(5), async {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buf = [0; 1024];
+                loop {
+                    let n = stream.read(&mut buf).await.unwrap();
+                    assert!(n > 0);
+                    request.extend_from_slice(&buf[..n]);
+                    if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    GZIP_BODY.len()
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                stream.write_all(GZIP_BODY).await.unwrap();
+                stream.flush().await.unwrap();
+                let _ = stream.shutdown().await;
+            })
+            .await
+            .expect("gzip fixture server timed out");
+        });
+        (address, server)
     }
 
     fn populate_checked_endpoint_cache(
@@ -495,5 +611,86 @@ mod tests {
         let client = make_client(EndpointPolicyScope::Trusted);
         assert_eq!(client.endpoint_policy_scope, EndpointPolicyScope::Trusted);
         assert_eq!(checked_endpoint_cache_len(&client), 0);
+    }
+
+    /// Negative control for the two `fetch` tests below.
+    ///
+    /// A default reqwest client must decode the gzip body. If this test starts
+    /// failing because the body comes back encoded, `reqwest/gzip` is no longer
+    /// active in this crate's test graph (it comes in via the `reqwest`
+    /// dev-dependency), and the `fetch` tests below prove nothing.
+    #[tokio::test]
+    async fn test_default_http_client_decodes_encoded_response() {
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+
+        let decoded = reqwest::ClientBuilder::new()
+            .build()
+            .unwrap()
+            .get(&url)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decoded.bytes().await.unwrap().as_ref(), RAW_BODY);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_storage_http_client_fetch_preserves_encoded_response() {
+        use http::Request;
+        use opendal::Buffer;
+        use opendal::raw::HttpFetch;
+        use reqwest::header::CONTENT_ENCODING;
+
+        let (address, server) = serve_gzip_object().await;
+        let url = format!("http://{address}/object.json.gz");
+        let req = Request::builder()
+            .method("GET")
+            .uri(&url)
+            .body(Buffer::new())
+            .unwrap();
+
+        let client = make_client(EndpointPolicyScope::Trusted);
+        let mut resp = client.fetch(req).await.unwrap();
+        assert_eq!(resp.headers()[CONTENT_ENCODING], "gzip");
+        assert_eq!(
+            resp.body_mut().to_buffer().await.unwrap().to_vec(),
+            GZIP_BODY
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_storage_http_client_pinned_fetch_preserves_encoded_response() {
+        use http::Request;
+        use opendal::Buffer;
+        use opendal::raw::HttpFetch;
+        use reqwest::header::CONTENT_ENCODING;
+
+        let (address, server) = serve_gzip_object().await;
+        let url = Url::parse(&format!("http://{address}/object.json.gz")).unwrap();
+        let req = Request::builder()
+            .method("GET")
+            .uri(url.as_str())
+            .body(Buffer::new())
+            .unwrap();
+
+        let client = make_client(EndpointPolicyScope::External);
+        populate_checked_endpoint_cache(
+            &client,
+            &url,
+            EndpointUrlCheck {
+                resolved_addrs: Some(vec![address]),
+            },
+            Duration::ZERO,
+        );
+
+        let mut resp = client.fetch(req).await.unwrap();
+        assert_eq!(resp.headers()[CONTENT_ENCODING], "gzip");
+        assert_eq!(
+            resp.body_mut().to_buffer().await.unwrap().to_vec(),
+            GZIP_BODY
+        );
+        server.await.unwrap();
     }
 }

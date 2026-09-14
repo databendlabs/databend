@@ -61,6 +61,12 @@ pub struct ChangesDesc {
     pub desc: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangesQuery {
+    pub query: String,
+    pub mode: StreamMode,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StreamBacklog {
     // Physical rows in latest-only endpoint blocks.
@@ -73,6 +79,12 @@ pub struct StreamBacklog {
 }
 
 impl FuseTable {
+    pub fn with_changes_desc(&self, changes_desc: ChangesDesc) -> Self {
+        let mut table = self.clone();
+        table.changes_desc = Some(changes_desc);
+        table
+    }
+
     pub async fn get_change_descriptor(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -135,21 +147,18 @@ impl FuseTable {
         base_location: &Option<String>,
         table_desc: String,
         seq: u64,
-    ) -> Result<String> {
+    ) -> Result<ChangesQuery> {
         let suffix = format!("{:08x}", Utc::now().timestamp());
 
         let optimized_mode = self.optimize_stream_mode(mode, base_location).await?;
-        let query = match optimized_mode {
+        let query = match &optimized_mode {
             StreamMode::AppendOnly => {
                 let append_alias = format!("_change_append${}", suffix);
                 format!(
                     "select *, \
                             'INSERT' as change$action, \
                             false as change$is_update, \
-                            if(is_not_null(_origin_block_id), \
-                                concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
-                                {append_alias}._base_row_id \
-                            ) as change$row_id \
+                            {append_alias}.change$row_id \
                     from {table_desc} as {append_alias} \
                     where not(is_not_null(_origin_version) and \
                               (_origin_version < {seq} or \
@@ -195,19 +204,13 @@ impl FuseTable {
                         from ( \
                             select {a_cols}, \
                                     'INSERT' as a_change$action, \
-                                    if(is_not_null(_origin_block_id), \
-                                        concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
-                                        {a_table_alias}._base_row_id \
-                                    ) as a_change$row_id \
+                                    {a_table_alias}.change$row_id as a_change$row_id \
                             from {table_desc} as {a_table_alias} \
                         ) as A \
                         FULL OUTER JOIN ( \
                             select {d_cols_alias}, \
                                     'DELETE' as d_change$action, \
-                                    if(is_not_null(_origin_block_id), \
-                                        concat(to_uuid(_origin_block_id), lpad(to_hex(_origin_block_row_num), 6, '0')), \
-                                        {d_table_alias}._base_row_id \
-                                    ) as d_change$row_id \
+                                    {d_table_alias}.change$row_id as d_change$row_id \
                             from {table_desc} as {d_table_alias} \
                         ) as D \
                         on A.a_change$row_id = D.d_change$row_id \
@@ -215,21 +218,24 @@ impl FuseTable {
                     ) \
                     select {a_cols}, \
                             a_change$action as change$action, \
-                            a_change$row_id as change$row_id, \
-                            d_change$action is not null as change$is_update \
+                            d_change$action is not null as change$is_update, \
+                            a_change$row_id as change$row_id \
                     from {cte_name} \
                     where a_change$action is not null \
                     union all \
                     select {d_cols}, \
                             d_change$action, \
-                            d_change$row_id, \
-                            a_change$action is not null \
+                            a_change$action is not null, \
+                            d_change$row_id \
                     from {cte_name} \
                     where d_change$action is not null",
                 )
             }
         };
-        Ok(query)
+        Ok(ChangesQuery {
+            query,
+            mode: optimized_mode,
+        })
     }
 
     async fn optimize_stream_mode(
@@ -247,7 +253,7 @@ impl FuseTable {
                     return Ok(StreamMode::Standard);
                 };
                 let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;
-                if logical_change_delta(Some(&base_snapshot), Some(&latest_snapshot))?
+                if logical_change_delta(Some(&base_snapshot), Some(&latest_snapshot))
                     .is_some_and(|delta| delta == (0, 0))
                 {
                     Ok(StreamMode::AppendOnly)
@@ -310,6 +316,7 @@ impl FuseTable {
             self.get_operator(),
             table_schema.clone(),
             &push_downs,
+            None,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
@@ -567,12 +574,24 @@ impl FuseTable {
 
     pub async fn changes_table_statistics(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         base_location: &Option<String>,
         change_type: ChangeType,
     ) -> Result<Option<TableStatistics>> {
         let Some(base_location) = base_location else {
-            return self.table_statistics(ctx, true, None).await;
+            // No base snapshot means this changes scan covers the full range from an empty
+            // endpoint to the attached latest snapshot (the first MV refresh uses this form).
+            // Do not call `table_statistics` recursively here: `self` is still an attached
+            // changes source, so re-entering it either loses the scan-level `ChangeType` or
+            // recurses back into this method. Derive the endpoint statistics directly instead.
+            let Some(latest_snapshot) = self.read_table_snapshot().await? else {
+                return Ok(None);
+            };
+            let num_rows = match change_type {
+                ChangeType::Append | ChangeType::Insert => latest_snapshot.summary.row_count,
+                ChangeType::Delete => 0,
+            };
+            return Ok(Some(scale_snapshot_statistics(&latest_snapshot, num_rows)));
         };
 
         let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;
@@ -703,45 +722,30 @@ fn replace_push_downs(
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct LogicalChangeRows {
+pub(crate) struct LogicalChangeRows {
     inserted: u64,
     updated: u64,
     deleted: u64,
 }
 
+/// Compare only endpoints with known, continuous counters. An empty base does
+/// not establish the start of a potentially restarted counting history.
 fn logical_change_delta(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
-) -> Result<Option<(u64, u64)>> {
-    let Some((latest_updated, latest_deleted)) =
-        latest.and_then(TableSnapshot::logical_change_counters)
-    else {
-        return Ok(None);
-    };
-    let (base_updated, base_deleted) = match base {
-        Some(snapshot) => {
-            let Some(counters) = snapshot.logical_change_counters() else {
-                return Ok(None);
-            };
-            counters
-        }
-        None => (0, 0),
-    };
-
-    let updated = latest_updated
-        .checked_sub(base_updated)
-        .ok_or_else(|| ErrorCode::Internal("logical updated row counter decreased"))?;
-    let deleted = latest_deleted
-        .checked_sub(base_deleted)
-        .ok_or_else(|| ErrorCode::Internal("logical deleted row counter decreased"))?;
-    Ok(Some((updated, deleted)))
+) -> Option<(u64, u64)> {
+    let base_counters = base?.logical_change_counters()?;
+    let latest_counters = latest?.logical_change_counters()?;
+    latest_counters.delta_from(&base_counters)
 }
 
+/// Estimate logical rows only when both endpoints have comparable counters.
+/// Missing or discontinuous history must fall back to endpoint processing.
 fn logical_change_rows(
     base: Option<&TableSnapshot>,
     latest: Option<&TableSnapshot>,
 ) -> Result<Option<LogicalChangeRows>> {
-    let Some((updated, deleted)) = logical_change_delta(base, latest)? else {
+    let Some((updated, deleted)) = logical_change_delta(base, latest) else {
         return Ok(None);
     };
     let base_rows = base.map_or(0, |snapshot| snapshot.summary.row_count);
@@ -754,6 +758,27 @@ fn logical_change_rows(
         updated,
         deleted,
     }))
+}
+
+pub(crate) fn estimate_change_rows(
+    base: Option<&TableSnapshot>,
+    latest: &TableSnapshot,
+    mode: &StreamMode,
+) -> Result<u64> {
+    if let Some(rows) = logical_change_rows(base, Some(latest))? {
+        return Ok(match mode {
+            StreamMode::AppendOnly => rows.inserted,
+            StreamMode::Standard => rows
+                .inserted
+                .saturating_add(rows.deleted)
+                .saturating_add(rows.updated.saturating_mul(2)),
+        });
+    }
+
+    Ok(latest
+        .summary
+        .row_count
+        .abs_diff(base.map_or(0, |snapshot| snapshot.summary.row_count)))
 }
 
 fn estimate_append_candidate_rows(
@@ -890,9 +915,17 @@ mod tests {
     use super::*;
 
     fn snapshot(rows: u64) -> TableSnapshot {
+        snapshot_at(None, None, rows)
+    }
+
+    fn snapshot_at(
+        prev_table_seq: Option<u64>,
+        previous: Option<Arc<TableSnapshot>>,
+        rows: u64,
+    ) -> TableSnapshot {
         TableSnapshot::try_new(
-            None,
-            None,
+            prev_table_seq,
+            previous,
             TableSchema::default(),
             Statistics {
                 row_count: rows,
@@ -906,9 +939,8 @@ mod tests {
         .unwrap()
     }
 
-    fn legacy_snapshot(rows: u64) -> TableSnapshot {
-        let snapshot = snapshot(rows);
-        let mut value = serde_json::to_value(snapshot).unwrap();
+    fn strip_counters(snapshot: &TableSnapshot) -> TableSnapshot {
+        let mut value = serde_json::to_value(snapshot.clone()).unwrap();
         value
             .as_object_mut()
             .unwrap()
@@ -916,11 +948,15 @@ mod tests {
         serde_json::from_value(value).unwrap()
     }
 
+    fn legacy_snapshot(rows: u64) -> TableSnapshot {
+        strip_counters(&snapshot(rows))
+    }
+
     #[test]
     fn test_logical_change_rows() {
         let legacy = legacy_snapshot(10);
-        let base = snapshot(10);
-        let mut latest = snapshot(9);
+        let base = snapshot_at(Some(10), None, 10);
+        let mut latest = snapshot_at(Some(11), Some(Arc::new(base.clone())), 9);
         latest.add_logical_change_delta(2, 3);
 
         assert_eq!(
@@ -936,8 +972,93 @@ mod tests {
             })
         );
 
-        let mut newer_base = snapshot(10);
-        newer_base.add_logical_change_delta(3, 0);
-        assert!(logical_change_rows(Some(&newer_base), Some(&latest)).is_err());
+        // Either counter decreasing makes the delta unknown, even in one epoch.
+        for (updated, deleted) in [(3, 0), (0, 3)] {
+            let mut newer_base = snapshot_at(Some(12), Some(Arc::new(latest.clone())), 10);
+            newer_base.add_logical_change_delta(updated, deleted);
+            assert_eq!(logical_change_delta(Some(&newer_base), Some(&latest)), None);
+            assert_eq!(
+                logical_change_rows(Some(&newer_base), Some(&latest)).unwrap(),
+                None
+            );
+        }
+
+        // Preserve upstream's estimate coverage with endpoints in one epoch.
+        let base = snapshot_at(Some(20), None, 10);
+        let mut updated = snapshot_at(Some(21), Some(Arc::new(base.clone())), 10);
+        updated.add_logical_change_delta(2, 0);
+        assert_eq!(
+            estimate_change_rows(Some(&base), &updated, &StreamMode::Standard).unwrap(),
+            4
+        );
+        assert_eq!(
+            estimate_change_rows(Some(&base), &updated, &StreamMode::AppendOnly).unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn test_no_base_does_not_trust_partial_history() {
+        let legacy = legacy_snapshot(10);
+        let restarted = snapshot_at(Some(20), Some(Arc::new(legacy)), 11);
+        assert_eq!(logical_change_delta(None, Some(&restarted)), None);
+        assert_eq!(logical_change_rows(None, Some(&restarted)).unwrap(), None);
+    }
+
+    /// A restart must neither look like zero changes (zero base counters) nor
+    /// cause subtraction underflow (nonzero base counters).
+    #[test]
+    fn test_restarted_counters_fall_back() {
+        for (updated, deleted) in [(0, 0), (5, 3)] {
+            let mut base = snapshot_at(Some(10), None, 3);
+            base.add_logical_change_delta(updated, deleted);
+
+            let mut mutated = snapshot_at(Some(11), Some(Arc::new(base.clone())), 2);
+            mutated.add_logical_change_delta(1, 1);
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&mutated)),
+                Some((1, 1)),
+                "within one history the delta is visible"
+            );
+
+            let legacy = strip_counters(&snapshot_at(Some(12), Some(Arc::new(mutated)), 3));
+            assert_eq!(logical_change_delta(Some(&base), Some(&legacy)), None);
+
+            let after_upgrade = snapshot_at(Some(13), Some(Arc::new(legacy)), 4);
+            assert_eq!(
+                logical_change_delta(Some(&base), Some(&after_upgrade)),
+                None,
+                "different histories must fall back, base=({updated}, {deleted})"
+            );
+            assert_eq!(
+                logical_change_rows(Some(&base), Some(&after_upgrade)).unwrap(),
+                None,
+            );
+        }
+    }
+
+    /// The fix must not cost the optimization for streams created after the
+    /// break, otherwise every table with a legacy ancestor regresses.
+    #[test]
+    fn test_history_after_restart_is_still_comparable() {
+        let legacy = legacy_snapshot(10);
+        // First counter-aware write mints a fresh history.
+        let restarted = snapshot_at(Some(20), Some(Arc::new(legacy)), 10);
+        // A stream created here uses `restarted` as its base.
+        let mut later = snapshot_at(Some(21), Some(Arc::new(restarted.clone())), 9);
+        later.add_logical_change_delta(2, 3);
+
+        assert_eq!(
+            logical_change_delta(Some(&restarted), Some(&later)),
+            Some((2, 3))
+        );
+        assert_eq!(
+            logical_change_rows(Some(&restarted), Some(&later)).unwrap(),
+            Some(LogicalChangeRows {
+                inserted: 2,
+                updated: 2,
+                deleted: 3,
+            })
+        );
     }
 }

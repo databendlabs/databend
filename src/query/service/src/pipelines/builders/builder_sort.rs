@@ -113,6 +113,21 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false, keep_order_col)
     }
 
+    pub fn build_local_full_sort_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        keep_order_col: bool,
+    ) -> Result<()> {
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.sort_column_desc(),
+            )
+        });
+
+        self.build_merge_sort(pipeline, false, keep_order_col)
+    }
+
     fn build_merge_sort(
         &self,
         pipeline: &mut Pipeline,

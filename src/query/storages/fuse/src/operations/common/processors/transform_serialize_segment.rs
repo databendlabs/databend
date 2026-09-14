@@ -13,16 +13,19 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -31,13 +34,13 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
 use log::info;
@@ -46,12 +49,11 @@ use opendal::Operator;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::ColumnHLLAccumulator;
 use crate::statistics::RowOrientedSegmentBuilder;
-use crate::statistics::VirtualColumnAccumulator;
+use crate::statistics::partition_values;
 
 enum State<B: SegmentBuilder> {
     None,
@@ -77,7 +79,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
     segment_builder: B,
-    virtual_column_accumulator: Option<VirtualColumnAccumulator>,
+    level_stats: BTreeMap<Option<i32>, ClusterLevelLogStats>,
     hll_accumulator: ColumnHLLAccumulator,
     block_top_n_template: Option<BlockTopN>,
     block_top_ns: Vec<BlockTopN>,
@@ -87,9 +89,12 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
+    pending_block: Option<ExtendedBlockMeta>,
+    current_partition: Option<Vec<Scalar>>,
 
     thresholds: BlockThresholds,
-    default_cluster_key_id: Option<u32>,
+    cluster_key_info: Option<ClusterKeyInfo>,
+    partition_key_count: usize,
     table_meta_timestamps: TableMetaTimestamps,
     is_column_oriented: bool,
 }
@@ -103,11 +108,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         segment_builder: B,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        let table_meta = &table.table_info.meta;
-        let virtual_column_accumulator =
-            VirtualColumnAccumulator::try_create(&table_meta.schema, &table_meta.virtual_schema);
-
-        let default_cluster_key_id = table.cluster_key_id();
+        let cluster_key_info = table.cluster_key_info();
 
         let block_top_n_template =
             table
@@ -123,17 +124,20 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             input,
             output,
             output_data: None,
+            pending_block: None,
+            current_partition: None,
             data_accessor: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
             segment_builder,
-            virtual_column_accumulator,
+            level_stats: Default::default(),
             hll_accumulator: ColumnHLLAccumulator::default(),
             block_top_n_template,
             block_top_ns: Vec::new(),
             top_n: HashMap::new(),
             thresholds,
-            default_cluster_key_id,
+            cluster_key_info,
+            partition_key_count: table.partition_key_count(),
             table_meta_timestamps,
             is_column_oriented: table.is_column_oriented(),
         })
@@ -208,30 +212,10 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             return Ok(Event::NeedConsume);
         }
 
-        if self.input.is_finished() {
+        if self.pending_block.is_none() && self.input.is_finished() {
             if self.segment_builder.block_count() != 0 {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
-            }
-
-            let virtual_column_accumulator = std::mem::take(&mut self.virtual_column_accumulator);
-            if let Some(virtual_column_accumulator) = virtual_column_accumulator {
-                if let Some(virtual_schema) =
-                    virtual_column_accumulator.build_virtual_schema_with_block_number()
-                {
-                    // emit log entry.
-                    // for newly created virtual schema.
-                    let meta = MutationLogs {
-                        entries: vec![MutationLogEntry::AppendVirtualSchema {
-                            virtual_schema: Some(virtual_schema),
-                            mode: VirtualSchemaMode::Merge,
-                        }],
-                        ..Default::default()
-                    };
-                    let data_block = DataBlock::empty_with_meta(Box::new(meta));
-                    self.output.push_data(Ok(data_block));
-                    return Ok(Event::NeedConsume);
-                }
             }
 
             self.output.finish();
@@ -239,38 +223,55 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             return Ok(Event::Finished);
         }
 
-        if self.input.has_data() {
-            let input_meta = self
-                .input
-                .pull_data()
-                .unwrap()?
-                .get_meta()
-                .cloned()
-                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-            let extended_block_meta = ExtendedBlockMeta::downcast_ref_from(&input_meta)
-                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?
-                .clone();
-
-            if let Some(draft_virtual_block_meta) = extended_block_meta.draft_virtual_block_meta {
-                let mut block_meta = extended_block_meta.block_meta.clone();
-                if let Some(ref mut virtual_column_accumulator) = self.virtual_column_accumulator {
-                    // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
-                        .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
-
-                    let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
-                        virtual_column_size: draft_virtual_block_meta.virtual_column_size,
-                        virtual_location: draft_virtual_block_meta.virtual_location.clone(),
-                    };
-                    block_meta.virtual_block_meta = Some(virtual_block_meta);
-                }
-
-                self.segment_builder.add_block(block_meta)?;
+        if self.pending_block.is_some() || self.input.has_data() {
+            let extended_block_meta = if let Some(block) = self.pending_block.take() {
+                block
             } else {
-                self.segment_builder
-                    .add_block(extended_block_meta.block_meta)?;
+                let input_meta = self
+                    .input
+                    .pull_data()
+                    .unwrap()?
+                    .get_meta()
+                    .cloned()
+                    .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+                ExtendedBlockMeta::downcast_ref_from(&input_meta)
+                    .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?
+                    .clone()
+            };
+
+            let next_partition = partition_values(
+                extended_block_meta.block_meta.partition_stats.as_ref(),
+                self.partition_key_count,
+            );
+            if self.partition_key_count != 0 && next_partition.is_none() {
+                return Err(ErrorCode::Internal(
+                    "partitioned block is missing valid partition statistics",
+                ));
             }
+            if self.segment_builder.block_count() != 0
+                && self.partition_key_count != 0
+                && self.current_partition.as_deref() != next_partition
+            {
+                self.pending_block = Some(extended_block_meta);
+                self.state = State::GenerateSegment;
+                return Ok(Event::Sync);
+            }
+            if self.current_partition.is_none() {
+                self.current_partition = next_partition.map(<[Scalar]>::to_vec);
+            }
+
+            ClusterLevelLogStats::accumulate(
+                &mut self.level_stats,
+                &extended_block_meta.block_meta,
+            );
+
+            let virtual_input = extended_block_meta
+                .draft_virtual_block_meta
+                .map(VirtualBlockInput::Draft)
+                .unwrap_or(VirtualBlockInput::None);
+
+            self.segment_builder
+                .add_block(extended_block_meta.block_meta, virtual_input)?;
 
             if let Some(hll) = extended_block_meta.column_hlls {
                 self.hll_accumulator.add_hll(hll)?;
@@ -282,6 +283,14 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             merge_column_top_n_mut(&mut self.top_n, block_top_n.clone())?;
             self.block_top_ns.push(block_top_n);
             if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
+                self.state = State::GenerateSegment;
+                return Ok(Event::Sync);
+            }
+
+            // The last input block may have been held in `pending_block` while the previous
+            // partition was serialized. If the input finished in the meantime, no port event
+            // remains to wake this processor, so flush the final partition immediately.
+            if self.input.is_finished() {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
@@ -322,9 +331,10 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
 
                 let segment_info = self.segment_builder.build(
                     self.thresholds,
-                    self.default_cluster_key_id,
+                    self.cluster_key_info.as_ref(),
                     additional_stats_meta,
                 )?;
+                self.current_partition = None;
 
                 self.state = State::SerializedSegment {
                     data: segment_info.serialize()?,
@@ -351,6 +361,9 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         summary: segment.summary().clone(),
                         hll,
                         top_n,
+                        level_stats: std::mem::take(&mut self.level_stats)
+                            .into_values()
+                            .collect(),
                     }],
                     ..Default::default()
                 };

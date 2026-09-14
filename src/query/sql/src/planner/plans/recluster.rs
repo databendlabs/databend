@@ -14,11 +14,14 @@
 
 use databend_common_ast::ast::Expr;
 
+use crate::plans::MaintenanceTarget;
+
 #[derive(Debug, Clone)]
 pub struct ReclusterPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 
     pub limit: Option<usize>,
     pub selection: Option<Expr>,

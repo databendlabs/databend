@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
@@ -104,7 +105,7 @@ impl PhysicalPlanBuilder {
         | databend_common_sql::plans::Exchange::GlobalHash(exprs) = exchange
         {
             for expr in exprs {
-                required.extend(expr.used_columns());
+                expr.collect_used_columns(&mut required);
             }
         }
 
@@ -119,7 +120,8 @@ impl PhysicalPlanBuilder {
                     let expr = scalar
                         .type_check(input_schema.as_ref())?
                         .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (expr, _) =
+                        ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                     keys.push(expr.as_remote_expr());
                 }
                 FragmentKind::Normal
@@ -129,7 +131,8 @@ impl PhysicalPlanBuilder {
                     let expr = scalar
                         .type_check(input_schema.as_ref())?
                         .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (expr, _) =
+                        ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                     keys.push(expr.as_remote_expr());
                 }
                 FragmentKind::GlobalShuffle

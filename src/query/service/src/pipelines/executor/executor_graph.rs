@@ -141,6 +141,7 @@ impl Node {
         outputs_port: &[Arc<OutputPort>],
         time_series_profile: Option<Arc<TimeSeriesProfiles>>,
         plan_mem_stat: Option<Arc<MemStat>>,
+        processor_interrupt: Arc<AtomicBool>,
     ) -> Arc<Node> {
         let p_name = unsafe { processor.name() };
         let tracking_payload = {
@@ -172,6 +173,7 @@ impl Node {
             if let Some(plan_mem_stat) = plan_mem_stat {
                 tracking_payload.mem_stat = Some(plan_mem_stat);
             }
+            tracking_payload.processor_interrupt = Some(processor_interrupt);
 
             tracking_payload
         };
@@ -222,7 +224,7 @@ struct ExecutingGraph {
     points: AtomicU64,
     max_points: AtomicU64,
     query_id: Arc<String>,
-    should_finish: AtomicBool,
+    should_finish: Arc<AtomicBool>,
     finished_notify: Arc<WatchNotify>,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
@@ -248,12 +250,14 @@ impl ExecutingGraph {
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         let mut plan_memory_stats = HashMap::new();
+        let should_finish = Arc::new(AtomicBool::new(false));
         Self::init_graph(
             &mut pipeline,
             &mut graph,
             &mut time_series_profile_builder,
             &mut plan_memory_stats,
             perf_enabled,
+            &should_finish,
         );
         let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
@@ -262,7 +266,7 @@ impl ExecutingGraph {
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
-            should_finish: AtomicBool::new(false),
+            should_finish,
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
@@ -294,6 +298,7 @@ impl ExecutingGraph {
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         let mut plan_memory_stats = HashMap::new();
+        let should_finish = Arc::new(AtomicBool::new(false));
         for pipeline in &mut pipelines {
             Self::init_graph(
                 pipeline,
@@ -301,6 +306,7 @@ impl ExecutingGraph {
                 &mut time_series_profile_builder,
                 &mut plan_memory_stats,
                 perf_enabled,
+                &should_finish,
             );
         }
         let executor_stats = ExecutorStats::new();
@@ -310,7 +316,7 @@ impl ExecutingGraph {
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
-            should_finish: AtomicBool::new(false),
+            should_finish,
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
@@ -326,6 +332,7 @@ impl ExecutingGraph {
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
         plan_memory_stats: &mut HashMap<u32, Arc<MemStat>>,
         perf_enabled: bool,
+        interrupt: &Arc<AtomicBool>,
     ) {
         let offset = graph.node_count();
         for node in pipeline.graph.node_weights() {
@@ -363,6 +370,7 @@ impl ExecutingGraph {
                 &node.outputs,
                 time_series_profile,
                 plan_mem_stat,
+                interrupt.clone(),
             ));
 
             unsafe {
@@ -935,12 +943,8 @@ impl RunningGraph {
         NodePerfCounters { counters }
     }
 
-    pub fn interrupt_running_nodes(&self) {
-        unsafe {
-            for node_index in self.0.graph.node_indices() {
-                self.0.graph[node_index].processor.interrupt();
-            }
-        }
+    pub fn interrupt(&self) {
+        self.0.should_finish.store(true, Ordering::SeqCst);
     }
 
     pub fn assert_finished_graph(&self) -> Result<()> {
@@ -972,7 +976,7 @@ impl RunningGraph {
             log_memory_limit_diagnostics(cause, "memory limit exceeded");
         }
         self.0.finished_notify.notify_waiters();
-        self.interrupt_running_nodes();
+        self.interrupt();
         let mut finished_error = self.0.finished_error.lock();
         if finished_error.is_none() {
             *finished_error = cause.err();

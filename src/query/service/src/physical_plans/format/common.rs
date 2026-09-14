@@ -281,22 +281,22 @@ pub fn format_output_columns(
                     return String::from("dummy value");
                 }
                 let column_entry = metadata.column(column_index);
+                let column_name = column_entry.name();
                 match column_entry.table_index() {
-                    Some(table_index) if format_table => match metadata
-                        .table(table_index)
-                        .alias_name()
-                    {
-                        Some(alias_name) => {
-                            format!("{}.{} (#{})", alias_name, column_entry.name(), column_index)
+                    Some(table_index) if format_table => {
+                        match metadata.table(table_index).alias_name() {
+                            Some(alias_name) => {
+                                format!("{}.{} (#{})", alias_name, column_name, column_index)
+                            }
+                            None => format!(
+                                "{}.{} (#{})",
+                                metadata.table(table_index).name(),
+                                column_name,
+                                column_index,
+                            ),
                         }
-                        None => format!(
-                            "{}.{} (#{})",
-                            metadata.table(table_index).name(),
-                            column_entry.name(),
-                            column_index,
-                        ),
-                    },
-                    _ => format!("{} (#{})", column_entry.name(), column_index),
+                    }
+                    _ => format!("{} (#{})", column_name, column_index),
                 }
             }
             _ => format!("#{}", field.name()),

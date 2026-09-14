@@ -197,6 +197,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
     }
 
+    pub fn get_enable_table_schema_refresh(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_schema_refresh")? != 0)
+    }
+
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
@@ -231,6 +235,10 @@ impl Settings {
 
     pub fn get_max_vacuum_threads(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_threads")
+    }
+
+    pub fn get_storage_delete_batch_size(&self) -> Result<u64> {
+        self.try_get_u64("storage_delete_batch_size")
     }
 
     // Get storage_fetch_part_num.
@@ -404,6 +412,10 @@ impl Settings {
 
     pub fn get_max_push_down_limit(&self) -> Result<usize> {
         Ok(self.try_get_u64("max_push_down_limit")? as usize)
+    }
+
+    pub fn get_enable_top_n(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_top_n")? != 0)
     }
 
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
@@ -607,12 +619,12 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
-    pub fn get_enable_group_by_column_first(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_group_by_column_first")? != 0)
-    }
-
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
+    }
+
+    pub fn get_enable_cascading_grouping_sets(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_cascading_grouping_sets")? == 1)
     }
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
@@ -742,6 +754,10 @@ impl Settings {
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
+    }
+
+    pub fn get_enable_materialized_view_rewrite(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_materialized_view_rewrite")? != 0)
     }
 
     pub fn get_enable_compact_after_write(&self) -> Result<bool> {
@@ -1048,14 +1064,6 @@ impl Settings {
 
     pub fn get_enable_prune_cache(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
-    }
-
-    pub fn get_enable_proxy_bloom_pruning(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_proxy_bloom_pruning")? == 1)
-    }
-
-    pub fn get_proxy_routing_model(&self) -> Result<String> {
-        self.try_get_string("proxy_routing_model")
     }
 
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {

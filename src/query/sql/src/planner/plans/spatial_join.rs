@@ -186,6 +186,7 @@ mod tests {
             func_name: func_name.to_string(),
             params: vec![],
             arguments,
+            return_type: Box::new(DataType::Boolean),
         })
     }
 

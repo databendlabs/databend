@@ -1,7 +1,6 @@
 === predicate_alias__where_scalar_alias_no_input ===
 matrix: predicate_alias
 key: P0N0S1_0_1
-setting: enable_group_by_column_first=0
 sql: SELECT i > 0 AS ok FROM t WHERE ok
 status: ok
 EvalScalar
@@ -18,7 +17,6 @@ EvalScalar
 === predicate_alias__where_scalar_alias_conflict_prefers_input_column ===
 matrix: predicate_alias
 key: P0N0S1_1_0
-setting: enable_group_by_column_first=0
 sql: SELECT i > 0 AS ok FROM t WHERE ok
 status: ok
 EvalScalar
@@ -35,7 +33,6 @@ EvalScalar
 === predicate_alias__having_aggregate_alias_conflict_prefers_aggregate_alias ===
 matrix: predicate_alias
 key: P1N0S2_2_0
-setting: enable_group_by_column_first=0
 sql: SELECT sum(number) > 0 AS ok FROM t HAVING ok
 status: ok
 EvalScalar
@@ -57,7 +54,6 @@ EvalScalar
 === predicate_alias__having_aggregate_alias_no_input ===
 matrix: predicate_alias
 key: P1N0S2_2_1
-setting: enable_group_by_column_first=0
 sql: SELECT sum(number) > 0 AS ok FROM t HAVING ok
 status: ok
 EvalScalar
@@ -79,7 +75,6 @@ EvalScalar
 === predicate_alias__qualify_window_alias_no_input ===
 matrix: predicate_alias
 key: P2N0S3_3_1
-setting: enable_group_by_column_first=0
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
 status: ok
 EvalScalar
@@ -106,7 +101,6 @@ EvalScalar
 === predicate_alias__qualify_window_alias_conflict_prefers_window_alias ===
 matrix: predicate_alias
 key: P2N0S3_4_0
-setting: enable_group_by_column_first=0
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
 status: ok
 EvalScalar
@@ -133,7 +127,6 @@ EvalScalar
 === predicate_alias__where_aggregate_alias_no_input_rejected ===
 matrix: predicate_alias
 key: P0N0S2_5_1
-setting: enable_group_by_column_first=0
 sql: SELECT sum(number) > 0 AS ok FROM t WHERE ok
 status: error
 code: 1065
@@ -142,7 +135,6 @@ message: Where clause can't contain aggregate or window functions
 === predicate_alias__qualify_aggregate_alias_no_input_rejected ===
 matrix: predicate_alias
 key: P2N0S2_5_1
-setting: enable_group_by_column_first=0
 sql: SELECT sum(number) > 0 AS ok FROM t QUALIFY ok
 status: error
 code: 1065
@@ -151,7 +143,6 @@ message: Qualify clause must not contain aggregate functions
 === predicate_alias__where_qualified_name_does_not_consume_scalar_alias ===
 matrix: predicate_alias
 key: P0N1S1_7_
-setting: enable_group_by_column_first=0
 sql: SELECT i > 0 AS ok FROM t AS t WHERE t.ok
 status: error
 code: 1065
@@ -160,7 +151,6 @@ message: column ok doesn't exist
 === predicate_alias__having_qualified_name_does_not_consume_aggregate_alias ===
 matrix: predicate_alias
 key: P1N1S2_7_
-setting: enable_group_by_column_first=0
 sql: SELECT sum(number) > 0 AS ok FROM t AS t HAVING t.ok
 status: error
 code: 1065
@@ -169,7 +159,6 @@ message: column ok doesn't exist
 === predicate_alias__qualify_qualified_name_does_not_consume_window_alias ===
 matrix: predicate_alias
 key: P2N1S3_7_
-setting: enable_group_by_column_first=0
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t AS t QUALIFY t.rn = 1
 status: error
 code: 1065
@@ -178,7 +167,6 @@ message: column rn doesn't exist
 === predicate_alias__where_duplicate_scalar_alias_is_ambiguous ===
 matrix: predicate_alias
 key: P0N0S1_7_
-setting: enable_group_by_column_first=0
 sql: SELECT i > 0 AS ok, i < 10 AS ok FROM t WHERE ok
 status: error
 code: 1065
@@ -187,7 +175,6 @@ message: column ok reference or alias is ambiguous, please use another alias nam
 === predicate_alias__having_duplicate_aggregate_alias_is_ambiguous ===
 matrix: predicate_alias
 key: P1N0S2_7_
-setting: enable_group_by_column_first=0
 sql: SELECT sum(number) > 0 AS ok, count(*) > 0 AS ok FROM t HAVING ok
 status: error
 code: 1065
@@ -196,7 +183,6 @@ message: column ok reference or alias is ambiguous, please use another alias nam
 === predicate_alias__qualify_duplicate_window_alias_is_ambiguous ===
 matrix: predicate_alias
 key: P2N0S3_7_
-setting: enable_group_by_column_first=0
 sql: SELECT number, row_number() OVER (ORDER BY number) AS rn, rank() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
 status: error
 code: 1065
@@ -205,7 +191,6 @@ message: column rn reference or alias is ambiguous, please use another alias nam
 === predicate_alias__where_window_alias_no_input_rejected ===
 matrix: predicate_alias
 key: P0N0S3_7_
-setting: enable_group_by_column_first=0
 sql: SELECT row_number() OVER (ORDER BY number) AS rn FROM t WHERE rn = 1
 status: error
 code: 1065
@@ -214,7 +199,6 @@ message: Where clause can't contain aggregate or window functions
 === predicate_alias__having_window_alias_no_input_rejected ===
 matrix: predicate_alias
 key: P1N0S3_7_
-setting: enable_group_by_column_first=0
 sql: SELECT row_number() OVER (ORDER BY number) AS rn FROM t HAVING rn = 1
 status: error
 code: 1065

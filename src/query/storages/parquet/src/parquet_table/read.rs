@@ -88,6 +88,7 @@ impl ParquetTable {
             self.schema_descr.clone(),
             Some(self.arrow_schema.clone()),
             Some(self.schema_from.clone()),
+            self.schema_descr_from_arrow_fallback,
         )
         .with_options(self.read_options)
         .with_push_downs(plan.push_downs.as_ref());
@@ -100,9 +101,11 @@ impl ParquetTable {
             builder.build_row_group_reader(ParquetSourceType::StageTable, need_row_number)?,
         );
         let full_file_reader = if has_file_part {
-            Some(Arc::new(builder.build_full_reader(
+            let batch_size = ctx.get_settings().get_max_block_size()? as usize;
+            Some(Arc::new(builder.build_full_reader_with_batch_size(
                 ParquetSourceType::StageTable,
                 need_row_number,
+                batch_size,
             )?))
         } else {
             None

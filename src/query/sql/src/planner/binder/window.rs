@@ -466,7 +466,7 @@ impl<'a> WindowRewriter<'a> {
                     let column = ColumnBindingBuilder::new(
                         "group_item".to_string(),
                         group_expr.index,
-                        Box::new(group_expr.scalar.data_type()?),
+                        Box::new(group_expr.scalar.data_type().into_owned()),
                         Visibility::Visible,
                     )
                     .build();
@@ -479,7 +479,7 @@ impl<'a> WindowRewriter<'a> {
                 }
             }
 
-            let ty = arg.data_type()?;
+            let ty = arg.data_type().into_owned();
             let index = self
                 .metadata
                 .write()
@@ -620,14 +620,16 @@ pub fn bind_window_function_info(
     // eval scalars before sort
     // Generate a `EvalScalar` as the input of `Window`.
     let mut scalar_items: Vec<ScalarItem> = Vec::new();
-    for arg in &window_plan.arguments {
-        scalar_items.push(arg.clone());
-    }
-    for part in &window_plan.partition_by {
-        scalar_items.push(part.clone());
-    }
-    for order in &window_plan.order_by {
-        scalar_items.push(order.order_by_item.clone())
+    let mut scalar_indexes = HashSet::new();
+    for item in std::iter::chain(&window_plan.arguments, &window_plan.partition_by).chain(
+        window_plan
+            .order_by
+            .iter()
+            .map(|order| &order.order_by_item),
+    ) {
+        if scalar_indexes.insert(item.index) {
+            scalar_items.push(item.clone());
+        }
     }
 
     let child = if !scalar_items.is_empty() {

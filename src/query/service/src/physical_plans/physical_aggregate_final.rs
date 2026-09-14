@@ -219,7 +219,7 @@ impl PhysicalPlanBuilder {
         let mut used = vec![];
         for item in &agg.aggregate_functions {
             if required.contains(&item.index) {
-                required.extend(item.scalar.used_columns());
+                item.scalar.collect_used_columns(&mut required);
                 used.push(item.clone());
             }
         }

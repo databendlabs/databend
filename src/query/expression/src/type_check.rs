@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -20,6 +21,7 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
+use smallvec::SmallVec;
 
 use crate::AutoCastRules;
 use crate::ColumnIndex;
@@ -177,7 +179,9 @@ pub fn check_cast<Index: ColumnIndex>(
     {
         return Ok(expr);
     }
-    if expr.data_type() == &wrapped_dest_type {
+    if expr.data_type() == &wrapped_dest_type
+        || expr.data_type().matches_physical_type(&wrapped_dest_type)
+    {
         Ok(expr)
     } else if expr.data_type().wrap_nullable() == wrapped_dest_type {
         Ok(Expr::Cast(Cast {
@@ -229,30 +233,30 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
 pub fn check_string<Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
-    expr: &Expr<Index>,
+    expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<String> {
-    let origin_ty = expr.data_type();
-    let (expr, _) = if origin_ty != &DataType::String {
+    let (expr, _) = if expr.data_type() != &DataType::String {
         ConstantFolder::fold(
-            &Expr::Cast(Cast {
+            Cow::Owned(Expr::Cast(Cast {
                 span,
                 is_try: false,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
                 dest_type: DataType::String,
-            }),
+            })),
             func_ctx,
             fn_registry,
         )
     } else {
-        ConstantFolder::fold(expr, func_ctx, fn_registry)
+        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
     };
+    let expr = expr.into_owned();
 
     match expr {
         Expr::Constant(Constant {
             scalar: Scalar::String(string),
             ..
-        }) => Ok(string.clone()),
+        }) => Ok(string),
         _ => Err(
             ErrorCode::from_string_no_backtrace("expected string literal".to_string())
                 .set_span(span),
@@ -263,24 +267,25 @@ pub fn check_string<Index: ColumnIndex>(
 pub fn check_number<T: Number, Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
-    expr: &Expr<Index>,
+    expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
-    let origin_ty = expr.data_type();
-    let (expr, _) = if origin_ty != &DataType::Number(T::data_type()) {
+    let origin_ty = expr.data_type().clone();
+    let (expr, _) = if origin_ty != DataType::Number(T::data_type()) {
         ConstantFolder::fold(
-            &Expr::Cast(Cast {
+            Cow::Owned(Expr::Cast(Cast {
                 span,
                 is_try: false,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
                 dest_type: DataType::Number(T::data_type()),
-            }),
+            })),
             func_ctx,
             fn_registry,
         )
     } else {
-        ConstantFolder::fold(expr, func_ctx, fn_registry)
+        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
     };
+    let expr = expr.into_owned();
 
     match expr {
         Expr::Constant(Constant {
@@ -345,13 +350,14 @@ pub fn check_function<Index: ColumnIndex>(
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
     let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
 
-    let mut fail_reasons = Vec::with_capacity(candidates.len());
+    let mut fail_reasons = SmallVec::<[_; 1]>::with_capacity(candidates.len());
     let mut checked_candidates = vec![];
-    let args_not_const = args
-        .iter()
-        .map(Expr::contains_column_ref)
-        .collect::<Vec<_>>();
-    let need_sort = candidates.len() > 1 && args_not_const.iter().any(|contain| !*contain);
+    let need_sort = candidates.len() > 1 && args.iter().any(|arg| !arg.contains_column_ref());
+    let args_with_column = need_sort.then(|| {
+        args.iter()
+            .map(Expr::contains_column_ref)
+            .collect::<Vec<_>>()
+    });
     for (seq, (id, func)) in candidates.iter().enumerate() {
         match try_check_function(
             args,
@@ -363,10 +369,14 @@ pub fn check_function<Index: ColumnIndex>(
             Ok((args, return_type, generics)) => {
                 let score = if need_sort {
                     args.iter()
-                        .zip(args_not_const.iter().copied())
-                        .map(|(expr, not_const)| {
+                        .zip(args_with_column.as_deref().unwrap().iter().copied())
+                        .map(|(expr, contains_column)| {
                             // smaller score win
-                            if not_const && expr.is_cast() { 1 } else { 0 }
+                            if contains_column && expr.is_cast() {
+                                1
+                            } else {
+                                0
+                            }
                         })
                         .sum::<usize>()
                 } else {
@@ -424,6 +434,30 @@ pub fn check_function<Index: ColumnIndex>(
     };
 
     Err(ErrorCode::SemanticError(msg).set_span(span))
+}
+
+pub fn infer_function_return_type<T>(
+    span: Span,
+    name: &str,
+    params: &[Scalar],
+    argument_types: impl Iterator<Item = T>,
+    fn_registry: &FunctionRegistry,
+) -> Result<DataType>
+where
+    T: Borrow<DataType>,
+{
+    let arguments = argument_types
+        .enumerate()
+        .map(|(id, data_type)| {
+            Expr::ColumnRef(ColumnRef {
+                span,
+                id,
+                data_type: data_type.borrow().clone(),
+                display_name: id.to_string(),
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(check_function(span, name, params, &arguments, fn_registry)?.into_data_type())
 }
 
 fn format_function_signature<Index: ColumnIndex>(
@@ -717,6 +751,12 @@ pub fn unify(
                 .unwrap_or_else(Substitution::empty);
             Ok(subst)
         }
+        (DataType::AggregateState(state), dest_ty) => unify(
+            state.physical_type(),
+            dest_ty,
+            auto_cast_rules,
+            dynamic_cast_rules,
+        ),
         _ => Err(ErrorCode::from_string_no_backtrace(format!(
             "unable to unify `{}` with `{}`",
             src_ty, dest_ty
@@ -756,6 +796,7 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         | (DataType::Map(box inner_src_ty), DataType::Map(box inner_dest_ty)) => {
             can_cast_to(inner_src_ty, inner_dest_ty)
         }
+        (DataType::AggregateState(state), dest_ty) => can_cast_to(state.physical_type(), dest_ty),
 
         (src_ty, dest_ty) => get_simple_cast_function(false, src_ty, dest_ty).is_some(),
     }

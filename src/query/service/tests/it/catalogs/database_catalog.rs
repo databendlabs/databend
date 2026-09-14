@@ -166,7 +166,9 @@ async fn test_catalogs_table() -> anyhow::Result<()> {
                 created_on,
                 ..TableMeta::default()
             },
+            source_table_option: None,
             as_dropped: false,
+            materialized_view: None,
             table_properties: None,
             table_partition: None,
         };

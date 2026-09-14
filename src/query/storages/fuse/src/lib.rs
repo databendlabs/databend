@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(
+    clippy::arc_with_non_send_sync,
     clippy::cloned_ref_to_slice_refs,
     clippy::collapsible_if,
     clippy::let_and_return,
@@ -66,7 +67,6 @@ pub mod statistics;
 pub mod table_functions;
 
 pub use constants::*;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 pub use databend_common_catalog::table_context::TableContext;

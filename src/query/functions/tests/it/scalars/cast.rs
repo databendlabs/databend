@@ -384,6 +384,15 @@ fn test_cast_between_number_and_string(file: &mut impl Write, is_try: bool) {
         "num",
         UInt64Type::from_data(vec![0, 1, u64::MAX]),
     )]);
+    run_ast(
+        file,
+        format!("{prefix}CAST(CAST('3.40282347e38' AS FLOAT64) AS STRING)"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}CAST(num AS STRING)"), &[(
+        "num",
+        Float64Type::from_data(vec![3.40282347e38]),
+    )]);
 }
 
 fn test_cast_between_boolean_and_string(file: &mut impl Write, is_try: bool) {

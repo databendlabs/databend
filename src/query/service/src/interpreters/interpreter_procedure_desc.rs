@@ -49,34 +49,37 @@ impl Interpreter for DescProcedureInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.plan.tenant.clone();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.plan.tenant.clone();
 
-        let req: GetProcedureReq = self.plan.clone().into();
-        let procedure = UserApiProvider::instance()
-            .procedure_api(&tenant)
-            .get_procedure(&req)
-            .await
-            .map_err(meta_service_error)?;
+            let req: GetProcedureReq = self.plan.clone().into();
+            let procedure = UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .get_procedure(&req)
+                .await
+                .map_err(meta_service_error)?;
 
-        if let Some(procedure) = procedure {
-            let script = format!("{}", procedure.procedure_meta.script);
-            let returns = format!(
-                "({})",
-                procedure.procedure_meta.return_types.iter().join(",")
-            );
-            let signature = format!("({})", procedure.procedure_meta.arg_names.iter().join(","));
-            let language = procedure.procedure_meta.procedure_language;
+            if let Some(procedure) = procedure {
+                let script = format!("{}", procedure.procedure_meta.script);
+                let returns = format!(
+                    "({})",
+                    procedure.procedure_meta.return_types.iter().join(",")
+                );
+                let signature =
+                    format!("({})", procedure.procedure_meta.arg_names.iter().join(","));
+                let language = procedure.procedure_meta.procedure_language;
 
-            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                StringType::from_data(vec!["signature", "returns", "language", "body"]),
-                StringType::from_data(vec![signature, returns, language, script]),
-            ])])
-        } else {
-            return Err(ErrorCode::UnknownProcedure(format!(
-                "Unknown procedure {}",
-                self.plan.name.procedure_name()
-            )));
-        }
+                PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                    StringType::from_data(vec!["signature", "returns", "language", "body"]),
+                    StringType::from_data(vec![signature, returns, language, script]),
+                ])])
+            } else {
+                return Err(ErrorCode::UnknownProcedure(format!(
+                    "Unknown procedure {}",
+                    self.plan.name.procedure_name()
+                )));
+            }
+        })
     }
 }

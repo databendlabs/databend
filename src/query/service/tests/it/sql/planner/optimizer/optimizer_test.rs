@@ -55,10 +55,11 @@ impl TestCaseRunner for ServiceRunner {
         };
 
         let settings = self.0.get_settings();
-        let opt_ctx = OptimizerContext::new(self.0.clone(), metadata)
-            .with_settings(&settings)?
-            .set_enable_distributed_optimization(true)
-            .clone();
+        let opt_ctx =
+            OptimizerContext::new(self.0.clone(), metadata, self.0.get_function_context()?)
+                .with_settings(&settings)?
+                .set_enable_distributed_optimization(true)
+                .clone();
 
         optimize(opt_ctx, plan).await
     }

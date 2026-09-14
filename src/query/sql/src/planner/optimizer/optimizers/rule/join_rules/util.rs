@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -23,11 +24,16 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
         .equi_conditions
         .iter()
         .map(|equi_condition| {
+            let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+                &equi_condition.left,
+                &equi_condition.right,
+            ]);
             Ok(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "eq".to_string(),
                 params: vec![],
                 arguments: vec![equi_condition.left.clone(), equi_condition.right.clone()],
+                return_type: Box::new(return_type),
             }))
         })
         .collect::<Result<Vec<_>>>()?

@@ -55,7 +55,7 @@ impl<'a> VolnitskyBase<'a> {
         let hash = if !fallback {
             let mut hash = Box::new([0; HASH_SIZE]);
             for i in (0..=needle_size - mem::size_of::<NGram>()).rev() {
-                let ngram = Self::to_ngram(&needle[i..i + 1]);
+                let ngram = Self::to_ngram(&needle[i..i + mem::size_of::<NGram>()]);
                 Self::put_ngram(hash.as_mut(), ngram, i as u8 + 1);
             }
             Some(hash)
@@ -117,7 +117,11 @@ impl<'a> VolnitskyBase<'a> {
             pos += self.step;
         }
 
-        self.fallback_search(haystack)
+        // Each probe covers `step` consecutive candidate starts. Search only after the last
+        // candidate start covered by the final probe.
+        let fallback_start = pos - (self.step - 1);
+        self.fallback_search(&haystack[fallback_start..])
+            .map(|match_pos| fallback_start + match_pos)
     }
 
     fn fallback_search(&self, haystack: &[u8]) -> Option<usize> {
@@ -174,6 +178,105 @@ fn test_volnitsky_search() {
 }
 
 #[test]
+fn test_volnitsky_fallback_boundaries() {
+    let needle = b"needle";
+    let searcher = VolnitskyBase::new(needle, 0);
+
+    // The probe loop does not run for a haystack only one byte longer than the needle, so the
+    // fallback must still search the complete haystack.
+    assert_eq!(searcher.search(b"xneedle"), Some(1));
+
+    // For a 101-byte haystack, the last probe covers candidate starts through 94. The match at
+    // the only remaining candidate start must be found by the suffix fallback.
+    let mut tail_match = vec![b'x'; 95];
+    tail_match.extend_from_slice(needle);
+    assert_eq!(searcher.search(&tail_match), Some(95));
+
+    // Candidate 5 partially matches "aabc" before failing the full comparison. The overlapping
+    // match at the first fallback candidate, 6, must still be found.
+    let searcher = VolnitskyBase::new(b"aabc", 0);
+    assert_eq!(searcher.search(b"xxxxxaaabc"), Some(6));
+
+    // When matches overlap on both sides of the boundary, the earlier probe-covered match must
+    // win over the fallback match.
+    let searcher = VolnitskyBase::new(b"aaaa", 0);
+    assert_eq!(searcher.search(b"xxaaaaa"), Some(2));
+}
+
+#[test]
+fn test_volnitsky_matches_across_probe_boundaries() {
+    for needle_size in [4, 5, 6, 7, 16, 31, 64, 127, 255] {
+        let distinct: Vec<u8> = (1..=u8::try_from(needle_size).unwrap()).collect();
+        let repeated = vec![1; needle_size];
+
+        for (pattern, needle) in [("distinct", &distinct), ("repeated", &repeated)] {
+            let searcher = VolnitskyBase::new(needle, 0);
+            assert!(searcher.hash.is_some());
+            let step = searcher.step;
+
+            // A probe covers `step` candidate starts. Exercise every possible number of fallback
+            // candidates after zero through four complete probe blocks.
+            for probe_count in 0..=4 {
+                for fallback_candidates in 0..step {
+                    let covered_candidates = probe_count * step;
+                    let candidate_count = covered_candidates + fallback_candidates;
+                    let haystack_size = needle_size - 1 + candidate_count;
+
+                    let context = format!(
+                        "needle_size={needle_size}, pattern={pattern}, probe_count={probe_count}, \
+                         fallback_candidates={fallback_candidates}"
+                    );
+                    let check_match = |match_start| {
+                        let mut haystack = vec![0; haystack_size];
+                        haystack[match_start..match_start + needle_size].copy_from_slice(needle);
+                        let expected = memchr::memmem::find(&haystack, needle);
+                        assert_eq!(expected, Some(match_start), "invalid fixture: {context}");
+                        assert_eq!(searcher.search(&haystack), expected, "{context}");
+                    };
+
+                    // Negative searches exercise the fallback even when it has no candidates.
+                    let no_match = vec![0; haystack_size];
+                    assert_eq!(
+                        searcher.search(&no_match),
+                        memchr::memmem::find(&no_match, needle),
+                        "{context}"
+                    );
+
+                    // Check the outer bounds and both sides of the probe/fallback boundary.
+                    for match_start in [
+                        (candidate_count > 0).then_some(0),
+                        (covered_candidates > 0).then(|| covered_candidates - 1),
+                        (fallback_candidates > 0).then_some(covered_candidates),
+                        (candidate_count > 0).then(|| candidate_count - 1),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        check_match(match_start);
+                    }
+                }
+            }
+
+            // Also check every candidate start in one haystack spanning multiple probes and the
+            // maximum possible fallback tail.
+            let probe_count = 4;
+            let fallback_candidates = step - 1;
+            let candidate_count = probe_count * step + fallback_candidates;
+            let haystack_size = needle_size - 1 + candidate_count;
+            for match_start in 0..candidate_count {
+                let mut haystack = vec![0; haystack_size];
+                haystack[match_start..match_start + needle_size].copy_from_slice(needle);
+                assert_eq!(
+                    searcher.search(&haystack),
+                    memchr::memmem::find(&haystack, needle),
+                    "needle_size={needle_size}, pattern={pattern}, match_start={match_start}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn test_volnitsky_userid() {
     let mut string = String::new();
     let start = 38575348285873298;
@@ -193,5 +296,38 @@ fn test_volnitsky_userid() {
             "Failed at iteration {}",
             i
         );
+    }
+}
+
+#[cfg(test)]
+mod property_tests {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    // Use `memmem::find` as the correctness oracle. These properties verify that Volnitsky
+    // returns the same first-match offset for arbitrary inputs and forced match positions.
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn test_volnitsky_matches_memmem(
+            needle in prop::collection::vec(any::<u8>(), 0..301),
+            haystack in prop::collection::vec(any::<u8>(), 0..513),
+        ) {
+            let searcher = VolnitskyBase::new(&needle, 0);
+            prop_assert_eq!(searcher.search(&haystack), memchr::memmem::find(&haystack, &needle));
+        }
+
+        #[test]
+        fn test_volnitsky_matches_memmem_with_inserted_match(
+            needle in prop::collection::vec(any::<u8>(), 4..65),
+            prefix in prop::collection::vec(any::<u8>(), 0..257),
+            suffix in prop::collection::vec(any::<u8>(), 0..257),
+        ) {
+            let searcher = VolnitskyBase::new(&needle, 0);
+            let haystack = [&prefix[..], &needle, &suffix[..]].concat();
+            prop_assert_eq!(searcher.search(&haystack), memchr::memmem::find(&haystack, &needle));
+        }
     }
 }

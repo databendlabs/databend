@@ -735,7 +735,7 @@ impl DataBlock {
         match value {
             Value::Scalar(scalar) => self.add_const_column(scalar, data_type),
             Value::Column(column) => {
-                debug_assert_eq!(data_type, column.data_type());
+                debug_assert!(data_type.matches_physical_type(&column.data_type()));
                 self.add_column(column)
             }
         }
@@ -923,19 +923,6 @@ impl DataBlock {
         }
         self.entries = entries;
         self
-    }
-
-    #[inline]
-    pub fn project_with_agg_index(self, projections: &ColumnSet, num_evals: usize) -> Self {
-        let mut columns = Vec::with_capacity(projections.len());
-        let eval_offset = self.entries.len() - num_evals;
-        for (index, column) in self.entries.into_iter().enumerate() {
-            if !projections.contains(&index) && index < eval_offset {
-                continue;
-            }
-            columns.push(column);
-        }
-        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
     }
 
     #[inline]

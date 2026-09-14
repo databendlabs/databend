@@ -197,6 +197,29 @@ impl DecompressDecoder {
         self.state
     }
 
+    /// Take source bytes buffered but not consumed by the codec.
+    pub fn take_buffered_input(&mut self) -> BytesMut {
+        self.buf.split()
+    }
+
+    /// Return whether the codec left source bytes unconsumed.
+    pub fn has_buffered_input(&self) -> bool {
+        !self.buf.is_empty()
+    }
+
+    /// Reinitialize the codec while preserving source bytes it has not consumed.
+    pub fn reinit(&mut self) -> Result<()> {
+        debug_assert_eq!(self.state, DecompressState::Done);
+
+        self.decoder.reinit()?;
+        self.state = if self.buf.is_empty() {
+            DecompressState::Reading
+        } else {
+            DecompressState::Decoding
+        };
+        Ok(())
+    }
+
     /// Fetch more data from underlying reader.
     ///
     /// # Notes
@@ -222,6 +245,13 @@ impl DecompressDecoder {
     /// Decode data into output.
     /// Returns the data that has been written.
     pub fn decode(&mut self, output: &mut [u8]) -> Result<usize> {
+        self.decode_with_consumed(output)
+            .map(|(_consumed, written)| written)
+    }
+
+    /// Decode data into output.
+    /// Returns the source bytes consumed and output bytes written.
+    pub fn decode_with_consumed(&mut self, output: &mut [u8]) -> Result<(usize, usize)> {
         debug_assert_eq!(self.state, DecompressState::Decoding);
 
         // If input is empty, inner reader must reach EOF, return directly.
@@ -231,7 +261,7 @@ impl DecompressDecoder {
             // has returned EOF.
             self.multiple_members = false;
             self.state = DecompressState::Flushing;
-            return Ok(0);
+            return Ok((0, 0));
         }
 
         let mut input = PartialBuffer::new(&self.buf);
@@ -252,7 +282,7 @@ impl DecompressDecoder {
             "decode: consume {read_len} bytes from src, write {written_len} bytes into dst, next state {:?}",
             self.state
         );
-        Ok(written_len)
+        Ok((read_len, written_len))
     }
 
     /// Finish a decompress press, flushing remaining data into output.
@@ -267,8 +297,8 @@ impl DecompressDecoder {
         let done = self.decoder.finish(&mut output)?;
         if done {
             if self.multiple_members {
-                self.decoder.reinit()?;
-                self.state = DecompressState::Reading;
+                self.state = DecompressState::Done;
+                self.reinit()?;
             } else {
                 self.state = DecompressState::Done;
             }

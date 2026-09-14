@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -309,13 +310,13 @@ fn prune_by_statistics(
             input_domains.insert(name.to_string(), domain.clone());
 
             let (new_expr, _) = ConstantFolder::fold_with_domain(
-                filter,
+                Cow::Borrowed(filter),
                 &input_domains,
                 func_ctx,
                 &BUILTIN_FUNCTIONS,
             );
             return matches!(
-                new_expr,
+                new_expr.as_ref(),
                 Expr::Constant(Constant {
                     scalar: Scalar::Boolean(false),
                     ..
@@ -506,6 +507,57 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_runtime_stats_pruner_folds_full_probe_expression() -> Result<()> {
+        let schema = test_schema();
+        let stats = Arc::new(RuntimeFilterStats::default());
+        let pruner = RuntimeStatsPruner::new(FunctionContext::default(), schema.clone(), vec![
+            RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                // The block domain is y=[10,40], so y+10=[20,50] cannot
+                // intersect the runtime-filter range [51,60].
+                expr: min_max_expr_plus("y", 10, 51, 60)?,
+                stats: stats.clone(),
+            },
+        ]);
+        let part = make_part(&schema, None, 0, 10, 40);
+        let part = FuseBlockPartInfo::from_part(&part)?;
+
+        assert!(pruner.should_prune_part(part));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_runtime_inlist_complex_expression_keeps_bloom_index() -> Result<()> {
+        init_test_globals()?;
+        let schema = test_schema();
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![10, 20, 30, 40])]);
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
+        let part = make_part(&schema, index_location, index_size, 10, 40);
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            1,
+            vec![RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::Inlist,
+                inlist_value_count: 1,
+                expr: inlist_expr_plus("y", 10, 25)?,
+                stats: Arc::new(RuntimeFilterStats::default()),
+            }],
+        );
+
+        // The static Bloom index stores y, not y+10. It cannot safely answer
+        // this expression and must conservatively keep the block.
+        assert!(!pruner.prune(&part).await?);
+        Ok(())
+    }
+
     fn test_schema() -> TableSchemaRef {
         Arc::new(TableSchema::new(vec![TableField::new(
             "y",
@@ -600,6 +652,54 @@ mod tests {
 
         let gte = check_function(None, "gte", &[], &[column.clone(), min], &BUILTIN_FUNCTIONS)?;
         let lte = check_function(None, "lte", &[], &[column, max], &BUILTIN_FUNCTIONS)?;
+        check_function(None, "and_filters", &[], &[gte, lte], &BUILTIN_FUNCTIONS)
+    }
+
+    fn plus_expr(column_name: &str, value: i32) -> Result<Expr<String>> {
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: column_name.to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: column_name.to_string(),
+        });
+        let value = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(value)),
+            data_type: DataType::Number(NumberDataType::Int32),
+        });
+        check_function(None, "plus", &[], &[column, value], &BUILTIN_FUNCTIONS)
+    }
+
+    fn inlist_expr_plus(column_name: &str, add: i32, value: i64) -> Result<Expr<String>> {
+        let probe_expr = plus_expr(column_name, add)?;
+        let value = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int64(value)),
+            data_type: DataType::Number(NumberDataType::Int64),
+        });
+        check_function(None, "eq", &[], &[probe_expr, value], &BUILTIN_FUNCTIONS)
+    }
+
+    fn min_max_expr_plus(column_name: &str, add: i32, min: i64, max: i64) -> Result<Expr<String>> {
+        let probe_expr = plus_expr(column_name, add)?;
+        let min = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int64(min)),
+            data_type: DataType::Number(NumberDataType::Int64),
+        });
+        let max = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int64(max)),
+            data_type: DataType::Number(NumberDataType::Int64),
+        });
+        let gte = check_function(
+            None,
+            "gte",
+            &[],
+            &[probe_expr.clone(), min],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let lte = check_function(None, "lte", &[], &[probe_expr, max], &BUILTIN_FUNCTIONS)?;
         check_function(None, "and_filters", &[], &[gte, lte], &BUILTIN_FUNCTIONS)
     }
 

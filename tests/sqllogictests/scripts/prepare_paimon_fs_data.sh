@@ -26,6 +26,24 @@ if [[ -z "${JAVA_HOME:-}" ]]; then
 fi
 if [[ -n "${JAVA_HOME:-}" ]]; then
 	export PATH="${JAVA_HOME}/bin:${PATH}"
+	if [[ -d "${JAVA_HOME}/lib/server" ]]; then
+		export LD_LIBRARY_PATH="${JAVA_HOME}/lib/server${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+	fi
 fi
 
-uv run --script "${CURDIR}/prepare_paimon_fs_data.py"
+# Spark / Maven package download can flake on CI. Retry a few times and keep
+# the last error so callers can surface it instead of an empty failure.
+max_attempts="${PAIMON_PREPARE_ATTEMPTS:-3}"
+attempt=1
+while true; do
+	if uv run --script "${CURDIR}/prepare_paimon_fs_data.py"; then
+		break
+	fi
+	if ((attempt >= max_attempts)); then
+		echo "FAIL: prepare_paimon_fs_data.py failed after ${max_attempts} attempts" >&2
+		exit 1
+	fi
+	echo "WARN: prepare_paimon_fs_data.py failed (attempt ${attempt}/${max_attempts}), retrying..." >&2
+	attempt=$((attempt + 1))
+	sleep $((attempt * 2))
+done

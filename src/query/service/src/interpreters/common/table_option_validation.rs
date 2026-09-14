@@ -43,7 +43,11 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use databend_common_storages_fuse::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
+use databend_common_storages_fuse::MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS;
+use databend_common_storages_fuse::MAX_VIRTUAL_COLUMN_PATH_STATISTICS;
 use databend_common_storages_fuse::MIN_RECLUSTER_DEPTH;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
@@ -56,6 +60,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -63,6 +68,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_P
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
@@ -72,6 +78,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 pub use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
 pub use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use log::error;
@@ -91,6 +98,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
@@ -101,6 +110,10 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_CHANGE_TRACKING);
+    r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
+    // Added by the binder for CLUSTER BY LINEAR/HILBERT. User-specified
+    // reserved options are rejected before the CreateTablePlan is built.
+    r.insert(OPT_KEY_CLUSTER_TYPE);
 
     r.insert(OPT_KEY_ENGINE);
 
@@ -121,6 +134,45 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
     r
 });
+
+/// Table option keys that can occur in 'create materialized view statement'.
+pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| {
+        let mut r = HashSet::new();
+        r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
+        r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
+        r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
+        r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
+        r.insert(FUSE_OPT_KEY_FILE_SIZE);
+        r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
+        r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
+        r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+        r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
+        r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
+        r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
+        r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
+        r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
+        r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
+        r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
+        r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
+        r.insert(OPT_KEY_TABLE_COMPRESSION);
+        r.insert(OPT_KEY_STORAGE_FORMAT);
+        r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
+        r.insert(OPT_KEY_SEGMENT_FORMAT);
+        r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
+        r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
+        r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+        r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
+        r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
+        r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
+        r.insert(OPT_KEY_ANALYZE_TOP_N_SIZE);
+        r.insert(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE);
+
+        // Added by the MV binder after user-specified reserved keys are rejected.
+        r.insert(OPT_KEY_DATABASE_ID);
+        r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+        r
+    });
 
 pub static CREATE_LAKE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
@@ -149,14 +201,6 @@ pub static CREATE_MEMORY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::ne
     r
 });
 
-pub static CREATE_PROXY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    let mut r = HashSet::new();
-    r.insert(OPT_KEY_ENGINE);
-    r.insert("targets");
-    r.insert("default");
-    r
-});
-
 pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
@@ -173,6 +217,8 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
+    r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
@@ -184,6 +230,28 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r
 });
 
+pub fn is_valid_virtual_column_layout_options(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS) {
+        let value = value.parse::<usize>()?;
+        if value > MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS} must be between 0 and {MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS}",
+            )));
+        }
+    }
+    if let Some(value) = options.get(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS) {
+        let value = value.parse::<usize>()?;
+        if value > MAX_VIRTUAL_COLUMN_PATH_STATISTICS {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS} must be between 0 and {MAX_VIRTUAL_COLUMN_PATH_STATISTICS}",
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
     let opt_key = opt_key.as_ref().to_lowercase();
     let opt_key = opt_key.as_str();
@@ -193,8 +261,8 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
         Engine::Paimon => opt_key == OPT_KEY_ENGINE,
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
-        Engine::Proxy => CREATE_PROXY_OPTIONS.contains(&opt_key),
         Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
+        Engine::MaterializedView => CREATE_MATERIALIZED_VIEW_OPTIONS.contains(opt_key),
     }
 }
 

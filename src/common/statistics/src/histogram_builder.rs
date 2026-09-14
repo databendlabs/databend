@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-
 use crate::Datum;
 use crate::F64;
 use crate::Histogram;
-use crate::HistogramBounds;
-use crate::TypedHistogramBounds;
 use crate::TypedHistogramBuilder;
 
 pub struct HistogramBuilder;
@@ -63,115 +59,6 @@ impl HistogramBuilder {
     }
 }
 
-pub type UniformSampleSet = HistogramBounds;
-
-impl HistogramBounds {
-    pub fn has_same_supported_type(&self, other: &HistogramBounds) -> bool {
-        let Some(kind) = self.lower_bound().kind() else {
-            return false;
-        };
-
-        self.upper_bound().kind() == Some(kind)
-            && other.lower_bound().kind() == Some(kind)
-            && other.upper_bound().kind() == Some(kind)
-    }
-
-    pub fn has_intersection(&self, other: &HistogramBounds) -> Result<bool> {
-        match (
-            self.lower_bound(),
-            self.upper_bound(),
-            other.lower_bound(),
-            other.upper_bound(),
-        ) {
-            (
-                Datum::Int(left_min),
-                Datum::Int(left_max),
-                Datum::Int(right_min),
-                Datum::Int(right_max),
-            ) => Ok(TypedHistogramBounds::new(*left_min, *left_max)
-                .has_intersection(&TypedHistogramBounds::new(*right_min, *right_max))),
-            (
-                Datum::UInt(left_min),
-                Datum::UInt(left_max),
-                Datum::UInt(right_min),
-                Datum::UInt(right_max),
-            ) => Ok(TypedHistogramBounds::new(*left_min, *left_max)
-                .has_intersection(&TypedHistogramBounds::new(*right_min, *right_max))),
-            (
-                Datum::Float(left_min),
-                Datum::Float(left_max),
-                Datum::Float(right_min),
-                Datum::Float(right_max),
-            ) => Ok(TypedHistogramBounds::new(*left_min, *left_max)
-                .has_intersection(&TypedHistogramBounds::new(*right_min, *right_max))),
-            (
-                Datum::Bytes(left_min),
-                Datum::Bytes(left_max),
-                Datum::Bytes(right_min),
-                Datum::Bytes(right_max),
-            ) => Ok(
-                TypedHistogramBounds::new(left_min.clone(), left_max.clone()).has_intersection(
-                    &TypedHistogramBounds::new(right_min.clone(), right_max.clone()),
-                ),
-            ),
-            _ => Ok(false),
-        }
-    }
-
-    pub fn intersection(&self, other: &HistogramBounds) -> Result<(Option<Datum>, Option<Datum>)> {
-        match (
-            self.lower_bound(),
-            self.upper_bound(),
-            other.lower_bound(),
-            other.upper_bound(),
-        ) {
-            (
-                Datum::Int(left_min),
-                Datum::Int(left_max),
-                Datum::Int(right_min),
-                Datum::Int(right_max),
-            ) => {
-                let (min, max) = TypedHistogramBounds::new(*left_min, *left_max)
-                    .intersection(&TypedHistogramBounds::new(*right_min, *right_max));
-                Ok((min.map(Datum::Int), max.map(Datum::Int)))
-            }
-            (
-                Datum::UInt(left_min),
-                Datum::UInt(left_max),
-                Datum::UInt(right_min),
-                Datum::UInt(right_max),
-            ) => {
-                let (min, max) = TypedHistogramBounds::new(*left_min, *left_max)
-                    .intersection(&TypedHistogramBounds::new(*right_min, *right_max));
-                Ok((min.map(Datum::UInt), max.map(Datum::UInt)))
-            }
-            (
-                Datum::Float(left_min),
-                Datum::Float(left_max),
-                Datum::Float(right_min),
-                Datum::Float(right_max),
-            ) => {
-                let (min, max) = TypedHistogramBounds::new(*left_min, *left_max)
-                    .intersection(&TypedHistogramBounds::new(*right_min, *right_max));
-                Ok((min.map(Datum::Float), max.map(Datum::Float)))
-            }
-            (
-                Datum::Bytes(left_min),
-                Datum::Bytes(left_max),
-                Datum::Bytes(right_min),
-                Datum::Bytes(right_max),
-            ) => {
-                let (min, max) =
-                    TypedHistogramBounds::new(left_min.clone(), left_max.clone()).intersection(
-                        &TypedHistogramBounds::new(right_min.clone(), right_max.clone()),
-                    );
-                Ok((min.map(Datum::Bytes), max.map(Datum::Bytes)))
-            }
-            _ => Ok((None, None)),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,29 +76,6 @@ mod tests {
         assert_eq!(histogram.num_buckets(), 4);
         assert_eq!(buckets.first().unwrap().lower_bound(), Datum::UInt(0));
         assert_eq!(buckets.last().unwrap().upper_bound(), Datum::UInt(80));
-    }
-
-    #[test]
-    fn test_uniform_sample_set_numeric_intersection() {
-        let left = UniformSampleSet::new(Datum::UInt(0), Datum::UInt(10));
-        let right = UniformSampleSet::new(Datum::UInt(5), Datum::UInt(15));
-
-        assert!(left.has_same_supported_type(&right));
-        assert!(left.has_intersection(&right).unwrap());
-        assert_eq!(
-            left.intersection(&right).unwrap(),
-            (Some(Datum::UInt(5)), Some(Datum::UInt(10)))
-        );
-    }
-
-    #[test]
-    fn test_uniform_sample_set_rejects_mixed_numeric_intersection() {
-        let left = UniformSampleSet::new(Datum::UInt(0), Datum::UInt(10));
-        let right = UniformSampleSet::new(Datum::Int(5), Datum::Int(15));
-
-        assert!(!left.has_same_supported_type(&right));
-        assert!(!left.has_intersection(&right).unwrap());
-        assert_eq!(left.intersection(&right).unwrap(), (None, None));
     }
 
     #[test]

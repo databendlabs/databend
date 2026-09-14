@@ -31,6 +31,9 @@ use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::OrderedFloat;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
@@ -816,4 +819,42 @@ fn test_quantile_tdigest_weighted_general_group_by() {
         .new_goldenfile("quantile_tdigest_weighted_general_group_by.txt")
         .unwrap();
     run_quantile_tdigest_weighted_general(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_quantile_tdigest_merge_rejects_mismatched_state_params() -> Result<()> {
+    let factory = AggregateFunctionFactory::instance();
+    let level = |value| Scalar::Number(NumberScalar::Float64(OrderedFloat(value)));
+    let arguments = vec![DataType::Number(NumberDataType::UInt64)];
+    let state = factory.get(
+        "quantile_tdigest_state",
+        vec![level(0.5)],
+        arguments,
+        vec![],
+    )?;
+    let state_type = state.return_type()?;
+
+    factory.get(
+        "quantile_tdigest_merge",
+        vec![],
+        vec![state_type.clone()],
+        vec![],
+    )?;
+    factory.get(
+        "quantile_tdigest_merge",
+        vec![level(0.5)],
+        vec![state_type.clone()],
+        vec![],
+    )?;
+
+    for name in ["quantile_tdigest_merge", "quantile_tdigest_merge_state"] {
+        let error = match factory.get(name, vec![level(0.9)], vec![state_type.clone()], vec![]) {
+            Ok(_) => panic!("{name} should reject mismatched persisted parameters"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), 1006);
+        assert!(error.message().contains("do not match"));
+    }
+
+    Ok(())
 }

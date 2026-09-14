@@ -24,13 +24,11 @@ use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
-use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::type_check;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
@@ -80,7 +78,7 @@ pub async fn build_runtime_filter_infos(
             };
             let bloom = if bloom_enabled {
                 if let Some(ref bloom) = packet.bloom {
-                    Some(build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id).await?)
+                    Some(build_bloom_filter(bloom.clone(), max_threads, desc.id).await?)
                 } else {
                     None
                 }
@@ -130,42 +128,31 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr
             0,
         ));
     }
-    let probe_key = resolve_probe_column_ref(probe_key);
-
-    let probe_data_type = probe_key.data_type.clone();
-    let raw_probe_key = RawExpr::ColumnRef {
-        span: probe_key.span,
-        id: probe_key.id.to_string(),
-        data_type: probe_key.data_type.clone(),
-        display_name: probe_key.display_name.clone(),
-    };
-
-    let eq_exprs: Vec<RawExpr<String>> = inlist
+    let probe_data_type = probe_key.data_type().clone();
+    let eq_exprs = inlist
         .iter()
-        .map(|scalar_ref| RawExpr::FunctionCall {
-            span: None,
-            name: "eq".to_string(),
-            params: vec![],
-            args: vec![raw_probe_key.clone(), RawExpr::Constant {
+        .map(|scalar_ref| {
+            let value = Expr::Constant(Constant {
                 span: None,
                 scalar: scalar_ref.to_owned(),
-                data_type: Some(probe_data_type.clone()),
-            }],
+                data_type: probe_data_type.clone(),
+            });
+            check_function(
+                probe_key.span(),
+                "eq",
+                &[],
+                &[probe_key.clone(), value],
+                &BUILTIN_FUNCTIONS,
+            )
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
 
-    let or_filters_expr = if eq_exprs.len() == 1 {
+    let expr = if eq_exprs.len() == 1 {
         eq_exprs[0].clone()
     } else {
-        RawExpr::FunctionCall {
-            span: None,
-            name: "or_filters".to_string(),
-            params: vec![],
-            args: eq_exprs,
-        }
+        check_function(None, "or_filters", &[], &eq_exprs, &BUILTIN_FUNCTIONS)?
     };
 
-    let expr = type_check::check(&or_filters_expr, &BUILTIN_FUNCTIONS)?;
     Ok((expr, inlist_value_count))
 }
 
@@ -254,12 +241,9 @@ fn build_min_max_filter(
 
 async fn build_bloom_filter(
     bloom: Vec<u64>,
-    probe_key: &Expr<String>,
     max_threads: usize,
     filter_id: usize,
 ) -> Result<RuntimeFilterBloom> {
-    let probe_column = resolve_probe_column_ref(probe_key);
-    let column_name = probe_column.id.to_string();
     let total_items = bloom.len();
 
     if total_items < 3_000_000 {
@@ -267,7 +251,6 @@ async fn build_bloom_filter(
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         filter.insert_hash_batch(&bloom);
         return Ok(RuntimeFilterBloom {
-            column_name,
             filter: Arc::new(filter),
         });
     }
@@ -284,40 +267,37 @@ async fn build_bloom_filter(
     );
 
     Ok(RuntimeFilterBloom {
-        column_name,
         filter: Arc::new(filter),
     })
 }
 
-fn resolve_probe_column_ref(probe_key: &Expr<String>) -> &ColumnRef<String> {
-    match probe_key {
-        Expr::ColumnRef(col) => col,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
-        Expr::Cast(cast) => match cast.expr.as_ref() {
-            Expr::ColumnRef(col) => col,
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
     use std::collections::HashMap;
 
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
     use databend_common_expression::ConstantFolder;
+    use databend_common_expression::DataBlock;
     use databend_common_expression::Domain;
+    use databend_common_expression::Evaluator;
     use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
     use databend_common_expression::FunctionContext;
     use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_functions::BUILTIN_FUNCTIONS;
 
     use super::build_inlist_filter;
+    use super::build_min_max_filter;
     use super::build_runtime_filter_infos;
     use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
@@ -415,7 +395,7 @@ mod tests {
         input_domains.insert("column_a".to_string(), domain_value_2_10);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Borrowed(&filter_expr),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -434,14 +414,14 @@ mod tests {
         input_domains_false.insert("column_a".to_string(), domain_value_2_9);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Owned(filter_expr),
             &input_domains_false,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
         // Range [2,9] does not intersect with {1, 10}, so it should fold to constant false
-        match folded_expr_false {
+        match folded_expr_false.as_ref() {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..
@@ -451,6 +431,58 @@ mod tests {
             _ => {
                 panic!("Expected constant false, got: {:?}", folded_expr_false);
             }
+        }
+    }
+
+    #[test]
+    fn test_runtime_filters_evaluate_full_probe_expression() {
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let probe_column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "a".to_string(),
+            data_type: int32_type.clone(),
+            display_name: "a".to_string(),
+        });
+        let ten = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(10)),
+            data_type: int32_type.clone(),
+        });
+        let probe_expr =
+            check_function(None, "plus", &[], &[probe_column, ten], &BUILTIN_FUNCTIONS).unwrap();
+
+        let mut inlist_builder = ColumnBuilder::with_capacity(probe_expr.data_type(), 1);
+        inlist_builder.push(Scalar::Number(11i64.into()).as_ref());
+        let (inlist, _) = build_inlist_filter(inlist_builder.build(), &probe_expr).unwrap();
+
+        let build_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: probe_expr.data_type().clone(),
+            display_name: "build_key".to_string(),
+        });
+        let min_max = build_min_max_filter(
+            SerializableDomain {
+                min: Scalar::Number(11i64.into()),
+                max: Scalar::Number(11i64.into()),
+            },
+            &probe_expr,
+            &build_key,
+        )
+        .unwrap();
+
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2])]);
+        let func_ctx = FunctionContext::default();
+        for filter in [inlist, min_max] {
+            let filter = filter
+                .project_column_ref(|name| if name == "a" { Ok(0) } else { unreachable!() })
+                .unwrap();
+            let result = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+                .run(&filter)
+                .unwrap()
+                .convert_to_full_column(filter.data_type(), block.num_rows());
+            let bitmap = BooleanType::try_downcast_column(&result).unwrap();
+            assert_eq!(bitmap.iter().collect::<Vec<_>>(), vec![true, false]);
         }
     }
 
@@ -544,7 +576,7 @@ mod tests {
         input_domains.insert("column_b".to_string(), domain_value_500_600);
 
         let (folded_expr, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Borrowed(&filter_expr),
             &input_domains,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -567,7 +599,7 @@ mod tests {
         input_domains_no_intersect.insert("column_b".to_string(), domain_value_2000_3000);
 
         let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
-            &filter_expr,
+            Cow::Owned(filter_expr),
             &input_domains_no_intersect,
             &func_ctx,
             &BUILTIN_FUNCTIONS,
@@ -575,7 +607,7 @@ mod tests {
 
         // Range [2000, 3000] does not intersect with {0, 1, 2, ..., 1023},
         // so it should fold to constant false
-        match folded_expr_false {
+        match folded_expr_false.as_ref() {
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..

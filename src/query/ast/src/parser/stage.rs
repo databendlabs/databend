@@ -64,13 +64,13 @@ pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String
     move |i| {
         let string_options = map(
             rule! {
-                #ident ~ #match_text(sep) ~ #literal_string
+                #ident ~ ^#match_text(sep) ~ ^#literal_string
             },
             |(k, _, v)| (k.to_string().to_lowercase(), v),
         );
         let bool_options = map(
             rule! {
-                ENABLE_VIRTUAL_HOST_STYLE ~ #match_text(sep) ~ #literal_bool
+                ENABLE_VIRTUAL_HOST_STYLE ~ ^#match_text(sep) ~ ^#literal_bool
             },
             |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
         );

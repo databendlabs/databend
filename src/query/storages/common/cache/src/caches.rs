@@ -67,7 +67,46 @@ pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
-pub type IcebergTableCache = InMemoryLruCache<(Arc<dyn Table>, AtomicBool, Instant)>;
+pub struct IcebergTableCacheValue {
+    table: Arc<dyn Table>,
+    refreshing: AtomicBool,
+    loaded_at: Instant,
+    credential_refresh_at: Option<Instant>,
+}
+
+impl IcebergTableCacheValue {
+    pub fn new(table: Arc<dyn Table>, credential_refresh_at: Option<Instant>) -> Self {
+        Self {
+            table,
+            refreshing: AtomicBool::new(false),
+            loaded_at: Instant::now(),
+            credential_refresh_at,
+        }
+    }
+
+    pub fn table(&self) -> Arc<dyn Table> {
+        self.table.clone()
+    }
+
+    pub(crate) fn loaded_at(&self) -> Instant {
+        self.loaded_at
+    }
+
+    pub(crate) fn credential_refresh_at(&self) -> Option<Instant> {
+        self.credential_refresh_at
+    }
+
+    pub(crate) fn is_refreshing(&self) -> bool {
+        self.refreshing.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_refreshing(&self) {
+        self.refreshing
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+pub type IcebergTableCache = InMemoryLruCache<IcebergTableCacheValue>;
 
 /// In memory object cache of table column array
 pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
@@ -105,7 +144,7 @@ impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
     }
 }
 
-impl CachedObject<(Arc<dyn Table>, AtomicBool, Instant)> for (Arc<dyn Table>, AtomicBool, Instant) {
+impl CachedObject<IcebergTableCacheValue> for IcebergTableCacheValue {
     type Cache = IcebergTableCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_iceberg_table_cache()
@@ -230,10 +269,8 @@ impl From<BlockMeta> for CacheValue<BlockMeta> {
     }
 }
 
-impl From<(Arc<dyn Table>, AtomicBool, Instant)>
-    for CacheValue<(Arc<dyn Table>, AtomicBool, Instant)>
-{
-    fn from(value: (Arc<dyn Table>, AtomicBool, Instant)) -> Self {
+impl From<IcebergTableCacheValue> for CacheValue<IcebergTableCacheValue> {
+    fn from(value: IcebergTableCacheValue) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
