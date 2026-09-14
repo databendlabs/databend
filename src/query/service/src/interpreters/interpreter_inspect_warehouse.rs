@@ -53,39 +53,44 @@ impl Interpreter for InspectWarehouseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        let mut warehouse_nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .inspect_warehouse(self.plan.warehouse.clone())
-            .await?;
+            let mut warehouse_nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .inspect_warehouse(self.plan.warehouse.clone())
+                .await?;
 
-        warehouse_nodes.sort_by(|left, right| {
-            (&left.cluster_id, &left.id).cmp(&(&right.cluster_id, &right.id))
-        });
+            warehouse_nodes.sort_by(|left, right| {
+                (&left.cluster_id, &left.id).cmp(&(&right.cluster_id, &right.id))
+            });
 
-        let mut clusters = ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
-        let mut nodes_id = ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
-        let mut nodes_type = ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
-        // let mut nodes_pool = ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
+            let mut clusters =
+                ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
+            let mut nodes_id =
+                ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
+            let mut nodes_type =
+                ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
+            // let mut nodes_pool = ColumnBuilder::with_capacity(&DataType::String, warehouse_nodes.len());
 
-        for warehouse_node in warehouse_nodes {
-            nodes_id.push(Scalar::String(warehouse_node.id.clone()).as_ref());
-            clusters.push(Scalar::String(warehouse_node.cluster_id.clone()).as_ref());
-            nodes_type.push(
-                Scalar::String(match warehouse_node.node_type {
-                    NodeType::SelfManaged => String::from("SelfManaged"),
-                    NodeType::SystemManaged => String::from("SystemManaged"),
-                })
-                .as_ref(),
-            );
-        }
+            for warehouse_node in warehouse_nodes {
+                nodes_id.push(Scalar::String(warehouse_node.id.clone()).as_ref());
+                clusters.push(Scalar::String(warehouse_node.cluster_id.clone()).as_ref());
+                nodes_type.push(
+                    Scalar::String(match warehouse_node.node_type {
+                        NodeType::SelfManaged => String::from("SelfManaged"),
+                        NodeType::SystemManaged => String::from("SystemManaged"),
+                    })
+                    .as_ref(),
+                );
+            }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            clusters.build(),
-            nodes_id.build(),
-            nodes_type.build(),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                clusters.build(),
+                nodes_id.build(),
+                nodes_type.build(),
+            ])])
+        })
     }
 }

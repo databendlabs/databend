@@ -55,11 +55,11 @@ pub struct UnionAll {
 impl UnionAll {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for (idx, _) in &self.left_outputs {
+        for (idx, expr) in self.left_outputs.iter().chain(&self.right_outputs) {
             used_columns.insert(*idx);
-        }
-        for (idx, _) in &self.right_outputs {
-            used_columns.insert(*idx);
+            if let Some(expr) = expr {
+                expr.collect_used_columns(&mut used_columns);
+            }
         }
         Ok(used_columns)
     }
@@ -255,18 +255,34 @@ impl Operator for UnionAll {
         2
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(
+            self.left_outputs
+                .iter()
+                .chain(&self.right_outputs)
+                .filter_map(|(_, expr)| expr.as_ref()),
+        )
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
-        // Derive output columns
         let output_columns = self.output_indexes.iter().cloned().collect();
         // Derive outer columns
-        let mut outer_columns = left_prop.outer_columns.clone();
-        outer_columns = outer_columns
-            .union(&right_prop.outer_columns)
+        let available_columns = left_prop
+            .output_columns
+            .union(&right_prop.output_columns)
             .cloned()
             .collect();
+        let outer_columns = self.derive_outer_columns(
+            left_prop
+                .outer_columns
+                .union(&right_prop.outer_columns)
+                .cloned()
+                .collect(),
+            &available_columns,
+        );
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;

@@ -56,52 +56,57 @@ impl Interpreter for VacuumVirtualColumnInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
 
-        table.check_mutable()?;
+            table.check_mutable()?;
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-                &LockTableOption::LockWithRetry,
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?;
+
+            let mut build_res = PipelineBuildResult::create();
+            let vacuum_result = do_vacuum_virtual_column(
+                self.ctx.clone(),
+                fuse_table,
+                &mut build_res.main_pipeline,
             )
             .await?;
 
-        let mut build_res = PipelineBuildResult::create();
-        let vacuum_result =
-            do_vacuum_virtual_column(self.ctx.clone(), fuse_table, &mut build_res.main_pipeline)
-                .await?;
+            execute_complete_pipeline(self.ctx.clone(), build_res).await?;
 
-        execute_complete_pipeline(self.ctx.clone(), build_res).await?;
-
-        let cleanup_removed_files = if vacuum_result.need_cleanup {
-            if vacuum_result.need_commit {
-                let latest_table = fuse_table.refresh(self.ctx.as_ref()).await?;
-                let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
-                cleanup_vacuum_virtual_column_files(self.ctx.clone(), latest_fuse_table).await?
+            let cleanup_removed_files = if vacuum_result.need_cleanup {
+                if vacuum_result.need_commit {
+                    let latest_table = fuse_table.refresh(self.ctx.as_ref()).await?;
+                    let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
+                    cleanup_vacuum_virtual_column_files(self.ctx.clone(), latest_fuse_table).await?
+                } else {
+                    cleanup_vacuum_virtual_column_files(self.ctx.clone(), fuse_table).await?
+                }
             } else {
-                cleanup_vacuum_virtual_column_files(self.ctx.clone(), fuse_table).await?
-            }
-        } else {
-            0
-        };
+                0
+            };
 
-        let removed_files = vacuum_result.removed_files + cleanup_removed_files;
-        drop(lock_guard);
+            let removed_files = vacuum_result.removed_files + cleanup_removed_files;
+            drop(lock_guard);
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            UInt64Type::from_data(vec![removed_files]),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(vec![removed_files]),
+            ])])
+        })
     }
 }
 

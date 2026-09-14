@@ -98,30 +98,32 @@ impl Interpreter for ShowCreateTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
+            let table = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
+                .await?;
 
-        if is_materialized_view_engine(table.engine()) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
-                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
-            )));
-        }
+            if is_materialized_view_engine(table.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
+                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                )));
+            }
 
-        Self::build_result(
-            self.ctx.as_ref(),
-            catalog.as_ref(),
-            &tenant,
-            &self.plan.database,
-            table.as_ref(),
-            self.plan.with_quoted_ident,
-        )
-        .await
+            Self::build_result(
+                self.ctx.as_ref(),
+                catalog.as_ref(),
+                &tenant,
+                &self.plan.database,
+                table.as_ref(),
+                self.plan.with_quoted_ident,
+            )
+            .await
+        })
     }
 }
 
@@ -170,7 +172,7 @@ impl ShowCreateTableInterpreter {
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
         match table.engine() {
-            STREAM_ENGINE => Self::show_create_stream_query(catalog, table).await,
+            STREAM_ENGINE => Self::show_create_stream_query(catalog, tenant, table).await,
             VIEW_ENGINE => Self::show_create_view_query(table, database),
             MATERIALIZED_VIEW_ENGINE => {
                 Self::show_create_materialized_view_query(
@@ -389,7 +391,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(&Self::format_table_options(table_info.options()));
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" {
+        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
@@ -500,9 +502,13 @@ impl ShowCreateTableInterpreter {
         Ok(create_sql)
     }
 
-    async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {
+    async fn show_create_stream_query(
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        table: &dyn Table,
+    ) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
-        let source_database_name = stream_table.source_database_name(catalog).await?;
+        let source_database_name = stream_table.source_database_name(catalog, tenant).await?;
         let source_table_name = stream_table.source_table_name(catalog).await?;
         let mode = stream_table.mode();
 

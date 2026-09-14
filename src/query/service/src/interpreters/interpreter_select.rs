@@ -297,100 +297,104 @@ impl Interpreter for SelectInterpreter {
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[fastrace::trace(name = "SelectInterpreter::execute2")]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.attach_tables_to_ctx();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            self.attach_tables_to_ctx();
 
-        self.ctx.set_status_info("Preparing execution plan");
+            self.ctx.set_status_info("Preparing execution plan");
 
-        // 0. Need to build physical plan first to get the partitions.
-        let physical_plan = self.build_physical_plan().await?;
+            // 0. Need to build physical plan first to get the partitions.
+            let physical_plan = self.build_physical_plan().await?;
 
-        let query_plan = {
-            let metadata = self.metadata.read();
-            physical_plan
-                .format(&metadata, Default::default())?
-                .format_pretty()?
-        };
-
-        info!("Query physical plan:\n{}", query_plan);
-
-        if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.result_cache_state().cacheable()
-            && self.formatted_ast.is_some()
-        {
-            let extras = self.ctx.result_cache_state().cache_key_extras();
-            let key_source = if extras.is_empty() {
-                self.formatted_ast.as_ref().unwrap().clone()
-            } else {
-                format!(
-                    "{}|{}",
-                    self.formatted_ast.as_ref().unwrap(),
-                    extras.join("|")
-                )
+            let query_plan = {
+                let metadata = self.metadata.read();
+                physical_plan
+                    .format(&metadata, Default::default())?
+                    .format_pretty()?
             };
-            let key = gen_result_cache_key(&key_source);
-            // 1. Try to get result from cache.
-            let kv_store = UserApiProvider::instance().get_meta_store_client();
 
-            // Execute `select * from result_scan(last_query_id)` multiple times
-            // should return same result. Please consider the following scenarios:
-            // 1) select * from t1;
-            // 2) select * from result_scan(last_query_id()); --> returns result same as line 1
-            // 3) insert into t1 values(2);
-            // 4) select * from t1; --> result changed since we insert new data.
-            // 5) select * from result_scan(last_query_id()); --> result same as line 2 cause cache
-            // If we read cache for 5, we will see it returns same result as 1 and 2 cause the
-            // generated result_cache_key are same for this statement, so here we fetch the previous
-            // meta_key through related query_id and set this meta_key with current query_id.
-            if let Some(t) = self.result_scan_table()? {
-                let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
-                let meta_key = self.ctx.get_result_cache_key(&arg_query_id);
-                if let Some(meta_key) = meta_key {
+            info!("Query physical plan:\n{}", query_plan);
+
+            if self.ctx.get_settings().get_enable_query_result_cache()?
+                && self.ctx.result_cache_state().cacheable()
+                && self.formatted_ast.is_some()
+            {
+                let extras = self.ctx.result_cache_state().cache_key_extras();
+                let key_source = if extras.is_empty() {
+                    self.formatted_ast.as_ref().unwrap().clone()
+                } else {
+                    format!(
+                        "{}|{}",
+                        self.formatted_ast.as_ref().unwrap(),
+                        extras.join("|")
+                    )
+                };
+                let key = gen_result_cache_key(&key_source);
+                // 1. Try to get result from cache.
+                let kv_store = UserApiProvider::instance().get_meta_store_client();
+
+                // Execute `select * from result_scan(last_query_id)` multiple times
+                // should return same result. Please consider the following scenarios:
+                // 1) select * from t1;
+                // 2) select * from result_scan(last_query_id()); --> returns result same as line 1
+                // 3) insert into t1 values(2);
+                // 4) select * from t1; --> result changed since we insert new data.
+                // 5) select * from result_scan(last_query_id()); --> result same as line 2 cause cache
+                // If we read cache for 5, we will see it returns same result as 1 and 2 cause the
+                // generated result_cache_key are same for this statement, so here we fetch the previous
+                // meta_key through related query_id and set this meta_key with current query_id.
+                if let Some(t) = self.result_scan_table()? {
+                    let arg_query_id = parse_result_scan_args(&t.table_args().unwrap())?;
+                    let meta_key = self.ctx.get_result_cache_key(&arg_query_id);
+                    if let Some(meta_key) = meta_key {
+                        self.ctx
+                            .set_query_id_result_cache(self.ctx.get_id(), meta_key);
+                    }
+                    return self.build_pipeline(physical_plan).await;
+                }
+
+                let cache_reader = ResultCacheReader::create(
+                    self.ctx.clone(),
+                    &key,
+                    self.formatted_ast.as_ref().unwrap(),
+                    kv_store.clone(),
                     self.ctx
-                        .set_query_id_result_cache(self.ctx.get_id(), meta_key);
-                }
-                return self.build_pipeline(physical_plan).await;
-            }
+                        .get_settings()
+                        .get_query_result_cache_allow_inconsistent()?,
+                );
 
-            let cache_reader = ResultCacheReader::create(
-                self.ctx.clone(),
-                &key,
-                self.formatted_ast.as_ref().unwrap(),
-                kv_store.clone(),
-                self.ctx
-                    .get_settings()
-                    .get_query_result_cache_allow_inconsistent()?,
-            );
-
-            // 2. Check the cache.
-            match cache_reader.try_read_cached_result().await {
-                Ok(Some(blocks)) => {
-                    // 2.0 update query_id -> result_cache_meta_key in session.
-                    self.ctx
-                        .set_query_id_result_cache(self.ctx.get_id(), cache_reader.get_meta_key());
-                    // 2.1 If found, return the result directly.
-                    return PipelineBuildResult::from_blocks(blocks);
-                }
-                Ok(None) => {
-                    let mut build_res = self.build_pipeline(physical_plan).await?;
-                    // 2.2 If not found result in cache, add pipelines to write the result to cache.
-                    let schema = infer_table_schema(&self.bind_context.output_schema())?;
-                    self.add_result_cache(
-                        &key,
-                        self.formatted_ast.as_ref().unwrap().clone(),
-                        schema,
-                        &mut build_res.main_pipeline,
-                        kv_store,
-                    )?;
-                    return Ok(build_res);
-                }
-                Err(e) => {
-                    // 2.3 If an error occurs, turn back to the normal pipeline.
-                    error!("Failed to read query result cache: {}", e);
+                // 2. Check the cache.
+                match cache_reader.try_read_cached_result().await {
+                    Ok(Some(blocks)) => {
+                        // 2.0 update query_id -> result_cache_meta_key in session.
+                        self.ctx.set_query_id_result_cache(
+                            self.ctx.get_id(),
+                            cache_reader.get_meta_key(),
+                        );
+                        // 2.1 If found, return the result directly.
+                        return PipelineBuildResult::from_blocks(blocks);
+                    }
+                    Ok(None) => {
+                        let mut build_res = self.build_pipeline(physical_plan).await?;
+                        // 2.2 If not found result in cache, add pipelines to write the result to cache.
+                        let schema = infer_table_schema(&self.bind_context.output_schema())?;
+                        self.add_result_cache(
+                            &key,
+                            self.formatted_ast.as_ref().unwrap().clone(),
+                            schema,
+                            &mut build_res.main_pipeline,
+                            kv_store,
+                        )?;
+                        return Ok(build_res);
+                    }
+                    Err(e) => {
+                        // 2.3 If an error occurs, turn back to the normal pipeline.
+                        error!("Failed to read query result cache: {}", e);
+                    }
                 }
             }
-        }
-        // Not use query cache.
-        self.build_pipeline(physical_plan).await
+            // Not use query cache.
+            self.build_pipeline(physical_plan).await
+        })
     }
 }

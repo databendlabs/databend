@@ -50,12 +50,14 @@ impl Interpreter for ShowTasksInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
         let tasks = TaskInterpreterManager::build(self.ctx.as_ref())?
             .show_tasks(&self.ctx, &self.plan)
             .await?;
 
         let result = parse_tasks_to_datablock(tasks)?;
         PipelineBuildResult::from_blocks(vec![result])
+        })
     }
 }

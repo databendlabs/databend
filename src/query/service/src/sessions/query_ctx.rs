@@ -34,7 +34,6 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use chrono::Utc;
 use chrono_tz::Tz;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
@@ -614,8 +613,8 @@ impl QueryContext {
         self.attach_query_lineage((!lineage.targets.is_empty()).then_some(lineage));
     }
 
-    pub fn get_created_time(&self) -> SystemTime {
-        self.shared.created_time
+    pub fn get_query_created_time(&self) -> SystemTime {
+        self.shared.query_created_time
     }
 
     pub fn set_finish_time(&self, time: SystemTime) {

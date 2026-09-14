@@ -53,30 +53,32 @@ impl Interpreter for DropAllTableRowAccessPoliciesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), RowAccessPolicy)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), RowAccessPolicy)?;
 
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
 
-        let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        table.check_mutable()?;
+            let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+            table.check_mutable()?;
 
-        let table_info = table.get_table_info();
-        let table_id = table_info.ident.table_id;
+            let table_info = table.get_table_info();
+            let table_id = table_info.ident.table_id;
 
-        if let Some(row_access_policy) = &table_info.meta.row_access_policy_columns_ids {
-            let req = SetTableRowAccessPolicyReq {
-                tenant: self.ctx.get_tenant(),
-                table_id,
-                action: SetSecurityPolicyAction::Unset(row_access_policy.policy_id),
-            };
-            let _resp = catalog.set_table_row_access_policy(req).await?;
-        }
+            if let Some(row_access_policy) = &table_info.meta.row_access_policy_columns_ids {
+                let req = SetTableRowAccessPolicyReq {
+                    tenant: self.ctx.get_tenant(),
+                    table_id,
+                    action: SetSecurityPolicyAction::Unset(row_access_policy.policy_id),
+                };
+                let _resp = catalog.set_table_row_access_policy(req).await?;
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

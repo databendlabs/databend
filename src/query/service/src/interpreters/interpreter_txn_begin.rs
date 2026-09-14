@@ -48,8 +48,10 @@ impl Interpreter for BeginInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        self.txn_manager.lock().begin();
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            self.txn_manager.lock().begin();
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

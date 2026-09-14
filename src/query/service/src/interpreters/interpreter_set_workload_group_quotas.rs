@@ -53,27 +53,29 @@ impl Interpreter for SetWorkloadGroupQuotasInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let mut workload_quotas = HashMap::with_capacity(self.plan.quotas.len());
+            let mut workload_quotas = HashMap::with_capacity(self.plan.quotas.len());
 
-        for (key, value) in &self.plan.quotas {
-            workload_quotas.insert(key.clone(), to_quota_value(value));
-        }
+            for (key, value) in &self.plan.quotas {
+                workload_quotas.insert(key.clone(), to_quota_value(value));
+            }
 
-        let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
-        workload_manager
-            .set_quotas(self.plan.name.clone(), workload_quotas)
-            .await?;
+            let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
+            workload_manager
+                .set_quotas(self.plan.name.clone(), workload_quotas)
+                .await?;
 
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "set_workload_quotas", &self.plan))?
-        );
-        Ok(PipelineBuildResult::create())
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "set_workload_quotas", &self.plan))?
+            );
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

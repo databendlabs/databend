@@ -51,7 +51,7 @@ impl InterpreterMetrics {
 
     fn record_query_detail(ctx: &QueryContext, labels: &Vec<(&'static str, String)>) {
         let query_duration_ms = SystemTime::now()
-            .duration_since(ctx.get_created_time())
+            .duration_since(ctx.get_query_created_time())
             .map(|d| d.as_micros() as f64 / 1000.0)
             .unwrap_or(0.0);
 

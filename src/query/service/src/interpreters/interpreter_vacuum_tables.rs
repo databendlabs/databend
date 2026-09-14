@@ -49,14 +49,16 @@ impl Interpreter for VacuumTablesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        vacuum_tables(&table_ctx, catalog.as_ref(), self.plan.database.as_deref()).await?;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+            vacuum_tables(&table_ctx, catalog.as_ref(), self.plan.database.as_deref()).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

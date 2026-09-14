@@ -174,8 +174,16 @@ impl Table for InferSchemaTable {
                 UriLocation::from_uri(self.args_parsed.location.clone(), BTreeMap::default())?;
             FileLocation::Uri(uri)
         };
+        let file_format = match &self.args_parsed.file_format {
+            Some(name) => {
+                let tenant = ctx.get_tenant();
+                let user_api = UserApiProvider::instance();
+                Some(resolve_file_format(&tenant, &user_api, name).await?)
+            }
+            None => None,
+        };
         let (stage_info, path) = stage_resolver
-            .resolve_file_location(&file_location, StagePathAccess::Read)
+            .resolve_data_file_location(&file_location, StagePathAccess::Read, file_format)
             .await?;
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
@@ -204,14 +212,7 @@ impl Table for InferSchemaTable {
             false,
         )?;
 
-        let file_format_params = match &self.args_parsed.file_format {
-            Some(f) => {
-                let tenant = ctx.get_tenant();
-                let user_api = UserApiProvider::instance();
-                resolve_file_format(&tenant, &user_api, f).await?
-            }
-            None => stage_info.file_format_params.clone(),
-        };
+        let file_format_params = stage_info.file_format_params.clone();
         let maybe_field_delimiter = match &file_format_params {
             FileFormatParams::Csv(fmt) => Some(("CSV", fmt.field_delimiter.as_str())),
             FileFormatParams::Text(fmt) => Some(("TEXT", fmt.field_delimiter.as_str())),

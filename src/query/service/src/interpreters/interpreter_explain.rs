@@ -101,239 +101,241 @@ impl Interpreter for ExplainInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let options = FormatOptions {
-            verbose: self.config.verbose,
-        };
-        let blocks = match &self.kind {
-            ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
-            ExplainKind::Plan => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    formatted_ast,
-                    ..
-                } => {
-                    self.explain_query(s_expr, metadata, bind_context, formatted_ast)
-                        .await?
-                }
-                Plan::Insert(insert_plan) => {
-                    let stat_context = StatContext::new(self.ctx.get_function_context()?);
-                    insert_plan.explain(options, &stat_context).await?
-                }
-                Plan::Replace(replace_plan) => {
-                    let stat_context = StatContext::new(self.ctx.get_function_context()?);
-                    replace_plan.explain(options, &stat_context).await?
-                }
-                Plan::CreateTable(plan) => match &plan.as_select {
-                    Some(box Plan::Query {
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let options = FormatOptions {
+                verbose: self.config.verbose,
+            };
+            let blocks = match &self.kind {
+                ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
+                ExplainKind::Plan => match &self.plan {
+                    Plan::Query {
                         s_expr,
                         metadata,
                         bind_context,
                         formatted_ast,
                         ..
-                    }) => {
-                        let mut res =
-                            vec![DataBlock::new_from_columns(vec![StringType::from_data(
-                                vec!["CreateTableAsSelect:", ""],
-                            )])];
-                        res.extend(
-                            self.explain_query(s_expr, metadata, bind_context, formatted_ast)
-                                .await?,
-                        );
-                        vec![DataBlock::concat(&res)?]
+                    } => {
+                        self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                            .await?
+                    }
+                    Plan::Insert(insert_plan) => {
+                        let stat_context = StatContext::new(self.ctx.get_function_context()?);
+                        insert_plan.explain(options, &stat_context).await?
+                    }
+                    Plan::Replace(replace_plan) => {
+                        let stat_context = StatContext::new(self.ctx.get_function_context()?);
+                        replace_plan.explain(options, &stat_context).await?
+                    }
+                    Plan::CreateTable(plan) => match &plan.as_select {
+                        Some(box Plan::Query {
+                            s_expr,
+                            metadata,
+                            bind_context,
+                            formatted_ast,
+                            ..
+                        }) => {
+                            let mut res =
+                                vec![DataBlock::new_from_columns(vec![StringType::from_data(
+                                    vec!["CreateTableAsSelect:", ""],
+                                )])];
+                            res.extend(
+                                self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                                    .await?,
+                            );
+                            vec![DataBlock::concat(&res)?]
+                        }
+                        _ => self.explain_plan(&self.plan)?,
+                    },
+                    Plan::InsertMultiTable(plan) => {
+                        let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                            self.ctx.clone(),
+                            *plan.clone(),
+                        )?
+                        .build_physical_plan(true)
+                        .await?;
+                        self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
+                            .await?
+                    }
+                    Plan::DataMutation {
+                        s_expr,
+                        schema,
+                        metadata,
+                    } => {
+                        let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                        let interpreter = MutationInterpreter::try_create(
+                            self.ctx.clone(),
+                            *s_expr.clone(),
+                            schema.clone(),
+                            metadata.clone(),
+                        )?;
+                        let mut plan = interpreter.build_physical_plan(&mutation, true).await?;
+                        self.inject_pruned_partitions_stats(&mut plan, metadata)?;
+                        self.explain_physical_plan(&plan, metadata, &None).await?
                     }
                     _ => self.explain_plan(&self.plan)?,
                 },
-                Plan::InsertMultiTable(plan) => {
-                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
-                        self.ctx.clone(),
-                        *plan.clone(),
-                    )?
-                    .build_physical_plan(true)
-                    .await?;
-                    self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
-                        .await?
-                }
-                Plan::DataMutation {
-                    s_expr,
-                    schema,
-                    metadata,
-                } => {
-                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
-                    let interpreter = MutationInterpreter::try_create(
-                        self.ctx.clone(),
-                        *s_expr.clone(),
-                        schema.clone(),
-                        metadata.clone(),
-                    )?;
-                    let mut plan = interpreter.build_physical_plan(&mutation, true).await?;
-                    self.inject_pruned_partitions_stats(&mut plan, metadata)?;
-                    self.explain_physical_plan(&plan, metadata, &None).await?
-                }
-                _ => self.explain_plan(&self.plan)?,
-            },
 
-            ExplainKind::Join => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } => {
-                    let ctx = self.ctx.clone();
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
-                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
-
-                    let metadata = metadata.read();
-                    let mut context = FormatContext {
-                        profs: HashMap::new(),
-                        metadata: &metadata,
-                        scan_id_to_runtime_filters: HashMap::new(),
-                        runtime_filter_reports: HashMap::new(),
-                    };
-
-                    let formatter = plan.formatter()?;
-                    let format_node = formatter.format_join(&mut context)?;
-                    let result = format_node.format_pretty()?;
-                    let line_split_result: Vec<&str> = result.lines().collect();
-                    let formatted_plan = StringType::from_data(line_split_result);
-                    vec![DataBlock::new_from_columns(vec![formatted_plan])]
-                }
-                _ => Err(ErrorCode::Unimplemented(
-                    "Unsupported EXPLAIN JOIN statement",
-                ))?,
-            },
-
-            ExplainKind::AnalyzePlan | ExplainKind::Graphical => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ignore_result,
-                    ..
-                } => {
-                    self.explain_analyze(
+                ExplainKind::Join => match &self.plan {
+                    Plan::Query {
                         s_expr,
                         metadata,
-                        bind_context.column_set(),
-                        None,
-                        *ignore_result,
-                    )
-                    .await?
-                }
-                Plan::DataMutation { s_expr, .. } => {
-                    let plan: Mutation = s_expr.plan().clone().try_into()?;
-                    let mutation_build_info =
-                        build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
-                    self.explain_analyze(
-                        s_expr.child(0)?,
-                        &plan.metadata,
-                        *plan.required_columns.clone(),
-                        Some(mutation_build_info),
-                        true,
-                    )
-                    .await?
-                }
-                _ => Err(ErrorCode::Unimplemented(
-                    "Unsupported EXPLAIN ANALYZE statement",
-                ))?,
-            },
+                        bind_context,
+                        ..
+                    } => {
+                        let ctx = self.ctx.clone();
+                        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
+                        let plan = builder.build(s_expr, bind_context.column_set()).await?;
 
-            ExplainKind::Pipeline => {
-                // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
-                // don't take real actions. for now we fix #13657 like below.
-                let previous_query_lineage = self.ctx.get_query_lineage();
-                let mut pipeline = match &self.plan {
-                    Plan::Query { .. } | Plan::DataMutation { .. } => {
-                        let result = async {
-                            let interpreter =
-                                InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
-                            interpreter.execute2().await
+                        let metadata = metadata.read();
+                        let mut context = FormatContext {
+                            profs: HashMap::new(),
+                            metadata: &metadata,
+                            scan_id_to_runtime_filters: HashMap::new(),
+                            runtime_filter_reports: HashMap::new(),
+                        };
+
+                        let formatter = plan.formatter()?;
+                        let format_node = formatter.format_join(&mut context)?;
+                        let result = format_node.format_pretty()?;
+                        let line_split_result: Vec<&str> = result.lines().collect();
+                        let formatted_plan = StringType::from_data(line_split_result);
+                        vec![DataBlock::new_from_columns(vec![formatted_plan])]
+                    }
+                    _ => Err(ErrorCode::Unimplemented(
+                        "Unsupported EXPLAIN JOIN statement",
+                    ))?,
+                },
+
+                ExplainKind::AnalyzePlan | ExplainKind::Graphical => match &self.plan {
+                    Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        ignore_result,
+                        ..
+                    } => {
+                        self.explain_analyze(
+                            s_expr,
+                            metadata,
+                            bind_context.column_set(),
+                            None,
+                            *ignore_result,
+                        )
+                        .await?
+                    }
+                    Plan::DataMutation { s_expr, .. } => {
+                        let plan: Mutation = s_expr.plan().clone().try_into()?;
+                        let mutation_build_info =
+                            build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
+                        self.explain_analyze(
+                            s_expr.child(0)?,
+                            &plan.metadata,
+                            *plan.required_columns.clone(),
+                            Some(mutation_build_info),
+                            true,
+                        )
+                        .await?
+                    }
+                    _ => Err(ErrorCode::Unimplemented(
+                        "Unsupported EXPLAIN ANALYZE statement",
+                    ))?,
+                },
+
+                ExplainKind::Pipeline => {
+                    // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
+                    // don't take real actions. for now we fix #13657 like below.
+                    let previous_query_lineage = self.ctx.get_query_lineage();
+                    let mut pipeline = match &self.plan {
+                        Plan::Query { .. } | Plan::DataMutation { .. } => {
+                            let result = async {
+                                let interpreter =
+                                    InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
+                                interpreter.execute2().await
+                            }
+                            .await;
+                            self.ctx.attach_query_lineage(previous_query_lineage);
+                            result?
                         }
-                        .await;
-                        self.ctx.attach_query_lineage(previous_query_lineage);
-                        result?
+                        _ => {
+                            self.ctx.attach_query_lineage(previous_query_lineage);
+                            PipelineBuildResult::create()
+                        }
+                    };
+
+                    // The explain pipeline does not require executing on_init and on_finished.
+                    let _ = pipeline.main_pipeline.take_on_init();
+                    let _ = pipeline.main_pipeline.take_on_finished();
+
+                    self.ctx
+                        .get_exchange_manager()
+                        .on_finished_query(&self.ctx.get_id(), None);
+
+                    for pipeline in &mut pipeline.sources_pipelines {
+                        let _ = pipeline.take_on_init();
+                        let _ = pipeline.take_on_finished();
+                    }
+
+                    Self::format_pipeline(&pipeline)
+                }
+
+                ExplainKind::Fragments => match &self.plan {
+                    Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        ..
+                    } => {
+                        self.explain_fragments(
+                            *s_expr.clone(),
+                            metadata.clone(),
+                            bind_context.column_set(),
+                        )
+                        .await?
+                    }
+                    Plan::DataMutation { s_expr, schema, .. } => {
+                        self.explain_merge_fragments(*s_expr.clone(), schema.clone())
+                            .await?
+                    }
+                    Plan::InsertMultiTable(plan) => {
+                        let physical_plan = InsertMultiTableInterpreter::try_create_static(
+                            self.ctx.clone(),
+                            *plan.clone(),
+                        )?
+                        .build_physical_plan(true)
+                        .await?;
+                        self.explain_physical_fragments(physical_plan, plan.meta_data.clone())
+                            .await?
                     }
                     _ => {
-                        self.ctx.attach_query_lineage(previous_query_lineage);
-                        PipelineBuildResult::create()
+                        return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                     }
-                };
+                },
 
-                // The explain pipeline does not require executing on_init and on_finished.
-                let _ = pipeline.main_pipeline.take_on_init();
-                let _ = pipeline.main_pipeline.take_on_finished();
-
-                self.ctx
-                    .get_exchange_manager()
-                    .on_finished_query(&self.ctx.get_id(), None);
-
-                for pipeline in &mut pipeline.sources_pipelines {
-                    let _ = pipeline.take_on_init();
-                    let _ = pipeline.take_on_finished();
+                ExplainKind::Graph => {
+                    return Err(ErrorCode::Unimplemented(
+                        "ExplainKind graph is unimplemented",
+                    ));
                 }
 
-                Self::format_pipeline(&pipeline)
-            }
-
-            ExplainKind::Fragments => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } => {
-                    self.explain_fragments(
-                        *s_expr.clone(),
-                        metadata.clone(),
-                        bind_context.column_set(),
-                    )
-                    .await?
+                ExplainKind::Ast(display_string)
+                | ExplainKind::Syntax(display_string)
+                | ExplainKind::Memo(display_string) => {
+                    let line_split_result: Vec<&str> = display_string.lines().collect();
+                    let column = StringType::from_data(line_split_result);
+                    vec![DataBlock::new_from_columns(vec![column])]
                 }
-                Plan::DataMutation { s_expr, schema, .. } => {
-                    self.explain_merge_fragments(*s_expr.clone(), schema.clone())
-                        .await?
+
+                ExplainKind::Raw
+                | ExplainKind::Optimized
+                | ExplainKind::Decorrelated
+                | ExplainKind::Perf { .. } => {
+                    unreachable!()
                 }
-                Plan::InsertMultiTable(plan) => {
-                    let physical_plan = InsertMultiTableInterpreter::try_create_static(
-                        self.ctx.clone(),
-                        *plan.clone(),
-                    )?
-                    .build_physical_plan(true)
-                    .await?;
-                    self.explain_physical_fragments(physical_plan, plan.meta_data.clone())
-                        .await?
-                }
-                _ => {
-                    return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
-                }
-            },
+            };
 
-            ExplainKind::Graph => {
-                return Err(ErrorCode::Unimplemented(
-                    "ExplainKind graph is unimplemented",
-                ));
-            }
-
-            ExplainKind::Ast(display_string)
-            | ExplainKind::Syntax(display_string)
-            | ExplainKind::Memo(display_string) => {
-                let line_split_result: Vec<&str> = display_string.lines().collect();
-                let column = StringType::from_data(line_split_result);
-                vec![DataBlock::new_from_columns(vec![column])]
-            }
-
-            ExplainKind::Raw
-            | ExplainKind::Optimized
-            | ExplainKind::Decorrelated
-            | ExplainKind::Perf { .. } => {
-                unreachable!()
-            }
-        };
-
-        PipelineBuildResult::from_blocks(blocks)
+            PipelineBuildResult::from_blocks(blocks)
+        })
     }
 }
 

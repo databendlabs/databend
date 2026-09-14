@@ -68,63 +68,68 @@ impl Interpreter for GrantShareInterpreter {
         true
     }
 
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        match (&self.plan.privilege, &self.plan.object) {
-            (ShareGrantObjectPrivilege::Usage, ShareGrantObject::Database { database }) => {
-                let db = provider_database(&self.ctx, &self.plan.tenant, database).await?;
-                ensure_database_can_be_shared(db.as_ref())?;
-                let grant = ShareGrantDatabase {
-                    database: database.clone(),
-                    database_id: db.get_db_info().database_id.db_id,
-                    database_meta_seq: db.get_db_info().meta.seq,
-                };
-                validate_share_database_grant(self.ctx.clone(), &grant).await?;
-                share_mgr()
-                    .grant_database(&self.plan.tenant, &self.plan.share, grant)
-                    .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            match (&self.plan.privilege, &self.plan.object) {
+                (ShareGrantObjectPrivilege::Usage, ShareGrantObject::Database { database }) => {
+                    let db = provider_database(&self.ctx, &self.plan.tenant, database).await?;
+                    ensure_database_can_be_shared(db.as_ref())?;
+                    let grant = ShareGrantDatabase {
+                        database: database.clone(),
+                        database_id: db.get_db_info().database_id.db_id,
+                        database_meta_seq: db.get_db_info().meta.seq,
+                    };
+                    validate_share_database_grant(self.ctx.clone(), &grant).await?;
+                    share_mgr()
+                        .grant_database(&self.plan.tenant, &self.plan.share, grant)
+                        .await?;
+                }
+                (
+                    ShareGrantObjectPrivilege::Select,
+                    ShareGrantObject::Table { database, table },
+                ) => {
+                    let database = self.resolve_table_database(database.as_deref())?;
+                    let db = provider_database(&self.ctx, &self.plan.tenant, &database).await?;
+                    ensure_database_can_be_shared(db.as_ref())?;
+                    let table_ref = db.get_table(table).await?;
+                    ensure_provider_table_can_be_shared(&table_ref.get_table_info().meta)?;
+                    let storage_params = table_ref
+                        .get_table_info()
+                        .meta
+                        .storage_params
+                        .clone()
+                        .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
+                    let grant = ShareGrantTable {
+                        database,
+                        database_id: db.get_db_info().database_id.db_id,
+                        database_meta_seq: db.get_db_info().meta.seq,
+                        table: table.clone(),
+                        table_id: table_ref.get_id(),
+                        table_meta_seq: table_ref.get_table_info().ident.seq,
+                        storage_params: storage_params.without_credentials(),
+                    };
+                    validate_share_table_grant(self.ctx.clone(), &grant).await?;
+                    let manager = share_mgr();
+                    let connection = manager
+                        .get_connection_name(&self.plan.tenant, &self.plan.share)
+                        .await?;
+                    validate_share_management_for_connection(self.ctx.clone(), Some(&connection))
+                        .await?;
+                    resolve_share_storage_params(&self.plan.tenant, &connection, storage_params)
+                        .await?;
+                    manager
+                        .grant_table(&self.plan.tenant, &self.plan.share, grant, connection)
+                        .await?;
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "Only USAGE ON DATABASE and SELECT ON TABLE can be granted to a share",
+                    ));
+                }
             }
-            (ShareGrantObjectPrivilege::Select, ShareGrantObject::Table { database, table }) => {
-                let database = self.resolve_table_database(database.as_deref())?;
-                let db = provider_database(&self.ctx, &self.plan.tenant, &database).await?;
-                ensure_database_can_be_shared(db.as_ref())?;
-                let table_ref = db.get_table(table).await?;
-                ensure_provider_table_can_be_shared(&table_ref.get_table_info().meta)?;
-                let storage_params = table_ref
-                    .get_table_info()
-                    .meta
-                    .storage_params
-                    .clone()
-                    .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
-                let grant = ShareGrantTable {
-                    database,
-                    database_id: db.get_db_info().database_id.db_id,
-                    database_meta_seq: db.get_db_info().meta.seq,
-                    table: table.clone(),
-                    table_id: table_ref.get_id(),
-                    table_meta_seq: table_ref.get_table_info().ident.seq,
-                    storage_params: storage_params.without_credentials(),
-                };
-                validate_share_table_grant(self.ctx.clone(), &grant).await?;
-                let manager = share_mgr();
-                let connection = manager
-                    .get_connection_name(&self.plan.tenant, &self.plan.share)
-                    .await?;
-                validate_share_management_for_connection(self.ctx.clone(), Some(&connection))
-                    .await?;
-                resolve_share_storage_params(&self.plan.tenant, &connection, storage_params)
-                    .await?;
-                manager
-                    .grant_table(&self.plan.tenant, &self.plan.share, grant, connection)
-                    .await?;
-            }
-            _ => {
-                return Err(ErrorCode::BadArguments(
-                    "Only USAGE ON DATABASE and SELECT ON TABLE can be granted to a share",
-                ));
-            }
-        }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 
@@ -149,49 +154,59 @@ impl Interpreter for RevokeShareInterpreter {
         true
     }
 
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let manager = share_mgr();
-        match (&self.plan.privilege, &self.plan.object) {
-            (ShareGrantObjectPrivilege::Usage, ShareGrantObject::Database { database }) => {
-                let current_database_id =
-                    provider_database_id_if_exists(&self.ctx, &self.plan.tenant, database).await?;
-                if let Some(target) = manager
-                    .prepare_revoke_database(
-                        &self.plan.tenant,
-                        &self.plan.share,
-                        current_database_id,
-                    )
-                    .await?
-                {
-                    validate_share_revoke_target(self.ctx.clone(), &target).await?;
-                    manager
-                        .revoke_share_object(&self.plan.tenant, &self.plan.share, target)
-                        .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let manager = share_mgr();
+            match (&self.plan.privilege, &self.plan.object) {
+                (ShareGrantObjectPrivilege::Usage, ShareGrantObject::Database { database }) => {
+                    let current_database_id =
+                        provider_database_id_if_exists(&self.ctx, &self.plan.tenant, database)
+                            .await?;
+                    if let Some(target) = manager
+                        .prepare_revoke_database(
+                            &self.plan.tenant,
+                            &self.plan.share,
+                            current_database_id,
+                        )
+                        .await?
+                    {
+                        validate_share_revoke_target(self.ctx.clone(), &target).await?;
+                        manager
+                            .revoke_share_object(&self.plan.tenant, &self.plan.share, target)
+                            .await?;
+                    }
+                }
+                (
+                    ShareGrantObjectPrivilege::Select,
+                    ShareGrantObject::Table { database, table },
+                ) => {
+                    let database = resolve_table_database(&self.ctx, database.as_deref())?;
+                    let current_object_ids =
+                        provider_table_id_if_exists(&self.ctx, &self.plan.tenant, &database, table)
+                            .await?;
+                    if let Some(target) = manager
+                        .prepare_revoke_table(
+                            &self.plan.tenant,
+                            &self.plan.share,
+                            current_object_ids,
+                        )
+                        .await?
+                    {
+                        validate_share_revoke_target(self.ctx.clone(), &target).await?;
+                        manager
+                            .revoke_share_object(&self.plan.tenant, &self.plan.share, target)
+                            .await?;
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "Only USAGE ON DATABASE and SELECT ON TABLE can be revoked from a share",
+                    ));
                 }
             }
-            (ShareGrantObjectPrivilege::Select, ShareGrantObject::Table { database, table }) => {
-                let database = resolve_table_database(&self.ctx, database.as_deref())?;
-                let current_object_ids =
-                    provider_table_id_if_exists(&self.ctx, &self.plan.tenant, &database, table)
-                        .await?;
-                if let Some(target) = manager
-                    .prepare_revoke_table(&self.plan.tenant, &self.plan.share, current_object_ids)
-                    .await?
-                {
-                    validate_share_revoke_target(self.ctx.clone(), &target).await?;
-                    manager
-                        .revoke_share_object(&self.plan.tenant, &self.plan.share, target)
-                        .await?;
-                }
-            }
-            _ => {
-                return Err(ErrorCode::BadArguments(
-                    "Only USAGE ON DATABASE and SELECT ON TABLE can be revoked from a share",
-                ));
-            }
-        }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

@@ -177,6 +177,73 @@ fn test_range_index_prunes_by_virtual_column_statistics() {
 }
 
 #[test]
+fn test_range_index_prunes_typed_virtual_column_with_converted_statistics() {
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    // Typed virtual-column pushdown removes the outer Cast from the filter. The
+    // expression therefore sees Int64 directly while block statistics retain
+    // the materialized UInt64 physical type.
+    let expr = parse_expr(r#""v.a" > 20"#, &[(
+        "v.a",
+        DataType::Number(NumberDataType::Int64),
+    )]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: Scalar::Number(1_u64.into()),
+        max: Scalar::Number(10_u64.into()),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        !index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
+fn test_range_index_keeps_typed_virtual_column_when_statistics_cast_overflows() {
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "v",
+        TableDataType::Variant,
+    )]));
+    let expr = parse_expr(r#""v.a" < 0"#, &[(
+        "v.a",
+        DataType::Number(NumberDataType::Int64),
+    )]);
+    let index = RangeIndex::try_create(
+        FunctionContext::default(),
+        &expr,
+        schema,
+        Default::default(),
+    )
+    .unwrap();
+    let stats = VirtualColumnStatsOfNames::from([("v.a".to_string(), VirtualColumnStat {
+        query_column_id: 3_000_000_000,
+        min: Scalar::Number((i64::MAX as u64).into()),
+        max: Scalar::Number((i64::MAX as u64 + 1).into()),
+        null_count: 0,
+        data_type: TableDataType::Number(NumberDataType::UInt64),
+    })]);
+
+    assert!(
+        index
+            .apply(&Default::default(), None, Some(&stats), |_| false)
+            .unwrap()
+    );
+}
+
+#[test]
 fn test_range_index_prunes_try_cast_virtual_column_by_physical_type() {
     fn n(value: u64) -> Scalar {
         Scalar::Number(value.into())

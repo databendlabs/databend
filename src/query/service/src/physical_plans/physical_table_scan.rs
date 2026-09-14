@@ -41,7 +41,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::type_check::check_function;
@@ -814,9 +813,12 @@ impl PhysicalPlanBuilder {
                             internal_column.column_name().to_owned(),
                             internal_column.data_type(),
                         ),
-                        ColumnEntry::VirtualColumn(_) | ColumnEntry::DerivedColumn(_) => {
-                            return None;
-                        }
+                        ColumnEntry::VirtualColumn(VirtualColumn {
+                            column_name,
+                            data_type,
+                            ..
+                        }) => (column_name.clone(), DataType::from(data_type)),
+                        ColumnEntry::DerivedColumn(_) => return None,
                     };
 
                     // sort item is already a column
@@ -932,21 +934,14 @@ impl PhysicalPlanBuilder {
 
         for (_, virtual_column) in virtual_columns.into_iter() {
             source_column_ids.insert(virtual_column.source_column_id);
-            let target_type = virtual_column.data_type.remove_nullable();
-            let cast_func_name = if target_type != TableDataType::Variant {
-                Some(format!("to_{}", target_type.to_string().to_lowercase()))
-            } else {
-                None
-            };
-
             let virtual_column_field = VirtualColumnField {
                 source_column_id: virtual_column.source_column_id,
                 source_name: virtual_column.source_column_name.clone(),
                 query_column_id: virtual_column.query_column_id,
                 name: virtual_column.column_name.clone(),
                 key_paths: virtual_column.key_paths.clone(),
-                cast_func_name,
                 data_type: Box::new(virtual_column.data_type.clone()),
+                is_try: virtual_column.is_try,
             };
             virtual_column_fields.push(virtual_column_field);
         }
