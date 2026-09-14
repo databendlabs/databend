@@ -32,7 +32,6 @@ use databend_common_expression::types::NumberScalar;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use jsonb::keypath::parse_key_paths;
-use unicase::Ascii;
 
 use super::CoreExpr;
 use super::CoreExprArena;

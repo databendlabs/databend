@@ -22,6 +22,7 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -138,12 +139,17 @@ impl TopNPruner {
                     .virtual_column_stats
                     .get(&sort_column_id)
             });
-            let stat = stat.ok_or_else(|| {
-                ErrorCode::UnknownException(format!(
+            let Some(stat) = stat else {
+                if sort_column_id >= VIRTUAL_COLUMN_ID_START {
+                    // Typed virtual statistics may be unavailable for incomplete metadata,
+                    // non-direct layouts, or unsafe physical-to-query type conversions.
+                    return Ok(metas);
+                }
+                return Err(ErrorCode::UnknownException(format!(
                     "Unable to get the colStats by ColumnId: {}",
                     sort_column_id
-                ))
-            })?;
+                )));
+            };
             id_stats.push((index.clone(), stat.clone(), meta.clone()));
         }
 
@@ -481,6 +487,27 @@ mod tests {
             let result = pruner.prune(vec![]).unwrap();
             assert_eq!(result.len(), 0);
         }
+    }
+
+    #[test]
+    fn test_prune_topn_keeps_blocks_when_virtual_column_statistics_are_missing() {
+        let virtual_column_id = VIRTUAL_COLUMN_ID_START;
+        let schema = Arc::new(TableSchema::new(vec![TableField::new_from_column_id(
+            "v['k']::Int64",
+            TableDataType::Number(NumberDataType::Int64),
+            virtual_column_id,
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "v['k']::Int64".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "v['k']::Int64".to_string(),
+        };
+        let metas = vec![build_block(0, 0, 1, 10, 10), build_block(0, 1, 11, 20, 10)];
+        let pruner = TopNPruner::create(schema, vec![(sort_expr, true, false)], 1, false);
+
+        let result = pruner.prune(metas.clone()).unwrap();
+        assert_eq!(result.len(), metas.len());
     }
 
     #[test]

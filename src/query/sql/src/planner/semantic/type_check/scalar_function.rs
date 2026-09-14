@@ -336,6 +336,13 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
+
+        if let Some(rewritten_variant_expr) =
+            self.try_resolve_variant_function(arena, span, func_name, args)
+        {
+            return rewritten_variant_expr;
+        }
+
         let (mut scalars, _) = self.resolve_expr_args(arena, args)?;
 
         // `grouping<...>(...)` with explicit params is the internal rewritten
@@ -348,11 +355,6 @@ where A: TypeCheckAdapter
             }
         }
 
-        if let Some(rewritten_variant_expr) =
-            self.try_rewrite_variant_function(span, func_name, &scalars)
-        {
-            return rewritten_variant_expr;
-        }
         if let Some(rewritten_vector_expr) =
             self.try_rewrite_vector_function(span, func_name, &scalars)
         {

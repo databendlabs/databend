@@ -36,7 +36,6 @@ use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualFieldReadPlan;
 use databend_storages_common_pruner::VirtualReadSlot;
 use databend_storages_common_pruner::VirtualReadSlotId;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use jsonb::keypath::OwnedKeyPath;

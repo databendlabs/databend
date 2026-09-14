@@ -265,6 +265,82 @@ select v['d']::string, v['d']::int from t2;
 ----
 20 20
 
+# Typed virtual-column pruning uses the final query type even when the JSONB
+# materialization uses UInt64 physically. Two inserts create two blocks with
+# disjoint ranges so both range and TopN pruning must reduce 2 blocks to 1.
+statement ok
+create table t_typed_virtual_pruning (
+    id int not null,
+    payload json not null
+) storage_format = 'parquet' enable_virtual_column = true row_per_block = 5
+
+statement ok
+insert into t_typed_virtual_pruning
+select number + 1, parse_json(concat('{"k":', to_string(number + 1), '}'))
+from numbers(5)
+
+statement ok
+insert into t_typed_virtual_pruning
+select number + 101, parse_json(concat('{"k":', to_string(number + 101), '}'))
+from numbers(5)
+
+statement ok
+refresh virtual column on t_typed_virtual_pruning
+
+# The filter contains a typed virtual ColumnRef without an outer CAST. Range
+# pruning converts the physical UInt64 statistics to the logical Int64 domain.
+query T
+explain select id from t_typed_virtual_pruning where payload['k']::Int64 > 100
+----
+Filter
+├── output columns: [t_typed_virtual_pruning.id (#0)]
+├── filters: [is_true(t_typed_virtual_pruning.payload['k']::Int64 (#2) > 100)]
+├── estimated rows: 5.00
+└── TableScan
+    ├── table: default.test_virtual_db.t_typed_virtual_pruning
+    ├── scan id: 0
+    ├── output columns: [id (#0), payload['k']::Int64 (#2)]
+    ├── read rows: 5
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t_typed_virtual_pruning.payload['k']::Int64 (#2) > 100)], limit: NONE]
+    ├── virtual columns: [payload['k']::Int64]
+    └── estimated rows: 10.00
+
+# TopN pruning uses the same conservative physical-to-query statistics cast.
+query T
+explain select id from t_typed_virtual_pruning order by payload['k']::Int64 desc limit 4
+----
+TopN(Final)
+├── output columns: [t_typed_virtual_pruning.id (#0), t_typed_virtual_pruning.payload['k']::Int64 (#2)]
+├── sort keys: [payload['k']::Int64 DESC NULLS LAST]
+├── limit: 4
+├── offset: 0
+├── estimated rows: 4.00
+└── TopN(Partial)
+    ├── output columns: [t_typed_virtual_pruning.id (#0), t_typed_virtual_pruning.payload['k']::Int64 (#2), #_order_col]
+    ├── sort keys: [payload['k']::Int64 DESC NULLS LAST]
+    ├── limit: 4
+    ├── offset: 0
+    ├── estimated rows: 4.00
+    └── TableScan
+        ├── table: default.test_virtual_db.t_typed_virtual_pruning
+        ├── scan id: 0
+        ├── output columns: [id (#0), payload['k']::Int64 (#2)]
+        ├── read rows: 5
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: 4]
+        ├── virtual columns: [payload['k']::Int64]
+        └── estimated rows: 10.00
+
+statement ok
+drop table t_typed_virtual_pruning
+
 query T
 explain select a, get_string(v, 'd') from t2 where get_string(v, 'd') like '%20%'
 ----
