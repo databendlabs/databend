@@ -101,10 +101,16 @@ impl Operator for TopN {
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let mut outer_columns = input_prop.outer_columns.clone();
+        outer_columns.extend(
+            self.used_columns()
+                .difference(&input_prop.output_columns)
+                .copied(),
+        );
 
         Ok(Arc::new(RelationalProperty {
             output_columns: input_prop.output_columns.clone(),
-            outer_columns: input_prop.outer_columns.clone(),
+            outer_columns,
             used_columns: input_prop.used_columns.clone(),
             orderings: self.items.clone(),
             partition_orderings: None,
