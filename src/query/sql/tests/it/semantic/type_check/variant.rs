@@ -143,6 +143,39 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn variant_access_fallback_reuses_resolved_base() -> Result<()> {
+    init_testing_globals();
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings.clone());
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let metadata = Arc::new(RwLock::new(Metadata::default()));
+
+    let mut bind_context = virtual_column_bind_context(metadata.clone())?;
+    bind_context.allow_virtual_column = false;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
+        &mut bind_context,
+        adapter,
+        &name_resolution_ctx,
+        metadata.clone(),
+        &[],
+    )?;
+
+    for sql in [
+        "get(get(get(v, 'a'), 'b'), 'c')",
+        "get_string(get(v, 'a'), 'b')::Int64",
+        "parse_json('{\"k\":1}')['k']::Int64",
+        "{'k': 1}['k']::Int64",
+    ] {
+        type_checker.resolve(&parse_test_expr(sql)?)?;
+    }
+    drop(type_checker);
+
+    assert!(bind_context.bound_virtual_columns.is_empty());
+    assert_eq!(metadata.read().columns().len(), 2);
+    Ok(())
+}
+
 fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindContext> {
     let table = NullTable::try_create(TableInfo {
         desc: "'default'.'t2'".into(),
