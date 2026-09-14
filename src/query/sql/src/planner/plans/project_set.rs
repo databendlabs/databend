@@ -75,12 +75,8 @@ impl Operator for ProjectSet {
         used_columns.extend(srf_used_columns.iter().copied());
 
         // Derive outer columns
-        let mut outer_columns = child_prop.outer_columns.clone();
-        outer_columns.extend(
-            srf_used_columns
-                .difference(&child_prop.output_columns)
-                .copied(),
-        );
+        let outer_columns =
+            self.derive_outer_columns(child_prop.outer_columns.clone(), &child_prop.output_columns);
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
