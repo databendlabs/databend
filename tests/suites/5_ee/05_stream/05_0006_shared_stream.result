@@ -1,0 +1,7 @@
+shared stream creation requires target CREATE
+shared stream creation does not require source SELECT
+false
+1
+true
+s t
+provider revocation prevents stream reads

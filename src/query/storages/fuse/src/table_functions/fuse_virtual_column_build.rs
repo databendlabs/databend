@@ -142,6 +142,13 @@ impl SimpleArgFunc for FuseVirtualColumnBuild {
             .await?
             .get_table(&ctx.get_tenant(), &args.database_name, &args.table_name)
             .await?;
+        // The share's storage operator can cover other provider tables. An
+        // arbitrary block path cannot be authorized by the named shared table.
+        if table.get_table_info().is_shared() {
+            return Err(ErrorCode::InvalidOperation(
+                "fuse_virtual_column_build is not supported on shared tables",
+            ));
+        }
         let table = FuseTable::try_from_table(table.as_ref())?;
         let (source_schema, projection) = variant_projection(table)?;
         let policy = args.max_direct_columns.map_or_else(

@@ -23,21 +23,27 @@ struct MetaNodeUnitTestBuilder {}
 #[async_trait]
 impl kvapi::ApiBuilder<MetaStore> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> MetaStore {
-        let store = MetaStore::new_local_testing::<TokioRuntime>().await;
-        let MetaStore::L(local) = &store else {
-            unreachable!("new_local_testing must return a local store")
-        };
-
-        assert_eq!(local.config.raft_config.raft_api_port, 0);
-        assert!(local.config.grpc.api_address().is_none());
-        assert_eq!(store.get_local_addr().await.unwrap(), "127.0.0.1:0");
-
-        store
+        MetaStore::new_local_testing::<TokioRuntime>().await
     }
 
     async fn build_cluster(&self) -> Vec<MetaStore> {
         todo!()
     }
+}
+
+/// The embedded meta service opens no TCP listener: Raft binds port 0 and
+/// gRPC runs over an in-process channel.
+#[tokio::test]
+async fn test_local_testing_store_has_no_listener() -> anyhow::Result<()> {
+    let store = MetaStore::new_local_testing::<TokioRuntime>().await;
+    let MetaStore::L(local) = &store else {
+        unreachable!("new_local_testing must return a local store")
+    };
+
+    assert_eq!(local.config.raft_config.raft_api_port, 0);
+    assert!(local.config.grpc.api_address().is_none());
+    assert_eq!(store.get_local_addr().await?, "127.0.0.1:0");
+    Ok(())
 }
 
 /// It just tests the basic kv api to ensure the internal meta client handle works.

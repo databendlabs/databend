@@ -23,10 +23,9 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::F32;
-use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
@@ -53,80 +52,72 @@ pub struct BlockMetaIndex {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct VirtualBlockMetaIndex {
     pub virtual_block_location: String,
-    // Block-local direct virtual column statistics keyed by query column id.
-    pub virtual_column_stats: HashMap<ColumnId, ColumnStatistics>,
-    // Key is parquet column id used for reading, value is the column meta.
-    pub virtual_column_metas: BTreeMap<ColumnId, VirtualColumnMeta>,
-    // Key is (source column id, shared data type), value is the base column id for shared map data.
-    #[serde(with = "shared_virtual_column_ids_serde")]
-    pub shared_virtual_column_ids: BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
-    // If all the virtual columns are generated,
-    // we can reduce IO by ignoring the source column.
+    /// Key is query column ID; value is the complete materialization plan.
+    pub fields: BTreeMap<ColumnId, VirtualFieldReadPlan>,
+    /// Query-local physical slots required by `fields`.
+    pub read_slots: Vec<VirtualReadSlot>,
+    /// Source table column IDs that do not require fallback reads.
     pub ignored_source_column_ids: HashSet<ColumnId>,
-    // Key is virtual column id, value is the read plan.
-    pub virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+    /// TopN-only statistics keyed by query column ID. Statistics are already
+    /// converted to the query-visible logical type. Range pruning derives its
+    /// virtual statistics independently from BlockMeta before this stage.
+    pub virtual_column_stats: HashMap<ColumnId, ColumnStatistics>,
 }
 
-/// Read plan for materializing a virtual column from parquet virtual data.
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+)]
+pub struct VirtualReadSlotId(pub u32);
+
+impl VirtualReadSlotId {
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum VirtualColumnReadPlan {
+pub struct VirtualReadSlot {
+    pub offset: u64,
+    pub len: u64,
+    pub num_values: u64,
+    /// Physical type stored in the sidecar.
+    pub data_type: DataType,
+}
+
+/// Read plan for materializing one query-visible virtual column.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum VirtualFieldReadPlan {
     /// The requested path is known to be absent from this virtual column file.
-    /// Materialize it as NULL without reading the source column.
     Missing,
-    /// Directly read a sidecar column whose read schema is keyed by its Parquet
-    /// physical column name.
-    Direct { name: String },
-    /// Directly read a column described by BlockMeta and keyed by its
-    /// segment-local virtual column id.
-    BlockMetaDirect { column_id: ColumnId },
-    /// Read from a parent plan (usually a variant column) and extract by keypath suffix.
+    /// Directly read one query-local sidecar slot.
+    Direct { slot: VirtualReadSlotId },
+    /// Read from a parent plan and extract a keypath suffix.
     FromParent {
-        parent: Box<VirtualColumnReadPlan>,
+        parent: Box<VirtualFieldReadPlan>,
         suffix_path: String,
     },
-    /// Read from the shared map column using the key index for this source column.
+    /// Read one entry from a shared map represented by adjacent key/value slots.
     Shared {
-        source_column_id: ColumnId,
-        data_type: VirtualColumnSharedDataType,
+        key_slot: VirtualReadSlotId,
+        value_slot: VirtualReadSlotId,
         index: u32,
     },
-    /// Merge multiple candidate plans by taking the first non-NULL value per row.
-    Coalesce { plans: Vec<VirtualColumnReadPlan> },
+    /// Merge candidate representations by taking the first non-NULL value.
+    Coalesce { plans: Vec<VirtualFieldReadPlan> },
     /// Reconstruct an object from child plans keyed by field name.
     Object {
-        entries: Vec<(String, VirtualColumnReadPlan)>,
+        entries: Vec<(String, VirtualFieldReadPlan)>,
     },
-}
-
-mod shared_virtual_column_ids_serde {
-    use std::collections::BTreeMap;
-
-    use databend_common_expression::ColumnId;
-    use databend_storages_common_index::VirtualColumnSharedDataType;
-    use serde::Deserialize;
-    use serde::Deserializer;
-    use serde::Serialize;
-    use serde::Serializer;
-
-    type SharedVirtualColumnIds = BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>;
-    type SharedVirtualColumnIdEntry = ((ColumnId, VirtualColumnSharedDataType), ColumnId);
-
-    pub fn serialize<S>(ids: &SharedVirtualColumnIds, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        ids.iter()
-            .map(|(key, value)| (*key, *value))
-            .collect::<Vec<SharedVirtualColumnIdEntry>>()
-            .serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<SharedVirtualColumnIds, D::Error>
-    where D: Deserializer<'de> {
-        Ok(
-            Vec::<SharedVirtualColumnIdEntry>::deserialize(deserializer)?
-                .into_iter()
-                .collect(),
-        )
-    }
 }
 
 #[typetag::serde(name = "block_meta_index")]

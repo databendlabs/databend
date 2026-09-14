@@ -40,6 +40,7 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use crate::FuseTable;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::string_literal;
 
 pub struct FuseStatsArgs {
@@ -113,6 +114,7 @@ impl SimpleArgFunc for FuseStatistics {
                 args.table_name.as_str(),
             )
             .await?;
+        check_shared_table_select(ctx.as_ref(), catalog, &args.database_name, tbl.as_ref()).await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         FuseStatisticImpl::new(tbl).get_statistic().await

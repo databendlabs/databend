@@ -50,6 +50,7 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use itertools::Itertools;
 
 use super::AggregateInfo;
+use crate::ColumnEntry;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::TypeChecker;
@@ -253,8 +254,16 @@ impl Binder {
         let mut column_binding = match &item.scalar {
             ScalarExpr::BoundColumnRef(column_ref) => {
                 let mut column_binding = column_ref.column.clone();
-                // We should apply alias for the ColumnBinding, since it comes from table
+                // A virtual column explicitly projected by the SELECT list must be visible.
+                // Generated hidden CTE outputs are marked invisible separately at the CTE
+                // boundary. Preserve the original visibility for every other column kind.
                 column_binding.column_name = item.alias.clone();
+                if matches!(
+                    self.metadata.read().column(column_binding.index),
+                    ColumnEntry::VirtualColumn(_)
+                ) {
+                    column_binding.visibility = Visibility::Visible;
+                }
                 column_binding
             }
             ScalarExpr::AggregateFunction(agg) => {

@@ -34,6 +34,7 @@ mod kmeans;
 mod range_index;
 mod spatial_index;
 mod spatial_predicate;
+mod statistics_cast;
 mod vector;
 mod virtual_column;
 
@@ -79,6 +80,7 @@ pub use spatial_predicate::SpatialPredicate;
 pub use spatial_predicate::SpatialPredicateOp;
 pub use spatial_predicate::SpatialPredicateResult;
 pub use spatial_predicate::collect_spatial_predicates;
+pub use statistics_cast::cast_virtual_column_statistics;
 pub use vector::normalize_vector;
 pub use vector::vector_stat_distance;
 pub use virtual_column::VIRTUAL_COLUMN_NODES_KEY;
