@@ -57,6 +57,7 @@ use crate::Index;
 use crate::SpatialPredicate;
 use crate::SpatialPredicateOp;
 use crate::VirtualColumnStatsOfNames;
+use crate::cast_virtual_column_statistics;
 use crate::collect_spatial_predicates;
 use crate::rect_contains;
 use crate::rects_distance_intersect;
@@ -214,6 +215,12 @@ impl RangeIndex {
                         let data_type = DataType::from(&stat.data_type);
                         if slot.data_type == data_type {
                             statistics_to_domain(vec![&column_stat], &data_type)
+                        } else if let Some(converted_stat) = cast_virtual_column_statistics(
+                            &column_stat,
+                            &data_type,
+                            &slot.data_type,
+                        ) {
+                            statistics_to_domain(vec![&converted_stat], &slot.data_type)
                         } else if cast_input_columns.contains(&slot.name) {
                             let domain = statistics_to_domain(vec![&column_stat], &data_type);
                             virtual_column_types.insert(slot.name.clone(), data_type);
