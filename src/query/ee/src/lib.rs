@@ -20,6 +20,7 @@
 
 pub mod attach_table;
 pub mod data_mask;
+pub mod data_sharing;
 pub mod enterprise_services;
 pub mod fail_safe;
 pub mod license;

@@ -186,7 +186,7 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig, _version: BuildInfoRef) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
@@ -216,7 +216,7 @@ impl MutableCatalog {
         let storage_factory = StorageFactory::create(conf.clone());
 
         // Database factory.
-        let database_factory = DatabaseFactory::create(conf.clone());
+        let database_factory = DatabaseFactory::create(version);
 
         let ctx = CatalogContext {
             meta,

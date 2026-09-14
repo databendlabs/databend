@@ -35,6 +35,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
@@ -100,6 +102,10 @@ impl StreamTable {
     }
 
     pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        if self.source_shared_database_id()?.is_some() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
+        }
         let source = if let Some(source) = &self.source_table {
             source.clone()
         } else {
@@ -144,6 +150,12 @@ impl StreamTable {
             .get_table(tenant, source_db_name, source_tb_name)
             .await
             .map_err(|err| {
+                if matches!(
+                    err.code(),
+                    ErrorCode::LICENSE_KEY_INVALID | ErrorCode::LICENSE_KEY_EXPIRED
+                ) {
+                    return err;
+                }
                 ErrorCode::IllegalStream(format!(
                     "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
                     source_db_name,

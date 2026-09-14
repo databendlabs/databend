@@ -16,6 +16,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -31,6 +33,9 @@ pub async fn check_shared_table_select(
     if !table.get_table_info().is_shared() {
         return Ok(());
     }
+
+    LicenseManagerSwitch::instance()
+        .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
 
     let named_object = GrantObject::Table(
         catalog_name.to_string(),
