@@ -50,28 +50,30 @@ impl Interpreter for SetRoleInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "set_role_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "set_role_execute");
 
-        let session = self.ctx.get_current_session();
+            let session = self.ctx.get_current_session();
 
-        if self.plan.is_default {
-            let role = session
-                .validate_available_role(&self.plan.role_name)
-                .await?;
-            let current_user = self.ctx.get_current_user()?;
-            UserApiProvider::instance()
-                .update_user_default_role(
-                    &self.ctx.get_tenant(),
-                    current_user.identity(),
-                    Some(role.name.clone()),
-                )
-                .await?;
-        } else {
-            session
-                .set_current_role_checked(&self.plan.role_name)
-                .await?;
-        }
-        Ok(PipelineBuildResult::create())
+            if self.plan.is_default {
+                let role = session
+                    .validate_available_role(&self.plan.role_name)
+                    .await?;
+                let current_user = self.ctx.get_current_user()?;
+                UserApiProvider::instance()
+                    .update_user_default_role(
+                        &self.ctx.get_tenant(),
+                        current_user.identity(),
+                        Some(role.name.clone()),
+                    )
+                    .await?;
+            } else {
+                session
+                    .set_current_role_checked(&self.plan.role_name)
+                    .await?;
+            }
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

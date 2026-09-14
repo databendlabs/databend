@@ -360,7 +360,24 @@ impl GetLineageSource {
 impl AsyncSource for GetLineageSource {
     const NAME: &'static str = "GetLineageSource";
 
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> futures::future::BoxFuture<'async_trait, Result<Option<DataBlock>>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        self.generate_boxed()
+    }
+}
+impl GetLineageSource {
+    fn generate_boxed<'a>(
+        &'a mut self,
+    ) -> futures::future::BoxFuture<'a, Result<Option<DataBlock>>> {
+        Box::pin(self.generate_inner())
+    }
+
+    async fn generate_inner(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
         }

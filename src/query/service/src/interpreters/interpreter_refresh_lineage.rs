@@ -368,115 +368,119 @@ impl Interpreter for RefreshLineageInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if !GlobalConfig::instance().lineage.enabled() {
-            return Err(ErrorCode::InvalidConfig(
-                "REFRESH LINEAGE requires lineage to be enabled".to_string(),
-            ));
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if !GlobalConfig::instance().lineage.enabled() {
+                return Err(ErrorCode::InvalidConfig(
+                    "REFRESH LINEAGE requires lineage to be enabled".to_string(),
+                ));
+            }
 
-        let catalog = self.ctx.get_catalog(DEFAULT_CATALOG).await?;
-        // Stored default-catalog View SQL commonly contains `database.table`. Make its original
-        // catalog context explicit for planning and restore the caller's session on every exit.
-        let _catalog_guard = CurrentCatalogGuard::set_default(self.ctx.as_ref());
-        let views = match self.plan.selector {
-            RefreshLineageSelector::AllViews => self.list_views(catalog.as_ref()).await?,
-        };
-        let target_keys = views
-            .iter()
-            .map(|view| format!("VIEW::ID::{}", view.table_id))
-            .collect::<BTreeSet<_>>();
-        let mut reader: LineageEdgeReader = LineageEdgeReader::try_create(self.ctx.clone()).await?;
-        let existing_edges = reader
-            .read_frontier("target_lineage_key", &target_keys)
-            .await?;
-        let mut existing_by_target = BTreeMap::<String, Vec<RawLineageEdge>>::new();
-        for edge in existing_edges {
-            existing_by_target
-                .entry(edge.target.lineage_key.clone())
-                .or_default()
-                .push(edge);
-        }
+            let catalog = self.ctx.get_catalog(DEFAULT_CATALOG).await?;
+            // Stored default-catalog View SQL commonly contains `database.table`. Make its original
+            // catalog context explicit for planning and restore the caller's session on every exit.
+            let _catalog_guard = CurrentCatalogGuard::set_default(self.ctx.as_ref());
+            let views = match self.plan.selector {
+                RefreshLineageSelector::AllViews => self.list_views(catalog.as_ref()).await?,
+            };
+            let target_keys = views
+                .iter()
+                .map(|view| format!("VIEW::ID::{}", view.table_id))
+                .collect::<BTreeSet<_>>();
+            let mut reader: LineageEdgeReader =
+                LineageEdgeReader::try_create(self.ctx.clone()).await?;
+            let existing_edges = reader
+                .read_frontier("target_lineage_key", &target_keys)
+                .await?;
+            let mut existing_by_target = BTreeMap::<String, Vec<RawLineageEdge>>::new();
+            for edge in existing_edges {
+                existing_by_target
+                    .entry(edge.target.lineage_key.clone())
+                    .or_default()
+                    .push(edge);
+            }
 
-        let refresh_time = Utc::now();
-        let refresh_event_time = refresh_time.timestamp_micros();
-        let backfilled_at = refresh_time.to_rfc3339_opts(SecondsFormat::Micros, true);
-        let query_id = self.ctx.get_id();
-        let mut results = Vec::new();
-        let mut pending_logs = Vec::new();
-        for view in views {
-            match self.extract_view_lineage(catalog.as_ref(), &view).await {
-                Ok(lineage) => {
-                    let target_key = format!("VIEW::ID::{}", view.table_id);
-                    let existing = existing_by_target
-                        .get(&target_key)
-                        .into_iter()
-                        .flatten()
-                        .filter_map(Self::existing_edge)
-                        .collect();
-                    let reconciliation = Self::reconcile(build_semantic_edges(lineage), existing);
-                    let upsert_count = reconciliation.upserts.len() as u64;
-                    let delete_count = reconciliation.deletes.len() as u64;
-                    // Large tenants commonly have mostly unchanged Views. Successful no-op
-                    // objects are intentionally omitted from the result set.
-                    if upsert_count == 0 && delete_count == 0 {
-                        continue;
-                    }
-
-                    if !self.plan.dry_run {
-                        let process = Self::backfill_process(
-                            &view,
-                            reconciliation.process_seed.as_ref(),
-                            &backfilled_at,
-                        );
-                        for edge in reconciliation.upserts {
-                            pending_logs.push(serialize_upsert_edge(edge, process.clone())?);
+            let refresh_time = Utc::now();
+            let refresh_event_time = refresh_time.timestamp_micros();
+            let backfilled_at = refresh_time.to_rfc3339_opts(SecondsFormat::Micros, true);
+            let query_id = self.ctx.get_id();
+            let mut results = Vec::new();
+            let mut pending_logs = Vec::new();
+            for view in views {
+                match self.extract_view_lineage(catalog.as_ref(), &view).await {
+                    Ok(lineage) => {
+                        let target_key = format!("VIEW::ID::{}", view.table_id);
+                        let existing = existing_by_target
+                            .get(&target_key)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(Self::existing_edge)
+                            .collect();
+                        let reconciliation =
+                            Self::reconcile(build_semantic_edges(lineage), existing);
+                        let upsert_count = reconciliation.upserts.len() as u64;
+                        let delete_count = reconciliation.deletes.len() as u64;
+                        // Large tenants commonly have mostly unchanged Views. Successful no-op
+                        // objects are intentionally omitted from the result set.
+                        if upsert_count == 0 && delete_count == 0 {
+                            continue;
                         }
-                        for identity in reconciliation.deletes {
-                            pending_logs.push(serialize_delete_edge(
-                                identity,
-                                refresh_event_time,
-                                query_id.clone(),
-                            )?);
-                        }
-                    }
 
-                    results.push(RefreshResult {
+                        if !self.plan.dry_run {
+                            let process = Self::backfill_process(
+                                &view,
+                                reconciliation.process_seed.as_ref(),
+                                &backfilled_at,
+                            );
+                            for edge in reconciliation.upserts {
+                                pending_logs.push(serialize_upsert_edge(edge, process.clone())?);
+                            }
+                            for identity in reconciliation.deletes {
+                                pending_logs.push(serialize_delete_edge(
+                                    identity,
+                                    refresh_event_time,
+                                    query_id.clone(),
+                                )?);
+                            }
+                        }
+
+                        results.push(RefreshResult {
+                            object_domain: "VIEW",
+                            catalog: Some(DEFAULT_CATALOG.to_string()),
+                            database: Some(view.database),
+                            object_name: view.name,
+                            status: if self.plan.dry_run {
+                                "DRY_RUN"
+                            } else {
+                                "REFRESHED"
+                            },
+                            edge_count: reconciliation.edge_count,
+                            upsert_count,
+                            delete_count,
+                            error: None,
+                        });
+                    }
+                    Err(error) => results.push(RefreshResult {
                         object_domain: "VIEW",
                         catalog: Some(DEFAULT_CATALOG.to_string()),
                         database: Some(view.database),
                         object_name: view.name,
-                        status: if self.plan.dry_run {
-                            "DRY_RUN"
-                        } else {
-                            "REFRESHED"
-                        },
-                        edge_count: reconciliation.edge_count,
-                        upsert_count,
-                        delete_count,
-                        error: None,
-                    });
+                        status: "ERROR",
+                        edge_count: 0,
+                        upsert_count: 0,
+                        delete_count: 0,
+                        error: Some(error.to_string()),
+                    }),
                 }
-                Err(error) => results.push(RefreshResult {
-                    object_domain: "VIEW",
-                    catalog: Some(DEFAULT_CATALOG.to_string()),
-                    database: Some(view.database),
-                    object_name: view.name,
-                    status: "ERROR",
-                    edge_count: 0,
-                    upsert_count: 0,
-                    delete_count: 0,
-                    error: Some(error.to_string()),
-                }),
             }
-        }
 
-        self.ctx.attach_query_lineage(None);
-        if !self.plan.dry_run {
-            self.ctx.attach_pending_lineage_logs(pending_logs);
-        }
+            self.ctx.attach_query_lineage(None);
+            if !self.plan.dry_run {
+                self.ctx.attach_pending_lineage_logs(pending_logs);
+            }
 
-        PipelineBuildResult::from_blocks(vec![Self::result_block(results)])
+            PipelineBuildResult::from_blocks(vec![Self::result_block(results)])
+        })
     }
 }
 

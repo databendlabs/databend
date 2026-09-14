@@ -751,7 +751,7 @@ impl TaskService {
         };
 
         let session = create_session(user, role).await?;
-        session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO)
+        session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO, None)
     }
 
     async fn create_task_context(&self, user: UserInfo, task: &Task) -> Result<Arc<QueryContext>> {

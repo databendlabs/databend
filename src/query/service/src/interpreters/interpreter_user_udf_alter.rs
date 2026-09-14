@@ -49,17 +49,19 @@ impl Interpreter for AlterUserUDFScript {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // Alter udf only modify the UserDefinedFunction, no need to modify ownership.
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_udf_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // Alter udf only modify the UserDefinedFunction, no need to modify ownership.
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_udf_execute");
 
-        let plan = self.plan.clone();
+            let plan = self.plan.clone();
 
-        let tenant = self.ctx.get_tenant();
-        UserApiProvider::instance()
-            .update_udf(&tenant, plan.udf)
-            .await?;
+            let tenant = self.ctx.get_tenant();
+            UserApiProvider::instance()
+                .update_udf(&tenant, plan.udf)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

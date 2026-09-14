@@ -285,7 +285,7 @@ impl TableContextSettings for QueryContext {
         let tz = tz_string.parse::<Tz>().map_err(|e| {
             ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
         })?;
-        let now = Utc::now();
+        let now = self.get_query_created_time().into();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;

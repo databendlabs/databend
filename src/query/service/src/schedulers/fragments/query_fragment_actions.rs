@@ -200,6 +200,7 @@ impl QueryFragmentsActions {
         self.statistics_connections(&mut builder)?;
 
         Ok(QueryEnv {
+            query_created_time: self.ctx.get_query_created_time(),
             workload_group,
             query_id: self.ctx.get_id(),
             cluster: self.ctx.get_cluster(),

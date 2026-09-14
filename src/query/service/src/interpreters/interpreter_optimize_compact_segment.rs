@@ -46,42 +46,44 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?;
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let table = catalog
-            .get_table(
-                &self.ctx.get_tenant(),
-                &self.plan.database,
-                &self.plan.table,
-            )
-            .await?;
-        table.check_mutable_or_materialized_view()?;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let table = catalog
+                .get_table(
+                    &self.ctx.get_tenant(),
+                    &self.plan.database,
+                    &self.plan.table,
+                )
+                .await?;
+            table.check_mutable_or_materialized_view()?;
 
-        let mut build_res = PipelineBuildResult::create();
-        table
-            .compact_segments(
-                self.ctx.clone(),
-                &mut build_res.main_pipeline,
-                self.plan.num_segment_limit,
-            )
-            .await?;
+            let mut build_res = PipelineBuildResult::create();
+            table
+                .compact_segments(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    self.plan.num_segment_limit,
+                )
+                .await?;
 
-        if build_res.main_pipeline.is_empty() {
-            drop(lock_guard);
-        } else {
-            build_res.main_pipeline.add_lock_guard(lock_guard);
-        }
-        Ok(build_res)
+            if build_res.main_pipeline.is_empty() {
+                drop(lock_guard);
+            } else {
+                build_res.main_pipeline.add_lock_guard(lock_guard);
+            }
+            Ok(build_res)
+        })
     }
 }

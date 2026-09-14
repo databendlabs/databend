@@ -14,18 +14,15 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_optimize_purge::purge;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -36,7 +33,6 @@ pub struct OptimizeCompactBlockInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     lock_opt: LockTableOption,
-    need_purge: bool,
 }
 
 impl OptimizeCompactBlockInterpreter {
@@ -44,13 +40,11 @@ impl OptimizeCompactBlockInterpreter {
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         lock_opt: LockTableOption,
-        need_purge: bool,
     ) -> Result<Self> {
         Ok(OptimizeCompactBlockInterpreter {
             ctx,
             s_expr,
             lock_opt,
-            need_purge,
         })
     }
 }
@@ -66,54 +60,40 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let OptimizeCompactBlock {
-            catalog,
-            database,
-            table,
-            limit,
-            ..
-        } = self.s_expr.plan().clone().try_into()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let OptimizeCompactBlock {
+                catalog,
+                database,
+                table,
+                ..
+            } = self.s_expr.plan().clone().try_into()?;
 
-        // try add lock table.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
-            .await?;
+            // try add lock table.
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
+                .await?;
 
-        let mut build_res = PipelineBuildResult::create();
-        let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-        match builder.build(&self.s_expr, ColumnSet::new()).await {
-            Ok(physical_plan) => {
-                build_res =
-                    build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
-                        .await?;
-                build_res.main_pipeline.add_lock_guard(lock_guard);
-            }
-            Err(e) => {
-                if e.code() != ErrorCode::NO_NEED_TO_COMPACT {
-                    return Err(e);
+            let mut build_res = PipelineBuildResult::create();
+            let mut builder =
+                PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
+            match builder.build(&self.s_expr, ColumnSet::new()).await {
+                Ok(physical_plan) => {
+                    build_res =
+                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
+                            .await?;
+                    build_res.main_pipeline.add_lock_guard(lock_guard);
+                }
+                Err(e) => {
+                    if e.code() != ErrorCode::NO_NEED_TO_COMPACT {
+                        return Err(e);
+                    }
                 }
             }
-        }
 
-        if self.need_purge {
-            let ctx = self.ctx.clone();
-            let num_snapshot_limit = limit.segment_limit;
-            if build_res.main_pipeline.is_empty() {
-                purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await?;
-            } else {
-                build_res
-                    .main_pipeline
-                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
-                        Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                            purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await
-                        }),
-                        Err(error_code) => Err(error_code.clone()),
-                    });
-            }
-        }
-        Ok(build_res)
+            Ok(build_res)
+        })
     }
 }

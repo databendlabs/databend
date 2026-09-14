@@ -903,9 +903,15 @@ impl Binder {
             catalog,
             database,
             view,
+            limit,
         } = stmt;
         let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
+        if *limit == Some(0) {
+            return Err(ErrorCode::SemanticError(
+                "REFRESH MATERIALIZED VIEW LIMIT must be greater than 0",
+            ));
+        }
 
         Ok(Plan::RefreshMaterializedView(Box::new(
             RefreshMaterializedViewPlan {
@@ -913,6 +919,7 @@ impl Binder {
                 catalog,
                 database,
                 view_name,
+                max_batch_size: *limit,
             },
         )))
     }

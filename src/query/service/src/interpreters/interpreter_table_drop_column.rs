@@ -60,142 +60,148 @@ impl Interpreter for DropTableColumnInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table_with_branch(
-                &self.ctx.get_tenant(),
-                db_name,
-                tbl_name,
-                self.plan.branch.as_deref(),
-            )
-            .await?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            let table = catalog
+                .get_table_with_branch(
+                    &self.ctx.get_tenant(),
+                    db_name,
+                    tbl_name,
+                    self.plan.branch.as_deref(),
+                )
+                .await?;
 
-        // check mutability
-        table.check_mutable()?;
+            // check mutability
+            table.check_mutable()?;
 
-        let table_info = table.get_table_info();
-        let engine = table_info.engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support alter",
-                &self.plan.database, &self.plan.table, engine
-            )));
-        }
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                &self.plan.database, &self.plan.table
-            )));
-        }
-
-        let table_schema = table_info.schema();
-        let field = table_schema.field_with_name(self.plan.column.as_str())?;
-
-        if let Some((_, cluster_key)) = table.cluster_key_meta() {
-            let referenced = cluster_key_referenced_columns(&cluster_key)?;
-            if referenced.contains(self.plan.column.as_str()) {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot drop column '{}' because it is referenced by cluster key {}",
-                    self.plan.column, cluster_key
+            let table_info = table.get_table_info();
+            let engine = table_info.engine();
+            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
                 )));
             }
-        }
-        if let Some(partition_key) = table_info.options().get(OPT_KEY_PARTITION_BY) {
-            let referenced = cluster_key_referenced_columns(partition_key)?;
-            if referenced.contains(self.plan.column.as_str()) {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot drop column '{}' because it is referenced by partition key {}",
-                    self.plan.column, partition_key
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    &self.plan.database, &self.plan.table
                 )));
             }
-        }
 
-        if table_info.meta.is_column_reference_policy(&field.column_id) {
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot drop column '{}' which is associated with a security policy",
-                self.plan.column.as_str()
-            )));
-        }
-        if field.computed_expr().is_none() {
-            let mut schema: DataSchema = table_schema.as_ref().into();
-            schema.drop_column(self.plan.column.as_str())?;
-            // Check if this column is referenced by computed columns.
-            check_referenced_computed_columns(
-                self.ctx.clone(),
-                Arc::new(schema),
-                self.plan.column.as_str(),
-            )?;
-        }
-        // If the column is table index column, the column can't be dropped.
-        if !table_info.meta.indexes.is_empty() {
-            for (index_name, index) in &table_info.meta.indexes {
-                if index.column_ids.contains(&field.column_id) {
-                    return Err(ErrorCode::ColumnReferencedByIndex(format!(
-                        "column `{}` is referenced by {} index, drop index `{}` first",
-                        field.name, index.index_type, index_name,
+            let table_schema = table_info.schema();
+            let field = table_schema.field_with_name(self.plan.column.as_str())?;
+
+            if let Some((_, cluster_key)) = table.cluster_key_meta() {
+                let referenced = cluster_key_referenced_columns(&cluster_key)?;
+                if referenced.contains(self.plan.column.as_str()) {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot drop column '{}' because it is referenced by cluster key {}",
+                        self.plan.column, cluster_key
                     )));
                 }
             }
-        }
-
-        let mut new_table_meta = table_info.meta.clone();
-        new_table_meta.drop_column(&self.plan.column)?;
-        // update table options
-        let opts = &mut new_table_meta.options;
-        if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
-            let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
-            if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
-                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
-                    // remove from the bloom index columns.
-                    cols.remove(pos);
-                    *value = cols.join(",");
+            if let Some(partition_key) = table_info.options().get(OPT_KEY_PARTITION_BY) {
+                let referenced = cluster_key_referenced_columns(partition_key)?;
+                if referenced.contains(self.plan.column.as_str()) {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot drop column '{}' because it is referenced by partition key {}",
+                        self.plan.column, partition_key
+                    )));
                 }
             }
-        }
 
-        if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
-            if let ApproxDistinctColumns::Specify(mut cols) =
-                value.parse::<ApproxDistinctColumns>()?
-            {
-                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
-                    // remove from the approx distinct columns.
-                    cols.remove(pos);
-                    *value = cols.join(",");
+            if table_info.meta.is_column_reference_policy(&field.column_id) {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot drop column '{}' which is associated with a security policy",
+                    self.plan.column.as_str()
+                )));
+            }
+            if field.computed_expr().is_none() {
+                let mut schema: DataSchema = table_schema.as_ref().into();
+                schema.drop_column(self.plan.column.as_str())?;
+                // Check if this column is referenced by computed columns.
+                check_referenced_computed_columns(
+                    self.ctx.clone(),
+                    Arc::new(schema),
+                    self.plan.column.as_str(),
+                )?;
+            }
+            // If the column is table index column, the column can't be dropped.
+            if !table_info.meta.indexes.is_empty() {
+                for (index_name, index) in &table_info.meta.indexes {
+                    if index.column_ids.contains(&field.column_id) {
+                        return Err(ErrorCode::ColumnReferencedByIndex(format!(
+                            "column `{}` is referenced by {} index, drop index `{}` first",
+                            field.name, index.index_type, index_name,
+                        )));
+                    }
                 }
             }
-        }
-        if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
-            if let ApproxDistinctColumns::Specify(mut cols) =
-                value.parse::<ApproxDistinctColumns>()?
-            {
-                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
-                    cols.remove(pos);
-                    *value = cols.join(",");
+
+            let mut new_table_meta = table_info.meta.clone();
+            new_table_meta.drop_column(&self.plan.column)?;
+            // update table options
+            let opts = &mut new_table_meta.options;
+            if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+                let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
+                if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
+                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                        // remove from the bloom index columns.
+                        cols.remove(pos);
+                        *value = cols.join(",");
+                    }
                 }
             }
-        }
-        let new_schema = new_table_meta.schema.as_ref().clone();
 
-        validate_constraints_by_schema(self.ctx.clone(), &new_table_meta.constraints, &new_schema)?;
-
-        commit_table_meta(
-            &self.ctx,
-            table.as_ref(),
-            new_table_meta,
-            catalog,
-            |snapshot_opt, _| {
-                if let Some(snapshot) = snapshot_opt {
-                    snapshot.schema = new_schema;
+            if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+                if let ApproxDistinctColumns::Specify(mut cols) =
+                    value.parse::<ApproxDistinctColumns>()?
+                {
+                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                        // remove from the approx distinct columns.
+                        cols.remove(pos);
+                        *value = cols.join(",");
+                    }
                 }
-            },
-        )
-        .await?;
+            }
+            if let Some(value) = opts.get_mut(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS) {
+                if let ApproxDistinctColumns::Specify(mut cols) =
+                    value.parse::<ApproxDistinctColumns>()?
+                {
+                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                        cols.remove(pos);
+                        *value = cols.join(",");
+                    }
+                }
+            }
+            let new_schema = new_table_meta.schema.as_ref().clone();
 
-        Ok(PipelineBuildResult::create())
+            validate_constraints_by_schema(
+                self.ctx.clone(),
+                &new_table_meta.constraints,
+                &new_schema,
+            )?;
+
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                new_table_meta,
+                catalog,
+                |snapshot_opt, _| {
+                    if let Some(snapshot) = snapshot_opt {
+                        snapshot.schema = new_schema;
+                    }
+                },
+            )
+            .await?;
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

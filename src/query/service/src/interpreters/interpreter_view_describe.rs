@@ -54,46 +54,48 @@ impl Interpreter for DescribeViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.plan.catalog.as_str();
-        let database = self.plan.database.as_str();
-        let view = self.plan.view_name.as_str();
-        let table = self.ctx.get_table(catalog, database, view).await?;
-        let tbl_info = table.get_table_info();
-        let engine = table.get_table_info().engine();
-        let schema = if engine == VIEW_ENGINE {
-            if let Some(query) = tbl_info.options().get(QUERY) {
-                let mut planner = Planner::new(self.ctx.clone());
-                let (plan, _) = planner.plan_sql(query).await?;
-                infer_table_schema(&plan.schema())
-            } else {
-                return Err(ErrorCode::Internal(
-                    "Logical error, View Table must have a SelectQuery inside.",
-                ));
-            }
-        } else {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is not VIEW, please use `DESC {} {}.{}`",
-                &self.plan.database,
-                &self.plan.view_name,
-                if engine == STREAM_ENGINE {
-                    "STREAM"
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.plan.catalog.as_str();
+            let database = self.plan.database.as_str();
+            let view = self.plan.view_name.as_str();
+            let table = self.ctx.get_table(catalog, database, view).await?;
+            let tbl_info = table.get_table_info();
+            let engine = table.get_table_info().engine();
+            let schema = if engine == VIEW_ENGINE {
+                if let Some(query) = tbl_info.options().get(QUERY) {
+                    let mut planner = Planner::new(self.ctx.clone());
+                    let (plan, _) = planner.plan_sql(query).await?;
+                    infer_table_schema(&plan.schema())
                 } else {
-                    "TABLE"
-                },
-                &self.plan.database,
-                &self.plan.view_name
-            )));
-        }?;
+                    return Err(ErrorCode::Internal(
+                        "Logical error, View Table must have a SelectQuery inside.",
+                    ));
+                }
+            } else {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is not VIEW, please use `DESC {} {}.{}`",
+                    &self.plan.database,
+                    &self.plan.view_name,
+                    if engine == STREAM_ENGINE {
+                        "STREAM"
+                    } else {
+                        "TABLE"
+                    },
+                    &self.plan.database,
+                    &self.plan.view_name
+                )));
+            }?;
 
-        let (names, types, nulls, default_exprs, extras) = generate_desc_schema(schema);
+            let (names, types, nulls, default_exprs, extras) = generate_desc_schema(schema);
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(types),
-            StringType::from_data(nulls),
-            StringType::from_data(default_exprs),
-            StringType::from_data(extras),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(types),
+                StringType::from_data(nulls),
+                StringType::from_data(default_exprs),
+                StringType::from_data(extras),
+            ])])
+        })
     }
 }

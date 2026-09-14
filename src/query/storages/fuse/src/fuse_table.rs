@@ -126,7 +126,6 @@ use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
-use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
@@ -148,7 +147,6 @@ use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
 use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
-use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -212,8 +210,13 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
+        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
+            return Err(ErrorCode::Internal(
+                "Shared table requires resolved provider storage parameters",
+            ));
+        }
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
+            DatabaseType::NormalDB | DatabaseType::SharedDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
@@ -1052,7 +1055,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        true
+        !self.table_info.is_shared()
     }
 
     fn support_column_projection(&self) -> bool {
@@ -1193,29 +1196,6 @@ impl Table for FuseTable {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => {
-                table
-                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
-                    .await
-            }
-            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
-                warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -1313,13 +1293,7 @@ impl Table for FuseTable {
                 .unwrap_or_default();
             let aligned_table_statistics = table_statistics
                 .as_ref()
-                .filter(|v| v.row_count == snapshot.summary.row_count)
-                .filter(|v| {
-                    snapshot
-                        .prev_snapshot_id
-                        .as_ref()
-                        .is_none_or(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
-                });
+                .filter(|stats| stats.is_fresh_for(&snapshot));
             let top_n = aligned_table_statistics
                 .map(|v| v.top_n.clone())
                 .unwrap_or_default();
@@ -1563,11 +1537,19 @@ impl Table for FuseTable {
     }
 
     fn result_can_be_cached(&self) -> bool {
-        true
+        !self.table_info.is_shared()
+    }
+
+    fn plan_can_be_cached(&self) -> bool {
+        // A new statement or transaction must resolve the share again, even
+        // when the provider's snapshot has not changed.
+        !self.table_info.is_shared()
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly() || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+        self.table_info.is_shared()
+            || self.table_type.is_readonly()
+            || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
     }
 
     fn use_own_sample_block(&self) -> bool {

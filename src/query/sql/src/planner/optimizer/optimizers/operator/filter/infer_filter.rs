@@ -189,6 +189,16 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        if left == right {
+            // Returning true tells the caller that this predicate has been absorbed and
+            // can be removed. However, a reflexive equality only forms a singleton
+            // equivalence class, so derive_predicates() will not reconstruct `expr = expr`.
+            // Removing it is valid for a non-nullable operand, but for a nullable operand
+            // the predicate is still needed to reject NULL rows. Return false so the caller
+            // keeps the original predicate.
+            return !left.data_type().is_nullable_or_null();
+        }
+
         let left_ty = left.data_type();
         let right_ty = right.data_type();
         if !common_super_type_with_conversion(left_ty.as_ref(), right_ty.as_ref())

@@ -51,48 +51,55 @@ impl Interpreter for ShowOnlineNodesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        let online_nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .list_online_nodes()
-            .await?;
+            let online_nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .list_online_nodes()
+                .await?;
 
-        let mut nodes_id = ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
-        let mut nodes_type = ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
-        let mut nodes_group = ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
-        let mut nodes_warehouse =
-            ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
-        let mut nodes_cluster = ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
-        let mut nodes_version = ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
+            let mut nodes_id = ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
+            let mut nodes_type =
+                ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
+            let mut nodes_group =
+                ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
+            let mut nodes_warehouse =
+                ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
+            let mut nodes_cluster =
+                ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
+            let mut nodes_version =
+                ColumnBuilder::with_capacity(&DataType::String, online_nodes.len());
 
-        for node in online_nodes {
-            let node_type = match node.node_type {
-                NodeType::SelfManaged => String::from("SelfManaged"),
-                NodeType::SystemManaged => String::from("SystemManaged"),
-            };
+            for node in online_nodes {
+                let node_type = match node.node_type {
+                    NodeType::SelfManaged => String::from("SelfManaged"),
+                    NodeType::SystemManaged => String::from("SystemManaged"),
+                };
 
-            let binary_version = match node.binary_version.split_once('(') {
-                None => node.binary_version,
-                Some((left, _right)) => left.to_string(),
-            };
+                let binary_version = match node.binary_version.split_once('(') {
+                    None => node.binary_version,
+                    Some((left, _right)) => left.to_string(),
+                };
 
-            nodes_id.push(Scalar::String(node.id).as_ref());
-            nodes_type.push(Scalar::String(node_type).as_ref());
-            nodes_group.push(Scalar::String(node.node_group.clone().unwrap_or_default()).as_ref());
-            nodes_warehouse.push(Scalar::String(node.warehouse_id).as_ref());
-            nodes_cluster.push(Scalar::String(node.cluster_id).as_ref());
-            nodes_version.push(Scalar::String(binary_version).as_ref());
-        }
+                nodes_id.push(Scalar::String(node.id).as_ref());
+                nodes_type.push(Scalar::String(node_type).as_ref());
+                nodes_group
+                    .push(Scalar::String(node.node_group.clone().unwrap_or_default()).as_ref());
+                nodes_warehouse.push(Scalar::String(node.warehouse_id).as_ref());
+                nodes_cluster.push(Scalar::String(node.cluster_id).as_ref());
+                nodes_version.push(Scalar::String(binary_version).as_ref());
+            }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            nodes_id.build(),
-            nodes_type.build(),
-            nodes_group.build(),
-            nodes_warehouse.build(),
-            nodes_cluster.build(),
-            nodes_version.build(),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                nodes_id.build(),
+                nodes_type.build(),
+                nodes_group.build(),
+                nodes_warehouse.build(),
+                nodes_cluster.build(),
+                nodes_version.build(),
+            ])])
+        })
     }
 }
