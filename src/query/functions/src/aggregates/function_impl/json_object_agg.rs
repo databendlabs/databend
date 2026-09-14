@@ -402,6 +402,7 @@ impl JsonObjectAggBuilder {
             .then(PlainRoute::new(JsonObjectAggBuilder::create))
             .then(IfRoute::direct(JsonObjectAggBuilder::create))
             .then(StateRoute::direct(JsonObjectAggBuilder::create))
+            .then(DistinctAliasRoute::direct(JsonObjectAggBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {

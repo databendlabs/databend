@@ -118,6 +118,7 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
         "stddev_pop",
         "stddev_samp",
         "skewness",
+        "kurtosis",
         "histogram",
     ] {
         for arg in ["n", "all_null", "NULL"] {
@@ -152,6 +153,7 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
             "median_tdigest",
             "stddev_pop",
             "skewness",
+            "kurtosis",
             "histogram",
         ] {
             write_aggregate_expr_case(
@@ -275,6 +277,7 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("stddev_pop", "stddev_pop_distinct"),
         ("stddev_samp", "stddev_samp_distinct"),
         ("skewness", "skewness_distinct"),
+        ("kurtosis", "kurtosis_distinct"),
         ("histogram", "histogram_distinct"),
         ("json_agg", "json_agg_distinct"),
         ("json_array_agg", "json_array_agg_distinct"),
@@ -344,7 +347,12 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         }
     }
 
-    for base in ["min", "uniq"] {
+    for base in ["min", "uniq", "json_object_agg"] {
+        let args_type = if base == "json_object_agg" {
+            vec![DataType::String, args_type[0].clone()]
+        } else {
+            args_type.to_vec()
+        };
         assert_eq!(
             AGGR_REGISTRY
                 .descriptor(base)
@@ -694,6 +702,104 @@ fn test_multi_arg_distinct_merge_and_replay() -> Result<()> {
                 panic!("expected float")
             };
             assert!((actual.0 - expected.0).abs() < 1e-12);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_kurtosis_distinct_values() -> Result<()> {
+    let values = Int64Type::from_opt_data(vec![
+        Some(1),
+        Some(1),
+        Some(1),
+        Some(2),
+        Some(3),
+        Some(4),
+        None,
+    ]);
+    for each_row in [false, true] {
+        for with_serialize in [false, true] {
+            let (result, _) = eval_aggregate_for_test(
+                "kurtosis_distinct",
+                vec![],
+                &[values.clone().into()],
+                7,
+                each_row,
+                with_serialize,
+                vec![],
+            )?;
+            let ScalarRef::Number(NumberScalar::Float64(value)) = result.index(0).unwrap() else {
+                panic!("expected kurtosis value");
+            };
+            // The four equally weighted values have corrected excess kurtosis -1.2.
+            assert!((value.0 + 1.2).abs() < 1e-12);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_window_funnel_distinct_is_idempotent() -> Result<()> {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::BooleanType;
+
+    // Shuffled, repeated rows; one row satisfies two stages at the same timestamp.
+    let entries: Vec<BlockEntry> = vec![
+        UInt64Type::from_data(vec![2, 2, 0, 0]).into(),
+        BooleanType::from_data(vec![false, false, true, true]).into(),
+        BooleanType::from_data(vec![false, false, true, true]).into(),
+        BooleanType::from_data(vec![true, true, false, false]).into(),
+    ];
+    let args_type = entries
+        .iter()
+        .map(BlockEntry::data_type)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        AGGR_REGISTRY
+            .descriptor("window_funnel")
+            .unwrap()
+            .features()
+            .distinct_policy,
+        DistinctPolicy::Idempotent
+    );
+    for (window, expected) in [(0, 2), (1, 2), (2, 3)] {
+        let params = vec![Scalar::Number(NumberScalar::UInt64(window))];
+        let semantic = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "window_funnel",
+            params: &params,
+            args_type: &args_type,
+            distinct: true,
+            order_by: &[],
+        })?;
+        assert_eq!(semantic.signature().name, "window_funnel");
+        assert!(!semantic.signature().distinct);
+        for name in ["window_funnel", "window_funnel_distinct"] {
+            for each_row in [false, true] {
+                for with_serialize in [false, true] {
+                    let (result, _) = eval_aggregate_for_test(
+                        name,
+                        params.clone(),
+                        &entries,
+                        4,
+                        each_row,
+                        with_serialize,
+                        vec![],
+                    )?;
+                    assert_eq!(
+                        result.index(0).unwrap(),
+                        ScalarRef::Number(NumberScalar::UInt8(expected))
+                    );
+                }
+            }
+            let (groups, _) =
+                simulate_two_groups_group_by(name, params.clone(), &entries, 4, vec![])?;
+            for row in 0..2 {
+                assert_eq!(
+                    groups.index(row).unwrap(),
+                    ScalarRef::Number(NumberScalar::UInt8(expected))
+                );
+            }
         }
     }
     Ok(())

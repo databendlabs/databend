@@ -69,6 +69,7 @@ impl MomentsBuilder {
         .then(PlainRoute::unary(Self::create_kurtosis))
         .then(IfRoute::unary(Self::create_kurtosis))
         .then(StateRoute::unary(Self::create_kurtosis))
+        .then(DistinctRoute::<true>::unary(Self::create_kurtosis))
         .register(registry);
     }
 }

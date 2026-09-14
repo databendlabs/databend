@@ -223,3 +223,33 @@ fn test_state_baselines() {
         },
     ]);
 }
+
+#[test]
+fn test_distinct_alias() -> databend_common_exception::Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::StringType;
+
+    let inputs: Vec<BlockEntry> = vec![
+        StringType::from_opt_data(vec![Some("a"), None, Some("b"), Some("c")]).into(),
+        Int64Type::from_opt_data(vec![Some(1), Some(2), None, Some(3)]).into(),
+    ];
+    for simulator in [eval_aggregate, simulate_two_groups_group_by] {
+        assert_eq!(
+            simulator("json_object_agg", vec![], &inputs, 4, vec![])?,
+            simulator("json_object_agg_distinct", vec![], &inputs, 4, vec![])?,
+        );
+    }
+    // An idempotent alias preserves duplicate-key errors, even for equal values.
+    for values in [vec![1, 1], vec![1, 2]] {
+        let inputs: Vec<BlockEntry> = vec![
+            StringType::from_data(vec!["a", "a"]).into(),
+            Int64Type::from_data(values).into(),
+        ];
+        for name in ["json_object_agg", "json_object_agg_distinct"] {
+            let error = eval_aggregate(name, vec![], &inputs, 2, vec![]).unwrap_err();
+            assert!(error.message().contains("duplicate key"));
+        }
+    }
+    Ok(())
+}

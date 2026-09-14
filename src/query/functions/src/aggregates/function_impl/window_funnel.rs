@@ -159,6 +159,7 @@ impl WindowFunnelBuilder {
             .then(PlainRoute::new(WindowFunnelBuilder::create))
             .then(IfRoute::direct(WindowFunnelBuilder::create))
             .then(StateRoute::direct(WindowFunnelBuilder::create))
+            .then(DistinctAliasRoute::direct(WindowFunnelBuilder::create))
     }
 
     fn create(build: DirectBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
