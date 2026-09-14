@@ -53,7 +53,7 @@ impl FromToProto for mt::LockKey {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::LockKey, Incompatible> {
+    fn to_pb(&self) -> pb::LockKey {
         let key = match self {
             mt::LockKey::Table { tenant, table_id } => {
                 Some(pb::lock_key::Key::Table(pb::lock_key::Table {
@@ -62,11 +62,11 @@ impl FromToProto for mt::LockKey {
                 }))
             }
         };
-        Ok(pb::LockKey {
+        pb::LockKey {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             key,
-        })
+        }
     }
 }
 
@@ -93,18 +93,17 @@ impl FromToProto for mt::LockMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::LockMeta, Incompatible> {
-        let p = pb::LockMeta {
+    fn to_pb(&self) -> pb::LockMeta {
+        pb::LockMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             user: self.user.clone(),
             node: self.node.clone(),
             query_id: self.query_id.clone(),
-            created_on: self.created_on.to_pb()?,
-            acquired_on: self.acquired_on.to_pb_opt()?,
+            created_on: self.created_on.to_pb(),
+            acquired_on: self.acquired_on.to_pb_opt(),
             lock_type: self.lock_type.clone() as i32,
             extra_info: self.extra_info.clone(),
-        };
-        Ok(p)
+        }
     }
 }

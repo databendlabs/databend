@@ -1,0 +1,238 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+
+# Although the stream_backlog function is not a EE function, it is dependent on the EE feature change_tracking.
+
+statement ok
+DROP DATABASE IF EXISTS test_stream_backlog
+
+statement ok
+CREATE DATABASE test_stream_backlog
+
+statement ok
+USE test_stream_backlog
+
+statement error 1025
+call system$stream_backlog('not_exist')
+
+statement error 1025
+select * from stream_backlog('not_exist')
+
+statement ok
+create table t(a int)
+
+statement ok
+alter table t set options(change_tracking=true)
+
+statement ok
+create stream if not exists s on table t
+
+query III
+select * from stream_backlog('s')
+----
+0 0 0
+
+query III
+select * from stream_backlog('test_stream_backlog.s')
+----
+0 0 0
+
+query III
+select * from stream_backlog('default.test_stream_backlog.s')
+----
+0 0 0
+
+query III
+call system$stream_backlog('s')
+----
+0 0 0
+
+query III
+call system$stream_backlog('test_stream_backlog.s')
+----
+0 0 0
+
+query III
+call system$stream_backlog('default.test_stream_backlog.s')
+----
+0 0 0
+
+statement ok
+insert into t values(1), (2)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s')
+----
+2 0 2
+
+statement ok
+create table t_append_delete_insert(a int)
+
+statement ok
+insert into t_append_delete_insert values(1), (2)
+
+statement ok
+create stream s_append_delete_insert on table t_append_delete_insert append_only = true
+
+statement ok
+delete from t_append_delete_insert where a = 1
+
+statement ok
+insert into t_append_delete_insert values(3)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_append_delete_insert')
+----
+2 2 1
+
+statement ok
+create table t_append_update(a int)
+
+statement ok
+insert into t_append_update values(1)
+
+statement ok
+create stream s_append_update on table t_append_update append_only = true
+
+statement ok
+update t_append_update set a = a + 10 where a = 1
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_append_update')
+----
+1 1 0
+
+statement ok
+create table t_standard_update(a int)
+
+statement ok
+insert into t_standard_update values(1)
+
+statement ok
+create stream s_standard_update on table t_standard_update append_only = false
+
+statement ok
+update t_standard_update set a = a + 10 where a = 1
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_update')
+----
+1 1 2
+
+statement ok
+create table t_standard_truncate(a int)
+
+statement ok
+insert into t_standard_truncate values(1), (2)
+
+statement ok
+create stream s_standard_truncate on table t_standard_truncate append_only = false
+
+statement ok
+truncate table t_standard_truncate
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_truncate')
+----
+0 2 2
+
+statement ok
+create table t_standard_mixed(a int)
+
+statement ok
+insert into t_standard_mixed values(1), (2), (3)
+
+statement ok
+create stream s_standard_mixed on table t_standard_mixed append_only = false
+
+statement ok
+delete from t_standard_mixed where a = 1
+
+statement ok
+update t_standard_mixed set a = a + 10 where a = 2
+
+statement ok
+insert into t_standard_mixed values(4), (5)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_mixed')
+----
+4 3 5
+
+statement ok
+create table t_standard_overwrite(a int)
+
+statement ok
+insert into t_standard_overwrite values(1), (2)
+
+statement ok
+create stream s_standard_overwrite on table t_standard_overwrite append_only = false
+
+statement ok
+insert overwrite t_standard_overwrite values(3), (4), (5)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_overwrite')
+----
+3 2 5
+
+statement ok
+create table t_standard_merge(a int, b int)
+
+statement ok
+insert into t_standard_merge values(1, 10), (2, 20), (3, 30)
+
+statement ok
+create table t_merge_source(a int, b int)
+
+statement ok
+insert into t_merge_source values(2, 200), (3, 300), (4, 400)
+
+statement ok
+create stream s_standard_merge on table t_standard_merge append_only = false
+
+statement ok
+merge into t_standard_merge as t using t_merge_source as s on t.a = s.a when matched and t.a = 2 then update set t.b = s.b when matched and t.a = 3 then delete when not matched then insert values(s.a, s.b)
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_merge')
+----
+3 3 4
+
+statement ok
+create table t_standard_replace(a int, b int)
+
+statement ok
+insert into t_standard_replace values(1, 10), (2, 20)
+
+statement ok
+create table t_replace_source(a int, b int)
+
+statement ok
+insert into t_replace_source values(2, 200), (3, 300)
+
+statement ok
+create stream s_standard_replace on table t_standard_replace append_only = false
+
+statement ok
+replace into t_standard_replace on(a) select * from t_replace_source
+
+query III
+select rows_added, rows_removed, estimated_rows from stream_backlog('s_standard_replace')
+----
+3 2 3
+
+statement ok
+DROP DATABASE IF EXISTS test_stream_backlog

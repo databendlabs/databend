@@ -17,8 +17,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -26,6 +24,7 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::build_column_hlls;
 use databend_common_storages_fuse::io::serialize_block;
+use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -40,8 +39,9 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
+use opendal::Buffer;
 use opendal::Operator;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use uuid::Uuid;
 
 use super::old_version_generator;
@@ -75,7 +75,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<FileMetaData>, RawBlockHLL)> {
+    ) -> Result<(BlockMeta, Option<ParquetMetaData>, RawBlockHLL)> {
         let (location, block_id) = if !self.is_greater_than_v5 {
             let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
                 self.location_generator.prefix().to_string(),
@@ -104,8 +104,7 @@ impl<'a> BlockWriter<'a> {
             ..Default::default()
         };
 
-        let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let col_metas = serialize_block(&write_settings, schema, block, &mut buf)?;
+        let (col_metas, buf) = serialize_block(&write_settings, schema, block)?;
         let file_size = buf.len() as u64;
 
         data_accessor.write(&location.0, buf).await?;
@@ -140,7 +139,7 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Option<Location>, Option<FileMetaData>)> {
+    ) -> Result<(u64, Option<Location>, Option<ParquetMetaData>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
@@ -159,19 +158,18 @@ impl<'a> BlockWriter<'a> {
         if let Some(bloom_index) = maybe_bloom_index {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;
-            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
-            let meta = blocks_to_parquet(
+            let SerializedParquet { payload, metadata } = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],
-                &mut data,
                 TableCompression::None,
                 false,
                 None,
             )?;
+            let data = Buffer::from(payload);
             let size = data.len() as u64;
             data_accessor.write(&location.0, data).await?;
-            Ok((size, Some(location), Some(meta)))
+            Ok((size, Some(location), Some(metadata)))
         } else {
             Ok((0u64, None, None))
         }

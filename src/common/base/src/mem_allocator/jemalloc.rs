@@ -136,7 +136,7 @@ pub mod linux {
                     unsafe { ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) }
                         as *mut (),
                 )
-                .unwrap()
+                .ok_or(AllocError)?
             };
 
             Ok(NonNull::<[u8]>::from_raw_parts(

@@ -62,9 +62,11 @@ impl Interpreter for CommitInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        execute_commit_statement(self.ctx.clone()).await?;
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            execute_commit_statement(self.ctx.clone()).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 
@@ -83,8 +85,15 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
     let is_active = ctx.txn_mgr().lock().is_active();
     if is_active {
         ctx.txn_mgr().lock().set_auto_commit();
-        let req = ctx.txn_mgr().lock().req();
-        commit_with_backoff(ctx.clone(), req).await?;
+        let (tenant, req) = {
+            let txn_mgr = ctx.txn_mgr();
+            let txn_mgr = txn_mgr.lock();
+            (
+                txn_mgr.tenant().unwrap_or_else(|| ctx.get_tenant()),
+                txn_mgr.req(),
+            )
+        };
+        commit_with_backoff(ctx.clone(), &tenant, req).await?;
         let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
         for (stage_info, files) in need_purge_files {
             try_purge_files(ctx.clone(), &stage_info, &files).await;

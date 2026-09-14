@@ -2,7 +2,7 @@
 description: A single-output SRF should preserve the old get(unnest(...), 1) top-level extraction.
 sql: unnest([1, 2, 3])
 status: ok
-scalar: get(unnest([1, 2, 3]))
+scalar: get(1)(unnest([1, 2, 3]))
 type: UInt8 NULL
 
 === nested_set_returning_function_errors ===
@@ -18,3 +18,10 @@ sql: sum(unnest([1, 2, 3])) OVER ()
 status: error
 code: 1065
 message: set-returning functions cannot be used in window spec
+
+=== set_returning_function_rejects_filter ===
+description: FILTER syntax should be rejected before SRF-specific lowering can ignore it.
+sql: unnest([1]) FILTER (WHERE false)
+status: error
+code: 1065
+message: FILTER clause is only supported for aggregate functions

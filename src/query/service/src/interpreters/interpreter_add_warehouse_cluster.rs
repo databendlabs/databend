@@ -52,60 +52,62 @@ impl Interpreter for AddWarehouseClusterInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        if let Some(cluster_size) = self.plan.options.get("cluster_size") {
-            if !self.plan.nodes.is_empty() {
-                return Err(ErrorCode::InvalidArgument(
-                    "CLUSTER_SIZE option and node list exists in one query.",
-                ));
+            if let Some(cluster_size) = self.plan.options.get("cluster_size") {
+                if !self.plan.nodes.is_empty() {
+                    return Err(ErrorCode::InvalidArgument(
+                        "CLUSTER_SIZE option and node list exists in one query.",
+                    ));
+                }
+
+                let Ok(cluster_size) = cluster_size.parse::<usize>() else {
+                    return Err(ErrorCode::InvalidArgument(
+                        "CLUSTER_SIZE must be a <number>",
+                    ));
+                };
+
+                GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                    .add_warehouse_cluster(
+                        self.plan.warehouse.clone(),
+                        self.plan.cluster.clone(),
+                        vec![SelectedNode::Random(None); cluster_size],
+                    )
+                    .await?;
+
+                return Ok(PipelineBuildResult::create());
             }
 
-            let Ok(cluster_size) = cluster_size.parse::<usize>() else {
-                return Err(ErrorCode::InvalidArgument(
-                    "CLUSTER_SIZE must be a <number>",
-                ));
-            };
+            if self.plan.nodes.is_empty() {
+                return Err(ErrorCode::InvalidArgument("Cluster nodes list is empty"));
+            }
+
+            let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());
+            for (group, nodes) in &self.plan.nodes {
+                for _ in 0..*nodes {
+                    selected_nodes.push(SelectedNode::Random(group.clone()));
+                }
+            }
 
             GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
                 .add_warehouse_cluster(
                     self.plan.warehouse.clone(),
                     self.plan.cluster.clone(),
-                    vec![SelectedNode::Random(None); cluster_size],
+                    selected_nodes,
                 )
                 .await?;
 
-            return Ok(PipelineBuildResult::create());
-        }
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_add_cluster", &self.plan))?
+            );
 
-        if self.plan.nodes.is_empty() {
-            return Err(ErrorCode::InvalidArgument("Cluster nodes list is empty"));
-        }
-
-        let mut selected_nodes = Vec::with_capacity(self.plan.nodes.len());
-        for (group, nodes) in &self.plan.nodes {
-            for _ in 0..*nodes {
-                selected_nodes.push(SelectedNode::Random(group.clone()));
-            }
-        }
-
-        GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .add_warehouse_cluster(
-                self.plan.warehouse.clone(),
-                self.plan.cluster.clone(),
-                selected_nodes,
-            )
-            .await?;
-
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_add_cluster", &self.plan))?
-        );
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -51,7 +51,7 @@ use crate::io::MetaReaders;
 // }
 // We can extract these fields `val['id']`, `val['name']`, `val['tags'][0]`,
 // `val['pricings'][0]['type']` and so on as virtual columns,
-// and and store them a separate block file.
+// and store them a separate block file.
 //
 // When reading virtual columns, first check whether the block file of virtual columns exists,
 // if it exists, read the schema from the meta of the file and using the schema

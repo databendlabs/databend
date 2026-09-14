@@ -21,12 +21,13 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::StatBounds;
 
 use crate::ColumnSet;
 use crate::Symbol;
@@ -38,6 +39,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -160,9 +162,18 @@ impl Operator for ConstantTableScan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
+            let (is_all_null, bitmap) = value.validity();
+            if is_all_null {
+                if self.num_rows > 0 {
+                    column_stats.insert(*index, ColumnStat::AllNull {
+                        null_count: StatCount::exact(self.num_rows as u64),
+                    });
+                }
+                continue;
+            }
             let (mins, _) = eval_aggr(
                 "min",
                 vec![],
@@ -207,12 +218,7 @@ impl Operator for ConstantTableScan {
             )?;
             let ndv = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap()[0];
 
-            let (is_all_null, bitmap) = value.validity();
-            let null_count = match (is_all_null, bitmap) {
-                (true, _) => self.num_rows as u64,
-                (false, Some(bitmap)) => bitmap.null_count() as u64,
-                (false, None) => 0,
-            };
+            let null_count = bitmap.map_or(0, |bitmap| bitmap.null_count() as u64);
 
             let histogram = HistogramBuilder::from_ndv(
                 ndv,
@@ -221,13 +227,14 @@ impl Operator for ConstantTableScan {
                 DEFAULT_HISTOGRAM_BUCKETS,
             )
             .ok();
-            let column_stat = ColumnStat {
-                min,
-                max,
-                ndv: StatEstimate::exact(ndv as f64),
-                null_count: StatCount::exact(null_count),
+            let bounds = StatBounds::new(min, max)?;
+            let column_stat = ColumnStat::new(
+                bounds,
+                NdvEstimate::exact(ndv as f64),
+                StatCount::exact(null_count),
                 histogram,
-            };
+            )
+            .map_err(ErrorCode::Internal)?;
             column_stats.insert(*index, column_stat);
         }
         Ok(Arc::new(StatInfo {
@@ -235,6 +242,8 @@ impl Operator for ConstantTableScan {
             statistics: Statistics {
                 precise_cardinality: Some(self.num_rows as u64),
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }

@@ -7,6 +7,15 @@ output domain  : {1..=1}
 output         : 1
 
 
+ast            : regexp_instr('abc', 'a', 5)
+raw expr       : regexp_instr('abc', 'a', 5)
+checked expr   : regexp_instr<String, String, Int64>("abc", "a", CAST<UInt8>(5_u8 AS Int64))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
 raw expr       : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
 checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", "a{2}", CAST<UInt8>(1_u8 AS Int64))

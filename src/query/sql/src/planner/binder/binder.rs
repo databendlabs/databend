@@ -12,40 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono_tz::Tz;
-use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::FileFormatOptionsReader;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_storages_common_table_meta::table::is_stream_name;
-use log::warn;
 
-use super::Finder;
+use super::Any;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::MetadataRef;
@@ -55,11 +50,12 @@ use crate::TypeChecker;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::bind_query::ExpressionScanContext;
+use crate::binder::parse_file_format;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
-use crate::binder::wrap_cast;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::ScanRequiredColumns;
 use crate::planner::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
@@ -100,8 +96,12 @@ pub struct Binder {
     /// Only that CTE should treat self references as `RecursiveCteScan`.
     pub bind_recursive_cte: Option<String>,
     pub m_cte_table_name: HashMap<String, String>,
+    /// Binder-local table instances that take precedence over catalog resolution.
+    pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
     pub enable_result_cache: bool,
+
+    pub enable_materialized_view_rewrite: bool,
 
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
@@ -118,6 +118,10 @@ impl Binder {
             .get_settings()
             .get_enable_query_result_cache()
             .unwrap_or_default();
+        let enable_materialized_view_rewrite = ctx
+            .get_settings()
+            .get_enable_materialized_view_rewrite()
+            .unwrap_or(true);
         Binder {
             ctx,
             dialect,
@@ -127,9 +131,16 @@ impl Binder {
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
+            pre_resolved_tables: HashMap::new(),
             enable_result_cache,
+            enable_materialized_view_rewrite,
             subquery_executor: None,
         }
+    }
+
+    pub fn with_materialized_view_rewrite(mut self, enable: bool) -> Self {
+        self.enable_materialized_view_rewrite = enable;
+        self
     }
 
     pub fn with_subquery_executor(
@@ -148,7 +159,10 @@ impl Binder {
             .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
-        self.bind_query_index(&mut bind_context, &plan).await?;
+        if self.enable_materialized_view_rewrite {
+            self.bind_query_materialized_views(&mut bind_context, &plan)
+                .await?;
+        }
         self.ctx.set_status_info(&format!(
             "[SQL-BINDER] Statement binding completed, execution time: {:?}",
             start.elapsed()
@@ -183,9 +197,12 @@ impl Binder {
                 }
             }
 
-            Statement::StatementWithSettings { settings, stmt } => {
-                self.bind_statement_settings(bind_context, settings, stmt)
-                    .await?
+            Statement::StatementWithSettings { settings: _, stmt } => {
+                if let box Statement::StatementWithSettings { .. } = stmt {
+                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                } else {
+                    self.bind_statement(bind_context, stmt).await?
+                }
             }
 
             Statement::Explain {
@@ -232,27 +249,9 @@ impl Binder {
                     .await?
             }
 
-            Statement::CopyIntoTable(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_copy_into_table(bind_context, stmt).await?
-            }
+            Statement::CopyIntoTable(stmt) => self.bind_copy_into_table(bind_context, stmt).await?,
 
             Statement::CopyIntoLocation(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve COPY optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
                 self.bind_copy_into_location(bind_context, stmt).await?
             }
 
@@ -296,6 +295,13 @@ impl Binder {
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
+            Statement::CreateShare(stmt) => self.bind_create_share(stmt).await?,
+            Statement::DropShare(stmt) => self.bind_drop_share(stmt).await?,
+            Statement::AlterShare(stmt) => self.bind_alter_share(stmt).await?,
+            Statement::GrantShare(stmt) => self.bind_grant_share(stmt).await?,
+            Statement::RevokeShare(stmt) => self.bind_revoke_share(stmt).await?,
+            Statement::ShowShares(stmt) => self.bind_show_shares(stmt).await?,
+            Statement::DescShare(stmt) => self.bind_desc_share(stmt).await?,
             Statement::UseDatabase { database } => {
                 let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan { database }))
@@ -324,6 +330,8 @@ impl Binder {
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
+            Statement::VacuumTables(stmt) => self.bind_vacuum_tables(bind_context, stmt).await?,
+            Statement::VacuumAll(stmt) => self.bind_vacuum_all(bind_context, stmt).await?,
             Statement::VacuumDropTable(stmt) => {
                 self.bind_vacuum_drop_table(bind_context, stmt).await?
             }
@@ -346,11 +354,27 @@ impl Binder {
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
             Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
             Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
+            Statement::RefreshLineage(stmt) => self.bind_refresh_lineage(stmt),
+            Statement::CreateMaterializedView(stmt) => {
+                self.bind_create_materialized_view(stmt).await?
+            }
+            Statement::AlterMaterializedView(stmt) => {
+                self.bind_alter_materialized_view(stmt).await?
+            }
+            Statement::DropMaterializedView(stmt) => self.bind_drop_materialized_view(stmt).await?,
+            Statement::RefreshMaterializedView(stmt) => {
+                self.bind_refresh_materialized_view(stmt).await?
+            }
+            Statement::ShowCreateMaterializedView(stmt) => {
+                self.bind_show_create_materialized_view(bind_context, stmt)
+                    .await?
+            }
+            Statement::ShowMaterializedViews(stmt) => {
+                self.bind_show_materialized_views(bind_context, stmt)
+                    .await?
+            }
 
             // Indexes
-            Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
-            Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
-            Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
             Statement::CreateTableIndex(stmt) => {
                 self.bind_create_table_index(bind_context, stmt).await?
             }
@@ -451,14 +475,17 @@ impl Binder {
             }
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
-                    format!(", pattern => '{pattern}'")
+                    format!(", pattern => {}", QuotedString(pattern, '\''))
                 } else {
                     "".to_string()
                 };
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})")
-                        .as_str(),
+                    format!(
+                        "SELECT * FROM LIST_STAGE(location => {}{pattern})",
+                        QuotedString(format!("@{location}"), '\'')
+                    )
+                    .as_str(),
                     RewriteKind::ListStage,
                 )
                 .await?
@@ -466,8 +493,11 @@ impl Binder {
             Statement::DescribeStage { stage_name } => {
                 self.bind_rewrite_to_query(
                     bind_context,
-                    format!("SELECT * FROM default.system.stages WHERE name = '{stage_name}'")
-                        .as_str(),
+                    format!(
+                        "SELECT * FROM default.system.stages WHERE name = {}",
+                        QuotedString(stage_name, '\'')
+                    )
+                    .as_str(),
                     RewriteKind::DescribeStage,
                 )
                 .await?
@@ -492,64 +522,14 @@ impl Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
-            Statement::Insert(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "In INSERT resolve optimize hints {:?} failed, err: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_insert(bind_context, stmt).await?
-            }
+            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
             Statement::InsertMultiTable(stmt) => {
                 self.bind_insert_multi_table(bind_context, stmt).await?
             }
-            Statement::Replace(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve REPLACE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_replace(bind_context, stmt).await?
-            }
-            Statement::MergeInto(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve MERGE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_merge_into(bind_context, stmt).await?
-            }
-            Statement::Delete(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve DELETE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_delete(bind_context, stmt).await?
-            }
-            Statement::Update(stmt) => {
-                if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!(
-                            "[SQL-BINDER] Failed to resolve UPDATE optimize hints {:?}, error: {:?}",
-                            hints, e
-                        );
-                    }
-                }
-                self.bind_update(bind_context, stmt).await?
-            }
+            Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
+            Statement::MergeInto(stmt) => self.bind_merge_into(bind_context, stmt).await?,
+            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt).await?,
+            Statement::Update(stmt) => self.bind_update(bind_context, stmt).await?,
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
@@ -579,15 +559,11 @@ impl Binder {
                         "[SQL-BINDER] File format '{name}' is reserved and cannot be used"
                     )));
                 }
-                let file_format_params = FileFormatParams::try_from_reader(
-                    FileFormatOptionsReader::from_ast(file_format_options),
-                    false,
+                let file_format_params = parse_file_format(
+                    databend_common_meta_app::principal::FileFormatOptionsReader::from_ast(
+                        file_format_options,
+                    ),
                 )?;
-                if matches!(file_format_params, FileFormatParams::Lance(_)) {
-                    return Err(ErrorCode::IllegalFileFormat(
-                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
-                    ));
-                }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
@@ -910,54 +886,6 @@ impl Binder {
         Ok(scalar)
     }
 
-    pub(crate) fn opt_hints_set_var(
-        &mut self,
-        bind_context: &mut BindContext,
-        hints: &Hint,
-    ) -> Result<()> {
-        let mut type_checker = TypeChecker::try_create(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            false,
-        )?;
-        let mut hint_settings: HashMap<String, String> = HashMap::new();
-        for hint in &hints.hints_list {
-            let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr)?;
-
-            let scalar = wrap_cast(&scalar, &DataType::String);
-            let expr = scalar.as_expr()?;
-
-            let (new_expr, _) =
-                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            match new_expr {
-                Expr::Constant(Constant { scalar, .. }) => {
-                    let value = scalar.into_string().unwrap();
-                    if variable.to_lowercase().as_str() == "timezone" {
-                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
-                        tz.parse::<Tz>().map_err(|_| {
-                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
-                        })?;
-                    }
-                    hint_settings.entry(variable.to_string()).or_insert(value);
-                }
-                _ => {
-                    warn!(
-                        "[SQL-BINDER] Failed to fold hint {:?}: value must be a constant",
-                        hint
-                    );
-                }
-            }
-        }
-
-        self.ctx
-            .get_shared_settings()
-            .set_batch_settings(&hint_settings, true)
-    }
-
     pub fn set_bind_recursive_cte(&mut self, val: Option<String>) {
         self.bind_recursive_cte = val;
     }
@@ -1068,9 +996,9 @@ impl Binder {
                     | ScalarExpr::AsyncFunctionCall(_)
             ) || scalar.is_aggregate()
         };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 
     pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
@@ -1089,22 +1017,22 @@ impl Binder {
                 .unwrap_or(true),
             _ => false,
         };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        Ok(!any.result())
     }
 
-    pub(crate) fn add_internal_column_into_expr(
+    pub(crate) fn add_bound_columns_into_expr(
         &mut self,
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
-        if bind_context.bound_internal_columns.is_empty() {
+        if bind_context.bound_internal_columns.is_empty()
+            && bind_context.bound_virtual_columns.is_empty()
+        {
             return Ok(s_expr);
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;
-        let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
-        let mut s_expr = s_expr;
 
         let mut has_score = false;
         let mut has_matched = false;
@@ -1121,43 +1049,38 @@ impl Binder {
                     .to_string(),
             ));
         }
-        let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
 
+        let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
         for ((table_index, _), column_index) in bound_internal_columns.iter() {
-            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
-                i.has_score = has_score;
-                i
-            });
-            let vector_index = vector_index_map.shift_remove(table_index);
-            s_expr = s_expr.add_column_index_to_scans(
-                *table_index,
-                *column_index,
-                &inverted_index,
-                &vector_index,
-            );
+            required_columns
+                .entry(*table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
         }
-        Ok(s_expr)
-    }
 
-    pub(crate) fn add_virtual_column_into_expr(
-        &mut self,
-        bind_context: &mut BindContext,
-        s_expr: SExpr,
-    ) -> Result<SExpr> {
-        if bind_context.bound_virtual_columns.is_empty() {
-            return Ok(s_expr);
+        if !required_columns.is_empty() {
+            let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
+            let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
+            for (table_index, required_columns) in required_columns.iter_mut() {
+                required_columns.inverted_index =
+                    inverted_index_map.shift_remove(table_index).map(|mut i| {
+                        i.has_score = has_score;
+                        i
+                    });
+                required_columns.vector_index = vector_index_map.shift_remove(table_index);
+            }
         }
+
         let bound_virtual_columns = &bind_context.bound_virtual_columns;
-
-        let mut s_expr = s_expr;
         for (virtual_column_name, (_, column_index)) in bound_virtual_columns.iter() {
-            s_expr = s_expr.add_column_index_to_scans(
-                virtual_column_name.table_index,
-                *column_index,
-                &None,
-                &None,
-            );
+            required_columns
+                .entry(virtual_column_name.table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
         }
-        Ok(s_expr)
+
+        Ok(s_expr.add_column_indexes_to_scans(&required_columns))
     }
 }

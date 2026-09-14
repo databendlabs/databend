@@ -16,7 +16,7 @@ runs:
   using: "composite"
   steps:
     - name: Setup sccache
-      uses: mozilla-actions/sccache-action@v0.0.3
+      uses: mozilla-actions/sccache-action@v0.0.10
 
     - name: Rust setup
       shell: bash

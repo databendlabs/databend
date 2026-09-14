@@ -140,7 +140,6 @@ mod tests {
             vec![],
             None,
             None,
-            None,
             // Dummy timestamps for test
             TableMetaTimestamps::new(None, Duration::hours(1)),
         )

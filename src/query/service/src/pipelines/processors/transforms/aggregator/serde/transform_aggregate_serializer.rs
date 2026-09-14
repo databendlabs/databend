@@ -13,23 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::Formatter;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PayloadFlushState;
-use databend_common_expression::local_block_meta_serde;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use futures::future::BoxFuture;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
@@ -129,51 +123,14 @@ impl TransformAggregateSerializer {
             unreachable!()
         };
 
-        self.input_data = Some(SerializeAggregateStream::create(
-            &self.params,
-            SerializePayload::AggregatePayload(p),
-        ));
+        self.input_data = Some(SerializeAggregateStream::create(&self.params, p));
         Ok(Event::Sync)
     }
 }
 
-pub enum SerializePayload {
-    AggregatePayload(AggregatePayload),
-}
-
-pub enum FlightSerialized {
-    DataBlock(DataBlock),
-    Future(BoxFuture<'static, Result<DataBlock>>),
-}
-
-unsafe impl Sync for FlightSerialized {}
-
-pub struct FlightSerializedMeta {
-    pub serialized_blocks: Vec<FlightSerialized>,
-}
-
-impl FlightSerializedMeta {
-    pub fn create(blocks: Vec<FlightSerialized>) -> BlockMetaInfoPtr {
-        Box::new(FlightSerializedMeta {
-            serialized_blocks: blocks,
-        })
-    }
-}
-
-impl std::fmt::Debug for FlightSerializedMeta {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("FlightSerializedMeta").finish()
-    }
-}
-
-local_block_meta_serde!(FlightSerializedMeta);
-
-#[typetag::serde(name = "exchange_shuffle")]
-impl BlockMetaInfo for FlightSerializedMeta {}
-
 pub struct SerializeAggregateStream {
     _params: Arc<AggregatorParams>,
-    pub payload: Pin<Box<SerializePayload>>,
+    payload: AggregatePayload,
     flush_state: PayloadFlushState,
     end_iter: bool,
     nums: usize,
@@ -184,9 +141,7 @@ unsafe impl Send for SerializeAggregateStream {}
 unsafe impl Sync for SerializeAggregateStream {}
 
 impl SerializeAggregateStream {
-    pub fn create(params: &Arc<AggregatorParams>, payload: SerializePayload) -> Self {
-        let payload = Box::pin(payload);
-
+    pub fn create(params: &Arc<AggregatorParams>, payload: AggregatePayload) -> Self {
         SerializeAggregateStream {
             payload,
             flush_state: PayloadFlushState::default(),
@@ -211,12 +166,16 @@ impl SerializeAggregateStream {
             return Ok(None);
         }
 
-        let SerializePayload::AggregatePayload(p) = self.payload.as_ref().get_ref();
-        match p.payload.aggregate_flush(&mut self.flush_state)? {
+        let AggregatePayload {
+            bucket,
+            ref payload,
+            max_partition_count,
+        } = self.payload;
+        match payload.aggregate_flush(&mut self.flush_state)? {
             Some(block) => {
                 self.nums += 1;
                 Ok(Some(block.add_meta(Some(
-                    AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count, false),
+                    AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, false),
                 ))?))
             }
             None => {
@@ -224,13 +183,9 @@ impl SerializeAggregateStream {
                 // always return at least one block
                 if self.nums == 0 {
                     self.nums += 1;
-                    let block = p.payload.empty_block(1);
+                    let block = payload.empty_block(1);
                     Ok(Some(block.add_meta(Some(
-                        AggregateSerdeMeta::create_agg_payload(
-                            p.bucket,
-                            p.max_partition_count,
-                            true,
-                        ),
+                        AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, true),
                     ))?))
                 } else {
                     Ok(None)

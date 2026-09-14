@@ -125,12 +125,6 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
 
     assert!(
         license_mgr
-            .check_enterprise_enabled(token.clone(), Feature::VirtualColumn)
-            .is_err()
-    );
-
-    assert!(
-        license_mgr
             .check_enterprise_enabled(token.clone(), Feature::Test)
             .is_ok()
     );

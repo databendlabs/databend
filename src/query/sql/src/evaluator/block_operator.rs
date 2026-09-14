@@ -14,9 +14,7 @@
 
 use std::collections::BTreeSet;
 
-use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
@@ -45,29 +43,14 @@ impl BlockOperator {
         }
         match self {
             BlockOperator::Map { exprs, projections } => {
-                let num_evals = input
-                    .get_meta()
-                    .and_then(AggIndexMeta::downcast_ref_from)
-                    .map(|a| a.num_evals);
-
-                if let Some(num_evals) = num_evals {
-                    // It's from aggregating index.
-                    match projections {
-                        Some(projections) => {
-                            Ok(input.project_with_agg_index(projections, num_evals))
-                        }
-                        None => Ok(input),
-                    }
-                } else {
-                    for expr in exprs {
-                        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                        let result = evaluator.run(expr)?;
-                        input.add_value(result, expr.data_type().clone());
-                    }
-                    match projections {
-                        Some(projections) => Ok(input.project(projections)),
-                        None => Ok(input),
-                    }
+                for expr in exprs {
+                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                    let result = evaluator.run(expr)?;
+                    input.add_value(result, expr.data_type().clone());
+                }
+                match projections {
+                    Some(projections) => Ok(input.project(projections)),
+                    None => Ok(input),
                 }
             }
 

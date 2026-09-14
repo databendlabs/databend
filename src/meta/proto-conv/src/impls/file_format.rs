@@ -47,23 +47,26 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             pb::StageFileFormatType::Parquet => Ok(mt::principal::StageFileFormatType::Parquet),
             pb::StageFileFormatType::Xml => Ok(mt::principal::StageFileFormatType::Xml),
             pb::StageFileFormatType::Lance => Ok(mt::principal::StageFileFormatType::Lance),
+            pb::StageFileFormatType::Arrow => Ok(mt::principal::StageFileFormatType::Arrow),
+            pb::StageFileFormatType::ArrowStream => {
+                Ok(mt::principal::StageFileFormatType::ArrowStream)
+            }
         }
     }
 
-    fn to_pb_enum(&self) -> Result<pb::StageFileFormatType, Incompatible> {
+    fn to_pb_enum(&self) -> pb::StageFileFormatType {
         match *self {
-            mt::principal::StageFileFormatType::Csv => Ok(pb::StageFileFormatType::Csv),
-            mt::principal::StageFileFormatType::Text => Ok(pb::StageFileFormatType::Text),
-            mt::principal::StageFileFormatType::Json => Ok(pb::StageFileFormatType::Json),
-            mt::principal::StageFileFormatType::NdJson => Ok(pb::StageFileFormatType::NdJson),
-            mt::principal::StageFileFormatType::Avro => Ok(pb::StageFileFormatType::Avro),
-            mt::principal::StageFileFormatType::Orc => Ok(pb::StageFileFormatType::Orc),
-            mt::principal::StageFileFormatType::Parquet => Ok(pb::StageFileFormatType::Parquet),
-            mt::principal::StageFileFormatType::Xml => Ok(pb::StageFileFormatType::Xml),
-            mt::principal::StageFileFormatType::Lance => Ok(pb::StageFileFormatType::Lance),
-            mt::principal::StageFileFormatType::None => Err(Incompatible::new(
-                "StageFileFormatType::None cannot be converted to protobuf".to_string(),
-            )),
+            mt::principal::StageFileFormatType::Csv => pb::StageFileFormatType::Csv,
+            mt::principal::StageFileFormatType::Text => pb::StageFileFormatType::Text,
+            mt::principal::StageFileFormatType::Json => pb::StageFileFormatType::Json,
+            mt::principal::StageFileFormatType::NdJson => pb::StageFileFormatType::NdJson,
+            mt::principal::StageFileFormatType::Avro => pb::StageFileFormatType::Avro,
+            mt::principal::StageFileFormatType::Orc => pb::StageFileFormatType::Orc,
+            mt::principal::StageFileFormatType::Parquet => pb::StageFileFormatType::Parquet,
+            mt::principal::StageFileFormatType::Xml => pb::StageFileFormatType::Xml,
+            mt::principal::StageFileFormatType::Lance => pb::StageFileFormatType::Lance,
+            mt::principal::StageFileFormatType::Arrow => pb::StageFileFormatType::Arrow,
+            mt::principal::StageFileFormatType::ArrowStream => pb::StageFileFormatType::ArrowStream,
         }
     }
 }
@@ -90,22 +93,20 @@ impl FromToProtoEnum for mt::principal::StageFileCompression {
         }
     }
 
-    fn to_pb_enum(&self) -> Result<pb::StageFileCompression, Incompatible> {
+    fn to_pb_enum(&self) -> pb::StageFileCompression {
         match *self {
-            mt::principal::StageFileCompression::Auto => Ok(pb::StageFileCompression::Auto),
-            mt::principal::StageFileCompression::Gzip => Ok(pb::StageFileCompression::Gzip),
-            mt::principal::StageFileCompression::Bz2 => Ok(pb::StageFileCompression::Bz2),
-            mt::principal::StageFileCompression::Brotli => Ok(pb::StageFileCompression::Brotli),
-            mt::principal::StageFileCompression::Zstd => Ok(pb::StageFileCompression::Zstd),
-            mt::principal::StageFileCompression::Deflate => Ok(pb::StageFileCompression::Deflate),
-            mt::principal::StageFileCompression::RawDeflate => {
-                Ok(pb::StageFileCompression::RawDeflate)
-            }
-            mt::principal::StageFileCompression::Lzo => Ok(pb::StageFileCompression::Lzo),
-            mt::principal::StageFileCompression::Snappy => Ok(pb::StageFileCompression::Snappy),
-            mt::principal::StageFileCompression::None => Ok(pb::StageFileCompression::None),
-            mt::principal::StageFileCompression::Xz => Ok(pb::StageFileCompression::Xz),
-            mt::principal::StageFileCompression::Zip => Ok(pb::StageFileCompression::Zip),
+            mt::principal::StageFileCompression::Auto => pb::StageFileCompression::Auto,
+            mt::principal::StageFileCompression::Gzip => pb::StageFileCompression::Gzip,
+            mt::principal::StageFileCompression::Bz2 => pb::StageFileCompression::Bz2,
+            mt::principal::StageFileCompression::Brotli => pb::StageFileCompression::Brotli,
+            mt::principal::StageFileCompression::Zstd => pb::StageFileCompression::Zstd,
+            mt::principal::StageFileCompression::Deflate => pb::StageFileCompression::Deflate,
+            mt::principal::StageFileCompression::RawDeflate => pb::StageFileCompression::RawDeflate,
+            mt::principal::StageFileCompression::Lzo => pb::StageFileCompression::Lzo,
+            mt::principal::StageFileCompression::Snappy => pb::StageFileCompression::Snappy,
+            mt::principal::StageFileCompression::None => pb::StageFileCompression::None,
+            mt::principal::StageFileCompression::Xz => pb::StageFileCompression::Xz,
+            mt::principal::StageFileCompression::Zip => pb::StageFileCompression::Zip,
         }
     }
 }
@@ -151,11 +152,10 @@ impl FromToProto for mt::principal::FileFormatOptions {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::FileFormatOptions, Incompatible> {
-        let format = mt::principal::StageFileFormatType::to_pb_enum(&self.format)? as i32;
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(pb::FileFormatOptions {
+    fn to_pb(&self) -> pb::FileFormatOptions {
+        let format = mt::principal::StageFileFormatType::to_pb_enum(&self.format) as i32;
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        pb::FileFormatOptions {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             format,
@@ -167,7 +167,7 @@ impl FromToProto for mt::principal::FileFormatOptions {
             row_tag: self.row_tag.clone(),
             escape: self.escape.clone(),
             quote: self.quote.clone(),
-        })
+        }
     }
 }
 
@@ -196,16 +196,16 @@ impl FromToProto for mt::principal::UserDefinedFileFormat {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::UserDefinedFileFormat, Incompatible> {
-        let file_format_params = mt::principal::FileFormatParams::to_pb(&self.file_format_params)?;
-        let creator = mt::principal::UserIdentity::to_pb(&self.creator)?;
-        Ok(pb::UserDefinedFileFormat {
+    fn to_pb(&self) -> pb::UserDefinedFileFormat {
+        let file_format_params = mt::principal::FileFormatParams::to_pb(&self.file_format_params);
+        let creator = mt::principal::UserIdentity::to_pb(&self.creator);
+        pb::UserDefinedFileFormat {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             file_format_params: Some(file_format_params),
             creator: Some(creator),
-        })
+        }
     }
 }
 
@@ -263,59 +263,101 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::LanceFileFormatParams::from_pb(p)?,
                 ))
             }
+            Some(pb::file_format_params::Format::Arrow(p)) => {
+                Ok(mt::principal::FileFormatParams::Arrow(
+                    mt::principal::ArrowFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::ArrowStream(p)) => {
+                Ok(mt::principal::FileFormatParams::ArrowStream(
+                    mt::principal::ArrowFileFormatParams::from_pb(p)?,
+                ))
+            }
             None => Err(Incompatible::new(
                 "FileFormatParams.format cannot be None".to_string(),
             )),
         }
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         match self {
-            Self::Parquet(p) => Ok(Self::PB {
+            Self::Parquet(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Parquet(
-                    mt::principal::ParquetFileFormatParams::to_pb(p)?,
+                    mt::principal::ParquetFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::NdJson(p) => Ok(Self::PB {
+            },
+            Self::NdJson(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::NdJson(
-                    mt::principal::NdJsonFileFormatParams::to_pb(p)?,
+                    mt::principal::NdJsonFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Csv(p) => Ok(Self::PB {
+            },
+            Self::Csv(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Csv(
-                    mt::principal::CsvFileFormatParams::to_pb(p)?,
+                    mt::principal::CsvFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Json(p) => Ok(Self::PB {
+            },
+            Self::Json(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Json(
-                    mt::principal::JsonFileFormatParams::to_pb(p)?,
+                    mt::principal::JsonFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Avro(p) => Ok(Self::PB {
+            },
+            Self::Avro(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Avro(
-                    mt::principal::AvroFileFormatParams::to_pb(p)?,
+                    mt::principal::AvroFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Text(p) => Ok(Self::PB {
+            },
+            Self::Text(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Text(
-                    mt::principal::TextFileFormatParams::to_pb(p)?,
+                    mt::principal::TextFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Xml(p) => Ok(Self::PB {
+            },
+            Self::Xml(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Xml(
-                    mt::principal::XmlFileFormatParams::to_pb(p)?,
+                    mt::principal::XmlFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Orc(p) => Ok(Self::PB {
+            },
+            Self::Orc(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Orc(
-                    mt::principal::OrcFileFormatParams::to_pb(p)?,
+                    mt::principal::OrcFileFormatParams::to_pb(p),
                 )),
-            }),
-            Self::Lance(p) => Ok(Self::PB {
+            },
+            Self::Lance(p) => Self::PB {
                 format: Some(pb::file_format_params::Format::Lance(
-                    mt::principal::LanceFileFormatParams::to_pb(p)?,
+                    mt::principal::LanceFileFormatParams::to_pb(p),
                 )),
-            }),
+            },
+            Self::Arrow(p) => Self::PB {
+                format: Some(pb::file_format_params::Format::Arrow(
+                    mt::principal::ArrowFileFormatParams::to_pb(p),
+                )),
+            },
+            Self::ArrowStream(p) => Self::PB {
+                format: Some(pb::file_format_params::Format::ArrowStream(
+                    mt::principal::ArrowFileFormatParams::to_pb(p),
+                )),
+            },
+        }
+    }
+}
+
+impl FromToProto for mt::principal::ArrowFileFormatParams {
+    type PB = pb::ArrowFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::ArrowFileFormatParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        mt::principal::ArrowFileFormatParams::try_create(p.missing_field_as.as_deref())
+            .map_err(|e| Incompatible::new(e.to_string()))
+    }
+
+    fn to_pb(&self) -> pb::ArrowFileFormatParams {
+        pb::ArrowFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            missing_field_as: Some(self.missing_field_as.to_string()),
         }
     }
 }
@@ -333,12 +375,12 @@ impl FromToProto for mt::principal::OrcFileFormatParams {
             .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
-    fn to_pb(&self) -> Result<pb::OrcFileFormatParams, Incompatible> {
-        Ok(pb::OrcFileFormatParams {
+    fn to_pb(&self) -> pb::OrcFileFormatParams {
+        pb::OrcFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             missing_field_as: Some(self.missing_field_as.to_string()),
-        })
+        }
     }
 }
 
@@ -354,11 +396,11 @@ impl FromToProto for mt::principal::LanceFileFormatParams {
         Ok(mt::principal::LanceFileFormatParams::default())
     }
 
-    fn to_pb(&self) -> Result<pb::LanceFileFormatParams, Incompatible> {
-        Ok(pb::LanceFileFormatParams {
+    fn to_pb(&self) -> pb::LanceFileFormatParams {
+        pb::LanceFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-        })
+        }
     }
 }
 
@@ -388,17 +430,16 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
-    fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(pb::ParquetFileFormatParams {
+    fn to_pb(&self) -> pb::ParquetFileFormatParams {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        pb::ParquetFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
             use_logic_type: Some(self.use_logic_type),
-        })
+        }
     }
 }
 
@@ -426,17 +467,16 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
-    fn to_pb(&self) -> Result<pb::NdJsonFileFormatParams, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(pb::NdJsonFileFormatParams {
+    fn to_pb(&self) -> pb::NdJsonFileFormatParams {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        pb::NdJsonFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_field_as: Some(self.null_field_as.to_string()),
             null_if: self.null_if.clone(),
-        })
+        }
     }
 }
 
@@ -457,14 +497,13 @@ impl FromToProto for mt::principal::JsonFileFormatParams {
         Ok(Self { compression })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
-        })
+        }
     }
 }
 
@@ -488,15 +527,14 @@ impl FromToProto for mt::principal::XmlFileFormatParams {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
             row_tag: self.row_tag.clone(),
-        })
+        }
     }
 }
 
@@ -571,10 +609,9 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
@@ -596,7 +633,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             encoding_error_mode: Some(self.encoding_error_mode.clone()),
             trim_space: self.trim_space,
             quote_style: Some(self.quote_style.to_string()),
-        })
+        }
     }
 }
 
@@ -640,10 +677,9 @@ impl FromToProto for mt::principal::TextFileFormatParams {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
@@ -660,7 +696,7 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             encoding: Some(self.encoding.clone()),
             encoding_error_mode: Some(self.encoding_error_mode.clone()),
             trim_space: self.trim_space,
-        })
+        }
     }
 }
 
@@ -688,16 +724,15 @@ impl FromToProto for mt::principal::AvroFileFormatParams {
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
-    fn to_pb(&self) -> Result<pb::AvroFileFormatParams, Incompatible> {
-        let compression =
-            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
-        Ok(pb::AvroFileFormatParams {
+    fn to_pb(&self) -> pb::AvroFileFormatParams {
+        let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
+        pb::AvroFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
             use_logic_type: Some(self.use_logic_type),
-        })
+        }
     }
 }

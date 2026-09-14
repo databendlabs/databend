@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use ExecuteState::*;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -335,6 +336,7 @@ impl Executor {
                         SystemTime::now(),
                         Some(e.clone()),
                         false,
+                        &[],
                     )
                     .unwrap_or_else(|e| error!("Failed to write query_log: {:?}", e));
                 }
@@ -407,14 +409,15 @@ impl ExecuteState {
         arrow_features: Option<ArrowFeatures>,
         mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
-        let make_error = || format!("failed to start query: {sql}");
+        let masked_sql = mask_connection_info(&sql);
+        let make_error = || format!("failed to start query: {masked_sql}");
 
         info!("Preparing to plan SQL query");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true, params.as_ref())
             .await
-            .map_err(|err| err.display_with_sql(&sql))
+            .map_err(|err| err.display_with_sql(&masked_sql))
             .with_context(make_error)?;
 
         Self::apply_settings(

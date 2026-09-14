@@ -30,6 +30,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
@@ -49,9 +50,11 @@ use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::TopN;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowGroup;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::sequence::Sequence;
 
@@ -79,7 +82,7 @@ pub trait Operator {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo::default()))
     }
 
@@ -115,10 +118,12 @@ pub enum RelOp {
     Aggregate,
     Sort,
     Limit,
+    TopN,
     Exchange,
     UnionAll,
     DummyTableScan,
     Window,
+    WindowGroup,
     ProjectSet,
     ConstantTableScan,
     ExpressionScan,
@@ -152,10 +157,12 @@ pub enum RelOperator {
     Aggregate(Aggregate),
     Sort(Sort),
     Limit(Limit),
+    TopN(TopN),
     Exchange(Exchange),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     Window(Window),
+    WindowGroup(WindowGroup),
     ProjectSet(ProjectSet),
     ConstantTableScan(ConstantTableScan),
     ExpressionScan(ExpressionScan),
@@ -218,8 +225,8 @@ impl Operator for RelOperator {
         match_rel_op!(self, derive_physical_prop(rel_expr))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        match_rel_op!(self, derive_stats(rel_expr))
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        match_rel_op!(self, derive_stats(rel_expr, stat_ctx))
     }
 
     fn compute_required_prop_child(
@@ -256,10 +263,12 @@ impl_try_from_rel_operator! {
     Aggregate,
     Sort,
     Limit,
+    TopN,
     Exchange,
     UnionAll,
     DummyTableScan,
     Window,
+    WindowGroup,
     ProjectSet,
     ConstantTableScan,
     ExpressionScan,

@@ -17,9 +17,9 @@ mod alter_table;
 mod analyze;
 mod clustering;
 mod commit;
+mod logical_change_retry;
 
 mod create_or_replace_ownership_object;
-mod gc;
 mod internal_column;
 mod mutation;
 mod navigate;
@@ -30,3 +30,6 @@ mod read_plan;
 mod replace_into;
 mod table_analyze;
 mod truncate;
+mod virtual_column_pruner_reader;
+mod virtual_columns;
+mod virtual_columns_builder;

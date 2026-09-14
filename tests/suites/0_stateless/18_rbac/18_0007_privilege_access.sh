@@ -4,13 +4,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_root_sql() {
-  cat <<SQL | $BENDSQL_CLIENT_CONNECT
+  cat <<SQL | bendsql_connect_root
 $1
 SQL
 }
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql_query_http_user_connect test-user password -A"
+export TEST_USER_CONNECT="bendsql_connect_user test-user password -A"
 export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 run_test_user() {
@@ -26,8 +26,8 @@ drop database if exists dbnotexists;
 "
 
 # These need separate execution to show individual errors
-echo "GRANT SELECT ON db01.tbnotexists TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT SELECT ON dbnotexists.* TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
+echo "GRANT SELECT ON db01.tbnotexists TO 'test-user'" | bendsql_connect_root
+echo "GRANT SELECT ON dbnotexists.* TO 'test-user'" | bendsql_connect_root
 
 run_root_sql "
 drop user if exists 'test-user';
@@ -105,12 +105,17 @@ select * from t20_0012 order by c;
 
 ## optimize table - test permission denied
 echo "select 'test -- optimize table'" | $TEST_USER_CONNECT
-echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
+echo "optimize table t20_0012 compact" | $TEST_USER_CONNECT
+
+## global vacuum drop table - test permission denied
+## This must require global SUPER instead of trying to resolve an empty database name.
+echo "select 'test -- vacuum drop table'" | $TEST_USER_CONNECT
+echo "vacuum drop table" | $TEST_USER_CONNECT
 
 ## grant user privilege and test optimize
 run_root_sql "GRANT Super ON *.* TO 'test-user';"
 run_test_user "
-set data_retention_time_in_days=0; optimize table t20_0012 all;
+optimize table t20_0012 compact;
 select count(*)>=1 from fuse_snapshot('default', 't20_0012');
 "
 
@@ -185,7 +190,7 @@ rm -rf password.out
 
 ## Show grants test
 export TEST_USER_PASSWORD="password"
-export USER_A_CONNECT="bendsql_query_http_user_connect a password -A"
+export USER_A_CONNECT="bendsql_connect_user a password -A"
 
 run_user_a() {
   cat <<SQL | $USER_A_CONNECT
@@ -208,16 +213,16 @@ drop table if exists default.test_t;
 create table default.test_t(id int not null);
 "
 
-echo "show grants for a" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for a" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 echo "show databases" | $USER_A_CONNECT
 
-echo "select 'test -- show tables from system'" | $BENDSQL_CLIENT_CONNECT
+echo "select 'test -- show tables from system'" | bendsql_connect_root
 echo "show tables from system" | $USER_A_CONNECT
-echo "select 'test -- show tables from grant_db'" | $BENDSQL_CLIENT_CONNECT
+echo "select 'test -- show tables from grant_db'" | bendsql_connect_root
 echo "show tables from grant_db" | $USER_A_CONNECT
 echo "use system" | $USER_A_CONNECT
 echo "use grant_db" | $USER_A_CONNECT
-echo "select 'test -- show columns from one from system'" | $BENDSQL_CLIENT_CONNECT
+echo "select 'test -- show columns from one from system'" | bendsql_connect_root
 run_user_a "
 show columns from one from system;
 show columns from t from grant_db;
@@ -236,11 +241,11 @@ select count(1) from information_schema.columns where table_schema in ('grant_db
 select count(1) from information_schema.columns where table_schema in ('nogrant');
 "
 
-echo "show columns from clusters from system" | $BENDSQL_CLIENT_CONNECT | echo $?
-echo "show columns from tasks from system" | $BENDSQL_CLIENT_CONNECT | echo $?
+echo "show columns from clusters from system" | bendsql_connect_root | echo $?
+echo "show columns from tasks from system" | bendsql_connect_root | echo $?
 
 #DML privilege check
-export USER_B_CONNECT="bendsql_query_http_user_connect b password -A"
+export USER_B_CONNECT="bendsql_connect_user b password -A"
 
 run_user_b() {
   cat <<SQL | $USER_B_CONNECT
@@ -300,7 +305,7 @@ grant select on system.* to b;
 create stage s3;
 "
 
-echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
+echo "copy into '@s3/a b' from (select 2);" | bendsql_connect_root | $RM_UUID | cut -d$'\t' -f1,2
 
 # need err - these must be separate to show individual errors
 echo "insert into t select * from t1" | $USER_B_CONNECT
@@ -338,21 +343,21 @@ create table c.t (id int);
 grant insert, select on c.t to b;
 "
 
-echo "show grants for b" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for b" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 run_user_b "
 insert into c.t values(1);
 select * from c.t;
 "
 
 run_root_sql "alter table c.t rename to t1;"
-echo "show grants for b" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for b" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 run_user_b "
 insert into c.t1 values(2);
 select * from c.t1 order by id;
 "
 
 run_root_sql "alter database c rename to d;"
-echo "show grants for b" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for b" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 run_user_b "
 insert into d.t1 values(3);
 select * from d.t1 order by id;
@@ -374,7 +379,7 @@ create user c identified by '123';
 grant drop on default.t to c;
 "
 
-export USER_C_CONNECT="bendsql_query_http_user_connect c 123 -A"
+export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
 run_user_c() {
   cat <<SQL | $USER_C_CONNECT
@@ -399,13 +404,13 @@ run_root_sql "
 drop user if exists c;
 create user c identified by '123';
 "
-export USER_C_CONNECT="bendsql_query_http_user_connect c 123 -A"
+export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
 run_root_sql "
 set session max_threads=1000;
 unset session max_threads;
 "
-echo "settings (ddl_column_type_nullable=0) select 100" | $BENDSQL_CLIENT_CONNECT
+echo "settings (ddl_column_type_nullable=0) select 100" | bendsql_connect_root
 run_root_sql "
 SET variable a = 'a';
 set global max_threads=1000;

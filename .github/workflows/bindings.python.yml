@@ -27,7 +27,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Get and validate version
@@ -64,7 +64,7 @@ jobs:
       - 4c
       - aws
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: ./.github/actions/build_bindings_python
@@ -89,7 +89,7 @@ jobs:
           - { arch: x86_64, runner: X64 }
           - { arch: aarch64, runner: ARM64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: ./.github/actions/build_bindings_python
@@ -97,7 +97,7 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           version: ${{ needs.get-version.outputs.version }}
       - name: Upload Linux wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-linux-${{ matrix.arch }}
           path: src/bendpy/dist/*.whl
@@ -113,7 +113,7 @@ jobs:
       matrix:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -132,7 +132,7 @@ jobs:
           target: ${{ matrix.target }}
           version: ${{ needs.get-version.outputs.version }}
       - name: Upload macOS wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-macos-${{ matrix.target }}
           path: src/bendpy/dist/*.whl
@@ -144,8 +144,8 @@ jobs:
     needs: [get-version, test, linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
         with:
           pattern: python-*
           merge-multiple: true

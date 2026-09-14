@@ -382,7 +382,7 @@ impl<E> HTTPSessionEndpoint<E> {
         if let Some(tenant_id) = req.headers().get(HEADER_TENANT) {
             let tenant_id = tenant_id.to_str().unwrap().to_string();
             let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
-            session.set_current_tenant(tenant);
+            session.set_current_tenant(tenant)?;
         }
         let (user_name, authed_client_session_id) = self
             .auth_manager

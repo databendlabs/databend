@@ -14,15 +14,19 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_settings::Settings;
 use educe::Educe;
 use parking_lot::RwLock;
 
+use crate::Metadata;
 use crate::MetadataRef;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 
@@ -32,13 +36,15 @@ pub struct OptimizerContext {
     #[educe(Debug(ignore))]
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
+    stat_context: StatContext,
 
     // Optimizer configurations
     enable_distributed_optimization: RwLock<bool>,
+    force_local_execution: RwLock<bool>,
     enable_join_reorder: RwLock<bool>,
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
-    planning_agg_index: RwLock<bool>,
+    enable_top_n: RwLock<bool>,
     skip_list: HashSet<String>,
     skip_list_str: String,
     grouping_sets_to_union: bool,
@@ -56,7 +62,11 @@ pub struct OptimizerContext {
 }
 
 impl OptimizerContext {
-    pub fn new(table_ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Arc<Self> {
+    pub fn new(
+        table_ctx: Arc<dyn TableContext>,
+        metadata: MetadataRef,
+        function_context: FunctionContext,
+    ) -> Arc<Self> {
         let settings = table_ctx.get_settings();
         let grouping_sets_to_union = settings.get_grouping_sets_to_union().unwrap_or_default();
 
@@ -74,13 +84,15 @@ impl OptimizerContext {
         Arc::new(Self {
             table_ctx,
             metadata,
+            stat_context: StatContext::new(function_context),
 
             enable_distributed_optimization: RwLock::new(false),
+            force_local_execution: RwLock::new(false),
             enable_join_reorder: RwLock::new(true),
             enable_dphyp: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
+            enable_top_n: RwLock::new(false),
             sample_executor: RwLock::new(None),
-            planning_agg_index: RwLock::new(false),
             skip_list,
             skip_list_str,
             grouping_sets_to_union,
@@ -93,6 +105,7 @@ impl OptimizerContext {
         self.set_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? });
         *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
         *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
+        *self.enable_top_n.write() = settings.get_enable_top_n()?;
         *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
 
         Ok(self)
@@ -106,13 +119,31 @@ impl OptimizerContext {
         self.metadata.clone()
     }
 
+    pub fn metadata_read(&self) -> impl Deref<Target = Metadata> {
+        self.metadata.read()
+    }
+
+    pub fn get_stat_context(&self) -> &StatContext {
+        &self.stat_context
+    }
+
     pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
         *self.enable_distributed_optimization.write() = enable;
         self
     }
 
     pub fn get_enable_distributed_optimization(&self) -> bool {
-        *self.enable_distributed_optimization.read()
+        *self.enable_distributed_optimization.read() && !*self.force_local_execution.read()
+    }
+
+    /// Force the query to remain in one local execution graph.
+    ///
+    /// Unlike `Distribution::Serial`, this prevents distributed fragments from
+    /// being created below a serial operator. The decision is sticky for the
+    /// lifetime of this optimizer context.
+    pub fn set_force_local_execution(self: &Arc<Self>) -> &Arc<Self> {
+        *self.force_local_execution.write() = true;
+        self
     }
 
     fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
@@ -140,17 +171,12 @@ impl OptimizerContext {
         self.sample_executor.read().clone()
     }
 
-    pub fn set_planning_agg_index(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
-        *self.planning_agg_index.write() = enable;
-        self
-    }
-
-    pub fn get_planning_agg_index(&self) -> bool {
-        *self.planning_agg_index.read()
-    }
-
     pub fn get_max_push_down_limit(&self) -> usize {
         *self.max_push_down_limit.read()
+    }
+
+    pub fn get_enable_top_n(&self) -> bool {
+        *self.enable_top_n.read()
     }
 
     pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> &Arc<Self> {

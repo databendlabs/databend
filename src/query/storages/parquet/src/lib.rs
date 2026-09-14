@@ -52,6 +52,7 @@ pub use copy_into_table::ParquetTableForCopy;
 pub use meta::read_metas_in_parallel_for_copy;
 pub use parquet_part::DeleteTask;
 pub use parquet_part::DeleteType;
+pub use parquet_part::ParquetFileMeta;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
 pub use parquet_reader::InMemoryRowGroup;

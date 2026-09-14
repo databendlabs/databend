@@ -41,6 +41,7 @@ use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_io::Axis;
 use databend_common_io::Extremum;
 use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
@@ -56,7 +57,6 @@ use databend_common_io::geometry::st_extreme;
 use databend_common_io::geometry_format;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::geometry_type_name;
-use databend_common_io::read_srid;
 use geo::Area;
 use geo::BoundingRect;
 use geo::Buffer;
@@ -394,27 +394,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         Ok(wkb)
     });
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
-        "to_string",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
-            let row = builder.len();
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(row) {
-                    builder.commit_row();
-                    return;
+    registry.register_context_dependent(|registry| {
+        registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
+            "to_string",
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.commit_row();
+                        return;
+                    }
                 }
-            }
 
-            match geometry_format(ewkb, ctx.func_ctx.geometry_output_format) {
-                Ok(data) => builder.put_str(&data),
-                Err(e) => {
-                    ctx.set_error(row, e.to_string());
+                match geometry_format(ewkb, ctx.func_ctx.geometry_output_format) {
+                    Ok(data) => builder.put_str(&data),
+                    Err(e) => {
+                        ctx.set_error(row, e.to_string());
+                    }
                 }
-            }
-            builder.commit_row();
-        }),
-    );
+                builder.commit_row();
+            }),
+        );
+    });
 
     geo_convert_fn::<GeometryType, StringType>("st_geohash", registry, |input| {
         point_to_geohash(input, None)
@@ -751,7 +753,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let srid = read_srid(&mut Ewkb(ewkb)).unwrap_or_default();
+            let srid = Ewkb(ewkb).srid().unwrap_or(UNKNOWN_SRID);
             output.push(srid);
         }),
     );
@@ -769,9 +771,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
-                // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
-                let Some(from_srid) = read_srid(&mut Ewkb(original)) else {
+                let Some(from_srid) = Ewkb(original).srid() else {
                     ctx.set_error(row, "input geometry must has the correct SRID".to_string());
                     builder.commit_row();
                     return;
@@ -1080,9 +1080,10 @@ fn st_transform_impl(
     .map_err(|_| ErrorCode::GeometryError("invalid to srid"))?;
 
     let old = Ewkb(original.to_vec());
-    let res = Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap())
-        .to_geo()
+    let res = old
+        .to_ewkb(old.dims(), Some(from_srid))
         .map_err(Box::new(ErrorCode::from))
+        .and_then(|ewkb| Ewkb(ewkb).to_geo().map_err(Box::new(ErrorCode::from)))
         .and_then(|mut geom| {
             // EPSG:4326 WGS84 in proj4rs is in radians, not degrees.
             if from_srid == GEOGRAPHY_SRID {

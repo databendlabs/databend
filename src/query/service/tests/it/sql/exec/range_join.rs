@@ -18,6 +18,122 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
+async fn explain_text(fixture: &TestFixture, query: &str) -> anyhow::Result<String> {
+    let blocks = fixture
+        .execute_query(&format!("EXPLAIN {query}"))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let block = DataBlock::concat(&blocks).expect("concat explain blocks");
+    let column = block.get_by_offset(0);
+    let mut lines = Vec::with_capacity(block.num_rows());
+    for row in 0..block.num_rows() {
+        if let Some(ScalarRef::String(line)) = column.index(row) {
+            lines.push(line.to_string());
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
+fn extract_one_u64(blocks: Vec<DataBlock>) -> u64 {
+    let block = DataBlock::concat(&blocks).expect("concat result blocks");
+    assert_eq!(block.num_rows(), 1);
+    match block.get_by_offset(0).index(0) {
+        Some(ScalarRef::Number(NumberScalar::UInt64(v))) => v,
+        other => panic!("unexpected count scalar: {other:?}"),
+    }
+}
+
+/// An inequality join with a precise-one-row aggregate side should use CROSS JOIN + FILTER
+/// instead of RangeJoin. Exercise both equivalent predicate operand orders and verify the
+/// selected physical operator and query result.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inequality_join_with_scalar_side_avoids_range_join() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.big(ts INT) AS SELECT number FROM numbers(1000)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.threshold(ts INT) AS SELECT number FROM numbers(1000)"
+        ))
+        .await?;
+
+    // Scalar subquery on the right side of the inequality.
+    let q_right = format!(
+        "SELECT count(*) FROM {db}.big b \
+         WHERE b.ts >= (SELECT min(ts) FROM {db}.threshold)"
+    );
+    // Equivalent predicate with the scalar subquery written on the left.
+    let q_left = format!(
+        "SELECT count(*) FROM {db}.big b \
+         WHERE (SELECT min(ts) FROM {db}.threshold) <= b.ts"
+    );
+
+    for query in [&q_right, &q_left] {
+        let plan = explain_text(&fixture, query).await?;
+        assert!(
+            !plan.contains("RangeJoin"),
+            "single-row inequality side must not produce a RangeJoin, plan was:\n{plan}"
+        );
+    }
+
+    // Both forms must produce the correct result: all 1000 rows match `ts >= min(ts)`.
+    for query in [&q_right, &q_left] {
+        let blocks = fixture
+            .execute_query(query)
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await?;
+        assert_eq!(extract_one_u64(blocks), 1000, "query: {query}");
+    }
+
+    Ok(())
+}
+
+/// Force the exact CROSS JOIN + FILTER shape that used to report a false scalar-subquery
+/// cardinality violation. The pushed-down expression is true for all four rows, but its
+/// estimated selectivity places the four-row table on the build side and the exact-one-row
+/// scalar aggregate on the probe side. The CROSS JOIN + FILTER execution must not treat the
+/// four cross-product candidates as four scalar-subquery rows.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_scalar_aggregate_probe_cross_join_filter() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.four_rows(ts INT) AS SELECT number FROM numbers(4)"
+        ))
+        .await?;
+
+    let query = format!(
+        "SELECT count(*) \
+         FROM (SELECT ts FROM {db}.four_rows WHERE length(to_string(ts)) > 0) b \
+         WHERE b.ts >= (SELECT min(number) FROM numbers(1))"
+    );
+
+    let plan = explain_text(&fixture, &query).await?;
+    assert!(plan.contains("HashJoin"), "plan was:\n{plan}");
+    assert!(plan.contains("TableScan(Build)"), "plan was:\n{plan}");
+    assert!(plan.contains("AggregateFinal(Probe)"), "plan was:\n{plan}");
+
+    let blocks = fixture
+        .execute_query(&query)
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    assert_eq!(extract_one_u64(blocks), 4);
+
+    Ok(())
+}
+
 fn extract_two_u64(blocks: Vec<DataBlock>) -> (u64, u64) {
     let block = DataBlock::concat(&blocks).expect("concat blocks");
     assert_eq!(block.num_rows(), 1, "unexpected rows: {}", block.num_rows());

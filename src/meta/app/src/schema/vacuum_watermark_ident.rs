@@ -25,10 +25,8 @@ impl VacuumWatermarkIdent {
 }
 
 mod kvapi_impl {
-    use databend_meta_client::kvapi;
 
     use crate::schema::vacuum_watermark::VacuumWatermark;
-    use crate::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct VacuumWatermarkRsc;
@@ -37,10 +35,6 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_vacuum_watermark_ts";
         const HAS_TENANT: bool = true;
         type ValueType = VacuumWatermark;
-    }
-
-    impl kvapi::Value for VacuumWatermark {
-        type KeyType = VacuumWatermarkIdent;
     }
 }
 

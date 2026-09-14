@@ -49,6 +49,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+
 #[derive(Debug, Default)]
 struct CTERefCounter {
     cte_ref_count: HashMap<String, usize>,
@@ -78,6 +79,7 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         let mut with = query.with.clone();
+        bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
         if self.ctx.get_settings().get_enable_auto_materialize_cte()? {
             if let Some(with) = &mut with {
                 if !with.recursive {
@@ -86,6 +88,22 @@ impl Binder {
             }
         }
 
+        bind_context.cte_context.virtual_column_outputs.clear();
+        let rewritten_body = if bind_context.allow_virtual_column {
+            if let Some(with) = &mut with {
+                let mut body = query.body.clone();
+                let virtual_column_outputs =
+                    self.rewrite_materialized_cte_virtual_columns(bind_context, with, &mut body);
+                bind_context.cte_context.virtual_column_outputs = virtual_column_outputs;
+                Some(body)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let body = rewritten_body.as_ref().unwrap_or(&query.body);
+
         self.init_cte(bind_context, &with)?;
 
         // Extract limit and offset from query.
@@ -93,7 +111,7 @@ impl Binder {
 
         // Bind query body.
         let (mut s_expr, mut bind_context) =
-            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit, None)?;
+            self.bind_set_expr(bind_context, body, &query.order_by, limit, None)?;
 
         // Bind order by for `SetOperation` and `Values`.
         s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;
@@ -108,6 +126,13 @@ impl Binder {
         bind_context.reset_result_column_positions();
 
         Ok((s_expr, bind_context))
+    }
+
+    pub(crate) fn is_virtual_column_rewrite_enabled(&self) -> bool {
+        self.ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default()
     }
 
     fn auto_materialize_cte(&mut self, with: &mut With, query: &Query) -> Result<()> {
@@ -306,7 +331,7 @@ impl Binder {
             uri_location: None,
             cluster_by: None,
             table_options: Default::default(),
-            iceberg_table_partition: None,
+            partition_by: None,
             table_properties: Default::default(),
             as_query: Some(as_query),
             table_type: TableType::Temporary,

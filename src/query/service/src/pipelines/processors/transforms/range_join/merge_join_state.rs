@@ -27,8 +27,8 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
 
+use crate::pipelines::processors::transforms::filter_block;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
-use crate::pipelines::processors::transforms::range_join::filter_block;
 
 impl RangeJoinState {
     pub fn range_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {

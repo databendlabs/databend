@@ -43,8 +43,6 @@ impl DictionaryNameIdent {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::dictionary_id_ident::DictionaryId;
     use crate::tenant_key::resource::TenantResource;
 
@@ -54,10 +52,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "DictionaryName";
         const HAS_TENANT: bool = true;
         type ValueType = DictionaryId;
-    }
-
-    impl kvapi::Value for DictionaryId {
-        type KeyType = super::DictionaryNameIdent;
     }
 }
 

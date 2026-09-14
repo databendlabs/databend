@@ -56,11 +56,12 @@ where A: TypeCheckAdapter
         let result = match ident {
             ColumnID::Name(ident) => {
                 let column = normalize_identifier(ident, self.name_resolution_ctx);
-                self.bind_context.resolve_name(
+                self.bind_context.resolve_name_with_alias_fallback(
                     database.as_deref(),
                     table.as_deref(),
                     &column,
                     self.aliases,
+                    self.fallback_aliases,
                     self.name_resolution_ctx,
                 )?
             }
@@ -182,7 +183,9 @@ where A: TypeCheckAdapter
                 let data_type = *column.data_type.clone();
                 (BoundColumnRef { span, column }.into(), data_type)
             }
-            NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()?),
+            NameResolutionResult::Alias { scalar, .. } => {
+                (scalar.clone(), scalar.data_type().into_owned())
+            }
         };
 
         Ok(Box::new((scalar, data_type)))

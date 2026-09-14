@@ -133,9 +133,128 @@ impl<T: AsyncAccumulatingTransform + 'static> Processor for AsyncAccumulatingTra
         }
 
         if !self.called_on_finish {
+            let result = self.inner.on_finish(true).await;
             self.called_on_finish = true;
-            self.output_data = self.inner.on_finish(true).await?;
+            self.output_data = result?;
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use databend_common_exception::ErrorCode;
+    use databend_common_exception::Result;
+    use databend_common_expression::DataBlock;
+    use databend_common_pipeline::core::InputPort;
+    use databend_common_pipeline::core::OutputPort;
+    use databend_common_pipeline::core::Processor;
+    use tokio::sync::oneshot;
+
+    use super::AsyncAccumulatingTransform;
+    use super::AsyncAccumulatingTransformer;
+
+    struct BlockingFinishTransform {
+        finish_entered_tx: Option<oneshot::Sender<()>>,
+        finish_release_rx: Option<oneshot::Receiver<()>>,
+    }
+
+    #[async_trait]
+    impl AsyncAccumulatingTransform for BlockingFinishTransform {
+        const NAME: &'static str = "BlockingFinishTransform";
+
+        async fn transform(&mut self, _data: DataBlock) -> Result<Option<DataBlock>> {
+            Ok(None)
+        }
+
+        async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+            if let Some(tx) = self.finish_entered_tx.take() {
+                let _ = tx.send(());
+            }
+
+            if let Some(rx) = self.finish_release_rx.take() {
+                let _ = rx.await;
+            }
+
+            Ok(None)
+        }
+    }
+
+    struct ErrorFinishTransform;
+
+    #[async_trait]
+    impl AsyncAccumulatingTransform for ErrorFinishTransform {
+        const NAME: &'static str = "ErrorFinishTransform";
+
+        async fn transform(&mut self, _data: DataBlock) -> Result<Option<DataBlock>> {
+            Ok(None)
+        }
+
+        async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+            Err(ErrorCode::Internal("finish failed"))
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_cancel_pending_on_finish_does_not_mark_finish_called() -> Result<()> {
+        let (finish_entered_tx, finish_entered_rx) = oneshot::channel();
+        let (_finish_release_tx, finish_release_rx) = oneshot::channel();
+
+        let mut transform = AsyncAccumulatingTransformer {
+            inner: BlockingFinishTransform {
+                finish_entered_tx: Some(finish_entered_tx),
+                finish_release_rx: Some(finish_release_rx),
+            },
+            input: InputPort::create(),
+            output: OutputPort::create(),
+            called_on_start: true,
+            called_on_finish: false,
+            input_data: None,
+            output_data: None,
+        };
+
+        let mut finish_future = Box::pin(transform.async_process());
+
+        tokio::select! {
+            entered = finish_entered_rx => {
+                entered.expect("on_finish should be entered");
+            }
+            result = &mut finish_future => {
+                panic!("on_finish should remain pending, got {result:?}");
+            }
+        }
+
+        drop(finish_future);
+
+        assert!(
+            !transform.called_on_finish,
+            "pending on_finish must not be recorded as completed"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_on_finish_error_marks_finish_called() -> Result<()> {
+        let mut transform = AsyncAccumulatingTransformer {
+            inner: ErrorFinishTransform,
+            input: InputPort::create(),
+            output: OutputPort::create(),
+            called_on_start: true,
+            called_on_finish: false,
+            input_data: None,
+            output_data: None,
+        };
+
+        let result = transform.async_process().await;
+
+        assert!(result.is_err(), "on_finish should propagate its error");
+        assert!(
+            transform.called_on_finish,
+            "completed on_finish errors must be recorded as attempted"
+        );
 
         Ok(())
     }

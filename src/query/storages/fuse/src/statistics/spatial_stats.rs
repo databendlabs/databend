@@ -14,9 +14,10 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::types::geometry::extract_geo_and_srid;
+use databend_common_expression::types::geometry::extract_bbox_and_srid;
+use databend_common_io::Bbox;
+use databend_common_io::UNKNOWN_SRID;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
-use geo::BoundingRect;
 use log::debug;
 
 #[derive(Clone)]
@@ -54,22 +55,21 @@ impl SpatialStatsBuilder {
     }
 
     pub fn update_value(&mut self, value: ScalarRef) -> Result<()> {
-        let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+        let Some((bbox, srid)) = extract_bbox_and_srid(value)? else {
             self.has_null = true;
             return Ok(());
         };
 
-        let rect = geo.bounding_rect();
-        self.update_rect_with_srid(rect, srid);
+        self.update_rect_with_srid(bbox, srid);
         Ok(())
     }
 
-    pub fn update_rect_with_srid(&mut self, rect: Option<geo::Rect<f64>>, srid: i32) {
+    pub fn update_rect_with_srid(&mut self, bbox: Option<Bbox>, srid: i32) {
         if !self.update_srid(srid) {
             return;
         }
-        if let Some(rect) = rect {
-            self.update_rect(rect);
+        if let Some(bbox) = bbox {
+            self.update_rect(bbox);
         } else {
             self.has_empty_rect = true;
         }
@@ -89,7 +89,7 @@ impl SpatialStatsBuilder {
 
     pub fn finalize(self) -> SpatialStatistics {
         let is_valid = self.is_valid();
-        let srid = self.srid.unwrap_or(0);
+        let srid = self.srid.unwrap_or(UNKNOWN_SRID);
         if is_valid {
             SpatialStatistics {
                 min_x: self.min_x.into(),
@@ -119,19 +119,18 @@ impl SpatialStatsBuilder {
         true
     }
 
-    fn update_rect(&mut self, rect: geo::Rect<f64>) {
-        let min = rect.min();
-        let max = rect.max();
+    fn update_rect(&mut self, bbox: Bbox) {
+        let (min_x, min_y, max_x, max_y) = bbox.corners();
         if self.has_value {
-            self.min_x = self.min_x.min(min.x);
-            self.min_y = self.min_y.min(min.y);
-            self.max_x = self.max_x.max(max.x);
-            self.max_y = self.max_y.max(max.y);
+            self.min_x = self.min_x.min(min_x);
+            self.min_y = self.min_y.min(min_y);
+            self.max_x = self.max_x.max(max_x);
+            self.max_y = self.max_y.max(max_y);
         } else {
-            self.min_x = min.x;
-            self.min_y = min.y;
-            self.max_x = max.x;
-            self.max_y = max.y;
+            self.min_x = min_x;
+            self.min_y = min_y;
+            self.max_x = max_x;
+            self.max_y = max_y;
             self.has_value = true;
         }
     }

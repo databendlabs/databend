@@ -1,0 +1,287 @@
+statement ok
+DROP DATABASE IF EXISTS test_cluster_spatial_join
+
+statement ok
+CREATE DATABASE test_cluster_spatial_join
+
+statement ok
+USE test_cluster_spatial_join
+
+statement ok
+CREATE TABLE small_polygons(id INT, geom GEOMETRY)
+
+statement ok
+CREATE TABLE large_polygons(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO small_polygons VALUES
+(1, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(2, TO_GEOMETRY('POLYGON((10 0, 10 5, 15 5, 15 0, 10 0))'))
+
+statement ok
+INSERT INTO large_polygons SELECT number, TO_GEOMETRY('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))') FROM numbers(300)
+
+statement ok
+SET enable_spatial_join = 1
+
+# The small input sits in the left/probe position. In a cluster the cost model
+# must broadcast the smaller side, so the join materializes as a
+# BroadcastSpatialJoin that broadcasts `small_polygons` instead of silently
+# falling back to HashJoin. This is the left-build case that previously
+# regressed because the build side was chosen twice with inconsistent inputs.
+query T
+EXPLAIN SELECT s.id, l.id
+FROM small_polygons AS s
+JOIN large_polygons AS l
+ON ST_Intersects(s.geom, l.geom)
+----
+Exchange
+├── output columns: [l.id (#2), s.id (#0)]
+├── exchange type: Merge
+└── BroadcastSpatialJoin
+    ├── output columns: [l.id (#2), s.id (#0)]
+    ├── build side: Right
+    ├── spatial predicates: [st_intersects(s.geom (#1), l.geom (#3))]
+    ├── Exchange(Build)
+    │   ├── output columns: [s.id (#0), s.geom (#1)]
+    │   ├── exchange type: Broadcast
+    │   └── TableScan
+    │       ├── table: default.test_cluster_spatial_join.small_polygons
+    │       ├── scan id: 0
+    │       ├── output columns: [id (#0), geom (#1)]
+    │       ├── read rows: 2
+    │       ├── read size: <slt:ignore>
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.test_cluster_spatial_join.large_polygons
+        ├── scan id: 1
+        ├── output columns: [id (#2), geom (#3)]
+        ├── read rows: 300
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── pruning stats: <slt:ignore>
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 300.00
+
+# Same query must return identical rows whether or not the spatial path is used.
+query I
+SELECT count(*)
+FROM small_polygons AS s
+JOIN large_polygons AS l
+ON ST_Intersects(s.geom, l.geom)
+----
+300
+
+# Q8-style distance predicates should take the same distributed spatial path.
+query T
+EXPLAIN SELECT s.id, l.id
+FROM small_polygons AS s
+JOIN large_polygons AS l
+ON ST_DWithin(s.geom, l.geom, 0.5)
+----
+Exchange
+├── output columns: [l.id (#2), s.id (#0)]
+├── exchange type: Merge
+└── BroadcastSpatialJoin
+    ├── output columns: [l.id (#2), s.id (#0)]
+    ├── build side: Right
+    ├── spatial predicates: [st_dwithin(s.geom (#1), l.geom (#3), 0.5)]
+    ├── Exchange(Build)
+    │   ├── output columns: [s.id (#0), s.geom (#1)]
+    │   ├── exchange type: Broadcast
+    │   └── TableScan
+    │       ├── table: default.test_cluster_spatial_join.small_polygons
+    │       ├── scan id: 0
+    │       ├── output columns: [id (#0), geom (#1)]
+    │       ├── read rows: 2
+    │       ├── read size: <slt:ignore>
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.test_cluster_spatial_join.large_polygons
+        ├── scan id: 1
+        ├── output columns: [id (#2), geom (#3)]
+        ├── read rows: 300
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── pruning stats: <slt:ignore>
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 300.00
+
+query I
+SELECT count(*)
+FROM small_polygons AS s
+JOIN large_polygons AS l
+ON ST_DWithin(s.geom, l.geom, 0.5)
+----
+300
+
+# Alias self joins must not double-count probe rows in a cluster. The two
+# polygons are disjoint, so only each row's self-pair matches.
+query I
+SELECT count(*)
+FROM small_polygons AS a
+JOIN small_polygons AS b
+ON ST_Intersects(a.geom, b.geom)
+----
+2
+
+# A residual predicate is outside the current spatial join admission. This
+# result guards against accidentally taking the spatial path and dropping the
+# residual filter.
+query I
+SELECT count(*)
+FROM small_polygons AS a
+JOIN small_polygons AS b
+ON a.id < b.id AND ST_Intersects(a.geom, b.geom)
+----
+0
+
+statement ok
+SET enable_spatial_join = 0
+
+query I
+SELECT count(*)
+FROM small_polygons AS s
+JOIN large_polygons AS l
+ON ST_Intersects(s.geom, l.geom)
+----
+300
+
+statement ok
+SET enable_spatial_join = 1
+
+# enforce_shuffle_join only governs the equi-join distribution path. A spatial
+# join has no equi conditions, so it must keep choosing the broadcast plan even
+# when shuffle is enforced (the two paths are mutually exclusive by shape).
+statement ok
+SET enforce_shuffle_join = 1
+
+query T
+EXPLAIN SELECT s.id, l.id
+FROM small_polygons AS s
+JOIN large_polygons AS l
+ON ST_Intersects(s.geom, l.geom)
+----
+Exchange
+├── output columns: [l.id (#2), s.id (#0)]
+├── exchange type: Merge
+└── BroadcastSpatialJoin
+    ├── output columns: [l.id (#2), s.id (#0)]
+    ├── build side: Right
+    ├── spatial predicates: [st_intersects(s.geom (#1), l.geom (#3))]
+    ├── Exchange(Build)
+    │   ├── output columns: [s.id (#0), s.geom (#1)]
+    │   ├── exchange type: Broadcast
+    │   └── TableScan
+    │       ├── table: default.test_cluster_spatial_join.small_polygons
+    │       ├── scan id: 0
+    │       ├── output columns: [id (#0), geom (#1)]
+    │       ├── read rows: 2
+    │       ├── read size: <slt:ignore>
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 2.00
+    └── TableScan(Probe)
+        ├── table: default.test_cluster_spatial_join.large_polygons
+        ├── scan id: 1
+        ├── output columns: [id (#2), geom (#3)]
+        ├── read rows: 300
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── pruning stats: <slt:ignore>
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 300.00
+
+statement ok
+SET enforce_shuffle_join = 0
+
+# Same-side column scenario: both geometry arguments reference the same table.
+# This must NOT produce a spatial join plan because the spatial predicate does
+# not correlate rows from different sides of the join. The planner should fall
+# back to the regular non-spatial join path (verified by unit test
+# test_spatial_join_same_side_predicate_does_not_preserve_left_broadcast).
+statement ok
+CREATE TABLE dual_geom(id INT, geom1 GEOMETRY, geom2 GEOMETRY)
+
+statement ok
+INSERT INTO dual_geom VALUES
+(1, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))')),
+(2, TO_GEOMETRY('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'), TO_GEOMETRY('POLYGON((20 20, 20 25, 25 25, 25 20, 20 20))'))
+
+# Row 1: geom1 contains geom2 → ST_Intersects = true
+# Row 2: geom1 and geom2 are disjoint → ST_Intersects = false
+# So the cross join with the predicate on same-side columns should produce
+# 300 rows (all large_polygons paired with dual_geom row 1).
+query I
+SELECT count(*)
+FROM dual_geom AS d
+JOIN large_polygons AS l
+ON ST_Intersects(d.geom1, d.geom2)
+----
+300
+
+# Verify the plan does NOT use SpatialJoin/BroadcastSpatialJoin. Since the
+# predicate only references `dual_geom`, it can be pushed into that table scan
+# and the remaining join is a regular cross HashJoin. Broadcasting the filtered
+# small side here is the normal non-spatial join path.
+query T
+EXPLAIN SELECT d.id, l.id
+FROM dual_geom AS d
+JOIN large_polygons AS l
+ON ST_Intersects(d.geom1, d.geom2)
+----
+Exchange
+├── output columns: [l.id (#3), d.id (#0)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [l.id (#3), d.id (#0)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── keys is null equal: []
+    ├── filters: []
+    ├── estimated rows: <slt:ignore>
+    ├── Exchange(Build)
+    │   ├── output columns: [d.id (#0)]
+    │   ├── exchange type: Broadcast
+    │   └── TableScan
+    │       ├── table: default.test_cluster_spatial_join.dual_geom
+    │       ├── scan id: 0
+    │       ├── output columns: [id (#0)]
+    │       ├── read rows: 2
+    │       ├── read size: <slt:ignore>
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_true(st_intersects(dual_geom.geom1 (#1), dual_geom.geom2 (#2)))], limit: NONE]
+    │       └── estimated rows: <slt:ignore>
+    └── TableScan(Probe)
+        ├── table: default.test_cluster_spatial_join.large_polygons
+        ├── scan id: 1
+        ├── output columns: [id (#3)]
+        ├── read rows: 300
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── pruning stats: <slt:ignore>
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 300.00
+
+statement ok
+DROP TABLE dual_geom
+
+statement ok
+DROP DATABASE test_cluster_spatial_join

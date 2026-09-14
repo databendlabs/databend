@@ -89,3 +89,12 @@ select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
 
 query error gen
 select * from @data/parquet/diff_schema/ (files=>('gen.py', 'f1.parquet'));
+
+# Files with identical columns but different Parquet field IDs share the inferred stage reader.
+query I rowsort
+settings (parquet_fast_read_bytes=0) select id from @data/parquet/different_field_ids/ (pattern=>'.*[.]parquet')
+----
+1
+2
+3
+4

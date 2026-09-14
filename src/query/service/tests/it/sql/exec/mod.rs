@@ -143,7 +143,7 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     let db2 = db.clone();
     let tbl2 = tbl.clone();
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("sql-exec-test".to_string()))?;
 
     // 1. insert into tbl
     let mut planner = Planner::new(ctx.clone());
@@ -242,12 +242,11 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     let compact_task = async move {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
         let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
-        if let Plan::OptimizeCompactBlock { s_expr, need_purge } = compact_plan {
+        if let Plan::OptimizeCompactBlock { s_expr } = compact_plan {
             let optimize_interpreter = OptimizeCompactBlockInterpreter::try_create(
                 ctx.clone(),
                 *s_expr.clone(),
                 LockTableOption::LockWithRetry,
-                need_purge,
             )?;
             let _ = optimize_interpreter.execute(ctx).await?;
         }
@@ -265,5 +264,8 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
 
 mod correlated_subquery_regression;
 mod get_table_bind_test;
+mod insert;
+mod multi_table_insert;
 mod range_join;
+mod spatial_join;
 mod window;

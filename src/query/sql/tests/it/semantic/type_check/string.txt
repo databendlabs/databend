@@ -68,6 +68,34 @@ status: ok
 scalar: like(text (#1), pattern (#2))
 type: Boolean NULL
 
+=== ilike_lowers_both_sides ===
+description: ILIKE should preserve case-insensitive semantics instead of using plain LIKE.
+sql: text ILIKE pattern
+status: ok
+scalar: ilike(text (#1), pattern (#2))
+type: Boolean NULL
+
+=== not_ilike_lowers_both_sides ===
+description: NOT ILIKE should negate the case-insensitive LIKE expression.
+sql: text NOT ILIKE pattern
+status: ok
+scalar: not(ilike(text (#1), pattern (#2)))
+type: Boolean NULL
+
+=== ilike_any_lowers_tuple_patterns ===
+description: ILIKE ANY should bind to the case-insensitive like_any function.
+sql: text ILIKE ANY ('A%', 'B%')
+status: ok
+scalar: ilike_any(text (#1), ('A%', 'B%'))
+type: Boolean NULL
+
+=== ilike_escape_lowers_escape ===
+description: ILIKE ESCAPE should preserve the escape marker for runtime pattern conversion.
+sql: text ILIKE 'A_%' ESCAPE 'A'
+status: ok
+scalar: ilike(text (#1), 'A_%', 'A')
+type: Boolean NULL
+
 === regexp_operator_from_function_tests_binds ===
 description: The regexp operator form from scalar comparison tests should type check as regexp_like.
 sql: text REGEXP pattern

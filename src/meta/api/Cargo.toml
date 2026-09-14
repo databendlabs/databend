@@ -35,5 +35,9 @@ tonic = { workspace = true }
 uuid = { workspace = true }
 zstd = { workspace = true }
 
+[dev-dependencies]
+databend-common-meta-store = { workspace = true }
+databend-meta-runtime = { workspace = true }
+
 [lints]
 workspace = true

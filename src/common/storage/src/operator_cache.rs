@@ -28,6 +28,7 @@ use log::info;
 use lru::LruCache;
 use opendal::Operator;
 
+use crate::EndpointPolicyScope;
 use crate::operator::init_operator_uncached;
 
 // Internal metrics for monitoring cache effectiveness
@@ -43,7 +44,13 @@ const DEFAULT_CACHE_SIZE: usize = 1024;
 /// OperatorCache provides caching for storage operators to avoid
 /// frequent recreation and token refresh operations.
 pub(crate) struct OperatorCache {
-    cache: Arc<Mutex<LruCache<StorageParams, Operator>>>,
+    cache: Arc<Mutex<LruCache<OperatorCacheKey, Operator>>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct OperatorCacheKey {
+    params: StorageParams,
+    endpoint_policy_scope: EndpointPolicyScope,
 }
 
 impl OperatorCache {
@@ -63,27 +70,42 @@ impl OperatorCache {
     }
 
     /// Get or create an operator from cache
-    pub(crate) fn get_or_create(&self, params: &StorageParams) -> DatabendResult<Operator> {
+    pub(crate) fn get_or_create(
+        &self,
+        params: &StorageParams,
+        endpoint_policy_scope: EndpointPolicyScope,
+    ) -> DatabendResult<Operator> {
+        let key = OperatorCacheKey {
+            params: params.clone(),
+            endpoint_policy_scope,
+        };
+
         // Check if we have a cached operator
         {
             let mut cache = self.cache.lock().unwrap();
-            if let Some(operator) = cache.get(params) {
-                debug!("Operator cache hit for params: {:?}", params);
+            if let Some(operator) = cache.get(&key) {
+                debug!(
+                    "Operator cache hit for params: {:?}, endpoint_policy_scope: {:?}",
+                    params, endpoint_policy_scope
+                );
                 CACHE_HIT_COUNT.inc();
                 return Ok(operator.clone());
             }
         }
 
         // Cache miss, create new operator
-        debug!("Operator cache miss for params: {:?}", params);
+        debug!(
+            "Operator cache miss for params: {:?}, endpoint_policy_scope: {:?}",
+            params, endpoint_policy_scope
+        );
         CACHE_MISS_COUNT.inc();
 
-        let operator = init_operator_uncached(params)?;
+        let operator = init_operator_uncached(params, endpoint_policy_scope)?;
 
         // Insert into cache
         {
             let mut cache = self.cache.lock().unwrap();
-            cache.put(params.clone(), operator.clone());
+            cache.put(key, operator.clone());
             CACHE_SIZE.set(cache.len() as i64);
         }
 

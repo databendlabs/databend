@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::panic::PanicHookInfo;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -19,8 +20,12 @@ use std::sync::atomic::Ordering;
 use backtrace::Backtrace;
 use backtrace::BacktraceFrame;
 use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::is_alloc_error_panic;
 use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
 use log::error;
+
+const MEMORY_BACKTRACE_SKIPPED: &str =
+    "Backtrace skipped because the panic was caused by memory allocation failure";
 
 pub fn set_panic_hook(version: String) {
     // Set a panic hook that records the panic as a `tracing` event at the
@@ -47,7 +52,11 @@ fn should_backtrace() -> bool {
 }
 
 pub fn log_panic(panic: &PanicHookInfo, version: Arc<String>) {
-    let backtrace_str = backtrace(50);
+    let backtrace_str = if is_alloc_error_panic() {
+        Cow::Borrowed(MEMORY_BACKTRACE_SKIPPED)
+    } else {
+        Cow::Owned(backtrace(50))
+    };
 
     eprintln!("{}", panic);
     eprintln!("{}", backtrace_str);
@@ -55,14 +64,14 @@ pub fn log_panic(panic: &PanicHookInfo, version: Arc<String>) {
     if let Some(location) = panic.location() {
         error!(
             version = version,
-            backtrace = &backtrace_str,
+            backtrace = backtrace_str.as_ref(),
             "panic.file" = location.file(),
             "panic.line" = location.line(),
             "panic.column" = location.column();
             "{}", panic,
         );
     } else {
-        error!(version=version, backtrace = backtrace_str; "{}", panic);
+        error!(version=version, backtrace = backtrace_str.as_ref(); "{}", panic);
     }
 }
 

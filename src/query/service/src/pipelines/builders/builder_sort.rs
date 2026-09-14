@@ -93,6 +93,10 @@ impl SortPipelineBuilder {
         self
     }
 
+    pub fn sort_column_desc(&self) -> Arc<[SortColumnDescription]> {
+        self.key_desc.sort_column_desc()
+    }
+
     pub fn build_full_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
@@ -102,11 +106,26 @@ impl SortPipelineBuilder {
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
                 LimitType::from_limit_rows(self.limit),
-                self.key_desc.sort_column_desc(),
+                self.sort_column_desc(),
             )
         });
 
         self.build_merge_sort_pipeline(pipeline, false, keep_order_col)
+    }
+
+    pub fn build_local_full_sort_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        keep_order_col: bool,
+    ) -> Result<()> {
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.sort_column_desc(),
+            )
+        });
+
+        self.build_merge_sort(pipeline, false, keep_order_col)
     }
 
     fn build_merge_sort(
@@ -217,7 +236,7 @@ impl SortPipelineBuilder {
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
                 LimitType::from_limit_rows(self.limit),
-                self.key_desc.sort_column_desc(),
+                self.sort_column_desc(),
             )
         });
 

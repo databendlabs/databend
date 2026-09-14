@@ -36,9 +36,6 @@ impl UdfIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use crate::principal::UdfIdent;
     use crate::principal::UserDefinedFunction;
     use crate::tenant_key::resource::TenantResource;
 
@@ -48,10 +45,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "UdfIdent";
         const HAS_TENANT: bool = true;
         type ValueType = UserDefinedFunction;
-    }
-
-    impl kvapi::Value for UserDefinedFunction {
-        type KeyType = UdfIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

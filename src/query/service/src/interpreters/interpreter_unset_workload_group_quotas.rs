@@ -51,21 +51,23 @@ impl Interpreter for UnsetWorkloadGroupQuotasInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
-        workload_manager
-            .unset_quotas(self.plan.name.clone(), self.plan.quotas.clone())
-            .await?;
+            let workload_manager = GlobalInstance::get::<Arc<WorkloadMgr>>();
+            workload_manager
+                .unset_quotas(self.plan.name.clone(), self.plan.quotas.clone())
+                .await?;
 
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "unset_workload_quotas", &self.plan))?
-        );
-        Ok(PipelineBuildResult::create())
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "unset_workload_quotas", &self.plan))?
+            );
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

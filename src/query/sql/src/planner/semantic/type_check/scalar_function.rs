@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::TypeName;
@@ -21,7 +25,6 @@ use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr;
@@ -52,12 +55,14 @@ use super::TypeCheckAdapter;
 use super::TypeChecker;
 use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
+use crate::binder::AliasLookup;
+use crate::binder::NameResolutionResult;
 use crate::planner::semantic::resolve_type_name;
+use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::SubqueryType;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn cast(
@@ -87,16 +92,23 @@ impl<'a> CoreExprArena<'a> {
             args,
             params,
             order_by,
+            filter,
             window,
-            lambda,
             ..
         } = func;
+
+        if filter.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
 
         if !*distinct
             && params.is_empty()
             && order_by.is_empty()
             && window.is_none()
-            && lambda.is_none()
+            && !func.has_explicit_lambda()
         {
             if let Some(expr) = self.lower_rewrite_function(span, func_name, args)? {
                 return Ok(expr);
@@ -207,6 +219,62 @@ where A: TypeCheckAdapter
         }
     }
 
+    /// GROUPING arguments must match grouping-sets items exactly (see
+    /// `AggregateInfo::replace_grouping`), but alias-preferring clauses such as
+    /// HAVING and ORDER BY can resolve a bare name to a same-name SELECT alias
+    /// like `if(grouping(x) = 1, 0, x) AS x`, shadowing the group column `x`.
+    /// Retarget such an argument to the input column when that column is a
+    /// grouping-sets item. This only fires on arguments that would otherwise
+    /// be rejected, so it never changes a previously working query.
+    fn grouping_argument_group_item(
+        &self,
+        arena: &CoreExprArena<'_>,
+        arg: CoreExprId,
+        resolved: &ScalarExpr,
+    ) -> Option<ScalarExpr> {
+        let aggregate_info = &self.bind_context.aggregate_info;
+        if aggregate_info.grouping_sets().is_none()
+            || aggregate_info.is_grouping_sets_item(resolved)
+        {
+            return None;
+        }
+
+        // Only bare unqualified names can be shadowed by SELECT aliases.
+        let CoreExpr::ColumnRef {
+            span,
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(ident),
+                },
+        } = arena.get(arg)
+        else {
+            return None;
+        };
+
+        // Unknown or ambiguous names keep the original resolution.
+        let column = match self.bind_context.resolve_name(
+            None,
+            None,
+            ident,
+            AliasLookup::all(&[]),
+            self.name_resolution_ctx,
+        ) {
+            Ok(NameResolutionResult::Column(column)) => column,
+            _ => return None,
+        };
+
+        let candidate: ScalarExpr = BoundColumnRef {
+            span: *span,
+            column,
+        }
+        .into();
+        aggregate_info
+            .is_grouping_sets_item(&candidate)
+            .then_some(candidate)
+    }
+
     pub(super) fn resolve_call(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -229,26 +297,21 @@ where A: TypeCheckAdapter
             return rewritten_get_expr;
         }
 
+        let is_grouping = func_name.eq_ignore_ascii_case("grouping");
         let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
         for arg in args {
-            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            let box (mut scalar, _) = self.resolve_core(arena, *arg)?;
+            if is_grouping
+                && let Some(group_item) = self.grouping_argument_group_item(arena, *arg, &scalar)
+            {
+                scalar = group_item;
+            }
             scalars.push(scalar);
         }
 
         if self.should_try_rewrite_variant_function(func_name) {
-            let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
-            for scalar in &scalars {
-                let mut data_type = scalar.data_type()?;
-                if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                    && subquery.typ == SubqueryType::Scalar
-                    && !data_type.is_nullable()
-                {
-                    data_type = data_type.wrap_nullable();
-                }
-                arg_types.push(data_type);
-            }
             if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+                self.try_rewrite_variant_function(span, func_name, &scalars)
             {
                 return rewritten_variant_expr;
             }
@@ -277,22 +340,21 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
-        let (scalars, _) = self.resolve_expr_args(arena, args)?;
+        let (mut scalars, _) = self.resolve_expr_args(arena, args)?;
+
+        // `grouping<...>(...)` with explicit params is the internal rewritten
+        // form; keep its arguments untouched (see `replace_grouping`).
+        if func_name.eq_ignore_ascii_case("grouping") && params.is_empty() {
+            for (scalar, arg) in scalars.iter_mut().zip(args) {
+                if let Some(group_item) = self.grouping_argument_group_item(arena, *arg, scalar) {
+                    *scalar = group_item;
+                }
+            }
+        }
 
         if self.should_try_rewrite_variant_function(func_name) {
-            let mut arg_types = Vec::with_capacity(scalars.len());
-            for scalar in &scalars {
-                let mut data_type = scalar.data_type()?;
-                if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                    && subquery.typ == SubqueryType::Scalar
-                    && !data_type.is_nullable()
-                {
-                    data_type = data_type.wrap_nullable();
-                }
-                arg_types.push(data_type);
-            }
             if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+                self.try_rewrite_variant_function(span, func_name, &scalars)
             {
                 return rewritten_variant_expr;
             }
@@ -328,10 +390,6 @@ where A: TypeCheckAdapter
             dest_type: DataType::from(&resolve_type_name(target_type, true)?),
         };
         let checked_expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-
-        if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
-            return Ok(constant);
-        }
 
         // cast variant to other type should nest wrap nullable,
         // as we cast JSON null to SQL NULL.
@@ -371,16 +429,16 @@ where A: TypeCheckAdapter
         let arg1 = &func.arguments[1];
         let (constant_arg_index, constant_arg) = match (arg0, arg1) {
             (ScalarExpr::ConstantExpr(_), _)
-                if arg1.data_type()?.remove_nullable() == DataType::Variant
+                if arg1.data_type().remove_nullable() == DataType::Variant
                     && !arg1.used_columns().is_empty()
-                    && arg0.data_type()? == DataType::String =>
+                    && arg0.data_type().as_ref() == &DataType::String =>
             {
                 (0, arg0)
             }
             (_, ScalarExpr::ConstantExpr(_))
-                if arg0.data_type()?.remove_nullable() == DataType::Variant
+                if arg0.data_type().remove_nullable() == DataType::Variant
                     && !arg0.used_columns().is_empty()
-                    && arg1.data_type()? == DataType::String =>
+                    && arg1.data_type().as_ref() == &DataType::String =>
             {
                 (1, arg1)
             }
@@ -394,6 +452,7 @@ where A: TypeCheckAdapter
             func_name: "to_variant".to_string(),
             params: vec![],
             arguments: vec![constant_arg.clone()],
+            return_type: Box::new(DataType::Variant),
         });
         let mut new_arguments = func.arguments.clone();
         new_arguments[constant_arg_index] = wrap_new_arg;
@@ -403,6 +462,7 @@ where A: TypeCheckAdapter
             func_name: func.func_name.clone(),
             params: func.params.clone(),
             arguments: new_arguments,
+            return_type: Box::new(data_type.clone()),
         });
 
         Ok(Box::new((new_func, data_type)))
@@ -427,26 +487,20 @@ where A: TypeCheckAdapter
             Self::rewrite_substring(&mut args);
         }
 
-        self.adjust_date_interval_function_args(func_name, &mut args)?;
-
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         // inject the params
         if ["round", "truncate"].contains(&func_name)
             && !args.is_empty()
             && params.is_empty()
-            && args[0].data_type()?.remove_nullable().is_decimal()
+            && args[0].data_type().remove_nullable().is_decimal()
         {
             let scale = if args.len() == 2 {
                 let scalar_expr = &arguments[1];
                 let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
 
-                let scale: i64 = check_number(
-                    expr.span(),
-                    &FunctionContext::default(),
-                    &expr,
-                    &BUILTIN_FUNCTIONS,
-                )?;
+                let scale: i64 =
+                    check_number(expr.span(), &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?;
                 scale.clamp(-76, 76)
             } else {
                 0
@@ -472,12 +526,8 @@ where A: TypeCheckAdapter
                 let param_args = arguments.split_off(1);
                 for arg in param_args.into_iter() {
                     let expr = type_check::check(&arg, &BUILTIN_FUNCTIONS)?;
-                    let param: u8 = check_number(
-                        expr.span(),
-                        &FunctionContext::default(),
-                        &expr,
-                        &BUILTIN_FUNCTIONS,
-                    )?;
+                    let param: u8 =
+                        check_number(expr.span(), &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?;
                     params.push(Scalar::Number(NumberScalar::UInt8(param)));
                 }
             }
@@ -529,7 +579,14 @@ where A: TypeCheckAdapter
                           default: i64|
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
-                    match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                    match ConstantFolder::fold(
+                        Cow::Owned(arg.as_expr()?),
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    )
+                    .0
+                    .into_owned()
+                    {
                         EExpr::Constant(Constant {
                             scalar,
                             ..
@@ -540,7 +597,7 @@ where A: TypeCheckAdapter
             };
 
             let (precision_index, scale_index) =
-                if args.len() > 1 && args[1].data_type()?.remove_nullable().is_string() {
+                if args.len() > 1 && args[1].data_type().remove_nullable().is_string() {
                     (2, 3)
                 } else {
                     (1, 2)
@@ -573,6 +630,7 @@ where A: TypeCheckAdapter
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         let expr = type_check::rewrite_function_to_cast(expr);
+        let is_top_level_cast = matches!(&expr, expr::Expr::Cast(_));
 
         // Run constant folding for arguments of the scalar function.
         // This will be helpful to simplify some constant expressions, especially
@@ -596,12 +654,12 @@ where A: TypeCheckAdapter
                 )
                 .zip(args)
                 .map(|((checked_arg, is_generic), arg)| {
-                    if !arg.evaluable() {
+                    if !arg.evaluable() || is_generic {
                         return arg;
                     }
-                    match self.try_fold_constant(checked_arg, !is_generic) {
-                        Some(box (constant, _)) => constant,
-                        _ => arg,
+                    match self.try_fold_constant(checked_arg.clone()) {
+                        Ok(box (constant, _)) => constant,
+                        Err(_) => arg,
                     }
                 })
                 .collect(),
@@ -612,17 +670,21 @@ where A: TypeCheckAdapter
             self.adapter.set_result_cache_uncacheable();
         }
 
-        if let Some(constant) = self.try_fold_constant(&expr, true) {
-            return Ok(constant);
-        }
+        let expr = match self.try_fold_constant(expr) {
+            Ok(constant) => return Ok(constant),
+            Err(expr) => expr,
+        };
 
-        if let expr::Expr::Cast(expr::Cast {
-            span,
-            is_try,
-            dest_type,
-            ..
-        }) = expr
-        {
+        if is_top_level_cast {
+            let expr::Expr::Cast(expr::Cast {
+                span,
+                is_try,
+                dest_type,
+                ..
+            }) = expr
+            else {
+                unreachable!("a partially folded top-level cast must remain a cast");
+            };
             assert_eq!(folded_args.len(), 1);
             return Ok(Box::new((
                 CastExpr {
@@ -645,15 +707,17 @@ where A: TypeCheckAdapter
             folded_args.swap(0, 1);
         }
 
+        let return_type = expr.into_data_type();
         Ok(Box::new((
             FunctionCall {
                 span,
                 params,
                 arguments: folded_args,
                 func_name: func_name.to_string(),
+                return_type: Box::new(return_type.clone()),
             }
             .into(),
-            expr.data_type().clone(),
+            return_type,
         )))
     }
 }

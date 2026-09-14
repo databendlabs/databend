@@ -1,0 +1,22 @@
+# Auto-materialized CTE results are preserved when CTE blocks spill.
+statement ok
+SET enable_auto_materialize_cte = 1
+
+statement ok
+SET force_materialized_cte_spill = 1
+
+query II
+WITH t AS (
+    SELECT number AS a FROM numbers(16)
+)
+SELECT count(), sum(x.a + y.a)
+FROM t AS x
+INNER JOIN t AS y ON x.a = y.a
+----
+16 240
+
+statement ok
+UNSET force_materialized_cte_spill
+
+statement ok
+UNSET enable_auto_materialize_cte

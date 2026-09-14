@@ -41,7 +41,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storage::init_operator;
+use databend_common_storage::EndpointPolicyScope;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetPruner;
@@ -161,7 +162,7 @@ impl DeltaTable {
 
     #[async_backtrace::framed]
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
-        let op = init_operator(sp)?;
+        let op = init_operator_with_policy_scope(sp, EndpointPolicyScope::External)?;
         let opendal_store = Arc::new(OpendalStore::new(op));
 
         let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())
@@ -233,7 +234,7 @@ impl DeltaTable {
         )?;
 
         let sp = self.get_storage_params()?;
-        let op = init_operator(sp)?;
+        let op = init_operator_with_policy_scope(sp, EndpointPolicyScope::External)?;
         let partition_field_indexes: Result<Vec<FieldIndex>> = self
             .meta
             .partition_columns
@@ -347,6 +348,7 @@ impl DeltaTable {
                                 estimated_uncompressed_size: add.size as u64, // This field is not used here.
                                 dedup_key: format!("{}_{}", add.modification_time, add.size),
                                 bucket_option: None,
+                                meta: Default::default(),
                             },
                         ),
                     }) as _))

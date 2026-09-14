@@ -36,10 +36,8 @@ impl TagNameIdentRaw {
 }
 
 mod kvapi_impl {
-    use databend_meta_client::kvapi;
 
     use super::super::id_ident::TagId;
-    use crate::schema::TagNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -48,10 +46,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "TagNameIdent";
         const HAS_TENANT: bool = true;
         type ValueType = TagId;
-    }
-
-    impl kvapi::Value for TagId {
-        type KeyType = TagNameIdent;
     }
 }
 

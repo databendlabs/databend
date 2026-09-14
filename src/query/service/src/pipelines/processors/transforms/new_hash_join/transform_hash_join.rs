@@ -68,7 +68,6 @@ impl TransformHashJoin {
             rf_desc.inlist_threshold,
             rf_desc.bloom_threshold,
             rf_desc.min_max_threshold,
-            rf_desc.spatial_threshold,
         )?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
@@ -271,7 +270,16 @@ impl Processor for TransformHashJoin {
                 );
 
                 self.instant = Instant::now();
-                Stage::Probe(ProbeState::new())
+                if self.rf_desc.build_side_empty() && self.join.can_skip_probe() {
+                    self.probe_port.finish();
+                    self.joined_port.finish();
+
+                    self.join = FinishedJoin::create();
+
+                    Stage::Finished
+                } else {
+                    Stage::Probe(ProbeState::new())
+                }
             }
             Stage::Probe(_) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;

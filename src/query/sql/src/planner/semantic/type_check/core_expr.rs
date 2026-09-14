@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -301,13 +303,14 @@ impl<'a> CoreExprArena<'a> {
                 right,
                 is_not,
                 escape,
-            } => self.lower_like_escape_expr(
-                *span,
-                if *is_not { "notlike" } else { "like" },
-                left,
-                right,
-                Some(escape),
-            )?,
+            } => {
+                let like = self.lower_like_escape_expr(*span, "like", left, right, Some(escape))?;
+                if *is_not {
+                    self.call(*span, "not", smallvec![like])
+                } else {
+                    like
+                }
+            }
             Expr::Case {
                 span,
                 operand,
@@ -321,9 +324,17 @@ impl<'a> CoreExprArena<'a> {
                 results,
                 else_result.as_deref(),
             )?,
-            expr @ Expr::CountAll { span, window, .. } => {
-                self.lower_count_all_expr(format!("{expr:#}"), *span, window.as_ref())?
-            }
+            expr @ Expr::CountAll {
+                span,
+                filter,
+                window,
+                ..
+            } => self.lower_count_all_expr(
+                format!("{expr:#}"),
+                *span,
+                filter.as_deref(),
+                window.as_ref(),
+            )?,
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
             }
@@ -355,6 +366,23 @@ impl<'a> CoreExprArena<'a> {
         self.ensure_window_not_in_lambda(span, func.window.is_some())?;
         if let Some(expr) = self.try_lower_udf_call(span, &func_name, func)? {
             return Ok(expr);
+        }
+
+        if func.filter.is_some() && !self.aggregate_function_factory.contains(&func_name) {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
+        if func.distinct
+            && !func.order_by.is_empty()
+            && self.aggregate_function_factory.contains(&func_name)
+        {
+            return Err(
+                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
+                    .set_span(span),
+            );
         }
 
         self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
@@ -564,9 +592,12 @@ where A: TypeCheckAdapter
             }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
-            CoreExpr::UdfCall { span, name, args } => {
-                self.resolve_udf_call(arena, *span, name, args)
-            }
+            CoreExpr::UdfCall {
+                span,
+                name,
+                args,
+                filter,
+            } => self.resolve_udf_call(arena, *span, name, args, *filter),
             CoreExpr::LambdaFunction {
                 span,
                 func_name,
@@ -686,8 +717,10 @@ where A: TypeCheckAdapter
         for (display_name, param) in params {
             let box (scalar, _) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (expr, _) =
+                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let constant = expr
+                .into_owned()
                 .into_constant()
                 .map_err(|_| {
                     ErrorCode::SemanticError(format!(
@@ -929,6 +962,21 @@ mod tests {
             }));
         });
 
+        assert_sql_lowers_to("a NOT LIKE 'x' ESCAPE '!'", |arena, root| {
+            let CoreExpr::Call {
+                func_name: "not",
+                args,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("NOT LIKE ESCAPE should lower to a not call");
+            };
+            assert!(matches!(arena.get(args[0]), CoreExpr::Call {
+                func_name: "like",
+                ..
+            }));
+        });
+
         assert_sql_lowers_to("array_filter([1], x -> x > 0)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::LambdaFunction { .. }));
         });
@@ -950,6 +998,61 @@ mod tests {
 
         assert_sql_lowers_to("abs(DISTINCT 1)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::ScalarFunction { .. }));
+        });
+    }
+
+    #[test]
+    fn lowers_trailing_lambda_through_the_existing_lambda_path() {
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value + 1)",
+            |arena, root| {
+                let CoreExpr::LambdaFunction {
+                    args,
+                    lambda_params,
+                    lambda_expr,
+                    ..
+                } = arena.get(root)
+                else {
+                    panic!("json_path_transform should lower as a lambda function");
+                };
+                assert_eq!(args.len(), 2);
+                assert_eq!(lambda_params[0].name, "value");
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "plus",
+                    ..
+                }));
+            },
+        );
+
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value -> 'name')",
+            |arena, root| {
+                let CoreExpr::LambdaFunction { lambda_expr, .. } = arena.get(root) else {
+                    panic!("json_path_transform should lower as a lambda function");
+                };
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "get",
+                    ..
+                }));
+            },
+        );
+
+        assert_sql_lower_error_contains(
+            "array_transform(arr, (value -> value) + 1)",
+            "must have a lambda expression",
+        );
+        assert_sql_lowers_to("to_string(doc -> 'key')", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::Call { .. }));
+        });
+        assert_sql_lowers_to("concat(a, b, doc -> 'key')", |arena, root| {
+            let CoreExpr::Call { args, .. } = arena.get(root) else {
+                panic!("concat should lower as a scalar function");
+            };
+            assert_eq!(args.len(), 3);
+            assert!(matches!(arena.get(args[2]), CoreExpr::Call {
+                func_name: "get",
+                ..
+            }));
         });
     }
 

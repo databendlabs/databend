@@ -1,0 +1,82 @@
+statement ok
+DROP DATABASE IF EXISTS issue_20181
+
+statement ok
+CREATE DATABASE issue_20181
+
+statement ok
+USE issue_20181
+
+statement ok
+SET max_block_size = 6
+
+# Keep block generation deterministic: each statement writes one perfect block
+# and one imperfect tail block, so compaction is triggered by the second write.
+statement ok
+SET max_threads = 1
+
+# REPLACE append after-images must retain their physical imperfect-block count so
+# the second statement reaches the table-level auto-compaction threshold.
+statement ok
+CREATE TABLE replace_target(id UInt64)
+ROW_PER_BLOCK = 10
+AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD = 2
+
+statement ok
+REPLACE INTO replace_target ON(id)
+SELECT number FROM numbers(10)
+UNION ALL
+SELECT number + 10 FROM numbers(2)
+
+statement ok
+REPLACE INTO replace_target ON(id)
+SELECT number + 12 FROM numbers(10)
+UNION ALL
+SELECT number + 22 FROM numbers(2)
+
+# Each REPLACE writes one perfect block and one imperfect tail block. The second
+# tail reaches the threshold, and auto compaction merges both input segments.
+query IIB
+SELECT count(), sum(row_count), sum(block_count) < 4
+FROM fuse_segment('issue_20181', 'replace_target')
+----
+1 24 1
+
+# MERGE unmatched inserts use the same AppendBlock segment-generation path.
+statement ok
+CREATE TABLE merge_target(id UInt64)
+ROW_PER_BLOCK = 10
+AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD = 2
+
+query I
+MERGE INTO merge_target AS t
+USING (
+    SELECT number AS id FROM numbers(10)
+    UNION ALL
+    SELECT number + 10 AS id FROM numbers(2)
+) AS s
+ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)
+----
+12
+
+query I
+MERGE INTO merge_target AS t
+USING (
+    SELECT number + 12 AS id FROM numbers(10)
+    UNION ALL
+    SELECT number + 22 AS id FROM numbers(2)
+) AS s
+ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)
+----
+12
+
+query IIB
+SELECT count(), sum(row_count), sum(block_count) < 4
+FROM fuse_segment('issue_20181', 'merge_target')
+----
+1 24 1
+
+statement ok
+DROP DATABASE issue_20181

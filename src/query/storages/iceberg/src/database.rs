@@ -110,7 +110,7 @@ impl Database for IcebergDatabase {
         };
         let reader =
             super::cache::iceberg_table_cache_reader(self.ctl.iceberg_catalog(), self.ctl.info());
-        reader.read(&params).await.map(|v| v.0.clone())
+        reader.read(&params).await.map(|v| v.table())
     }
 
     // trigger use will refresh the table meta cache in current databases

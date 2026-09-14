@@ -40,6 +40,17 @@ v1
 v2
 v3
 
+statement ok
+CREATE VIEW showview.`a'b_view` AS SELECT * FROM showview.t1
+
+query T
+SHOW VIEWS LIKE 'a''b%'
+----
+a'b_view
+
+statement ok
+DROP VIEW showview.`a'b_view`
+
 query T
 SHOW VIEWS LIKE 'v2'
 ----

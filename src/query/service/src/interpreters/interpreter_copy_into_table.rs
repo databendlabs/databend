@@ -88,6 +88,7 @@ use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;
 use crate::table_functions::infer_schema::InferSchemaSeparator;
+use crate::table_functions::infer_schema::InferredJsonSchema;
 use crate::table_functions::infer_schema::merge_schema;
 
 const NDJSON_SCHEMA_EVOLUTION_AUTO_SAMPLE_FILES: usize = 64;
@@ -95,6 +96,7 @@ const NDJSON_SCHEMA_EVOLUTION_AUTO_RECORDS_PER_FILE: usize = 1000;
 const NDJSON_SCHEMA_EVOLUTION_AUTO_TOTAL_RECORDS: usize = 10000;
 const NDJSON_SCHEMA_EVOLUTION_SAMPLE_BYTES_PER_FILE: usize = 32 * 1024 * 1024;
 const NDJSON_SCHEMA_EVOLUTION_COMPRESSED_READ_CHUNK_BYTES: usize = 1024 * 1024;
+const NDJSON_SCHEMA_EVOLUTION_JSON_MAX_DEPTH: usize = 1;
 
 #[derive(Clone, Copy)]
 struct NdJsonSchemaEvolutionOptions {
@@ -491,7 +493,11 @@ impl CopyIntoTableInterpreter {
                             return Ok(None);
                         }
                         let schema =
-                            InferSchemaSeparator::infer_ndjson_schema(bytes, Some(max_records))?;
+                            InferSchemaSeparator::infer_ndjson_schema_state_with_max_depth(
+                                bytes,
+                                Some(max_records),
+                                NDJSON_SCHEMA_EVOLUTION_JSON_MAX_DEPTH,
+                            )?;
                         Ok::<_, ErrorCode>(Some((path, max_records, schema)))
                     });
                 }
@@ -505,7 +511,7 @@ impl CopyIntoTableInterpreter {
                 )
                 .await?;
 
-                let mut inferred_schema: Option<TableSchema> = None;
+                let mut inferred_schema: Option<InferredJsonSchema> = None;
                 let mut sampled_records_limit = 0usize;
                 let mut sampled_file_count = 0usize;
                 for result in results {
@@ -516,13 +522,17 @@ impl CopyIntoTableInterpreter {
                     sampled_file_count += 1;
                     inferred_schema = Some(match inferred_schema {
                         None => schema,
-                        Some(existing) => merge_schema(existing, schema),
+                        Some(mut existing) => {
+                            existing.merge(schema);
+                            existing
+                        }
                     });
                 }
 
                 let Some(inferred_schema) = inferred_schema else {
                     return Ok(None);
                 };
+                let inferred_schema = inferred_schema.into_table_schema();
 
                 let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
                     == Some(ColumnMatchMode::CaseSensitive);
@@ -950,88 +960,99 @@ impl Interpreter for CopyIntoTableInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            return Ok(PipelineBuildResult::create());
-        }
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
 
-        let plan = &self.plan;
-        let to_table = self
-            .ctx
-            .get_table(
+            let plan = &self.plan;
+            let to_table = self
+                .ctx
+                .get_table(
+                    plan.catalog_info.catalog_name(),
+                    &plan.database_name,
+                    &plan.table_name,
+                )
+                .await?;
+
+            self.ctx.update_query_lineage_target_id(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
-            )
-            .await?;
-
-        to_table.check_mutable()?;
-
-        if self.plan.no_file_to_copy {
-            info!("no file to copy");
-            return self.on_no_files_to_copy().await;
-        }
-
-        let snapshot = FuseTable::try_from_table(to_table.as_ref())?
-            .read_table_snapshot()
-            .await?;
-        let table_meta_timestamps = self
-            .ctx
-            .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
-
-        let (physical_plan, update_stream_meta, new_schema) = self
-            .build_physical_plan(
-                to_table.get_table_info().clone(),
-                &self.plan,
-                table_meta_timestamps,
-            )
-            .await?;
-
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-
-        // Build commit insertion pipeline.
-        {
-            let files_to_copy = self
-                .plan
-                .stage_table_info
-                .files_to_copy
-                .clone()
-                .unwrap_or_default();
-
-            let duplicated_files_detected =
-                self.plan.stage_table_info.duplicated_files_detected.clone();
-
-            self.commit_insertion(
-                &mut build_res.main_pipeline,
-                &self.plan,
-                files_to_copy,
-                duplicated_files_detected,
-                update_stream_meta,
-                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-                self.plan.path_prefix.clone(),
-                table_meta_timestamps,
-                new_schema,
-            )
-            .await?;
-        }
-
-        // Execute hook.
-        {
-            let hook_operator = HookOperator::create(
-                self.ctx.clone(),
-                self.plan.catalog_info.catalog_name().to_string(),
-                self.plan.database_name.to_string(),
-                self.plan.table_name.to_string(),
-                MutationKind::Insert,
-                LockTableOption::LockNoRetry,
+                to_table.get_table_info().ident.table_id,
             );
-            hook_operator.execute(&mut build_res.main_pipeline).await;
-        }
 
-        Ok(build_res)
+            to_table.check_mutable()?;
+
+            if self.plan.no_file_to_copy {
+                self.ctx.attach_query_lineage(None);
+                info!("no file to copy");
+                return self.on_no_files_to_copy().await;
+            }
+
+            let snapshot = FuseTable::try_from_table(to_table.as_ref())?
+                .read_table_snapshot()
+                .await?;
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
+
+            let (physical_plan, update_stream_meta, new_schema) = self
+                .build_physical_plan(
+                    to_table.get_table_info().clone(),
+                    &self.plan,
+                    table_meta_timestamps,
+                )
+                .await?;
+
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+
+            // Build commit insertion pipeline.
+            {
+                let files_to_copy = self
+                    .plan
+                    .stage_table_info
+                    .files_to_copy
+                    .clone()
+                    .unwrap_or_default();
+
+                let duplicated_files_detected =
+                    self.plan.stage_table_info.duplicated_files_detected.clone();
+
+                self.commit_insertion(
+                    &mut build_res.main_pipeline,
+                    &self.plan,
+                    files_to_copy,
+                    duplicated_files_detected,
+                    update_stream_meta,
+                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                    self.plan.path_prefix.clone(),
+                    table_meta_timestamps,
+                    new_schema,
+                )
+                .await?;
+            }
+
+            // Execute hook.
+            {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    self.plan.catalog_info.catalog_name().to_string(),
+                    self.plan.database_name.to_string(),
+                    self.plan.table_name.to_string(),
+                    MutationKind::Insert,
+                    LockTableOption::LockNoRetry,
+                );
+                hook_operator.execute(&mut build_res.main_pipeline).await;
+            }
+
+            Ok(build_res)
+        })
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
@@ -1087,6 +1108,27 @@ mod tests {
         assert_eq!(options.sample_files, 3);
         assert_eq!(options.sample_records_per_file, 10);
         assert_eq!(options.sample_total_records, 20);
+    }
+
+    #[test]
+    fn test_ndjson_schema_evolution_default_depth() -> Result<()> {
+        let schema = InferSchemaSeparator::infer_ndjson_schema_state_with_max_depth(
+            b"{\"a\":1,\"b\":{\"c\":2}}\n",
+            None,
+            NDJSON_SCHEMA_EVOLUTION_JSON_MAX_DEPTH,
+        )?
+        .into_table_schema();
+
+        assert_eq!(
+            schema.field_with_name("a")?.data_type(),
+            &TableDataType::Number(databend_common_expression::types::NumberDataType::Int64)
+                .wrap_nullable()
+        );
+        assert_eq!(
+            schema.field_with_name("b")?.data_type(),
+            &TableDataType::Variant.wrap_nullable()
+        );
+        Ok(())
     }
 
     #[test]

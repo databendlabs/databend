@@ -26,6 +26,7 @@ COPY rust-toolchain.toml /build/rust-toolchain.toml
 COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
 RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     /build/scripts/setup/dev_setup.sh -yb && \
+    test -f /usr/local/include/google/protobuf/timestamp.proto && \
     rm -rf /root/.cargo/git && \
     rm -rf /root/.cargo/registry && \
     mkdir -p /opt/rust && \

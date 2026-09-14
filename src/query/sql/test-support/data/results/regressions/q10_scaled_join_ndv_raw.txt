@@ -1,0 +1,40 @@
+EvalScalar
+├── scalars: [COUNT(*) (#8) AS (#8)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#8)]
+    └── Filter
+        ├── filters: [eq(customer.c_custkey (#0), orders.o_custkey (#3)), eq(lineitem.l_orderkey (#5), orders.o_orderkey (#2)), gte(orders.o_orderdate (#4), '1993-10-01'), lt(orders.o_orderdate (#4), '1994-01-01'), eq(lineitem.l_returnflag (#6), 'R'), eq(customer.c_nationkey (#1), nation.n_nationkey (#7))]
+        └── Join(Cross)
+            ├── build keys: []
+            ├── probe keys: []
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.nation (#3)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.lineitem (#2)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Join(Cross)
+                    ├── build keys: []
+                    ├── probe keys: []
+                    ├── other filters: []
+                    ├── Scan
+                    │   ├── table: default.orders (#1)
+                    │   ├── filters: []
+                    │   ├── order by: []
+                    │   └── limit: NONE
+                    └── Scan
+                        ├── table: default.customer (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+

@@ -38,11 +38,8 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
@@ -53,7 +50,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -63,8 +59,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -79,6 +73,7 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -97,10 +92,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -359,25 +350,22 @@ impl Catalog for IcebergMutableCatalog {
 
     #[async_backtrace::framed]
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        match req.create_option {
-            CreateOption::Create => {}
-            CreateOption::CreateIfNotExists => {
-                if self
-                    .exists_database(req.name_ident.tenant(), req.name_ident.name())
-                    .await?
-                {
-                    return Ok(CreateDatabaseReply {
-                        db_id: DatabaseId::new(0),
-                    });
-                }
+        if self
+            .exists_database(req.name_ident.tenant(), req.name_ident.name())
+            .await?
+        {
+            if !req.override_existing {
+                return Ok(CreateDatabaseReply {
+                    db_id: DatabaseId::new(0),
+                    created: false,
+                });
             }
-            CreateOption::CreateOrReplace => {
-                self.drop_database(DropDatabaseReq {
-                    if_exists: true,
-                    name_ident: req.name_ident.clone(),
-                })
-                .await?;
-            }
+
+            self.drop_database(DropDatabaseReq {
+                if_exists: true,
+                name_ident: req.name_ident.clone(),
+            })
+            .await?;
         }
 
         let ns = NamespaceIdent::new(req.name_ident.name().to_owned());
@@ -394,6 +382,7 @@ impl Catalog for IcebergMutableCatalog {
 
         Ok(CreateDatabaseReply {
             db_id: DatabaseId::new(0),
+            created: true,
         })
     }
 
@@ -451,6 +440,37 @@ impl Catalog for IcebergMutableCatalog {
     #[async_backtrace::framed]
     async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         unimplemented!()
+    }
+
+    async fn get_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _mv_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(
+            "ICEBERG catalog does not support materialized-view definitions",
+        ))
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+        _mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        Err(ErrorCode::Unimplemented(
+            "ICEBERG catalog does not support active materialized-view definitions",
+        ))
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        Err(ErrorCode::Unimplemented(
+            "ICEBERG catalog does not support materialized-view source generations",
+        ))
     }
 
     async fn mget_table_names_by_ids(
@@ -700,27 +720,6 @@ impl Catalog for IcebergMutableCatalog {
         unimplemented!()
     }
 
-    // Table index
-    #[async_backtrace::framed]
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unimplemented!()
-    }
-
     /// Table function
     // Get function by name.
     fn get_table_function(
@@ -778,11 +777,6 @@ impl Catalog for IcebergMutableCatalog {
     /// Dictionary
     #[async_backtrace::framed]
     async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
         unimplemented!()
     }
 

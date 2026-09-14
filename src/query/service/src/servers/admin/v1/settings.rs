@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
@@ -136,6 +137,45 @@ pub async fn unset_settings(
 ) -> poem::Result<impl IntoResponse> {
     Ok(Json(
         unset_setting_impl(&tenant, &key)
+            .await
+            .map_err(poem::error::InternalServerError)?,
+    ))
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn list_settings_local() -> poem::Result<impl IntoResponse> {
+    let config = GlobalConfig::instance();
+    let tenant = config.query.tenant_id.tenant_name();
+    Ok(Json(
+        list_settings_impl(tenant)
+            .await
+            .map_err(poem::error::InternalServerError)?,
+    ))
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn set_settings_local(
+    Path(key): Path<String>,
+    value: Json<String>,
+) -> poem::Result<impl IntoResponse> {
+    let config = GlobalConfig::instance();
+    let tenant = config.query.tenant_id.tenant_name();
+    Ok(Json(
+        set_setting_impl(tenant, &key, value.0)
+            .await
+            .map_err(poem::error::InternalServerError)?,
+    ))
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn unset_settings_local(Path(key): Path<String>) -> poem::Result<impl IntoResponse> {
+    let config = GlobalConfig::instance();
+    let tenant = config.query.tenant_id.tenant_name();
+    Ok(Json(
+        unset_setting_impl(tenant, &key)
             .await
             .map_err(poem::error::InternalServerError)?,
     ))

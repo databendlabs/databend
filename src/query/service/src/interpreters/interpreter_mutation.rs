@@ -63,6 +63,7 @@ pub struct MutationInterpreter {
     s_expr: SExpr,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    materialized_view_refresh_target: Option<u64>,
 }
 
 impl MutationInterpreter {
@@ -77,6 +78,23 @@ impl MutationInterpreter {
             s_expr,
             schema,
             metadata,
+            materialized_view_refresh_target: None,
+        })
+    }
+
+    pub fn try_create_materialized_view_refresh(
+        ctx: Arc<QueryContext>,
+        s_expr: SExpr,
+        schema: DataSchemaRef,
+        metadata: MetadataRef,
+        target_table_id: u64,
+    ) -> Result<MutationInterpreter> {
+        Ok(MutationInterpreter {
+            ctx,
+            s_expr,
+            schema,
+            metadata,
+            materialized_view_refresh_target: Some(target_table_id),
         })
     }
 }
@@ -92,44 +110,47 @@ impl Interpreter for MutationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            return Ok(PipelineBuildResult::create());
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
 
-        let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
+            let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
 
-        // Build physical plan.
-        let physical_plan = self.build_physical_plan(&mutation, false).await?;
+            // Build physical plan.
+            let physical_plan = self.build_physical_plan(&mutation, false).await?;
 
-        let query_plan = {
-            let metadata = self.metadata.read();
-            physical_plan
-                .format(&metadata, Default::default())?
-                .format_pretty()?
-        };
+            let query_plan = {
+                let metadata = self.metadata.read();
+                physical_plan
+                    .format(&metadata, Default::default())?
+                    .format_pretty()?
+            };
 
-        info!("Query physical plan: \n{}", query_plan);
+            info!("Query physical plan: \n{}", query_plan);
 
-        // Build pipeline.
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        if mutation.no_effect {
-            build_res
-                .main_pipeline
-                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
-        }
+            // Build pipeline.
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+            if mutation.no_effect {
+                build_res
+                    .main_pipeline
+                    .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+            }
 
-        // Execute hook.
-        self.execute_hook(&mutation, &mut build_res).await;
+            // Execute hook.
+            self.execute_hook(&mutation, &mut build_res).await;
 
-        let lock_guard = mutation
-            .lock_guard
-            .as_ref()
-            .and_then(|holder| holder.try_take());
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+            let lock_guard = mutation
+                .lock_guard
+                .as_ref()
+                .and_then(|holder| holder.try_take());
+            build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        Ok(build_res)
+            Ok(build_res)
+        })
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
@@ -144,11 +165,14 @@ impl MutationInterpreter {
         mutation: &databend_common_sql::plans::Mutation,
         build_res: &mut PipelineBuildResult,
     ) {
-        let hook_lock_opt = if mutation.lock_guard.is_some() {
-            LockTableOption::NoLock
-        } else {
-            LockTableOption::LockNoRetry
-        };
+        let hook_lock_opt =
+            if self.materialized_view_refresh_target.is_some() || mutation.lock_guard.is_some() {
+                // Materialized-view refresh already owns its lifecycle lock. Mutations with an
+                // attached lock guard likewise keep that guard for the complete pipeline.
+                LockTableOption::NoLock
+            } else {
+                LockTableOption::LockNoRetry
+            };
 
         let mutation_kind = match mutation.mutation_type {
             MutationType::Update => MutationKind::Update,
@@ -173,7 +197,13 @@ impl MutationInterpreter {
         dry_run: bool,
     ) -> Result<PhysicalPlan> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let mutation_build_info = build_mutation_info(self.ctx.clone(), mutation, dry_run).await?;
+        let mutation_build_info = build_mutation_info(
+            self.ctx.clone(),
+            mutation,
+            dry_run,
+            self.materialized_view_refresh_target,
+        )
+        .await?;
         // Build physical plan.
         let mut builder =
             PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), dry_run);
@@ -205,6 +235,7 @@ pub async fn build_mutation_info(
     ctx: Arc<QueryContext>,
     mutation: &Mutation,
     dry_run: bool,
+    materialized_view_refresh_target: Option<u64>,
 ) -> Result<MutationBuildInfo> {
     let table = ctx
         .get_table(
@@ -214,7 +245,9 @@ pub async fn build_mutation_info(
         )
         .await?;
     // Check if the table supports mutation.
-    table.check_mutable()?;
+    if materialized_view_refresh_target != Some(table.get_id()) {
+        table.check_mutable()?;
+    }
     let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
         ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support {}",

@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_ast::ast::CreateCatalogStmt;
@@ -23,8 +22,8 @@ use databend_common_ast::ast::DropCatalogStmt;
 use databend_common_ast::ast::ShowCatalogsStmt;
 use databend_common_ast::ast::ShowCreateCatalogStmt;
 use databend_common_ast::ast::ShowLimit;
-use databend_common_ast::ast::UriLocation;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -33,17 +32,15 @@ use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IcebergStorageCatalogOption;
-use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::schema::PaimonCatalogOption;
 
 use crate::BindContext;
 use crate::Binder;
-use crate::binder::parse_storage_params_from_uri;
 use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::DropCatalogPlan;
@@ -64,12 +61,12 @@ impl Binder {
         write!(
             query,
             "SELECT name AS Catalogs FROM {}.system.catalogs",
-            default_catalog
+            QuotedIdent(&default_catalog, '`')
         )
         .unwrap();
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                write!(query, " WHERE name LIKE '{pattern}'").unwrap();
+                write!(query, " WHERE name LIKE {}", QuotedString(pattern, '\'')).unwrap();
             }
             Some(ShowLimit::Where { selection }) => {
                 write!(query, " WHERE {selection}").unwrap();
@@ -115,7 +112,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
 
         let meta = self
-            .try_create_meta_from_options(&self.ctx, catalog_type.clone().into(), options)
+            .try_create_meta_from_options(catalog_type.clone().into(), options)
             .await?;
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
@@ -143,7 +140,6 @@ impl Binder {
 
     async fn try_create_meta_from_options(
         &self,
-        ctx: &Arc<dyn TableContext>,
         catalog_type: CatalogType,
         options: &BTreeMap<String, String>,
     ) -> Result<CatalogMeta> {
@@ -156,23 +152,17 @@ impl Binder {
                 ));
             }
             CatalogType::Hive => {
-                let mut options = options.clone();
-
-                // Remove address and url to avoid unexpected field error in uri location.
-                let address = options.remove("metastore_address").ok_or_else(|| {
-                    ErrorCode::InvalidArgument("expected field: METASTORE_ADDRESS")
-                })?;
-
-                let sp = parse_hive_catalog_url(ctx, options).await?;
-
-                CatalogOption::Hive(HiveCatalogOption {
-                    address,
-                    storage_params: sp.map(Box::new),
-                })
+                return Err(ErrorCode::CatalogNotSupported(
+                    "Creating Hive catalog is not supported!",
+                ));
             }
             CatalogType::Iceberg => {
                 let opt = parse_iceberg_rest_catalog(options.clone())?;
                 CatalogOption::Iceberg(opt)
+            }
+            CatalogType::Paimon => {
+                let opt = parse_paimon_catalog(options.clone())?;
+                CatalogOption::Paimon(opt)
             }
         };
 
@@ -181,34 +171,6 @@ impl Binder {
             created_on: Utc::now(),
         })
     }
-}
-
-async fn parse_hive_catalog_url(
-    ctx: &Arc<dyn TableContext>,
-    options: BTreeMap<String, String>,
-) -> Result<Option<StorageParams>> {
-    // Make sure options has been lower cases.
-    let mut options = options
-        .into_iter()
-        .map(|(k, v)| (k.to_lowercase(), v))
-        .collect::<BTreeMap<_, _>>();
-
-    // has to be removed, or UriLocation will complain about unknown field
-    let uri = if let Some(v) = options.remove("url") {
-        v
-    } else {
-        return Ok(None);
-    };
-
-    let mut location = UriLocation::from_uri(uri, options)?;
-    let sp = parse_storage_params_from_uri(
-        &mut location,
-        Some(ctx.as_ref()),
-        "when create Hive Catalog",
-    )
-    .await?;
-
-    Ok(Some(sp))
 }
 
 fn parse_iceberg_rest_catalog(
@@ -275,4 +237,29 @@ fn parse_iceberg_rest_catalog(
     };
 
     Ok(option)
+}
+
+fn parse_paimon_catalog(mut options: BTreeMap<String, String>) -> Result<PaimonCatalogOption> {
+    let metastore = options
+        .remove("metastore")
+        .unwrap_or_else(|| "filesystem".to_string())
+        .to_lowercase();
+    if !matches!(metastore.as_str(), "filesystem" | "rest") {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "paimon catalog metastore {metastore} is not supported"
+        )));
+    }
+    let warehouse = options.remove("warehouse").ok_or_else(|| {
+        ErrorCode::InvalidArgument("warehouse for paimon catalog is not specified")
+    })?;
+    if metastore == "rest" && !options.contains_key("uri") {
+        return Err(ErrorCode::InvalidArgument(
+            "uri for paimon rest catalog is not specified",
+        ));
+    }
+    options.insert("metastore".to_string(), metastore);
+    options.insert("warehouse".to_string(), warehouse);
+    Ok(PaimonCatalogOption {
+        options: options.into_iter().collect(),
+    })
 }

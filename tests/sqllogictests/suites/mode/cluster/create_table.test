@@ -10,42 +10,41 @@ EvalScalar
 ├── output columns: [max(number) (#1), d (#2)]
 ├── expressions: [numbers.number (#0) % 400]
 ├── estimated rows: 3.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [max(number) (#1), numbers.number (#0)]
+    ├── sort keys: [number ASC NULLS LAST]
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 3.00
-    └── Sort(Final)
+    └── Exchange
         ├── output columns: [max(number) (#1), numbers.number (#0)]
-        ├── sort keys: [number ASC NULLS LAST]
-        ├── estimated rows: 3333333.33
-        └── Exchange
+        ├── exchange type: Merge
+        └── TopN(Partial)
             ├── output columns: [max(number) (#1), numbers.number (#0)]
-            ├── exchange type: Merge
-            └── Sort(Partial)
+            ├── sort keys: [number ASC NULLS LAST]
+            ├── limit: 3
+            ├── offset: 0
+            ├── estimated rows: 3.00
+            └── AggregateFinal
                 ├── output columns: [max(number) (#1), numbers.number (#0)]
-                ├── sort keys: [number ASC NULLS LAST]
+                ├── group by: [number]
+                ├── aggregate functions: [max(number)]
                 ├── estimated rows: 3333333.33
-                └── AggregateFinal
+                └── Exchange
                     ├── output columns: [max(number) (#1), numbers.number (#0)]
-                    ├── group by: [number]
-                    ├── aggregate functions: [max(number)]
-                    ├── estimated rows: 3333333.33
-                    └── Exchange
-                        ├── output columns: [max(number) (#1), numbers.number (#0)]
-                        ├── exchange type: Hash(0)
-                        └── AggregatePartial
-                            ├── group by: [number]
-                            ├── aggregate functions: [max(number)]
-                            ├── estimated rows: 3333333.33
-                            ├── rank limit: 3
-                            └── TableScan
-                                ├── table: default.system.numbers
-                                ├── scan id: 0
-                                ├── output columns: [number (#0)]
-                                ├── read rows: 10000000
-                                ├── read size: 76.29 MiB
-                                ├── partitions total: 153
-                                ├── partitions scanned: 153
-                                ├── push downs: [filters: [], limit: NONE]
-                                └── estimated rows: 10000000.00
+                    ├── exchange type: Hash(0)
+                    └── AggregatePartial
+                        ├── group by: [number]
+                        ├── aggregate functions: [max(number)]
+                        ├── estimated rows: 3333333.33
+                        ├── rank limit: 3
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── scan id: 0
+                            ├── output columns: [number (#0)]
+                            ├── read rows: 10000000
+                            ├── read size: 76.29 MiB
+                            ├── partitions total: 153
+                            ├── partitions scanned: 153
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 10000000.00

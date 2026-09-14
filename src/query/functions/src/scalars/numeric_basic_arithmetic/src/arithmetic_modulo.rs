@@ -29,29 +29,18 @@ pub fn vectorize_modulo<L, R, M, O>()
 -> impl Fn(Value<NumberType<L>>, Value<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>> + Copy
 where
     L: Number + AsPrimitive<M>,
-    R: Number + AsPrimitive<M> + AsPrimitive<f64>,
-    M: Number + AsPrimitive<O> + Rem<Output = M> + RemScalar<O>,
+    R: Number + AsPrimitive<M>,
+    M: Number + AsPrimitive<O> + Rem<Output = M> + RemScalar<L, R, O> + ModuloValue,
     O: Number,
 {
     move |arg1, arg2, ctx| {
         let apply = |lhs: &L, rhs: &R, builder: &mut Vec<O>, ctx: &mut EvalContext| {
-            let r: f64 = rhs.as_();
-            if r == 0.0 {
-                ctx.set_error(builder.len(), "Division by zero");
-                builder.push(O::default());
-            } else {
-                builder.push((lhs.as_() % rhs.as_()).as_());
-            }
+            push_modulo_result::<L, R, M, O>(lhs, rhs, builder, ctx);
         };
 
         match (arg1, arg2) {
             (Value::Column(lhs), Value::Scalar(rhs)) => {
-                if rhs == R::default() {
-                    ctx.set_error(0, "Division by zero");
-                    return Value::Column(vec![O::default(); lhs.len()].into());
-                }
-                let iter = lhs.iter().map(|lhs| lhs.as_());
-                RemScalar::<O>::rem_scalar(iter, rhs.as_())
+                <M as RemScalar<L, R, O>>::rem_scalar(lhs.iter(), &rhs, ctx)
             }
             (Value::Scalar(lhs), Value::Scalar(rhs)) => {
                 let mut builder: Vec<O> = Vec::with_capacity(1);
@@ -77,22 +66,84 @@ where
     }
 }
 
-pub trait RemScalar<O: Number>: Number {
-    fn rem_scalar(_left: impl Iterator<Item = Self>, _other: Self) -> Value<NumberType<O>> {
-        unimplemented!()
+fn push_modulo_result<L, R, M, O>(lhs: &L, rhs: &R, output: &mut Vec<O>, ctx: &mut EvalContext)
+where
+    L: Number + AsPrimitive<M>,
+    R: Number + AsPrimitive<M>,
+    M: Number + AsPrimitive<O> + Rem<Output = M> + ModuloValue,
+    O: Number,
+{
+    if std::intrinsics::unlikely(*rhs == R::default()) {
+        ctx.set_error(output.len(), "Division by zero");
+        output.push(O::default());
+        return;
+    }
+
+    let rhs: M = rhs.as_();
+    let lhs: M = lhs.as_();
+    if std::intrinsics::unlikely(M::is_signed_min_modulo_minus_one(lhs, rhs)) {
+        // Mathematically MIN % -1 is 0. Rust must guard this case before
+        // lowering to LLVM because the machine signed remainder instruction has
+        // undefined behavior here, so spell out the value instead of letting the
+        // generated code panic.
+        output.push(O::default());
+        return;
+    }
+
+    output.push((lhs % rhs).as_());
+}
+
+pub trait ModuloValue: Number {
+    fn is_signed_min_modulo_minus_one(_lhs: Self, _rhs: Self) -> bool {
+        false
+    }
+}
+
+pub trait RemScalar<L: Number, R: Number, O: Number>: Number {
+    fn rem_scalar<'a>(
+        left: impl ExactSizeIterator<Item = &'a L>,
+        other: &R,
+        ctx: &mut EvalContext,
+    ) -> Value<NumberType<O>>
+    where
+        L: 'a + AsPrimitive<Self>,
+        R: AsPrimitive<Self>,
+        Self: AsPrimitive<O> + Rem<Output = Self> + ModuloValue,
+    {
+        let mut builder = Vec::with_capacity(left.len());
+        for lhs in left {
+            push_modulo_result::<L, R, Self, O>(lhs, other, &mut builder, ctx);
+        }
+        Value::Column(builder.into())
     }
 }
 
 macro_rules! impl_rem_scalar {
     ($t: ident, $strength_reduce: ident) => {
-        impl<O> RemScalar<O> for $t
+        impl ModuloValue for $t {}
+
+        impl<L, R, O> RemScalar<L, R, O> for $t
         where
-            Self: AsPrimitive<O> + AsPrimitive<f64> + Rem<Output = Self>,
+            L: Number + AsPrimitive<$t>,
+            R: Number + AsPrimitive<$t>,
+            $t: AsPrimitive<O>,
             O: Number,
         {
-            fn rem_scalar(left: impl Iterator<Item = Self>, other: Self) -> Value<NumberType<O>> {
+            fn rem_scalar<'a>(
+                left: impl ExactSizeIterator<Item = &'a L>,
+                other: &R,
+                ctx: &mut EvalContext,
+            ) -> Value<NumberType<O>>
+            where
+                L: 'a,
+            {
+                if *other == R::default() {
+                    ctx.set_error(0, "Division by zero");
+                    return Value::Column(vec![O::default(); left.len()].into());
+                }
+                let other: $t = other.as_();
                 let reduced_rem = $strength_reduce::new(other);
-                let iter = left.map(|v| (v % reduced_rem).as_());
+                let iter = left.map(|v| (v.as_() % reduced_rem).as_());
                 let col = NumberType::<O>::column_from_iter(iter, &[]);
                 Value::Column(col)
             }
@@ -105,9 +156,29 @@ impl_rem_scalar!(u16, StrengthReducedU16);
 impl_rem_scalar!(u32, StrengthReducedU32);
 impl_rem_scalar!(u64, StrengthReducedU64);
 
-impl<O: Number> RemScalar<O> for i8 {}
-impl<O: Number> RemScalar<O> for i16 {}
-impl<O: Number> RemScalar<O> for i32 {}
-impl<O: Number> RemScalar<O> for i64 {}
-impl<O: Number> RemScalar<O> for F32 {}
-impl<O: Number> RemScalar<O> for F64 {}
+impl<L: Number, R: Number, O: Number> RemScalar<L, R, O> for i8 {}
+impl<L: Number, R: Number, O: Number> RemScalar<L, R, O> for i16 {}
+impl<L: Number, R: Number, O: Number> RemScalar<L, R, O> for i32 {}
+impl<L: Number, R: Number, O: Number> RemScalar<L, R, O> for i64 {}
+impl<L: Number, R: Number, O: Number> RemScalar<L, R, O> for F32 {}
+impl<L: Number, R: Number, O: Number> RemScalar<L, R, O> for F64 {}
+
+macro_rules! impl_default_modulo_value {
+    ($($t: ident),*) => {
+        $(impl ModuloValue for $t {})*
+    };
+}
+
+impl_default_modulo_value!(F32, F64);
+
+macro_rules! impl_signed_modulo_value {
+    ($($t: ident),*) => {
+        $(impl ModuloValue for $t {
+            fn is_signed_min_modulo_minus_one(lhs: Self, rhs: Self) -> bool {
+                lhs == <$t>::MIN && rhs == -1
+            }
+        })*
+    };
+}
+
+impl_signed_modulo_value!(i8, i16, i32, i64);

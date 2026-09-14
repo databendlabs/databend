@@ -23,3 +23,6 @@ echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
 target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+
+echo "Checking query logs for duplicate query_id entries"
+python3 scripts/ci/ci-check-query-log-duplicates.py .databend/logs_1/query-details

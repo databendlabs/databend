@@ -172,6 +172,4 @@ impl AccumulatingTransform for SumSummaryTransform {
             Ok(vec![])
         }
     }
-
-    fn interrupt(&self) {}
 }

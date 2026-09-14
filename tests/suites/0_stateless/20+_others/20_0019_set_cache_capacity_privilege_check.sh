@@ -3,9 +3,9 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "create user if not exists test identified by 'test'"|$BENDSQL_CLIENT_CONNECT
+echo "create user if not exists test identified by 'test'"|bendsql_connect_root
 
-export TEST_NON_PRIVILEGED_USER_CONNECT="bendsql_query_http_user_connect test test -A"
+export TEST_NON_PRIVILEGED_USER_CONNECT="bendsql_connect_user test test -A"
 
 
 echo "call system\$fuse_amend('db', 't')" | $TEST_NON_PRIVILEGED_USER_CONNECT

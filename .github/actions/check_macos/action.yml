@@ -4,7 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Setup sccache
-      uses: mozilla-actions/sccache-action@v0.0.3
+      uses: mozilla-actions/sccache-action@v0.0.10
       continue-on-error: true
 
     - name: Setup macOS check environment

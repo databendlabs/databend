@@ -109,7 +109,7 @@ runs:
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
-    #   uses: crazy-max/ghaction-upx@v2
+    #   uses: crazy-max/ghaction-upx@v4
     #   with:
     #     files: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 

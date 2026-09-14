@@ -43,9 +43,9 @@ fn create_sequence(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ SEQUENCE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ ( START ~ ( WITH | "=" )? ~ #literal_u64 )?
-            ~ ( INCREMENT ~ ( BY | "=" )? ~ #literal_u64 )?
-            ~ ( COMMENT ~ "=" ~ #literal_string )?
+            ~ ( START ~ ( WITH | "=" )? ~ ^#literal_u64 )?
+            ~ ( INCREMENT ~ ( BY | "=" )? ~ ^#literal_u64 )?
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
         },
         |(
             _,

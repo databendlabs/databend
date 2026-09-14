@@ -36,9 +36,6 @@ impl DatabaseIdHistoryIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use crate::schema::DatabaseIdHistoryIdent;
     use crate::schema::DbIdList;
     use crate::tenant_key::resource::TenantResource;
 
@@ -48,10 +45,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "DatabaseIdHistoryIdent";
         const HAS_TENANT: bool = true;
         type ValueType = DbIdList;
-    }
-
-    impl kvapi::Value for DbIdList {
-        type KeyType = DatabaseIdHistoryIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

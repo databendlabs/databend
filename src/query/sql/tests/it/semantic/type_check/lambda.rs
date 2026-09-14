@@ -4,8 +4,8 @@ use super::*;
 async fn test_type_check_lambda_functions() -> Result<()> {
     let cases = [
         SqlTestCase {
-            name: "non_lambda_function_rejects_lambda_syntax",
-            description: "Only lambda functions should accept lambda syntax.",
+            name: "non_lambda_function_keeps_ambiguous_arrow_as_json_expression",
+            description: "Non-lambda functions should interpret an ambiguous trailing arrow as a JSON expression.",
             setup_sqls: &[],
             sql: "abs(number, x -> x)",
         },
@@ -16,8 +16,8 @@ async fn test_type_check_lambda_functions() -> Result<()> {
             sql: "array_transform([number])",
         },
         SqlTestCase {
-            name: "lambda_functions_cannot_be_nested",
-            description: "Lambda functions should remain rejected while resolving another lambda body.",
+            name: "lambda_functions_can_be_nested",
+            description: "Lambda functions should be allowed inside another lambda body.",
             setup_sqls: &[],
             sql: "array_transform([number], x -> array_transform([x], y -> y))",
         },

@@ -30,21 +30,10 @@ use seq_marked::SeqValue;
 
 use crate::serde::Quota;
 
-pub fn serialize_struct<T, ErrFn, CtxFn, D>(
-    value: &T,
-    err_code_fn: ErrFn,
-    context_fn: CtxFn,
-) -> Result<Vec<u8>>
-where
-    T: FromToProto + 'static,
-    ErrFn: FnOnce(String) -> ErrorCode + Copy,
-    D: Display,
-    CtxFn: FnOnce() -> D + Copy,
-{
-    let p = value.to_pb().map_err_to_code(err_code_fn, context_fn)?;
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf).map_err_to_code(err_code_fn, context_fn)?;
-    Ok(buf)
+pub fn serialize_struct<T>(value: &T) -> Vec<u8>
+where T: FromToProto + 'static {
+    let p = value.to_pb();
+    prost::Message::encode_to_vec(&p)
 }
 
 pub fn deserialize_struct<T, ErrFn, CtxFn, D>(
@@ -99,7 +88,7 @@ where
     quota.decrement();
 
     // If we reached here, it means JSON deserialization was successful but we need to serialize to protobuf format.
-    let value = databend_common_meta_api::serialize_struct(&data)?;
+    let value = databend_common_meta_api::serialize_struct(&data);
 
     let res = kv_api
         .upsert_kv(UpsertKV::new(

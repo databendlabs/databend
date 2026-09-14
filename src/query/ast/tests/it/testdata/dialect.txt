@@ -564,6 +564,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -646,6 +647,7 @@ FunctionCall {
                     ],
                     params: [],
                     order_by: [],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },
@@ -672,6 +674,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -754,6 +757,7 @@ FunctionCall {
                     ],
                     params: [],
                     order_by: [],
+                    filter: None,
                     window: None,
                     lambda: None,
                 },
@@ -780,6 +784,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -881,6 +886,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -953,6 +959,7 @@ FunctionCall {
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: None,
     },
@@ -1028,120 +1035,126 @@ FunctionCall {
                     ],
                     params: [],
                     order_by: [],
+                    filter: None,
                     window: None,
                     lambda: Some(
-                        Lambda {
-                            params: [
-                                Identifier {
-                                    span: Some(
-                                        14..15,
-                                    ),
-                                    name: "x",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ],
-                            expr: BinaryOp {
-                                span: Some(
-                                    36..37,
-                                ),
-                                op: Eq,
-                                left: BinaryOp {
-                                    span: Some(
-                                        32..33,
-                                    ),
-                                    op: Modulo,
-                                    left: ColumnRef {
+                        Lambda(
+                            Lambda {
+                                params: [
+                                    Identifier {
                                         span: Some(
-                                            30..31,
+                                            14..15,
                                         ),
-                                        column: ColumnRef {
-                                            database: None,
-                                            table: None,
-                                            column: Name(
-                                                Identifier {
-                                                    span: Some(
-                                                        30..31,
-                                                    ),
-                                                    name: "x",
-                                                    quote: None,
-                                                    ident_type: None,
-                                                },
+                                        name: "x",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ],
+                                expr: BinaryOp {
+                                    span: Some(
+                                        36..37,
+                                    ),
+                                    op: Eq,
+                                    left: BinaryOp {
+                                        span: Some(
+                                            32..33,
+                                        ),
+                                        op: Modulo,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                30..31,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            30..31,
+                                                        ),
+                                                        name: "x",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: Literal {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            value: UInt64(
+                                                2,
                                             ),
                                         },
                                     },
                                     right: Literal {
                                         span: Some(
-                                            34..35,
+                                            38..39,
                                         ),
                                         value: UInt64(
-                                            2,
+                                            0,
                                         ),
                                     },
                                 },
-                                right: Literal {
-                                    span: Some(
-                                        38..39,
-                                    ),
-                                    value: UInt64(
-                                        0,
-                                    ),
-                                },
                             },
-                        },
+                        ),
                     ),
                 },
             },
         ],
         params: [],
         order_by: [],
+        filter: None,
         window: None,
         lambda: Some(
-            Lambda {
-                params: [
-                    Identifier {
+            Lambda(
+                Lambda {
+                    params: [
+                        Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "x",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ],
+                    expr: BinaryOp {
                         span: Some(
-                            14..15,
+                            4..5,
                         ),
-                        name: "x",
-                        quote: None,
-                        ident_type: None,
-                    },
-                ],
-                expr: BinaryOp {
-                    span: Some(
-                        4..5,
-                    ),
-                    op: Multiply,
-                    left: ColumnRef {
-                        span: Some(
-                            2..3,
-                        ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        2..3,
-                                    ),
-                                    name: "x",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        op: Multiply,
+                        left: ColumnRef {
+                            span: Some(
+                                2..3,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            2..3,
+                                        ),
+                                        name: "x",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                6..9,
+                            ),
+                            value: UInt64(
+                                100,
                             ),
                         },
                     },
-                    right: Literal {
-                        span: Some(
-                            6..9,
-                        ),
-                        value: UInt64(
-                            100,
-                        ),
-                    },
                 },
-            },
+            ),
         ),
     },
 }

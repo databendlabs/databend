@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
@@ -25,7 +26,6 @@ use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -47,9 +47,10 @@ use tokio::runtime::Handle;
 use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
+use crate::binder::AliasLookup;
 use crate::optimizer::ir::SExpr;
+use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
-use crate::plans::ScalarExpr;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -133,6 +134,9 @@ enum CoreExpr<'a> {
         span: Span,
         name: &'a Identifier,
         args: CoreUdfCallArgs,
+        // Carried through to UDF resolution, where scalar UDFs and UDAFs are
+        // distinguished before a FILTER clause can be handled or rejected.
+        filter: Option<&'a Expr>,
     },
     LambdaFunction {
         span: Span,
@@ -286,8 +290,8 @@ struct FullTypeCheckAdapterDependencies {
     license_manager: Arc<LicenseManagerSwitch>,
     catalog_manager: Arc<CatalogManager>,
     user_api_provider: Arc<UserApiProvider>,
+    storage_allow_insecure: bool,
     security_policy_cache_manager: Arc<SecurityPolicyCacheManager>,
-    global_config: Arc<InnerConfig>,
     cloud_control_api_provider: Option<Arc<CloudControlApiProvider>>,
 }
 
@@ -317,8 +321,10 @@ pub trait UdfAdapter: Clone {
         Err(missing_type_check_adapter_dependency("udf server folding"))
     }
 
-    fn enable_udf_sandbox(&self) -> Result<bool> {
-        Err(missing_type_check_adapter_dependency("udf sandbox setting"))
+    fn validation_config(&self) -> Result<UdfValidationConfig> {
+        Err(missing_type_check_adapter_dependency(
+            "udf validation config",
+        ))
     }
 
     fn apply_udf_cloud_script(
@@ -330,8 +336,6 @@ pub trait UdfAdapter: Clone {
     }
 }
 
-impl UdfAdapter for () {}
-
 pub trait TypeCheckAdapter: Clone + Sized {
     type UdfAdapter: UdfAdapter;
 
@@ -341,7 +345,7 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
 
-    fn udf_adapter(&self) -> Self::UdfAdapter;
+    fn udf_adapter(&self) -> Result<Self::UdfAdapter>;
 
     fn check_core_expr_context(&self, _arena: &CoreExprArena<'_>) -> Result<()> {
         Ok(())
@@ -425,7 +429,8 @@ pub struct TypeChecker<'a, A> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
-    aliases: &'a [(String, ScalarExpr)],
+    aliases: AliasLookup<'a>,
+    fallback_aliases: Option<AliasLookup<'a>>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.

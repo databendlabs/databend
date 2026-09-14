@@ -89,6 +89,7 @@ impl Processor for BroadcastSendTransform {
                     self.channels.handle_send_results(results)?;
                     if self.no_active_downstream() {
                         self.input.finish();
+                        self.channels.close_all();
                         return Ok(Event::Finished);
                     }
                 }
@@ -101,6 +102,7 @@ impl Processor for BroadcastSendTransform {
 
         if self.no_active_downstream() {
             self.input.finish();
+            self.channels.close_all();
             return Ok(Event::Finished);
         }
 
@@ -141,6 +143,7 @@ impl Processor for BroadcastSendTransform {
                         self.channels.handle_send_results(results)?;
                         if self.no_active_downstream() {
                             self.input.finish();
+                            self.channels.close_all();
                             return Ok(Event::Finished);
                         }
                     }
@@ -170,12 +173,12 @@ impl Processor for BroadcastSendTransform {
 
     fn details_status(&self) -> Option<String> {
         Some(format!(
-            "BroadcastSendTransform {} {:?}",
+            "handle_pending={}, local_pos={}, closed_channels={}/{}, closed={:?}",
             self.handle.is_some(),
-            self.channels
-                .iter()
-                .map(|(_, x)| x.is_closed())
-                .collect::<Vec<_>>()
+            self.local_pos,
+            self.channels.closed_count(),
+            self.channels.len(),
+            self.channels.closed_status(),
         ))
     }
 

@@ -23,14 +23,14 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::plans::Plan;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::types::PyAny;
 use tokio_stream::StreamExt;
 
 use crate::datablock::PyDataBlocks;
 use crate::schema::PySchema;
 use crate::utils::wait_for_future;
 
-#[pyclass(name = "BoxSize", module = "databend", subclass)]
+#[pyclass(name = "BoxSize", module = "databend", subclass, skip_from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyBoxSize {
     pub(crate) bs_max_display_rows: usize,
@@ -38,7 +38,7 @@ pub(crate) struct PyBoxSize {
     pub(crate) bs_max_col_width: usize,
 }
 
-#[pyclass(name = "DataFrame", module = "databend", subclass)]
+#[pyclass(name = "DataFrame", module = "databend", subclass, skip_from_py_object)]
 #[derive(Clone)]
 pub(crate) struct PyDataFrame {
     ctx: Arc<QueryContext>,
@@ -119,7 +119,7 @@ impl PyDataFrame {
         }
     }
 
-    pub fn to_py_arrow(&self, py: Python) -> PyResult<Vec<PyObject>> {
+    pub fn to_py_arrow(&self, py: Python) -> PyResult<Vec<Py<PyAny>>> {
         let blocks = wait_for_future(py, self.df_collect());
         let blocks = blocks.map_err(|err| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("DataFrame collect error: {:?}", err))
@@ -132,50 +132,38 @@ impl PyDataFrame {
                     .to_record_batch_with_dataschema(self.df.schema().as_ref())
                     .unwrap()
                     .to_pyarrow(py)
+                    .map(Bound::unbind)
             })
             .collect()
     }
 
     /// Convert to Arrow Table
     /// Collect the batches and pass to Arrow Table
-    pub fn to_arrow_table(&self, py: Python) -> PyResult<PyObject> {
+    pub fn to_arrow_table(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let batches = self.to_py_arrow(py)?.into_pyobject(py)?;
         let schema = ArrowSchema::from(self.df.schema().as_ref());
         let schema = PyArrowType(schema);
         let schema = schema.into_pyobject(py)?;
 
-        Python::with_gil(|py| {
-            // Instantiate pyarrow Table object and use its from_batches method
-            let table_class = py.import("pyarrow")?.getattr("Table")?;
-            let args = PyTuple::new(py, &[batches, schema])?;
-            let table: PyObject = table_class.call_method1("from_batches", args)?.into();
-            Ok(table)
-        })
+        let table_class = py.import("pyarrow")?.getattr("Table")?;
+        Ok(table_class
+            .call_method1("from_batches", (batches, schema))?
+            .unbind())
     }
 
     /// Convert to pandas dataframe with pyarrow
     /// Collect the batches, pass to Arrow Table & then convert to Pandas DataFrame
-    fn to_pandas(&self, py: Python) -> PyResult<PyObject> {
+    fn to_pandas(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let table = self.to_arrow_table(py)?;
-
-        Python::with_gil(|py| {
-            // See also: https://arrow.apache.org/docs/python/generated/pyarrow.Table.html#pyarrow.Table.to_pandas
-            let result = table.call_method0(py, "to_pandas")?;
-            Ok(result)
-        })
+        table.call_method0(py, "to_pandas")
     }
 
     /// Convert to polars dataframe with pyarrow
     /// Collect the batches, pass to Arrow Table & then convert to polars DataFrame
-    fn to_polars(&self, py: Python) -> PyResult<PyObject> {
+    fn to_polars(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let table = self.to_arrow_table(py)?;
-
-        Python::with_gil(|py| {
-            let dataframe = py.import("polars")?.getattr("DataFrame")?;
-            let args = PyTuple::new(py, &[table])?;
-            let result: PyObject = dataframe.call1(args)?.into();
-            Ok(result)
-        })
+        let dataframe = py.import("polars")?.getattr("DataFrame")?;
+        Ok(dataframe.call1((table,))?.unbind())
     }
 }
 

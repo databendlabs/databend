@@ -28,6 +28,8 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -46,6 +48,8 @@ use serde::Serialize;
 pub struct WholeFileData {
     pub data: Vec<u8>,
     pub path: String,
+    pub content_key: Option<String>,
+    pub last_modified: Option<DateTime<Utc>>,
 }
 
 #[typetag::serde(name = "avro_file_data")]
@@ -111,6 +115,8 @@ impl PrefetchAsyncSource for WholeFileReader {
         let meta = std::boxed::Box::new(WholeFileData {
             data,
             path: file.path.clone(),
+            content_key: file.content_key.clone(),
+            last_modified: file.last_modified,
         });
         Ok(Some(DataBlock::empty_with_meta(meta)))
     }

@@ -29,7 +29,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::file::metadata::ParquetMetaData;
-use parquet::format::PageLocation;
+use parquet::file::page_index::offset_index::PageLocation;
 
 use super::statistics::collect_row_group_stats;
 use crate::statistics::convert_index_to_column_statistics;

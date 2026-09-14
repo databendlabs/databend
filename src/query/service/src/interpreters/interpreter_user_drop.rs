@@ -51,17 +51,19 @@ impl Interpreter for DropUserInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        UserApiProvider::instance()
-            .drop_user(&tenant, plan.user.clone(), plan.if_exists)
-            .await?;
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            UserApiProvider::instance()
+                .drop_user(&tenant, plan.user.clone(), plan.if_exists)
+                .await?;
 
-        cleanup_object_tags(&tenant, TaggableObject::User { user: plan.user }).await?;
+            cleanup_object_tags(&tenant, TaggableObject::User { user: plan.user }).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

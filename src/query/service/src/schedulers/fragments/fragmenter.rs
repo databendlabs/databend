@@ -59,18 +59,13 @@ use crate::sessions::TableContextSettings;
 pub struct Fragmenter {
     ctx: Arc<QueryContext>,
     query_id: String,
-    fragments: Vec<PlanFragment>,
 }
 
 impl Fragmenter {
     pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
         let query_id = ctx.get_id();
 
-        Ok(Self {
-            ctx,
-            fragments: vec![],
-            query_id,
-        })
+        Ok(Self { ctx, query_id })
     }
 
     /// Get ids of executor nodes.
@@ -111,12 +106,22 @@ impl Fragmenter {
             fragment_id: self.ctx.fragment_id().next_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
-            source_fragments: self.fragments,
+            has_merge_input: false,
         });
 
         let edges = Self::collect_fragments_edge(fragments.values());
 
         for (source, target) in edges {
+            let has_merge_input = fragments
+                .get(&source)
+                .is_some_and(|fragment| matches!(fragment.exchange, Some(DataExchange::Merge(_))));
+
+            if has_merge_input {
+                if let Some(fragment) = fragments.get_mut(&target) {
+                    fragment.has_merge_input = true;
+                }
+            }
+
             let Some(fragment) = fragments.get_mut(&source) else {
                 continue;
             };
@@ -317,9 +322,9 @@ impl DeriveHandle for FragmentDeriveHandle {
                 plan,
                 exchange,
                 fragment_type,
-                source_fragments: vec![],
                 fragment_id: source_fragment_id,
                 query_id: self.query_id.clone(),
+                has_merge_input: false,
             };
 
             self.fragments.insert(source_fragment_id, source_fragment);
@@ -354,7 +359,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 fragment_id,
                 exchange: None,
                 query_id: self.query_id.clone(),
-                source_fragments: vec![],
+                has_merge_input: false,
             };
 
             self.fragments.insert(fragment_id, fragment);

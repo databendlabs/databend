@@ -15,6 +15,11 @@
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 #[serde(default)]
 pub struct PruningStatistics {
+    /// Segment read cost in microseconds.
+    pub segments_read_cost: u64,
+    /// Segment block metas decompress cost in microseconds.
+    pub segments_decompress_cost: u64,
+
     /// Segment range pruning stats.
     pub segments_range_pruning_before: usize,
     pub segments_range_pruning_after: usize,
@@ -32,6 +37,8 @@ pub struct PruningStatistics {
     pub blocks_bloom_pruning_after: usize,
     /// Block bloom pruning cost in microseconds.
     pub blocks_bloom_pruning_cost: u64,
+    /// Block bloom index read cost in microseconds.
+    pub blocks_bloom_index_read_cost: u64,
 
     /// Block inverted index filter pruning stats.
     pub blocks_inverted_index_pruning_before: usize,
@@ -60,6 +67,8 @@ pub struct PruningStatistics {
 
 impl PruningStatistics {
     pub fn merge(&mut self, other: &Self) {
+        self.segments_read_cost += other.segments_read_cost;
+        self.segments_decompress_cost += other.segments_decompress_cost;
         self.segments_range_pruning_before += other.segments_range_pruning_before;
         self.segments_range_pruning_after += other.segments_range_pruning_after;
         self.segments_range_pruning_cost += other.segments_range_pruning_cost;
@@ -69,6 +78,7 @@ impl PruningStatistics {
         self.blocks_bloom_pruning_before += other.blocks_bloom_pruning_before;
         self.blocks_bloom_pruning_after += other.blocks_bloom_pruning_after;
         self.blocks_bloom_pruning_cost += other.blocks_bloom_pruning_cost;
+        self.blocks_bloom_index_read_cost += other.blocks_bloom_index_read_cost;
         self.blocks_inverted_index_pruning_before += other.blocks_inverted_index_pruning_before;
         self.blocks_inverted_index_pruning_after += other.blocks_inverted_index_pruning_after;
         self.blocks_inverted_index_pruning_cost += other.blocks_inverted_index_pruning_cost;

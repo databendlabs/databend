@@ -41,28 +41,32 @@ use crate::plans::walk_expr_mut;
 
 pub(crate) struct ExprValuesRewriter {
     ctx: Arc<dyn TableContext>,
-    scalars: Vec<ScalarExpr>,
+    invalid: bool,
 }
 
 impl ExprValuesRewriter {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
         Self {
             ctx,
-            scalars: vec![],
+            invalid: false,
         }
     }
 
-    pub fn reset_scalars(&mut self) {
-        self.scalars.clear();
+    pub fn reset(&mut self) {
+        self.invalid = false;
     }
 
-    pub fn scalars(&self) -> &[ScalarExpr] {
-        &self.scalars
+    pub fn is_invalid(&self) -> bool {
+        self.invalid
     }
 }
 
 impl<'a> VisitorMut<'a> for ExprValuesRewriter {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if self.invalid {
+            return Ok(());
+        }
+
         match &expr {
             ScalarExpr::AsyncFunctionCall(async_func) => {
                 let tenant = self.ctx.get_tenant();
@@ -96,7 +100,7 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
-                    self.scalars.push(expr.clone());
+                    self.invalid = true;
                     return Ok(());
                 }
             }
@@ -105,7 +109,7 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
             | ScalarExpr::SubqueryExpr(_)
             | ScalarExpr::UDFCall(_)
             | ScalarExpr::UDAFCall(_) => {
-                self.scalars.push(expr.clone());
+                self.invalid = true;
                 return Ok(());
             }
             ScalarExpr::BoundColumnRef(_)
@@ -158,10 +162,10 @@ impl BindContext {
 
             let (mut scalar, data_type) = scalar_binder.bind(expr)?;
 
-            rewriter.reset_scalars();
+            rewriter.reset();
             rewriter.visit(&mut scalar)?;
 
-            if !rewriter.scalars().is_empty() {
+            if rewriter.is_invalid() {
                 return Err(ErrorCode::SemanticError(
                     "Aggregate, external udf and window functions are not allowed in value expressions"
                         .to_string(),

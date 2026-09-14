@@ -43,12 +43,29 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
+        self.register_1_arg_with_policy(name, calc_domain, PartialEvalPolicy::EvaluateAll, func);
+    }
+
+    pub fn register_1_arg_with_policy<I1: ArgType, O: ArgType, G>(
+        &mut self,
+        name: &str,
+        calc_domain: fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O>,
+        policy: PartialEvalPolicy,
+        func: G,
+    ) where
+        G: Fn(I1::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
+            + 'static
+            + Clone
+            + Copy
+            + Send
+            + Sync,
+    {
         self.scalar_builder(name)
             .function()
             .typed_1_arg::<I1, O>()
             .passthrough_nullable()
             .calc_domain(calc_domain)
-            .each_row(func)
+            .each_row_with_policy(policy, func)
             .register();
     }
 
@@ -65,12 +82,29 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
+        self.register_2_arg_with_policy(name, calc_domain, PartialEvalPolicy::EvaluateAll, func);
+    }
+
+    pub fn register_2_arg_with_policy<I1: ArgType, I2: ArgType, O: ArgType, G>(
+        &mut self,
+        name: &str,
+        calc_domain: fn(&FunctionContext, &I1::Domain, &I2::Domain) -> FunctionDomain<O>,
+        policy: PartialEvalPolicy,
+        func: G,
+    ) where
+        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
+            + 'static
+            + Clone
+            + Copy
+            + Send
+            + Sync,
+    {
         self.scalar_builder(name)
             .function()
             .typed_2_arg::<I1, I2, O>()
             .passthrough_nullable()
             .calc_domain(calc_domain)
-            .each_row(func)
+            .each_row_with_policy(policy, func)
             .register();
     }
 

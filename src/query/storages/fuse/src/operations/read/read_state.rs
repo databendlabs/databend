@@ -46,7 +46,7 @@ use crate::pruning::ExprBloomFilter;
 
 #[derive(Clone)]
 pub struct BloomRuntimeFilterRef {
-    pub column_index: FieldIndex,
+    pub probe_expr: Expr<FieldIndex>,
     pub filter: RuntimeBloomFilter,
     pub stats: Arc<RuntimeFilterStats>,
 }
@@ -77,18 +77,27 @@ impl ReadState {
             prewhere_info.is_some() && prewhere_selectivity_threshold == 0;
         let original_schema = block_reader.original_schema.as_ref();
 
-        let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
-        let runtime_filter_column_names: Vec<_> = runtime_filter_entries
-            .iter()
-            .filter_map(|entry| {
-                let column_name = entry.bloom.as_ref().map(|bloom| &bloom.column_name)?;
-                if original_schema.index_of(column_name).is_ok() {
-                    Some(column_name)
-                } else {
-                    None
-                }
+        let runtime_filter_entries: Vec<_> = ctx
+            .get_runtime_filters(scan_id)
+            .into_iter()
+            .filter(|entry| {
+                entry.bloom.is_some()
+                    && entry
+                        .probe_expr
+                        .column_refs()
+                        .keys()
+                        .all(|name| runtime_filter_column_is_projectable(original_schema, name))
             })
             .collect();
+        let mut runtime_filter_column_names = Vec::new();
+        for entry in &runtime_filter_entries {
+            for name in entry.probe_expr.column_refs().into_keys() {
+                if !runtime_filter_column_names.contains(&name) {
+                    runtime_filter_column_names.push(name);
+                }
+            }
+        }
+        let runtime_filter_column_names: Vec<_> = runtime_filter_column_names.iter().collect();
 
         let mut preread_projection =
             Projection::from_column_names(original_schema, &runtime_filter_column_names)?;
@@ -116,9 +125,12 @@ impl ReadState {
             .into_iter()
             .filter_map(|entry| {
                 let bloom = entry.bloom?;
-                let column_index = prewhere_schema.index_of(bloom.column_name.as_str()).ok()?;
+                let probe_expr = entry
+                    .probe_expr
+                    .project_column_ref(|name| prewhere_schema.index_of(name))
+                    .ok()?;
                 Some(BloomRuntimeFilterRef {
-                    column_index,
+                    probe_expr,
                     filter: bloom.filter,
                     stats: entry.stats,
                 })
@@ -165,14 +177,22 @@ impl ReadState {
     pub fn runtime_filter(
         &self,
         block: &DataBlock,
-        _num_rows: usize,
+        num_rows: usize,
     ) -> Result<Option<MutableBitmap>> {
         let bloom_start = Instant::now();
 
         let mut bitmaps = vec![];
+        let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for runtime_filter in &self.runtime_filters {
-            let probe_column = block.get_by_offset(runtime_filter.column_index).to_column();
+            let filter_start = Instant::now();
+            let probe_column = evaluator
+                .run(&runtime_filter.probe_expr)?
+                .convert_to_full_column(runtime_filter.probe_expr.data_type(), num_rows);
             let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
+            runtime_filter.stats.record_bloom(
+                filter_start.elapsed().as_nanos() as u64,
+                bitmap.null_count() as u64,
+            );
             bitmaps.push(bitmap);
         }
 
@@ -201,7 +221,21 @@ impl ReadState {
             .deserialize_part(part, pre_columns_chunks, None)?;
 
         let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
-        let runtime_filter_bitmap = self.runtime_filter(&preread_block, part.nums_rows)?;
+        // Expensive probe expressions are evaluated only for rows surviving
+        // the static prewhere predicate. Expand their bitmap back to the
+        // original row positions before combining it with prewhere.
+        let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
+            // Preserve the profile entry emitted before expression probes were
+            // supported, even when there is no Bloom filter to evaluate.
+            self.runtime_filter(&preread_block, part.nums_rows)?
+        } else if let Some(filter_bitmap) = &filter_bitmap {
+            let filter_bitmap: Bitmap = filter_bitmap.clone().into();
+            let filtered_block = preread_block.clone().filter_with_bitmap(&filter_bitmap)?;
+            self.runtime_filter(&filtered_block, filtered_block.num_rows())?
+                .map(|runtime_bitmap| expand_runtime_filter_bitmap(&filter_bitmap, &runtime_bitmap))
+        } else {
+            self.runtime_filter(&preread_block, part.nums_rows)?
+        };
 
         let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
             (Some(filter_bitmap), Some(runtime_filter_bitmap)) => {
@@ -267,6 +301,31 @@ impl ReadState {
     }
 }
 
+fn runtime_filter_column_is_projectable(
+    schema: &databend_common_expression::TableSchema,
+    name: &str,
+) -> bool {
+    Projection::from_column_names(schema, &[name]).is_ok()
+}
+
+fn expand_runtime_filter_bitmap(
+    prewhere_bitmap: &Bitmap,
+    runtime_filter_bitmap: &MutableBitmap,
+) -> MutableBitmap {
+    let mut runtime_filter_bits = runtime_filter_bitmap.iter();
+    let mut expanded = MutableBitmap::with_capacity(prewhere_bitmap.len());
+    for survives_prewhere in prewhere_bitmap.iter() {
+        expanded.push(
+            survives_prewhere
+                && runtime_filter_bits
+                    .next()
+                    .expect("runtime filter bitmap must match surviving rows"),
+        );
+    }
+    debug_assert!(runtime_filter_bits.next().is_none());
+    expanded
+}
+
 fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) -> bool {
     let total_rows = row_selection.bitmap.len();
     if threshold == 0 || total_rows == 0 {
@@ -278,7 +337,13 @@ fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) 
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::MutableBitmap;
+    use databend_common_expression::types::NumberDataType;
 
     use super::*;
 
@@ -306,5 +371,46 @@ mod tests {
         let sparse_selection = RowSelection::from(&sparse_bitmap);
 
         assert!(!should_push_down_row_selection(&sparse_selection, 0));
+    }
+
+    #[test]
+    fn test_expand_runtime_filter_bitmap_after_prewhere() {
+        let prewhere: Bitmap = [false, true, true, false, true].into_iter().collect();
+        let runtime_filter: MutableBitmap = [true, false, true].into_iter().collect();
+
+        let expanded = expand_runtime_filter_bitmap(&prewhere, &runtime_filter);
+        assert_eq!(expanded.iter().collect::<Vec<_>>(), vec![
+            false, true, false, false, true
+        ]);
+    }
+
+    #[test]
+    fn test_nested_runtime_filter_column_is_projectable() {
+        let schema = TableSchema::new(vec![TableField::new("payload", TableDataType::Tuple {
+            fields_name: vec!["value".to_string()],
+            fields_type: vec![TableDataType::Number(NumberDataType::Int64)],
+        })]);
+        assert!(schema.index_of("payload:value").is_err());
+        assert!(runtime_filter_column_is_projectable(
+            &schema,
+            "payload:value"
+        ));
+
+        let projection = Projection::from_column_names(&schema, &["payload:value"]).unwrap();
+        let projected_schema = projection.project_schema(&schema);
+        let projected_schema: DataSchema = (&projected_schema).into();
+        let probe_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "payload:value".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "payload:value".to_string(),
+        });
+        let projected_expr = probe_expr
+            .project_column_ref(|name| projected_schema.index_of(name))
+            .unwrap();
+        assert_eq!(
+            projected_expr.column_refs().into_keys().collect::<Vec<_>>(),
+            vec![0]
+        );
     }
 }

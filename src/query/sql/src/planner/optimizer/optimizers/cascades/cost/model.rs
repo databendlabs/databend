@@ -88,10 +88,12 @@ impl DefaultCostModel {
             RelOperator::EvalScalar(_)
             | RelOperator::Filter(_)
             | RelOperator::Window(_)
+            | RelOperator::WindowGroup(_)
             | RelOperator::Sort(_)
             | RelOperator::ProjectSet(_)
             | RelOperator::Udf(_)
-            | RelOperator::Limit(_) => self.compute_cost_unary_common_operator(memo, m_expr),
+            | RelOperator::Limit(_)
+            | RelOperator::TopN(_) => self.compute_cost_unary_common_operator(memo, m_expr),
 
             RelOperator::Exchange(_) => self.compute_cost_exchange(memo, m_expr),
 

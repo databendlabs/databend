@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -30,6 +29,7 @@ use databend_common_expression::types::NumberScalar;
 use indexmap::Equivalent;
 use itertools::Itertools;
 
+use super::Any;
 use super::ExprContext;
 use super::Finder;
 use super::GROUPING_ID_COLUMN_NAME;
@@ -48,6 +48,7 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::ClauseAliasBindings;
 use crate::binder::select::SelectList;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -129,13 +130,53 @@ pub struct GroupingSetsInfo {
     pub dup_group_items: Vec<(Symbol, DataType)>,
 }
 
+#[derive(Clone)]
+struct GroupItem {
+    expr: Expr,
+    disable_select_alias_fallback: bool,
+}
+
+impl GroupItem {
+    fn normal(expr: Expr) -> Self {
+        Self {
+            expr,
+            disable_select_alias_fallback: false,
+        }
+    }
+
+    fn grouping_construct(expr: Expr) -> Self {
+        Self {
+            expr,
+            disable_select_alias_fallback: true,
+        }
+    }
+}
+
+enum ExpandedGroup {
+    Normal(Vec<GroupItem>),
+    All,
+    GroupingSets(Vec<Vec<GroupItem>>),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum AggregateCall {
+    Aggregate(ScalarItem),
+    Udaf(ScalarItem),
+}
+
+impl AggregateCall {
+    fn item(&self) -> &ScalarItem {
+        match self {
+            AggregateCall::Aggregate(item) | AggregateCall::Udaf(item) => item,
+        }
+    }
+}
+
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
-    /// Builtin aggregation functions.
-    aggregate_functions: Vec<ScalarItem>,
-
-    /// User-defined aggregation functions.
-    udaf_calls: Vec<ScalarItem>,
+    /// Aggregate calls in ascending column index order.
+    /// Column indices are allocated monotonically, so registration order preserves this ordering.
+    aggregate_calls: Vec<AggregateCall>,
 
     /// Arguments of aggregation functions
     aggregate_arguments: Vec<ScalarItem>,
@@ -208,7 +249,7 @@ impl AggregateInfo {
             ColumnBindingBuilder::new(
                 new_name.to_string(),
                 column.index,
-                Box::new(column.scalar.data_type()?),
+                Box::new(column.scalar.data_type().into_owned()),
                 visibility,
             )
             .build()
@@ -233,15 +274,23 @@ impl AggregateInfo {
 
     pub fn lookup_aggregate_function(&self, aggregate: &AggregateFunction) -> Option<&ScalarItem> {
         let scalar = ScalarExpr::AggregateFunction(aggregate.clone());
-        self.aggregate_functions
+        self.aggregate_calls
             .iter()
+            .filter_map(|call| match call {
+                AggregateCall::Aggregate(item) => Some(item),
+                AggregateCall::Udaf(_) => None,
+            })
             .find(|item| item.scalar.equivalent(&scalar))
     }
 
     pub fn lookup_udaf_call(&self, udaf: &UDAFCall) -> Option<&ScalarItem> {
         let scalar = ScalarExpr::UDAFCall(udaf.clone());
-        self.udaf_calls
+        self.aggregate_calls
             .iter()
+            .filter_map(|call| match call {
+                AggregateCall::Aggregate(_) => None,
+                AggregateCall::Udaf(item) => Some(item),
+            })
             .find(|item| item.scalar.equivalent(&scalar))
     }
 
@@ -253,7 +302,7 @@ impl AggregateInfo {
         self.lookup_aggregate_function(aggregate)
             .map(|scalar_item| {
                 debug_assert_eq!(
-                    &scalar_item.scalar.data_type().unwrap(),
+                    scalar_item.scalar.data_type().as_ref(),
                     aggregate.return_type.as_ref()
                 );
                 build_replaced_aggregate_column(new_name, scalar_item.index, &aggregate.return_type)
@@ -267,7 +316,7 @@ impl AggregateInfo {
     ) -> Option<ColumnBinding> {
         self.lookup_udaf_call(udaf).map(|scalar_item| {
             debug_assert_eq!(
-                &scalar_item.scalar.data_type().unwrap(),
+                scalar_item.scalar.data_type().as_ref(),
                 udaf.return_type.as_ref()
             );
             build_replaced_aggregate_column(new_name, scalar_item.index, &udaf.return_type)
@@ -275,21 +324,25 @@ impl AggregateInfo {
     }
 
     pub fn has_aggregate_calls(&self) -> bool {
-        !self.aggregate_functions.is_empty() || !self.udaf_calls.is_empty()
+        !self.aggregate_calls.is_empty()
+    }
+
+    pub fn aggregate_calls(&self) -> impl Iterator<Item = &ScalarItem> {
+        self.aggregate_calls.iter().map(AggregateCall::item)
     }
 
     pub fn has_aggregate_call_index(&self, index: Symbol) -> bool {
-        self.aggregate_functions
-            .iter()
-            .chain(self.udaf_calls.iter())
-            .any(|item| item.index == index)
+        self.aggregate_calls().any(|item| item.index == index)
     }
 
-    pub fn aggregate_calls_for_plan(&self) -> Vec<ScalarItem> {
-        let mut items = self.aggregate_functions.clone();
-        items.extend(self.udaf_calls.iter().cloned());
-        items.sort_by_key(|item| item.index);
-        items
+    fn push_aggregate_call(&mut self, call: AggregateCall) {
+        debug_assert!(
+            self.aggregate_calls
+                .last()
+                .is_none_or(|last| last.item().index < call.item().index),
+            "aggregate calls must be registered in column index order"
+        );
+        self.aggregate_calls.push(call);
     }
 
     fn lookup_existing_aggregate_function_column(
@@ -379,10 +432,10 @@ impl AggregateInfo {
             *aggregate.return_type.clone(),
         );
 
-        self.aggregate_functions.push(ScalarItem {
+        self.push_aggregate_call(AggregateCall::Aggregate(ScalarItem {
             scalar: replaced_agg.into(),
             index,
-        });
+        }));
 
         Ok(build_replaced_aggregate_column(
             &aggregate.display_name,
@@ -418,10 +471,10 @@ impl AggregateInfo {
             .write()
             .add_derived_column(udaf.display_name.clone(), *udaf.return_type.clone());
 
-        self.udaf_calls.push(ScalarItem {
+        self.push_aggregate_call(AggregateCall::Udaf(ScalarItem {
             scalar: replaced_udaf.into(),
             index,
-        });
+        }));
 
         Ok(build_replaced_aggregate_column(
             &udaf.display_name,
@@ -461,7 +514,7 @@ impl AggregateInfo {
                     let column_binding = ColumnBindingBuilder::new(
                         name,
                         item.index,
-                        Box::new(expr.data_type()?),
+                        Box::new(expr.data_type().into_owned()),
                         Visibility::Visible,
                     )
                     .build();
@@ -471,7 +524,7 @@ impl AggregateInfo {
                         column: column_binding,
                     })
                 } else {
-                    let data_type = expr.data_type()?;
+                    let data_type = expr.data_type().into_owned();
                     let index = metadata
                         .write()
                         .add_derived_column(name.clone(), data_type.clone());
@@ -527,7 +580,7 @@ impl AggregateInfo {
                 let column_binding = ColumnBindingBuilder::new(
                     name,
                     item.index,
-                    Box::new(expr.data_type()?),
+                    Box::new(expr.data_type().into_owned()),
                     Visibility::Visible,
                 )
                 .build();
@@ -565,7 +618,7 @@ impl AggregateInfo {
             .enumerate()
             .map(|(i, arg)| {
                 let name = format!("{}_arg_{}", func_name, i);
-                let data_type = arg.data_type()?;
+                let data_type = arg.data_type().into_owned();
                 if let ScalarExpr::BoundColumnRef(column_ref) = arg {
                     self.aggregate_arguments.push(ScalarItem {
                         index: column_ref.column.index,
@@ -628,7 +681,7 @@ impl AggregateInfo {
         let mut replaced_args = Vec::with_capacity(args.len());
         for (i, arg) in args.iter().enumerate() {
             let name = format!("{}_arg_{}", func_name, i);
-            let data_type = arg.data_type()?;
+            let data_type = arg.data_type().into_owned();
             if let ScalarExpr::BoundColumnRef(column_ref) = arg {
                 replaced_args.push(column_ref.clone().into());
                 continue;
@@ -705,6 +758,7 @@ impl AggregateInfo {
                 span: function.span,
                 column: grouping_id_column,
             })],
+            return_type: function.return_type.clone(),
         })
     }
 }
@@ -747,9 +801,9 @@ impl AggregateRewriter<'_> {
 
     pub fn check_no_aggregate_calls(expr: &ScalarExpr, error_message: &str) -> Result<()> {
         let f = |scalar: &ScalarExpr| scalar.is_aggregate();
-        let mut finder = Finder::new(&f);
-        finder.visit(expr)?;
-        if !finder.scalars().is_empty() {
+        let mut any = Any::new(&f);
+        any.visit(expr)?;
+        if any.result() {
             return Err(ErrorCode::Internal(error_message.to_string()));
         }
 
@@ -890,27 +944,28 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        group_by_aliases: &ClauseAliasBindings,
+        group_by_aliases: &ClauseAliasBindings<'_>,
         group_by: &GroupBy,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
-        let original_group_by_column_first = bind_context.group_by_column_first;
-        bind_context.group_by_column_first =
-            self.ctx.get_settings().get_enable_group_by_column_first()?;
 
         let result = (|| {
             let group_by = Self::expand_group(group_by.clone())?;
             match &group_by {
-                GroupBy::Normal(exprs) => self.resolve_group_items(
+                ExpandedGroup::Normal(items) => self.resolve_group_items(
                     bind_context,
                     select_list,
-                    exprs,
+                    items,
                     group_by_aliases,
                     false,
                     &mut vec![],
                 )?,
-                GroupBy::All => {
+                ExpandedGroup::All => {
                     let groups = self.resolve_group_all(select_list)?;
+                    let groups = groups
+                        .into_iter()
+                        .map(GroupItem::normal)
+                        .collect::<Vec<_>>();
                     self.resolve_group_items(
                         bind_context,
                         select_list,
@@ -920,50 +975,63 @@ impl Binder {
                         &mut vec![],
                     )?;
                 }
-                GroupBy::GroupingSets(sets) => {
+                ExpandedGroup::GroupingSets(sets) => {
                     self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
                 }
-                _ => unreachable!(),
             }
             Ok(())
         })();
         bind_context.expr_context = original_context;
-        bind_context.group_by_column_first = original_group_by_column_first;
         result
     }
 
-    pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {
+    fn expand_group(group_by: GroupBy) -> Result<ExpandedGroup> {
         match group_by {
-            GroupBy::Normal(_) | GroupBy::All | GroupBy::GroupingSets(_) => Ok(group_by),
+            GroupBy::Normal(exprs) => Ok(ExpandedGroup::Normal(
+                exprs.into_iter().map(GroupItem::normal).collect(),
+            )),
+            GroupBy::All => Ok(ExpandedGroup::All),
+            GroupBy::GroupingSets(sets) => Ok(ExpandedGroup::GroupingSets(
+                Self::grouping_construct_sets(sets),
+            )),
             GroupBy::Cube(exprs) => {
                 // Expand CUBE to GroupingSets
-                let sets = Self::generate_cube_sets(exprs);
-                Ok(GroupBy::GroupingSets(sets))
+                Ok(ExpandedGroup::GroupingSets(
+                    Self::generate_cube_sets(exprs)
+                        .into_iter()
+                        .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
+                        .collect(),
+                ))
             }
             GroupBy::Rollup(exprs) => {
                 // Expand ROLLUP to GroupingSets
-                let sets = Self::generate_rollup_sets(exprs);
-                Ok(GroupBy::GroupingSets(sets))
+                Ok(ExpandedGroup::GroupingSets(
+                    Self::generate_rollup_sets(exprs)
+                        .into_iter()
+                        .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
+                        .collect(),
+                ))
             }
             GroupBy::Combined(groups) => {
                 // Flatten and expand all nested GroupBy variants
                 let mut combined_sets = Vec::new();
                 for group in groups {
                     match Self::expand_group(group)? {
-                        GroupBy::Normal(exprs) => {
-                            combined_sets = Self::cartesian_product(combined_sets, vec![exprs]);
+                        ExpandedGroup::Normal(items) => {
+                            combined_sets = Self::cartesian_product(combined_sets, vec![items]);
                         }
-                        GroupBy::GroupingSets(sets) => {
+                        ExpandedGroup::GroupingSets(sets) => {
                             combined_sets = Self::cartesian_product(combined_sets, sets);
                         }
-                        other => {
+                        ExpandedGroup::All => {
                             return Err(ErrorCode::SyntaxException(format!(
-                                "COMBINED GROUP BY does not support {other:?}"
+                                "COMBINED GROUP BY does not support {:?}",
+                                GroupBy::All
                             )));
                         }
                     }
                 }
-                Ok(GroupBy::GroupingSets(combined_sets))
+                Ok(ExpandedGroup::GroupingSets(combined_sets))
             }
         }
     }
@@ -984,8 +1052,17 @@ impl Binder {
         result
     }
 
+    fn grouping_construct_sets(sets: Vec<Vec<Expr>>) -> Vec<Vec<GroupItem>> {
+        sets.into_iter()
+            .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
+            .collect()
+    }
+
     /// Perform Cartesian product of two sets of grouping sets
-    fn cartesian_product(set1: Vec<Vec<Expr>>, set2: Vec<Vec<Expr>>) -> Vec<Vec<Expr>> {
+    fn cartesian_product(
+        set1: Vec<Vec<GroupItem>>,
+        set2: Vec<Vec<GroupItem>>,
+    ) -> Vec<Vec<GroupItem>> {
         if set1.is_empty() {
             return set2;
         }
@@ -1053,7 +1130,7 @@ impl Binder {
         let aggregate_plan = Aggregate {
             mode: AggregateMode::Initial,
             group_items: agg_info.group_items.clone(),
-            aggregate_functions: agg_info.aggregate_calls_for_plan(),
+            aggregate_functions: agg_info.aggregate_calls().cloned().collect(),
             from_distinct: false,
             rank_limit: None,
 
@@ -1072,8 +1149,8 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        sets: &[Vec<Expr>],
-        group_by_aliases: &ClauseAliasBindings,
+        sets: &[Vec<GroupItem>],
+        group_by_aliases: &ClauseAliasBindings<'_>,
     ) -> Result<()> {
         let mut grouping_sets = Vec::with_capacity(sets.len());
         for set in sets {
@@ -1114,7 +1191,7 @@ impl Binder {
             // We just generate a new bound index.
             let dummy = self.create_derived_column_binding(
                 format!("_dup_group_item_{i}"),
-                item.scalar.data_type()?,
+                item.scalar.data_type().into_owned(),
             );
             dup_group_items.push((dummy.index, *dummy.data_type));
         }
@@ -1155,11 +1232,12 @@ impl Binder {
         // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
 
         let f = |scalar: &ScalarExpr| scalar.is_aggregate();
+        let mut any = Any::new(&f);
         let mut groups = Vec::new();
         for (idx, select_item) in select_list.items.iter().enumerate() {
-            let mut finder = Finder::new(&f);
-            finder.visit(&select_item.scalar)?;
-            if finder.scalars().is_empty() {
+            any.reset();
+            any.visit(&select_item.scalar)?;
+            if !any.result() {
                 groups.push(Expr::Literal {
                     span: None,
                     value: Literal::UInt64(idx as u64 + 1),
@@ -1173,20 +1251,17 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        group_by: &[Expr],
-        group_by_aliases: &ClauseAliasBindings,
+        group_by: &[GroupItem],
+        group_by_aliases: &ClauseAliasBindings<'_>,
         collect_grouping_sets: bool,
         grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
-        let preferred_aliases = group_by_aliases.preferred_aliases();
-        let available_aliases = group_by_aliases.available_aliases();
-        // Keep alias-first binding for simple `GROUP BY <alias>` items. For
-        // complex expressions, resolve input columns first and only use SELECT
-        // aliases for names that are not present in the input scope.
-        for expr in group_by.iter() {
+        let mut group_by_aliases = group_by_aliases.group_item_state();
+        for item in group_by.iter() {
+            let expr = &item.expr;
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
                 value: Literal::UInt64(index),
@@ -1204,7 +1279,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_derived_column_binding(alias, scalar.data_type()?)
+                        self.create_derived_column_binding(alias, scalar.data_type().into_owned())
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
@@ -1218,52 +1293,30 @@ impl Binder {
                 continue;
             }
 
-            let is_simple_column_ref = matches!(expr, Expr::ColumnRef {
-                column: ColumnRef {
-                    database: None,
-                    table: None,
-                    ..
-                },
-                ..
-            });
+            let (preferred_aliases, fallback_aliases) =
+                group_by_aliases.group_item_aliases(expr, item.disable_select_alias_fallback);
 
-            let (mut scalar_expr, _) = if is_simple_column_ref {
-                let mut scalar_binder = ScalarBinder::new(
+            let (mut scalar_expr, _) = {
+                let mut type_checker = TypeChecker::try_create_with_alias_fallback(
                     bind_context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     preferred_aliases,
-                );
-                if preferred_aliases == available_aliases {
-                    scalar_binder.bind(expr)?
-                } else {
-                    scalar_binder.bind(expr).or_else(|_| {
-                        let mut fallback_scalar_binder = ScalarBinder::new(
-                            bind_context,
-                            self.ctx.clone(),
-                            &self.name_resolution_ctx,
-                            self.metadata.clone(),
-                            available_aliases,
-                        );
-                        fallback_scalar_binder.bind(expr)
-                    })?
-                }
-            } else {
-                bind_context.with_expr_context(
-                    ExprContext::SelectClause,
-                    |bind_context| -> Result<(ScalarExpr, DataType)> {
-                        let mut scalar_binder = ScalarBinder::new(
-                            bind_context,
-                            self.ctx.clone(),
-                            &self.name_resolution_ctx,
-                            self.metadata.clone(),
-                            available_aliases,
-                        );
-                        scalar_binder.bind(expr)
-                    },
-                )?
+                    fallback_aliases,
+                    false,
+                )?;
+                *type_checker.resolve(expr)?
             };
+
+            // If a simple GROUP BY item matched a SELECT alias, remember that
+            // alias as a group item column for later GROUP BY items.
+            //
+            // `SELECT i AS k FROM t GROUP BY k, abs(k)` should let `abs(k)`
+            // use the preceding group item alias `k`.
+            // Without a preceding group item alias, complex GROUP BY items
+            // still bind input columns before falling back to SELECT aliases.
+            let group_alias = group_by_aliases.matched_group_item_alias(expr, &scalar_expr);
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
             analyzer.visit(&mut scalar_expr)?;
@@ -1271,37 +1324,37 @@ impl Binder {
                 grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
 
-            // Was add by previous
-            // The group key is duplicated
-            if bind_context
+            let group_item_exists = bind_context
                 .aggregate_info
                 .group_items_map
-                .contains_key(&scalar_expr)
-            {
-                continue;
+                .contains_key(&scalar_expr);
+            if !group_item_exists {
+                let group_item_name = format!("{:#}", expr);
+                let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column: ColumnBinding { index, .. },
+                    ..
+                }) = &scalar_expr
+                {
+                    *index
+                } else {
+                    self.metadata.write().add_derived_column(
+                        group_item_name.clone(),
+                        scalar_expr.data_type().into_owned(),
+                    )
+                };
+
+                bind_context.aggregate_info.group_items.push(ScalarItem {
+                    scalar: scalar_expr.clone(),
+                    index,
+                });
+                bind_context.aggregate_info.group_items_map.insert(
+                    scalar_expr,
+                    bind_context.aggregate_info.group_items.len() - 1,
+                );
             }
-
-            let group_item_name = format!("{:#}", expr);
-            let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
-                column: ColumnBinding { index, .. },
-                ..
-            }) = &scalar_expr
-            {
-                *index
-            } else {
-                self.metadata
-                    .write()
-                    .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
-            };
-
-            bind_context.aggregate_info.group_items.push(ScalarItem {
-                scalar: scalar_expr.clone(),
-                index,
-            });
-            bind_context.aggregate_info.group_items_map.insert(
-                scalar_expr,
-                bind_context.aggregate_info.group_items.len() - 1,
-            );
+            if let Some(alias_index) = group_alias {
+                group_by_aliases.register_group_item_alias(alias_index);
+            }
         }
 
         // Check group by contains aggregate functions or not
@@ -1321,8 +1374,7 @@ impl Binder {
         for item in bind_context.aggregate_info.group_items.iter() {
             let mut finder = Finder::new(&f);
             finder.visit(&item.scalar)?;
-            if !finder.scalars().is_empty() {
-                let scalar = finder.scalars().first().unwrap();
+            if let Some(scalar) = finder.scalars().first().copied() {
                 let display_name = match scalar {
                     ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
                     ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),
@@ -1484,6 +1536,7 @@ mod tests {
                 }
                 .into(),
             ],
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
         }
         .into()
     }
@@ -1506,10 +1559,10 @@ mod tests {
         };
 
         let mut agg_info = AggregateInfo::default();
-        agg_info.aggregate_functions.push(ScalarItem {
+        agg_info.push_aggregate_call(AggregateCall::Aggregate(ScalarItem {
             scalar: replaced.clone().into(),
             index: Symbol::new(42),
-        });
+        }));
 
         assert!(agg_info.lookup_aggregate_function(&original).is_none());
         assert_eq!(
@@ -1536,10 +1589,10 @@ mod tests {
         };
 
         let mut agg_info = AggregateInfo::default();
-        agg_info.udaf_calls.push(ScalarItem {
+        agg_info.push_aggregate_call(AggregateCall::Udaf(ScalarItem {
             scalar: replaced.clone().into(),
             index: Symbol::new(84),
-        });
+        }));
 
         assert!(agg_info.lookup_udaf_call(&original).is_none());
         assert_eq!(
@@ -1562,10 +1615,10 @@ mod tests {
         };
 
         let mut agg_info = AggregateInfo::default();
-        agg_info.aggregate_functions.push(ScalarItem {
+        agg_info.push_aggregate_call(AggregateCall::Aggregate(ScalarItem {
             scalar: replaced.clone().into(),
             index: Symbol::new(42),
-        });
+        }));
 
         let mut expr: ScalarExpr = replaced.into();
         AggregateRewriter::rewrite_existing_expr(

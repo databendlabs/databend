@@ -44,9 +44,6 @@ impl StageFileIdent {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use super::StageFileIdent;
     use crate::principal::StageFile;
     use crate::tenant_key::resource::TenantResource;
 
@@ -56,10 +53,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "StageFileIdent";
         const HAS_TENANT: bool = true;
         type ValueType = StageFile;
-    }
-
-    impl kvapi::Value for StageFile {
-        type KeyType = StageFileIdent;
     }
 }
 

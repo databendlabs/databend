@@ -365,9 +365,9 @@ mod tests {
                 AggrStateType::Custom(layout) => {
                     let start = loc.offset();
                     let end = start + layout.size();
-                    for i in start..end {
-                        assert!(!memory[i], "layout is overlap, input: {input:?}");
-                        memory[i] = true;
+                    for memory in &mut memory[start..end] {
+                        assert!(!*memory, "layout is overlap, input: {input:?}");
+                        *memory = true;
                     }
                 }
                 _ => unreachable!(),

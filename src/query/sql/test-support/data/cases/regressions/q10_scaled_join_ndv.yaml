@@ -1,0 +1,87 @@
+name: "q10_scaled_join_ndv"
+description: "Q10-shaped join reorder case where a row-scaled lineitem orderkey histogram should use expected surviving NDV rather than the global NDV upper bound"
+
+tables:
+  customer: regressions/q10_customer.sql
+  orders: regressions/q10_orders.sql
+  lineitem: regressions/q10_lineitem.sql
+  nation: regressions/q10_nation.sql
+
+node_num: 1
+
+sql: |
+  SELECT count(*)
+  FROM customer,
+       orders,
+       lineitem,
+       nation
+  WHERE c_custkey = o_custkey
+    AND l_orderkey = o_orderkey
+    AND o_orderdate >= CAST('1993-10-01' AS date)
+    AND o_orderdate < add_months(CAST('1993-10-01' AS date), 3)
+    AND l_returnflag = 'R'
+    AND c_nationkey = n_nationkey;
+
+table_statistics:
+  customer:
+    num_rows: 150000
+    data_size: 2400000
+    number_of_blocks: 1
+    number_of_segments: 1
+  orders:
+    num_rows: 1500000
+    data_size: 36000000
+    number_of_blocks: 2
+    number_of_segments: 1
+  lineitem:
+    num_rows: 6001215
+    data_size: 96019440
+    number_of_blocks: 8
+    number_of_segments: 1
+  nation:
+    num_rows: 25
+    data_size: 200
+    number_of_blocks: 1
+    number_of_segments: 1
+
+column_statistics:
+  customer.c_custkey:
+    min: 1
+    max: 150000
+    ndv: 130526
+    null_count: 0
+  customer.c_nationkey:
+    min: 0
+    max: 24
+    ndv: 25
+    null_count: 0
+  orders.o_orderkey:
+    min: 1
+    max: 6000000
+    ndv: 1500000
+    null_count: 0
+  orders.o_custkey:
+    min: 1
+    max: 150000
+    ndv: 91814
+    null_count: 0
+  orders.o_orderdate:
+    min: 8035
+    max: 10440
+    ndv: 2406
+    null_count: 0
+  lineitem.l_orderkey:
+    min: 1
+    max: 6000000
+    ndv: 1601092
+    null_count: 0
+  lineitem.l_returnflag:
+    min: "A"
+    max: "R"
+    ndv: 3
+    null_count: 0
+  nation.n_nationkey:
+    min: 0
+    max: 24
+    ndv: 25
+    null_count: 0

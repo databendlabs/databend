@@ -43,7 +43,9 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_sql::binder::resolve_stage_location;
+use databend_common_sql::binder::StagePathAccess;
+use databend_common_sql::binder::StageResolver;
+use databend_common_sql::binder::validate_stage_files_path_traversal;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_metadata_async;
@@ -205,7 +207,15 @@ impl AsyncSource for InspectParquetSource {
         }
         self.is_finished = true;
         let uri = self.uri.strip_prefix('@').unwrap().to_string();
-        let (stage_info, path) = resolve_stage_location(self.ctx.as_ref(), &uri).await?;
+        let (stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            databend_common_users::UserApiProvider::instance(),
+            databend_common_config::GlobalConfig::instance()
+                .storage
+                .allow_insecure,
+        )?
+        .resolve_stage_location(&uri, StagePathAccess::Read)
+        .await?;
         let enable_experimental_rbac_check = self
             .ctx
             .get_settings()
@@ -235,6 +245,12 @@ impl AsyncSource for InspectParquetSource {
             files: None,
             pattern: None,
         };
+        validate_stage_files_path_traversal(
+            self.ctx.get_settings().as_ref(),
+            &file_info.path,
+            file_info.files.as_deref(),
+            false,
+        )?;
 
         let first_file = file_info.first_file(&operator).await?;
         let Some(first_file) = first_file else {

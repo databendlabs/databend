@@ -15,10 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
+use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::number::NumberDataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::ColumnSet;
@@ -45,6 +47,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
+use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
@@ -145,6 +148,8 @@ impl RuleEagerAggregation {
                 match_op!(EvalScalar -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
             ],
             metadata,
         }
@@ -191,7 +196,7 @@ impl Rule for RuleEagerAggregation {
 #[derive(Clone)]
 struct EagerInput<'a> {
     eval_scalar: &'a EvalScalar,
-    sort_expr: Option<&'a SExpr>,
+    ordering_expr: Option<&'a SExpr>,
     join_expr: &'a SExpr,
     extra_eval_scalar: EvalScalar,
     final_agg: Aggregate,
@@ -202,11 +207,14 @@ impl<'a> EagerInput<'a> {
         let eval_scalar = s_expr.plan().as_eval_scalar()?;
 
         let mut current = s_expr.unary_child();
-        let sort_expr = current.plan().as_sort().map(|_| {
-            let sort_expr = current;
-            current = sort_expr.unary_child();
-            sort_expr
-        });
+        let ordering_expr = match current.plan() {
+            RelOperator::Sort(_) | RelOperator::TopN(_) => {
+                let ordering_expr = current;
+                current = ordering_expr.unary_child();
+                Some(ordering_expr)
+            }
+            _ => None,
+        };
 
         let final_agg = current.plan().as_aggregate()?.clone();
         current = current.unary_child();
@@ -228,7 +236,7 @@ impl<'a> EagerInput<'a> {
 
         Some(Self {
             eval_scalar,
-            sort_expr,
+            ordering_expr,
             join_expr: current,
             extra_eval_scalar,
             final_agg,
@@ -1061,8 +1069,8 @@ impl EagerAnalysis {
                 ..final_aggr.clone()
             })
             .build_unary(final_aggr);
-        let plan = match input.sort_expr {
-            Some(sort_expr) => plan.build_unary(sort_expr.plan.clone()),
+        let plan = match input.ordering_expr {
+            Some(ordering_expr) => plan.build_unary(ordering_expr.plan.clone()),
             None => plan,
         };
         plan.build_unary(eval_scalar)
@@ -1221,6 +1229,15 @@ impl EagerAnalysis {
             unreachable!()
         };
 
+        let new_scalar_type = new_scalar.data_type();
+        let count_type = DataType::Number(NumberDataType::UInt64);
+        let return_type = infer_function_return_type(
+            None,
+            "multiply",
+            &[],
+            [new_scalar_type.as_ref(), &count_type].into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )?;
         let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "multiply".to_string(),
@@ -1243,8 +1260,17 @@ impl EagerAnalysis {
                     &DataType::Number(NumberDataType::UInt64),
                 ),
             ],
+            return_type: Box::new(return_type),
         });
-        let multiplied_type = multiplied_scalar.data_type()?;
+        let multiplied_scalar = if matches!(
+            aggregate_function.return_type.remove_nullable(),
+            DataType::Decimal(_)
+        ) {
+            wrap_cast(&multiplied_scalar, &aggregate_function.return_type)
+        } else {
+            multiplied_scalar
+        };
+        let multiplied_type = multiplied_scalar.data_type().into_owned();
         let new_index = metadata.write().add_derived_column(
             format!("{} * _eager_count", aggregate_function.display_name),
             multiplied_type.clone(),
@@ -1384,8 +1410,8 @@ impl Optimizer for RuleEagerAggregation {
         "RuleEagerAggregationOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr, ErrorCode> {
-        self.optimize_sync(s_expr)
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr, ErrorCode> {
+        self.optimize_sync(&s_expr)
     }
 }
 

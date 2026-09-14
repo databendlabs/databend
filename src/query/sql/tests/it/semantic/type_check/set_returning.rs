@@ -21,6 +21,12 @@ async fn test_type_check_set_returning_functions() -> Result<()> {
             setup_sqls: &[],
             sql: "sum(unnest([1, 2, 3])) OVER ()",
         },
+        SqlTestCase {
+            name: "set_returning_function_rejects_filter",
+            description: "FILTER syntax should be rejected before SRF-specific lowering can ignore it.",
+            setup_sqls: &[],
+            sql: "unnest([1]) FILTER (WHERE false)",
+        },
     ];
 
     run_type_check_cases("set_returning.txt", &cases).await

@@ -20,16 +20,12 @@ use databend_common_expression::Column;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
 use super::packet::SerializableDomain;
-use super::packet::SpatialPacket;
-use super::spatial::merge_rtrees_to_threshold;
-use crate::physical_plans::SpatialRuntimeFilterMode;
 
 pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
-    spatial_threshold: usize,
 ) -> Result<JoinRuntimeFilterPacket> {
     log::info!(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
@@ -82,7 +78,6 @@ pub fn merge_join_runtime_filter_packets(
             } else {
                 None
             },
-            spatial: merge_spatial(&packets, *id, spatial_threshold)?,
         });
     }
 
@@ -180,63 +175,6 @@ fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) ->
     Some(bloom)
 }
 
-fn merge_spatial(
-    packets: &[HashMap<usize, RuntimeFilterPacket>],
-    rf_id: usize,
-    spatial_threshold: usize,
-) -> Result<Option<SpatialPacket>> {
-    let mut srid: Option<i32> = None;
-    let mut mode: Option<SpatialRuntimeFilterMode> = None;
-    let mut rtrees = Vec::new();
-
-    for packet in packets {
-        let Some(entry) = packet.get(&rf_id) else {
-            return Ok(None);
-        };
-        let Some(spatial) = entry.spatial.as_ref() else {
-            return Ok(None);
-        };
-        if !spatial.valid {
-            return Ok(None);
-        }
-        let entry_mode = spatial.mode.clone();
-        if let Some(prev) = mode.as_ref() {
-            if prev != &entry_mode {
-                return Ok(None);
-            }
-        } else {
-            mode = Some(entry_mode);
-        }
-        if let Some(entry_srid) = spatial.srid {
-            if let Some(prev) = srid {
-                if prev != entry_srid {
-                    return Ok(None);
-                }
-            } else {
-                srid = Some(entry_srid);
-            }
-        }
-        if !spatial.rtrees.is_empty() {
-            rtrees.push(spatial.rtrees.as_slice());
-        }
-    }
-    let Some(mode) = mode else {
-        return Ok(None);
-    };
-
-    let rtrees = merge_rtrees_to_threshold(rtrees, spatial_threshold)?;
-    if rtrees.is_empty() {
-        return Ok(None);
-    }
-
-    Ok(Some(SpatialPacket {
-        valid: true,
-        srid,
-        mode,
-        rtrees,
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -246,11 +184,8 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use geo_index::rtree::RTreeBuilder;
-    use geo_index::rtree::sort::HilbertSort;
 
     use super::*;
-    use crate::pipelines::processors::transforms::hash_join::runtime_filter::spatial::rtree_bounds_from_bytes;
 
     fn int_column(values: &[i32]) -> Column {
         let data_type = DataType::Number(NumberDataType::Int32);
@@ -259,29 +194,6 @@ mod tests {
             builder.push(Scalar::Number(NumberScalar::Int32(*value)).as_ref());
         }
         builder.build()
-    }
-
-    fn spatial_packet(
-        id: usize,
-        bounds: [f64; 4],
-        mode: SpatialRuntimeFilterMode,
-    ) -> RuntimeFilterPacket {
-        let mut builder = RTreeBuilder::<f64>::new(1);
-        builder.add(bounds[0], bounds[1], bounds[2], bounds[3]);
-        let rtrees = builder.finish::<HilbertSort>().into_inner();
-
-        RuntimeFilterPacket {
-            id,
-            inlist: None,
-            min_max: None,
-            bloom: None,
-            spatial: Some(SpatialPacket {
-                valid: true,
-                srid: Some(4326),
-                mode,
-                rtrees,
-            }),
-        }
     }
 
     #[test]
@@ -295,11 +207,10 @@ mod tests {
                 max: Scalar::Number(NumberScalar::Int32(3)),
             }),
             bloom: Some(vec![11, 22, 33]),
-            spatial: None,
         });
 
         let packet = JoinRuntimeFilterPacket::complete(runtime_filters, 100);
-        let merged = merge_join_runtime_filter_packets(vec![packet], 1, 1, 1, 1)?;
+        let merged = merge_join_runtime_filter_packets(vec![packet], 1, 1, 1)?;
 
         assert_eq!(merged.build_rows, 100);
         let packet = merged.packets.unwrap().remove(&1).unwrap();
@@ -321,7 +232,6 @@ mod tests {
                 max: Scalar::Number(NumberScalar::Int32(5)),
             }),
             bloom: Some(vec![1, 2]),
-            spatial: None,
         });
         let mut runtime_filters_2 = HashMap::new();
         runtime_filters_2.insert(7, RuntimeFilterPacket {
@@ -332,7 +242,6 @@ mod tests {
                 max: Scalar::Number(NumberScalar::Int32(8)),
             }),
             bloom: Some(vec![3, 4]),
-            spatial: None,
         });
 
         let merged = merge_join_runtime_filter_packets(
@@ -341,7 +250,6 @@ mod tests {
                 JoinRuntimeFilterPacket::complete(runtime_filters_2, 5),
             ],
             10,
-            100,
             100,
             100,
         )?;
@@ -370,85 +278,9 @@ mod tests {
             usize::MAX,
             usize::MAX,
             usize::MAX,
-            usize::MAX,
         )?;
         assert!(merged.disable_all_due_to_spill);
         assert_eq!(merged.build_rows, 15);
-        Ok(())
-    }
-
-    #[test]
-    fn test_merge_spatial_preserves_distance_mode() -> Result<()> {
-        let mode = SpatialRuntimeFilterMode::DistanceWithin(10.0);
-
-        let merged = merge_join_runtime_filter_packets(
-            vec![
-                JoinRuntimeFilterPacket::complete(
-                    HashMap::from([(3, spatial_packet(3, [0.0, 0.0, 1.0, 1.0], mode.clone()))]),
-                    1,
-                ),
-                JoinRuntimeFilterPacket::complete(
-                    HashMap::from([(3, spatial_packet(3, [5.0, 5.0, 6.0, 6.0], mode.clone()))]),
-                    1,
-                ),
-            ],
-            usize::MAX,
-            usize::MAX,
-            usize::MAX,
-            usize::MAX,
-        )?;
-
-        let spatial = merged.packets.unwrap().remove(&3).unwrap().spatial.unwrap();
-        assert_eq!(spatial.mode, mode);
-        assert_eq!(
-            rtree_bounds_from_bytes(&spatial.rtrees)?,
-            Some([0.0, 0.0, 6.0, 6.0])
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_merge_spatial_drops_mismatched_modes() -> Result<()> {
-        let merged = merge_join_runtime_filter_packets(
-            vec![
-                JoinRuntimeFilterPacket::complete(
-                    HashMap::from([(
-                        5,
-                        spatial_packet(
-                            5,
-                            [0.0, 0.0, 1.0, 1.0],
-                            SpatialRuntimeFilterMode::Intersects,
-                        ),
-                    )]),
-                    1,
-                ),
-                JoinRuntimeFilterPacket::complete(
-                    HashMap::from([(
-                        5,
-                        spatial_packet(
-                            5,
-                            [5.0, 5.0, 6.0, 6.0],
-                            SpatialRuntimeFilterMode::DistanceWithin(10.0),
-                        ),
-                    )]),
-                    1,
-                ),
-            ],
-            usize::MAX,
-            usize::MAX,
-            usize::MAX,
-            usize::MAX,
-        )?;
-
-        assert!(
-            merged
-                .packets
-                .unwrap()
-                .remove(&5)
-                .unwrap()
-                .spatial
-                .is_none()
-        );
         Ok(())
     }
 }

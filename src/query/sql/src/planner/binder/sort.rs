@@ -219,13 +219,10 @@ impl Binder {
                     let column_binding = match &rewrite_scalar {
                         ScalarExpr::ConstantExpr(..) => return None,
                         ScalarExpr::BoundColumnRef(col) => col.column.clone(),
-                        _ => match rewrite_scalar.data_type() {
-                            Ok(data_type) => self.create_derived_column_binding(
-                                format!("{:#}", order.expr),
-                                data_type,
-                            ),
-                            Err(err) => return Some(Err(err)),
-                        },
+                        _ => self.create_derived_column_binding(
+                            format!("{:#}", order.expr),
+                            rewrite_scalar.data_type().into_owned(),
+                        ),
                     };
 
                     let item = ScalarItem {
@@ -365,6 +362,7 @@ impl Binder {
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments,
+                    return_type: func.return_type.clone(),
                 }))
             }
             ScalarExpr::CastExpr(CastExpr {

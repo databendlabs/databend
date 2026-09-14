@@ -49,9 +49,12 @@ pub async fn read_partitions_simple(
     let partitions = files
         .into_iter()
         .map(|v| {
+            let content_key = v.etag.clone().or_else(|| v.md5.clone());
             let part = SingleFilePartition {
                 path: v.path.clone(),
                 size: v.size as usize,
+                content_key,
+                last_modified: v.last_modified,
             };
             let part_info: Box<dyn PartInfo> = Box::new(part);
             Arc::new(part_info)

@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::FamilyGauge;
 use databend_common_base::runtime::metrics::FamilyHistogram;
@@ -161,6 +162,7 @@ impl MetricsRecorder {
 
 impl observe::MetricsIntercept for MetricsRecorder {
     fn observe(&self, labels: observe::MetricLabels, value: observe::MetricValue) {
+        record_thread_tracker_io_stats(&labels, value);
         let labels = OperationLabels(labels);
         match value {
             observe::MetricValue::OperationBytes(v) => self
@@ -235,6 +237,22 @@ impl observe::MetricsIntercept for MetricsRecorder {
     }
 }
 
+fn record_thread_tracker_io_stats(labels: &observe::MetricLabels, value: observe::MetricValue) {
+    let Some(stats) = ThreadTracker::io_stats() else {
+        return;
+    };
+
+    match value {
+        observe::MetricValue::OperationBytes(v) => {
+            stats.record_operation_bytes(labels.operation, v)
+        }
+        observe::MetricValue::OperationDurationSeconds(v) => {
+            stats.record_operation_duration(labels.operation, v)
+        }
+        _ => {}
+    }
+}
+
 /// observe::MetricLabels contains root but we don't want it.
 #[derive(Clone, Debug)]
 struct OperationLabels(observe::MetricLabels);
@@ -273,6 +291,96 @@ impl EncodeLabelSet for OperationLabels {
         if let Some(code) = &self.0.status_code {
             (observe::LABEL_STATUS_CODE, code.as_str()).encode(encoder.encode_label())?;
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use databend_common_base::runtime::TrackingPayloadExt;
+    use opendal::Buffer;
+    use opendal::Operator;
+    use opendal::Result;
+    use opendal::services;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn metrics_recorder_records_thread_tracker_io_stats() {
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
+        let query_stats = payload.io_stats.clone().unwrap();
+
+        payload
+            .tracking(async {
+                let mut labels = observe::MetricLabels {
+                    operation: "read",
+                    ..Default::default()
+                };
+                record_thread_tracker_io_stats(
+                    &labels,
+                    observe::MetricValue::OperationDurationSeconds(Duration::from_millis(1)),
+                );
+                record_thread_tracker_io_stats(&labels, observe::MetricValue::OperationBytes(17));
+
+                labels.operation = "write";
+                record_thread_tracker_io_stats(
+                    &labels,
+                    observe::MetricValue::OperationDurationSeconds(Duration::from_millis(1)),
+                );
+                record_thread_tracker_io_stats(&labels, observe::MetricValue::OperationBytes(23));
+
+                labels.operation = "list";
+                record_thread_tracker_io_stats(
+                    &labels,
+                    observe::MetricValue::OperationDurationSeconds(Duration::from_millis(1)),
+                );
+            })
+            .await;
+
+        let query_stats = query_stats.snapshot();
+        assert_eq!(query_stats.read_count, 1);
+        assert_eq!(query_stats.read_bytes, 17);
+        assert_eq!(query_stats.read_duration_ms, 1);
+        assert_eq!(query_stats.write_count, 1);
+        assert_eq!(query_stats.write_bytes, 23);
+        assert_eq!(query_stats.write_duration_ms, 1);
+        assert_eq!(query_stats.list_count, 1);
+        assert_eq!(query_stats.list_duration_ms, 1);
+    }
+
+    #[tokio::test]
+    async fn metrics_layer_records_thread_tracker_io_stats() -> Result<()> {
+        let op = Operator::new(services::Memory::default())?
+            .layer(METRICS_LAYER.clone())
+            .finish();
+
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
+        let query_stats = payload.io_stats.clone().unwrap();
+
+        payload
+            .tracking(async {
+                op.write("dir/file", Buffer::from(vec![1, 2, 3, 4])).await?;
+                let _ = op.read("dir/file").await?;
+                let _ = op.list("dir/").await?;
+                Result::Ok(())
+            })
+            .await?;
+
+        let query_stats = query_stats.snapshot();
+        assert_eq!(query_stats.write_count, 1);
+        assert_eq!(query_stats.write_bytes, 4);
+        assert_eq!(query_stats.read_count, 1);
+        assert_eq!(query_stats.read_bytes, 4);
+        assert_eq!(query_stats.list_count, 1);
+
         Ok(())
     }
 }

@@ -6,6 +6,8 @@ import json
 import glob
 import logging
 import argparse
+import base64
+import gzip
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -25,6 +27,11 @@ def update_results(dataset, title, url):
         with open(result_file, "r") as f:
             results.append(json.load(f))
 
+    results_json = json.dumps(results, ensure_ascii=False, separators=(",", ":"))
+    results_gzip_base64 = base64.b64encode(
+        gzip.compress(results_json.encode("utf-8"), mtime=0)
+    ).decode("ascii")
+
     logger.info("loading report template %s ...", TEMPLATE_FILE)
     templateLoader = FileSystemLoader(searchpath="./")
     templateEnv = Environment(loader=templateLoader)
@@ -35,7 +42,7 @@ def update_results(dataset, title, url):
         title=title,
         url=url,
         queries=queries,
-        results=results,
+        results_gzip_base64=results_gzip_base64,
     )
     with open(f"results/{dataset}.html", "w") as f:
         f.write(outputText)

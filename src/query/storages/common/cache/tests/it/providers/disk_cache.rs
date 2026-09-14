@@ -160,7 +160,7 @@ fn test_evict_until_enough_space() {
     // file1 and file2 MUST be evicted
     assert!(!c.contains_key("file1"));
     assert!(!c.contains_key("file2"));
-    // file3 MUST be keeped
+    // file3 MUST be kept
     assert!(c.contains_key("file3"));
 }
 

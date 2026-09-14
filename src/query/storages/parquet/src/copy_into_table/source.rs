@@ -29,6 +29,8 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_storage::CopyStatus;
+use databend_common_storage::FileStatus;
 use opendal::Operator;
 
 use crate::ParquetPart;
@@ -46,6 +48,7 @@ pub struct ParquetCopySource {
     // Source processor related fields.
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
+    copy_status: Arc<CopyStatus>,
 
     // Used for event transforming.
     ctx: Arc<dyn TableContext>,
@@ -58,6 +61,7 @@ pub struct ParquetCopySource {
     copy_projection_evaluator: CopyProjectionEvaluator,
     state: State,
     batch_size: usize,
+    current_location: Option<String>,
 }
 
 impl ParquetCopySource {
@@ -69,6 +73,7 @@ impl ParquetCopySource {
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let copy_status = ctx.copy_state().copy_status();
         let batch_size = ctx.get_settings().get_parquet_max_block_size()? as usize;
         let func_ctx = Arc::new(ctx.get_function_context()?);
         let copy_projection_evaluator = CopyProjectionEvaluator::new(schema, func_ctx);
@@ -76,6 +81,7 @@ impl ParquetCopySource {
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
             scan_progress,
+            copy_status,
             ctx,
             operator,
             row_group_readers,
@@ -84,6 +90,7 @@ impl ParquetCopySource {
             is_finished: false,
             state: State::Init,
             copy_projection_evaluator,
+            current_location: None,
         })))
     }
 }
@@ -127,6 +134,12 @@ impl Processor for ParquetCopySource {
                     ProfileStatisticsName::ScanBytes,
                     data_block.memory_size(),
                 );
+                if let Some(location) = &self.current_location {
+                    self.copy_status.add_chunk(location.as_str(), FileStatus {
+                        num_rows_loaded: data_block.num_rows(),
+                        error: None,
+                    });
+                }
                 self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }
@@ -158,6 +171,7 @@ impl Processor for ParquetCopySource {
                     match ParquetPart::from_part(&part)? {
                         ParquetPart::RowGroup(part) => {
                             let schema_index = part.schema_index;
+                            self.current_location = Some(part.location.clone());
                             let builder = self
                                 .row_group_readers
                                 .get(&schema_index)

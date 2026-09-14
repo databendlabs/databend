@@ -13,4 +13,5 @@
 // limitations under the License.
 
 pub(super) mod block_batch;
+pub(super) mod file_writer;
 pub(super) mod limit_file_size_processor;

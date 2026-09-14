@@ -86,7 +86,7 @@ pub const GENERAL_WINDOW_FUNCTIONS: [Ascii<&str>; 13] = [
 pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
     ["first_value", "first", "last_value", "last", "nth_value"];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 16] = [
+pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 17] = [
     Ascii::new("array_transform"),
     Ascii::new("array_apply"),
     Ascii::new("array_map"),
@@ -103,6 +103,7 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 16] = [
     Ascii::new("json_map_filter"),
     Ascii::new("json_map_transform_keys"),
     Ascii::new("json_map_transform_values"),
+    Ascii::new("json_path_transform"),
 ];
 
 pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [

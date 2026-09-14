@@ -153,7 +153,7 @@ impl TableRefHandler for RealTableRefHandler {
             .drop_table_tag(DropTableTagReq {
                 table_id,
                 tag_name: plan.name.clone(),
-                seq: MatchSeq::Exact(seq_tag.seq),
+                seq: Some(seq_tag.seq),
             })
             .await
     }

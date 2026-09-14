@@ -13,10 +13,6 @@ inputs:
     description: "logic test parallel"
     required: false
     default: ""
-  storage-format:
-    description: "storage format for databend query to test"
-    required: true
-    default: all
   enable_table_meta_cache:
     description: "Enable table meta cache"
     required: false
@@ -30,20 +26,9 @@ runs:
         artifacts: sqllogictests,meta,query
 
     - name: Run sqllogic Tests with Standalone mode
-      if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
-
-    - name: Run native sqllogic Tests with Standalone mode
-      if: inputs.storage-format == 'all' || inputs.storage-format == 'native'
-      shell: bash
-      env:
-        TEST_HANDLERS: ${{ inputs.handlers }}
-        TEST_PARALLEL: ${{ inputs.parallel }}
-        TEST_EXT_ARGS: '--skip_file tpcds_spill_1.test,tpcds_spill_2.test,tpcds_spill_3.test'
-        CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
-      run: bash ./scripts/ci/ci-run-sqllogic-tests-native.sh ${{ inputs.dirs }}

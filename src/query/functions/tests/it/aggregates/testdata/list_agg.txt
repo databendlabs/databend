@@ -1,0 +1,51 @@
+ast: listagg(s)
+evaluation (internal):
++--------+-------------------------------------------------------------------------------+
+| Column | Data                                                                          |
++--------+-------------------------------------------------------------------------------+
+| s      | Column(StringColumn[abc, def, opq, xyz])                                      |
+| Output | NullableColumn { column: StringColumn[abcdefopqxyz], validity: [0b_______1] } |
++--------+-------------------------------------------------------------------------------+
+
+
+ast: listagg(s)
+sort_descs: [AggregateFunctionSortDesc { index: Offset(0), is_reuse_index: true, data_type: String, nulls_first: false, asc: false }]
+evaluation (internal):
++--------+-------------------------------------------------------------------------------+
+| Column | Data                                                                          |
++--------+-------------------------------------------------------------------------------+
+| s      | Column(StringColumn[abc, def, opq, xyz])                                      |
+| Output | NullableColumn { column: StringColumn[xyzopqdefabc], validity: [0b_______1] } |
++--------+-------------------------------------------------------------------------------+
+
+
+ast: listagg(s_null)
+evaluation (internal):
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| s_null | Column(NullableColumn { column: StringColumn[a, , c, d], validity: [0b____1101] }) |
+| Output | NullableColumn { column: StringColumn[acd], validity: [0b_______1] }               |
++--------+------------------------------------------------------------------------------------+
+
+
+ast: listagg(s, '|')
+evaluation (internal):
++--------+-------------------------------------------------------------------------------+
+| Column | Data                                                                          |
++--------+-------------------------------------------------------------------------------+
+| s      | Column(StringColumn[abc, def, opq, xyz])                                      |
+| Output | NullableColumn { column: StringColumn[abcdefopqxyz], validity: [0b_______1] } |
++--------+-------------------------------------------------------------------------------+
+
+
+ast: listagg(s_null, '-')
+evaluation (internal):
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| s_null | Column(NullableColumn { column: StringColumn[a, , c, d], validity: [0b____1101] }) |
+| Output | NullableColumn { column: StringColumn[acd], validity: [0b_______1] }               |
++--------+------------------------------------------------------------------------------------+
+
+

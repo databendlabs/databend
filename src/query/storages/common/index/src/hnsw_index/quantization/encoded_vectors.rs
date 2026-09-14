@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::VectorDistanceType;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -61,6 +62,14 @@ pub trait EncodedVectors<TEncodedQuery: Sized>: Sized {
 }
 
 impl DistanceType {
+    pub fn vector_distance_type(&self) -> VectorDistanceType {
+        match self {
+            DistanceType::L1 => VectorDistanceType::L1,
+            DistanceType::L2 => VectorDistanceType::L2,
+            DistanceType::Dot => VectorDistanceType::Dot,
+        }
+    }
+
     pub fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
         match self {
             DistanceType::Dot => a.iter().zip(b).map(|(a, b)| a * b).sum(),

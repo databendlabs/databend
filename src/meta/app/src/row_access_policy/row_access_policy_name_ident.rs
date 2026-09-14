@@ -34,10 +34,7 @@ impl RowAccessPolicyNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::row_access_policy::RowAccessPolicyId;
-    use crate::row_access_policy::RowAccessPolicyNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -46,10 +43,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "RowAccessPolicyNameIdent";
         const HAS_TENANT: bool = true;
         type ValueType = RowAccessPolicyId;
-    }
-
-    impl kvapi::Value for RowAccessPolicyId {
-        type KeyType = RowAccessPolicyNameIdent;
     }
 }
 

@@ -21,9 +21,14 @@ use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
-use parquet::format::FileMetaData;
+use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
+use parquet::file::metadata::ParquetMetaData;
 use serde::ser::SerializeMap;
 
 pub const VIRTUAL_COLUMN_STRING_TABLE_KEY: &str = "string_table";
@@ -34,6 +39,33 @@ pub const VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: &str = "shared_ids";
 const LEGACY_VIRTUAL_COLUMN_STRING_TABLE_KEY: &str = "virtual_column_string_table";
 const LEGACY_VIRTUAL_COLUMN_NODES_KEY: &str = "virtual_column_nodes";
 const LEGACY_VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: &str = "virtual_column_shared_column_ids";
+
+/// Range statistics of one direct virtual column in a block, used by range pruning.
+#[derive(Clone, Debug)]
+pub struct VirtualColumnStat {
+    pub query_column_id: u32,
+    pub min: Scalar,
+    pub max: Scalar,
+    pub null_count: u64,
+    /// The data type of the min/max scalars.
+    pub data_type: TableDataType,
+}
+
+impl VirtualColumnStat {
+    pub fn to_column_statistics(&self) -> ColumnStatistics {
+        ColumnStatistics {
+            min: self.min.clone(),
+            max: self.max.clone(),
+            null_count: self.null_count,
+            in_memory_size: 0,
+            distinct_of_values: None,
+        }
+    }
+}
+
+/// Range statistics of virtual columns of one block, keyed by the virtual column
+/// name used in the filter expression (e.g. `v['a']`).
+pub type VirtualColumnStatsOfNames = HashMap<String, VirtualColumnStat>;
 
 #[derive(
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize,
@@ -459,9 +491,26 @@ pub fn encode_compact_virtual_column_shared_ids(
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct VirtualColumnIdWithMeta {
-    pub column_id: u32,
+    pub parquet_column_id: u32,
     pub meta: SingleColumnMeta,
     pub data_type: DataType,
+}
+
+impl VirtualColumnIdWithMeta {
+    /// Converts Parquet footer metadata into compact block-level virtual column
+    /// metadata. An unsupported physical type is treated as corrupted metadata.
+    pub fn to_virtual_column_meta(&self) -> Result<VirtualColumnMeta> {
+        let physical_type = VirtualColumnPhysicalType::try_from_data_type(&self.data_type)?;
+        let (data_type, extended_physical_type) = physical_type.encode();
+        Ok(VirtualColumnMeta {
+            offset: self.meta.offset,
+            len: self.meta.len,
+            num_values: self.meta.num_values,
+            data_type,
+            extended_physical_type,
+            column_stat: None,
+        })
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -514,10 +563,10 @@ impl TryFrom<Bytes> for VirtualColumnFileMeta {
 // - VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: compact shared/typed-shared column id mapping.
 // Legacy metadata keys are still accepted as a fallback for old virtual column files.
 // Column offsets/lengths/num_values and shared map columns are derived from parquet metadata.
-impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
+impl TryFrom<ParquetMetaData> for VirtualColumnFileMeta {
     type Error = ErrorCode;
 
-    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
+    fn try_from(meta: ParquetMetaData) -> std::result::Result<Self, Self::Error> {
         let mut arrow_schema = None;
         let mut string_table = None;
         let mut json_string_table = None;
@@ -527,7 +576,11 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
         let mut typed_shared_column_ids = None;
         let mut legacy_typed_shared_column_ids = None;
 
-        let key_value_metadata = meta.key_value_metadata.unwrap_or_default();
+        let key_value_metadata = meta
+            .file_metadata()
+            .key_value_metadata()
+            .cloned()
+            .unwrap_or_default();
         for key_value in &key_value_metadata {
             if key_value.key == "ARROW:schema" {
                 let encoded_meta = key_value.value.as_ref().unwrap();
@@ -579,34 +632,20 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
             .or(legacy_typed_shared_column_ids)
             .unwrap_or_default();
 
-        let rg = meta.row_groups.remove(0);
-        let mut column_metas = Vec::with_capacity(rg.columns.len());
-        for (column_idx, column) in rg.columns.iter().enumerate() {
-            let chunk_meta = column.meta_data.as_ref().ok_or_else(|| {
-                ErrorCode::Internal(
-                    "expecting chunk meta data while converting ThriftFileMetaData to VirtualColumnFileMeta",
-                )
-            })?;
-            let col_start = if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                dict_page_offset
-            } else {
-                chunk_meta.data_page_offset
-            };
-            let col_len = chunk_meta.total_compressed_size;
-            assert!(
-                col_start >= 0 && col_len >= 0,
-                "column start and length should not be negative"
-            );
-            let num_values = chunk_meta.num_values as u64;
+        let row_group = &meta.row_groups()[0];
+        let mut column_metas = Vec::with_capacity(row_group.columns().len());
+        for (column_idx, chunk_meta) in row_group.columns().iter().enumerate() {
+            let (offset, len) = chunk_meta.byte_range();
+            let num_values = chunk_meta.num_values() as u64;
             let res = SingleColumnMeta {
-                offset: col_start as u64,
-                len: col_len as u64,
+                offset,
+                len,
                 num_values,
             };
-            let data_type = data_type_from_path(&data_schema, &chunk_meta.path_in_schema)?;
-            let column_id = column_idx as u32;
+            let data_type = data_type_from_path(&data_schema, chunk_meta.column_path().parts())?;
+            let parquet_column_id = column_idx as u32;
             column_metas.push(VirtualColumnIdWithMeta {
-                column_id,
+                parquet_column_id,
                 meta: res,
                 data_type,
             });

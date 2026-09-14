@@ -14,17 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::ClusterLevelLogStats;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::VirtualDataSchema;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::Statistics;
 
-use super::VirtualSchemaMode;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
@@ -33,6 +33,10 @@ use crate::operations::mutation::SegmentIndex;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
     pub entries: Vec<MutationLogEntry>,
+    #[serde(default)]
+    pub logical_updated_rows: u64,
+    #[serde(default)]
+    pub logical_deleted_rows: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -42,9 +46,12 @@ pub enum MutationLogEntry {
         format_version: FormatVersion,
         summary: Statistics,
         hll: BlockHLL,
+        top_n: BlockTopN,
+        level_stats: Vec<ClusterLevelLogStats>,
     },
     AppendBlock {
         block_meta: Arc<ExtendedBlockMeta>,
+        merge_hll: bool,
     },
     DeletedBlock {
         index: BlockMetaIndex,
@@ -58,10 +65,6 @@ pub enum MutationLogEntry {
     },
     CompactExtras {
         extras: CompactExtraInfo,
-    },
-    AppendVirtualSchema {
-        virtual_schema: Option<VirtualDataSchema>,
-        mode: VirtualSchemaMode,
     },
     DoNothing,
 }

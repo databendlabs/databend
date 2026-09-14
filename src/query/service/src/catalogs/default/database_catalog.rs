@@ -36,8 +36,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -46,11 +44,11 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -63,9 +61,6 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
-use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
 use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -73,12 +68,9 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
@@ -87,6 +79,8 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -107,19 +101,18 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -236,6 +229,13 @@ impl Catalog for DatabaseCatalog {
             .exists_database(req.name_ident.tenant(), req.name_ident.database_name())
             .await?
         {
+            if !req.override_existing {
+                return Ok(CreateDatabaseReply {
+                    db_id: DatabaseId::new(0),
+                    created: false,
+                });
+            }
+
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
                 req.name_ident.database_name()
@@ -299,6 +299,47 @@ impl Catalog for DatabaseCatalog {
         } else {
             self.mutable_catalog.get_table_meta_by_id(table_id).await
         }
+    }
+
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.mutable_catalog
+            .get_mv_definition(tenant, mv_table_id)
+            .await
+    }
+
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>> {
+        self.mutable_catalog
+            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
+            .await
+    }
+
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>> {
+        self.mutable_catalog
+            .get_mv_current_source_generation(tenant, source_table_id)
+            .await
+    }
+
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        self.mutable_catalog
+            .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -710,10 +751,11 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn retryable_update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         self.mutable_catalog
-            .retryable_update_multi_table_meta(reqs)
+            .retryable_update_multi_table_meta(tenant, reqs)
             .await
     }
 
@@ -736,32 +778,6 @@ impl Catalog for DatabaseCatalog {
     // Table index
 
     #[async_backtrace::framed]
-    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
-        self.mutable_catalog.create_index(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        self.mutable_catalog.drop_index(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
-        self.mutable_catalog.get_index(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn list_marked_deleted_indexes(
-        &self,
-        tenant: &Tenant,
-        table_id: Option<u64>,
-    ) -> Result<GetMarkedDeletedIndexesReply> {
-        self.mutable_catalog
-            .list_marked_deleted_indexes(tenant, table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
     async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
@@ -769,18 +785,6 @@ impl Catalog for DatabaseCatalog {
     ) -> Result<GetMarkedDeletedTableIndexesReply> {
         self.mutable_catalog
             .list_marked_deleted_table_indexes(tenant, table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    async fn remove_marked_deleted_index_ids(
-        &self,
-        tenant: &Tenant,
-        table_id: u64,
-        index_ids: &[u64],
-    ) -> Result<()> {
-        self.mutable_catalog
-            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
             .await
     }
 
@@ -794,29 +798,6 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog
             .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
             .await
-    }
-
-    #[async_backtrace::framed]
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        self.mutable_catalog.update_index(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        self.mutable_catalog.list_indexes(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        self.mutable_catalog.list_index_ids_by_table_id(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        self.mutable_catalog.list_indexes_by_table_id(req).await
     }
 
     fn get_table_function(
@@ -962,8 +943,22 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
-        self.mutable_catalog.update_dictionary(req).await
+    async fn get_dictionary_id(
+        &self,
+        dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        self.mutable_catalog.get_dictionary_id(dict_ident).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        self.mutable_catalog
+            .update_dictionary_by_id(id_ident, dictionary_meta)
+            .await
     }
 
     #[async_backtrace::framed]

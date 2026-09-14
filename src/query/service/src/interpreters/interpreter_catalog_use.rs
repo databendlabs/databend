@@ -46,17 +46,19 @@ impl Interpreter for UseCatalogInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if self.plan.catalog.trim().is_empty() {
-            return Err(ErrorCode::UnknownCatalog("No catalog selected"));
-        }
-        self.ctx
-            .set_current_catalog(self.plan.catalog.clone())
-            .await?;
-        self.ctx.set_affect(QueryAffect::UseCatalog {
-            name: self.plan.catalog.clone(),
-        });
-        let _schema = Arc::new(DataSchema::empty());
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if self.plan.catalog.trim().is_empty() {
+                return Err(ErrorCode::UnknownCatalog("No catalog selected"));
+            }
+            self.ctx
+                .set_current_catalog(self.plan.catalog.clone())
+                .await?;
+            self.ctx.set_affect(QueryAffect::UseCatalog {
+                name: self.plan.catalog.clone(),
+            });
+            let _schema = Arc::new(DataSchema::empty());
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

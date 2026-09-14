@@ -41,13 +41,13 @@ impl FromToProto for mt::principal::OwnershipInfo {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::OwnershipInfo, Incompatible> {
-        Ok(pb::OwnershipInfo {
+    fn to_pb(&self) -> pb::OwnershipInfo {
+        pb::OwnershipInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             role: self.role.clone(),
-            object: Some(self.object.to_pb()?),
-        })
+            object: Some(self.object.to_pb()),
+        }
     }
 }
 
@@ -109,7 +109,7 @@ impl FromToProto for mt::principal::OwnershipObject {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::OwnershipObject, Incompatible> {
+    fn to_pb(&self) -> pb::OwnershipObject {
         let object = match self {
             mt::principal::OwnershipObject::Database {
                 catalog_name,
@@ -182,10 +182,10 @@ impl FromToProto for mt::principal::OwnershipObject {
                 ))
             }
         };
-        Ok(pb::OwnershipObject {
+        pb::OwnershipObject {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             object,
-        })
+        }
     }
 }

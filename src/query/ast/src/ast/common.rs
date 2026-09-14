@@ -238,13 +238,13 @@ pub(crate) fn write_comma_separated_list(
 /// Write input items into `'a', 'b', 'c'`
 pub(crate) fn write_comma_separated_string_list(
     f: &mut Formatter,
-    items: impl IntoIterator<Item = impl Display>,
+    items: impl IntoIterator<Item = impl AsRef<str>>,
 ) -> std::fmt::Result {
     for (i, item) in items.into_iter().enumerate() {
         if i > 0 {
             write!(f, ", ")?;
         }
-        write!(f, "'{item}'")?;
+        write!(f, "{}", QuotedString(item, '\''))?;
     }
     Ok(())
 }

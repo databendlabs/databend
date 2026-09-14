@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
@@ -34,6 +35,7 @@ use rand::thread_rng;
 use sha2::Digest;
 
 use crate::plan::PartStatistics;
+use crate::plan::VirtualColumnLayout;
 use crate::table_context::TableContext;
 
 /// Partition information.
@@ -63,6 +65,12 @@ pub trait PartInfo: Send + Sync {
     /// If the partition is lazy level, it should be override.
     fn part_type(&self) -> PartInfoType {
         PartInfoType::BlockLevel
+    }
+
+    /// Whether this part carries metadata that must stay with any reshuffled
+    /// slice of the real partitions.
+    fn is_reshuffle_header(&self) -> bool {
+        false
     }
 }
 
@@ -133,13 +141,36 @@ impl Partitions {
         executors_sorted.sort_by(|left, right| left.cache_id.cmp(&right.cache_id));
 
         let num_executors = executors_sorted.len();
+        // Some partition lists include synthetic header parts that carry
+        // metadata needed to interpret the real partitions. Reshuffle must not
+        // assign such a header to only the first executor slice:
+        //
+        //   executor-1: [header, part1, part2]
+        //   executor-2: [part3, part4]         // missing metadata
+        //
+        // Instead, every non-empty executor slice receives the headers:
+        //
+        //   executor-1: [header, part1, part2]
+        //   executor-2: [header, part3, part4]
+        let headers = self
+            .partitions
+            .iter()
+            .filter(|part| part.is_reshuffle_header())
+            .cloned()
+            .collect::<Vec<_>>();
+        let regular_partitions = self
+            .partitions
+            .iter()
+            .filter(|part| !part.is_reshuffle_header())
+            .cloned()
+            .collect::<Vec<_>>();
+
         let partitions = match self.kind {
-            PartitionsShuffleKind::Seq => self.partitions.clone(),
+            PartitionsShuffleKind::Seq => regular_partitions,
             PartitionsShuffleKind::Mod => {
                 // Sort by hash%executor_nums.
-                let mut parts = self
-                    .partitions
-                    .iter()
+                let mut parts = regular_partitions
+                    .into_iter()
                     .map(|p| (p.hash() % num_executors as u64, p.clone()))
                     .collect::<Vec<_>>();
                 parts.sort_by(|a, b| a.0.cmp(&b.0));
@@ -158,6 +189,14 @@ impl Partitions {
                     .map(|e| (e.id.clone(), Partitions::default()))
                     .collect::<HashMap<_, _>>();
 
+                if !headers.is_empty() && regular_partitions.is_empty() {
+                    let local_id = &GlobalConfig::instance().query.node_id;
+                    if let Some(part) = executor_part.get_mut(local_id) {
+                        part.partitions = headers;
+                    }
+                    return Ok(executor_part);
+                }
+
                 let mut ring = executors_sorted
                     .iter()
                     .flat_map(|e| {
@@ -172,7 +211,7 @@ impl Partitions {
 
                 ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
 
-                for p in self.partitions.iter() {
+                for p in &regular_partitions {
                     let k = p.hash();
                     let idx = ring
                         .binary_search_by(|&(_, h)| h.cmp(&k))
@@ -185,11 +224,18 @@ impl Partitions {
                     let part = executor_part.get_mut(&executor).unwrap();
                     part.partitions.push(p.clone());
                 }
+                if !headers.is_empty() {
+                    for part in executor_part.values_mut() {
+                        if !part.partitions.is_empty() {
+                            part.partitions.splice(0..0, headers.clone());
+                        }
+                    }
+                }
                 return Ok(executor_part);
             }
             PartitionsShuffleKind::Rand => {
                 let mut rng = thread_rng();
-                let mut parts = self.partitions.clone();
+                let mut parts = regular_partitions;
                 parts.shuffle(&mut rng);
                 parts
             }
@@ -208,13 +254,36 @@ impl Partitions {
         };
 
         // If there is only one partition, we prioritize executing the query on the local node.
+        if partitions.is_empty() && !headers.is_empty() {
+            let mut executor_part = HashMap::default();
+
+            let local_id = &GlobalConfig::instance().query.node_id;
+            for executor in executors_sorted.into_iter() {
+                let parts = match &executor.id == local_id {
+                    true => headers.clone(),
+                    false => vec![],
+                };
+
+                executor_part.insert(
+                    executor.id.clone(),
+                    Partitions::create(PartitionsShuffleKind::Seq, parts),
+                );
+            }
+
+            return Ok(executor_part);
+        }
+
         if partitions.len() == 1 {
             let mut executor_part = HashMap::default();
 
             let local_id = &GlobalConfig::instance().query.node_id;
             for executor in executors_sorted.into_iter() {
                 let parts = match &executor.id == local_id {
-                    true => partitions.clone(),
+                    true => headers
+                        .iter()
+                        .cloned()
+                        .chain(partitions.iter().cloned())
+                        .collect(),
                     false => vec![],
                 };
 
@@ -243,7 +312,11 @@ impl Partitions {
                 // reach here only when num_executors > num_parts
                 vec![]
             } else {
-                partitions[begin..end].to_vec()
+                headers
+                    .iter()
+                    .cloned()
+                    .chain(partitions[begin..end].iter().cloned())
+                    .collect()
             };
 
             executor_part.insert(
@@ -359,6 +432,44 @@ impl StealablePartitions {
     }
 }
 
+/// Per-level block counts, rows and sizes for insert/recluster diagnostic logs, not table statistics.
+/// `None` means no cluster statistics; -1 denotes a perfect block.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ClusterLevelLogStats {
+    pub level: Option<i32>,
+    pub block_count: u64,
+    pub row_count: u64,
+    pub block_size: u64,
+    pub file_size: u64,
+}
+
+impl ClusterLevelLogStats {
+    pub fn accumulate(levels: &mut BTreeMap<Option<i32>, Self>, block: &BlockMeta) {
+        let level = block.cluster_stats.as_ref().map(|stats| stats.level);
+        let stats = levels.entry(level).or_default();
+        stats.level = level;
+        stats.block_count += 1;
+        stats.row_count += block.row_count;
+        stats.block_size += block.block_size;
+        stats.file_size += block.file_size;
+    }
+}
+
+/// Work performed by the row-sort stage of a recluster task.
+///
+/// Task plans are exchanged only between query processes running the same version;
+/// this enum is not part of persisted FUSE metadata.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ReclusterTaskKind {
+    /// Establish row order. For ordinary linear FUSE tasks, the inputs are one
+    /// unordered block or a size-bounded group of small blocks. Other layouts
+    /// retain their layout-specific sorting and re-aggregation semantics.
+    SortBlocks,
+    /// Merge blocks already ordered by the current linear cluster key, without
+    /// sorting their rows again.
+    MergeBlocks,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterTask {
     pub parts: Partitions,
@@ -366,7 +477,13 @@ pub struct ReclusterTask {
     pub total_rows: usize,
     pub total_bytes: usize,
     pub total_compressed: usize,
+    /// Base level; the serializer requests `level + 1` (perfect blocks may become -1).
     pub level: i32,
+    /// Effective input levels under the current cluster key, not historical stored levels.
+    #[serde(default)]
+    pub input_level_stats: Vec<ClusterLevelLogStats>,
+    pub kind: ReclusterTaskKind,
+    pub virtual_column_layout: Option<VirtualColumnLayout>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
@@ -383,10 +500,6 @@ impl ReclusterParts {
     pub fn is_empty(&self) -> bool {
         self.tasks.is_empty() && self.remained_blocks.is_empty()
     }
-
-    pub fn is_distributed(&self, _ctx: Arc<dyn TableContext>) -> bool {
-        self.tasks.len() > 1
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
@@ -394,4 +507,7 @@ pub struct ReclusterInfoSideCar {
     pub merged_blocks: Vec<BlockMetaWithHLL>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
+    /// Acquire the table lock only around refresh, sequence validation, and CAS publish.
+    #[serde(default)]
+    pub acquire_commit_lock: bool,
 }

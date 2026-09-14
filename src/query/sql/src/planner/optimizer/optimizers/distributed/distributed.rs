@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use super::sort_and_limit::SortAndLimitPushDownOptimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PropertyEnforcer;
@@ -27,12 +26,12 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 
 /// DistributedOptimizer optimizes a query plan for distributed execution.
-/// It enforces distribution properties and applies sort/limit push down optimizations.
+/// It only enforces distribution properties; Exchange-sensitive stage lowering
+/// is applied after materialized CTE placement has been resolved.
 ///
 /// TODO(leiysky): Consider deprecating this in favor of cascades planner for distributed optimization.
 pub struct DistributedOptimizer {
     ctx: Arc<dyn TableContext>,
-    sort_limit_optimizer: SortAndLimitPushDownOptimizer,
 }
 
 impl DistributedOptimizer {
@@ -40,11 +39,11 @@ impl DistributedOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         Self {
             ctx: opt_ctx.get_table_ctx(),
-            sort_limit_optimizer: SortAndLimitPushDownOptimizer::create(),
         }
     }
 
-    /// Optimize the given SExpr for distributed execution
+    /// Enforce distribution properties without lowering Exchange-sensitive
+    /// operators into their partial and final stages.
     #[recursive::recursive]
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         // Step 1: Set the initial distribution requirement (Any)
@@ -54,19 +53,16 @@ impl DistributedOptimizer {
 
         // Step 2: Enforce the property
         let enforcer = PropertyEnforcer::new(self.ctx.clone());
-        let result = enforcer.require_property(&required, s_expr)?;
+        let mut result = enforcer.require_property(&required, s_expr)?;
 
-        // Step 3: Apply the sort and limit push down optimization
-        let mut result = self.sort_limit_optimizer.optimize(&result)?;
-
-        // Step 4: Check if the result satisfies the required distribution property
+        // Step 3: Check if the result satisfies the required distribution property
         let rel_expr = RelExpr::with_s_expr(&result);
         let physical_prop = rel_expr.derive_physical_prop()?;
         let root_required = RequiredProperty {
             distribution: Distribution::Serial,
         };
 
-        // Step 5: If not satisfied, manually enforce serial distribution
+        // Step 4: If not satisfied, manually enforce serial distribution
         if !root_required.satisfied_by(&physical_prop) {
             // Add an Exchange::Merge operator
             result = SExpr::create_unary(Arc::new(Exchange::Merge.into()), Arc::new(result));

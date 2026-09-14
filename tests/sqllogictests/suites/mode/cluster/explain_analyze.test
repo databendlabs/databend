@@ -117,7 +117,7 @@ Exchange
     ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 6
-    ├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 6.00
 
@@ -143,7 +143,7 @@ Exchange
     ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 6
-    ├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 6.00
 
@@ -169,7 +169,7 @@ Exchange
     ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 4
-    ├── pruning stats: [segments: <range pruning: 6 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 6 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(article.article_id (#0) < 3)], limit: NONE]
     └── estimated rows: 3.00
 
@@ -214,7 +214,7 @@ Exchange
     │       ├── read size: < 1 KiB
     │       ├── partitions total: 5
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
     │       ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
     │       └── estimated rows: 1.25
     └── TableScan(Probe)
@@ -234,7 +234,7 @@ Exchange
         ├── read size: < 1 KiB
         ├── partitions total: 6
         ├── partitions scanned: 6
-        ├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 6.00

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod block_builder;
-mod cluster_statistics;
 mod column_ndv_estimator;
 mod column_statistics_builder;
 mod column_statistics_state;

@@ -180,7 +180,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC)
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [t2.rank (#6) = 1]
+├── filters: [rank() OVER (PARTITION BY k ORDER BY v DESC) (#6) = 1]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY k ORDER BY v DESC) (#6)]
@@ -223,7 +223,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC)
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
+├── filters: [rank() OVER (PARTITION BY v ORDER BY v DESC) (#6) = 1, is_true(t1.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY v ORDER BY v DESC) (#6)]
@@ -266,7 +266,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (ORDER BY v DESC) AS rank FROM (
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
+├── filters: [rank() OVER (ORDER BY v DESC) (#6) = 1, is_true(t1.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (ORDER BY v DESC) (#6)]
@@ -378,7 +378,7 @@ explain select * from vwpush where b > 3;
 ----
 Filter
 ├── output columns: [tbpush.b (#0), rnum (#1)]
-├── filters: [is_true(vwpush.b (#0) > 3)]
+├── filters: [is_true(tbpush.b (#0) > 3)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [tbpush.b (#0), rnum (#1)]
@@ -647,23 +647,14 @@ digraph {
     6 [ label = "TransformWindowPartitionCollect(Sort)" ]
     7 [ label = "Transform Window" ]
     8 [ label = "Resize" ]
-    9 [ label = "SortPartialTransform" ]
-    10 [ label = "SortPartialTransform" ]
-    11 [ label = "SortPartialTransform" ]
-    12 [ label = "SortPartialTransform" ]
-    13 [ label = "TransformSortMergeLimit" ]
-    14 [ label = "TransformSortMergeLimit" ]
-    15 [ label = "TransformSortMergeLimit" ]
-    16 [ label = "TransformSortMergeLimit" ]
-    17 [ label = "KWayMergePartitioner" ]
-    18 [ label = "KWayMergeWorker" ]
-    19 [ label = "KWayMergeWorker" ]
-    20 [ label = "KWayMergeWorker" ]
-    21 [ label = "KWayMergeWorker" ]
-    22 [ label = "KWayMergeCombiner" ]
-    23 [ label = "LimitTransform" ]
-    24 [ label = "TransformRowsFetcher" ]
-    25 [ label = "CompoundBlockOperator(Project)" ]
+    9 [ label = "TransformPartialTopN" ]
+    10 [ label = "TransformPartialTopN" ]
+    11 [ label = "TransformPartialTopN" ]
+    12 [ label = "TransformPartialTopN" ]
+    13 [ label = "Resize" ]
+    14 [ label = "TransformFinalTopN" ]
+    15 [ label = "TransformRowsFetcher" ]
+    16 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -676,25 +667,13 @@ digraph {
     8 -> 10 [ label = "from: 1, to: 0" ]
     8 -> 11 [ label = "from: 2, to: 0" ]
     8 -> 12 [ label = "from: 3, to: 0" ]
-    9 -> 13 [ label = "" ]
-    10 -> 14 [ label = "" ]
-    11 -> 15 [ label = "" ]
-    12 -> 16 [ label = "" ]
-    13 -> 17 [ label = "from: 0, to: 0" ]
-    14 -> 17 [ label = "from: 0, to: 1" ]
-    15 -> 17 [ label = "from: 0, to: 2" ]
-    16 -> 17 [ label = "from: 0, to: 3" ]
-    17 -> 18 [ label = "from: 0, to: 0" ]
-    17 -> 19 [ label = "from: 1, to: 0" ]
-    17 -> 20 [ label = "from: 2, to: 0" ]
-    17 -> 21 [ label = "from: 3, to: 0" ]
-    18 -> 22 [ label = "from: 0, to: 0" ]
-    19 -> 22 [ label = "from: 0, to: 1" ]
-    20 -> 22 [ label = "from: 0, to: 2" ]
-    21 -> 22 [ label = "from: 0, to: 3" ]
-    22 -> 23 [ label = "" ]
-    23 -> 24 [ label = "" ]
-    24 -> 25 [ label = "" ]
+    9 -> 13 [ label = "from: 0, to: 0" ]
+    10 -> 13 [ label = "from: 0, to: 1" ]
+    11 -> 13 [ label = "from: 0, to: 2" ]
+    12 -> 13 [ label = "from: 0, to: 3" ]
+    13 -> 14 [ label = "" ]
+    14 -> 15 [ label = "" ]
+    15 -> 16 [ label = "" ]
 }
 
 # row fetch with window function(plan explain)
@@ -705,14 +684,17 @@ RowFetch
 ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6), t.c (#2), t.d (#3), t.e (#4), t.f (#5)]
 ├── columns to fetch: [c, d, e, f]
 ├── estimated rows: 0.00
-└── Limit
+└── TopN(Final)
     ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+    ├── sort keys: [b ASC NULLS LAST]
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Sort(Single)
-        ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
+    └── TopN(Partial)
+        ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6), #_order_col]
         ├── sort keys: [b ASC NULLS LAST]
+        ├── limit: 3
+        ├── offset: 0
         ├── estimated rows: 0.00
         └── Window
             ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
@@ -772,7 +754,7 @@ query T
 explain optimized select time, rowkey from (select *, row_number() over(partition by rowkey order by time desc) as rn from table43764_orc) a where rn < 1
 ----
 EvalScalar
-├── scalars: [table43764_orc.rowkey (#0) AS (#0), table43764_orc.rowkey (#0) AS (#0), table43764_orc.time (#1) AS (#1), table43764_orc.time (#1) AS (#1), table43764_orc.sirc_action (#2) AS (#2), table43764_orc.sirc_operation_count (#3) AS (#3), table43764_orc.akc087 (#4) AS (#4), table43764_orc.aae035 (#5) AS (#5), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#6), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#7)]
+├── scalars: [table43764_orc.rowkey (#0) AS (#0), table43764_orc.time (#1) AS (#1), table43764_orc.sirc_action (#2) AS (#2), table43764_orc.sirc_operation_count (#3) AS (#3), table43764_orc.akc087 (#4) AS (#4), table43764_orc.aae035 (#5) AS (#5), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#6), row_number() OVER (PARTITION BY rowkey ORDER BY time DESC) (#6) AS (#7)]
 └── EmptyResultScan
 
 # same order multi window
@@ -798,11 +780,9 @@ digraph {
     15 [ label = "KWayMergeWorker" ]
     16 [ label = "KWayMergeCombiner" ]
     17 [ label = "Transform Window" ]
-    18 [ label = "CompoundBlockOperator(Map)" ]
+    18 [ label = "Transform Window" ]
     19 [ label = "Transform Window" ]
-    20 [ label = "CompoundBlockOperator(Map)" ]
-    21 [ label = "Transform Window" ]
-    22 [ label = "CompoundBlockOperator(Project)" ]
+    20 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "from: 0, to: 0" ]
@@ -829,8 +809,6 @@ digraph {
     17 -> 18 [ label = "" ]
     18 -> 19 [ label = "" ]
     19 -> 20 [ label = "" ]
-    20 -> 21 [ label = "" ]
-    21 -> 22 [ label = "" ]
 }
 
 # same order same partiton by multi window
@@ -844,12 +822,8 @@ digraph {
     3 [ label = "ShuffleMergePartition(Window)" ]
     4 [ label = "TransformWindowPartitionCollect(Sort)" ]
     5 [ label = "Transform Window" ]
-    6 [ label = "CompoundBlockOperator(Map)" ]
-    7 [ label = "ShufflePartition(Window)" ]
-    8 [ label = "ShuffleMergePartition(Window)" ]
-    9 [ label = "TransformWindowPartitionCollect(Sort)" ]
-    10 [ label = "Transform Window" ]
-    11 [ label = "CompoundBlockOperator(Project)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -857,10 +831,6 @@ digraph {
     4 -> 5 [ label = "" ]
     5 -> 6 [ label = "" ]
     6 -> 7 [ label = "" ]
-    7 -> 8 [ label = "" ]
-    8 -> 9 [ label = "" ]
-    9 -> 10 [ label = "" ]
-    10 -> 11 [ label = "" ]
 }
 
 # window partition with empty sort items from same window partition  with sort items
@@ -913,58 +883,44 @@ query T
 explain select number, avg(number) over (partition by number % 3),  rank() over (partition by number % 3 order by number + 1), sum(number) over (partition by number % 3)
     from numbers(50);
 ----
-Window
-├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum_part_0 (#6), sum(number) OVER (PARTITION BY number % 3) (#7)]
-├── aggregate function: [sum(number)]
-├── partition by: [sum_part_0]
-├── order by: []
-├── frame: [Range: Preceding(None) ~ Following(None)]
+WindowGroup
+├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum(number) OVER (PARTITION BY number % 3) (#7)]
+├── Window
+│   ├── output column: [5]
+│   ├── aggregate function: [rank]
+│   ├── partition by: [rank_part_0]
+│   ├── order by: [rank_order_0]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+├── Window
+│   ├── output column: [2]
+│   ├── aggregate function: [avg(number)]
+│   ├── partition by: [rank_part_0]
+│   ├── order by: []
+│   └── frame: [Range: Preceding(None) ~ Following(None)]
+├── Window
+│   ├── output column: [7]
+│   ├── aggregate function: [sum(number)]
+│   ├── partition by: [rank_part_0]
+│   ├── order by: []
+│   └── frame: [Range: Preceding(None) ~ Following(None)]
 └── WindowPartition
-    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum_part_0 (#6)]
-    ├── hash keys: [sum_part_0]
+    ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
+    ├── hash keys: [rank_part_0]
     ├── estimated rows: 50.00
     └── EvalScalar
-        ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg(number) OVER (PARTITION BY number % 3) (#2), sum_part_0 (#6)]
-        ├── expressions: [numbers.number (#0) % 3]
+        ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
+        ├── expressions: [numbers.number (#0) % 3, numbers.number (#0) + 1]
         ├── estimated rows: 50.00
-        └── Window
-            ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg_part_0 (#1), avg(number) OVER (PARTITION BY number % 3) (#2)]
-            ├── aggregate function: [avg(number)]
-            ├── partition by: [avg_part_0]
-            ├── order by: []
-            ├── frame: [Range: Preceding(None) ~ Following(None)]
-            └── WindowPartition
-                ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg_part_0 (#1)]
-                ├── hash keys: [avg_part_0]
-                ├── estimated rows: 50.00
-                └── EvalScalar
-                    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5), avg_part_0 (#1)]
-                    ├── expressions: [numbers.number (#0) % 3]
-                    ├── estimated rows: 50.00
-                    └── Window
-                        ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#5)]
-                        ├── aggregate function: [rank]
-                        ├── partition by: [rank_part_0]
-                        ├── order by: [rank_order_0]
-                        ├── frame: [Range: Preceding(None) ~ CurrentRow]
-                        └── WindowPartition
-                            ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
-                            ├── hash keys: [rank_part_0]
-                            ├── estimated rows: 50.00
-                            └── EvalScalar
-                                ├── output columns: [numbers.number (#0), rank_part_0 (#3), rank_order_0 (#4)]
-                                ├── expressions: [numbers.number (#0) % 3, numbers.number (#0) + 1]
-                                ├── estimated rows: 50.00
-                                └── TableScan
-                                    ├── table: default.system.numbers
-                                    ├── scan id: 0
-                                    ├── output columns: [number (#0)]
-                                    ├── read rows: 50
-                                    ├── read size: < 1 KiB
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── push downs: [filters: [], limit: NONE]
-                                    └── estimated rows: 50.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── scan id: 0
+            ├── output columns: [number (#0)]
+            ├── read rows: 50
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 50.00
 
 query T
 explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number) a from numbers(50));
@@ -1023,7 +979,7 @@ Window
     ├── estimated rows: 50.00
     └── EvalScalar
         ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
-        ├── expressions: [t.number (#0) - 1, t.number (#0) % 3]
+        ├── expressions: [numbers.number (#0) - 1, numbers.number (#0) % 3]
         ├── estimated rows: 50.00
         └── Window
             ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2)]
@@ -1093,15 +1049,15 @@ AggregateFinal
 ├── output columns: [count() (#4), numbers.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: [count()]
-├── estimated rows: 166.67
+├── estimated rows: 1.00
 └── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: [count()]
-    ├── estimated rows: 166.67
+    ├── estimated rows: 1.00
     └── Filter
         ├── output columns: [numbers.number (#0)]
         ├── filters: [numbers.number (#0) = 3, row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3) = 1]
-        ├── estimated rows: 500.00
+        ├── estimated rows: 1.00
         └── Window
             ├── output columns: [numbers.number (#0), row_number_part_0 (#2), row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3)]
             ├── aggregate function: [row_number]

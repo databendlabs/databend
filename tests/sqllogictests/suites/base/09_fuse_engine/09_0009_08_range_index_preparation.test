@@ -1,0 +1,36 @@
+# Range-index preparation must preserve implicit casts and compound predicates.
+statement ok
+CREATE OR REPLACE DATABASE range_index_preparation
+
+statement ok
+USE range_index_preparation
+
+statement ok
+CREATE TABLE t(k INT NULL, s STRING) bloom_index_columns=''
+
+statement ok
+INSERT INTO t VALUES (1,'a'),(2,'b'),(3,'c'),(NULL,'n')
+
+query IT
+SELECT * FROM t WHERE k = '2'
+----
+2 b
+
+query IT
+SELECT * FROM t WHERE k::BIGINT = 3 AND s = 'c'
+----
+3 c
+
+query I
+SELECT count(*) FROM t WHERE k = '99'
+----
+0
+
+query IT rowsort
+SELECT * FROM t WHERE (k = '2' OR k IS NULL) AND s IN ('b','n')
+----
+2 b
+NULL n
+
+statement ok
+DROP DATABASE range_index_preparation

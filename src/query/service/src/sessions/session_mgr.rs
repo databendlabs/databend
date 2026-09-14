@@ -41,6 +41,7 @@ use futures::future::Either;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
@@ -425,6 +426,30 @@ impl SessionManager {
             "Unknown query {}",
             query_id
         )))
+    }
+
+    pub fn get_queries_top_memory_plan_nodes(
+        &self,
+        limit: usize,
+    ) -> Vec<(String, Vec<PlanNodeMemoryUsage>)> {
+        let mut top_memory_plan_nodes = Vec::new();
+        for weak_ptr in self.active_sessions_snapshot() {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                let query_id = context_shared.init_query_id.as_ref().read().clone();
+                let plan_nodes = context_shared.get_top_memory_plan_nodes(limit);
+                if !plan_nodes.is_empty() {
+                    top_memory_plan_nodes.push((query_id, plan_nodes));
+                }
+            }
+        }
+
+        top_memory_plan_nodes
     }
 
     pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {

@@ -39,7 +39,8 @@ pub fn traverse_values_dfs(columns: &[BlockEntry], fields: &[TableField]) -> Tra
                 traverse_scalar_recursive(s, data_type, &mut next_column_id, &mut leaves)?;
             }
             BlockEntry::Column(c) => {
-                traverse_column_recursive(c, &c.data_type(), &mut next_column_id, &mut leaves)?;
+                let data_type = DataType::from(field.data_type());
+                traverse_column_recursive(c, &data_type, &mut next_column_id, &mut leaves)?;
             }
         }
     }
@@ -105,6 +106,14 @@ fn traverse_column_recursive(
             }
             _ => unreachable!(),
         },
+        DataType::AggregateState(state) => {
+            let state_type = if data_type.is_nullable() {
+                state.physical_type().wrap_nullable()
+            } else {
+                state.physical_type().clone()
+            };
+            traverse_column_recursive(column, &state_type, next_column_id, leaves)?;
+        }
         _ => {
             if RangeIndex::supported_type(data_type) {
                 leaves.push((
@@ -164,6 +173,14 @@ fn traverse_scalar_recursive(
             }
             _ => unreachable!(),
         },
+        DataType::AggregateState(state) => {
+            let state_type = if data_type.is_nullable() {
+                state.physical_type().wrap_nullable()
+            } else {
+                state.physical_type().clone()
+            };
+            traverse_scalar_recursive(scalar, &state_type, next_column_id, leaves)?;
+        }
         _ => {
             // Ignore the range index does not supported type.
             if RangeIndex::supported_type(data_type) {

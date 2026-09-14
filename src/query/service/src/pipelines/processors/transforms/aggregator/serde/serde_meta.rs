@@ -12,26 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
-
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 
 pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;
-pub const NEW_SPILLED_TYPE: usize = 3;
-pub const PARTITIONED_AGGREGATE_TYPE: usize = 4;
+pub const PARTITIONED_AGGREGATE_TYPE: usize = 3;
 
-// Cannot change to enum, because bincode cannot deserialize custom enum
+// Cannot change to enum, because bincode cannot deserialize custom enum.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateSerdeMeta {
     pub typ: usize,
     pub bucket: isize,
-    pub location: Option<String>,
-    pub data_range: Option<Range<u64>>,
-    pub columns_layout: Vec<usize>,
-    // use for new agg hashtable
     pub max_partition_count: usize,
     pub is_empty: bool,
 
@@ -53,9 +46,6 @@ impl AggregateSerdeMeta {
         Box::new(AggregateSerdeMeta {
             typ: BUCKET_TYPE,
             bucket,
-            location: None,
-            data_range: None,
-            columns_layout: vec![],
             max_partition_count,
             is_empty,
             buckets: vec![],
@@ -64,55 +54,10 @@ impl AggregateSerdeMeta {
         })
     }
 
-    pub fn create_spilled(
-        bucket: isize,
-        location: String,
-        data_range: Range<u64>,
-        columns_layout: Vec<usize>,
-        is_empty: bool,
-    ) -> BlockMetaInfoPtr {
+    pub fn create_spilled(shuffle_bucket: isize) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: SPILLED_TYPE,
-            bucket,
-            columns_layout,
-            location: Some(location),
-            data_range: Some(data_range),
-            max_partition_count: 0,
-            is_empty,
-            buckets: vec![],
-            payload_row_counts: vec![],
-            shuffle_bucket: 0,
-        })
-    }
-
-    pub fn create_agg_spilled(
-        bucket: isize,
-        location: String,
-        data_range: Range<u64>,
-        columns_layout: Vec<usize>,
-        max_partition_count: usize,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta {
-            typ: SPILLED_TYPE,
-            bucket,
-            columns_layout,
-            location: Some(location),
-            data_range: Some(data_range),
-            max_partition_count,
-            is_empty: false,
-            buckets: vec![],
-            payload_row_counts: vec![],
-            shuffle_bucket: 0,
-        })
-    }
-
-    pub fn create_new_spilled(shuffle_bucket: isize) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta {
-            typ: NEW_SPILLED_TYPE,
             bucket: 0,
-            columns_layout: vec![],
-            location: None,
-            data_range: None,
             max_partition_count: 0,
             is_empty: false,
             buckets: vec![],
@@ -129,9 +74,6 @@ impl AggregateSerdeMeta {
         Box::new(AggregateSerdeMeta {
             typ: PARTITIONED_AGGREGATE_TYPE,
             bucket: 0,
-            columns_layout: vec![],
-            location: None,
-            data_range: None,
             max_partition_count: 0,
             is_empty,
             buckets,

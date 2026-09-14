@@ -69,6 +69,23 @@ SELECT SUM(agg0) FROM (
 ----
 4.0
 
+query TR
+WITH user_income AS (
+  SELECT CAST(number % 2 AS STRING) AS user_id,
+         SUM(number::FLOAT64) AS total_entry_fee,
+         SUM(number::FLOAT64) + 1 AS total_actual_reward
+  FROM numbers(5)
+  GROUP BY user_id
+)
+SELECT user_id,
+       total_actual_reward - total_entry_fee AS total_user_income
+FROM user_income
+WHERE total_user_income < 10
+ORDER BY user_id
+----
+0 1.0
+1 1.0
+
 query TT
 select typeof(sum(number::Decimal(18, 1))), typeof(sum(number::Decimal(19, 1))) from numbers(1000);
 ----
@@ -79,6 +96,11 @@ settings(enable_decimal_sum_widening=1) select typeof(sum(number::Decimal(18, 1)
 ----
 DECIMAL(18, 1) NULL DECIMAL(76, 1) NULL
 
+query TT
+settings(enable_decimal_sum_widening=1) select typeof(sum(number::Decimal(18, 1)) filter (where number % 2 = 0)), typeof(sum(number::Decimal(19, 1)) filter (where number % 2 = 0)) from numbers(1000);
+----
+DECIMAL(18, 1) NULL DECIMAL(76, 1) NULL
+
 statement error Decimal overflow
 select sum(a) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a)
 
@@ -86,6 +108,16 @@ query RT
 settings(enable_decimal_sum_widening=1) select sum(a), typeof(sum(a)) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a);
 ----
 100000000000000000000000000000000000000 DECIMAL(76, 0) NULL
+
+query RT
+settings(enable_decimal_sum_widening=1) select sum(a) filter (where a >= 0), typeof(sum(a) filter (where a >= 0)) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a);
+----
+100000000000000000000000000000000000000 DECIMAL(76, 0) NULL
+
+# FILTER lowers to the _if combinator. Applying it to an aggregate that already
+# targets a combinator (sum_if) must be rejected rather than producing sum_if_if.
+statement error FILTER clause is not supported for aggregate combinator
+select sum_if(number, number % 2 = 0) filter (where number > 0) from numbers(10);
 
 query RRT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);
@@ -275,9 +307,6 @@ X1 102 2021 9 3 2021-09-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
 
 statement ok
 drop database sample_test
-
-statement ok
-set enable_experiment_aggregate = 1;
 
 statement ok
 set force_aggregate_shuffle_mode = 'bucket';

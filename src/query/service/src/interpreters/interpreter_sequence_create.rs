@@ -17,12 +17,17 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
+use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_sql::plans::CreateSequencePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use fastrace::func_name;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,36 +58,50 @@ impl Interpreter for CreateSequenceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let req = CreateSequenceReq {
-            create_option: self.plan.create_option,
-            ident: self.plan.ident.clone(),
-            start: self.plan.start,
-            increment: self.plan.increment,
-            comment: self.plan.comment.clone(),
-            create_on: Utc::now(),
-            storage_version: 0,
-        };
-        let catalog = self.ctx.get_default_catalog()?;
-        let _reply = catalog.create_sequence(req).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let req = CreateSequenceReq {
+                override_existing: self.plan.create_option.is_overriding(),
+                ident: self.plan.ident.clone(),
+                start: self.plan.start,
+                increment: self.plan.increment,
+                comment: self.plan.comment.clone(),
+                create_on: Utc::now(),
+                storage_version: 0,
+            };
+            let catalog = self.ctx.get_default_catalog()?;
+            let reply = catalog.create_sequence(req).await?;
+            if !reply.success {
+                if self.plan.create_option.if_return_error() {
+                    return Err(KVAppError::AppError(AppError::SequenceError(
+                        SequenceError::SequenceAlreadyExists(
+                            self.plan.ident.exist_error(func_name!()),
+                        ),
+                    ))
+                    .into());
+                }
 
-        // Grant ownership as the current role
-        if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            let tenant = self.plan.ident.tenant();
-            let name = self.plan.ident.name().to_string();
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let role_api = UserApiProvider::instance().role_api(tenant);
-                role_api
-                    .grant_ownership(&OwnershipObject::Sequence { name }, &current_role.name)
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(tenant);
+                return Ok(PipelineBuildResult::create());
             }
-        }
 
-        Ok(PipelineBuildResult::create())
+            // Grant ownership as the current role
+            if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
+            {
+                let tenant = self.plan.ident.tenant();
+                let name = self.plan.ident.name().to_string();
+                if let Some(current_role) = self.ctx.get_current_role() {
+                    let role_api = UserApiProvider::instance().role_api(tenant);
+                    role_api
+                        .grant_ownership(&OwnershipObject::Sequence { name }, &current_role.name)
+                        .await?;
+                    RoleCacheManager::instance().invalidate_cache(tenant);
+                }
+            }
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

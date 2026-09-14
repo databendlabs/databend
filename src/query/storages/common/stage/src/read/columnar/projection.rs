@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::Expr;
+use databend_common_expression::LambdaFunctionCall;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -27,7 +28,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::NullAs;
-use databend_common_meta_app::principal::StageFileFormatType;
 
 use crate::read::cast::load_can_auto_cast_to;
 
@@ -42,7 +42,6 @@ pub fn project_columnar(
     default_exprs: &Option<Vec<RemoteDefaultExpr>>,
     location: &str,
     case_sensitive: bool,
-    fmt: StageFileFormatType,
 ) -> databend_common_exception::Result<(Vec<Expr>, Vec<usize>)> {
     let mut pushdown_columns = vec![];
     let mut output_projection = vec![];
@@ -88,7 +87,7 @@ pub fn project_columnar(
                         &to_field.data_type().into(),
                         &BUILTIN_FUNCTIONS,
                     )?
-                } else if fmt == StageFileFormatType::Orc && !matches!(missing_as, NullAs::Error) {
+                } else if !matches!(missing_as, NullAs::Error) {
                     // special cast for tuple type, fill in default values for the missing fields.
                     match (
                         from_field.data_type.remove_nullable(),
@@ -98,35 +97,23 @@ pub fn project_columnar(
                             TableDataType::Array(box TableDataType::Nullable(
                                 box TableDataType::Tuple {
                                     fields_name: from_fields_name,
-                                    fields_type: _from_fields_type,
+                                    fields_type: from_fields_type,
                                 },
                             )),
                             TableDataType::Array(box TableDataType::Nullable(
                                 box TableDataType::Tuple {
                                     fields_name: to_fields_name,
-                                    fields_type: _to_fields_type,
+                                    fields_type: to_fields_type,
                                 },
                             )),
-                        ) => {
-                            let mut v = vec![];
-                            for to in to_fields_name.iter() {
-                                match from_fields_name.iter().position(|k| k == to) {
-                                    Some(p) => v.push(p as i32),
-                                    None => v.push(-1),
-                                };
-                            }
-                            let name = v
-                                .iter()
-                                .map(|v| v.to_string())
-                                .collect::<Vec<_>>()
-                                .join(",");
-                            Expr::ColumnRef(ColumnRef {
-                                span: None,
-                                id: pos,
-                                data_type: from_field.data_type().into(),
-                                display_name: format!("#!{name}",),
-                            })
-                        }
+                        ) => project_array_tuple(
+                            expr,
+                            to_field,
+                            &from_fields_name,
+                            &from_fields_type,
+                            &to_fields_name,
+                            &to_fields_type,
+                        )?,
                         (
                             TableDataType::Tuple {
                                 fields_name: from_fields_name,
@@ -138,8 +125,8 @@ pub fn project_columnar(
                             },
                         ) => project_tuple(
                             expr,
-                            from_field,
-                            to_field,
+                            &from_field.data_type,
+                            &to_field.data_type,
                             &from_fields_name,
                             &from_fields_type,
                             &to_fields_name,
@@ -169,9 +156,17 @@ pub fn project_columnar(
                 match missing_as {
                     // default
                     NullAs::Error => {
+                        let advice = build_columnar_missing_advice(
+                            input_schema,
+                            output_schema,
+                            field_name,
+                            case_sensitive,
+                            "MISSING_FIELD_AS=ERROR",
+                            None,
+                        );
                         return Err(ErrorCode::BadDataValueType(format!(
-                            "file {} missing column `{}`",
-                            location, field_name,
+                            "file {} missing column `{}`. {}",
+                            location, field_name, advice,
                         )));
                     }
                     NullAs::Null => {
@@ -182,9 +177,17 @@ pub fn project_columnar(
                                 scalar: Scalar::Null,
                             })
                         } else {
+                            let advice = build_columnar_missing_advice(
+                                input_schema,
+                                output_schema,
+                                field_name,
+                                case_sensitive,
+                                "MISSING_FIELD_AS=NULL",
+                                Some("the column is not nullable"),
+                            );
                             return Err(ErrorCode::BadDataValueType(format!(
-                                "{} missing column `{}`",
-                                location, field_name,
+                                "file {} missing column `{}`. {}",
+                                location, field_name, advice,
                             )));
                         }
                     }
@@ -220,10 +223,115 @@ pub fn project_columnar(
     Ok((output_projection, pushdown_columns))
 }
 
+fn build_columnar_missing_advice(
+    input_schema: &TableSchemaRef,
+    output_schema: &TableSchemaRef,
+    field_name: &str,
+    case_sensitive: bool,
+    current_setting: &str,
+    extra_reason: Option<&str>,
+) -> String {
+    let mut hints = Vec::new();
+
+    // Hint 1: current MISSING_FIELD_AS setting
+    hints.push(format!("current FILE_FORMAT option: {current_setting}"));
+
+    // Hint 2: if there's an extra reason (e.g., column not nullable)
+    if let Some(reason) = extra_reason {
+        hints.push(reason.to_string());
+    }
+
+    // Hint 3: if case_sensitive, check if there's a case-insensitive match in the file
+    if case_sensitive {
+        let lower_field = field_name.to_lowercase();
+        let matched = input_schema
+            .fields()
+            .iter()
+            .find(|f| f.name().to_lowercase() == lower_field && f.name() != field_name);
+        if let Some(f) = matched {
+            hints.push(format!(
+                "found column '{}' with different case in file; consider using `COLUMN_MATCH_MODE=CASE_INSENSITIVE`",
+                f.name()
+            ));
+        }
+    }
+
+    // Hint 4: if target table has a single Variant column, suggest select $1
+    let fields = output_schema.fields();
+    if fields.len() == 1
+        && matches!(
+            fields[0].data_type.remove_nullable(),
+            TableDataType::Variant
+        )
+    {
+        hints.push(
+            "the target table has a single VARIANT column; consider using `COPY INTO <table> FROM (SELECT $1 FROM @<stage>)` to load raw data"
+                .to_string(),
+        );
+    }
+
+    hints.join(". ")
+}
+
+fn project_array_tuple(
+    expr: Expr,
+    to_field: &TableField,
+    from_fields_name: &[String],
+    from_fields_type: &[TableDataType],
+    to_fields_name: &[String],
+    to_fields_type: &[TableDataType],
+) -> databend_common_exception::Result<Expr> {
+    let from_tuple_type = TableDataType::Nullable(Box::new(TableDataType::Tuple {
+        fields_name: from_fields_name.to_vec(),
+        fields_type: from_fields_type.to_vec(),
+    }));
+    let to_tuple_type = TableDataType::Nullable(Box::new(TableDataType::Tuple {
+        fields_name: to_fields_name.to_vec(),
+        fields_type: to_fields_type.to_vec(),
+    }));
+    let lambda_arg = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: (&from_tuple_type).into(),
+        display_name: "x".to_string(),
+    });
+    let lambda_expr = project_tuple(
+        lambda_arg,
+        &from_tuple_type,
+        &to_tuple_type,
+        from_fields_name,
+        from_fields_type,
+        to_fields_name,
+        to_fields_type,
+    )?;
+
+    let array_map_return_type = if expr.data_type().is_nullable_or_null() {
+        DataType::Array(Box::new(lambda_expr.data_type().clone())).wrap_nullable()
+    } else {
+        DataType::Array(Box::new(lambda_expr.data_type().clone()))
+    };
+    let array_map = Expr::LambdaFunctionCall(LambdaFunctionCall {
+        span: None,
+        name: "array_map".to_string(),
+        args: vec![expr],
+        lambda_expr: Box::new(lambda_expr.as_remote_expr()),
+        lambda_display: "x -> tuple projection".to_string(),
+        return_type: array_map_return_type,
+    });
+
+    check_cast(
+        None,
+        false,
+        array_map,
+        &to_field.data_type().into(),
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
 fn project_tuple(
     expr: Expr,
-    from_field: &TableField,
-    to_field: &TableField,
+    from_data_type: &TableDataType,
+    to_data_type: &TableDataType,
     from_fields_name: &[String],
     from_fields_type: &[TableDataType],
     to_fields_name: &[String],
@@ -269,14 +377,14 @@ fn project_tuple(
         inner_columns.push(inner_column);
     }
     let tuple_column = check_function(None, "tuple", &[], &inner_columns, &BUILTIN_FUNCTIONS)?;
-    let tuple_column = if from_field.data_type != to_field.data_type {
-        let dest_ty: DataType = (&to_field.data_type).into();
+    let tuple_column = if from_data_type != to_data_type {
+        let dest_ty: DataType = to_data_type.into();
         check_cast(None, false, tuple_column, &dest_ty, &BUILTIN_FUNCTIONS)?
     } else {
         tuple_column
     };
 
-    if from_field.data_type.is_nullable() && to_field.data_type.is_nullable() {
+    if from_data_type.is_nullable() && to_data_type.is_nullable() {
         // add if function to cast null value
         let is_not_null = check_function(
             None,
@@ -299,5 +407,81 @@ fn project_tuple(
         )
     } else {
         Ok(tuple_column)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn test_project_array_nullable_tuple_with_lambda_for_parquet() {
+        let input_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Array(Box::new(TableDataType::Nullable(Box::new(
+                TableDataType::Tuple {
+                    fields_name: vec!["x".to_string(), "y".to_string()],
+                    fields_type: vec![
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::Int32,
+                        ))),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::Int32,
+                        ))),
+                    ],
+                },
+            )))),
+        )]));
+        let output_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
+                TableDataType::Nullable(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["y".to_string(), "z".to_string(), "x".to_string()],
+                    fields_type: vec![
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::Int32,
+                        ))),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::Int32,
+                        ))),
+                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::Int32,
+                        ))),
+                    ],
+                })),
+            )))),
+        )]));
+
+        let (projection, pushdowns) = project_columnar(
+            &input_schema,
+            &output_schema,
+            &NullAs::Null,
+            &None,
+            "test.parquet",
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(pushdowns, vec![0]);
+        assert_eq!(projection.len(), 1);
+        let Expr::Cast(cast) = &projection[0] else {
+            panic!("expected array tuple projection to be cast to the target type");
+        };
+        assert_eq!(cast.dest_type, output_schema.field(0).data_type().into());
+        let Expr::LambdaFunctionCall(lambda) = cast.expr.as_ref() else {
+            panic!("expected array tuple projection to be a lambda expression");
+        };
+        assert_eq!(lambda.name, "array_map");
+        assert_eq!(lambda.args.len(), 1);
+        let Expr::ColumnRef(arg) = &lambda.args[0] else {
+            panic!("expected array_map input to be the source column");
+        };
+        assert_eq!(arg.id, 0);
+        assert_eq!(lambda.return_type, cast.dest_type.remove_nullable());
     }
 }

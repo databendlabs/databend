@@ -40,13 +40,13 @@ pub fn apply_cse(
                 }
 
                 let mut cse_candidates: Vec<&Expr> = cse_counter
-                    .iter()
-                    .filter(|(_, count)| **count > 1)
+                    .into_iter()
+                    .filter(|(_, count)| *count > 1)
                     .map(|(expr, _)| expr)
                     .collect();
 
-                // Make sure the smaller expr goes firstly
-                cse_candidates.sort_by_key(|a| a.sql_display().len());
+                // Make sure smaller expressions come first.
+                cse_candidates.sort_by_key(|expr| expression_size(expr));
 
                 let mut temp_var_counter = input_num_columns;
                 if !cse_candidates.is_empty() {
@@ -54,7 +54,7 @@ pub fn apply_cse(
                     let mut cse_replacements = HashMap::new();
 
                     let candidates_nums = cse_candidates.len();
-                    for cse_candidate in cse_candidates.iter() {
+                    for cse_candidate in cse_candidates.into_iter().cloned() {
                         let temp_var = format!("__temp_cse_{}", temp_var_counter);
                         let temp_expr: Expr<_> = expr::ColumnRef {
                             span: None,
@@ -64,17 +64,13 @@ pub fn apply_cse(
                         }
                         .into();
 
-                        let mut expr_cloned = (*cse_candidate).clone();
+                        let mut expr_cloned = cse_candidate.clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
 
-                        debug!(
-                            "cse_candidate: {}, temp_expr: {}",
-                            expr_cloned.sql_display(),
-                            temp_expr.sql_display()
-                        );
+                        debug!("cse_candidate: {expr_cloned}, temp_expr: {temp_expr}");
 
                         new_exprs.push(expr_cloned);
-                        cse_replacements.insert(cse_candidate.sql_display(), temp_expr);
+                        cse_replacements.insert(cse_candidate, temp_expr);
                         temp_var_counter += 1;
                     }
 
@@ -120,7 +116,7 @@ pub fn apply_cse(
 
 /// `count_expressions` recursively counts the occurrences of expressions in an expression tree
 /// and stores the count in a HashMap.
-fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
+fn count_expressions<'a>(expr: &'a Expr, counter: &mut HashMap<&'a Expr, usize>) {
     if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
         return;
     }
@@ -131,7 +127,7 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
             if function.signature.name == "is_not_error" => {}
         Expr::FunctionCall(expr::FunctionCall { args, .. })
         | Expr::LambdaFunctionCall(expr::LambdaFunctionCall { args, .. }) => {
-            let entry = counter.entry(expr.clone()).or_insert(0);
+            let entry = counter.entry(expr).or_insert(0);
             *entry += 1;
 
             for arg in args {
@@ -141,7 +137,7 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
         Expr::Cast(Cast {
             expr: inner_expr, ..
         }) => {
-            let entry = counter.entry(expr.clone()).or_insert(0);
+            let entry = counter.entry(expr).or_insert(0);
             *entry += 1;
 
             count_expressions(inner_expr, counter);
@@ -151,11 +147,26 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
     }
 }
 
+/// Return the number of nodes in an expression tree. A child expression is always smaller than
+/// its parent, so sorting by this value ensures that nested CSE candidates are materialized first.
+fn expression_size(expr: &Expr) -> usize {
+    match expr {
+        Expr::Cast(expr::Cast {
+            expr: inner_expr, ..
+        }) => 1 + expression_size(inner_expr),
+        Expr::FunctionCall(expr::FunctionCall { args, .. })
+        | Expr::LambdaFunctionCall(expr::LambdaFunctionCall { args, .. }) => {
+            1 + args.iter().map(expression_size).sum::<usize>()
+        }
+        Expr::Constant(_) | Expr::ColumnRef(_) => 1,
+    }
+}
+
 // `perform_cse_replacement` performs common subexpression elimination (CSE) on an expression tree
 // by replacing subexpressions that appear multiple times with a single shared expression.
-fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, Expr>) {
+fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<Expr, Expr>) {
     // If expr itself is a key in cse_replacements, return the replaced expression.
-    if let Some(replacement) = cse_replacements.get(&expr.sql_display()) {
+    if let Some(replacement) = cse_replacements.get(expr) {
         *expr = replacement.clone();
         return;
     }
@@ -174,5 +185,82 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, E
         }
         // ignore constant and column ref
         Expr::Constant(_) | Expr::ColumnRef(_) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::RawExpr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+
+    #[test]
+    fn test_cse_distinguishes_expressions_with_same_display() {
+        let data_type = DataType::Number(NumberDataType::Int32);
+        let plus = |id| RawExpr::FunctionCall {
+            span: None,
+            name: "plus".to_string(),
+            params: vec![],
+            args: vec![
+                RawExpr::ColumnRef {
+                    span: None,
+                    id,
+                    data_type: data_type.clone(),
+                    display_name: "a".to_string(),
+                },
+                RawExpr::Constant {
+                    span: None,
+                    scalar: Scalar::Number(NumberScalar::UInt64(1)),
+                    data_type: None,
+                },
+            ],
+        };
+
+        // The expressions render identically, but refer to different input columns.
+        let exprs = [plus(0), plus(0), plus(1), plus(1)]
+            .iter()
+            .map(|expr| check(expr, &BUILTIN_FUNCTIONS).unwrap())
+            .collect();
+        let operators = apply_cse(
+            vec![BlockOperator::Map {
+                exprs,
+                projections: None,
+            }],
+            2,
+        );
+
+        let BlockOperator::Map { exprs, .. } = &operators[0] else {
+            unreachable!()
+        };
+        assert_eq!(exprs.len(), 6);
+
+        let mut source_ids = exprs[..2]
+            .iter()
+            .map(|expr| match expr {
+                Expr::FunctionCall(call) => match &call.args[0] {
+                    Expr::ColumnRef(column) => column.id,
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+        source_ids.sort_unstable();
+        assert_eq!(source_ids, vec![0, 1]);
+
+        let replacement_ids = exprs[2..]
+            .iter()
+            .map(|expr| match expr {
+                Expr::ColumnRef(column) => column.id,
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(replacement_ids[0], replacement_ids[1]);
+        assert_eq!(replacement_ids[2], replacement_ids[3]);
+        assert_ne!(replacement_ids[0], replacement_ids[2]);
     }
 }

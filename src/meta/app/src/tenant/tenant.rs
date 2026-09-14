@@ -119,8 +119,4 @@ mod kvapi_key_impl {
     impl kvapi::Key for Tenant {
         type ValueType = EmptyTenantValue;
     }
-
-    impl kvapi::Value for EmptyTenantValue {
-        type KeyType = Tenant;
-    }
 }

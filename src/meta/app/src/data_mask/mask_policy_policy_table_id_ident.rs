@@ -33,10 +33,7 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::data_mask::MaskPolicyTableId;
-    use crate::data_mask::mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -45,10 +42,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "MaskPolicyTableIdIdent";
         const HAS_TENANT: bool = true;
         type ValueType = MaskPolicyTableId;
-    }
-
-    impl kvapi::Value for MaskPolicyTableId {
-        type KeyType = MaskPolicyTableIdIdent;
     }
 }
 

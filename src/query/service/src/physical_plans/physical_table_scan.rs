@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -206,14 +207,14 @@ impl IPhysicalPlan for TableScan {
             true,
         )?;
 
+        let schema = self.source.schema();
         // Fill internal columns if needed.
         if let Some(internal_columns) = &self.internal_column {
-            builder
-                .main_pipeline
-                .add_transformer(|| TransformAddInternalColumns::new(internal_columns.clone()));
+            builder.main_pipeline.add_transformer(|| {
+                TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
+            });
         }
 
-        let schema = self.source.schema();
         let mut projection = self
             .name_mapping
             .keys()
@@ -307,7 +308,6 @@ impl PhysicalPlanBuilder {
                 let read_guard = self.metadata.read();
                 let virtual_column_id_set = read_guard
                     .virtual_columns_by_table_index(scan.table_index)
-                    .iter()
                     .map(|column| column.index())
                     .collect::<HashSet<_>>();
                 for required_column_id in required_column_ids {
@@ -325,7 +325,7 @@ impl PhysicalPlanBuilder {
             // on tenant_id would fail when the query only selects id.
             if let Some(secure_preds) = &scan.secure_predicates {
                 for pred in secure_preds {
-                    used = used.union(&pred.used_columns()).cloned().collect();
+                    pred.collect_used_columns(&mut used);
                 }
             }
 
@@ -454,7 +454,8 @@ impl PhysicalPlanBuilder {
                     .as_raw_expr()
                     .type_check(&metadata)?
                     .project_column_ref(|col| Ok(col.column_name.clone()))?;
-                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (folded, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote = folded.as_remote_expr();
                 serialized.push(serde_json::to_string(&remote).map_err(|e| {
                     ErrorCode::Internal(format!(
@@ -511,13 +512,6 @@ impl PhysicalPlanBuilder {
         source.scan_id = scan.scan_id;
         source.block_meta_options.reserve_block_index =
             need_reserve_block_info(self.ctx.clone(), scan.table_index).0;
-        if let Some(agg_index) = &scan.agg_index {
-            let source_schema = source.schema();
-            let push_down = source.push_downs.as_mut().unwrap();
-            let output_fields = TableScan::output_fields(source_schema, &name_mapping)?;
-            let agg_index = Self::build_agg_index(agg_index, &output_fields)?;
-            push_down.agg_index = Some(agg_index);
-        }
         let internal_column = if project_internal_columns.is_empty() {
             None
         } else {
@@ -549,7 +543,7 @@ impl PhysicalPlanBuilder {
         }
 
         if let Some(secure_preds) = &scan.secure_predicates {
-            if !secure_preds.is_empty() {
+            if !secure_preds.is_empty() && scan.has_secure_predicates_not_applied_by_prewhere() {
                 let input_schema = plan.output_schema()?;
                 let retained = self.metadata.read().get_retained_column().clone();
                 let mut projections = BTreeSet::new();
@@ -568,8 +562,11 @@ impl PhysicalPlanBuilder {
                                 input_schema.index_of(&col.index.to_string())
                             })?;
                         let expr = cast_expr_to_non_null_boolean(expr)?;
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        let (expr, _) = ConstantFolder::fold(
+                            Cow::Owned(expr),
+                            &self.func_ctx,
+                            &BUILTIN_FUNCTIONS,
+                        );
                         Ok(expr.as_remote_expr())
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -771,6 +768,7 @@ impl PhysicalPlanBuilder {
                             func_name: "and_filters".to_string(),
                             params: vec![],
                             arguments: vec![lhs, rhs],
+                            return_type: Box::new(DataType::Boolean),
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
@@ -781,7 +779,8 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
-                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (filter, _) =
+                    ConstantFolder::fold(Cow::Owned(filter), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -855,11 +854,11 @@ impl PhysicalPlanBuilder {
             order_by,
             virtual_column,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
-            agg_index: None,
             change_type: scan.change_type.clone(),
             inverted_index: scan.inverted_index.clone(),
             vector_index: scan.vector_index.clone(),
             sample: scan.sample.clone(),
+            read_partitions_pruning_mode: Default::default(),
             secure_filters,
         })
     }
@@ -890,7 +889,8 @@ impl PhysicalPlanBuilder {
             .unwrap();
 
         let expr = cast_expr_to_non_null_boolean(expr)?;
-        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let expr = expr.into_owned();
 
         let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
         let inverted_filter =
@@ -910,7 +910,7 @@ impl PhysicalPlanBuilder {
         for index in indices.iter() {
             if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
             {
-                virtual_column_ids.push(virtual_column.column_id);
+                virtual_column_ids.push(virtual_column.query_column_id);
             }
         }
         if !virtual_column_ids.is_empty() {
@@ -942,7 +942,7 @@ impl PhysicalPlanBuilder {
             let virtual_column_field = VirtualColumnField {
                 source_column_id: virtual_column.source_column_id,
                 source_name: virtual_column.source_column_name.clone(),
-                column_id: virtual_column.column_id,
+                query_column_id: virtual_column.query_column_id,
                 name: virtual_column.column_name.clone(),
                 key_paths: virtual_column.key_paths.clone(),
                 cast_func_name,
@@ -956,65 +956,6 @@ impl PhysicalPlanBuilder {
             virtual_column_fields,
         };
         Ok(Some(virtual_column_info))
-    }
-
-    pub fn build_agg_index(
-        agg: &databend_common_sql::plans::AggIndexInfo,
-        source_fields: &[DataField],
-    ) -> Result<databend_common_catalog::plan::AggIndexInfo> {
-        // Build projection
-        let used_columns = agg.used_columns();
-        let mut col_indices = Vec::with_capacity(used_columns.len());
-        for index in used_columns.iter() {
-            col_indices.push(agg.schema.index_of(&index.to_string())?);
-        }
-        let projection = Projection::Columns(col_indices);
-        let output_schema = projection.project_schema(&agg.schema);
-
-        let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-            })
-        });
-        let filter = predicate
-            .map(|pred| -> Result<_> {
-                Ok(cast_expr_to_non_null_boolean(
-                    pred.as_expr()?
-                        .project_column_ref(|col| output_schema.index_of(&col.index.to_string()))?,
-                )?
-                .as_remote_expr())
-            })
-            .transpose()?;
-        let selection = agg
-            .selection
-            .iter()
-            .map(|sel| {
-                let offset = source_fields
-                    .iter()
-                    .position(|f| sel.index.to_string() == f.name().as_str());
-                Ok((
-                    sel.scalar
-                        .as_expr()?
-                        .project_column_ref(|col| output_schema.index_of(&col.index.to_string()))?
-                        .as_remote_expr(),
-                    offset,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(databend_common_catalog::plan::AggIndexInfo {
-            index_id: agg.index_id,
-            filter,
-            selection,
-            schema: agg.schema.clone(),
-            actual_table_field_len: source_fields.len(),
-            is_agg: agg.is_agg,
-            projection,
-            num_agg_funcs: agg.num_agg_funcs,
-        })
     }
 
     pub fn build_projection<'a>(

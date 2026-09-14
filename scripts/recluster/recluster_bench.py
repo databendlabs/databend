@@ -9,18 +9,17 @@ intended for local experiments and is not part of the repository test suite.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import re
-import shlex
-import subprocess
 import sys
 import time
 from dataclasses import asdict
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.bench_common.bendsql import BendSQL, QueryResult, csv_records, kv_map
 
 
 RECLUSTER_METRICS = (
@@ -31,15 +30,6 @@ RECLUSTER_METRICS = (
     "fuse_recluster_row_nums_to_read",
     "fuse_recluster_write_block_nums",
 )
-
-
-@dataclass
-class QueryResult:
-    label: str
-    sql: str
-    elapsed_sec: float
-    stdout: str
-    stderr: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -138,63 +128,6 @@ def parse_args() -> argparse.Namespace:
         help="Width of sampled range predicates for --prune-samples.",
     )
     return parser.parse_args()
-
-
-class BendSQL:
-    def __init__(self, binary: str, dsn: str | None, dry_run: bool) -> None:
-        self.binary = binary
-        self.dsn = dsn
-        self.dry_run = dry_run
-
-    def run(
-        self, sql: str, label: str, output: str = "csv", echo_stdout: bool = True
-    ) -> QueryResult:
-        cmd = [self.binary, "--output", output, f"--query={sql}"]
-        if self.dsn:
-            cmd[1:1] = ["--dsn", self.dsn]
-
-        printable = " ".join(shlex.quote(part) for part in cmd)
-        print(f"\n[{label}] {printable}", flush=True)
-        start = time.monotonic()
-        if self.dry_run:
-            elapsed = time.monotonic() - start
-            return QueryResult(label, sql, elapsed, "", "")
-
-        proc = subprocess.run(cmd, text=True, capture_output=True)
-        elapsed = time.monotonic() - start
-        if proc.returncode != 0:
-            print(proc.stdout, end="", file=sys.stdout)
-            print(proc.stderr, end="", file=sys.stderr)
-            raise RuntimeError(f"bendsql failed for {label}, exit={proc.returncode}")
-        if echo_stdout and proc.stdout.strip():
-            print(proc.stdout.strip(), flush=True)
-        if proc.stderr.strip():
-            print(proc.stderr.strip(), file=sys.stderr, flush=True)
-        return QueryResult(label, sql, elapsed, proc.stdout, proc.stderr)
-
-    def try_run(
-        self, sql: str, label: str, output: str = "csv", echo_stdout: bool = True
-    ) -> QueryResult:
-        try:
-            return self.run(sql, label, output, echo_stdout)
-        except RuntimeError as err:
-            print(f"[{label}] skipped: {err}", file=sys.stderr, flush=True)
-            return QueryResult(label, sql, 0.0, "", str(err))
-
-
-def csv_records(stdout: str) -> list[list[str]]:
-    text = stdout.strip()
-    if not text:
-        return []
-    return list(csv.reader(text.splitlines()))
-
-
-def kv_map(stdout: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for row in csv_records(stdout):
-        if len(row) >= 2:
-            out[row[0]] = row[1]
-    return out
 
 
 def parse_value(value: str | None) -> Any:

@@ -29,6 +29,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::TableInfo;
 use enum_as_inner::EnumAsInner;
 use parking_lot::Mutex;
@@ -38,6 +39,7 @@ use tokio::sync::mpsc::Receiver;
 
 use super::Plan;
 use crate::INSERT_NAME;
+use crate::optimizer::ir::StatContext;
 use crate::planner::format::FormatOptions;
 use crate::planner::format::MetadataIdHumanizer;
 use crate::plans::CopyIntoTablePlan;
@@ -89,6 +91,10 @@ pub struct Insert {
     // it should be provided as some `table_info`.
     // otherwise, the table being inserted will be resolved by using `catalog`.`database`.`table`
     pub table_info: Option<TableInfo>,
+    /// Target table id captured for lineage extraction only. Execution must
+    /// continue to resolve ordinary INSERT targets by name.
+    pub lineage_target_table_id: Option<u64>,
+    pub lineage_target_catalog_type: CatalogType,
 }
 
 impl PartialEq for Insert {
@@ -114,6 +120,7 @@ impl Insert {
     pub async fn explain(
         &self,
         options: FormatOptions,
+        stat_context: &StatContext,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
         let mut result = vec![];
 
@@ -126,6 +133,8 @@ impl Insert {
             overwrite,
             // table_info only used create table as select.
             table_info: _,
+            lineage_target_table_id: _,
+            lineage_target_catalog_type: _,
             source,
         } = self;
 
@@ -147,7 +156,8 @@ impl Insert {
             FormatTreeNode::new(format!("overwrite: {overwrite}")),
         ];
 
-        let formatted_plan = format_insert_source("InsertPlan", source, options, children)?;
+        let formatted_plan =
+            format_insert_source("InsertPlan", source, options, stat_context, children)?;
 
         let line_split_result: Vec<&str> = formatted_plan.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -167,6 +177,7 @@ pub(crate) fn format_insert_source(
     plan_name: &str,
     source: &InsertInputSource,
     options: FormatOptions,
+    stat_context: &StatContext,
     mut children: Vec<FormatTreeNode>,
 ) -> databend_common_exception::Result<String> {
     match source {
@@ -176,7 +187,7 @@ pub(crate) fn format_insert_source(
             } = &**plan
             {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 let sub_tree = s_expr.to_format_tree(&humanizer)?;
                 children.push(sub_tree);
 
@@ -214,7 +225,7 @@ pub(crate) fn format_insert_source(
             Plan::CopyIntoTable(copy_plan) => {
                 let CopyIntoTablePlan {
                     no_file_to_copy,
-                    from_attachment,
+                    from_stage_attachment,
                     required_values_schema,
                     required_source_schema,
                     write_mode,
@@ -237,7 +248,7 @@ pub(crate) fn format_insert_source(
                     .join(",");
                 let stage_node = vec![
                     FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
-                    FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
+                    FormatTreeNode::new(format!("from_stage_attachment: {from_stage_attachment}")),
                     FormatTreeNode::new(format!(
                         "required_values_schema: [{required_values_schema}]"
                     )),

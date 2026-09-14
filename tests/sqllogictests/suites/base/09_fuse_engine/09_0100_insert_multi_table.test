@@ -779,3 +779,57 @@ drop table dst1_19716;
 
 statement ok
 drop table dst2_19716;
+
+# ChunkAppendData builds each target's partition transforms independently.
+# Different target expressions must not share or misalign partition metadata.
+statement ok
+CREATE TABLE multi_partitioned_a(p INT, id INT)
+PARTITION BY (p % 2)
+ROW_PER_BLOCK=100000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+CREATE TABLE multi_partitioned_b(id INT)
+PARTITION BY (id % 3)
+ROW_PER_BLOCK=100000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT ALL
+  WHEN true THEN INTO multi_partitioned_a VALUES(p, id)
+  WHEN id % 2 = 0 THEN INTO multi_partitioned_b VALUES(id)
+SELECT (number % 4)::INT AS p, number::INT AS id FROM numbers(16)
+
+query I
+SELECT count(*) FROM multi_partitioned_a
+----
+16
+
+query I
+SELECT count(*) FROM multi_partitioned_b
+----
+8
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p % 2) AS partition_values
+    FROM multi_partitioned_a
+    GROUP BY _block_name
+)
+----
+0
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT id % 3) AS partition_values
+    FROM multi_partitioned_b
+    GROUP BY _block_name
+)
+----
+0
+
+statement ok
+DROP TABLE multi_partitioned_a
+
+statement ok
+DROP TABLE multi_partitioned_b

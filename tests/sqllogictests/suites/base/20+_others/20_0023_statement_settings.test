@@ -1,0 +1,165 @@
+## Statement settings: duplicate keys, hint precedence, and nested binding scope.
+
+statement ok
+SET max_threads = 13
+
+## The first occurrence wins within a hint group or SETTINGS clause.
+
+query T
+SELECT /*+ SET_VAR(max_threads=3) SET_VAR(max_threads=5) */ value
+FROM system.settings WHERE name = 'max_threads'
+----
+3
+
+query T
+SETTINGS (max_threads = 3, max_threads = 5)
+SELECT value FROM system.settings WHERE name = 'max_threads'
+----
+3
+
+## Later hint groups in AST walk order override earlier groups.
+
+query T
+SELECT /*+ SET_VAR(max_threads=3) */ value
+FROM (
+    SELECT /*+ SET_VAR(max_threads=5) */ value
+    FROM system.settings WHERE name = 'max_threads'
+)
+----
+5
+
+## Later groups resolve expressions using settings applied by earlier groups.
+
+statement ok
+SET timezone = 'UTC'
+
+query T
+SELECT /*+ SET_VAR(timezone='Asia/Shanghai') */ timezone()
+FROM (SELECT /*+ SET_VAR(timezone=timezone()) */ 1)
+----
+Asia/Shanghai
+
+query T
+SELECT /*+ SET_VAR(timezone='Asia/Shanghai') */ timezone()
+FROM (SELECT /*+ SET_VAR(timezone='America/Los_Angeles') */ 1)
+----
+America/Los_Angeles
+
+## Sequential application remains query-local.
+
+query T
+SELECT timezone()
+----
+UTC
+
+statement ok
+UNSET timezone
+
+## SETTINGS takes priority over SET_VAR when both occur in the same statement.
+
+query T
+SETTINGS (max_threads = 7)
+SELECT /*+ SET_VAR(max_threads=5) */ value
+FROM system.settings
+WHERE name = 'max_threads'
+----
+7
+
+## SQL UDTFs and views parse and bind stored SQL while binding an outer query.
+## Query-level settings in that stored SQL are ignored; settings already
+## applied to the outer query are inherited by the nested bind. UDTF SQL can
+## contain SETTINGS or SET_VAR, while a stored view Query can contain SET_VAR.
+
+statement ok
+DROP FUNCTION IF EXISTS statement_settings_double_bind_udtf
+
+statement ok
+DROP FUNCTION IF EXISTS statement_settings_double_bind_udtf_settings
+
+statement ok
+DROP VIEW IF EXISTS statement_settings_double_bind_view
+
+statement ok
+CREATE FUNCTION statement_settings_double_bind_udtf()
+RETURNS TABLE (value STRING) AS $$
+    SELECT /*+ SET_VAR(max_threads=5) */ value
+    FROM system.settings
+    WHERE name = 'max_threads'
+$$
+
+statement ok
+CREATE FUNCTION statement_settings_double_bind_udtf_settings()
+RETURNS TABLE (value STRING) AS $$
+    SETTINGS (max_threads = 5)
+    SELECT value
+    FROM system.settings
+    WHERE name = 'max_threads'
+$$
+
+## The SET_VAR in the stored UDTF SQL is ignored.
+
+query T
+SELECT * FROM statement_settings_double_bind_udtf()
+----
+13
+
+## The SETTINGS clause in stored UDTF SQL is also ignored.
+
+query T
+SELECT * FROM statement_settings_double_bind_udtf_settings()
+----
+13
+
+## The outer query's SETTINGS is inherited by the UDTF bind.
+
+query T
+SETTINGS (max_threads = 7)
+SELECT * FROM statement_settings_double_bind_udtf()
+----
+7
+
+query T
+SETTINGS (max_threads = 7)
+SELECT * FROM statement_settings_double_bind_udtf_settings()
+----
+7
+
+statement ok
+CREATE VIEW statement_settings_double_bind_view AS
+SELECT /*+ SET_VAR(max_threads=5) */ value
+FROM system.settings
+WHERE name = 'max_threads'
+
+## The SET_VAR in the stored view SQL is ignored.
+
+query T
+SELECT * FROM statement_settings_double_bind_view
+----
+13
+
+## The outer query's SETTINGS is inherited by the view bind.
+
+query T
+SETTINGS (max_threads = 7)
+SELECT * FROM statement_settings_double_bind_view
+----
+7
+
+## The outer query's SETTINGS does not leak into the session.
+
+query TT
+SELECT value, level FROM system.settings WHERE name = 'max_threads'
+----
+13 SESSION
+
+statement ok
+UNSET max_threads
+
+statement ok
+DROP FUNCTION statement_settings_double_bind_udtf
+
+statement ok
+DROP FUNCTION statement_settings_double_bind_udtf_settings
+
+statement ok
+DROP VIEW statement_settings_double_bind_view

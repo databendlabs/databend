@@ -22,12 +22,12 @@ use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_sql::binder::StageResolver;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextStage;
 use crate::sessions::TableContextTableAccess;
 
 #[async_backtrace::framed]
@@ -124,7 +124,16 @@ pub async fn validate_grant_object_exists(
             };
         }
         GrantObject::Connection(c) => {
-            return match ctx.get_connection(c).await {
+            return match StageResolver::from_table_context(
+                ctx.clone(),
+                databend_common_users::UserApiProvider::instance(),
+                databend_common_config::GlobalConfig::instance()
+                    .storage
+                    .allow_insecure,
+            )?
+            .resolve_connection(c)
+            .await
+            {
                 Ok(_c) => Ok(()),
                 Err(e) => Err(e),
             };

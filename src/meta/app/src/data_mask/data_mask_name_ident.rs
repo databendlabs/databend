@@ -34,10 +34,7 @@ impl DataMaskNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::data_mask::DataMaskId;
-    use crate::data_mask::DataMaskNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -46,10 +43,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "DataMaskNameIdent";
         const HAS_TENANT: bool = true;
         type ValueType = DataMaskId;
-    }
-
-    impl kvapi::Value for DataMaskId {
-        type KeyType = DataMaskNameIdent;
     }
 }
 

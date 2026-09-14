@@ -60,7 +60,7 @@ jobs:
       - 8c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -78,12 +78,12 @@ jobs:
       - 16c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # fetch all tags, metasrv and meta client need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 90
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
@@ -97,7 +97,7 @@ jobs:
           artifacts: all
       - name: upload sccache log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
@@ -111,7 +111,7 @@ jobs:
       - 16c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -129,7 +129,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
@@ -142,7 +142,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
@@ -155,7 +155,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
@@ -168,7 +168,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
@@ -181,7 +181,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_client_cluster
         with:
           nox_session: python_client
@@ -196,7 +196,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_client_cluster
         with:
           nox_session: java_client
@@ -211,7 +211,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_client_cluster
         with:
           nox_session: go_client
@@ -226,12 +226,29 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_logs
+        timeout-minutes: 20
+
+  test_lineage:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_lineage
         timeout-minutes: 20
 
   test_private_tasks:
@@ -243,7 +260,7 @@ jobs:
       - 8c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -260,7 +277,7 @@ jobs:
       - 8c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -277,7 +294,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
@@ -290,7 +307,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateless_standalone_linux
         timeout-minutes: 25
 
@@ -303,12 +320,29 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_stateless_cluster_linux
+        timeout-minutes: 25
+
+  test_stateful_paimon_cluster:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 4c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_stateful_paimon_cluster_linux
         timeout-minutes: 25
 
   test_stateful_standalone:
@@ -320,7 +354,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateful_standalone_linux
         timeout-minutes: 15
       - name: Upload failure
@@ -338,7 +372,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -361,7 +395,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
@@ -374,7 +408,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/test_stateful_iceberg_catalogs_standalone
         timeout-minutes: 10
       - name: Upload failure
@@ -382,25 +416,6 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-iceberg-catalogs-standalone
-
-  # TODO: tmp disable since hive image not running on arm64
-  # test_stateful_hive_standalone:
-  #   needs: [ build, check ]
-  #   runs-on:
-  #     - self-hosted
-  #     - "${{ inputs.runner_arch }}"
-  #     - Linux
-  #     - 2c
-  #     - "${{ inputs.runner_provider }}"
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/test_stateful_hive_standalone
-  #       timeout-minutes: 10
-  #     - name: Upload failure
-  #       if: failure()
-  #       uses: ./.github/actions/artifact_failure
-  #       with:
-  #         name: test_stateful_hive_standalone
 
   # test_fuzz_standalone:
   #   needs: [build, check]
@@ -411,7 +426,7 @@ jobs:
   #     - 2c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
   #     - uses: ./.github/actions/test_fuzz_standalone_linux
   #       timeout-minutes: 10
   #       continue-on-error: true
@@ -425,7 +440,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
         with:
           runner_provider: ${{ inputs.runner_provider }}
@@ -438,33 +453,6 @@ jobs:
         with:
           name: test-stateful-standalone-linux
 
-  #  Temporarily commented out, since this job is run on self-hosted, may
-  #  bring troubles to other jobs run on self-hosted.
-  #
-  #  Maybe we could patch `libfaketime` and let it support jemalloc?
-  #
-  #  test_ee_standalone_fake_time:
-  #    needs: [build, check]
-  #    runs-on:
-  #      - self-hosted
-  #      - "${{ inputs.runner_arch }}"
-  #      - Linux
-  #      - 2c
-  #      - "${{ inputs.runner_provider }}"
-  #    steps:
-  #      - uses: actions/checkout@v4
-  #      - uses: ./.github/actions/setup_license
-  #        with:
-  #          runner_provider: ${{ inputs.runner_provider }}
-  #          type: ${{ inputs.license_type }}
-  #      - uses: ./.github/actions/test_ee_standalone_fake_time_linux
-  #        timeout-minutes: 10
-  #      - name: Upload failure
-  #        if: failure()
-  #        uses: ./.github/actions/artifact_failure
-  #        with:
-  #          name: test-stateful-standalone-fake-time-linux
-
   test_ee_management_mode:
     needs: [build, check]
     runs-on:
@@ -474,7 +462,7 @@ jobs:
       - 2c
       - "${{ inputs.runner_provider }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/setup_license
         with:

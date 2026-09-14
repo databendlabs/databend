@@ -28,6 +28,7 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
 use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
+use databend_common_sql::apply_statement_settings;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::planner::Binder;
 use databend_common_sql::planner::Metadata;
@@ -71,13 +72,12 @@ pub async fn execute_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<()> {
 
 /// Get raw plan from SQL
 pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
-    let settings = ctx.get_settings();
     let planner = Planner::new(ctx.clone());
     let extras = planner.parse_sql(sql)?;
 
     let metadata = Arc::new(parking_lot::RwLock::new(Metadata::default()));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-
+    apply_statement_settings(ctx.clone(), &extras.statement)?;
+    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let binder = Binder::new(
         ctx.clone(),
         CatalogManager::instance(),
@@ -121,6 +121,7 @@ pub fn create_column_function_call(name: &str) -> ScalarExpr {
         func_name: "column".to_string(),
         params: vec![],
         arguments: vec![create_constant_string(name)],
+        return_type: Box::new(DataType::Boolean),
     })
 }
 
@@ -449,32 +450,38 @@ impl ExprBuilder {
 
     /// Create an AND expression
     pub fn and(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
+        let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "and".to_string(),
             params: vec![],
             arguments: vec![left, right],
+            return_type: Box::new(return_type),
         })
     }
 
     /// Create an OR expression
     pub fn or(&self, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
+        let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "or".to_string(),
             params: vec![],
             arguments: vec![left, right],
+            return_type: Box::new(return_type),
         })
     }
 
     /// Create a comparison expression with the given operator
     pub fn comparison(&self, left: ScalarExpr, right: ScalarExpr, op: ComparisonOp) -> ScalarExpr {
         let func_name = op.to_func_name().to_string();
+        let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name,
             arguments: vec![left, right],
             params: vec![],
+            return_type: Box::new(return_type),
         })
     }
 
@@ -485,11 +492,13 @@ impl ExprBuilder {
         then_expr: ScalarExpr,
         else_expr: ScalarExpr,
     ) -> ScalarExpr {
+        let return_type = then_expr.data_type().into_owned();
         ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "if".to_string(),
             arguments: vec![condition, then_expr, else_expr],
             params: vec![],
+            return_type: Box::new(return_type),
         })
     }
 

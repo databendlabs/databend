@@ -180,6 +180,15 @@ pub enum Statement {
         database: Identifier,
     },
 
+    // Shares
+    CreateShare(CreateShareStmt),
+    DropShare(DropShareStmt),
+    AlterShare(AlterShareStmt),
+    GrantShare(GrantShareStmt),
+    RevokeShare(RevokeShareStmt),
+    ShowShares(ShowSharesStmt),
+    DescShare(DescShareStmt),
+
     // Tables
     ShowTables(ShowTablesStmt),
     ShowCreateTable(ShowCreateTableStmt),
@@ -195,6 +204,8 @@ pub enum Statement {
     TruncateTable(TruncateTableStmt),
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
+    VacuumTables(VacuumTablesStmt),
+    VacuumAll(VacuumAllStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
     VacuumVirtualColumn(VacuumVirtualColumnStmt),
@@ -218,6 +229,15 @@ pub enum Statement {
     DropView(DropViewStmt),
     ShowViews(ShowViewsStmt),
     DescribeView(DescribeViewStmt),
+    RefreshLineage(RefreshLineageStmt),
+
+    // Materialized Views
+    CreateMaterializedView(CreateMaterializedViewStmt),
+    AlterMaterializedView(AlterMaterializedViewStmt),
+    DropMaterializedView(DropMaterializedViewStmt),
+    RefreshMaterializedView(RefreshMaterializedViewStmt),
+    ShowCreateMaterializedView(ShowCreateMaterializedViewStmt),
+    ShowMaterializedViews(ShowMaterializedViewsStmt),
 
     // Streams
     CreateStream(CreateStreamStmt),
@@ -226,9 +246,6 @@ pub enum Statement {
     DescribeStream(DescribeStreamStmt),
 
     // Indexes
-    CreateIndex(CreateIndexStmt),
-    DropIndex(DropIndexStmt),
-    RefreshIndex(RefreshIndexStmt),
     CreateTableIndex(CreateTableIndexStmt),
     DropTableIndex(DropTableIndexStmt),
     RefreshTableIndex(RefreshTableIndexStmt),
@@ -454,6 +471,45 @@ impl Statement {
                 attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
                 format!("{}", Statement::AttachTable(attach_clone))
             }
+            Statement::CreateConnection(stmt) => {
+                let mut clone = stmt.clone();
+                clone.storage_params = clone
+                    .storage_params
+                    .iter()
+                    .map(|(k, v)| {
+                        let chars: Vec<char> = v.chars().collect();
+                        let masked = if chars.len() <= 4 {
+                            "***".to_string()
+                        } else {
+                            let head: String = chars[..2].iter().collect();
+                            let tail: String = chars[chars.len() - 2..].iter().collect();
+                            format!("{}***{}", head, tail)
+                        };
+                        (k.clone(), masked)
+                    })
+                    .collect();
+                format!("{}", Statement::CreateConnection(clone))
+            }
+            Statement::AlterTable(stmt) => {
+                let mut clone = stmt.clone();
+                if let AlterTableAction::ModifyConnection { new_connection } = &mut clone.action {
+                    *new_connection = new_connection
+                        .iter()
+                        .map(|(k, v)| {
+                            let chars: Vec<char> = v.chars().collect();
+                            let masked = if chars.len() <= 4 {
+                                "***".to_string()
+                            } else {
+                                let head: String = chars[..2].iter().collect();
+                                let tail: String = chars[chars.len() - 2..].iter().collect();
+                                format!("{}***{}", head, tail)
+                            };
+                            (k.clone(), masked)
+                        })
+                        .collect();
+                }
+                format!("{}", Statement::AlterTable(clone))
+            }
             _ => format!("{}", self),
         }
     }
@@ -496,7 +552,10 @@ impl Statement {
             | Statement::ShowDatabases(..)
             | Statement::ShowDropDatabases(..)
             | Statement::ShowCreateDatabase(..)
+            | Statement::ShowShares(..)
+            | Statement::DescShare(..)
             | Statement::UseDatabase { .. }
+            | Statement::ShowCreateMaterializedView(..)
             | Statement::ShowTables(..)
             | Statement::ShowCreateTable(..)
             | Statement::DescribeTable(..)
@@ -505,6 +564,8 @@ impl Statement {
             | Statement::ShowDropTables(..)
             | Statement::OptimizeTable(..)
             | Statement::VacuumTable(..)
+            | Statement::VacuumTables(..)
+            | Statement::VacuumAll(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
             | Statement::VacuumVirtualColumn(..)
@@ -515,9 +576,10 @@ impl Statement {
             | Statement::ShowColumns(..)
             | Statement::ShowViews(..)
             | Statement::DescribeView(..)
+            | Statement::RefreshLineage(..)
+            | Statement::ShowMaterializedViews(..)
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
-            | Statement::RefreshIndex(..)
             | Statement::RefreshTableIndex(..)
             | Statement::RefreshVirtualColumn(..)
             | Statement::ShowVirtualColumns(..)
@@ -563,9 +625,13 @@ impl Statement {
             | Statement::InspectWarehouse(..) => true,
 
             Statement::CreateDatabase(..)
+            | Statement::CreateShare(..)
+            | Statement::DropShare(..)
+            | Statement::AlterShare(..)
+            | Statement::GrantShare(..)
+            | Statement::RevokeShare(..)
             | Statement::CreateTable(..)
             | Statement::CreateView(..)
-            | Statement::CreateIndex(..)
             | Statement::CreateStage(..)
             | Statement::AlterStage(..)
             | Statement::CreateSequence(..)
@@ -575,12 +641,15 @@ impl Statement {
             | Statement::AlterTable(..)
             | Statement::AlterObjectTag(..)
             | Statement::AlterView(..)
+            | Statement::AlterMaterializedView(..)
             | Statement::AlterUser(..)
             | Statement::AlterDatabase(..)
             | Statement::DropDatabase(..)
             | Statement::DropTable(..)
             | Statement::DropView(..)
-            | Statement::DropIndex(..)
+            | Statement::DropMaterializedView(..)
+            | Statement::CreateMaterializedView(..)
+            | Statement::RefreshMaterializedView(..)
             | Statement::DropSequence(..)
             | Statement::DropDictionary(..)
             | Statement::TruncateTable(..)
@@ -862,6 +931,13 @@ impl Display for Statement {
             Statement::UndropDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
+            Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterShare(stmt) => write!(f, "{stmt}")?,
+            Statement::GrantShare(stmt) => write!(f, "{stmt}")?,
+            Statement::RevokeShare(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
+            Statement::DescShare(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
             Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
@@ -878,6 +954,8 @@ impl Display for Statement {
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTables(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumAll(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,
@@ -893,13 +971,17 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::ShowViews(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeView(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshLineage(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::DropMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateMaterializedView(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowMaterializedViews(stmt) => write!(f, "{stmt}")?,
             Statement::CreateStream(stmt) => write!(f, "{stmt}")?,
             Statement::DropStream(stmt) => write!(f, "{stmt}")?,
             Statement::ShowStreams(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeStream(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateTableIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropTableIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshTableIndex(stmt) => write!(f, "{stmt}")?,
@@ -995,7 +1077,7 @@ impl Display for Statement {
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = {}", QuotedString(pattern, '\''))?;
                 }
             }
             Statement::ShowStages { show_options } => {
@@ -1019,7 +1101,7 @@ impl Display for Statement {
             Statement::RemoveStage { location, pattern } => {
                 write!(f, "REMOVE @{location}")?;
                 if !pattern.is_empty() {
-                    write!(f, " PATTERN = '{pattern}'")?;
+                    write!(f, " PATTERN = {}", QuotedString(pattern, '\''))?;
                 }
             }
             Statement::DescribeStage { stage_name } => write!(f, "DESC STAGE {stage_name}")?,

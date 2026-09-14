@@ -11,5 +11,9 @@ query ?
 select * from @empty_stage_select_error
 ----
 
+query T
+select array_transform([1], x -> 1) from @empty_stage_select_error
+----
+
 statement ok
 drop stage empty_stage_select_error;

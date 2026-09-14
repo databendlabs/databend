@@ -26,12 +26,15 @@ use super::FunctionSignature;
 use super::ScalarFunction;
 use super::ScalarFunctionDomain;
 use super::function_factory::PassthroughNullableDomain;
+use super::register_vectorize::PartialEvalPolicy;
 use super::register_vectorize::VectorizedFn1;
 use super::register_vectorize::VectorizedFn2;
 use super::register_vectorize::passthrough_nullable_1_arg;
 use super::register_vectorize::passthrough_nullable_2_arg;
 use super::register_vectorize::vectorize_1_arg;
+use super::register_vectorize::vectorize_1_arg_with_policy;
 use super::register_vectorize::vectorize_2_arg;
+use super::register_vectorize::vectorize_2_arg_with_policy;
 use super::register_vectorize::vectorize_with_builder_1_arg;
 use crate::EvalContext;
 use crate::FunctionContext;
@@ -456,7 +459,6 @@ pub struct TypedUnaryFunctionBuilder<I: AccessType, O: AccessType, B: ScalarFunc
     calc_domain: Option<fn(&FunctionContext, &I::Domain) -> FunctionDomain<O>>,
     derive_stat: Option<DeriveStat>,
     passthrough_nullable: bool,
-    is_heavy: bool,
     _marker: PhantomData<fn(I) -> O>,
 }
 
@@ -475,7 +477,6 @@ impl<I: AccessType, O: ReturnType, B: ScalarFunctionCollect> TypedUnaryFunctionB
             calc_domain: None,
             derive_stat: None,
             passthrough_nullable: false,
-            is_heavy: false,
             _marker: PhantomData,
         }
     }
@@ -523,6 +524,12 @@ impl<I: AccessType, O: ReturnType, B: ScalarFunctionCollect> TypedUnaryFunctionB
         self.finish_with(vectorize_1_arg(func))
     }
 
+    pub fn each_row_with_policy<F>(self, policy: PartialEvalPolicy, func: F) -> B
+    where F: Fn(I::ScalarRef<'_>, &mut EvalContext) -> O::Scalar + Send + Sync + Copy + 'static
+    {
+        self.finish_with(vectorize_1_arg_with_policy(policy, func))
+    }
+
     pub fn each_row_throw<F, E>(self, func: F) -> B
     where
         E: fmt::Display + 'static,
@@ -543,12 +550,8 @@ impl<I: AccessType, O: ReturnType, B: ScalarFunctionCollect> TypedUnaryFunctionB
         ))
     }
 
-    pub fn each_row_heavy(
-        mut self,
-        func: fn(I::ScalarRef<'_>, &mut EvalContext) -> O::Scalar,
-    ) -> B {
-        self.is_heavy = true;
-        self.finish_with(vectorize_1_arg(func))
+    pub fn each_row_heavy(self, func: fn(I::ScalarRef<'_>, &mut EvalContext) -> O::Scalar) -> B {
+        self.each_row_with_policy(PartialEvalPolicy::SkipInactiveRows, func)
     }
 
     fn finish_with<F>(self, func: F) -> B
@@ -713,7 +716,6 @@ pub struct TypedBinaryFunctionBuilder<
     calc_domain: Option<fn(&FunctionContext, &I1::Domain, &I2::Domain) -> FunctionDomain<O>>,
     derive_stat: Option<DeriveStat>,
     passthrough_nullable: bool,
-    is_heavy: bool,
     _marker: PhantomData<fn(I1, I2) -> O>,
 }
 
@@ -732,7 +734,6 @@ where
             calc_domain: None,
             derive_stat: None,
             passthrough_nullable: false,
-            is_heavy: false,
             _marker: PhantomData,
         }
     }
@@ -781,12 +782,20 @@ where
         self.finish_with(vectorize_2_arg(func))
     }
 
+    pub fn each_row_with_policy<F>(self, policy: PartialEvalPolicy, func: F) -> B
+    where F: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
+            + Send
+            + Sync
+            + Copy
+            + 'static {
+        self.finish_with(vectorize_2_arg_with_policy(policy, func))
+    }
+
     pub fn each_row_heavy(
-        mut self,
+        self,
         func: fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar,
     ) -> B {
-        self.is_heavy = true;
-        self.finish_with(vectorize_2_arg(func))
+        self.each_row_with_policy(PartialEvalPolicy::SkipInactiveRows, func)
     }
 
     fn finish_with<F>(self, func: F) -> B

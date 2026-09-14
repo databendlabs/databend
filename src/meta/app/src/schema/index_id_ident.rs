@@ -25,10 +25,7 @@ pub use kvapi_impl::IndexIdResource;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::IndexMeta;
-    use crate::schema::index_id_ident::IndexIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct IndexIdResource;
@@ -37,10 +34,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "IndexIdIdent";
         const HAS_TENANT: bool = false;
         type ValueType = IndexMeta;
-    }
-
-    impl kvapi::Value for IndexMeta {
-        type KeyType = IndexIdIdent;
     }
 }
 

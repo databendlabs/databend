@@ -1,0 +1,911 @@
+statement ok
+DROP DATABASE IF EXISTS test_virtual_column
+
+statement ok
+CREATE DATABASE test_virtual_column
+
+statement ok
+USE test_virtual_column
+
+statement ok
+set enable_experimental_virtual_column = 1;
+
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1(id int, val json) storage_format = 'parquet'
+
+statement ok
+insert into t1 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
+
+query TTTTT
+show virtual columns from t1
+----
+
+# This EE fixture does not expose a creatable virtual-column name matching
+# a'b%; keep this empty result as rewrite escaping coverage.
+query TTTTT
+show virtual columns from t1 like 'a''b%'
+----
+
+statement ok
+insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
+
+query ITIT
+select id, val['a'], val['b'], val['c'] from t1 order by id
+----
+1 11 1 "test"
+2 22 2 "data"
+3 NULL NULL NULL
+4 44 4 "value"
+5 55 5 "bend"
+6 NULL NULL NULL
+
+query ITITT
+select id, val['a'], val['b'], val['c'], val from t1 order by id
+----
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+2 22 2 "data" {"a":22,"b":2,"c":"data"}
+3 NULL NULL NULL 3
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+5 55 5 "bend" {"a":55,"b":5,"c":"bend"}
+6 NULL NULL NULL 6
+
+query ITITT
+select id, val['a'], val['b'], val['c'], val['d'] from t1 order by id
+----
+1 11 1 "test" NULL
+2 22 2 "data" NULL
+3 NULL NULL NULL NULL
+4 44 4 "value" NULL
+5 55 5 "bend" NULL
+6 NULL NULL NULL NULL
+
+query ITIT
+select id, val['a'], val['b'], val['c'] from t1 where val=3 or val=6 order by id
+----
+3 NULL NULL NULL
+6 NULL NULL NULL
+
+query ITTT
+select id, val['a'], val['b'], val from t1 where val=3 or val=6 order by id
+----
+3 NULL NULL 3
+6 NULL NULL 6
+
+query ITIT
+select id, val['a'], val['b'], val['c'] from t1 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1 "test"
+4 44 4 "value"
+
+query ITITT
+select id, val['a'], val['b'], val['c'], val from t1 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+
+query IT
+select max(id), val:a from t1 group by val:a order by val:a
+----
+1 11
+2 22
+4 44
+5 55
+6 NULL
+
+query ITIT
+select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t1)t11 join (select id, val:a as a from t1)t12 on t11.a = t12.a order by t11.a
+----
+1 11 1 11
+2 22 2 22
+4 44 4 44
+5 55 5 55
+
+query ITITI
+SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.val, r.val as nval FROM t1 AS r) AS r order by id
+----
+1 11 1 11 1
+2 22 2 22 2
+3 NULL NULL NULL NULL
+4 44 4 44 4
+5 55 5 55 5
+6 NULL NULL NULL NULL
+
+statement error 1115
+REFRESH VIRTUAL COLUMN FOR t1;
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t2(id int, val json) storage_format = 'parquet' enable_virtual_column = true
+
+statement ok
+insert into t2 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'),(3, '3')
+
+statement ok
+refresh virtual column on t2
+
+query TTTTT
+show virtual columns from t2
+----
+test_virtual_column t2 val a UInt64
+test_virtual_column t2 val b UInt64
+test_virtual_column t2 val c String
+
+query II
+select row_count, virtual_column_size from fuse_block('test_virtual_column', 't2')
+----
+3 817
+
+query III
+select block_count, row_count, virtual_column_size from fuse_segment('test_virtual_column', 't2');
+----
+1 3 817
+
+query III
+select block_count, row_count, virtual_column_size from fuse_snapshot('test_virtual_column', 't2');
+----
+1 3 817
+1 3 NULL
+
+query IIT
+select virtual_column_size, virtual_column_count, virtual_schema from fuse_virtual_column_segment_schema('test_virtual_column', 't2')
+----
+817 1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.b"},{"column_id":2,"path":"val.c"}]
+
+query IIBT
+select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 't2')
+----
+817 3 1 [{"column_id":0,"column_stat":{"in_memory_size":25,"max":22,"min":11,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":4,"path":"val.a"},{"column_id":1,"column_stat":{"in_memory_size":25,"max":2,"min":1,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":44,"path":"val.b"},{"column_id":2,"column_stat":{"in_memory_size":49,"max":"test","min":"data","null_count":1},"data_type":"String","len":40,"num_values":3,"offset":84,"path":"val.c"}]
+
+query IIIIII
+select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
+----
+1 3 134 697 1233 1
+
+statement ok
+insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
+
+statement ok
+refresh virtual column on t2
+
+query ITIT
+select id, val['a'], val['b'], val['c'] from t2 order by id
+----
+1 11 1 "test"
+2 22 2 "data"
+3 NULL NULL NULL
+4 44 4 "value"
+5 55 5 "bend"
+6 NULL NULL NULL
+
+query ITITT
+select id, val['a'], val['b'], val['c'], val from t2 order by id
+----
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+2 22 2 "data" {"a":22,"b":2,"c":"data"}
+3 NULL NULL NULL 3
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+5 55 5 "bend" {"a":55,"b":5,"c":"bend"}
+6 NULL NULL NULL 6
+
+query ITITT
+select id, val['a'], val['b'], val['c'], val['d'] from t2 order by id
+----
+1 11 1 "test" NULL
+2 22 2 "data" NULL
+3 NULL NULL NULL NULL
+4 44 4 "value" NULL
+5 55 5 "bend" NULL
+6 NULL NULL NULL NULL
+
+query ITIT
+select id, val['a'], val['b'], val['c'] from t2 where val=3 or val=6 order by id
+----
+3 NULL NULL NULL
+6 NULL NULL NULL
+
+query ITTT
+select id, val['a'], val['b'], val from t2 where val=3 or val=6 order by id
+----
+3 NULL NULL 3
+6 NULL NULL 6
+
+query ITIT
+select id, val['a'], val['b'], val['c'] from t2 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1 "test"
+4 44 4 "value"
+
+query ITITT
+select id, val['a'], val['b'], val['c'], val from t2 where val['a']=11 or val['a']=44 order by id
+----
+1 11 1 "test" {"a":11,"b":1,"c":"test"}
+4 44 4 "value" {"a":44,"b":4,"c":"value"}
+
+query IT
+select max(id), val:a from t2 group by val:a order by val:a
+----
+1 11
+2 22
+4 44
+5 55
+6 NULL
+
+query ITIT
+select t21.id, t21.a, t22.id, t22.a from(select id, val:a as a from t2)t21 join (select id, val:a as a from t2)t22 on t21.a = t22.a order by t21.a
+----
+1 11 1 11
+2 22 2 22
+4 44 4 44
+5 55 5 55
+
+query ITITI
+SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.val, r.val as nval FROM t2 AS r) AS r order by id
+----
+1 11 1 11 1
+2 22 2 22 2
+3 NULL NULL NULL NULL
+4 44 4 44 4
+5 55 5 55 5
+6 NULL NULL NULL NULL
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t2;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t2;
+----
+0
+
+query TTTTT
+show virtual columns from t2
+----
+test_virtual_column t2 val a UInt64
+test_virtual_column t2 val b UInt64
+test_virtual_column t2 val c String
+
+statement ok
+create or replace table tweets (id int, data json) storage_format = 'parquet' enable_virtual_column = true;
+
+statement ok
+INSERT INTO tweets (id, data) VALUES
+(1, '{"id":1, "create": "3/06", "text": "a", "user": {"id": 1}}'),
+(2, '{"id":2, "create": "3/07", "text": "b", "user": {"id": 3}}'),
+(3, '{"id":3, "create": "6/07", "text": "c", "user": {"id": 5}}'),
+(4, '{"id":4, "create": "1/08", "text": "a", "user": {"id": 1}, "replies": 9}'),
+(5, '{"id":5, "create": "1/10", "text": "b", "user": {"id": 7}, "replies": 3, "geo": {"lat": 1.9}}'),
+(6, '{"id":6, "create": "1/11", "text": "c", "user": {"id": 1}, "replies": 2, "geo": null}'),
+(7, '{"id":7, "create": "1/12", "text": "d", "user": {"id": 3}, "replies": 0, "geo": {"lat": 2.7}}'),
+(8, '{"id":8, "create": "1/13", "text": "x", "user": {"id": 3}, "replies": 1, "geo": {"lat": 3.5}}');
+
+statement ok
+refresh virtual column on tweets
+
+query TTTTT
+show virtual columns where table='tweets';
+----
+test_virtual_column tweets data create String
+test_virtual_column tweets data geo Variant
+test_virtual_column tweets data geo.lat Decimal(18, 1)
+test_virtual_column tweets data id UInt64
+test_virtual_column tweets data replies UInt64
+test_virtual_column tweets data text String
+test_virtual_column tweets data user.id UInt64
+
+query IITTIITF
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL
+4 4 "1/08" "a" 1 9 NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9
+6 6 "1/11" "c" 1 2 null NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5
+
+statement ok
+INSERT INTO tweets (id, data) VALUES
+(9, '{"id":9, "create": "2/14", "text": "y", "user": {"id": 5}, "replies": 5, "geo": {"lat": 4.2}, "likes": 25, "tags": ["good", "popular"]}'),
+(10, '{"id":10, "create": "2/15", "text": "z", "user": {"id": 7}, "replies": 7, "geo": {"lat": 5.0}, "likes": 10, "tags": ["new", "interesting"]}');
+
+statement ok
+refresh virtual column on tweets
+
+query TTTTT
+show virtual columns where table='tweets';
+----
+test_virtual_column tweets data create String
+test_virtual_column tweets data geo Variant
+test_virtual_column tweets data geo.lat Decimal(18, 1)
+test_virtual_column tweets data id UInt64
+test_virtual_column tweets data likes UInt64
+test_virtual_column tweets data replies UInt64
+test_virtual_column tweets data tags Variant
+test_virtual_column tweets data text String
+test_virtual_column tweets data user.id UInt64
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "a" 1 9 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+query IIT
+select virtual_column_size, virtual_column_count, virtual_schema from fuse_virtual_column_segment_schema('test_virtual_column', 'tweets')
+----
+2138 1 [{"column_id":0,"path":"data.create"},{"column_id":1,"path":"data.geo.lat"},{"column_id":2,"path":"data.id"},{"column_id":3,"path":"data.likes"},{"column_id":4,"path":"data.replies"},{"column_id":5,"path":"data.tags"},{"column_id":6,"path":"data.text"},{"column_id":7,"path":"data.user.id"}]
+2012 1 [{"column_id":0,"path":"data.create"},{"column_id":1,"path":"data.geo"},{"column_id":2,"path":"data.geo.lat"},{"column_id":3,"path":"data.id"},{"column_id":4,"path":"data.replies"},{"column_id":5,"path":"data.text"},{"column_id":6,"path":"data.user.id"}]
+
+query IIBT
+select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 'tweets')
+----
+2138 2 1 [{"column_id":0,"column_stat":{"in_memory_size":33,"max":"2/15","min":"2/14","null_count":0},"data_type":"String","len":40,"num_values":2,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":{"in_memory_size":17,"max":5.0,"min":4.2,"null_count":0},"data_type":"Decimal(18, 1)","len":40,"num_values":2,"offset":44,"path":"data.geo.lat"},{"column_id":2,"column_stat":{"in_memory_size":17,"max":10,"min":9,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":84,"path":"data.id"},{"column_id":3,"column_stat":{"in_memory_size":17,"max":25,"min":10,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":124,"path":"data.likes"},{"column_id":4,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":164,"path":"data.replies"},{"column_id":5,"column_stat":null,"data_type":"Variant","len":104,"num_values":2,"offset":204,"path":"data.tags"},{"column_id":6,"column_stat":{"in_memory_size":33,"max":"z","min":"y","null_count":0},"data_type":"String","len":34,"num_values":2,"offset":308,"path":"data.text"},{"column_id":7,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":342,"path":"data.user.id"}]
+2012 8 1 [{"column_id":0,"column_stat":{"in_memory_size":129,"max":"6/07","min":"1/08","null_count":0},"data_type":"String","len":78,"num_values":8,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":null,"data_type":"Variant","len":61,"num_values":8,"offset":82,"path":"data.geo"},{"column_id":2,"column_stat":{"in_memory_size":65,"max":3.5,"min":1.9,"null_count":5},"data_type":"Decimal(18, 1)","len":48,"num_values":8,"offset":143,"path":"data.geo.lat"},{"column_id":3,"column_stat":{"in_memory_size":65,"max":8,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":191,"path":"data.id"},{"column_id":4,"column_stat":{"in_memory_size":65,"max":9,"min":0,"null_count":3},"data_type":"UInt64","len":55,"num_values":8,"offset":254,"path":"data.replies"},{"column_id":5,"column_stat":{"in_memory_size":129,"max":"x","min":"a","null_count":0},"data_type":"String","len":60,"num_values":8,"offset":309,"path":"data.text"},{"column_id":6,"column_stat":{"in_memory_size":65,"max":7,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":369,"path":"data.user.id"}]
+
+statement ok
+UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
+
+statement ok
+refresh virtual column on tweets
+
+query IIBT
+select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 'tweets')
+----
+2138 2 1 [{"column_id":0,"column_stat":{"in_memory_size":33,"max":"2/15","min":"2/14","null_count":0},"data_type":"String","len":40,"num_values":2,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":{"in_memory_size":17,"max":5.0,"min":4.2,"null_count":0},"data_type":"Decimal(18, 1)","len":40,"num_values":2,"offset":44,"path":"data.geo.lat"},{"column_id":2,"column_stat":{"in_memory_size":17,"max":10,"min":9,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":84,"path":"data.id"},{"column_id":3,"column_stat":{"in_memory_size":17,"max":25,"min":10,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":124,"path":"data.likes"},{"column_id":4,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":164,"path":"data.replies"},{"column_id":5,"column_stat":null,"data_type":"Variant","len":104,"num_values":2,"offset":204,"path":"data.tags"},{"column_id":6,"column_stat":{"in_memory_size":33,"max":"z","min":"y","null_count":0},"data_type":"String","len":34,"num_values":2,"offset":308,"path":"data.text"},{"column_id":7,"column_stat":{"in_memory_size":17,"max":7,"min":5,"null_count":0},"data_type":"UInt64","len":40,"num_values":2,"offset":342,"path":"data.user.id"}]
+2018 8 1 [{"column_id":0,"column_stat":{"in_memory_size":129,"max":"6/07","min":"1/08","null_count":0},"data_type":"String","len":78,"num_values":8,"offset":4,"path":"data.create"},{"column_id":1,"column_stat":null,"data_type":"Variant","len":61,"num_values":8,"offset":82,"path":"data.geo"},{"column_id":2,"column_stat":{"in_memory_size":65,"max":3.5,"min":1.9,"null_count":5},"data_type":"Decimal(18, 1)","len":48,"num_values":8,"offset":143,"path":"data.geo.lat"},{"column_id":3,"column_stat":{"in_memory_size":65,"max":8,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":191,"path":"data.id"},{"column_id":4,"column_stat":{"in_memory_size":65,"max":10,"min":0,"null_count":3},"data_type":"UInt64","len":55,"num_values":8,"offset":254,"path":"data.replies"},{"column_id":5,"column_stat":{"in_memory_size":129,"max":"x","min":"a","null_count":0},"data_type":"String","len":65,"num_values":8,"offset":309,"path":"data.text"},{"column_id":6,"column_stat":{"in_memory_size":65,"max":7,"min":1,"null_count":0},"data_type":"UInt64","len":63,"num_values":8,"offset":374,"path":"data.user.id"}]
+
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+UPDATE tweets SET data = '{"id":1, "create": "3/06", "text": "a", "user": {"id": 1}, "likes": 100}' WHERE id = 1;
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+8 8 "1/13" "x" 3 1 {"lat":3.5} 3.5 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+DELETE FROM tweets WHERE id = 8;
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+
+statement ok
+INSERT INTO tweets (id, data) VALUES
+(11, '{"id":11, "create": "3/16", "text": "w", "user": {"id": 9}, "replies": 2, "geo": {"lat": 1.5}}'),
+(12, '{"id":12, "create": "3/17", "text": "v", "user": {"id": 11}, "replies": 4, "geo": {"lat": 2.0}}');
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/17" "v" 11 4 {"lat":2.0} 2.0 NULL NULL
+
+statement ok
+MERGE INTO tweets AS target
+USING (SELECT 13 AS id, parse_json('{"id":13, "create": "4/18", "text": "u", "user": {"id": 13}, "replies": 6, "geo": {"lat": 3.0}}') AS data) AS source
+ON target.id = source.id
+WHEN MATCHED THEN
+  UPDATE SET target.data = source.data
+WHEN NOT MATCHED THEN
+  INSERT (id, data) VALUES (source.id, source.data);
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/17" "v" 11 4 {"lat":2.0} 2.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+
+statement ok
+MERGE INTO tweets AS target
+USING (SELECT 12 AS id, parse_json('{"id":12, "create": "3/19", "text": "vv", "user": {"id": 16}, "replies": 10, "geo": {"lat": 4.0}}') AS data) AS source
+ON target.id = source.id
+WHEN MATCHED THEN
+  UPDATE SET target.data = source.data
+WHEN NOT MATCHED THEN
+  INSERT (id, data) VALUES (source.id, source.data);
+
+statement ok
+refresh virtual column on tweets
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+
+query I
+select sum(row_count) from fuse_virtual_column_block_meta('test_virtual_column', 'tweets') where virtual_column_metas is not null
+----
+12
+
+statement ok
+ALTER TABLE tweets SET OPTIONS(enable_virtual_column = false);
+
+statement ok
+INSERT INTO tweets FROM (SELECT * FROM tweets);
+
+query I
+select sum(row_count) from fuse_virtual_column_block_meta('test_virtual_column', 'tweets') where virtual_column_metas is not null
+----
+12
+
+statement ok
+ALTER TABLE tweets SET OPTIONS(enable_virtual_column = true);
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR tweets;
+
+# Compact tweets table, so that number of automatic detected virtual columns could be stablized
+statement ok
+optimize table test_virtual_column.tweets compact
+
+query I
+select sum(row_count) from fuse_virtual_column_block_meta('test_virtual_column', 'tweets') where virtual_column_metas is not null
+----
+24
+
+query IITTIITFIT
+select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
+----
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+1 1 "3/06" "a" 1 NULL NULL NULL 100 NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+2 2 "3/07" "b" 3 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+3 3 "6/07" "c" 5 NULL NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+4 4 "1/08" "aa" 1 10 NULL NULL NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+5 5 "1/10" "b" 7 3 {"lat":1.9} 1.9 NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+6 6 "1/11" "c" 1 2 null NULL NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+7 7 "1/12" "d" 3 0 {"lat":2.7} 2.7 NULL NULL
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+11 11 "3/16" "w" 9 2 {"lat":1.5} 1.5 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
+
+statement ok
+CREATE OR REPLACE TABLE STUDENT_GRADES (
+  SCHOOL_ID VARCHAR,
+  STUDENT_ID VARCHAR,
+  GRADE_CODE VARCHAR,
+  GRADE_DESCRIPTION VARCHAR,
+  HONOR_ROLL VARCHAR(1)
+);
+
+statement ok
+CREATE OR REPLACE TABLE SCHOOL (
+  SCHOOL_ID VARCHAR,
+  SCHOOL_CODE VARCHAR
+);
+
+statement ok
+CREATE OR REPLACE TABLE Student_Current (
+  id VARCHAR,
+  school_code VARCHAR,
+  update_date TIMESTAMP
+);
+
+statement ok
+CREATE OR REPLACE TABLE Academic_Record (
+  student_id VARCHAR,
+  school_code VARCHAR,
+  record_data VARIANT
+);
+
+statement ok
+INSERT INTO SCHOOL VALUES
+  ('S001', 'HIGH_SCHOOL'),
+  ('S002', 'MIDDLE_SCHOOL'),
+  ('S003', 'DISTRICT');
+
+statement ok
+INSERT INTO Student_Current VALUES
+  ('ST001', 'HIGH_SCHOOL', '2023-05-12T10:00:00.000000'),
+  ('ST002', 'MIDDLE_SCHOOL', '2023-05-12T11:00:00.000000'),
+  ('ST003', 'DISTRICT', '2023-05-12T12:00:00.000000');
+
+statement ok
+INSERT INTO Academic_Record VALUES
+  ('ST001', 'HIGH_SCHOOL', '{
+    "academic": {
+      "performance": {
+        "grade_code": "A",
+        "grade_desc": "Excellent",
+        "extra_credits": 2
+      }
+    },
+    "eligible_schools": ["HIGH_SCHOOL", "DISTRICT"]
+  }'),
+  ('ST002', 'MIDDLE_SCHOOL', '{
+    "academic": {
+      "performance": {
+        "grade_code": "B",
+        "grade_desc": "Good",
+        "extra_credits": 1
+      }
+    },
+    "eligible_schools": ["MIDDLE_SCHOOL"]
+  }'),
+  ('ST003', 'DISTRICT', '{
+    "academic": {
+      "performance": {
+        "grade_code": "C",
+        "grade_desc": "Average",
+        "extra_credits": 0
+      }
+    },
+    "eligible_schools": ["HIGH_SCHOOL", "ELEMENTARY"]
+  }');
+
+query ??
+MERGE INTO STUDENT_GRADES tgt USING
+(
+  SELECT *
+  FROM
+  (
+    SELECT
+        s.school_id,
+        sc.id AS student_id,
+        ar.record_data:academic.performance.grade_code AS grade_code,
+        ar.record_data:academic.performance.grade_desc AS grade_description,
+        CASE WHEN ar.record_data:academic.performance.extra_credits::INT > 0 THEN 'Y'
+            ELSE 'N' END AS honor_roll,
+        ROW_NUMBER() OVER (PARTITION BY s.school_id, sc.id ORDER BY NULL) row_number
+    FROM Student_Current sc
+    JOIN Academic_Record ar ON sc.id = ar.student_id
+    JOIN SCHOOL s ON s.SCHOOL_CODE = sc.school_code OR
+                    (ar.school_code = 'DISTRICT' AND s.school_code IN (ar.record_data:eligible_schools))
+    WHERE sc.update_date >= '2023-05-01T00:00:00.000000'
+  )
+  WHERE row_number = 1
+) src ON src.school_id = tgt.school_id
+    AND src.student_id = tgt.student_id
+WHEN MATCHED THEN
+UPDATE SET
+  tgt.GRADE_CODE = src.GRADE_CODE,
+  tgt.GRADE_DESCRIPTION = src.GRADE_DESCRIPTION,
+  tgt.HONOR_ROLL = src.HONOR_ROLL
+WHEN NOT MATCHED THEN
+INSERT (
+  SCHOOL_ID,
+  STUDENT_ID,
+  GRADE_CODE,
+  GRADE_DESCRIPTION,
+  HONOR_ROLL
+) VALUES (
+  src.SCHOOL_ID,
+  src.STUDENT_ID,
+  src.GRADE_CODE,
+  src.GRADE_DESCRIPTION,
+  src.HONOR_ROLL
+);
+----
+3 0
+
+query TTTTT
+SELECT * FROM STUDENT_GRADES ORDER BY school_id;
+----
+S001 ST001 A Excellent Y
+S002 ST002 B Good Y
+S003 ST003 C Average N
+
+statement ok
+CREATE OR REPLACE TABLE test_stream (
+    id INT,
+    data1 VARIANT,
+    data2 VARIANT
+) storage_format = 'parquet' enable_virtual_column = true;
+
+statement ok
+INSERT INTO test_stream (id, data1, data2) VALUES 
+(1, '{"name": "John", "age": 25, "address": {"city": "New York", "district": "Manhattan"}}', '{"scores": [85, 90, 78], "hobbies": ["reading", "swimming"]}'),
+(2, '{"name": "Alice", "age": 30, "address": {"city": "San Francisco", "district": "Mission"}}', '{"scores": [92, 88, 95], "hobbies": ["basketball", "music"]}'),
+(3, '{"name": "Bob", "age": 28, "address": {"city": "Chicago", "district": "Loop"}}', '{"scores": [76, 82, 90], "hobbies": ["travel", "photography"]}'),
+(4, '{"name": "Emma", "age": 22, "address": {"city": "New York", "district": "Brooklyn"}}', '{"scores": [88, 91, 85], "hobbies": ["coding", "movies"]}'),
+(5, '{"name": "Michael", "age": 35, "address": {"city": "Seattle", "district": "Downtown"}}', '{"scores": [95, 93, 97], "hobbies": ["golf", "cooking"]}'),
+(6, '{"name": "Sarah", "age": 27, "address": {"city": "Boston", "district": "Back Bay"}}', '{"scores": [82, 85, 80], "hobbies": ["fishing", "painting"]}'),
+(7, '{"name": "David", "age": 31, "address": {"city": "New York", "district": "Queens"}}', '{"scores": [79, 88, 92], "hobbies": ["soccer", "chess"]}'),
+(8, '{"name": "Jennifer", "age": 29, "address": {"city": "San Francisco", "district": "Marina"}}', '{"scores": [86, 89, 84], "hobbies": ["yoga", "dancing"]}'),
+(9, '{"name": "Richard", "age": 33, "address": {"city": "Austin", "district": "Downtown"}}', '{"scores": [91, 87, 93], "hobbies": ["hiking", "cycling"]}'),
+(10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago", "district": "River North"}}', '{"scores": [83, 81, 89], "hobbies": ["gaming", "reading"]}');
+
+statement ok
+refresh virtual column on test_stream
+
+query TTTTT
+show virtual columns from test_stream;
+----
+test_virtual_column test_stream data1 address.city String
+test_virtual_column test_stream data1 address.district String
+test_virtual_column test_stream data1 age UInt64
+test_virtual_column test_stream data1 name String
+test_virtual_column test_stream data2 hobbies Variant
+test_virtual_column test_stream data2 scores Variant
+
+query ITTTTT
+SELECT 
+    id,
+    data1:name AS name,
+    data1:age AS age,
+    data1:address:city AS city,
+    data2:hobbies[0] AS first_hobby,
+    data2:hobbies[1] AS second_hobby
+FROM test_stream;
+----
+1 "John" 25 "New York" "reading" "swimming"
+2 "Alice" 30 "San Francisco" "basketball" "music"
+3 "Bob" 28 "Chicago" "travel" "photography"
+4 "Emma" 22 "New York" "coding" "movies"
+5 "Michael" 35 "Seattle" "golf" "cooking"
+6 "Sarah" 27 "Boston" "fishing" "painting"
+7 "David" 31 "New York" "soccer" "chess"
+8 "Jennifer" 29 "San Francisco" "yoga" "dancing"
+9 "Richard" 33 "Austin" "hiking" "cycling"
+10 "Lisa" 26 "Chicago" "gaming" "reading"
+
+statement ok
+CREATE OR REPLACE TABLE test2 (
+    id INT,
+    data1 VARIANT,
+    data2 VARIANT
+) storage_format = 'parquet' enable_virtual_column = true;
+
+statement ok
+INSERT INTO test2 (id, data1, data2) VALUES 
+(1, '{"name": "John", "address": {"city": "New York", "district": "Manhattan"}}', '{"product_id": 101}'),
+(2, '{"name": "Alice", "address": {"city": "San Francisco", "district": "Mission"}}', '{"product_id": 102, "price": 10.2}'),
+(3, '{"name": "Bob", "age": 28, "address": {"city": "Chicago", "district": "Loop"}}', '{"product_id": 103, "price": 10.3}'),
+(4, '{"name": "Emma", "age": 22, "address": {"district": "Brooklyn"}}', '{"product_id": 104, "price": 10.4}'),
+(5, '{"name": "Michael", "age": 35, "address": {"city": "Seattle", "district": "Downtown"}}', '{"price": "10.5"}'),
+(6, '{"age": 27, "address": {"city": "Boston", "district": "Back Bay"}}', '{"product_id": 106}'),
+(7, '{"name": "David", "age": 31, "address": {"district": "Queens"}}', '{"product_id": 107, "price": "10.7"}'),
+(8, '{"name": "Jennifer", "age": 29, "address": {"city": "San Francisco", "district": "Marina"}}', '{"product_id": 108, "price": "10.8"}'),
+(9, '{"name": "Richard", "age": 33, "address": {"city": "Austin"}}', '{"product_id": "109", "price": "10.9"}'),
+(10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago"}}', '{"price": "10.10"}');
+
+statement ok
+refresh virtual column on test2
+
+query TTTTT
+show virtual columns from test2;
+----
+test_virtual_column test2 data1 address.city String
+test_virtual_column test2 data1 address.district String
+test_virtual_column test2 data1 age UInt64
+test_virtual_column test2 data1 name String
+test_virtual_column test2 data2 price Variant
+test_virtual_column test2 data2 product_id Variant
+
+query ???????
+SELECT 
+    id,
+    data1:name AS name,
+    data1:age AS age,
+    data1:address:city AS city,
+    data1:address:district AS district,
+    data2:product_id AS product_id,
+    data2:price AS price
+FROM test2;
+----
+1 "John" NULL "New York" "Manhattan" 101 NULL
+2 "Alice" NULL "San Francisco" "Mission" 102 10.2
+3 "Bob" 28 "Chicago" "Loop" 103 10.3
+4 "Emma" 22 NULL "Brooklyn" 104 10.4
+5 "Michael" 35 "Seattle" "Downtown" NULL "10.5"
+6 NULL 27 "Boston" "Back Bay" 106 NULL
+7 "David" 31 NULL "Queens" 107 "10.7"
+8 "Jennifer" 29 "San Francisco" "Marina" 108 "10.8"
+9 "Richard" 33 "Austin" NULL "109" "10.9"
+10 "Lisa" 26 "Chicago" NULL NULL "10.10"
+
+# A prewhere predicate on a regular column may keep no rows of a block that
+# still survives min/max pruning. Reading the materialized virtual columns of
+# such a block must yield zero rows instead of failing. Each insert below
+# forms its own segment with a different virtual schema (paths, physical
+# types, missing paths), so the empty-selection path is exercised against
+# every schema shape with several projections.
+statement ok
+drop table if exists t_empty_prewhere
+
+statement ok
+create table t_empty_prewhere(id int, val json) storage_format = 'parquet' enable_virtual_column = true
+
+# segment 1: a is UInt64, b is String
+statement ok
+insert into t_empty_prewhere values (1, '{"a":1,"b":"x"}'), (3, '{"a":3,"b":"z"}')
+
+# segment 2: a is String, plus Boolean c and nested d.e
+statement ok
+insert into t_empty_prewhere values (11, '{"a":"s1","c":true,"d":{"e":1}}'), (13, '{"a":"s3","c":false,"d":{"e":3}}')
+
+# segment 3: a is missing, f stays Variant
+statement ok
+insert into t_empty_prewhere values (21, '{"d":{"e":21},"f":[1,2]}'), (23, '{"d":{"e":23},"b":"w"}')
+
+statement ok
+refresh virtual column on t_empty_prewhere
+
+# segment 4: materialized by a second refresh, only a
+statement ok
+insert into t_empty_prewhere values (31, '{"a":31}'), (33, '{"a":33}')
+
+statement ok
+refresh virtual column on t_empty_prewhere
+
+query IT
+select virtual_column_count, virtual_schema from fuse_virtual_column_segment_schema('test_virtual_column', 't_empty_prewhere') order by virtual_schema
+----
+1 [{"column_id":0,"path":"val.a"}]
+1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.b"}]
+1 [{"column_id":0,"path":"val.a"},{"column_id":1,"path":"val.c"},{"column_id":2,"path":"val.d.e"}]
+1 [{"column_id":0,"path":"val.b"},{"column_id":1,"path":"val.d.e"},{"column_id":2,"path":"val.f"}]
+
+query TTTTT
+show virtual columns from t_empty_prewhere
+----
+test_virtual_column t_empty_prewhere val a UInt64, String
+test_virtual_column t_empty_prewhere val b String
+test_virtual_column t_empty_prewhere val c Boolean
+test_virtual_column t_empty_prewhere val d.e UInt64
+test_virtual_column t_empty_prewhere val f Variant
+
+# `id % 2 = 0` cannot prune any block by statistics, yet matches no row, so
+# every block reaches the reader with an empty row selection.
+query T
+select val['a'] from t_empty_prewhere where id % 2 = 0
+----
+
+query TT
+select val['b'], val['c'] from t_empty_prewhere where id % 2 = 0
+----
+
+query TT
+select val['d']['e'], val['f'][0] from t_empty_prewhere where id % 2 = 0
+----
+
+query ITT
+select id, val, val['a'] from t_empty_prewhere where id % 2 = 0
+----
+
+query TI
+select val['a']::string, val['d']['e']::int from t_empty_prewhere where id % 2 = 0
+----
+
+query ITT
+select count(), max(val['a']), min(val['d']['e']) from t_empty_prewhere where id % 2 = 0
+----
+0 NULL NULL
+
+query I
+select count() from t_empty_prewhere where id % 2 = 0 and val['a'] = 2
+----
+0
+
+# Range predicates that only keep a single block, then reject all of its rows.
+query T
+select val['a'] from t_empty_prewhere where id > 1 and id < 3
+----
+
+query TT
+select val['a'], val['c'] from t_empty_prewhere where id > 11 and id < 13
+----
+
+query TT
+select val['a'], val['d']['e'] from t_empty_prewhere where id > 21 and id < 23
+----
+
+query TT
+select val['a'], val['b'] from t_empty_prewhere where id > 31 and id < 33
+----
+
+# Blocks with zero selected rows mixed with blocks that keep some rows.
+query ITT
+select id, val['a'], val['d']['e'] from t_empty_prewhere where id >= 3 and id < 13 and id != 11 order by id
+----
+3 3 NULL
+
+query ITTT
+select id, val['a'], val['b'], val['d']['e'] from t_empty_prewhere where id >= 3 and id < 33 and id % 10 != 1 order by id
+----
+3 3 "z" NULL
+13 "s3" NULL 3
+23 NULL "w" 23
+
+query I
+select id from t_empty_prewhere where id % 2 = 1 and val['d']['e'] > 20 order by id
+----
+21
+23
+
+statement ok
+drop table t_empty_prewhere
+
+statement ok
+set enable_experimental_virtual_column = 0;
+
+statement ok
+DROP DATABASE test_virtual_column

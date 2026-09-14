@@ -5,6 +5,34 @@ status: ok
 scalar: get([10, 20, 30], 1)
 type: UInt8 NULL
 
+=== array_expression_index_access_binds ===
+description: Non-literal array indices should bind through get with normal type checking.
+sql: array('a', 'b', 'c')[delta % 2]
+status: ok
+scalar: get(['a', 'b', 'c'], modulo(delta (#3), 2))
+type: String NULL
+
+=== array_dynamic_index_before_literal_path_binds ===
+description: Literal access after a dynamic index should preserve the remaining path.
+sql: [[10, 20], [30, 40]][delta][2]
+status: ok
+scalar: get(get([[10, 20], [30, 40]], delta (#3)), 2)
+type: UInt8 NULL
+
+=== array_dynamic_index_after_literal_path_binds ===
+description: A dynamic index should preserve preceding literal access.
+sql: [[10, 20], [30, 40]][1][delta]
+status: ok
+scalar: get([10, 20], delta (#3))
+type: UInt8 NULL
+
+=== map_expression_key_access_binds ===
+description: Computed map keys should use the existing get function.
+sql: {'k1': 1, 'k2': delta}[concat('k', '1')]
+status: ok
+scalar: get(map(['k1', 'k2'], array(1, delta (#3))), 'k1')
+type: Int32 NULL
+
 === map_key_access_binds ===
 description: Map key access should preserve the existing get-function rewrite.
 sql: {'k1': 1, 'k2': delta}['k1']

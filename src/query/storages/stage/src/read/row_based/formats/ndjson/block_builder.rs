@@ -59,22 +59,29 @@ impl NdJsonDecoder {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         null_if: &[&str],
-        file_full_path: &str,
+        file_path: &str,
     ) -> std::result::Result<(), FileParseError> {
         // Use from_slice instead of from_reader: from_reader wraps the slice
         // in an IoRead adapter that reads byte-by-byte and disables serde_json's
         // slice fast path. Benchmarks on ~890 MiB of real NDJSON show a 2.5x
         // speedup from this change alone.
         let json: serde_json::Value =
-            serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_full_path))?;
+            serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_path))?;
         // todo: this is temporary
         if self.field_decoder.is_select {
-            self.field_decoder
-                .read_field(&mut columns[0], &json)
-                .map_err(|e| FileParseError::InvalidRow {
+            if let ColumnBuilder::Variant(column) = &mut columns[0] {
+                let value = jsonb::Value::from(&json);
+                value.write_to_vec(&mut column.data);
+                column.commit_row();
+            } else {
+                return Err(FileParseError::InvalidRow {
                     format: "NDJSON".to_string(),
-                    message: e.to_string(),
-                })?;
+                    message: format!(
+                        "Invalid NDJSON select schema: expect Variant column, but got {}",
+                        columns[0].data_type()
+                    ),
+                });
+            }
         } else {
             let object_keys = json.as_object().map(|object| object.len()).unwrap_or(0);
             let object_values =
@@ -103,20 +110,34 @@ impl NdJsonDecoder {
                 match value {
                     None => match self.fmt.params.missing_field_as {
                         NullAs::Error => {
+                            let advice = self.build_column_missing_advice(
+                                field.name(),
+                                &json,
+                                "MISSING_FIELD_AS=ERROR",
+                                None,
+                            );
                             return Err(FileParseError::ColumnMissingError {
                                 column_index,
                                 column_name: field.name().to_owned(),
                                 column_type: field.data_type.to_string(),
+                                advice,
                             });
                         }
                         NullAs::Null => {
                             if field.is_nullable_or_null() {
                                 column.push_default();
                             } else {
+                                let advice = self.build_column_missing_advice(
+                                    field.name(),
+                                    &json,
+                                    "MISSING_FIELD_AS=NULL",
+                                    Some("the column is not nullable"),
+                                );
                                 return Err(FileParseError::ColumnMissingError {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
+                                    advice,
                                 });
                             }
                         }
@@ -151,15 +172,15 @@ impl NdJsonDecoder {
                         {
                             column.push_default();
                         } else {
-                            self.field_decoder.read_field(column, value).map_err(|e| {
-                                FileParseError::ColumnDecodeError {
+                            self.field_decoder
+                                .read_field_with_data_type(column, value, field.data_type())
+                                .map_err(|e| FileParseError::ColumnDecodeError {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     decode_error: e.to_string(),
                                     column_data: truncate_column_data(value.to_string()),
-                                }
-                            })?;
+                                })?;
                         }
                     }
                 }
@@ -176,7 +197,7 @@ impl NdJsonDecoder {
                         format: "NDJSON".to_string(),
                         message: format!(
                             "schema evolution sample did not include all columns for File '{}'. Extra columns: {}. Please adjust SCHEMA_EVOLUTION sample options such as SAMPLE_FILES, SAMPLE_RECORDS_PER_FILE, or SAMPLE_TOTAL_RECORDS",
-                            file_full_path,
+                            file_path,
                             extra_columns.join(", "),
                         ),
                     });
@@ -184,6 +205,54 @@ impl NdJsonDecoder {
             }
         }
         Ok(())
+    }
+
+    fn build_column_missing_advice(
+        &self,
+        column_name: &str,
+        json: &serde_json::Value,
+        current_setting: &str,
+        extra_reason: Option<&str>,
+    ) -> String {
+        let mut hints = Vec::new();
+
+        // Hint 1: current MISSING_FIELD_AS setting
+        hints.push(format!("current FILE_FORMAT option: {current_setting}"));
+
+        // Hint 2: if there's an extra reason (e.g., column not nullable)
+        if let Some(reason) = extra_reason {
+            hints.push(reason.to_string());
+        }
+
+        // Hint 3: if case_sensitive, try case-insensitive match
+        if self.field_decoder.ident_case_sensitive {
+            if let Some(object) = json.as_object() {
+                let lower_column = column_name.to_lowercase();
+                let matched_key = object.keys().find(|k| k.to_lowercase() == lower_column);
+                if let Some(key) = matched_key {
+                    hints.push(format!(
+                        "found field '{}' with different case; consider using COPY with `COLUMN_MATCH_MODE=CASE_INSENSITIVE`",
+                        key
+                    ));
+                }
+            }
+        }
+
+        // Hint 4: if target table has a single Variant column, suggest select $1
+        let fields = self.load_context.schema.fields();
+        if fields.len() == 1
+            && matches!(
+                fields[0].data_type.remove_nullable(),
+                databend_common_expression::TableDataType::Variant
+            )
+        {
+            hints.push(
+                "the target table has a single VARIANT column; consider using `COPY INTO <table> FROM (SELECT $1 FROM @<stage>)` to load raw JSON"
+                    .to_string(),
+            );
+        }
+
+        hints.join(". ")
     }
 }
 
@@ -282,7 +351,7 @@ impl RowDecoder for NdJsonDecoder {
 // - add info for size and next byte
 //
 // Use test in case of changes of serde_json.
-fn map_json_error(err: serde_json::Error, data: &[u8], file_full_path: &str) -> FileParseError {
+fn map_json_error(err: serde_json::Error, data: &[u8], file_path: &str) -> FileParseError {
     let pos = if err.column() > 0 {
         err.column() - 1
     } else {
@@ -295,7 +364,7 @@ fn map_json_error(err: serde_json::Error, data: &[u8], file_full_path: &str) -> 
         message = message[..p].to_string()
     }
 
-    message = format!("{message}, position {pos} of size {len} for File '{file_full_path}'");
+    message = format!("{message}, position {pos} of size {len} for File '{file_path}'");
     if err.column() < len {
         message = format!("{message}, next byte is '{}'", data[pos] as char)
     }

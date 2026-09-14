@@ -19,6 +19,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -27,7 +28,6 @@ use databend_common_pipeline::core::Pipeline;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_source_pipeline;
@@ -97,28 +97,6 @@ impl FuseTable {
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
-        let topk = plan
-            .push_downs
-            .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
-            .and_then(|x| x.top_k(plan.schema().as_ref()));
-
-        let index_reader = Arc::new(
-            plan.push_downs
-                .as_ref()
-                .and_then(|p| p.agg_index.as_ref())
-                .map(|agg| {
-                    AggIndexReader::try_create(
-                        ctx.clone(),
-                        self.operator.clone(),
-                        agg,
-                        self.table_compression,
-                        put_cache,
-                    )
-                })
-                .transpose()?,
-        );
-
         let virtual_reader = Arc::new(
             PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
                 .as_ref()
@@ -157,10 +135,12 @@ impl FuseTable {
                                 table_schema,
                                 lazy_init_segments,
                                 0,
+                                ReadPartitionsPruningMode::Normal,
+                                None,
                             )
                             .await
                         {
-                            Ok((_, partitions)) => {
+                            Ok((_, partitions, _)) => {
                                 for part in partitions.partitions {
                                     // the sql may be killed or early stop, ignore the error
                                     if let Err(_e) = tx.send(Ok(part)).await {
@@ -198,9 +178,7 @@ impl FuseTable {
             block_reader,
             max_threads,
             plan,
-            topk,
             max_io_requests,
-            index_reader,
             virtual_reader,
             rx,
         )?;

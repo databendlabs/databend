@@ -46,6 +46,7 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::binary::BinaryType;
 use databend_common_expression::types::geography::Geography;
 use databend_common_expression::types::geography::GeographyColumn;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
@@ -73,7 +74,7 @@ fn geometry_column_to_geos_and_srid(
     let mut geos = Vec::with_capacity(column.len());
     for value in column.iter() {
         let (geo, geo_srid) = ewkb_to_geo(&mut Ewkb(value))?;
-        let geo_srid = geo_srid.unwrap_or_default();
+        let geo_srid = geo_srid.unwrap_or(UNKNOWN_SRID);
         if let Some(srid) = srid {
             if srid != geo_srid {
                 return Err(ErrorCode::GeometryError(format!(
@@ -140,7 +141,7 @@ where O: GeoAggOp
     }
 
     fn add_geo(&mut self, geo: Geometry<f64>, geo_srid: Option<i32>) -> Result<()> {
-        let geo_srid = geo_srid.unwrap_or_default();
+        let geo_srid = geo_srid.unwrap_or(UNKNOWN_SRID);
         if let Some(srid) = self.srid {
             if srid != geo_srid {
                 return Err(ErrorCode::GeometryError(format!(

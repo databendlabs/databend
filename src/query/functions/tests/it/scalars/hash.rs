@@ -33,6 +33,19 @@ fn test_hash() {
     test_siphash64(file);
     test_xxhash64(file);
     test_xxhash32(file);
+    test_bucket(file);
+}
+
+fn test_bucket(file: &mut impl Write) {
+    run_ast(file, "bucket(16, 34)", &[]);
+    run_ast(file, "bucket(16, 'iceberg')", &[]);
+    run_ast(file, "bucket(16, to_date(10000))", &[]);
+    run_ast(file, "bucket(16, to_datetime(100000))", &[]);
+    run_ast(file, "bucket(0, 1)", &[]);
+    run_ast(file, "bucket(8, a)", &[(
+        "a",
+        Int64Type::from_data(vec![1, 2, 3, 4]),
+    )]);
 }
 
 fn test_md5(file: &mut impl Write) {

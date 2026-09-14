@@ -22,10 +22,7 @@ use super::marked_deleted_index_id::MarkedDeletedIndexId;
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::schema::MarkedDeletedIndexMeta;
-    use crate::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     /// The meta-service key for storing id of dropped but not vacuumed index
@@ -35,10 +32,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "MarkedDeletedIndexIdent";
         const HAS_TENANT: bool = false;
         type ValueType = MarkedDeletedIndexMeta;
-    }
-
-    impl kvapi::Value for MarkedDeletedIndexMeta {
-        type KeyType = MarkedDeletedIndexIdIdent;
     }
 }
 

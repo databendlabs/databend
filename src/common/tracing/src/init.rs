@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
+use fastrace::collector::SpanContext;
 use fastrace::prelude::*;
 use log::LevelFilter;
 use logforth::filter::EnvFilter;
@@ -127,6 +128,7 @@ fn env_filter(level: &str) -> EnvFilter {
             .filter(Some("databend::log::structlog"), LevelFilter::Off)
             .filter(Some("databend::log::time_series"), LevelFilter::Off)
             .filter(Some("databend::log::access"), LevelFilter::Off)
+            .filter(Some("databend::log::dump_graph"), LevelFilter::Off)
             .parse(level),
     )
 }
@@ -417,7 +419,7 @@ pub fn init_logging(
                 .append(structlog_log_file)
         });
     }
-    if cfg.history.on {
+    if cfg.history.enabled() {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
 
@@ -426,7 +428,7 @@ pub fn init_logging(
 
         let mut table_to_target = table_to_target();
 
-        for table_cfg in cfg.history.tables.iter() {
+        for table_cfg in cfg.history.enabled_tables() {
             if let Some(target) = table_to_target.remove(&table_cfg.table_name) {
                 filter_builder = filter_builder.filter(Some(&target), LevelFilter::Trace);
             }
@@ -460,4 +462,36 @@ pub fn init_logging(
     }
 
     _drop_guards
+}
+
+#[cfg(test)]
+mod tests {
+    use log::Level;
+    use log::Metadata;
+    use logforth::Filter;
+    use logforth::filter::FilterResult;
+
+    use super::env_filter;
+
+    #[test]
+    fn test_dump_graph_filter_is_off_by_default() {
+        let filter = env_filter("TRACE");
+        let metadata = Metadata::builder()
+            .target("databend::log::dump_graph")
+            .level(Level::Trace)
+            .build();
+
+        assert_eq!(filter.enabled(&metadata), FilterResult::Reject);
+    }
+
+    #[test]
+    fn test_dump_graph_filter_can_be_enabled_by_level() {
+        let filter = env_filter("WARN,databend::log::dump_graph=TRACE");
+        let metadata = Metadata::builder()
+            .target("databend::log::dump_graph")
+            .level(Level::Trace)
+            .build();
+
+        assert_eq!(filter.enabled(&metadata), FilterResult::Neutral);
+    }
 }

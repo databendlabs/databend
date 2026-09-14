@@ -1,0 +1,64 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/004-json-search.sql
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE TABLE frame_metadata_catalog (
+    doc_id      STRING,
+    meta_json   VARIANT,
+    captured_at TIMESTAMP,
+    INVERTED INDEX idx_meta_json (meta_json)
+)
+
+statement ok
+INSERT INTO frame_metadata_catalog VALUES
+                                       ('FRAME-0101',
+                                        PARSE_JSON('{"labels":["hard_brake","rain"],"weather":"rain","speed_kmh":32.4}'),
+                                        '2025-01-01 08:15:21'),
+                                       ('FRAME-0102',
+                                        PARSE_JSON('{"labels":["pedestrian"],"weather":"rain","speed_kmh":24.8}'),
+                                        '2025-01-01 08:33:54'),
+                                       ('FRAME-0201',
+                                        PARSE_JSON('{"labels":["lane_merge"],"weather":"overcast","speed_kmh":48.1}'),
+                                        '2025-01-01 11:12:02')
+
+query TT
+SELECT doc_id,
+       meta_json
+FROM frame_metadata_catalog
+ORDER BY doc_id
+----
+FRAME-0101 {"labels":["hard_brake","rain"],"speed_kmh":32.4,"weather":"rain"}
+FRAME-0102 {"labels":["pedestrian"],"speed_kmh":24.8,"weather":"rain"}
+FRAME-0201 {"labels":["lane_merge"],"speed_kmh":48.1,"weather":"overcast"}
+
+query TTTTR
+SELECT doc_id,
+       captured_at,
+       meta_json['labels']  AS labels,
+       meta_json['weather'] AS weather,
+       SCORE()              AS relevance
+FROM frame_metadata_catalog
+WHERE QUERY('meta_json.labels:(hard_brake OR pedestrian) AND meta_json.weather:rain')
+ORDER BY relevance DESC
+----
+FRAME-0101 2025-01-01 08:15:21.000000 ["hard_brake","rain"] "rain" 3.5079713
+FRAME-0102 2025-01-01 08:33:54.000000 ["pedestrian"] "rain" 2.0930047
+
+query TRT
+SELECT doc_id,
+       meta_json['speed_kmh']::DOUBLE AS speed_kmh,
+    meta_json['weather']           AS weather
+FROM frame_metadata_catalog
+WHERE QUERY('meta_json.speed_kmh:{30 TO 50}')
+ORDER BY speed_kmh DESC
+----
+FRAME-0201 48.1 "overcast"
+FRAME-0101 32.4 "rain"
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo

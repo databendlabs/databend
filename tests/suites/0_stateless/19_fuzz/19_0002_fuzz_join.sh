@@ -4,13 +4,13 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_bendsql() {
-  cat <<SQL | $BENDSQL_CLIENT_CONNECT
+  cat <<SQL | bendsql_connect_root
 $1
 SQL
 }
 
 run_bendsql_null() {
-  cat <<SQL | $BENDSQL_CLIENT_OUTPUT_NULL
+  cat <<SQL | bendsql_connect_root_null
 $1
 SQL
 }

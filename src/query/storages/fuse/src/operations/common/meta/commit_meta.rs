@@ -18,28 +18,22 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::VirtualDataSchema;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotChanges;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum VirtualSchemaMode {
-    #[default]
-    Merge,
-    Replace,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub new_segment_locs: Vec<Location>,
     pub table_id: u64,
-    pub virtual_schema: Option<VirtualDataSchema>,
-    pub virtual_schema_mode: VirtualSchemaMode,
+    pub logical_updated_rows: u64,
+    pub logical_deleted_rows: u64,
     pub hll: BlockHLL,
+    pub top_n: BlockTopN,
 }
 
 impl CommitMeta {
@@ -50,9 +44,10 @@ impl CommitMeta {
             ),
             new_segment_locs: vec![],
             table_id,
-            virtual_schema: None,
-            virtual_schema_mode: VirtualSchemaMode::Merge,
+            logical_updated_rows: 0,
+            logical_deleted_rows: 0,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
         }
     }
 
@@ -60,17 +55,19 @@ impl CommitMeta {
         conflict_resolve_context: ConflictResolveContext,
         new_segment_locs: Vec<Location>,
         table_id: u64,
-        virtual_schema: Option<VirtualDataSchema>,
-        virtual_schema_mode: VirtualSchemaMode,
+        logical_updated_rows: u64,
+        logical_deleted_rows: u64,
         hll: BlockHLL,
+        top_n: BlockTopN,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
             table_id,
-            virtual_schema,
-            virtual_schema_mode,
+            logical_updated_rows,
+            logical_deleted_rows,
             hll,
+            top_n,
         }
     }
 }

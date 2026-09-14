@@ -79,6 +79,7 @@ async fn apply_snapshot_pruning(
         op,
         schema.clone(),
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         HashSet::new(),
@@ -92,10 +93,12 @@ async fn apply_snapshot_pruning(
         fuse_pruner.clone(),
         &mut prune_pipeline,
         ctx.clone(),
+        0,
         segment_rx,
         res_tx,
         cache_key,
         schema.clone(),
+        HashSet::new(),
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {

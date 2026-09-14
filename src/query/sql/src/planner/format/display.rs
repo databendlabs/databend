@@ -24,6 +24,7 @@ use crate::Symbol;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::RelOperator;
 
@@ -34,6 +35,8 @@ pub trait IdHumanizer {
     fn humanize_table_id(&self, id: IndexType) -> String;
 
     fn options(&self) -> &FormatOptions;
+
+    fn stat_context(&self) -> &StatContext;
 }
 
 /// A trait for humanizing operators.
@@ -73,11 +76,20 @@ pub struct DefaultOperatorHumanizer;
 pub struct MetadataIdHumanizer<'a> {
     metadata: &'a Metadata,
     options: FormatOptions,
+    stat_context: &'a StatContext,
 }
 
 impl<'a> MetadataIdHumanizer<'a> {
-    pub fn new(metadata: &'a Metadata, options: FormatOptions) -> Self {
-        Self { metadata, options }
+    pub fn new(
+        metadata: &'a Metadata,
+        options: FormatOptions,
+        stat_context: &'a StatContext,
+    ) -> Self {
+        Self {
+            metadata,
+            options,
+            stat_context,
+        }
     }
 }
 
@@ -120,6 +132,10 @@ impl IdHumanizer for MetadataIdHumanizer<'_> {
     fn options(&self) -> &FormatOptions {
         &self.options
     }
+
+    fn stat_context(&self) -> &StatContext {
+        self.stat_context
+    }
 }
 
 /// A humanizer for `SExpr`.
@@ -151,7 +167,7 @@ where
         if self.id_humanizer.options().verbose {
             let rel_expr = RelExpr::with_s_expr(s_expr);
             let prop = rel_expr.derive_relational_prop()?;
-            let stat = rel_expr.derive_cardinality()?;
+            let stat = rel_expr.derive_cardinality(self.id_humanizer.stat_context())?;
             let properties = self.humanize_property(&prop);
             let stats = self.humanize_stat(&stat)?;
             tree.children.extend(properties);
@@ -192,7 +208,10 @@ where
             ));
         }
 
-        if s_expr.plan.is_join() {
+        if let RelOperator::MaterializedCTERef(_) = op {
+            // MaterializedCTERef definitions are represented by their producer MaterializedCTE
+            // in the surrounding Sequence.
+        } else if s_expr.plan.is_join() {
             tree.children
                 .push(self.humanize_s_expr(s_expr.build_side_child())?);
             tree.children
@@ -250,16 +269,27 @@ where
             .statistics
             .column_stats
             .iter()
-            .map(|(column, hist)| {
+            .map(|(column, stat)| {
                 let column = self.id_humanizer.humanize_column_id(*column);
-                let hist = format!(
-                    "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
-                    hist.min,
-                    hist.max,
-                    hist.ndv.expected,
-                    hist.null_count.expected()
-                );
-                FormatTreeNode::new(format!("{}: {}", column, hist))
+                let stat = match stat.bounds() {
+                    Some(bounds) => {
+                        let (min, max) = bounds.display_parts();
+                        format!(
+                            "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
+                            min,
+                            max,
+                            stat.ndv().expected.unwrap_or(stat.ndv().upper),
+                            stat.null_count().expected()
+                        )
+                    }
+                    None => {
+                        format!(
+                            "{{ all null, null count: {} }}",
+                            stat.null_count().expected()
+                        )
+                    }
+                };
+                FormatTreeNode::new(format!("{}: {}", column, stat))
             })
             .sorted_by(|a, b| a.payload.cmp(&b.payload))
             .collect::<Vec<_>>();
@@ -304,15 +334,13 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::FunctionCall(func) => {
-            format!(
-                "{}({})",
-                &func.func_name,
-                func.arguments
-                    .iter()
-                    .map(format_scalar)
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
+            let params = func.params.iter().map(|param| param.to_string()).join(", ");
+            let arguments = func.arguments.iter().map(format_scalar).join(", ");
+            if params.is_empty() {
+                format!("{}({})", &func.func_name, arguments)
+            } else {
+                format!("{}({})({})", &func.func_name, params, arguments)
+            }
         }
         ScalarExpr::CastExpr(cast) => {
             format!(

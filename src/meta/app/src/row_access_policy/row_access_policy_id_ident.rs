@@ -43,9 +43,6 @@ impl RowAccessPolicyIdIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use crate::row_access_policy::RowAccessPolicyIdIdent;
     use crate::row_access_policy::RowAccessPolicyMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -55,10 +52,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "RowAccessPolicyIdIdent";
         const HAS_TENANT: bool = true;
         type ValueType = RowAccessPolicyMeta;
-    }
-
-    impl kvapi::Value for RowAccessPolicyMeta {
-        type KeyType = RowAccessPolicyIdIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

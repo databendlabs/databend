@@ -55,54 +55,56 @@ impl Interpreter for DropProcedureInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_procedure_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_procedure_execute");
 
-        let tenant = self.plan.tenant.clone();
+            let tenant = self.plan.tenant.clone();
 
-        let drop_procedure_req: DropProcedureReq = self.plan.clone().into();
+            let drop_procedure_req: DropProcedureReq = self.plan.clone().into();
 
-        let dropped = UserApiProvider::instance()
-            .procedure_api(&tenant)
-            .drop_procedure(&drop_procedure_req.name_ident)
-            .await?;
-        match dropped {
-            Some(d) => {
-                let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-                let owner_object = OwnershipObject::Procedure {
-                    procedure_id: d.1.seq,
-                };
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
-            None => {
-                if !self.plan.if_exists {
-                    // try drop old name:
-                    let old_drop_procedure_req = DropProcedureReq {
-                        name_ident: self.plan.old_name.clone(),
+            let dropped = UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .drop_procedure(&drop_procedure_req.name_ident)
+                .await?;
+            match dropped {
+                Some(d) => {
+                    let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+                    let owner_object = OwnershipObject::Procedure {
+                        procedure_id: d.1.seq,
                     };
-                    let dropped = UserApiProvider::instance()
-                        .procedure_api(&tenant)
-                        .drop_procedure(&old_drop_procedure_req.name_ident)
-                        .await?;
-                    if dropped.is_none() {
-                        return Err(ErrorCode::UnknownProcedure(format!(
-                            "Unknown procedure '{}' while drop procedure",
-                            drop_procedure_req.name_ident.procedure_name()
-                        )));
+                    role_api.revoke_ownership(&owner_object).await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
+                None => {
+                    if !self.plan.if_exists {
+                        // try drop old name:
+                        let old_drop_procedure_req = DropProcedureReq {
+                            name_ident: self.plan.old_name.clone(),
+                        };
+                        let dropped = UserApiProvider::instance()
+                            .procedure_api(&tenant)
+                            .drop_procedure(&old_drop_procedure_req.name_ident)
+                            .await?;
+                        if dropped.is_none() {
+                            return Err(ErrorCode::UnknownProcedure(format!(
+                                "Unknown procedure '{}' while drop procedure",
+                                drop_procedure_req.name_ident.procedure_name()
+                            )));
+                        }
                     }
                 }
             }
-        }
 
-        // Clean up tag references unconditionally (must be after drop for concurrency safety)
-        let proc_identity = drop_procedure_req.name_ident.procedure_name();
-        cleanup_object_tags(&tenant, TaggableObject::Procedure {
-            name: proc_identity.name.clone(),
-            args: proc_identity.args.clone(),
+            // Clean up tag references unconditionally (must be after drop for concurrency safety)
+            let proc_identity = drop_procedure_req.name_ident.procedure_name();
+            cleanup_object_tags(&tenant, TaggableObject::Procedure {
+                name: proc_identity.name.clone(),
+                args: proc_identity.args.clone(),
+            })
+            .await?;
+
+            Ok(PipelineBuildResult::create())
         })
-        .await?;
-
-        Ok(PipelineBuildResult::create())
     }
 }

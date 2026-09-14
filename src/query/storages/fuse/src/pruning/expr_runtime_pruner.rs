@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -19,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
@@ -30,6 +32,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -61,6 +64,118 @@ pub struct RuntimeFilterExpr {
     pub inlist_value_count: usize,
     pub expr: Expr<String>,
     pub stats: Arc<RuntimeFilterStats>,
+}
+
+impl RuntimeFilterExpr {
+    pub fn from_entry(entry: &RuntimeFilterEntry) -> Vec<Self> {
+        let mut exprs = Vec::new();
+        if let Some(expr) = entry.inlist.clone() {
+            exprs.push(Self {
+                filter_id: entry.id,
+                kind: RuntimeFilterExprKind::Inlist,
+                inlist_value_count: entry.inlist_value_count,
+                expr,
+                stats: entry.stats.clone(),
+            });
+        }
+        if let Some(expr) = entry.min_max.clone() {
+            exprs.push(Self {
+                filter_id: entry.id,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                expr,
+                stats: entry.stats.clone(),
+            });
+        }
+        exprs
+    }
+
+    pub fn statistics_from_entry(entry: &RuntimeFilterEntry) -> Vec<Self> {
+        let mut exprs = Vec::new();
+        if let Some(expr) = entry.min_max.clone() {
+            exprs.push(Self {
+                filter_id: entry.id,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                expr,
+                stats: entry.stats.clone(),
+            });
+        }
+        if let Some(expr) = entry.inlist.clone() {
+            exprs.push(Self {
+                filter_id: entry.id,
+                kind: RuntimeFilterExprKind::Inlist,
+                inlist_value_count: entry.inlist_value_count,
+                expr,
+                stats: entry.stats.clone(),
+            });
+        }
+        exprs
+    }
+}
+
+#[derive(Clone)]
+pub struct RuntimeStatsPruner {
+    func_ctx: FunctionContext,
+    table_schema: TableSchemaRef,
+    exprs: Vec<RuntimeFilterExpr>,
+}
+
+impl RuntimeStatsPruner {
+    pub fn new(
+        func_ctx: FunctionContext,
+        table_schema: TableSchemaRef,
+        exprs: Vec<RuntimeFilterExpr>,
+    ) -> Self {
+        Self {
+            func_ctx,
+            table_schema,
+            exprs,
+        }
+    }
+
+    pub fn try_create(
+        func_ctx: FunctionContext,
+        table_schema: TableSchemaRef,
+        entries: &[RuntimeFilterEntry],
+    ) -> Option<Arc<Self>> {
+        let exprs = entries
+            .iter()
+            .flat_map(RuntimeFilterExpr::statistics_from_entry)
+            .collect::<Vec<_>>();
+        (!exprs.is_empty()).then(|| Arc::new(Self::new(func_ctx, table_schema, exprs)))
+    }
+
+    pub fn should_prune_part(&self, part: &FuseBlockPartInfo) -> bool {
+        self.should_prune(part.columns_stat.as_ref(), part.nums_rows)
+    }
+
+    pub fn should_prune(&self, column_stats: Option<&StatisticsOfColumns>, rows: usize) -> bool {
+        let _profile_guard =
+            ProfileGuard::new(ProfileStatisticsName::RuntimeFilterInlistMinMaxTime);
+        for entry in self.exprs.iter() {
+            let start = Instant::now();
+            let should_prune = prune_by_statistics(
+                &self.func_ctx,
+                &self.table_schema,
+                &entry.expr,
+                column_stats,
+            );
+            let elapsed = start.elapsed();
+            entry.stats.record_inlist_min_max(
+                elapsed.as_nanos() as u64,
+                if should_prune { rows as u64 } else { 0 },
+                if should_prune { 1 } else { 0 },
+            );
+
+            if should_prune {
+                Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 impl ExprRuntimePruner {
@@ -97,7 +212,12 @@ impl ExprRuntimePruner {
         for entry in self.exprs.iter() {
             let start = Instant::now();
             let filter = &entry.expr;
-            let mut should_prune = self.prune_by_statistics(filter, part);
+            let mut should_prune = prune_by_statistics(
+                &self.func_ctx,
+                &self.table_schema,
+                filter,
+                part.columns_stat.as_ref(),
+            );
 
             if !should_prune
                 && matches!(entry.kind, RuntimeFilterExprKind::Inlist)
@@ -140,56 +260,6 @@ impl ExprRuntimePruner {
         Ok(partition_pruned)
     }
 
-    fn prune_by_statistics(&self, filter: &Expr<String>, part: &FuseBlockPartInfo) -> bool {
-        if matches!(
-            filter,
-            Expr::Constant(Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            })
-        ) {
-            return true;
-        }
-
-        let column_refs = filter.column_refs();
-        debug_assert!(column_refs.len() == 1);
-        let ty = column_refs.values().last().unwrap();
-        let name = column_refs.keys().last().unwrap();
-
-        if let Some(stats) = &part.columns_stat {
-            let column_ids = self.table_schema.leaf_columns_of(name);
-            if column_ids.len() == 1 {
-                if let Some(stat) = stats.get(&column_ids[0]) {
-                    let stats = vec![stat];
-                    let domain = statistics_to_domain(stats, ty);
-
-                    let mut input_domains = HashMap::new();
-                    input_domains.insert(name.to_string(), domain.clone());
-
-                    let (new_expr, _) = ConstantFolder::fold_with_domain(
-                        filter,
-                        &input_domains,
-                        &self.func_ctx,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    return matches!(
-                        new_expr,
-                        Expr::Constant(Constant {
-                            scalar: Scalar::Boolean(false),
-                            ..
-                        })
-                    );
-                }
-            }
-        } else {
-            info!(
-                "Can't prune the partition by runtime filter, because there is no statistics for the partition"
-            );
-        }
-
-        false
-    }
-
     async fn prune_inlist_by_bloom_index(
         &self,
         filter: &Expr<String>,
@@ -207,17 +277,68 @@ impl ExprRuntimePruner {
     }
 }
 
+fn prune_by_statistics(
+    func_ctx: &FunctionContext,
+    table_schema: &TableSchemaRef,
+    filter: &Expr<String>,
+    column_stats: Option<&StatisticsOfColumns>,
+) -> bool {
+    if matches!(
+        filter,
+        Expr::Constant(Constant {
+            scalar: Scalar::Boolean(false),
+            ..
+        })
+    ) {
+        return true;
+    }
+
+    let column_refs = filter.column_refs();
+    debug_assert!(column_refs.len() == 1);
+    let ty = column_refs.values().last().unwrap();
+    let name = column_refs.keys().last().unwrap();
+
+    if let Some(stats) = column_stats {
+        let column_ids = table_schema.leaf_columns_of(name);
+        if column_ids.len() == 1
+            && let Some(stat) = stats.get(&column_ids[0])
+        {
+            let stats = vec![stat];
+            let domain = statistics_to_domain(stats, ty);
+
+            let mut input_domains = HashMap::new();
+            input_domains.insert(name.to_string(), domain.clone());
+
+            let (new_expr, _) = ConstantFolder::fold_with_domain(
+                Cow::Borrowed(filter),
+                &input_domains,
+                func_ctx,
+                &BUILTIN_FUNCTIONS,
+            );
+            return matches!(
+                new_expr.as_ref(),
+                Expr::Constant(Constant {
+                    scalar: Scalar::Boolean(false),
+                    ..
+                })
+            );
+        }
+    } else {
+        info!(
+            "Can't prune the partition by runtime filter, because there is no statistics for the partition"
+        );
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::sync::OnceLock;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
-    use databend_common_base::base::GlobalInstance;
     use databend_common_base::base::tokio;
-    use databend_common_base::runtime::GlobalIORuntime;
-    use databend_common_config::CacheConfig;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Expr;
@@ -232,7 +353,6 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::UInt64Type;
     use databend_storages_common_blocks::blocks_to_parquet;
-    use databend_storages_common_cache::CacheManager;
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
@@ -241,8 +361,10 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
+    use opendal::Buffer;
 
     use super::*;
+    use crate::test_utils::init_test_globals;
 
     fn test_read_settings() -> ReadSettings {
         ReadSettings {
@@ -337,21 +459,110 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_runtime_stats_pruner_prunes_block_by_min_max_statistics() -> Result<()> {
+        let schema = test_schema();
+        let stats = Arc::new(RuntimeFilterStats::default());
+        let pruner = RuntimeStatsPruner::new(FunctionContext::default(), schema.clone(), vec![
+            RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                expr: min_max_expr("y", 50, 60)?,
+                stats: stats.clone(),
+            },
+        ]);
+        let part = make_part(&schema, None, 0, 10, 40);
+        let part = FuseBlockPartInfo::from_part(&part)?;
+
+        assert!(pruner.should_prune_part(part));
+
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.min_max_rows_filtered, 4);
+        assert_eq!(snapshot.min_max_partitions_pruned, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_stats_pruner_keeps_overlapping_block() -> Result<()> {
+        let schema = test_schema();
+        let stats = Arc::new(RuntimeFilterStats::default());
+        let pruner = RuntimeStatsPruner::new(FunctionContext::default(), schema.clone(), vec![
+            RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                expr: min_max_expr("y", 30, 60)?,
+                stats: stats.clone(),
+            },
+        ]);
+        let part = make_part(&schema, None, 0, 10, 40);
+        let part = FuseBlockPartInfo::from_part(&part)?;
+
+        assert!(!pruner.should_prune_part(part));
+
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.min_max_rows_filtered, 0);
+        assert_eq!(snapshot.min_max_partitions_pruned, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_stats_pruner_folds_full_probe_expression() -> Result<()> {
+        let schema = test_schema();
+        let stats = Arc::new(RuntimeFilterStats::default());
+        let pruner = RuntimeStatsPruner::new(FunctionContext::default(), schema.clone(), vec![
+            RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                // The block domain is y=[10,40], so y+10=[20,50] cannot
+                // intersect the runtime-filter range [51,60].
+                expr: min_max_expr_plus("y", 10, 51, 60)?,
+                stats: stats.clone(),
+            },
+        ]);
+        let part = make_part(&schema, None, 0, 10, 40);
+        let part = FuseBlockPartInfo::from_part(&part)?;
+
+        assert!(pruner.should_prune_part(part));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_runtime_inlist_complex_expression_keeps_bloom_index() -> Result<()> {
+        init_test_globals()?;
+        let schema = test_schema();
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![10, 20, 30, 40])]);
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
+        let part = make_part(&schema, index_location, index_size, 10, 40);
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            1,
+            vec![RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::Inlist,
+                inlist_value_count: 1,
+                expr: inlist_expr_plus("y", 10, 25)?,
+                stats: Arc::new(RuntimeFilterStats::default()),
+            }],
+        );
+
+        // The static Bloom index stores y, not y+10. It cannot safely answer
+        // this expression and must conservatively keep the block.
+        assert!(!pruner.prune(&part).await?);
+        Ok(())
+    }
+
     fn test_schema() -> TableSchemaRef {
         Arc::new(TableSchema::new(vec![TableField::new(
             "y",
             TableDataType::Number(NumberDataType::Int32),
         )]))
-    }
-
-    fn init_test_globals() -> Result<()> {
-        static INIT: OnceLock<Result<()>> = OnceLock::new();
-        INIT.get_or_init(|| {
-            GlobalInstance::init_production();
-            GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
-        })
-        .clone()
     }
 
     fn make_part(
@@ -378,12 +589,9 @@ mod tests {
             "memory:///block".to_string(),
             bloom_filter_index_location,
             bloom_filter_index_size,
-            None,
-            0,
             4,
             HashMap::new(),
             Some(column_stats),
-            None,
             Compression::Lz4Raw,
             None,
             None,
@@ -424,6 +632,77 @@ mod tests {
         check_function(None, "or_filters", &[], &eq_exprs, &BUILTIN_FUNCTIONS)
     }
 
+    fn min_max_expr(column_name: &str, min: i32, max: i32) -> Result<Expr<String>> {
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: column_name.to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: column_name.to_string(),
+        });
+        let min = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(min)),
+            data_type: DataType::Number(NumberDataType::Int32),
+        });
+        let max = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(max)),
+            data_type: DataType::Number(NumberDataType::Int32),
+        });
+
+        let gte = check_function(None, "gte", &[], &[column.clone(), min], &BUILTIN_FUNCTIONS)?;
+        let lte = check_function(None, "lte", &[], &[column, max], &BUILTIN_FUNCTIONS)?;
+        check_function(None, "and_filters", &[], &[gte, lte], &BUILTIN_FUNCTIONS)
+    }
+
+    fn plus_expr(column_name: &str, value: i32) -> Result<Expr<String>> {
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: column_name.to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: column_name.to_string(),
+        });
+        let value = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int32(value)),
+            data_type: DataType::Number(NumberDataType::Int32),
+        });
+        check_function(None, "plus", &[], &[column, value], &BUILTIN_FUNCTIONS)
+    }
+
+    fn inlist_expr_plus(column_name: &str, add: i32, value: i64) -> Result<Expr<String>> {
+        let probe_expr = plus_expr(column_name, add)?;
+        let value = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int64(value)),
+            data_type: DataType::Number(NumberDataType::Int64),
+        });
+        check_function(None, "eq", &[], &[probe_expr, value], &BUILTIN_FUNCTIONS)
+    }
+
+    fn min_max_expr_plus(column_name: &str, add: i32, min: i64, max: i64) -> Result<Expr<String>> {
+        let probe_expr = plus_expr(column_name, add)?;
+        let min = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int64(min)),
+            data_type: DataType::Number(NumberDataType::Int64),
+        });
+        let max = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::Int64(max)),
+            data_type: DataType::Number(NumberDataType::Int64),
+        });
+        let gte = check_function(
+            None,
+            "gte",
+            &[],
+            &[probe_expr.clone(), min],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let lte = check_function(None, "lte", &[], &[probe_expr, max], &BUILTIN_FUNCTIONS)?;
+        check_function(None, "and_filters", &[], &[gte, lte], &BUILTIN_FUNCTIONS)
+    }
+
     async fn write_bloom_index(
         operator: &opendal::Operator,
         schema: &TableSchemaRef,
@@ -446,17 +725,17 @@ mod tests {
             format!("block_bloom_{}", NEXT_ID.fetch_add(1, Ordering::Relaxed)),
             BlockFilter::VERSION,
         );
-        let mut data = Vec::new();
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             &bloom_index.filter_schema,
             vec![index_block],
-            &mut data,
             TableCompression::None,
             false,
             None,
         )?;
-        let size = data.len() as u64;
-        operator.write(&location.0, data).await?;
+        let size = serialized.len() as u64;
+        operator
+            .write(&location.0, Buffer::from(serialized.payload))
+            .await?;
         Ok((Some(location), size))
     }
 
@@ -548,12 +827,9 @@ mod tests {
             "memory:///block".to_string(),
             bloom_filter_index_location,
             bloom_filter_index_size,
-            None,
-            0,
             1000,
             HashMap::new(),
             Some(column_stats),
-            None,
             Compression::Lz4Raw,
             None,
             None,

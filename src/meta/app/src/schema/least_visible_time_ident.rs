@@ -25,10 +25,8 @@ impl LeastVisibleTimeIdent {
 }
 
 mod kvapi_impl {
-    use databend_meta_client::kvapi;
 
     use crate::schema::LeastVisibleTime;
-    use crate::schema::least_visible_time_ident::LeastVisibleTimeIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct LeastVisibleTimeRsc;
@@ -36,10 +34,6 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_table_lvt";
         const HAS_TENANT: bool = false;
         type ValueType = LeastVisibleTime;
-    }
-
-    impl kvapi::Value for LeastVisibleTime {
-        type KeyType = LeastVisibleTimeIdent;
     }
 }
 

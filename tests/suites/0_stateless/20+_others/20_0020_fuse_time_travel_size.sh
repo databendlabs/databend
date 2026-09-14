@@ -15,7 +15,7 @@ stmt "create table test_fuse_time_travel_size.t(c int) 'fs:///tmp/test_fuse_time
 
 stmt "insert into test_fuse_time_travel_size.t values (1),(2)" 
 
-result_size=$(echo "select time_travel_size from fuse_time_travel_size('test_fuse_time_travel_size')" | $BENDSQL_CLIENT_CONNECT)
+result_size=$(echo "select time_travel_size from fuse_time_travel_size('test_fuse_time_travel_size')" | bendsql_connect_root)
 
 expected_size=$(find /tmp/test_fuse_time_travel_size/ -type f -exec du -b  {} + | awk '{sum += $1} END {print sum}')
 

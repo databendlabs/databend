@@ -81,12 +81,9 @@ pub type TagIdObjectRefIdentRaw = TIdentRaw<TagIdObjectRefResource, TagIdObjectR
 pub use kvapi_impl::TagIdObjectRefResource;
 
 mod kvapi_impl {
-    use databend_meta_client::kvapi;
 
     use crate::schema::EmptyProto;
-    use crate::schema::ObjectTagIdRefIdent;
     use crate::schema::ObjectTagIdRefValue;
-    use crate::schema::TagIdObjectRefIdent;
     use crate::tenant_key::resource::TenantResource;
 
     /// Resource marker for object -> tag reference keys.
@@ -98,10 +95,6 @@ mod kvapi_impl {
         type ValueType = ObjectTagIdRefValue;
     }
 
-    impl kvapi::Value for ObjectTagIdRefValue {
-        type KeyType = ObjectTagIdRefIdent;
-    }
-
     /// Resource marker for tag -> object reference keys.
     pub struct TagIdObjectRefResource;
     impl TenantResource for TagIdObjectRefResource {
@@ -109,10 +102,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "TagIdObjectRefIdent";
         const HAS_TENANT: bool = true;
         type ValueType = EmptyProto;
-    }
-
-    impl kvapi::Value for EmptyProto {
-        type KeyType = TagIdObjectRefIdent;
     }
 }
 

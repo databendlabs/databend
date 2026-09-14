@@ -37,7 +37,12 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::bitmap::bitmap_contains;
+use databend_common_io::bitmap::bitmap_has_all;
+use databend_common_io::bitmap::bitmap_has_any;
 use databend_common_io::bitmap::bitmap_len;
+use databend_common_io::bitmap::bitmap_max;
+use databend_common_io::bitmap::bitmap_min;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use itertools::join;
@@ -269,9 +274,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     return;
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        builder.push(rb.contains(item));
+                match bitmap_contains(b, item) {
+                    Ok(found) => {
+                        builder.push(found);
                     }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -346,13 +351,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Ok(rb) => {
                         let subset_start = offset;
                         let subset_length = length;
-                        if subset_start >= b.len() as u64 {
+                        let bitmap_len = rb.len();
+                        if subset_start >= bitmap_len {
                             let rb = HybridBitmap::new();
                             rb.serialize_into(&mut builder.data).unwrap();
                         } else {
-                            let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
-                            let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize..(subset_start + adjusted_length) as usize];
-                            let rb = HybridBitmap::from_iter(subset_bitmap.iter());
+                            let subset_end = subset_start.saturating_add(subset_length).min(bitmap_len);
+                            let subset_bitmap = (0_u64..)
+                                .zip(rb)
+                                .skip_while(|(index, _)| *index < subset_start)
+                                .take_while(|(index, _)| *index < subset_end)
+                                .map(|(_, value)| value);
+                            let rb = HybridBitmap::from_iter(subset_bitmap);
                             rb.serialize_into(&mut builder.data).unwrap();
                         }
                     }
@@ -376,23 +386,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     return;
                 }
-                let rb = match deserialize_bitmap(b) {
-                    Ok(rb) => rb,
+                match bitmap_has_all(b, items) {
+                    Ok(has_all) => {
+                        builder.push(has_all);
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         builder.push(false);
-                        return;
                     }
-                };
-                let rb2 = match deserialize_bitmap(items) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                builder.push(rb.is_superset(&rb2));
+                }
             },
         ),
     );
@@ -408,23 +410,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     return;
                 }
-                let rb = match deserialize_bitmap(b) {
-                    Ok(rb) => rb,
+                match bitmap_has_any(b, items) {
+                    Ok(has_any) => {
+                        builder.push(has_any);
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         builder.push(false);
-                        return;
                     }
-                };
-                let rb2 = match deserialize_bitmap(items) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                builder.push(rb.intersection_len(&rb2) != 0);
+                }
             },
         ),
     );
@@ -443,14 +437,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(0);
                     return;
                 }
-                let val = match deserialize_bitmap(b) {
-                    Ok(rb) => match rb.max() {
-                        Some(val) => val,
-                        None => {
-                            ctx.set_error(builder.len(), "The bitmap is empty");
-                            0
-                        }
-                    },
+                let val = match bitmap_max(b) {
+                    Ok(Some(val)) => val,
+                    Ok(None) => {
+                        ctx.set_error(builder.len(), "The bitmap is empty");
+                        0
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         0
@@ -475,14 +467,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(0);
                     return;
                 }
-                let val = match deserialize_bitmap(b) {
-                    Ok(rb) => match rb.min() {
-                        Some(val) => val,
-                        None => {
-                            ctx.set_error(builder.len(), "The bitmap is empty");
-                            0
-                        }
-                    },
+                let val = match bitmap_min(b) {
+                    Ok(Some(val)) => val,
+                    Ok(None) => {
+                        ctx.set_error(builder.len(), "The bitmap is empty");
+                        0
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         0

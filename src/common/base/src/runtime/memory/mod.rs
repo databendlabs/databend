@@ -18,7 +18,11 @@ mod memory_manager;
 mod stat_buffer_global;
 mod stat_buffer_mem_stat;
 
+pub use alloc_error_hook::is_alloc_error_panic;
+#[cfg(test)]
+pub(crate) use alloc_error_hook::mark_alloc_error_panic_for_test;
 pub use alloc_error_hook::set_alloc_error_hook;
+pub use alloc_error_hook::take_alloc_error_panic;
 pub use mem_stat::GLOBAL_MEM_STAT;
 pub use mem_stat::MemStat;
 pub use mem_stat::OutOfLimit;

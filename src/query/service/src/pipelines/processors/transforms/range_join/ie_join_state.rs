@@ -40,8 +40,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::sorts::sort_merge;
 
 use crate::physical_plans::RangeJoin;
+use crate::pipelines::processors::transforms::filter_block;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
-use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::sessions::TableContextSettings;

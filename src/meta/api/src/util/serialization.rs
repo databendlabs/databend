@@ -13,16 +13,15 @@
 // limitations under the License.
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_client::types::InvalidArgument;
 use databend_meta_client::types::InvalidReply;
 use databend_meta_client::types::MetaNetworkError;
 
 use crate::kv_pb_api::decode_pb;
 use crate::kv_pb_api::encode_pb;
 
-pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
+pub fn serialize_struct<T>(value: &T) -> Vec<u8>
 where T: FromToProto + 'static {
-    encode_pb(value).map_err(|e| MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "")))
+    encode_pb(value)
 }
 
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>

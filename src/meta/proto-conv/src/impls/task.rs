@@ -72,7 +72,11 @@ impl FromToProto for mt::Task {
         Ok(Self {
             task_id: p.task_id,
             task_name: p.task_name,
-            query_text: p.query_text,
+            task_sql: if p.script_sql.is_empty() {
+                mt::TaskSql::Sql(p.query_text)
+            } else {
+                mt::TaskSql::Script(p.script_sql)
+            },
             when_condition: p.when_condition.clone(),
             after: p.after,
             comment: p.comment,
@@ -91,13 +95,13 @@ impl FromToProto for mt::Task {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::Task {
+    fn to_pb(&self) -> Self::PB {
+        pb::Task {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             task_id: self.task_id,
             task_name: self.task_name.clone(),
-            query_text: self.query_text.clone(),
+            query_text: self.task_sql.query_text(),
             comment: self.comment.clone(),
             owner: self.owner.clone(),
             schedule_options: self.schedule_options.as_ref().map(|s| pb::ScheduleOptions {
@@ -114,18 +118,22 @@ impl FromToProto for mt::Task {
                     warehouse: w.warehouse.clone(),
                     using_warehouse_size: w.using_warehouse_size.clone(),
                 }),
-            next_scheduled_at: self.next_scheduled_at.to_pb_opt()?,
+            next_scheduled_at: self.next_scheduled_at.to_pb_opt(),
             suspend_task_after_num_failures: self.suspend_task_after_num_failures.map(|v| v as i32),
             status: self.status as i32,
-            created_at: self.created_at.to_pb()?,
-            updated_at: self.updated_at.to_pb()?,
-            last_suspended_at: self.last_suspended_at.to_pb_opt()?,
+            created_at: self.created_at.to_pb(),
+            updated_at: self.updated_at.to_pb(),
+            last_suspended_at: self.last_suspended_at.to_pb_opt(),
             after: self.after.clone(),
             when_condition: self.when_condition.clone(),
             session_parameters: self.session_params.clone(),
             error_integration: self.error_integration.clone(),
             owner_user: self.owner_user.clone(),
-        })
+            script_sql: match &self.task_sql {
+                mt::TaskSql::Sql(_) => vec![],
+                mt::TaskSql::Script(sqls) => sqls.clone(),
+            },
+        }
     }
 }
 
@@ -146,42 +154,46 @@ impl FromToProto for mt::TaskMessage {
                 Message::ScheduleTask(task) => {
                     mt::TaskMessage::ScheduleTask(mt::Task::from_pb(task)?)
                 }
-                Message::DeleteTask(task_name) => mt::TaskMessage::DeleteTask(task_name, None),
+                Message::DeleteTask(task_name) => {
+                    mt::TaskMessage::DeleteTask(task_name, None, None)
+                }
                 Message::DeleteTaskV2(DeleteTask {
                     task_name,
                     warehouse_options,
+                    task_id,
                 }) => {
                     let warehouse = warehouse_options.as_ref().map(|w| mt::WarehouseOptions {
                         warehouse: w.warehouse.clone(),
                         using_warehouse_size: w.using_warehouse_size.clone(),
                     });
-                    mt::TaskMessage::DeleteTask(task_name, warehouse)
+                    mt::TaskMessage::DeleteTask(task_name, warehouse, task_id)
                 }
                 Message::AfterTask(task) => mt::TaskMessage::AfterTask(mt::Task::from_pb(task)?),
             },
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+    fn to_pb(&self) -> Self::PB {
         let message = match self {
-            mt::TaskMessage::ExecuteTask(task) => Message::ExecuteTask(task.to_pb()?),
-            mt::TaskMessage::ScheduleTask(task) => Message::ScheduleTask(task.to_pb()?),
-            mt::TaskMessage::DeleteTask(task_name, warehouse_options) => {
+            mt::TaskMessage::ExecuteTask(task) => Message::ExecuteTask(task.to_pb()),
+            mt::TaskMessage::ScheduleTask(task) => Message::ScheduleTask(task.to_pb()),
+            mt::TaskMessage::DeleteTask(task_name, warehouse_options, task_id) => {
                 Message::DeleteTaskV2(DeleteTask {
                     task_name: task_name.clone(),
                     warehouse_options: warehouse_options.as_ref().map(|w| pb::WarehouseOptions {
                         warehouse: w.warehouse.clone(),
                         using_warehouse_size: w.using_warehouse_size.clone(),
                     }),
+                    task_id: *task_id,
                 })
             }
-            mt::TaskMessage::AfterTask(task) => Message::AfterTask(task.to_pb()?),
+            mt::TaskMessage::AfterTask(task) => Message::AfterTask(task.to_pb()),
         };
 
-        Ok(pb::TaskMessage {
+        pb::TaskMessage {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             message: Some(message),
-        })
+        }
     }
 }

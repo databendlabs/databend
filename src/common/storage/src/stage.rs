@@ -15,6 +15,7 @@
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -35,7 +36,9 @@ use opendal::Operator;
 use regex::Regex;
 
 use crate::DataOperator;
+use crate::EndpointPolicyScope;
 use crate::init_operator;
+use crate::init_operator_with_policy_scope;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {
@@ -60,7 +63,9 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta.last_modified(),
+            last_modified: meta
+                .last_modified()
+                .map(|m| DateTime::<Utc>::from(SystemTime::from(m))),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,
@@ -100,7 +105,10 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
             v => v,
         };
 
-        Ok(init_operator(&storage)?)
+        Ok(init_operator_with_policy_scope(
+            &storage,
+            EndpointPolicyScope::External,
+        )?)
     } else {
         let stage_prefix = stage_info.stage_prefix();
         let param = DataOperator::instance()
@@ -110,6 +118,20 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
         Ok(init_operator(&param)?)
     }
 }
+
+pub fn is_stage_path_traversal(path: &str) -> bool {
+    path.split('/').any(|component| component == "..")
+}
+
+pub fn ensure_no_stage_path_traversal(path: &str) -> Result<()> {
+    if is_stage_path_traversal(path) {
+        return Err(ErrorCode::BadArguments(format!(
+            "stage path traversal is not allowed by stage_path_traversal_policy: {path}"
+        )));
+    }
+    Ok(())
+}
+
 /// select * from @s1/<path> (FILES => <files> PATTERN => <pattern>)
 /// copy from @s1/<path> FILES = <files> PATTERN => <pattern>
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug, Default)]
@@ -365,5 +387,23 @@ fn stdin_stage_info() -> StageFileInfo {
         etag: None,
         status: StageFileStatus::NeedCopy,
         creator: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_stage_path_traversal;
+
+    #[test]
+    fn test_is_stage_path_traversal() {
+        assert!(is_stage_path_traversal("../a"));
+        assert!(is_stage_path_traversal("../"));
+        assert!(is_stage_path_traversal(".."));
+        assert!(is_stage_path_traversal("a/../b"));
+        assert!(is_stage_path_traversal("a/.."));
+
+        assert!(!is_stage_path_traversal("a/b"));
+        assert!(!is_stage_path_traversal("..a/b"));
+        assert!(!is_stage_path_traversal("a/..b"));
     }
 }

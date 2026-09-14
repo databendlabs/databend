@@ -113,31 +113,31 @@ id BIGINT 1 csv/max_records.csv 0
 value VARCHAR 1 csv/max_records.csv 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.csv 0
 value BIGINT 1 csv/max_records.csv 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.zip', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.zip', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.zip 0
 value BIGINT 1 csv/max_records.zip 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.zst 0
 value BIGINT 1 csv/max_records.zst 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.csv 0
 value BIGINT 1 csv/max_records.csv 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.xz 0
 value BIGINT 1 csv/max_records.xz 1
@@ -200,31 +200,31 @@ id BIGINT 1 ndjson/max_records.ndjson 0
 value VARCHAR 1 ndjson/max_records.ndjson 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.ndjson 0
 value BIGINT 1 ndjson/max_records.ndjson 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.zip', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.zip', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.zip 0
 value BIGINT 1 ndjson/max_records.zip 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.zst 0
 value BIGINT 1 ndjson/max_records.zst 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.ndjson 0
 value BIGINT 1 ndjson/max_records.ndjson 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_pre_file => 5)
+select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_per_file => 5)
 ----
 id BIGINT 1 ndjson/max_records.xz 0
 value BIGINT 1 ndjson/max_records.xz 1
@@ -252,6 +252,19 @@ col2 VARCHAR 1 1
 col3 VARCHAR 1 2
 col4 VARCHAR 1 3
 col5 VARCHAR 1 4
+
+query TTBI
+select column_name, type, nullable, order_id from infer_schema(location => '@data/ndjson/infer_schema_conflicts.ndjson', file_format => 'NDJSON');
+----
+scalar_conflict VARCHAR 1 0
+int_float DOUBLE 1 1
+scalar_array_conflict VARIANT 1 2
+object_conflict VARIANT 1 3
+nested TUPLE(LEAF TUPLE(X INT64, Y STRING),) 1 4
+arr ARRAY(STRING) 1 5
+empty_arr ARRAY(VARIANT) 1 6
+nullable_num BIGINT 1 7
+nullable_bool BOOLEAN 1 8
 
 query T
 select CASE

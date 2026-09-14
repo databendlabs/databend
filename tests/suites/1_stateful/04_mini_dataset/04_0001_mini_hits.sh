@@ -3,9 +3,9 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "drop table if exists hits;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists hits;" | bendsql_connect_root
 ## Create table
-cat $TESTS_DATA_DIR/ddl/hits.sql | $BENDSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/hits.sql | bendsql_connect_root
 
 hits_statements=(
   ## load data
@@ -101,8 +101,8 @@ hits_statements=(
 )
 
 for i in "${hits_statements[@]}"; do
-  echo "$i" | $BENDSQL_CLIENT_CONNECT
+  echo "$i" | bendsql_connect_root
 done
 
 ## Clean up
-echo "drop table if exists hits all;" | $BENDSQL_CLIENT_CONNECT
+echo "drop table if exists hits all;" | bendsql_connect_root

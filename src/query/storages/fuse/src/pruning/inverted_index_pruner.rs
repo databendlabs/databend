@@ -105,7 +105,7 @@ impl InvertedIndexPruner {
                 }
             }
 
-            // whether need to generate score internl column
+            // whether need to generate score internal column
             let has_score = inverted_index_info.has_score;
             let index_name = inverted_index_info.index_name.clone();
             let index_version = inverted_index_info.index_version.clone();

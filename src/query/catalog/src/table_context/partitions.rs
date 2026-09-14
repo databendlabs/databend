@@ -37,14 +37,6 @@ pub trait TableContextPartitionStats: Send + Sync {
         unimplemented!()
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        unimplemented!()
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {
-        unimplemented!()
-    }
-
     fn get_enable_sort_spill(&self) -> bool {
         unimplemented!()
     }
@@ -76,6 +68,8 @@ pub trait TableContextPartitionStats: Send + Sync {
     fn set_pruned_partitions_stats(&self, _plan_id: u32, _stats: PartStatistics) {
         unimplemented!()
     }
+
+    fn clear_pruned_partitions_stats(&self) {}
 
     fn merge_pruned_partitions_stats(&self, _other: &HashMap<u32, PartStatistics>) {
         unimplemented!()

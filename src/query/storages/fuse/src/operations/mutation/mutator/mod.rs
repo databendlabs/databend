@@ -13,13 +13,10 @@
 // limitations under the License.
 
 mod block_compact_mutator;
-mod recluster_mutator;
 mod segment_compact_mutator;
 
 pub use block_compact_mutator::BlockCompactMutator;
 pub use block_compact_mutator::SegmentCompactChecker;
-pub use recluster_mutator::ReclusterMutator;
-pub(crate) use recluster_mutator::SelectedReclusterSegment;
 pub use segment_compact_mutator::SegmentCompactMutator;
 pub use segment_compact_mutator::SegmentCompactionState;
 pub use segment_compact_mutator::SegmentCompactor;

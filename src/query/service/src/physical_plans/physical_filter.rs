@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
@@ -152,9 +153,10 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let used = filter.predicates.iter().fold(required.clone(), |acc, v| {
-            acc.union(&v.used_columns()).cloned().collect()
-        });
+        let mut used = required.clone();
+        for predicate in &filter.predicates {
+            predicate.collect_used_columns(&mut used);
+        }
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, used).await?;
@@ -183,7 +185,8 @@ impl PhysicalPlanBuilder {
                         .type_check(input_schema.as_ref())?
                         .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
                     let expr = cast_expr_to_non_null_boolean(expr)?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (expr, _) =
+                        ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                     Ok(expr.as_remote_expr())
                 })
                 .collect::<Result<_>>()?,

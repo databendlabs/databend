@@ -28,14 +28,16 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::StageFilesInfo;
 
 use super::util::TableIdentifier;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::binder::Binder;
-use crate::binder::resolve_stage_location;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
+use crate::binder::parse_file_format;
+use crate::binder::validate_stage_files_path_traversal;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
@@ -198,15 +200,8 @@ impl Binder {
                 location,
             } => {
                 let settings = self.ctx.get_settings();
-                let file_format_params = FileFormatParams::try_from_reader(
-                    FileFormatOptionsReader::from_ast(&format_options),
-                    false,
-                )?;
-                if matches!(file_format_params, FileFormatParams::Lance(_)) {
-                    return Err(ErrorCode::IllegalFileFormat(
-                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
-                    ));
-                }
+                let file_format_params =
+                    parse_file_format(FileFormatOptionsReader::from_ast(&format_options))?;
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
@@ -252,15 +247,31 @@ impl Binder {
                                 "Insert into branch from stage is not supported yet",
                             ));
                         }
-                        let (mut stage_info, path) =
-                            resolve_stage_location(self.ctx.as_ref(), loc).await?;
-                        stage_info.file_format_params = file_format_params;
+                        let (stage_info, path) = StageResolver::from_table_context(
+                            self.ctx.clone(),
+                            databend_common_users::UserApiProvider::instance(),
+                            databend_common_config::GlobalConfig::instance()
+                                .storage
+                                .allow_insecure,
+                        )?
+                        .resolve_data_stage_location(
+                            loc,
+                            StagePathAccess::Read,
+                            Some(file_format_params),
+                        )
+                        .await?;
 
                         let files_info = StageFilesInfo {
                             path,
                             files: None,
                             pattern: None,
                         };
+                        validate_stage_files_path_traversal(
+                            self.ctx.get_settings().as_ref(),
+                            &files_info.path,
+                            files_info.files.as_deref(),
+                            false,
+                        )?;
                         let options = CopyIntoTableOptions {
                             purge: true,
                             force: true,
@@ -280,6 +291,7 @@ impl Binder {
                                 CopyIntoTableMode::Insert {
                                     overwrite: *overwrite,
                                 },
+                                false,
                             )
                             .await;
                     }
@@ -296,6 +308,10 @@ impl Binder {
             overwrite: *overwrite,
             source: input_source?,
             table_info: None,
+            lineage_target_table_id: (table.get_table_info().catalog_info.catalog_type()
+                == databend_common_meta_app::schema::CatalogType::Default)
+                .then_some(table.get_table_info().ident.table_id),
+            lineage_target_catalog_type: table.get_table_info().catalog_info.catalog_type(),
         };
 
         Ok(Plan::Insert(Box::new(plan)))

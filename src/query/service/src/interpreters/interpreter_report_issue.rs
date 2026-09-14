@@ -48,6 +48,7 @@ use super::InterpreterFactory;
 use super::ShowCreateQuerySettings;
 use super::ShowCreateTableInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
@@ -73,25 +74,27 @@ impl Interpreter for ReportIssueInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // Detection error
-        let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
-        let settings = self.ctx.get_settings();
-        report_context.add_setting_changes(settings);
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // Detection error
+            let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
+            let settings = self.ctx.get_settings();
+            report_context.add_setting_changes(settings);
 
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_query(
-            LevelFilter::Debug,
-            report_context.logs.clone(),
-        ));
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_query(
+                LevelFilter::Debug,
+                report_context.logs.clone(),
+            ));
 
-        tracking_payload
-            .tracking(self.detection_error(&mut report_context))
-            .await?;
+            tracking_payload
+                .tracking(self.detection_error(&mut report_context))
+                .await?;
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(vec![format!("{}", report_context)]),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(vec![format!("{}", report_context)]),
+            ])])
+        })
     }
 }
 
@@ -143,7 +146,10 @@ impl ReportIssueInterpreter {
             }
         };
 
-        let mut data_stream = match interpreter.execute(self.ctx.clone()).await {
+        let mut data_stream = match interpreter
+            .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested_with_hooks())
+            .await
+        {
             Ok(data_stream) => data_stream,
             Err(error) => {
                 report_context.add_report_error(error);

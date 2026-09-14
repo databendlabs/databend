@@ -55,7 +55,7 @@ use crate::transformer::RecordBatchTransformer;
 /// The reader to read a whole parquet file.
 pub struct ParquetWholeFileReader {
     pub(super) op_registry: Arc<dyn OperatorRegistry>,
-    pub(super) expect_file_schema: Option<(SchemaDescPtr, String)>,
+    pub(super) expect_file_schema: Option<(SchemaDescPtr, String, bool)>,
     pub(super) output_schema: TableSchemaRef,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
 
@@ -186,12 +186,15 @@ impl ParquetWholeFileReader {
 
         // Prune row groups.
         let file_meta = builder.metadata().clone();
-        if let Some((expect_schema, expect_schema_from)) = &self.expect_file_schema {
+        if let Some((expect_schema, expect_schema_from, from_arrow_fallback)) =
+            &self.expect_file_schema
+        {
             check_parquet_schema(
                 expect_schema,
                 file_meta.file_metadata().schema_descr(),
                 path,
                 expect_schema_from,
+                *from_arrow_fallback,
             )?;
         }
 

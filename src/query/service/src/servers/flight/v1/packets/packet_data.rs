@@ -23,6 +23,7 @@ use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::PerfValue;
 use databend_common_catalog::plan::PartStatistics;
@@ -76,6 +77,7 @@ pub enum DataPacket {
     PartStatistics(HashMap<u32, PartStatistics>),
     QueryPerf(String),
     QueryPerfCounters(NodePerfCounters),
+    IoStats(IoStatsSnapshot),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -96,6 +98,7 @@ impl DataPacket {
             DataPacket::QueryPerf(_) => 0,
             DataPacket::PartStatistics(_) => 0,
             DataPacket::QueryPerfCounters(_) => 0,
+            DataPacket::IoStats(_) => 0,
         }
     }
 }
@@ -174,6 +177,12 @@ impl TryFrom<DataPacket> for FlightData {
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
+            DataPacket::IoStats(stats) => FlightData {
+                app_metadata: vec![0x0c].into(),
+                data_body: serde_json::to_vec(&stats)?.into(),
+                data_header: Default::default(),
+                flight_descriptor: None,
+            },
         })
     }
 }
@@ -248,6 +257,10 @@ impl TryFrom<FlightData> for DataPacket {
             0x0b => {
                 let counters = serde_json::from_slice::<NodePerfCounters>(&flight_data.data_body)?;
                 Ok(DataPacket::QueryPerfCounters(counters))
+            }
+            0x0c => {
+                let stats = serde_json::from_slice::<IoStatsSnapshot>(&flight_data.data_body)?;
+                Ok(DataPacket::IoStats(stats))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }

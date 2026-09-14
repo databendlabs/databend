@@ -57,6 +57,13 @@ select count(regexp_split_to_table(',apple,,banana,', ','));
 ----
 5
 
+query TI
+SELECT regexp_split_to_table('a,b', ','), unnest([1, 2, 3])
+----
+a 1
+b 2
+NULL 3
+
 query I
 SELECT count(regexp_split_to_table('the quick brown fox', '\\s*'));
 ----

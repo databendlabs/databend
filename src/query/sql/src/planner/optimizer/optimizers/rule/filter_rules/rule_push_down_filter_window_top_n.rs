@@ -23,6 +23,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::MetadataRef;
 use crate::Symbol;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -39,6 +40,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::Window;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 
 /// Input:  Filter
 ///           \
@@ -53,25 +55,36 @@ use crate::plans::WindowFuncType;
 ///              Sort(top n)
 pub struct RulePushDownFilterWindowTopN {
     id: RuleID,
+    ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
     matchers: Vec<Matcher>,
 }
 
 impl RulePushDownFilterWindowTopN {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
         Self {
             id: RuleID::PushDownFilterWindowTopN,
-            metadata,
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Filter,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Window,
+            metadata: ctx.get_metadata(),
+            ctx,
+            matchers: vec![
+                Matcher::MatchOp {
+                    op_type: RelOp::Filter,
                     children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Sort,
+                        op_type: RelOp::Window,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Sort,
+                            children: vec![Matcher::Leaf],
+                        }],
+                    }],
+                },
+                Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::WindowGroup,
                         children: vec![Matcher::Leaf],
                     }],
-                }],
-            }],
+                },
+            ],
         }
     }
 }
@@ -82,8 +95,13 @@ impl Rule for RulePushDownFilterWindowTopN {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let window_expr = s_expr.child(0)?;
+        if matches!(window_expr.plan().rel_op(), RelOp::WindowGroup) {
+            return self.apply_window_group(s_expr, filter, window_expr, &func_ctx, state);
+        }
+
         let window: Window = window_expr.plan().clone().try_into()?;
         let sort_expr = window_expr.child(0)?;
         let mut sort: Sort = sort_expr.plan().clone().try_into()?;
@@ -95,7 +113,7 @@ impl Rule for RulePushDownFilterWindowTopN {
         let predicates = filter
             .predicates
             .into_iter()
-            .filter_map(|predicate| extract_top_n(window.index, predicate))
+            .filter_map(|predicate| extract_top_n(window.index, predicate, &func_ctx))
             .collect::<Vec<_>>();
 
         let Some(top_n) = predicates.into_iter().min() else {
@@ -143,7 +161,73 @@ impl Rule for RulePushDownFilterWindowTopN {
     }
 }
 
-fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
+impl RulePushDownFilterWindowTopN {
+    fn apply_window_group(
+        &self,
+        s_expr: &SExpr,
+        filter: Filter,
+        window_expr: &SExpr,
+        func_ctx: &FunctionContext,
+        state: &mut TransformResult,
+    ) -> Result<()> {
+        let mut window_group: WindowGroup = window_expr.plan().clone().try_into()?;
+        let mut top_n_windows = Vec::new();
+
+        for (index, window) in window_group.windows.iter().enumerate() {
+            if !is_ranking_function(&window.function) || window.partition_by.is_empty() {
+                continue;
+            }
+
+            let predicates = filter
+                .predicates
+                .iter()
+                .filter_map(|predicate| extract_top_n(window.index, predicate.clone(), func_ctx))
+                .collect::<Vec<_>>();
+            if let Some(top_n) = predicates.into_iter().min() {
+                top_n_windows.push((index, top_n));
+            }
+        }
+
+        let Some((index, top_n)) = top_n_windows.into_iter().min_by_key(|(_, top_n)| *top_n) else {
+            return Ok(());
+        };
+
+        if top_n == 0 {
+            let output_columns = s_expr
+                .plan()
+                .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
+                .output_columns
+                .clone();
+            let metadata = self.metadata.read();
+            let mut columns = output_columns.iter().copied().collect::<Vec<_>>();
+            columns.sort();
+            let fields = columns
+                .into_iter()
+                .map(|col| DataField::new(&col.to_string(), metadata.column(col).data_type()))
+                .collect::<Vec<_>>();
+            let empty_scan =
+                ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
+            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            state.add_result(result);
+            return Ok(());
+        }
+
+        window_group.windows[index].top = Some(top_n);
+        let mut result = s_expr.replace_children(vec![Arc::new(
+            window_expr.replace_plan(Arc::new(window_group.into())),
+        )]);
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
+
+        Ok(())
+    }
+}
+
+fn extract_top_n(
+    column: Symbol,
+    predicate: ScalarExpr,
+    func_ctx: &FunctionContext,
+) -> Option<usize> {
     let ScalarExpr::FunctionCall(call) = predicate else {
         return None;
     };
@@ -155,7 +239,7 @@ fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
             | (number, ScalarExpr::BoundColumnRef(col))
                 if col.column.index == column =>
             {
-                extract_i32(number).map(|n| n.max(0) as usize)
+                extract_i32(number, func_ctx).map(|n| n.max(0) as usize)
             }
             _ => None,
         };
@@ -182,7 +266,7 @@ fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
     let eq = func_name == ComparisonOp::GTE.to_func_name()
         || func_name == ComparisonOp::LTE.to_func_name();
 
-    extract_i32(right).map(|n| {
+    extract_i32(right, func_ctx).map(|n| {
         if eq {
             n.max(0) as usize
         } else {
@@ -191,14 +275,8 @@ fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
     })
 }
 
-fn extract_i32(expr: &ScalarExpr) -> Option<i32> {
-    check_number(
-        None,
-        &FunctionContext::default(),
-        &expr.as_expr().ok()?,
-        &BUILTIN_FUNCTIONS,
-    )
-    .ok()
+fn extract_i32(expr: &ScalarExpr, func_ctx: &FunctionContext) -> Option<i32> {
+    check_number(None, func_ctx, expr.as_expr().ok()?, &BUILTIN_FUNCTIONS).ok()
 }
 
 fn is_ranking_function(func: &WindowFuncType) -> bool {

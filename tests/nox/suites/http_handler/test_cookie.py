@@ -18,7 +18,7 @@ class GlobalCookieJar(RequestsCookieJar):
 
 
 def do_query(session_client, query, session_state=None, enable_cookie=True):
-    url = f"http://127.0.0.1:8000/v1/query"
+    url = "http://127.0.0.1:8000/v1/query"
     query_payload = {
         "sql": query,
         "pagination": {"wait_time_secs": 100, "max_rows_per_page": 2},
@@ -91,6 +91,34 @@ def test_temp_table():
     session_state = resp.json()["session"]
     assert not session_state["need_sticky"]
     assert not session_state["need_keep_alive"]
+
+
+def test_active_temp_table_survives_vacuum():
+    vacuum_client = requests.session()
+    resp = do_query(vacuum_client, "select * from fuse_vacuum_temporary_table()")
+    assert resp.status_code == 200, resp.text
+
+    client = requests.session()
+    client.cookies = GlobalCookieJar()
+    client.cookies.set("cookie_enabled", "true")
+
+    resp = do_query(client, "create temp table active_temp(a int)")
+    assert resp.status_code == 200, resp.text
+    session_state = resp.json()["session"]
+
+    resp = do_query(client, "insert into active_temp values (1)", session_state)
+    assert resp.status_code == 200, resp.text
+    session_state = resp.json()["session"]
+
+    resp = do_query(vacuum_client, "select * from fuse_vacuum_temporary_table()")
+    assert resp.status_code == 200, resp.text
+
+    resp = do_query(client, "select * from active_temp", session_state)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"] == [["1"]], resp.text
+
+    resp = do_query(client, "drop table active_temp", resp.json()["session"])
+    assert resp.status_code == 200, resp.text
 
 
 def test_no_cookie_if_not_enabled():

@@ -48,10 +48,11 @@ use databend_meta::configs::AdminConfig;
 use databend_meta::configs::GrpcConfig;
 use databend_meta::configs::MetaServiceConfig;
 use databend_meta::configs::TlsConfig;
-use databend_meta::raft_store::MetaStartupError;
-use databend_meta::raft_store::config::RaftConfig as InnerRaftConfig;
-use databend_meta::raft_store::config::get_default_raft_advertise_host;
-use databend_meta::raft_store::ondisk::DATA_VERSION;
+use databend_meta::raft_config::MetaStartupError;
+use databend_meta::raft_config::Secret;
+use databend_meta::raft_config::config::RaftConfig as InnerRaftConfig;
+use databend_meta::raft_config::config::get_default_raft_advertise_host;
+use databend_meta::raft_config::data_version::DATA_VERSION;
 use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use serde::Deserialize;
 use serde::Serialize;
@@ -455,6 +456,38 @@ pub struct RaftConfig {
     /// Default: 32MB (33554432).
     #[clap(long)]
     pub raft_grpc_max_message_size: Option<usize>,
+
+    /// The secret this node attaches to the raft RPCs it sends.
+    ///
+    /// Unset sends nothing, which is how a not yet configured node behaves.
+    /// Peers that are not strict still accept such a node, so a cluster can
+    /// adopt the secret without downtime.
+    ///
+    /// Held as a plain `String` rather than the inner `Secret`, because
+    /// `serfig` merges the config sources by serializing this struct, and
+    /// `Secret` serializes to `***` on purpose: it would overwrite the real
+    /// value with the redaction. The conversion to `Secret` happens on the way
+    /// to `InnerRaftConfig`, which is the only form that outlives loading and
+    /// the only one ever logged.
+    #[clap(long)]
+    pub raft_secret: Option<String>,
+
+    /// The secrets this node accepts on the raft RPCs it receives.
+    ///
+    /// Accepting more than one is what makes rotation possible without
+    /// downtime: add the new secret here on every node first, then move
+    /// `raft_secret` over node by node, then drop the old one from here.
+    #[clap(long)]
+    pub raft_accepted_secrets: Vec<String>,
+
+    /// Whether to reject a received raft RPC carrying no or an unaccepted
+    /// secret.
+    ///
+    /// Must stay off until every node of the cluster sends a secret: turning
+    /// it on earlier makes the nodes declare each other unreachable.
+    /// Default: false.
+    #[clap(long)]
+    pub raft_secret_strict: Option<bool>,
 }
 
 // TODO(rotbl): should not be used.
@@ -498,6 +531,13 @@ impl From<RaftConfig> for InnerRaftConfig {
             cluster_name: x.cluster_name,
             wait_leader_timeout: x.wait_leader_timeout,
             raft_grpc_max_message_size: x.raft_grpc_max_message_size,
+            raft_secret: x.raft_secret.map(Secret::new),
+            raft_accepted_secrets: x
+                .raft_accepted_secrets
+                .into_iter()
+                .map(Secret::new)
+                .collect(),
+            raft_secret_strict: x.raft_secret_strict,
         }
     }
 }
@@ -535,6 +575,13 @@ impl From<InnerRaftConfig> for RaftConfig {
             cluster_name: inner.cluster_name,
             wait_leader_timeout: inner.wait_leader_timeout,
             raft_grpc_max_message_size: inner.raft_grpc_max_message_size,
+            raft_secret: inner.raft_secret.map(|s| s.expose().to_string()),
+            raft_accepted_secrets: inner
+                .raft_accepted_secrets
+                .iter()
+                .map(|s| s.expose().to_string())
+                .collect(),
+            raft_secret_strict: inner.raft_secret_strict,
         }
     }
 }
@@ -821,6 +868,7 @@ mod tests {
 
     use crate::Config;
     use crate::MetaConfig;
+    use crate::RaftConfig;
 
     #[test]
     fn test_load_config() -> anyhow::Result<()> {
@@ -887,6 +935,80 @@ cluster_name = "foo_cluster"
             assert_eq!(cfg.service.raft_config.id, 20);
             assert_eq!(cfg.service.raft_config.cluster_name, "foo_cluster");
         });
+
+        Ok(())
+    }
+
+    /// The config file is mid-rotation: the node still sends the old secret
+    /// while already accepting both.
+    #[test]
+    fn test_load_raft_secret_from_file() -> anyhow::Result<()> {
+        let d = tempdir()?;
+        let file_path = d.path().join("secret.toml");
+        let mut file = File::create(&file_path)?;
+        write!(
+            file,
+            r#"
+[raft_config]
+raft_secret = "old-secret"
+raft_accepted_secrets = ["old-secret", "new-secret"]
+raft_secret_strict = true
+             "#
+        )?;
+
+        temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
+            let cfg: MetaConfig = Config::load(false)
+                .expect("load must success")
+                .try_into()
+                .expect("conversion must success");
+
+            let raft = &cfg.service.raft_config;
+            assert_eq!(
+                raft.raft_secret.as_ref().map(|s| s.expose()),
+                Some("old-secret")
+            );
+            assert_eq!(
+                raft.raft_accepted_secrets
+                    .iter()
+                    .map(|s| s.expose())
+                    .collect::<Vec<_>>(),
+                vec!["old-secret", "new-secret"],
+                "a rotation keeps both the old and the new secret accepted"
+            );
+            assert_eq!(raft.raft_secret_strict, Some(true));
+        });
+
+        Ok(())
+    }
+
+    /// `Secret` redacts itself, so a config dump must not contain the value.
+    /// Both places that log the config serialize `MetaConfig`, not the CLI
+    /// `Config`, which is why the CLI layer may hold a plain `String`.
+    #[test]
+    fn test_logged_config_redacts_the_raft_secret() -> anyhow::Result<()> {
+        let cli = Config {
+            raft_config: RaftConfig {
+                raft_secret: Some("hunter2".to_string()),
+                raft_accepted_secrets: vec!["hunter2".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // The CLI struct itself does leak, which is the whole reason it must
+        // not be the one that gets logged, and the reason `serfig` can merge
+        // it faithfully.
+        assert!(serde_json::to_string(&cli)?.contains("hunter2"));
+
+        let inner: MetaConfig = cli.try_into().expect("conversion must success");
+        let dumped = serde_json::to_string(&inner)?;
+
+        assert!(
+            !dumped.contains("hunter2"),
+            "the secret must not reach a config dump: {}",
+            dumped
+        );
+        assert!(dumped.contains("***"), "and it must be visibly redacted");
 
         Ok(())
     }

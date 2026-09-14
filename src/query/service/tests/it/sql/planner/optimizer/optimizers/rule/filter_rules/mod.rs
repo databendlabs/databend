@@ -12,4 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod filter_nulls_test;
 mod push_down_filter_join_test;

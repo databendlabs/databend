@@ -49,6 +49,17 @@ statement ok
 create stream s1 on table t append_only = true
 
 statement ok
+create stream `a'b_stream` on table t append_only = true
+
+query TTT
+show streams like 'a''b%'
+----
+a'b_stream test_stream.t append_only
+
+statement ok
+drop stream `a'b_stream`
+
+statement ok
 insert into t values(3)
 
 statement ok

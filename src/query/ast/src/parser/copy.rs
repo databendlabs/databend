@@ -126,7 +126,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
             ~ #hint?
             ~ INTO ~ #file_location
             ~ ^FROM ~ ^#copy_into_location_source
-            ~ (PARTITION ~ BY ~ "(" ~ #expr ~ ")")?
+            ~ (PARTITION ~ ^BY ~ ^"(" ~ ^#expr ~ ^")")?
             ~ #copy_into_location_option*
         },
         |(with, _copy, opt_hints, _into, dst, _from, src, partition_by, opts)| {
@@ -152,14 +152,14 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
          #copy_into_location:"`COPY
                 INTO { @<stage_name>[/<path>]  | '<uri>' }
                 FROM { [<database_name>.]<table_name> | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ copyOptions ]`"
          | #copy_into_table: "`COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`"

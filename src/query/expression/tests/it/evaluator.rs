@@ -66,6 +66,7 @@ fn test_run_lambda_ignores_physical_nullable_wrapper_for_non_nullable_array() {
             vec![array_ty.clone()],
             &lambda_expr,
             &array_ty,
+            None,
         )
         .unwrap();
 

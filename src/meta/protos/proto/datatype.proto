@@ -71,7 +71,102 @@ message DataType {
     uint64   opaque_t      = 51;
     Empty    stage_location_t = 52;
     Empty    timestamp_tz_t = 53;
+    AggregateState aggregate_state_t = 54;
   }
+}
+
+message AggregateState {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string function_name = 1;
+  repeated AggregateFunctionParam params = 2;
+  repeated DataType argument_types = 3;
+  DataType state_type = 4;
+}
+
+message AggregateFunctionParam {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  oneof value {
+    Empty null_value = 1;
+    AggregateNumberParam number = 2;
+    AggregateDecimalParam decimal = 3;
+    sint64 timestamp = 4;
+    AggregateTimestampTzParam timestamp_tz = 5;
+    sint32 date = 6;
+    AggregateIntervalParam interval = 7;
+    bool boolean = 8;
+    bytes binary = 9;
+    string string = 10;
+    bytes bitmap = 11;
+    AggregateTupleParam tuple = 12;
+    bytes variant = 13;
+    bytes geometry = 14;
+  }
+}
+
+message AggregateNumberParam {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  oneof value {
+    uint32 uint8 = 1;
+    uint32 uint16 = 2;
+    uint32 uint32 = 3;
+    uint64 uint64 = 4;
+    sint32 int8 = 5;
+    sint32 int16 = 6;
+    sint32 int32 = 7;
+    sint64 int64 = 8;
+    fixed32 float32_bits = 9;
+    fixed64 float64_bits = 10;
+  }
+}
+
+message AggregateDecimalParam {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  oneof value {
+    AggregateDecimalValue decimal64 = 1;
+    AggregateDecimalValue decimal128 = 2;
+    AggregateDecimalValue decimal256 = 3;
+  }
+}
+
+message AggregateDecimalValue {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  bytes value = 1;
+  uint32 precision = 2;
+  uint32 scale = 3;
+}
+
+message AggregateTimestampTzParam {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  sint64 timestamp = 1;
+  sint32 offset = 2;
+}
+
+message AggregateIntervalParam {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  sint32 months = 1;
+  sint32 days = 2;
+  sint64 microseconds = 3;
+}
+
+message AggregateTupleParam {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated AggregateFunctionParam fields = 1;
 }
 
 // TODO: remove when MIN_MSG_VER becomes >=24

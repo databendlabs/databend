@@ -37,10 +37,11 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 
 use crate::ir::ColumnAccess;
 use crate::ir::IterRef;
@@ -826,92 +827,72 @@ impl Compiler {
         self.compile_if(span, &conditions, results, else_result)
     }
 
+    fn rewrite_sql_hole_expr(&self, expr: &mut Expr) -> Result<()> {
+        if let Expr::Hole { span, name } = expr {
+            let index = self.lookup_var(&Identifier::from_name(*span, name.clone()))?;
+            *expr = Expr::Hole {
+                span: *span,
+                name: index.index.to_string(),
+            };
+        }
+        Ok(())
+    }
+
+    fn rewrite_sql_hole_ident(&self, ident: &mut Identifier) -> Result<()> {
+        if ident.is_hole() {
+            let index = self.lookup_var(ident)?;
+            *ident = Identifier::from_name(ident.span, index.index.to_string());
+            ident.ident_type = IdentifierType::Hole;
+        }
+        Ok(())
+    }
+
     fn compile_sql_statement(
         &self,
         span: Span,
         stmt: &Statement,
         to_set: SetRef,
     ) -> Result<Vec<ScriptIR>> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter), Statement(enter))]
         struct QuoteVisitor<'a> {
             compiler: &'a Compiler,
-            error: Option<ErrorCode>,
         }
 
-        impl QuoteVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
-                if let Expr::Hole { span, name } = expr {
-                    let index = self
-                        .compiler
-                        .lookup_var(&Identifier::from_name(*span, name.clone()));
-                    match index {
-                        Ok(index) => {
-                            *expr = Expr::Hole {
-                                span: *span,
-                                name: index.index.to_string(),
-                            };
-                        }
-                        Err(e) => {
-                            self.error = Some(e.set_span(*span));
-                        }
-                    }
-                }
+        impl VisitorMut for QuoteVisitor<'_> {
+            type Error = ErrorCode;
+
+            fn visit_expr(&mut self, expr: &mut Expr) -> Result<VisitControl> {
+                self.compiler.rewrite_sql_hole_expr(expr)?;
+                Ok(VisitControl::Continue)
             }
 
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole() {
-                    let index = self.compiler.lookup_var(ident);
-                    match index {
-                        Ok(index) => {
-                            *ident = Identifier::from_name(ident.span, index.index.to_string());
-                            ident.ident_type = IdentifierType::Hole;
-                        }
-                        Err(e) => {
-                            self.error = Some(e.set_span(ident.span));
-                        }
-                    }
-                }
+            fn visit_identifier(&mut self, ident: &mut Identifier) -> Result<VisitControl> {
+                self.compiler.rewrite_sql_hole_ident(ident)?;
+                Ok(VisitControl::Continue)
             }
 
             // TODO(andylokandy: handle these statement)
-            fn enter_statement(&mut self, stmt: &mut Statement) {
+            fn visit_statement(&mut self, stmt: &mut Statement) -> Result<VisitControl> {
                 match stmt {
-                    Statement::Begin => {
-                        self.error = Some(ErrorCode::Unimplemented(
-                            "BEGIN in script is not supported yet".to_string(),
-                        ));
-                    }
-                    Statement::Commit => {
-                        self.error = Some(ErrorCode::Unimplemented(
-                            "COMMIT in script is not supported yet".to_string(),
-                        ));
-                    }
-                    Statement::Abort => {
-                        self.error = Some(ErrorCode::Unimplemented(
-                            "ABORT in script is not supported yet".to_string(),
-                        ));
-                    }
-                    Statement::Call { .. } => {
-                        self.error = Some(ErrorCode::Unimplemented(
-                            "CALL in script is not supported yet".to_string(),
-                        ));
-                    }
-                    _ => (),
+                    Statement::Begin => Err(ErrorCode::Unimplemented(
+                        "BEGIN in script is not supported yet".to_string(),
+                    )),
+                    Statement::Commit => Err(ErrorCode::Unimplemented(
+                        "COMMIT in script is not supported yet".to_string(),
+                    )),
+                    Statement::Abort => Err(ErrorCode::Unimplemented(
+                        "ABORT in script is not supported yet".to_string(),
+                    )),
+                    Statement::Call { .. } => Err(ErrorCode::Unimplemented(
+                        "CALL in script is not supported yet".to_string(),
+                    )),
+                    _ => Ok(VisitControl::Continue),
                 }
             }
         }
 
         let mut stmt = stmt.clone();
-        let mut visitor = QuoteVisitor {
-            compiler: self,
-            error: None,
-        };
-        stmt.drive_mut(&mut visitor);
-
-        if let Some(e) = visitor.error {
-            return Err(e);
-        }
+        let mut visitor = QuoteVisitor { compiler: self };
+        stmt.walk_mut(&mut visitor)?;
 
         // QUERY <stmt>, to_set
         let stmt = StatementTemplate::new(span, stmt);
@@ -1065,16 +1046,32 @@ impl Compiler {
     }
 
     fn quote_expr(&mut self, expr: &Expr) -> Result<(Vec<ScriptIR>, Expr)> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
         struct QuoteVisitor<'a> {
             compiler: &'a mut Compiler,
             output: Vec<ScriptIR>,
-            error: Option<ErrorCode>,
+            query_depth: usize,
         }
 
-        impl QuoteVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
+        impl VisitorMut for QuoteVisitor<'_> {
+            type Error = ErrorCode;
+
+            fn visit_query(&mut self, _query: &mut Query) -> Result<VisitControl> {
+                self.query_depth += 1;
+                Ok(VisitControl::Continue)
+            }
+
+            fn leave_query(&mut self, _query: &mut Query) -> Result<()> {
+                self.query_depth -= 1;
+                Ok(())
+            }
+
+            fn visit_expr(&mut self, expr: &mut Expr) -> Result<VisitControl> {
+                if self.query_depth > 0 {
+                    // Nested SQL uses the same quoting rules as RESULTSET/RETURN TABLE:
+                    // bare names stay SQL names, `:var` is a script variable.
+                    self.compiler.rewrite_sql_hole_expr(expr)?;
+                    return Ok(VisitControl::Continue);
+                }
                 match expr {
                     // Transform `variable` to `:index`.
                     Expr::ColumnRef {
@@ -1086,18 +1083,11 @@ impl Compiler {
                                 column: ColumnID::Name(column),
                             },
                     } => {
-                        let index = self.compiler.lookup_var(column);
-                        match index {
-                            Ok(index) => {
-                                *expr = Expr::Hole {
-                                    span: *span,
-                                    name: index.index.to_string(),
-                                };
-                            }
-                            Err(e) => {
-                                self.error = Some(e.set_span(*span));
-                            }
-                        }
+                        let index = self.compiler.lookup_var(column)?;
+                        *expr = Expr::Hole {
+                            span: *span,
+                            name: index.index.to_string(),
+                        };
                     }
                     // Transform `iter.column` to `READ <iter>, <column>, to_var`, and replace the
                     // expression with `:to_var_index`.
@@ -1110,55 +1100,50 @@ impl Compiler {
                                 column: ColumnID::Name(column),
                             },
                     } => {
-                        let res = try {
-                            // READ <iter>, <column>, to_var
-                            let to_var = VarRef::new_internal(
-                                column.span,
-                                &format!("{iter}.{column}"),
-                                &mut self.compiler.ref_allocator,
-                            );
-                            let iter = self.compiler.lookup_iter(iter)?;
-                            let column =
-                                ColumnAccess::Name(self.compiler.normalize_ident(column).0);
-                            self.output.push(ScriptIR::Read {
-                                iter,
-                                column,
-                                to_var: to_var.clone(),
-                            });
+                        // READ <iter>, <column>, to_var
+                        let to_var = VarRef::new_internal(
+                            column.span,
+                            &format!("{iter}.{column}"),
+                            &mut self.compiler.ref_allocator,
+                        );
+                        let iter = self.compiler.lookup_iter(iter)?;
+                        let column = ColumnAccess::Name(self.compiler.normalize_ident(column).0);
+                        self.output.push(ScriptIR::Read {
+                            iter,
+                            column,
+                            to_var: to_var.clone(),
+                        });
 
-                            *expr = Expr::Hole {
-                                span: *span,
-                                name: to_var.index.to_string(),
-                            };
+                        *expr = Expr::Hole {
+                            span: *span,
+                            name: to_var.index.to_string(),
                         };
-
-                        if let Err(err) = res {
-                            self.error = Some(err);
-                        }
                     }
                     Expr::Hole { span, .. } => {
-                        self.error = Some(
-                            ErrorCode::ScriptSemanticError(
-                                "variable doesn't need to be quoted in this context, \
+                        return Err(ErrorCode::ScriptSemanticError(
+                            "variable doesn't need to be quoted in this context, \
                                     try removing the colon"
-                                    .to_string(),
-                            )
-                            .set_span(*span),
-                        );
+                                .to_string(),
+                        )
+                        .set_span(*span));
                     }
                     _ => {}
                 }
+                Ok(VisitControl::Continue)
             }
 
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
-                if ident.is_hole() {
-                    self.error = Some(
-                        ErrorCode::ScriptSemanticError(
-                            "variable is not allowed in this context".to_string(),
-                        )
-                        .set_span(ident.span),
-                    );
+            fn visit_identifier(&mut self, ident: &mut Identifier) -> Result<VisitControl> {
+                if self.query_depth > 0 {
+                    self.compiler.rewrite_sql_hole_ident(ident)?;
+                    return Ok(VisitControl::Continue);
                 }
+                if ident.is_hole() {
+                    return Err(ErrorCode::ScriptSemanticError(
+                        "variable is not allowed in this context".to_string(),
+                    )
+                    .set_span(ident.span));
+                }
+                Ok(VisitControl::Continue)
             }
         }
 
@@ -1166,13 +1151,9 @@ impl Compiler {
         let mut visitor = QuoteVisitor {
             compiler: self,
             output: vec![],
-            error: None,
+            query_depth: 0,
         };
-        expr.drive_mut(&mut visitor);
-
-        if let Some(err) = visitor.error {
-            return Err(err);
-        }
+        expr.walk_mut(&mut visitor)?;
 
         Ok((visitor.output, expr))
     }
@@ -1269,6 +1250,7 @@ fn wrap_is_true(expr: Expr) -> Expr {
             args: vec![expr],
             params: vec![],
             order_by: vec![],
+            filter: None,
             window: None,
             lambda: None,
         },

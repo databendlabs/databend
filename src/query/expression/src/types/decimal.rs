@@ -86,6 +86,11 @@ pub type Decimal256Type = DecimalType<i256>;
 pub type DecimalType<T> = SimpleValueType<CoreDecimal<T>>;
 pub type DecimalScalarType<T> = SimpleValueType<CoreScalarDecimal<T>>;
 
+// arrow-udf represents decimals with rust_decimal. These conservative ABI
+// limits are intentionally narrower than Databend's Decimal128/256 ranges.
+pub const ARROW_UDF_DECIMAL_MAX_PRECISION: u8 = 28;
+pub const ARROW_UDF_DECIMAL_MAX_SCALE: u8 = 28;
+
 impl<Num: Decimal> AccessType for CoreDecimal<Num> {
     type Scalar = Num;
     type ScalarRef<'a> = Num;

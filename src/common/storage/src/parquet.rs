@@ -25,6 +25,7 @@ use parquet::arrow::parquet_to_arrow_schema;
 use parquet::errors::ParquetError;
 // FIXME(xuanwo): refactor code here.
 use parquet::file::metadata::FileMetaData;
+use parquet::file::metadata::FooterTail;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
 
@@ -108,12 +109,8 @@ pub async fn read_metadata_async(
 
     let map_err =
         |e: ParquetError| ErrorCode::BadBytes(format!("Invalid Parquet file '{path}': {e}",));
-    let footer_tail = ParquetMetaDataReader::decode_footer_tail(
-        &buffer[(buffer_len - FOOTER_SIZE as usize)..]
-            .try_into()
-            .unwrap(),
-    )
-    .map_err(map_err)?;
+    let footer_tail =
+        FooterTail::try_from(&buffer[(buffer_len - FOOTER_SIZE as usize)..]).map_err(map_err)?;
     let metadata_len = footer_tail.metadata_length() as u64;
     check_meta_size(file_size, metadata_len, path)?;
 

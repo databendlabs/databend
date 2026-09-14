@@ -21,11 +21,11 @@ jobs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
       bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Check Source File Changes
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         id: src
         with:
           files_ignore: |
@@ -37,7 +37,7 @@ jobs:
             scripts/distribution/**
             .devcontainer/**
       - name: Check Bendpy File Changes
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         id: bendpy
         with:
           files: |
@@ -69,7 +69,7 @@ jobs:
     if: needs.changes.outputs.any_src_changed == 'true'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: ./.github/actions/check_macos
@@ -85,7 +85,7 @@ jobs:
       - 4c
       - aws
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: ./.github/actions/build_bindings_python
@@ -93,18 +93,27 @@ jobs:
         with:
           target: aarch64-unknown-linux-gnu
 
+  ai_assistance_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test AI assistance validator
+        run: python3 .github/scripts/test_check_pr_ai_assistance.py
+
   ready:
     if: always()
     runs-on: ubuntu-latest
     needs:
+      - ai_assistance_test
       - changes
       - linux
       - mac_check
       - test_bendpy
     steps:
       - name: Check Ready to Merge
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
+          AI_ASSISTANCE_TEST_RESULT: ${{ needs.ai_assistance_test.result }}
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
@@ -112,6 +121,10 @@ jobs:
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
+            if (process.env.AI_ASSISTANCE_TEST_RESULT != 'success') {
+              core.setFailed(`AI assistance validator tests did not complete successfully (${process.env.AI_ASSISTANCE_TEST_RESULT}), not ready to merge`);
+              return;
+            }
             if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false') {
               core.info('No source file changes detected, skipping');
               return;

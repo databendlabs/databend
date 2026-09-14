@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,13 +31,12 @@ use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_sql::IndexType;
 
 use super::read_block_context::ReadBlockContext;
+use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
-use crate::pruning::RuntimeFilterExprKind;
-use crate::pruning::SpatialRuntimePruner;
 
 pub struct ReadDataTransform {
     func_ctx: FunctionContext,
@@ -46,6 +45,7 @@ pub struct ReadDataTransform {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    runtime_scan_filters: RuntimeScanFilters,
 }
 
 impl ReadDataTransform {
@@ -60,6 +60,7 @@ impl ReadDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
@@ -70,34 +71,12 @@ impl ReadDataTransform {
                 table_schema,
                 scan_id,
                 context: ctx,
+                runtime_scan_filters,
             },
         )))
     }
 
-    fn build_runtime_filter_exprs(entry: &RuntimeFilterEntry) -> Vec<RuntimeFilterExpr> {
-        let mut exprs = Vec::new();
-        if let Some(expr) = entry.inlist.clone() {
-            exprs.push(RuntimeFilterExpr {
-                filter_id: entry.id,
-                kind: RuntimeFilterExprKind::Inlist,
-                inlist_value_count: entry.inlist_value_count,
-                expr,
-                stats: entry.stats.clone(),
-            });
-        }
-        if let Some(expr) = entry.min_max.clone() {
-            exprs.push(RuntimeFilterExpr {
-                filter_id: entry.id,
-                kind: RuntimeFilterExprKind::MinMax,
-                inlist_value_count: 0,
-                expr,
-                stats: entry.stats.clone(),
-            });
-        }
-        exprs
-    }
-
-    fn create_runtime_pruners(&self) -> Result<(ExprRuntimePruner, Option<SpatialRuntimePruner>)> {
+    fn create_runtime_pruners(&self) -> Result<ExprRuntimePruner> {
         let read_settings = self.read_block_context.read_settings();
         let inlist_bloom_prune_threshold =
             self.context
@@ -113,50 +92,76 @@ impl ReadDataTransform {
             inlist_bloom_prune_threshold,
             runtime_filters
                 .iter()
-                .flat_map(Self::build_runtime_filter_exprs)
+                .flat_map(RuntimeFilterExpr::from_entry)
                 .collect(),
         );
-        let spatial_runtime_pruner = SpatialRuntimePruner::try_create(
-            self.table_schema.clone(),
-            self.block_reader.operator(),
-            read_settings,
-            &runtime_filters,
-        )?;
 
-        Ok((runtime_filter, spatial_runtime_pruner))
+        Ok(runtime_filter)
     }
 
     async fn read_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
         let mut read_tasks = Vec::with_capacity(parts.len());
-        let mut parts_to_read = Vec::with_capacity(parts.len());
-        let (expr_runtime_pruner, spatial_runtime_pruner) = self.create_runtime_pruners()?;
+        let expr_runtime_pruner = self.create_runtime_pruners()?;
 
         for part in parts {
-            if expr_runtime_pruner.prune(&part).await? {
-                continue;
-            }
-
-            if let Some(spatial_runtime_pruner) = &spatial_runtime_pruner {
-                if spatial_runtime_pruner.prune(&part).await? {
+            if !self.runtime_scan_filters.is_empty() {
+                let part_info = FuseBlockPartInfo::from_part(&part)?;
+                if self
+                    .runtime_scan_filters
+                    .should_prune(part_info.columns_stat.as_ref())
+                {
                     continue;
                 }
             }
 
-            parts_to_read.push(part.clone());
-            let read_block_context = self.read_block_context.clone();
+            if expr_runtime_pruner.prune(&part).await? {
+                continue;
+            }
 
+            let filters = self.runtime_scan_filters.clone();
+            let read_block_context = self.read_block_context.clone();
             read_tasks.push(async move {
                 databend_common_base::runtime::spawn(async move {
-                    read_block_context.read_data(part).await
+                    if filters.is_empty() {
+                        let source = read_block_context.read_data(part.clone()).await?;
+                        return Ok::<_, ErrorCode>(Some((part, source)));
+                    }
+
+                    let read = read_block_context.read_data(part.clone());
+                    tokio::pin!(read);
+                    loop {
+                        // Subscribe before checking so a boundary update cannot be missed.
+                        let rechecks = filters.recheck_notified();
+                        debug_assert!(!rechecks.is_empty());
+                        let part_info = FuseBlockPartInfo::from_part(&part)?;
+                        if filters.should_prune(part_info.columns_stat.as_ref()) {
+                            return Ok::<_, ErrorCode>(None);
+                        }
+
+                        tokio::select! {
+                            result = &mut read => {
+                                let source = result?;
+                                return Ok::<_, ErrorCode>(Some((part, source)));
+                            }
+                            _ = futures::future::select_all(rechecks) => {}
+                        }
+                    }
                 })
-                .await
-                .unwrap()
+                .await?
             });
+        }
+
+        let completed_reads = futures::future::try_join_all(read_tasks).await?;
+        let mut parts_to_read = Vec::with_capacity(completed_reads.len());
+        let mut sources = Vec::with_capacity(completed_reads.len());
+        for (part, source) in completed_reads.into_iter().flatten() {
+            parts_to_read.push(part);
+            sources.push(source);
         }
 
         Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
             parts_to_read,
-            futures::future::try_join_all(read_tasks).await?,
+            sources,
         )))
     }
 }

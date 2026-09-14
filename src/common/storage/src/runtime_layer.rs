@@ -100,6 +100,10 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     }
 
     async fn create_dir(&self, path: &str, args: OpCreateDir) -> Result<RpCreateDir> {
+        if self.runtime.is_current() {
+            return self.inner.create_dir(path, args).await;
+        }
+
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
@@ -109,33 +113,46 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        let op = self.inner.clone();
-        let path = path.to_string();
+        let result = if self.runtime.is_current() {
+            self.inner.read(path, args).await
+        } else {
+            let op = self.inner.clone();
+            let path = path.to_string();
+            self.runtime
+                .spawn(async move { op.read(&path, args).await })
+                .await
+                .expect("join must success")
+        };
 
-        self.runtime
-            .spawn(async move { op.read(&path, args).await })
-            .await
-            .expect("join must success")
-            .map(|(rp, r)| {
-                let r = RuntimeIO::new(r, self.runtime.clone());
-                (rp, r)
-            })
+        result.map(|(rp, r)| {
+            let r = RuntimeIO::new(r, self.runtime.clone());
+            (rp, r)
+        })
     }
 
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
-        let op = self.inner.clone();
-        let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.write(&path, args).await })
-            .await
-            .expect("join must success")
-            .map(|(rp, r)| {
-                let r = RuntimeIO::new(r, self.runtime.clone());
-                (rp, r)
-            })
+        let result = if self.runtime.is_current() {
+            self.inner.write(path, args).await
+        } else {
+            let op = self.inner.clone();
+            let path = path.to_string();
+            self.runtime
+                .spawn(async move { op.write(&path, args).await })
+                .await
+                .expect("join must success")
+        };
+
+        result.map(|(rp, r)| {
+            let r = RuntimeIO::new(r, self.runtime.clone());
+            (rp, r)
+        })
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
+        if self.runtime.is_current() {
+            return self.inner.stat(path, args).await;
+        }
+
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
@@ -145,32 +162,45 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     }
 
     async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
-        let op = self.inner.clone();
+        let result = if self.runtime.is_current() {
+            self.inner.delete().await
+        } else {
+            let op = self.inner.clone();
+            self.runtime
+                .spawn(async move { op.delete().await })
+                .await
+                .expect("join must success")
+        };
 
-        self.runtime
-            .spawn(async move { op.delete().await })
-            .await
-            .expect("join must success")
-            .map(|(rp, r)| {
-                let r = RuntimeIO::new(r, self.runtime.clone());
-                (rp, r)
-            })
+        result.map(|(rp, r)| {
+            let r = RuntimeIO::new(r, self.runtime.clone());
+            (rp, r)
+        })
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
-        let op = self.inner.clone();
-        let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.list(&path, args).await })
-            .await
-            .expect("join must success")
-            .map(|(rp, r)| {
-                let r = RuntimeIO::new(r, self.runtime.clone());
-                (rp, r)
-            })
+        let result = if self.runtime.is_current() {
+            self.inner.list(path, args).await
+        } else {
+            let op = self.inner.clone();
+            let path = path.to_string();
+            self.runtime
+                .spawn(async move { op.list(&path, args).await })
+                .await
+                .expect("join must success")
+        };
+
+        result.map(|(rp, r)| {
+            let r = RuntimeIO::new(r, self.runtime.clone());
+            (rp, r)
+        })
     }
 
     async fn presign(&self, path: &str, args: OpPresign) -> Result<RpPresign> {
+        if self.runtime.is_current() {
+            return self.inner.presign(path, args).await;
+        }
+
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
@@ -206,6 +236,15 @@ impl<R> RuntimeIO<R> {
 
 impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     async fn read(&mut self) -> Result<Buffer> {
+        if self.runtime.is_current() {
+            return self
+                .inner
+                .as_mut()
+                .expect("reader must be valid")
+                .read()
+                .await;
+        }
+
         let mut r = self.inner.take().expect("reader must be valid");
         let runtime = self.runtime.clone();
 
@@ -226,6 +265,15 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
 
 impl<R: oio::Write> oio::Write for RuntimeIO<R> {
     async fn write(&mut self, bs: Buffer) -> Result<()> {
+        if self.runtime.is_current() {
+            return self
+                .inner
+                .as_mut()
+                .expect("writer must be valid")
+                .write(bs)
+                .await;
+        }
+
         let mut r = self.inner.take().expect("writer must be valid");
         let runtime = self.runtime.clone();
 
@@ -244,6 +292,15 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
     }
 
     async fn close(&mut self) -> Result<Metadata> {
+        if self.runtime.is_current() {
+            return self
+                .inner
+                .as_mut()
+                .expect("writer must be valid")
+                .close()
+                .await;
+        }
+
         let mut r = self.inner.take().expect("writer must be valid");
         let runtime = self.runtime.clone();
 
@@ -262,6 +319,15 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
     }
 
     async fn abort(&mut self) -> Result<()> {
+        if self.runtime.is_current() {
+            return self
+                .inner
+                .as_mut()
+                .expect("writer must be valid")
+                .abort()
+                .await;
+        }
+
         let mut r = self.inner.take().expect("writer must be valid");
         let runtime = self.runtime.clone();
 
@@ -282,6 +348,15 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
 
 impl<R: oio::List> oio::List for RuntimeIO<R> {
     async fn next(&mut self) -> Result<Option<oio::Entry>> {
+        if self.runtime.is_current() {
+            return self
+                .inner
+                .as_mut()
+                .expect("lister must be valid")
+                .next()
+                .await;
+        }
+
         let mut r = self.inner.take().expect("lister must be valid");
         let runtime = self.runtime.clone();
 
@@ -306,6 +381,15 @@ impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
     }
 
     async fn flush(&mut self) -> Result<usize> {
+        if self.runtime.is_current() {
+            return self
+                .inner
+                .as_mut()
+                .expect("deleter must be valid")
+                .flush()
+                .await;
+        }
+
         let mut r = self.inner.take().expect("deleter must be valid");
         let runtime = self.runtime.clone();
 
@@ -321,5 +405,136 @@ impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
             .expect("join must success");
         self.inner = Some(r);
         res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use opendal::raw::AccessorInfo;
+
+    use super::*;
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct ExecutionContext {
+        runtime_id: tokio::runtime::Id,
+        task_id: tokio::task::Id,
+    }
+
+    impl ExecutionContext {
+        fn current() -> Self {
+            Self {
+                runtime_id: tokio::runtime::Handle::current().id(),
+                task_id: tokio::task::id(),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct ProbeAccess {
+        contexts: Arc<Mutex<Vec<ExecutionContext>>>,
+    }
+
+    impl Access for ProbeAccess {
+        type Reader = ProbeReader;
+        type Writer = ();
+        type Lister = ();
+        type Deleter = ();
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            Arc::new(AccessorInfo::default())
+        }
+
+        async fn read(&self, _path: &str, _args: OpRead) -> Result<(RpRead, Self::Reader)> {
+            self.contexts
+                .lock()
+                .expect("contexts lock must be valid")
+                .push(ExecutionContext::current());
+
+            Ok((RpRead::new(), ProbeReader {
+                contexts: self.contexts.clone(),
+            }))
+        }
+    }
+
+    #[derive(Debug)]
+    struct ProbeReader {
+        contexts: Arc<Mutex<Vec<ExecutionContext>>>,
+    }
+
+    impl oio::Read for ProbeReader {
+        async fn read(&mut self) -> Result<Buffer> {
+            self.contexts
+                .lock()
+                .expect("contexts lock must be valid")
+                .push(ExecutionContext::current());
+            Ok(Buffer::new())
+        }
+    }
+
+    fn probe_accessor(
+        runtime: Arc<Runtime>,
+        contexts: Arc<Mutex<Vec<ExecutionContext>>>,
+    ) -> RuntimeAccessor<ProbeAccess> {
+        RuntimeLayer::new(runtime).layer(ProbeAccess { contexts })
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_bypass_spawn_in_target_runtime() -> anyhow::Result<()> {
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            1,
+            Some("runtime-layer-target".to_string()),
+        )?);
+        let contexts = Arc::new(Mutex::new(Vec::new()));
+        let accessor = probe_accessor(runtime.clone(), contexts.clone());
+
+        let caller_context = runtime
+            .spawn(async move {
+                assert!(accessor.runtime.is_current());
+                let caller_context = ExecutionContext::current();
+                let (_, mut reader) = Access::read(&accessor, "file", OpRead::new()).await?;
+                oio::Read::read(&mut reader).await?;
+                Ok::<_, opendal::Error>(caller_context)
+            })
+            .await??;
+
+        let contexts = contexts.lock().expect("contexts lock must be valid");
+        assert_eq!(contexts.as_slice(), &[caller_context, caller_context]);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spawn_into_target_runtime_from_other_runtime() -> anyhow::Result<()> {
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            1,
+            Some("runtime-layer-target".to_string()),
+        )?);
+        let target_runtime_id = runtime.inner().id();
+        let contexts = Arc::new(Mutex::new(Vec::new()));
+        let accessor = probe_accessor(runtime.clone(), contexts.clone());
+
+        assert!(!runtime.is_current());
+        let caller_context = databend_common_base::runtime::spawn(async move {
+            let caller_context = ExecutionContext::current();
+            let (_, mut reader) = Access::read(&accessor, "file", OpRead::new()).await?;
+            oio::Read::read(&mut reader).await?;
+            Ok::<_, opendal::Error>(caller_context)
+        })
+        .await??;
+
+        let contexts = contexts.lock().expect("contexts lock must be valid");
+        assert_eq!(contexts.len(), 2);
+        assert!(
+            contexts
+                .iter()
+                .all(|context| context.runtime_id == target_runtime_id)
+        );
+        assert!(
+            contexts
+                .iter()
+                .all(|context| context.task_id != caller_context.task_id)
+        );
+        Ok(())
     }
 }

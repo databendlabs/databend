@@ -37,7 +37,6 @@ use crate::physical_plans::HashJoin;
 use crate::physical_plans::NestedLoopFilterInfo;
 use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::PhysicalRuntimeFilters;
-use crate::physical_plans::SpatialRuntimeFilterMode;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sql::plans::JoinType;
 
@@ -84,7 +83,6 @@ pub struct RuntimeFilterDesc {
     pub enable_bloom_runtime_filter: bool,
     pub enable_inlist_runtime_filter: bool,
     pub enable_min_max_runtime_filter: bool,
-    pub spatial_mode: Option<SpatialRuntimeFilterMode>,
 }
 
 #[derive(Debug)]
@@ -114,7 +112,6 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
             enable_bloom_runtime_filter: runtime_filter.enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: runtime_filter.enable_inlist_runtime_filter,
             enable_min_max_runtime_filter: runtime_filter.enable_min_max_runtime_filter,
-            spatial_mode: runtime_filter.spatial_mode.clone(),
         }
     }
 }

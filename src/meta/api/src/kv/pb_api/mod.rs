@@ -94,7 +94,6 @@ pub trait KVPbApi: KVApi {
         let value_meta = req.value_meta.clone();
 
         async move {
-            let v = v?;
             let req = UpsertKV::new(k, seq, v, value_meta);
             let reply = self
                 .upsert_kv(req)
@@ -594,7 +593,7 @@ mod tests {
             }),
             created_on: DateTime::<Utc>::MIN_UTC,
         };
-        let v = catalog_meta.to_pb()?.encode_to_vec();
+        let v = catalog_meta.to_pb().encode_to_vec();
 
         let foo = FooKV {
             early_return: Some(2),
@@ -647,7 +646,7 @@ mod tests {
             }),
             created_on: DateTime::<Utc>::MIN_UTC,
         };
-        let v = catalog_meta.to_pb()?.encode_to_vec();
+        let v = catalog_meta.to_pb().encode_to_vec();
 
         let foo = FooKV {
             early_return: None,
@@ -720,7 +719,7 @@ mod tests {
             }),
             created_on: DateTime::<Utc>::MIN_UTC,
         };
-        let catalog_bytes = catalog_meta.to_pb()?.encode_to_vec();
+        let catalog_bytes = catalog_meta.to_pb().encode_to_vec();
 
         let n = 1024;
         let mut kvs = vec![];
@@ -813,7 +812,7 @@ mod tests {
             }),
             created_on: DateTime::<Utc>::MIN_UTC,
         };
-        let v = catalog_meta.to_pb()?.encode_to_vec();
+        let v = catalog_meta.to_pb().encode_to_vec();
 
         let kvs: BTreeMap<_, _> = (1..=5)
             .map(|i| {

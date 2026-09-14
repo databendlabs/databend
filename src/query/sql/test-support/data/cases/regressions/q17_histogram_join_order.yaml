@@ -1,0 +1,81 @@
+name: "q17_histogram_join_order"
+description: "Q17-shaped join reorder case where filtered key histograms should not make the part+aggregate path look like a full lineitem join"
+
+tables:
+  lineitem: regressions/q17_lineitem.sql
+  part: regressions/q17_part.sql
+
+node_num: 1
+
+sql: |
+  SELECT sum(o.l_extendedprice)
+  FROM lineitem AS o,
+       part AS p
+  WHERE p.p_partkey = o.l_partkey
+    AND p.p_brand = 'Brand#23'
+    AND p.p_container = 'MED BOX'
+    AND o.l_quantity < (
+      SELECT 0.2 * avg(s.l_quantity)
+      FROM lineitem AS s
+      WHERE s.l_partkey = p.p_partkey
+    );
+
+table_statistics:
+  lineitem:
+    num_rows: 6001215
+    data_size: 144029160
+    number_of_blocks: 8
+    number_of_segments: 1
+  part:
+    num_rows: 200000
+    data_size: 4800000
+    number_of_blocks: 1
+    number_of_segments: 1
+
+column_statistics:
+  lineitem.l_partkey:
+    min: 1
+    max: 200000
+    ndv: 186502
+    null_count: 0
+  lineitem.l_quantity:
+    min: 1
+    max: 50
+    ndv: 50
+    null_count: 0
+  lineitem.l_extendedprice:
+    min: 1
+    max: 100000
+    ndv: 100000
+    null_count: 0
+  part.p_partkey:
+    min: 1
+    max: 200000
+    ndv: 186502
+    null_count: 0
+  part.p_brand:
+    min: "Brand#11"
+    max: "Brand#55"
+    ndv: 27
+    null_count: 0
+  part.p_container:
+    min: "JUMBO BAG"
+    max: "WRAP PKG"
+    ndv: 39
+    null_count: 0
+
+histogram_statistics:
+  lineitem.l_partkey:
+    accuracy: true
+    buckets:
+      - lower_bound: !Int 1
+        upper_bound: !Int 200000
+        num_values: 6001215
+        num_distinct: 186502
+  part.p_partkey:
+    accuracy: true
+    buckets:
+      - lower_bound: !Int 1
+        upper_bound: !Int 200000
+        num_values: 200000
+        num_distinct: 186502

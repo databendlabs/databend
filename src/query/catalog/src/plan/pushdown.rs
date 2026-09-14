@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
 use databend_common_ast::ast::SampleConfig;
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
@@ -31,7 +34,7 @@ use databend_common_expression::types::F32;
 use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
 
-use super::AggIndexInfo;
+use crate::plan::InternalColumn;
 use crate::plan::Projection;
 
 /// Information of Virtual Columns.
@@ -54,9 +57,11 @@ pub struct VirtualColumnField {
     pub source_column_id: u32,
     /// The source column name.
     pub source_name: String,
-    /// The virtual column id
-    pub column_id: u32,
-    /// The virtual column name.
+    /// Query-time temporary column id. This is not a persisted segment-local
+    /// virtual column id; each segment may assign a different real column id
+    /// for the same path, so readers must map this id through the segment schema.
+    pub query_column_id: u32,
+    /// Full query field name using bracket path notation.
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: OwnedKeyPaths,
@@ -64,6 +69,21 @@ pub struct VirtualColumnField {
     pub cast_func_name: Option<String>,
     /// Virtual column data type.
     pub data_type: Box<TableDataType>,
+}
+
+/// Query-time identity of a virtual column referenced by a pushed-down filter
+/// or ordering expression. It bridges the query column id to the persisted
+/// source-column/canonical-path identity used to locate segment-local stats.
+#[derive(Clone, Debug)]
+pub struct VirtualPredicateRef {
+    /// Unique internal query/pipeline field name used by expression column references.
+    pub name: String,
+    /// Id of the authoritative source Variant column.
+    pub source_column_id: u32,
+    /// Query-time temporary column id used by runtime filters and readers.
+    pub query_column_id: u32,
+    /// Compact canonical JSON path relative to the source column.
+    pub encoded_path: String,
 }
 
 /// Information about prewhere optimization.
@@ -152,6 +172,13 @@ pub struct VectorIndexInfo {
     pub query_values: Vec<F32>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ReadPartitionsPruningMode {
+    #[default]
+    Normal,
+    Lightweight,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -176,8 +203,6 @@ pub struct PushDownInfo {
     pub virtual_column: Option<VirtualColumnInfo>,
     /// If lazy materialization is enabled in this query.
     pub lazy_materialization: bool,
-    /// Aggregating index information.
-    pub agg_index: Option<AggIndexInfo>,
     /// Identifies the type of data change we are looking for
     pub change_type: Option<ChangeType>,
     /// Optional inverted index
@@ -186,12 +211,75 @@ pub struct PushDownInfo {
     pub vector_index: Option<VectorIndexInfo>,
     /// Used by table sample
     pub sample: Option<SampleConfig>,
+    /// Controls how much pruning work a storage should do while collecting partitions.
+    #[serde(default)]
+    pub read_partitions_pruning_mode: ReadPartitionsPruningMode,
     /// Optional secure filters from Row Access Policy, kept separate for display redaction.
     #[serde(default)]
     pub secure_filters: Option<Filters>,
 }
 
 impl PushDownInfo {
+    pub fn virtual_predicate_refs(
+        &self,
+        filter_expr: Option<&Expr<String>>,
+    ) -> Vec<VirtualPredicateRef> {
+        let Some(virtual_column) = &self.virtual_column else {
+            return Vec::new();
+        };
+        let mut referenced_columns = filter_expr.map(Expr::column_refs).unwrap_or_default();
+        for (expr, _, _) in &self.order_by {
+            referenced_columns.extend(expr.column_refs());
+        }
+        virtual_column
+            .virtual_column_fields
+            .iter()
+            .filter(|field| referenced_columns.contains_key(&field.name))
+            .map(|field| VirtualPredicateRef {
+                name: field.name.clone(),
+                source_column_id: field.source_column_id,
+                query_column_id: field.query_column_id,
+                encoded_path: field.key_paths.to_canonical_path(),
+            })
+            .collect()
+    }
+
+    pub fn add_internal_column_dependencies<'a>(
+        &mut self,
+        schema: &TableSchema,
+        internal_columns: impl Iterator<Item = &'a InternalColumn>,
+    ) -> Result<()> {
+        let dependency_ids = internal_columns
+            .flat_map(InternalColumn::dependencies)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if dependency_ids.is_empty() {
+            return Ok(());
+        }
+
+        let mut dependency_indices = Vec::with_capacity(dependency_ids.len());
+        for column_id in dependency_ids {
+            let field = schema.field_of_column_id(column_id)?;
+            dependency_indices.push(schema.index_of(field.name())?);
+        }
+        dependency_indices.sort_unstable();
+        let dependencies = Projection::Columns(dependency_indices);
+
+        if let Some(projection) = &mut self.projection {
+            projection.merge(&dependencies);
+        }
+        if let Some(output_columns) = &mut self.output_columns {
+            output_columns.merge(&dependencies);
+        }
+        if let Some(prewhere) = &mut self.prewhere {
+            prewhere.output_columns.merge(&dependencies);
+            prewhere
+                .remain_columns
+                .merge(&dependencies.difference(&prewhere.prewhere_columns));
+        }
+        Ok(())
+    }
+
     pub fn filter_only_use_index(&self) -> bool {
         let allow_search = self.inverted_index.is_some();
         if !allow_search {

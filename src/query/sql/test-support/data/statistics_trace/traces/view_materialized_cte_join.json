@@ -1,0 +1,462 @@
+{
+  "views": [
+    {
+      "catalog": "default",
+      "database": "default",
+      "view": "statistics_trace_recent_orders",
+      "query": "SELECT o_orderkey, o_custkey, o_total FROM default.statistics_trace_orders WHERE o_total > 10"
+    }
+  ],
+  "udfs": [
+    {
+      "name": "trace_region_norm",
+      "arg_types": [
+        {
+          "Nullable": "String"
+        }
+      ],
+      "return_type": {
+        "Nullable": "String"
+      }
+    }
+  ],
+  "table_stats": {
+    "1": {
+      "statistics": {
+        "num_rows": 4,
+        "data_size": 67,
+        "data_size_compressed": 764,
+        "index_size": 842,
+        "bloom_index_size": 842,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": 1,
+        "number_of_segments": 1
+      },
+      "fields": [
+        {
+          "name": "o_orderkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "o_custkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 1,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "o_total",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Float64"
+            }
+          },
+          "column_id": 2,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    },
+    "2": {
+      "statistics": {
+        "num_rows": 3,
+        "data_size": 78,
+        "data_size_compressed": 567,
+        "index_size": 629,
+        "bloom_index_size": 629,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": 1,
+        "number_of_segments": 1
+      },
+      "fields": [
+        {
+          "name": "c_custkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "c_region",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": "String"
+          },
+          "column_id": 1,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ],
+      "row_access_policy": {
+        "policy_id": 5,
+        "columns": [
+          "c_region"
+        ],
+        "args": [
+          [
+            "region",
+            "STRING"
+          ]
+        ],
+        "body": "region <> 'AFRICA'"
+      }
+    },
+    "4": {
+      "statistics": {
+        "num_rows": 4,
+        "data_size": 67,
+        "data_size_compressed": 764,
+        "index_size": 842,
+        "bloom_index_size": 842,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": 1,
+        "number_of_segments": 1
+      },
+      "fields": [
+        {
+          "name": "o_orderkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "o_custkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 1,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "o_total",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Float64"
+            }
+          },
+          "column_id": 2,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    },
+    "6": {
+      "statistics": {
+        "num_rows": 4,
+        "data_size": 67,
+        "data_size_compressed": 764,
+        "index_size": 842,
+        "bloom_index_size": 842,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": 1,
+        "number_of_segments": 1
+      },
+      "fields": [
+        {
+          "name": "o_orderkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "o_custkey",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 1,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "o_total",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Float64"
+            }
+          },
+          "column_id": 2,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    }
+  },
+  "column_stats": [
+    {
+      "table_index": 1,
+      "column_name": "o_custkey",
+      "statistics": {
+        "min": {
+          "Int": 10
+        },
+        "max": {
+          "Int": 30
+        },
+        "ndv": 3,
+        "null_count": 0,
+        "in_memory_size": 17
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 1,
+      "column_name": "o_orderkey",
+      "statistics": {
+        "min": {
+          "Int": 1
+        },
+        "max": {
+          "Int": 4
+        },
+        "ndv": 4,
+        "null_count": 0,
+        "in_memory_size": 17
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 1,
+      "column_name": "o_total",
+      "statistics": {
+        "min": {
+          "Float": 4.0
+        },
+        "max": {
+          "Float": 33.0
+        },
+        "ndv": 4,
+        "null_count": 0,
+        "in_memory_size": 33
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 2,
+      "column_name": "c_custkey",
+      "statistics": {
+        "min": {
+          "Int": 10
+        },
+        "max": {
+          "Int": 30
+        },
+        "ndv": 3,
+        "null_count": 0,
+        "in_memory_size": 13
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 2,
+      "column_name": "c_region",
+      "statistics": {
+        "min": {
+          "Bytes": [
+            65,
+            70,
+            82,
+            73,
+            67,
+            65
+          ]
+        },
+        "max": {
+          "Bytes": [
+            69,
+            85,
+            82,
+            79,
+            80,
+            69
+          ]
+        },
+        "ndv": 3,
+        "null_count": 0,
+        "in_memory_size": 49
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 4,
+      "column_name": "o_custkey",
+      "statistics": {
+        "min": {
+          "Int": 10
+        },
+        "max": {
+          "Int": 30
+        },
+        "ndv": 3,
+        "null_count": 0,
+        "in_memory_size": 17
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 4,
+      "column_name": "o_orderkey",
+      "statistics": {
+        "min": {
+          "Int": 1
+        },
+        "max": {
+          "Int": 4
+        },
+        "ndv": 4,
+        "null_count": 0,
+        "in_memory_size": 17
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 4,
+      "column_name": "o_total",
+      "statistics": {
+        "min": {
+          "Float": 4.0
+        },
+        "max": {
+          "Float": 33.0
+        },
+        "ndv": 4,
+        "null_count": 0,
+        "in_memory_size": 33
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 6,
+      "column_name": "o_custkey",
+      "statistics": {
+        "min": {
+          "Int": 10
+        },
+        "max": {
+          "Int": 30
+        },
+        "ndv": 3,
+        "null_count": 0,
+        "in_memory_size": 17
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 6,
+      "column_name": "o_orderkey",
+      "statistics": {
+        "min": {
+          "Int": 1
+        },
+        "max": {
+          "Int": 4
+        },
+        "ndv": 4,
+        "null_count": 0,
+        "in_memory_size": 17
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 6,
+      "column_name": "o_total",
+      "statistics": {
+        "min": {
+          "Float": 4.0
+        },
+        "max": {
+          "Float": 33.0
+        },
+        "ndv": 4,
+        "null_count": 0,
+        "in_memory_size": 33
+      },
+      "histogram": null
+    }
+  ],
+  "scan_mappings": [
+    {
+      "scan_id": 0,
+      "table_index": 1,
+      "catalog": "default",
+      "database": "default",
+      "table": "statistics_trace_orders",
+      "change_type": null
+    },
+    {
+      "scan_id": 1,
+      "table_index": 2,
+      "catalog": "default",
+      "database": "default",
+      "table": "statistics_trace_customers",
+      "change_type": null
+    },
+    {
+      "scan_id": 2,
+      "table_index": 4,
+      "catalog": "default",
+      "database": "default",
+      "table": "statistics_trace_orders",
+      "change_type": null
+    },
+    {
+      "scan_id": 3,
+      "table_index": 6,
+      "catalog": "default",
+      "database": "default",
+      "table": "statistics_trace_orders",
+      "change_type": null
+    }
+  ]
+}

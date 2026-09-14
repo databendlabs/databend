@@ -42,10 +42,7 @@ impl ProcedureIdIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::principal::ProcedureMeta;
-    use crate::principal::procedure_id_ident::ProcedureIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -54,10 +51,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "ProcedureIdIdent";
         const HAS_TENANT: bool = false;
         type ValueType = ProcedureMeta;
-    }
-
-    impl kvapi::Value for ProcedureMeta {
-        type KeyType = ProcedureIdIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

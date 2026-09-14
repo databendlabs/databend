@@ -270,7 +270,7 @@ impl AbstractSegment for ColumnOrientedSegment {
             // TODO(Sky): Construct the optimal props, enabling compression, encoding, etc., if performance is better.
             let props = Some(
                 WriterProperties::builder()
-                    .set_max_row_group_size(usize::MAX)
+                    .set_max_row_group_row_count(Some(usize::MAX))
                     .build(),
             );
             let arrow_schema = Arc::new(Schema::from(&self.segment_schema));

@@ -20,13 +20,14 @@ use std::sync::Arc;
 
 use databend_common_meta_process::pb_value_decoder::decode_cmd_values;
 use databend_common_meta_process::pb_value_decoder::raw_cmd_values;
-use databend_meta::raft_store::raft_log::Config;
-use databend_meta::raft_store::raft_log::Dump;
-use databend_meta::raft_store::raft_log::DumpApi;
-use databend_meta::raft_store::raft_log::WALRecord;
-use databend_meta::raft_store::raft_log::dump_writer::write_record_display;
-use databend_meta::raft_store::raft_log_v004::RaftLogTypes;
+use databend_meta::log_store::RaftLogTypes;
 use databend_meta::types::raft_types::EntryPayload;
+use raft_log::Config;
+use raft_log::Dump;
+use raft_log::DumpApi;
+use raft_log::RaftLogAction;
+use raft_log::WALRecord;
+use raft_log::dump_writer::write_record_display;
 
 use crate::args::DumpRaftLogWalArgs;
 
@@ -45,10 +46,7 @@ pub fn dump_wal(
     raw: bool,
     mut w: impl Write,
 ) -> anyhow::Result<()> {
-    let config = Arc::new(Config {
-        dir: wal_dir.to_string_lossy().to_string(),
-        ..Default::default()
-    });
+    let config = Arc::new(Config::new(wal_dir.to_string_lossy().to_string()));
 
     let dump = Dump::<RaftLogTypes>::new(config)?;
 
@@ -62,7 +60,7 @@ pub fn dump_wal(
     dump.write_with(|chunk_id, idx, res| {
         let mut extra_lines = vec![];
 
-        if let Ok((_seg, WALRecord::Append(_log_id, payload))) = &res
+        if let Ok((_seg, WALRecord::Action(RaftLogAction::Append(_log_id, payload)))) = &res
             && let EntryPayload::Normal(log_entry) = &payload.0
         {
             if decode_values {
@@ -93,17 +91,17 @@ mod tests {
     use chrono::Utc;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_proto_conv::FromToProto;
-    use databend_meta::raft_store::raft_log::Config;
-    use databend_meta::raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
-    use databend_meta::raft_store::raft_log_v004::Cw;
-    use databend_meta::raft_store::raft_log_v004::RaftLogV004;
-    use databend_meta::raft_store::raft_log_v004::util::blocking_flush;
+    use databend_meta::log_store::Cw;
+    use databend_meta::log_store::RaftLog;
+    use databend_meta::log_store::util::blocking_flush;
     use databend_meta::types::Cmd;
     use databend_meta::types::LogEntry;
     use databend_meta::types::UpsertKV;
     use databend_meta::types::raft_types::EntryPayload;
     use databend_meta::types::raft_types::new_log_id;
     use prost::Message;
+    use raft_log::Config;
+    use raft_log::api::raft_log_writer::RaftLogWriter;
 
     use super::*;
 
@@ -113,12 +111,9 @@ mod tests {
         let wal_dir = tmp.path().join("log");
         std::fs::create_dir_all(&wal_dir)?;
 
-        let config = Arc::new(Config {
-            dir: wal_dir.to_string_lossy().to_string(),
-            ..Default::default()
-        });
+        let config = Arc::new(Config::new(wal_dir.to_string_lossy().to_string()));
 
-        let mut log = RaftLogV004::open(config)?;
+        let mut log = RaftLog::open(config)?;
         log.append([(Cw(new_log_id(1, 0, 0)), Cw(EntryPayload::Blank))])?;
         blocking_flush(&mut log).await?;
         drop(log);
@@ -132,7 +127,7 @@ mod tests {
             concat!(
                 "RaftLog:\n",
                 "ChunkId(00_000_000_000_000_000_000)\n",
-                "  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
+                "  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
                 "  R-00001: [000_000_018, 000_000_070) Size(52): Append(log_id: T1-N0.0, payload: blank)\n",
             )
         );
@@ -146,10 +141,7 @@ mod tests {
         let wal_dir = tmp.path().join("log");
         std::fs::create_dir_all(&wal_dir)?;
 
-        let config = Arc::new(Config {
-            dir: wal_dir.to_string_lossy().to_string(),
-            ..Default::default()
-        });
+        let config = Arc::new(Config::new(wal_dir.to_string_lossy().to_string()));
 
         // Use a fixed timestamp to ensure deterministic protobuf encoding size
         // across platforms. `Utc::now()` in `DatabaseMeta::default()` produces
@@ -165,15 +157,14 @@ mod tests {
             drop_on: None,
             gc_in_progress: false,
         };
-        let pb = meta.to_pb()?;
-        let mut pb_buf = vec![];
-        pb.encode(&mut pb_buf)?;
+        let pb = meta.to_pb();
+        let pb_buf = pb.encode_to_vec();
 
         let cmd = Cmd::UpsertKV(UpsertKV::update("__fd_database_by_id/123", &pb_buf));
         let log_entry = LogEntry::new(cmd);
         let payload = EntryPayload::Normal(log_entry);
 
-        let mut log = RaftLogV004::open(config)?;
+        let mut log = RaftLog::open(config)?;
         log.append([(Cw(new_log_id(1, 0, 0)), Cw(payload))])?;
         blocking_flush(&mut log).await?;
         drop(log);
@@ -187,7 +178,7 @@ mod tests {
             concat!(
                 "RaftLog:\n",
                 "ChunkId(00_000_000_000_000_000_000)\n",
-                "  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
+                "  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
                 r#"  R-00001: [000_000_018, 000_000_218) Size(200): Append(log_id: T1-N0.0, payload: normal: cmd: upsert_kv:__fd_database_by_id/123(GE(0)) = Update("[binary]") (None))"#,
                 "\n",
                 r#"    value(__fd_database_by_id/123): DatabaseMeta { engine: "", engine_options: {}, options: {}, created_on: 2024-01-01T00:00:00Z, updated_on: 2024-01-01T00:00:00Z, comment: "", drop_on: None, gc_in_progress: false }"#,
@@ -204,10 +195,7 @@ mod tests {
         let wal_dir = tmp.path().join("log");
         std::fs::create_dir_all(&wal_dir)?;
 
-        let config = Arc::new(Config {
-            dir: wal_dir.to_string_lossy().to_string(),
-            ..Default::default()
-        });
+        let config = Arc::new(Config::new(wal_dir.to_string_lossy().to_string()));
 
         let ts = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
         let meta = DatabaseMeta {
@@ -220,9 +208,8 @@ mod tests {
             drop_on: None,
             gc_in_progress: false,
         };
-        let pb = meta.to_pb()?;
-        let mut pb_buf = vec![];
-        pb.encode(&mut pb_buf)?;
+        let pb = meta.to_pb();
+        let pb_buf = pb.encode_to_vec();
 
         let raw_bytes_str = format!(
             "[{}]",
@@ -237,7 +224,7 @@ mod tests {
         let log_entry = LogEntry::new(cmd);
         let payload = EntryPayload::Normal(log_entry);
 
-        let mut log = RaftLogV004::open(config)?;
+        let mut log = RaftLog::open(config)?;
         log.append([(Cw(new_log_id(1, 0, 0)), Cw(payload))])?;
         blocking_flush(&mut log).await?;
         drop(log);
@@ -251,7 +238,7 @@ mod tests {
             concat!(
                 "RaftLog:\n",
                 "ChunkId(00_000_000_000_000_000_000)\n",
-                "  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
+                "  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
                 r#"  R-00001: [000_000_018, 000_000_218) Size(200): Append(log_id: T1-N0.0, payload: normal: cmd: upsert_kv:__fd_database_by_id/123(GE(0)) = Update("[binary]") (None))"#,
                 "\n",
                 "    raw(__fd_database_by_id/123): {}\n",
@@ -270,7 +257,7 @@ mod tests {
             concat!(
                 "RaftLog:\n",
                 "ChunkId(00_000_000_000_000_000_000)\n",
-                "  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
+                "  R-00000: [000_000_000, 000_000_018) Size(18): Checkpoint(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
                 r#"  R-00001: [000_000_018, 000_000_218) Size(200): Append(log_id: T1-N0.0, payload: normal: cmd: upsert_kv:__fd_database_by_id/123(GE(0)) = Update("[binary]") (None))"#,
                 "\n",
                 r#"    value(__fd_database_by_id/123): DatabaseMeta {{ engine: "", engine_options: {{}}, options: {{}}, created_on: 2024-01-01T00:00:00Z, updated_on: 2024-01-01T00:00:00Z, comment: "", drop_on: None, gc_in_progress: false }}"#,

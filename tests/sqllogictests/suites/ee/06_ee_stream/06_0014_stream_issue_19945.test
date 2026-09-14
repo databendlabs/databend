@@ -1,0 +1,79 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+## Test that change$row_id is always lowercase hex after compaction.
+## Regression test for: hex() producing uppercase after PR #19892 causes
+## standard stream FULL OUTER JOIN mismatch on change$row_id.
+
+statement ok
+DROP DATABASE IF EXISTS test_stream_row_id_case
+
+statement ok
+CREATE DATABASE test_stream_row_id_case
+
+statement ok
+USE test_stream_row_id_case
+
+statement ok
+CREATE TABLE t(a int)
+
+statement ok
+ALTER TABLE t SET OPTIONS(change_tracking = true)
+
+## Insert rows in separate batches to ensure compaction merges blocks.
+## We need row numbers >= 10 (0xa) so that hex output contains a-f digits.
+statement ok
+INSERT INTO t VALUES(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16)
+
+statement ok
+CREATE STREAM s_standard ON TABLE t APPEND_ONLY = false
+
+statement ok
+CREATE STREAM s_append ON TABLE t APPEND_ONLY = true
+
+## Insert another batch so the stream has data to track.
+statement ok
+INSERT INTO t VALUES(17),(18),(19),(20),(21),(22),(23),(24),(25),(26),(27),(28),(29),(30),(31),(32)
+
+## Compact to trigger _origin_block_id path in change$row_id generation.
+statement ok
+OPTIMIZE TABLE t COMPACT
+
+## Do an update so standard stream has both INSERT and DELETE sides.
+statement ok
+UPDATE t SET a = a + 100 WHERE a >= 10 AND a <= 16
+
+## Verify: all change$row_id values in standard stream must be lowercase.
+## If hex() produces uppercase, rows with row_num containing a-f will have uppercase chars.
+query I
+SELECT count(*) FROM s_standard WHERE change$row_id <> lower(change$row_id)
+----
+0
+
+## Verify: standard stream correctness - the update should produce matched INSERT/DELETE pairs.
+## Rows 10-16 should appear as DELETE(old) + INSERT(new) with is_update=true.
+query I
+SELECT count(*) FROM s_standard WHERE change$is_update = true
+----
+14
+
+## Verify: append_only stream row_id is also lowercase.
+query I
+SELECT count(*) FROM s_append WHERE change$row_id <> lower(change$row_id)
+----
+0
+
+## Cleanup
+statement ok
+DROP DATABASE test_stream_row_id_case

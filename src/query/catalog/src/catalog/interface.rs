@@ -29,8 +29,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -44,7 +42,6 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -57,9 +54,6 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
-use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
 use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -67,12 +61,9 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
@@ -81,6 +72,8 @@ use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::MVDefinition;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -101,10 +94,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -114,10 +103,13 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -178,23 +170,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply>;
 
-    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply>;
-
-    async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
-
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
-
-    async fn list_marked_deleted_indexes(
-        &self,
-        _tenant: &Tenant,
-        _table_id: Option<u64>,
-    ) -> Result<GetMarkedDeletedIndexesReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'list_marked_deleted_indexes' not implemented for catalog {}",
-            self.name()
-        )))
-    }
-
     async fn list_marked_deleted_table_indexes(
         &self,
         _tenant: &Tenant,
@@ -202,18 +177,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<GetMarkedDeletedTableIndexesReply> {
         Err(ErrorCode::Unimplemented(format!(
             "'list_marked_deleted_table_indexes' not implemented for catalog {}",
-            self.name()
-        )))
-    }
-
-    async fn remove_marked_deleted_index_ids(
-        &self,
-        _tenant: &Tenant,
-        _table_id: u64,
-        _index_ids: &[u64],
-    ) -> Result<()> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'remove_marked_deleted_index_ids' not implemented for catalog {}",
             self.name()
         )))
     }
@@ -228,23 +191,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             "'remove_marked_deleted_table_indexes' not implemented for catalog {}",
             self.name()
         )))
-    }
-
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
-
-    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        Ok(vec![])
-    }
-
-    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        Ok(vec![])
-    }
-
-    async fn list_indexes_by_table_id(
-        &self,
-        _req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        Ok(vec![])
     }
 
     #[async_backtrace::framed]
@@ -263,6 +209,42 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
+
+    /// Get a materialized-view definition by its table ID.
+    async fn get_mv_definition(
+        &self,
+        tenant: &Tenant,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>>;
+
+    /// Get an MV definition if its source binding is active.
+    async fn get_active_mv_definition(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+        mv_table_id: u64,
+    ) -> Result<Option<SeqV<MVDefinition>>>;
+
+    /// Get a source table's current materialized-view binding generation.
+    ///
+    /// `None` means the generation record is not initialized and represents generation 0.
+    async fn get_mv_current_source_generation(
+        &self,
+        tenant: &Tenant,
+        source_table_id: u64,
+    ) -> Result<Option<u64>>;
+
+    /// Get a consistent snapshot of active MV bindings for a source table.
+    async fn get_mv_source_binding_snapshot(
+        &self,
+        _tenant: &Tenant,
+        _source_table_id: u64,
+    ) -> Result<MVSourceBindingSnapshot> {
+        Ok(MVSourceBindingSnapshot {
+            generation: 0,
+            materialized_views: vec![],
+        })
+    }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
     async fn mget_table_names_by_ids(
@@ -497,6 +479,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn retryable_update_multi_table_meta(
         &self,
+        _tenant: &Tenant,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         Err(ErrorCode::Unimplemented(
@@ -506,9 +489,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_multi_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let result = self.retryable_update_multi_table_meta(req).await?;
+        let result = self.retryable_update_multi_table_meta(tenant, req).await?;
         match result {
             Ok(reply) => Ok(reply),
             Err(failed_tables) => {
@@ -531,9 +515,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // update stream metas, currently used by "copy into location form stream"
     async fn update_stream_metas(
         &self,
+        tenant: &Tenant,
         update_stream_metas: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(tenant, UpdateMultiTableMetaReq {
             update_stream_metas,
             ..Default::default()
         })
@@ -543,6 +528,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_single_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateTableMetaReq,
         table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
@@ -559,7 +545,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         } else {
             update_table_metas.push((req, table_info.clone()));
         }
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(tenant, UpdateMultiTableMetaReq {
             update_table_metas,
             update_temp_tables,
             ..Default::default()
@@ -696,7 +682,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Dictionary
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply>;
 
-    async fn update_dictionary(&self, req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply>;
+    async fn get_dictionary_id(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>> {
+        unimplemented!()
+    }
+
+    async fn update_dictionary_by_id(
+        &self,
+        _id_ident: DictionaryIdIdent,
+        _dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>> {
+        unimplemented!()
+    }
 
     async fn drop_dictionary(
         &self,

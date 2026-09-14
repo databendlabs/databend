@@ -13,19 +13,42 @@
 // limitations under the License.
 
 macro_rules! try_dispatch {
-    ($input:expr_2021, $return_if_ok:literal, $($pat:pat => $body:expr_2021),+ $(,)?) => {{
+    ($input:expr_2021, true, $($($kind:ident)|+ => $body:expr_2021),+ $(,)?) => {{
+        let mut dispatch_error = None;
         if let Some(token_0) = $input.tokens.first() {
-            use TokenKind::*;
-
             if let Some(result) = match token_0.kind {
-                $($pat => Some($body),)+
+                $($($kind)|+ => Some($body),)+
                 _ => None,
             } {
-                if !$return_if_ok || result.is_ok() {
-                    return result;
+                match result {
+                    Ok(output) => return Ok(output),
+                    Err(nom::Err::Error(error) | nom::Err::Failure(error)) => {
+                        dispatch_error = Some(error);
+                    }
+                    Err(nom::Err::Incomplete(needed)) => {
+                        return Err(nom::Err::Incomplete(needed));
+                    }
                 }
             }
         }
+        dispatch_error
+    }};
+    ($input:expr_2021, false, $($($kind:ident)|+ => $body:expr_2021),+ $(,)?) => {{
+        if let Some(token_0) = $input.tokens.first() {
+            if let Some(result) = match token_0.kind {
+                $($($kind)|+ => Some($body),)+
+                _ => None,
+            } {
+                return result;
+            }
+        }
+        Err(nom::Err::Error(try_dispatch!(
+            @error $input, $($($kind)|+),+
+        )))
+    }};
+    (@error $input:expr_2021, $($($kind:ident)|+),+ $(,)?) => {{
+        const EXPECTED_TOKENS: &[$crate::parser::token::TokenKind] = &[$($($kind,)+)+];
+        $crate::parser::Error::from_expected_tokens($input, EXPECTED_TOKENS)
     }};
 }
 
@@ -51,7 +74,6 @@ pub mod token;
 pub use common::IResult;
 pub use common::match_text;
 pub use common::match_token;
-pub use error::Backtrace;
 pub use error::Error;
 pub use error::ErrorKind;
 pub use error::display_parser_error;

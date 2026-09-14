@@ -12,100 +12,107 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
+databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
+
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_license::license::Feature;
+use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::TableInfo;
+use databend_common_metrics::storage::metrics_inc_segment_claim_conflicts;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
-use databend_common_sql::ClusterKeyNormalizer;
-use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
-use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::bind_table;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::plans::BoundColumnRef;
-use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::ReclusterPlan;
-use databend_common_sql::plans::plan_hilbert_sql;
-use databend_common_sql::plans::replace_with_constant;
-use databend_common_sql::plans::set_update_stream_columns;
-use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::ReclusterFinalCarry;
+use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ClusterType;
-use derive_visitor::DriveMut;
-use log::debug;
 use log::error;
+use log::info;
 use log::warn;
+use rand::Rng;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
-use crate::interpreters::interpreter_insert_multi_table::scalar_expr_to_remote_expr;
+use crate::locks::CoordinationManager;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::HilbertPartition;
 use crate::physical_plans::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::Recluster;
-use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::schedulers::ServiceQueryExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
-use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 use crate::sessions::TableContextTelemetry;
 
+const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
+
+#[derive(Debug, PartialEq, Eq)]
+enum ReclusterRoundOutcome {
+    Committed,
+    NoParts,
+    ClaimRetriesExhausted,
+}
+
+impl ReclusterRoundOutcome {
+    fn stop_reason(&self) -> Option<&'static str> {
+        match self {
+            Self::Committed => None,
+            Self::NoParts => Some("no_recluster_parts"),
+            Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
+        }
+    }
+}
+
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterPlan,
-    lock_opt: LockTableOption,
+    allow_segment_claims: bool,
 }
 
 impl ReclusterTableInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: ReclusterPlan,
-        lock_opt: LockTableOption,
+        allow_segment_claims: bool,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
             plan,
-            lock_opt,
+            allow_segment_claims,
         })
     }
 }
@@ -121,101 +128,168 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let ctx = self.ctx.clone();
-        let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let ctx = self.ctx.clone();
+            let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 
-        let mut times = 0;
-        let mut push_downs = None;
-        let mut hilbert_info = None;
-        let start = SystemTime::now();
-        let timeout = Duration::from_secs(recluster_timeout_secs);
-        let is_final = self.plan.is_final;
-        loop {
-            if let Err(err) = ctx.check_aborting() {
-                error!(
-                    "recluster: statement aborted, server is shutting down or the query was killed, round={}",
-                    times + 1
-                );
-                return Err(err.with_context("failed to execute"));
-            }
+            let mut rounds = 0;
+            let mut push_downs = None;
+            // FINAL carry is scoped to this fixed-scan statement loop.
+            // A new FINAL statement starts from the table head again.
+            let mut linear_final_carry = ReclusterFinalCarry::default();
+            let start = SystemTime::now();
+            let timeout = Duration::from_secs(recluster_timeout_secs);
+            let is_final = self.plan.is_final;
+            let mut committed_rounds = 0;
+            let (result, stop_reason) = loop {
+                if let Err(err) = ctx.check_aborting() {
+                    error!(
+                        event = "recluster.aborted",
+                        rounds;
+                        "Recluster aborted before next round"
+                    );
+                    break (Err(err.with_context("failed to execute")), "aborted");
+                }
 
-            let res = self
-                .execute_recluster(&mut push_downs, &mut hilbert_info)
-                .await;
+                rounds += 1;
+                let res = self
+                    .execute_recluster(&mut push_downs, &mut linear_final_carry)
+                    .await;
 
-            match res {
-                Ok(is_break) => {
-                    if is_break {
-                        debug!(
-                            "recluster: final loop stop reason=no_recluster_parts round={}",
-                            times + 1,
-                        );
-                        break;
+                match res {
+                    Ok(outcome) => {
+                        if let Some(reason) = outcome.stop_reason() {
+                            break (Ok(()), reason);
+                        }
+                        committed_rounds += 1;
+                    }
+                    Err(e) => {
+                        if is_final
+                            && matches!(
+                                e.code(),
+                                ErrorCode::LEASE_EXPIRED
+                                    | ErrorCode::TABLE_ALREADY_LOCKED
+                                    | ErrorCode::TABLE_VERSION_MISMATCHED
+                                    | ErrorCode::UNRESOLVABLE_CONFLICT
+                            )
+                        {
+                            // Keep FINAL carry across retryable conflicts. FINAL is
+                            // a bounded fixed scan and does not restart from table
+                            // head to chase concurrent snapshot drift.
+                            warn!(
+                                event = "recluster.retry",
+                                reason = "retryable_conflict",
+                                round = rounds,
+                                code = e.code(),
+                                error :? = e;
+                                "Recluster round failed with retryable conflict"
+                            );
+                        } else {
+                            error!(
+                                event = "recluster.failed",
+                                round = rounds,
+                                code = e.code(),
+                                error :? = e;
+                                "Recluster round failed"
+                            );
+                            break (Err(e), "error");
+                        }
                     }
                 }
-                Err(e) => {
-                    if is_final
-                        && matches!(
-                            e.code(),
-                            ErrorCode::TABLE_LOCK_EXPIRED
-                                | ErrorCode::TABLE_ALREADY_LOCKED
-                                | ErrorCode::TABLE_VERSION_MISMATCHED
-                                | ErrorCode::UNRESOLVABLE_CONFLICT
-                        )
-                    {
-                        warn!(
-                            "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
-                            times + 1,
-                            e.code(),
-                            e,
-                        );
-                    } else {
-                        error!(
-                            "recluster: final loop stop reason=error round={} code={} error={:?}",
-                            times + 1,
-                            e.code(),
-                            e,
-                        );
-                        return Err(e);
-                    }
+
+                let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
+                ctx.set_status_info(&format!(
+                    "[FUSE-RECLUSTER] Executed rounds={} committed_rounds={} elapsed={:?}",
+                    rounds, committed_rounds, elapsed_time,
+                ));
+
+                if !is_final {
+                    break (Ok(()), "single_round_completed");
                 }
+
+                if elapsed_time >= timeout {
+                    warn!(
+                        event = "recluster.timeout",
+                        rounds,
+                        timeout_secs = recluster_timeout_secs;
+                        "Recluster stopped at time limit"
+                    );
+                    break (Ok(()), "timeout");
+                }
+            };
+
+            info!(
+                event = "recluster.finished",
+                catalog = self.plan.catalog.as_str(),
+                database = self.plan.database.as_str(),
+                table = self.plan.table.as_str(),
+                is_final,
+                rounds,
+                committed_rounds,
+                stop_reason,
+                success = result.is_ok(),
+                elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
+                "Recluster finished"
+            );
+
+            if committed_rounds > 0 {
+                self.vacuum_table_history().await;
             }
 
-            let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
-            times += 1;
-            // Status.
-            {
-                let status = format!(
-                    "[FUSE-RECLUSTER] Run recluster tasks:{} times, cost:{:?}",
-                    times, elapsed_time
-                );
-                ctx.set_status_info(&status);
-            }
-
-            if !is_final {
-                break;
-            }
-
-            if elapsed_time >= timeout {
-                warn!(
-                    "recluster: final loop stop reason=timeout round={} timeout={:?}",
-                    times, timeout,
-                );
-                break;
-            }
-        }
-
-        Ok(PipelineBuildResult::create())
+            result?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 
 impl ReclusterTableInterpreter {
+    async fn vacuum_table_history(&self) {
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)
+            .is_err()
+        {
+            return;
+        }
+
+        let result = async {
+            // RECLUSTER resolves the table by name for every round. The deferred vacuum follows
+            // the same name-bound semantics and bypasses the query-level table cache instead of
+            // pinning the table ID for the statement.
+            let table = self
+                .ctx
+                .get_catalog(&self.plan.catalog)
+                .await?
+                .get_table(
+                    &self.ctx.get_tenant(),
+                    &self.plan.database,
+                    &self.plan.table,
+                )
+                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            // Transient tables retain their existing per-commit PurgeAllHistory behavior.
+            if fuse_table.is_transient() {
+                return Ok::<_, ErrorCode>(());
+            }
+            if is_auto_vacuum_enabled(self.ctx.as_ref(), fuse_table)? {
+                fuse_table
+                    .vacuum_table(self.ctx.clone(), &get_vacuum_handler(), true)
+                    .await;
+            }
+            Ok::<_, ErrorCode>(())
+        }
+        .await;
+
+        if let Err(error) = result {
+            warn!("recluster: final table-history vacuum failed: {error}");
+        }
+    }
+
     async fn execute_recluster(
         &self,
         push_downs: &mut Option<PushDownInfo>,
-        hilbert_info: &mut Option<HilbertBuildInfo>,
-    ) -> Result<bool> {
+        linear_final_carry: &mut ReclusterFinalCarry,
+    ) -> Result<ReclusterRoundOutcome> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
         let settings = self.ctx.get_settings();
@@ -227,38 +301,90 @@ impl ReclusterTableInterpreter {
             limit,
             ..
         } = &self.plan;
-        // try to add lock table.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(catalog, database, table, &self.lock_opt)
-            .await?;
+        // Callers that already own the lifecycle lock (for example, MV refresh) disable segment
+        // claims to avoid reacquiring the shared table lock at the commit gate.
+        let mut use_segment_claims =
+            self.allow_segment_claims && settings.get_enable_table_lock()?;
 
-        let tbl = self.ctx.get_table(catalog, database, table).await?;
-        // check mutability
-        tbl.check_mutable()?;
-        let Some(cluster_type) = tbl.cluster_type() else {
-            return Err(ErrorCode::UnclusteredTable(format!(
-                "Unclustered table '{}.{}'",
-                database, table,
-            )));
-        };
-
-        self.build_push_downs(push_downs, &tbl)?;
-
-        let physical_plan = match cluster_type {
-            ClusterType::Hilbert => {
-                self.build_hilbert_plan(&tbl, push_downs, hilbert_info)
-                    .await?
+        // Concurrent planning must evict this cache so the claim set is matched against the
+        // latest snapshot.
+        if use_segment_claims {
+            self.ctx.evict_table_from_cache(catalog, database, table)?;
+        }
+        let mut tbl = self.ctx.get_table(catalog, database, table).await?;
+        // Temporary tables are session-local, and their IDs are intentionally unsupported by
+        // the segment-claim and lock catalog APIs.
+        if tbl.is_temp() {
+            use_segment_claims = false;
+        }
+        let claim_manager = use_segment_claims.then(CoordinationManager::instance);
+        let mut claim_retries = 0;
+        let (parts, snapshot, claim_guard) = loop {
+            check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
+            if tbl.cluster_key_meta().is_none() {
+                return Err(ErrorCode::UnclusteredTable(format!(
+                    "Unclustered table '{}.{}'",
+                    database, table,
+                )));
             }
-            ClusterType::Linear => self.build_linear_plan(&tbl, push_downs, *limit).await?,
+            self.build_push_downs(push_downs, &tbl)?;
+
+            let claimed_segments = if let Some(claim_manager) = &claim_manager {
+                claim_manager
+                    .claimed_segments(self.ctx.as_ref(), tbl.get_id())
+                    .await?
+            } else {
+                HashSet::new()
+            };
+            let candidate = self
+                .build_linear_candidate(
+                    tbl.as_ref(),
+                    push_downs,
+                    *limit,
+                    linear_final_carry,
+                    &claimed_segments,
+                )
+                .await?;
+            let Some((parts, snapshot, segments)) = candidate else {
+                return Ok(ReclusterRoundOutcome::NoParts);
+            };
+            let Some(claim_manager) = &claim_manager else {
+                break (parts, snapshot, None);
+            };
+
+            let claim = claim_manager
+                .try_segment_claim(self.ctx.clone(), tbl.get_id(), segments)
+                .await?;
+            if claim.is_some() {
+                break (parts, snapshot, claim);
+            }
+
+            metrics_inc_segment_claim_conflicts();
+            if claim_retries >= MAX_SEGMENT_CLAIM_RETRIES {
+                warn!(
+                    event = "recluster.claim_retries_exhausted",
+                    table_id = tbl.get_id(),
+                    claim_retries;
+                    "Recluster stopped at segment claim retry limit"
+                );
+                return Ok(ReclusterRoundOutcome::ClaimRetriesExhausted);
+            }
+            claim_retries += 1;
+
+            // Let concurrent losers spread out before selecting another candidate set.
+            *linear_final_carry = ReclusterFinalCarry::default();
+            let delay_ms = rand::thread_rng().gen_range(5..=20);
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+
+            self.ctx.evict_table_from_cache(catalog, database, table)?;
+            tbl = self.ctx.get_table(catalog, database, table).await?;
         };
-        let Some(mut physical_plan) = physical_plan else {
-            return Ok(true);
-        };
+        let mut physical_plan =
+            self.build_linear_plan(tbl.as_ref(), parts, snapshot, use_segment_claims)?;
         physical_plan.adjust_plan_id(&mut 0);
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        build_res.main_pipeline.add_lock_guard(claim_guard);
         {
             let ctx = self.ctx.clone();
             let catalog = self.plan.catalog.clone();
@@ -267,12 +393,16 @@ impl ReclusterTableInterpreter {
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
                     ctx.written_segment_locations().clear();
-                    ctx.selected_segment_locations().clear();
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
                     hook_vacuum_temp_files(&ctx)?;
+                    // RECLUSTER FINAL runs independent pipelines under one query id.
+                    // We allow hook vacuum to be best-effort for each round, and avoid
+                    // carrying this round's spill progress into later rounds.
+                    // Leftovers beyond the hook vacuum limit are handled by normal vacuum.
+                    ctx.clear_cluster_spill_progress();
                     hook_disk_temp_dir(&ctx)?;
                     match &info.res {
                         Ok(_) => {
@@ -301,223 +431,47 @@ impl ReclusterTableInterpreter {
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
         self.ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute().await?;
+        let execution_result = complete_executor.execute().await;
 
-        // make sure the executor is dropped before the next loop.
+        // Make sure the executor and any pipeline-held claim start releasing before an error is
+        // returned to the FINAL loop for another round. Claim release remains asynchronous, so a
+        // retry may rarely observe this round's claim and skip those segments. This best-effort
+        // window is acceptable: refresh and task planning normally outlast claim cleanup, and any
+        // skipped work remains eligible for a later recluster.
         drop(complete_executor);
-        // make sure the lock guard is dropped before the next loop.
-        drop(lock_guard);
 
-        Ok(false)
+        execution_result?;
+        Ok(ReclusterRoundOutcome::Committed)
     }
 
-    /// Builds physical plan for Hilbert clustering.
-    /// # Arguments
-    /// * `tbl` - Reference to the table being reclustered
-    /// * `push_downs` - Optional filter conditions to push down to storage
-    /// * `hilbert_info` - Cached Hilbert mapping information (built if None)
-    /// # Returns
-    /// * `Result<Option<PhysicalPlan>>` - The physical plan if reclustering is needed, None otherwise
-    async fn build_hilbert_plan(
+    async fn build_linear_candidate(
         &self,
-        tbl: &Arc<dyn Table>,
-        push_downs: &mut Option<PushDownInfo>,
-        hilbert_info: &mut Option<HilbertBuildInfo>,
-    ) -> Result<Option<PhysicalPlan>> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
-        let handler = get_hilbert_clustering_handler();
-        let Some((recluster_info, snapshot)) = handler
-            .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs.clone())
-            .await?
-        else {
-            // No reclustering needed (e.g., table already optimally clustered)
-            return Ok(None);
-        };
-
-        let settings = self.ctx.get_settings();
-        let table_info = tbl.get_table_info().clone();
-        let scan_progress_value = self.ctx.get_scan_progress_value();
-
-        let block_thresholds = tbl.get_block_thresholds();
-        let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
-        let total_rows = recluster_info.removed_statistics.row_count as usize;
-        let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
-
-        // Determine rows per block based on data size and compression ratio
-        let (rows_per_block, _) =
-            block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
-
-        // Calculate initial partition count based on data volume and block size
-        let mut total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
-
-        // Adjust number of partitions according to the block size thresholds
-        if total_partitions < block_thresholds.block_per_segment
-            && block_thresholds.check_perfect_segment(
-            block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
-            total_rows,
-            total_bytes,
-            total_compressed,
-        )
-        {
-            total_partitions = block_thresholds.block_per_segment;
-        }
-
-        warn!(
-            "recluster: build hilbert plan total_bytes={} total_rows={} total_partitions={}",
-            total_bytes, total_rows, total_partitions
-        );
-
-        // Create a subquery executor for running Hilbert mapping calculations
-        let subquery_executor = Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
-            self.ctx.as_ref(),
-        )));
-
-        let partitions = settings.get_hilbert_num_range_ids()? as usize;
-
-        // Ensure Hilbert mapping information is built (if not already)
-        self.build_hilbert_info(tbl, hilbert_info).await?;
-        let HilbertBuildInfo {
-            keys_bound,
-            index_bound,
-            query,
-        } = hilbert_info.as_ref().unwrap();
-
-        // Variables will store the calculated bounds for Hilbert mapping
-        let mut variables = VecDeque::new();
-
-        // Execute the `kyes_bound` plan to calculate bounds for each clustering key
-        let keys_bounds = self
-            .execute_hilbert_plan(
-                &subquery_executor,
-                keys_bound,
-                std::cmp::max(total_partitions, partitions),
-                &variables,
-                tbl,
-            )
-            .await?;
-
-        // Store each clustering key's bounds in the variables collection
-        for entry in keys_bounds.columns().iter() {
-            let v = entry.index(0).unwrap().to_owned();
-            variables.push_back(v);
-        }
-
-        // Execute the `index_bound` plan to calculate the Hilbert index bounds
-        // i.e. `range_bound(..)(hilbert_range_index(..))`
-        let index_bounds = self
-            .execute_hilbert_plan(
-                &subquery_executor,
-                index_bound,
-                total_partitions,
-                &variables,
-                tbl,
-            )
-            .await?;
-
-        // Add the Hilbert index bound to the front of variables
-        let val = index_bounds.value_at(0, 0).unwrap().to_owned();
-        variables.push_front(val);
-
-        // Reset the scan progress to its original value
-        self.ctx.get_scan_progress().set(&scan_progress_value);
-
-        let Plan::Query {
-            s_expr,
-            metadata,
-            bind_context,
-            ..
-        } = query
-        else {
-            unreachable!("Expected a Query plan, but got {:?}", query.kind());
-        };
-
-        // Replace placeholders in the expression
-        //  `range_partition_id(hilbert_range_index(cluster_key, [$key_range_bound], ..), [$hilbert_index_range_bound])`
-        // with calculated constants.
-        let mut s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
-
-        if tbl.change_tracking_enabled() {
-            s_expr = set_update_stream_columns(&s_expr)?;
-        }
-
-        metadata.write().replace_all_tables(tbl.clone());
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-        let mut plan = builder.build(&s_expr, bind_context.column_set()).await?;
-
-        // Check if the plan already has an exchange operator
-        let mut is_exchange = false;
-        if let Some(exchange) = Exchange::from_physical_plan(&plan) {
-            if exchange.kind == FragmentKind::Merge {
-                is_exchange = true;
-                plan = exchange.input.clone();
-            }
-        }
-
-        // Determine if we need distributed execution
-        let cluster = self.ctx.get_cluster();
-        let is_distributed = is_exchange || !cluster.is_empty();
-
-        // For distributed execution, add an exchange operator to distribute work
-        if is_distributed {
-            // Create an expression for the partition column,
-            // i.e.`range_partition_id(hilbert_range_index({hilbert_keys_str}), [...]) AS _predicate`
-            let expr = scalar_expr_to_remote_expr(
-                &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: bind_context.columns.last().unwrap().clone(),
-                }),
-                plan.output_schema()?.as_ref(),
-            )?;
-
-            // Add exchange operator for data distribution,
-            // shuffling data based on the hash of range partition IDs derived from the Hilbert index.
-            plan = PhysicalPlan::new(Exchange {
-                input: plan,
-                kind: FragmentKind::Normal,
-                keys: vec![expr],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-                meta: PhysicalPlanMeta::new("Exchange"),
-            });
-        }
-
-        let table_meta_timestamps = self
-            .ctx
-            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
-
-        // Create the Hilbert partition physical plan,
-        // collecting data into partitions and persist them
-        plan = PhysicalPlan::new(HilbertPartition {
-            rows_per_block,
-            table_meta_timestamps,
-
-            input: plan,
-            table_info: table_info.clone(),
-            num_partitions: total_partitions,
-            meta: PhysicalPlanMeta::new("HilbertPartition"),
-        });
-
-        // Finally, commit the newly clustered table
-        Ok(Some(Self::add_commit_sink(
-            plan,
-            is_distributed,
-            table_info,
-            snapshot,
-            false,
-            Some(recluster_info),
-            table_meta_timestamps,
-        )))
-    }
-
-    async fn build_linear_plan(
-        &self,
-        tbl: &Arc<dyn Table>,
+        tbl: &dyn Table,
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
-    ) -> Result<Option<PhysicalPlan>> {
-        let Some((parts, snapshot)) = tbl
-            .recluster(self.ctx.clone(), push_downs.clone(), limit)
+        linear_final_carry: &mut ReclusterFinalCarry,
+        claimed_segments: &HashSet<String>,
+    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>, Vec<String>)>> {
+        let fuse_table = FuseTable::try_from_table(tbl)?;
+        // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
+        // those tables on the conservative strategy until CREATE/ALTER CLUSTER BY
+        // materializes the option with value 1.
+        let mode = if self.plan.is_final
+            && fuse_table.get_option(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER, 0u32) != 0
+        {
+            ReclusterMode::Aggressive
+        } else {
+            ReclusterMode::Conservative
+        };
+        let Some((parts, snapshot)) = fuse_table
+            .do_recluster(
+                self.ctx.clone(),
+                push_downs.clone(),
+                limit,
+                mode,
+                linear_final_carry,
+                claimed_segments,
+            )
             .await?
         else {
             return Ok(None);
@@ -525,40 +479,79 @@ impl ReclusterTableInterpreter {
         if parts.is_empty() {
             return Ok(None);
         }
+
+        let claimed_sources = parts
+            .removed_segment_indexes
+            .iter()
+            .map(|index| {
+                snapshot
+                    .segments
+                    .get(*index)
+                    .map(|(location, _)| location.clone())
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "recluster source segment index {index} is outside snapshot"
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Some((parts, snapshot, claimed_sources)))
+    }
+
+    fn build_linear_plan(
+        &self,
+        tbl: &dyn Table,
+        parts: ReclusterParts,
+        snapshot: Arc<TableSnapshot>,
+        acquire_commit_lock: bool,
+    ) -> Result<PhysicalPlan> {
         let table_meta_timestamps = self
             .ctx
-            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
-
+            .get_table_meta_timestamps(tbl, Some(snapshot.clone()))?;
         let table_info = tbl.get_table_info().clone();
-        let is_distributed = parts.is_distributed(self.ctx.clone());
         let ReclusterParts {
             tasks,
             remained_blocks,
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
-        let root = PhysicalPlan::new(Recluster {
+        let is_distributed = tasks.len() > 1;
+        let mut input = PhysicalPlan::new(Recluster {
             tasks,
             table_meta_timestamps,
-
             table_info: table_info.clone(),
             meta: PhysicalPlanMeta::new("Recluster"),
         });
+        if is_distributed {
+            input = PhysicalPlan::new(Exchange {
+                input,
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
+        }
 
-        let plan = Self::add_commit_sink(
-            root,
-            is_distributed,
+        Ok(PhysicalPlan::new(CommitSink {
+            input,
             table_info,
-            snapshot,
-            false,
-            Some(ReclusterInfoSideCar {
+            snapshot: Some(snapshot),
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Recluster,
+                merge_meta: false,
+            },
+            update_stream_meta: vec![],
+            deduplicated_label: None,
+            table_meta_timestamps,
+            recluster_info: Some(ReclusterInfoSideCar {
                 merged_blocks: remained_blocks,
                 removed_segment_indexes,
                 removed_statistics: removed_segment_summary,
+                acquire_commit_lock,
             }),
-            table_meta_timestamps,
-        );
-        Ok(Some(plan))
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        }))
     }
 
     fn build_push_downs(
@@ -600,154 +593,4 @@ impl ReclusterTableInterpreter {
         }
         Ok(())
     }
-
-    async fn build_hilbert_info(
-        &self,
-        tbl: &Arc<dyn Table>,
-        hilbert_info: &mut Option<HilbertBuildInfo>,
-    ) -> Result<()> {
-        if hilbert_info.is_some() {
-            return Ok(());
-        }
-
-        let database = &self.plan.database;
-        let table = &self.plan.table;
-        let settings = self.ctx.get_settings();
-        let sample_size = settings.get_hilbert_sample_size_per_block()?;
-        let sql_dialect = settings.get_sql_dialect()?;
-
-        let mut normalizer = ClusterKeyNormalizer {
-            force_quoted_ident: false,
-            unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
-            quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
-            sql_dialect,
-        };
-        let ast_exprs = tbl.resolve_cluster_keys().unwrap();
-        let cluster_keys_len = ast_exprs.len();
-        let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
-        for mut ast in ast_exprs {
-            ast.drive_mut(&mut normalizer);
-            cluster_key_strs.push(format!("{:#}", &ast));
-        }
-
-        let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
-        let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
-        for cluster_key_str in cluster_key_strs.into_iter() {
-            keys_bounds.push(format!(
-                "range_bound(1000, {sample_size})({cluster_key_str})"
-            ));
-
-            hilbert_keys.push(format!("{cluster_key_str}, []"));
-        }
-        let hilbert_keys_str = hilbert_keys.join(", ");
-
-        let keys_bounds_query =
-            format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
-        let keys_bound =
-            plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &keys_bounds_query).await?;
-
-        let index_bound_query = format!(
-            "SELECT \
-                range_bound(1000, {sample_size})(hilbert_range_index({hilbert_keys_str})) \
-            FROM {database}.{table}"
-        );
-        let index_bound =
-            plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &index_bound_query).await?;
-
-        let quote = sql_dialect.default_ident_quote();
-        let schema = tbl.schema_with_stream();
-        let mut output_with_table = Vec::with_capacity(schema.fields.len());
-        for field in &schema.fields {
-            output_with_table.push(format!(
-                "{quote}{table}{quote}.{quote}{}{quote}",
-                field.name
-            ));
-        }
-        let output_with_table_str = output_with_table.join(", ");
-        let query = format!(
-            "SELECT \
-                {output_with_table_str}, \
-                range_partition_id(hilbert_range_index({hilbert_keys_str}), [])AS _predicate \
-            FROM {database}.{table}"
-        );
-        let query = plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &query).await?;
-
-        *hilbert_info = Some(HilbertBuildInfo {
-            keys_bound,
-            index_bound,
-            query,
-        });
-        Ok(())
-    }
-
-    async fn execute_hilbert_plan(
-        &self,
-        executor: &Arc<ServiceQueryExecutor>,
-        plan: &Plan,
-        partitions: usize,
-        variables: &VecDeque<Scalar>,
-        tbl: &Arc<dyn Table>,
-    ) -> Result<DataBlock> {
-        let Plan::Query {
-            s_expr,
-            metadata,
-            bind_context,
-            ..
-        } = plan
-        else {
-            unreachable!()
-        };
-
-        let s_expr = replace_with_constant(s_expr, variables, partitions as u16);
-        metadata.write().replace_all_tables(tbl.clone());
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-        let plan = builder.build(&s_expr, bind_context.column_set()).await?;
-        let data_blocks = executor.execute_query_with_physical_plan(&plan).await?;
-        DataBlock::concat(&data_blocks)
-    }
-
-    fn add_commit_sink(
-        mut input: PhysicalPlan,
-        is_distributed: bool,
-        table_info: TableInfo,
-        snapshot: Arc<TableSnapshot>,
-        merge_meta: bool,
-        recluster_info: Option<ReclusterInfoSideCar>,
-        table_meta_timestamps: TableMetaTimestamps,
-    ) -> PhysicalPlan {
-        if is_distributed {
-            input = PhysicalPlan::new(Exchange {
-                input,
-                kind: FragmentKind::Merge,
-                keys: vec![],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-                meta: PhysicalPlanMeta::new("Exchange"),
-            });
-        }
-
-        let mut kind = MutationKind::Compact;
-
-        if recluster_info.is_some() {
-            kind = MutationKind::Recluster
-        }
-
-        PhysicalPlan::new(CommitSink {
-            input,
-            table_info,
-            snapshot: Some(snapshot),
-            commit_type: CommitType::Mutation { kind, merge_meta },
-            update_stream_meta: vec![],
-            deduplicated_label: None,
-            table_meta_timestamps,
-            recluster_info,
-            meta: PhysicalPlanMeta::new("CommitSink"),
-        })
-    }
-}
-
-struct HilbertBuildInfo {
-    keys_bound: Plan,
-    index_bound: Plan,
-    query: Plan,
 }

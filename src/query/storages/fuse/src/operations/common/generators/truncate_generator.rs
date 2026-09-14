@@ -18,10 +18,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::plans::TruncateMode;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::operations::common::SnapshotGenerator;
 use crate::statistics::TableStatsGenerator;
@@ -47,11 +46,19 @@ impl SnapshotGenerator for TruncateGenerator {
         self
     }
 
+    fn logical_change_delta(&self, previous: &Option<Arc<TableSnapshot>>) -> (u64, u64) {
+        (
+            0,
+            previous
+                .as_ref()
+                .map_or(0, |snapshot| snapshot.summary.row_count),
+        )
+    }
+
     fn do_generate_new_snapshot(
         &self,
         table_info: &TableInfo,
-        cluster_key_meta: Option<ClusterKey>,
-        cluster_type: Option<ClusterType>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         _table_stats_gen: TableStatsGenerator,
@@ -62,8 +69,7 @@ impl SnapshotGenerator for TruncateGenerator {
             table_info.schema().as_ref().clone(),
             Default::default(),
             vec![],
-            cluster_key_meta,
-            cluster_type,
+            cluster_key_info,
             None,
             table_meta_timestamps,
         )

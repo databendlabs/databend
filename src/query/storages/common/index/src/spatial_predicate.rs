@@ -26,13 +26,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
 use databend_common_functions::SPATIAL_INDEX_FUNCTIONS;
-use databend_common_io::ewkb_to_geo;
-use geo::BoundingRect;
+use databend_common_io::UNKNOWN_SRID;
+use databend_common_io::ewkb_to_bbox;
 use geo::Rect;
-use geozero::wkb::Ewkb;
 use unicase::Ascii;
-
-use crate::scalar_to_distance_threshold;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpatialPredicateOp {
@@ -139,10 +136,12 @@ impl<'a> SpatialPredicateVisitor<'a> {
     fn scalar_to_query(scalar: &Scalar) -> Option<(Option<Rect<f64>>, i32)> {
         match scalar {
             Scalar::Geometry(buffer) => {
-                let mut ewkb = Ewkb(buffer.as_slice());
-                let (geom, srid) = ewkb_to_geo(&mut ewkb).ok()?;
-                let rect = geom.bounding_rect();
-                Some((rect, srid.unwrap_or(0)))
+                let result = ewkb_to_bbox(buffer.as_slice())?;
+                let rect = result.bbox.map(|bbox| {
+                    let (min_x, min_y, max_x, max_y) = bbox.corners();
+                    Rect::new((min_x, min_y), (max_x, max_y))
+                });
+                Some((rect, result.srid.unwrap_or(UNKNOWN_SRID)))
             }
             _ => None,
         }
@@ -201,7 +200,7 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
             "st_intersects" => SpatialPredicateOp::Intersects,
             "st_dwithin" => {
                 let Some(distance) = Self::extract_constant_arg(&args[2])
-                    .and_then(|scalar| scalar_to_distance_threshold(&scalar))
+                    .and_then(|scalar| scalar.to_distance_threshold())
                 else {
                     return Self::visit_function_call(call, self);
                 };

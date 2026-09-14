@@ -64,13 +64,17 @@ impl SegmentPruner {
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
 
         for segment_location in segment_locs {
-            let info = T::SegmentReader::read_compact_segment_through_cache(
-                self.pruning_ctx.dal.clone(),
-                segment_location.location.clone(),
-                &self.projection,
-                self.table_schema.clone(),
-            )
-            .await?;
+            let info = pruning_cost
+                .measure_async(
+                    PruningCostKind::SegmentsRead,
+                    T::SegmentReader::read_compact_segment_through_cache(
+                        self.pruning_ctx.dal.clone(),
+                        segment_location.location.clone(),
+                        &self.projection,
+                        self.table_schema.clone(),
+                    ),
+                )
+                .await?;
 
             let total_bytes = info.summary().uncompressed_byte_size;
             // Perf.
@@ -86,7 +90,13 @@ impl SegmentPruner {
                 info.summary().spatial_stats.as_ref(),
             );
             if pruning_cost.measure(PruningCostKind::SegmentsRange, || {
-                range_pruner.should_keep(&range_input, None)
+                self.pruning_ctx
+                    .partition_pruner
+                    .as_ref()
+                    .is_none_or(|pruner| {
+                        pruner.should_keep(info.summary().partition_stats.as_ref())
+                    })
+                    && range_pruner.should_keep(&range_input, None)
             }) {
                 // Perf.
                 {

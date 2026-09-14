@@ -27,19 +27,22 @@ use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
-use super::legacy_hash_index::AdapterImpl;
+use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
-use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
+use crate::aggregate::AggregateFunctionRef;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
 pub struct AggregateHashTable {
+    // Hash index entries store RowRef values into these payload pages. Any path
+    // that replaces or repartitions payload must clear or rebuild the index
+    // before probing it again.
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
@@ -81,10 +84,49 @@ impl AggregateHashTable {
                 config.partition_start_bit,
                 vec![arena],
             ),
-            hash_index: HashIndex::new(&config, capacity),
+            hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
         }
+    }
+
+    pub fn new_with_partitioned_arenas(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        config: HashTableConfig,
+    ) -> Self {
+        // Repartition transfers raw aggregate state addresses between payloads. Separate arenas
+        // are only safe for a final hash table whose partitions will never be repartitioned.
+        assert!(
+            !config.partial_agg,
+            "partition-local aggregate arenas cannot be used by a repartitioning hash table"
+        );
+        let capacity = Self::initial_capacity();
+        let partition_count = 1 << config.initial_radix_bits;
+        let arenas = (0..partition_count)
+            .map(|_| Arc::new(Bump::new()))
+            .collect();
+        Self {
+            direct_append: false,
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new_with_start_bit(
+                group_types,
+                aggrs,
+                partition_count,
+                config.partition_start_bit,
+                arenas,
+            ),
+            hash_index: HashIndex::with_capacity(capacity),
+            config,
+            hash_index_resize_count: 0,
+        }
+    }
+
+    pub fn into_payloads(self) -> Vec<Payload> {
+        self.payload
+            .into_bucket_payloads()
+            .map(|(_, payload)| payload)
+            .collect()
     }
 
     pub fn new_directly(
@@ -99,9 +141,9 @@ impl AggregateHashTable {
         // if need_init_entry is false, we will directly append rows without probing hash index
         // so we can use a dummy hash index, which is not allowed to insert any entry
         let hash_index = if need_init_entry {
-            HashIndex::new(&config, capacity)
+            HashIndex::with_capacity(capacity)
         } else {
-            HashIndex::new_dummy(&config)
+            HashIndex::dummy()
         };
         Self {
             direct_append: !need_init_entry,
@@ -176,7 +218,7 @@ impl AggregateHashTable {
         #[cfg(debug_assertions)]
         {
             for (i, group_column) in group_columns.iter().enumerate() {
-                if group_column.data_type() != self.payload.group_types[i] {
+                if !self.payload.group_types[i].matches_physical_type(&group_column.data_type()) {
                     return Err(databend_common_exception::ErrorCode::UnknownException(
                         format!(
                             "group_column type not match in index {}, expect: {:?}, actual: {:?}",
@@ -425,18 +467,18 @@ impl AggregateHashTable {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::new(&self.config, target);
+            self.hash_index = HashIndex::with_capacity(target);
             return;
         }
 
         self.hash_index_resize_count += 1;
 
-        let mut hash_index = HashIndex::new(&self.config, new_capacity);
+        let mut hash_index = HashIndex::with_capacity(new_capacity);
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {
                 for idx in 0..page.rows {
-                    let row_ptr = page.data_ptr(idx, payload.tuple_size);
+                    let row_ptr = payload.data_ptr(page, idx);
                     let hash = row_ptr.hash(&payload.row_layout);
 
                     hash_index.probe_slot_and_set(hash, row_ptr);

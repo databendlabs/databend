@@ -22,12 +22,12 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
+use super::StateSerdeItem;
+use super::StateSerdeType;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::Scalar;
-use crate::StateSerdeItem;
-use crate::StateSerdeType;
 use crate::types::DataType;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
@@ -69,6 +69,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
+    /// Describes the physical aggregate state layout.
+    ///
+    /// This layout is persisted in typed aggregate-state table schemas and must remain stable.
+    /// Changing it requires a versioned metadata migration for previously stored states.
     fn serialize_type(&self) -> Vec<StateSerdeItem>;
 
     fn serialize_data_type(&self) -> DataType {

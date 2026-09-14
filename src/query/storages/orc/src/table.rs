@@ -31,7 +31,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
+use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -161,7 +161,7 @@ impl Table for OrcTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+        (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
     }
 
     fn support_prewhere(&self) -> bool {

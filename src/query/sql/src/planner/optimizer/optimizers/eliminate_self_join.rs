@@ -41,7 +41,7 @@ impl Optimizer for EliminateSelfJoinOptimizer {
         "EliminateSelfJoinOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         // `EagerAggregation` is used here as a speculative pre-rewrite to expose patterns that
         // `EliminateSelfJoin` can match. If no self-join is actually eliminated, we intentionally
         // return the original input plan to avoid keeping the eager-aggregation rewrite as a
@@ -49,18 +49,18 @@ impl Optimizer for EliminateSelfJoinOptimizer {
         let start = Instant::now();
         static RULES_EAGER_AGGREGATION: &[RuleID] = &[RuleID::EagerAggregation];
         let optimizer = RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES_EAGER_AGGREGATION);
-        let s_expr_after_eager_aggregation = optimizer.optimize_sync(s_expr)?;
+        let s_expr_after_eager_aggregation = optimizer.optimize_sync(s_expr.clone())?;
 
         static RULES_ELIMINATE_SELF_JOIN: &[RuleID] = &[RuleID::EliminateSelfJoin];
         let optimizer =
             RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES_ELIMINATE_SELF_JOIN);
-        let s_expr_after_eliminate_self_join =
-            optimizer.optimize_sync(&s_expr_after_eager_aggregation)?;
+        let s_expr_after_eliminate_self_join: SExpr =
+            optimizer.optimize_sync(s_expr_after_eager_aggregation.clone())?;
 
         let duration = start.elapsed();
 
         if s_expr_after_eliminate_self_join == s_expr_after_eager_aggregation {
-            return Ok(s_expr.clone());
+            return Ok(s_expr);
         }
 
         // EliminateSelfJoinOptimizer should ideally run before Dphyp in the optimizer pipeline.

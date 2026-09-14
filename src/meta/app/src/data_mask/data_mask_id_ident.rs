@@ -43,9 +43,6 @@ impl DataMaskIdIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
-    use crate::data_mask::DataMaskIdIdent;
     use crate::data_mask::DatamaskMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -55,10 +52,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "DataMaskIdIdent";
         const HAS_TENANT: bool = false;
         type ValueType = DatamaskMeta;
-    }
-
-    impl kvapi::Value for DatamaskMeta {
-        type KeyType = DataMaskIdIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

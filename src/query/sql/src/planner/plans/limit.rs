@@ -22,6 +22,7 @@ use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -53,6 +54,8 @@ impl Limit {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
     }
@@ -99,8 +102,8 @@ impl Operator for Limit {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let stat_info = rel_expr.derive_cardinality_child(0)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         self.derive_limit_stats(stat_info)
     }
 }

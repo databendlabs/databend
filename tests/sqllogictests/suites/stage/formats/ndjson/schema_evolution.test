@@ -98,3 +98,43 @@ drop table t_ndjson_schema_evolution
 
 statement ok
 drop stage s_ndjson_schema_evolution
+
+statement ok
+drop table if exists t_ndjson_schema_evolution_depth
+
+statement ok
+drop stage if exists s_ndjson_schema_evolution_depth
+
+statement ok
+create table t_ndjson_schema_evolution_depth(a int)
+
+statement ok
+create stage s_ndjson_schema_evolution_depth
+
+statement ok
+copy into @s_ndjson_schema_evolution_depth from (select 1 as a, parse_json('{"c":2}') as b) file_format=(type=ndjson)
+
+statement ok
+alter table t_ndjson_schema_evolution_depth set options(enable_schema_evolution = true)
+
+statement ok
+copy into t_ndjson_schema_evolution_depth
+from @s_ndjson_schema_evolution_depth/
+file_format=(type=ndjson)
+schema_evolution=(
+  sample_files=auto,
+  sample_records_per_file=auto,
+  sample_total_records=auto
+)
+
+query ???
+desc t_ndjson_schema_evolution_depth;
+----
+a INT YES NULL (empty)
+b VARIANT YES NULL (empty)
+
+statement ok
+drop table t_ndjson_schema_evolution_depth
+
+statement ok
+drop stage s_ndjson_schema_evolution_depth

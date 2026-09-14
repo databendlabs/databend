@@ -62,7 +62,9 @@ use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
-use crate::binder::resolve_stage_location;
+use crate::binder::AliasLookup;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::DictionarySource;
 use crate::plans::RedisSource;
@@ -122,15 +124,15 @@ impl FullTypeCheckAdapterDependencies {
             license_manager: LicenseManagerSwitch::instance(),
             catalog_manager: CatalogManager::instance(),
             user_api_provider: UserApiProvider::instance(),
+            storage_allow_insecure: global_config.storage.allow_insecure,
             security_policy_cache_manager: SecurityPolicyCacheManager::instance(),
-            global_config,
             cloud_control_api_provider,
         }
     }
 }
 
 impl TypeCheckAdapter for FullTypeCheckAdapter {
-    type UdfAdapter = FullTypeCheckAdapter;
+    type UdfAdapter = Self;
 
     fn function_context(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
@@ -144,8 +146,8 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.dependencies.aggregate_function_factory
     }
 
-    fn udf_adapter(&self) -> Self::UdfAdapter {
-        self.clone()
+    fn udf_adapter(&self) -> Result<Self::UdfAdapter> {
+        Ok(self.clone())
     }
 
     fn forbid_udf(&self) -> bool {
@@ -274,7 +276,13 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
 
     fn resolve_read_file_stage_info(&self, span: Span, stage_name: &str) -> Result<StageInfo> {
         self.block_on(async move {
-            let (stage_info, _) = resolve_stage_location(self.ctx.as_ref(), stage_name).await?;
+            let (stage_info, _) = StageResolver::from_table_context(
+                self.ctx.clone(),
+                self.dependencies.user_api_provider.clone(),
+                self.dependencies.storage_allow_insecure,
+            )?
+            .resolve_stage_location(stage_name, StagePathAccess::Read)
+            .await?;
             if self
                 .ctx
                 .get_settings()
@@ -448,6 +456,25 @@ impl<'a> TypeChecker<'a, FullTypeCheckAdapter> {
             name_resolution_ctx,
             metadata,
             aliases,
+        )
+    }
+
+    pub fn try_create_with_alias_fallback(
+        bind_context: &'a mut BindContext,
+        ctx: Arc<dyn TableContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
+        metadata: MetadataRef,
+        aliases: AliasLookup<'a>,
+        fallback_aliases: Option<AliasLookup<'a>>,
+        forbid_udf: bool,
+    ) -> Result<Self> {
+        Self::try_create_with_adapter_and_alias_fallback(
+            bind_context,
+            FullTypeCheckAdapter::new(ctx)?.with_forbid_udf(forbid_udf),
+            name_resolution_ctx,
+            metadata,
+            aliases,
+            fallback_aliases,
         )
     }
 }

@@ -17,7 +17,7 @@
 
 services:
   rest:
-    image: tabulario/iceberg-rest:1.6.0
+    image: apache/iceberg-rest-fixture:1.10.0
     container_name: iceberg-rest
     network_mode: "host"
     environment:
@@ -69,6 +69,8 @@ services:
       - mc
     environment:
       - AWS_REGION=us-east-1
+      - SPARK_LOCAL_HOSTNAME=localhost
+      - SPARK_LOCAL_IP=127.0.0.1
     build:
       context: ./iceberg-driver
       dockerfile: Dockerfile

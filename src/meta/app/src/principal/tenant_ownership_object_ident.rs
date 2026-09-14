@@ -77,10 +77,7 @@ impl TenantOwnershipObjectIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_meta_client::kvapi;
-
     use crate::principal::OwnershipInfo;
-    use crate::principal::TenantOwnershipObjectIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -89,10 +86,6 @@ mod kvapi_impl {
         const TYPE: &'static str = "TenantOwnershipObjectIdent";
         const HAS_TENANT: bool = true;
         type ValueType = OwnershipInfo;
-    }
-
-    impl kvapi::Value for OwnershipInfo {
-        type KeyType = TenantOwnershipObjectIdent;
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

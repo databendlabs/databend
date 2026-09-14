@@ -13,47 +13,30 @@
 // limitations under the License.
 
 use super::RowID;
-use crate::StateAddr;
-use crate::StatesLayout;
+use super::StateAddr;
+use super::StatesLayout;
 use crate::types::StringColumn;
 
-/// A wrapper around raw pointer that provides safe and convenient methods
-/// for accessing row data in the aggregate hash table.
+/// A read-only row pointer into aggregate payload storage.
+#[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct RowPtr(*mut u8);
+pub struct RowPtr(*const u8);
 
 impl RowPtr {
-    pub(super) fn new(ptr: *mut u8) -> Self {
+    pub(super) fn new(ptr: *const u8) -> Self {
         Self(ptr)
     }
 
     pub(super) fn null() -> Self {
-        Self(std::ptr::null_mut())
+        Self(std::ptr::null())
     }
 
     pub(super) fn as_ptr(&self) -> *const u8 {
-        self.0.cast_const()
+        self.0
     }
 
     pub(super) unsafe fn read<T>(&self, offset: usize) -> T {
-        unsafe { core::ptr::read_unaligned(self.0.add(offset).cast::<T>().cast_const()) }
-    }
-
-    pub(super) unsafe fn write<T: Copy>(&mut self, offset: usize, value: &T) {
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                value as *const T as *const u8,
-                self.0.add(offset),
-                size_of::<T>(),
-            );
-        }
-    }
-
-    pub(super) unsafe fn write_bytes(&mut self, offset: usize, value: &[u8]) {
-        unsafe {
-            self.write(offset, &(value.len() as u32));
-            self.write(offset + 4, &(value.as_ptr() as u64));
-        }
+        unsafe { core::ptr::read_unaligned(self.0.add(offset).cast::<T>()) }
     }
 
     pub(super) unsafe fn read_bytes(&self, offset: usize) -> &[u8] {
@@ -97,24 +80,69 @@ impl RowPtr {
         unsafe { self.read::<u8>(offset) != 0 }
     }
 
+    pub(super) fn hash(&self, layout: &RowLayout) -> u64 {
+        unsafe { self.read::<u64>(layout.hash_offset) }
+    }
+
+    pub(super) fn state_addr(&self, layout: &RowLayout) -> StateAddr {
+        unsafe { self.read::<StateAddr>(layout.state_offset) }
+    }
+}
+
+/// A writable row pointer used while constructing aggregate payload rows.
+#[repr(transparent)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct RowMut(*mut u8);
+
+const _: () = {
+    assert!(core::mem::size_of::<RowPtr>() == core::mem::size_of::<RowMut>());
+    assert!(core::mem::align_of::<RowPtr>() == core::mem::align_of::<RowMut>());
+};
+
+impl RowMut {
+    pub(super) fn new(ptr: *mut u8) -> Self {
+        Self(ptr)
+    }
+
+    pub(super) fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.0
+    }
+
+    pub(super) fn dangling() -> Self {
+        Self(std::ptr::NonNull::<u8>::dangling().as_ptr())
+    }
+
+    pub(super) fn into_ref(self) -> RowPtr {
+        RowPtr::new(self.0.cast_const())
+    }
+
+    pub(super) unsafe fn write<T: Copy>(&mut self, offset: usize, value: &T) {
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                value as *const T as *const u8,
+                self.0.add(offset),
+                size_of::<T>(),
+            );
+        }
+    }
+
+    pub(super) unsafe fn write_bytes(&mut self, offset: usize, value: &[u8]) {
+        unsafe {
+            self.write(offset, &(value.len() as u32));
+            self.write(offset + 4, &(value.as_ptr() as u64));
+        }
+    }
+
     pub(super) unsafe fn write_u8(&mut self, offset: usize, value: u8) {
         unsafe {
             self.write::<u8>(offset, &value);
         }
     }
 
-    pub(super) fn hash(&self, layout: &RowLayout) -> u64 {
-        unsafe { self.read::<u64>(layout.hash_offset) }
-    }
-
     pub(super) fn set_hash(&mut self, layout: &RowLayout, value: u64) {
         unsafe {
             self.write(layout.hash_offset, &value);
         }
-    }
-
-    pub(super) fn state_addr(&self, layout: &RowLayout) -> StateAddr {
-        unsafe { self.read::<StateAddr>(layout.state_offset) }
     }
 
     pub(super) fn set_state_addr(&mut self, layout: &RowLayout, value: &StateAddr) {

@@ -148,12 +148,16 @@ fn derive_decimal_equality_stat<Op: EqualityOp>(
         return Ok(None);
     };
 
-    let minmax_cmp = input.domain.as_ref().map(decimal_minmax).map(|(min, max)| {
-        (
-            DecimalComparisonStat::compare(&input.constant, &min),
-            DecimalComparisonStat::compare(&input.constant, &max),
-        )
-    });
+    let minmax_cmp = input
+        .domain
+        .as_ref()
+        .map(decimal_minmax)
+        .and_then(|(min, max)| {
+            Some((
+                input.constant.cmp_exact(&min)?,
+                input.constant.cmp_exact(&max)?,
+            ))
+        });
     let true_count = input.equality_true_count(minmax_cmp, Op::NOT_EQ);
     Ok(Some(input.boolean_stat(true_count)))
 }
@@ -173,8 +177,12 @@ fn derive_decimal_range_stat<Op: StatComparisonOp>(
     let Some((min, max)) = input.domain.as_ref().map(decimal_minmax) else {
         return Ok(None);
     };
-    let cmp_min = DecimalComparisonStat::compare(&input.constant, &min);
-    let cmp_max = DecimalComparisonStat::compare(&input.constant, &max);
+    let (Some(cmp_min), Some(cmp_max)) = (
+        input.constant.cmp_exact(&min),
+        input.constant.cmp_exact(&max),
+    ) else {
+        return Ok(None);
+    };
     Ok(if reverse {
         Op::Reverse::range_true_count(input.stat.ndv, input.non_null_cardinality, cmp_min, cmp_max)
     } else {
@@ -187,18 +195,14 @@ fn derive_decimal_range_stat<Op: StatComparisonOp>(
 struct DecimalComparisonStat;
 
 impl ConstantComparisonAdapter for DecimalComparisonStat {
-    // TODO: Decimal statistics still inherit the existing Datum/ColumnStat
-    // limitation of representing decimal bounds as f64. Preserve the current
-    // behavior for now, but compare scaled decimal integers here once the
-    // statistics path can carry exact decimal bounds end-to-end.
-    type Value = F64;
+    type Value = DecimalStatValue;
     type Domain = DecimalDomain;
 
-    fn constant(scalar: Scalar) -> Result<F64, String> {
+    fn constant(scalar: Scalar) -> Result<DecimalStatValue, String> {
         let Scalar::Decimal(value) = scalar else {
             return Err("decimal comparison constant downcast failed".to_string());
         };
-        Ok(F64::from(value.to_float64()))
+        Ok(DecimalStatValue::from_scalar(value))
     }
 
     fn domain(domain: &Domain) -> Result<DecimalDomain, String> {
@@ -207,25 +211,70 @@ impl ConstantComparisonAdapter for DecimalComparisonStat {
             .cloned()
             .ok_or_else(|| "decimal comparison domain downcast failed".to_string())
     }
+}
 
-    fn compare(left: &F64, right: &F64) -> Ordering {
-        left.cmp(right)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DecimalStatValue {
+    value: i256,
+    scale: u8,
+}
+
+impl DecimalStatValue {
+    fn from_scalar(scalar: DecimalScalar) -> Self {
+        match scalar {
+            DecimalScalar::Decimal64(value, size) => Self {
+                value: value.into(),
+                scale: size.scale(),
+            },
+            DecimalScalar::Decimal128(value, size) => Self {
+                value: value.into(),
+                scale: size.scale(),
+            },
+            DecimalScalar::Decimal256(value, size) => Self {
+                value,
+                scale: size.scale(),
+            },
+        }
+    }
+
+    fn from_parts<T: Into<i256>>(value: T, size: DecimalSize) -> Self {
+        Self {
+            value: value.into(),
+            scale: size.scale(),
+        }
+    }
+
+    fn scaled_value(self, scale: u8) -> Option<i256> {
+        debug_assert!(scale >= self.scale);
+        self.value.checked_mul(i256::e(scale - self.scale))
+    }
+
+    fn cmp_exact(&self, other: &Self) -> Option<Ordering> {
+        if self.value.signum() != other.value.signum() {
+            return Some(self.value.cmp(&other.value));
+        }
+
+        let scale = self.scale.max(other.scale);
+        match (self.scaled_value(scale), other.scaled_value(scale)) {
+            (Some(left), Some(right)) => Some(left.cmp(&right)),
+            _ => None,
+        }
     }
 }
 
-fn decimal_minmax(domain: &DecimalDomain) -> (F64, F64) {
+fn decimal_minmax(domain: &DecimalDomain) -> (DecimalStatValue, DecimalStatValue) {
     match domain {
         DecimalDomain::Decimal64(domain, size) => (
-            F64::from(domain.min.to_float64(size.scale())),
-            F64::from(domain.max.to_float64(size.scale())),
+            DecimalStatValue::from_parts(domain.min, *size),
+            DecimalStatValue::from_parts(domain.max, *size),
         ),
         DecimalDomain::Decimal128(domain, size) => (
-            F64::from(domain.min.to_float64(size.scale())),
-            F64::from(domain.max.to_float64(size.scale())),
+            DecimalStatValue::from_parts(domain.min, *size),
+            DecimalStatValue::from_parts(domain.max, *size),
         ),
         DecimalDomain::Decimal256(domain, size) => (
-            F64::from(domain.min.to_float64(size.scale())),
-            F64::from(domain.max.to_float64(size.scale())),
+            DecimalStatValue::from_parts(domain.min, *size),
+            DecimalStatValue::from_parts(domain.max, *size),
         ),
     }
 }
@@ -445,4 +494,51 @@ pub fn register_decimal_compare(registry: &mut FunctionRegistry) {
     register_decimal_compare_op::<GtOp>(registry, DecimalRangeStat::<GtOp>::default());
     register_decimal_compare_op::<LteOp>(registry, DecimalRangeStat::<LteOp>::default());
     register_decimal_compare_op::<GteOp>(registry, DecimalRangeStat::<GteOp>::default());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decimal_stat_compare_keeps_large_adjacent_values_distinct() {
+        let size = DecimalSize::new(38, 0).unwrap();
+        let value = "10000000000000000000000000000000000000"
+            .parse::<i128>()
+            .unwrap();
+        let left = DecimalStatValue::from_scalar(DecimalScalar::Decimal128(value, size));
+        let right = DecimalStatValue::from_scalar(DecimalScalar::Decimal128(value + 1, size));
+
+        assert_eq!(left.value.as_f64(), right.value.as_f64());
+        assert_eq!(left.cmp_exact(&right), Some(Ordering::Less));
+    }
+
+    #[test]
+    fn decimal_stat_compare_aligns_scale_exactly() {
+        let one = DecimalStatValue::from_scalar(DecimalScalar::Decimal64(
+            1,
+            DecimalSize::new(1, 0).unwrap(),
+        ));
+        let one_scaled = DecimalStatValue::from_scalar(DecimalScalar::Decimal64(
+            100,
+            DecimalSize::new(3, 2).unwrap(),
+        ));
+
+        assert_eq!(one.cmp_exact(&one_scaled), Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn decimal_stat_compare_returns_none_when_scale_alignment_overflows() {
+        let large = DecimalStatValue::from_scalar(DecimalScalar::Decimal256(
+            i256::DECIMAL_MAX,
+            DecimalSize::new(76, 0).unwrap(),
+        ));
+        let smaller = DecimalStatValue::from_scalar(DecimalScalar::Decimal256(
+            i256::DECIMAL_MAX,
+            DecimalSize::new(76, 1).unwrap(),
+        ));
+
+        assert!(large.scaled_value(1).is_none());
+        assert_eq!(large.cmp_exact(&smaller), None);
+    }
 }

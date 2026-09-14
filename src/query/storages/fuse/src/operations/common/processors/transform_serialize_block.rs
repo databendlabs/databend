@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -42,6 +43,7 @@ use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
@@ -60,6 +62,7 @@ enum State {
         block: DataBlock,
         stats_type: ClusterStatsGenType,
         index: Option<BlockMetaIndex>,
+        virtual_column_layout: Option<VirtualColumnLayout>,
     },
     Serialized {
         serialized: BlockSerialization,
@@ -77,6 +80,8 @@ pub struct TransformSerializeBlock {
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
+    pending_merge_hll: bool,
+    pending_logical_change: (u64, u64),
 }
 
 impl TransformSerializeBlock {
@@ -97,6 +102,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             kind,
             false,
+            None,
             table_meta_timestamps,
         )
     }
@@ -118,6 +124,30 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             kind,
             true,
+            None,
+            table_meta_timestamps,
+        )
+    }
+
+    pub fn try_create_with_virtual_layout(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        cluster_stats_gen: ClusterStatsGenerator,
+        kind: MutationKind,
+        virtual_column_layout: Arc<VirtualColumnLayout>,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Self> {
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            kind,
+            false,
+            Some(virtual_column_layout),
             table_meta_timestamps,
         )
     }
@@ -130,6 +160,7 @@ impl TransformSerializeBlock {
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
         with_tid: bool,
+        virtual_column_layout: Option<Arc<VirtualColumnLayout>>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         let schema = table.schema();
@@ -157,16 +188,46 @@ impl TransformSerializeBlock {
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
+        let top_n = if matches!(kind, MutationKind::Insert) {
+            table.append_top_n_columns(source_schema.clone())?
+        } else {
+            None
+        };
         let ngram_args =
             FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let virtual_column_builder = if table.enable_virtual_column() {
-            VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
-        } else {
-            None
-        };
+        // Recluster/compact/refresh materialize virtual columns and reuse the
+        // path frequencies collected by VirtualColumnBuilder. Other mutations
+        // only collect JSON path statistics.
+        let (virtual_column_builder, json_path_statistics_builder) =
+            if table.enable_virtual_column() {
+                match kind {
+                    MutationKind::Recluster | MutationKind::Compact | MutationKind::Refresh => (
+                        VirtualColumnBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .map(|builder| match &virtual_column_layout {
+                            Some(layout) => builder.with_adaptive_layout(layout.clone()),
+                            None => builder,
+                        })
+                        .ok(),
+                        None,
+                    ),
+                    _ => (
+                        None,
+                        JsonPathStatisticsBuilder::try_create(
+                            source_schema.clone(),
+                            table.virtual_column_layout_policy(),
+                        )
+                        .ok(),
+                    ),
+                }
+            } else {
+                (None, None)
+            };
         let vector_index_builder = VectorIndexBuilder::try_create(
             &table.table_info.meta.indexes,
             source_schema.clone(),
@@ -198,9 +259,11 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             bloom_columns_map,
             ndv_columns_map,
+            top_n,
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,
+            json_path_statistics_builder,
             vector_index_builder,
             spatial_index_builder,
             table_meta_timestamps,
@@ -215,6 +278,8 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
+            pending_merge_hll: false,
+            pending_logical_change: (0, 0),
         })
     }
 
@@ -233,9 +298,15 @@ impl TransformSerializeBlock {
         self.block_builder.clone()
     }
 
-    fn mutation_logs(entry: MutationLogEntry) -> DataBlock {
+    fn mutation_logs(
+        entry: MutationLogEntry,
+        logical_updated_rows: u64,
+        logical_deleted_rows: u64,
+    ) -> DataBlock {
         let meta = MutationLogs {
             entries: vec![entry],
+            logical_updated_rows,
+            logical_deleted_rows,
         };
         DataBlock::empty_with_meta(Box::new(meta))
     }
@@ -291,49 +362,76 @@ impl Processor for TransformSerializeBlock {
             match meta {
                 SerializeDataMeta::DeletedSegment(deleted_segment) => {
                     // delete a whole segment, segment level
-                    let data_block =
-                        Self::mutation_logs(MutationLogEntry::DeletedSegment { deleted_segment });
+                    let logical_deleted_rows = deleted_segment.summary.row_count;
+                    let data_block = Self::mutation_logs(
+                        MutationLogEntry::DeletedSegment { deleted_segment },
+                        0,
+                        logical_deleted_rows,
+                    );
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
                 SerializeDataMeta::SerializeBlock(serialize_block) => {
                     if input_data.is_empty() {
                         // delete a whole block, block level
-                        let data_block = Self::mutation_logs(MutationLogEntry::DeletedBlock {
-                            index: serialize_block.index,
-                        });
+                        let data_block = Self::mutation_logs(
+                            MutationLogEntry::DeletedBlock {
+                                index: serialize_block.index,
+                            },
+                            serialize_block.logical_updated_rows,
+                            serialize_block.logical_deleted_rows,
+                        );
                         self.output.push_data(Ok(data_block));
                         Ok(Event::NeedConsume)
                     } else {
                         // replace the old block
+                        self.pending_logical_change = (
+                            serialize_block.logical_updated_rows,
+                            serialize_block.logical_deleted_rows,
+                        );
                         self.state = State::NeedSerialize {
                             block: input_data,
                             stats_type: serialize_block.stats_type,
                             index: Some(serialize_block.index),
+                            virtual_column_layout: serialize_block.virtual_column_layout,
                         };
                         Ok(Event::Sync)
                     }
                 }
+                SerializeDataMeta::SerializeAppend => {
+                    self.pending_merge_hll = true;
+                    self.state = State::NeedSerialize {
+                        block: input_data,
+                        stats_type: ClusterStatsGenType::Generally,
+                        index: None,
+                        virtual_column_layout: None,
+                    };
+                    Ok(Event::Sync)
+                }
                 SerializeDataMeta::CompactExtras(compact_extras) => {
                     // compact extras
-                    let data_block = Self::mutation_logs(MutationLogEntry::CompactExtras {
-                        extras: compact_extras,
-                    });
+                    let data_block = Self::mutation_logs(
+                        MutationLogEntry::CompactExtras {
+                            extras: compact_extras,
+                        },
+                        0,
+                        0,
+                    );
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
             }
         } else if input_data.is_empty() {
             // do nothing
-            let data_block = Self::mutation_logs(MutationLogEntry::DoNothing);
+            let data_block = Self::mutation_logs(MutationLogEntry::DoNothing, 0, 0);
             self.output.push_data(Ok(data_block));
             Ok(Event::NeedConsume)
         } else {
-            // append block
             self.state = State::NeedSerialize {
                 block: input_data,
                 stats_type: ClusterStatsGenType::Generally,
                 index: None,
+                virtual_column_layout: None,
             };
             Ok(Event::Sync)
         }
@@ -345,20 +443,25 @@ impl Processor for TransformSerializeBlock {
                 block,
                 stats_type,
                 index,
+                virtual_column_layout,
             } => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
+                let mut block_builder = self.block_builder.clone();
+                if let Some(layout) = virtual_column_layout
+                    && let Some(builder) = block_builder.virtual_column_builder.take()
+                {
+                    block_builder.virtual_column_builder =
+                        Some(builder.with_adaptive_layout(Arc::new(layout)));
+                }
                 let serialized =
-                    self.block_builder
-                        .build(block, |block, generator| match &stats_type {
-                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
-                            ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                let cluster_stats = generator
-                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
-                                Ok((cluster_stats, block))
-                            }
-                        })?;
+                    block_builder.build(block, |block, generator| match &stats_type {
+                        ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
+                        ClusterStatsGenType::WithOrigin(origin_stats) => {
+                            generator.gen_with_origin_stats(block, origin_stats.clone())
+                        }
+                    })?;
 
                 self.state = State::Serialized { serialized, index };
             }
@@ -371,13 +474,20 @@ impl Processor for TransformSerializeBlock {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {
+                let merge_hll = std::mem::take(&mut self.pending_merge_hll);
+                let (logical_updated_rows, logical_deleted_rows) =
+                    std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
 
                 let bytes = if let Some(draft_virtual_block_meta) =
                     &extended_block_meta.draft_virtual_block_meta
                 {
                     (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta.virtual_column_size) as usize
+                        + draft_virtual_block_meta
+                            .virtual_columns
+                            .as_ref()
+                            .map(|meta| meta.virtual_column_size)
+                            .unwrap_or_default()) as usize
                 } else {
                     extended_block_meta.block_meta.block_size as usize
                 };
@@ -392,22 +502,18 @@ impl Processor for TransformSerializeBlock {
 
                 let mutation_log_data_block = if let Some(index) = index {
                     // we are replacing the block represented by the `index`
-                    Self::mutation_logs(MutationLogEntry::ReplacedBlock {
-                        index,
-                        block_meta: Arc::new(extended_block_meta),
-                    })
+                    Self::mutation_logs(
+                        MutationLogEntry::ReplacedBlock {
+                            index,
+                            block_meta: Arc::new(extended_block_meta),
+                        },
+                        logical_updated_rows,
+                        logical_deleted_rows,
+                    )
                 } else {
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
-                        if let Some(tid) = self.table_id {
-                            self.block_builder
-                                .ctx
-                                .mutation_state()
-                                .update_multi_table_insert_status(
-                                    tid,
-                                    extended_block_meta.block_meta.row_count,
-                                );
-                        } else {
+                        if self.table_id.is_none() {
                             self.block_builder.ctx.mutation_state().add_mutation_status(
                                 MutationStatus {
                                     insert_rows: extended_block_meta.block_meta.row_count,
@@ -424,9 +530,14 @@ impl Processor for TransformSerializeBlock {
                         if matches!(self.kind, MutationKind::Recluster) {
                             metrics_inc_recluster_write_block_nums();
                         }
-                        Self::mutation_logs(MutationLogEntry::AppendBlock {
-                            block_meta: Arc::new(extended_block_meta),
-                        })
+                        Self::mutation_logs(
+                            MutationLogEntry::AppendBlock {
+                                block_meta: Arc::new(extended_block_meta),
+                                merge_hll,
+                            },
+                            logical_updated_rows,
+                            logical_deleted_rows,
+                        )
                     }
                 };
                 self.output_data = Some(mutation_log_data_block);

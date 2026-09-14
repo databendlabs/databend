@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index_sink;
 mod analyze;
 mod append;
 mod changes;
 mod commit;
 mod common;
 mod compact;
-mod gc;
 mod inverted_index;
 mod merge;
 mod merge_into;
@@ -34,14 +32,18 @@ mod replace;
 mod replace_into;
 mod revert;
 mod snapshot_hint;
+mod stream_batch;
 mod table_index;
 mod truncate;
 mod util;
 mod vacuum;
+mod virtual_column;
 
-pub use agg_index_sink::AggIndexSink;
+pub use analyze::AnalyzeHistogramInfo;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
+pub use changes::ChangesQuery;
+pub use changes::StreamBacklog;
 pub use common::*;
 pub use compact::CompactOptions;
 pub use merge_into::*;
@@ -51,9 +53,21 @@ pub use read::DeserializeDataTransform;
 pub use read::ReadState;
 pub use read::need_reserve_block_info;
 pub use read::row_fetch_processor;
+pub use recluster::CandidateScore;
+pub use recluster::ReclusterCandidateWindow;
+pub use recluster::ReclusterFinalCarry;
+pub use recluster::ReclusterMode;
+pub use recluster::ReclusterMutator;
+pub use recluster::SelectedReclusterSegment;
 pub use replace_into::*;
 pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;
 pub use util::*;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;
+pub use vacuum::is_gc_candidate_segment_block;
 pub use vacuum::vacuum_tables_from_info;
+pub use virtual_column::VirtualColumnVacuumResult;
+pub use virtual_column::cleanup_vacuum_virtual_column_files;
+pub use virtual_column::commit_refresh_virtual_column;
+pub use virtual_column::do_vacuum_virtual_column;
+pub use virtual_column::prepare_refresh_virtual_column;

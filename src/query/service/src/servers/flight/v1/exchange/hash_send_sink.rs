@@ -90,6 +90,7 @@ impl Processor for HashSendSink {
                     self.channels.handle_send_results(results)?;
                     if self.channels.all_closed() {
                         self.input.finish();
+                        self.channels.close_all();
                         return Ok(Event::Finished);
                     }
                 }
@@ -131,6 +132,7 @@ impl Processor for HashSendSink {
                             self.channels.handle_send_results(results)?;
                             if self.channels.all_closed() {
                                 self.input.finish();
+                                self.channels.close_all();
                                 return Ok(Event::Finished);
                             }
                         }
@@ -185,6 +187,17 @@ impl Processor for HashSendSink {
 
         self.input.set_need_data();
         Ok(Event::NeedData)
+    }
+
+    fn details_status(&self) -> Option<String> {
+        Some(format!(
+            "handle_pending={}, closed_channels={}/{}, closed={:?}, buffered_partitions={:?}",
+            self.handle.is_some(),
+            self.channels.closed_count(),
+            self.channels.len(),
+            self.channels.closed_status(),
+            self.partition_stream.partition_ids(),
+        ))
     }
 
     fn set_id(&mut self, id: NodeIndex) {

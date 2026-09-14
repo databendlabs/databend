@@ -1,0 +1,246 @@
+statement ok
+DROP DATABASE IF EXISTS test_spatial_join
+
+statement ok
+CREATE DATABASE test_spatial_join
+
+statement ok
+USE test_spatial_join
+
+statement ok
+CREATE TABLE build_t(id INT, geom GEOMETRY)
+
+statement ok
+CREATE TABLE probe_t(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO probe_t VALUES
+(10, TO_GEOMETRY('POINT(1 1)')),
+(20, TO_GEOMETRY('POINT(2 2)')),
+(30, TO_GEOMETRY('POINT(3 3)'))
+
+statement ok
+SET enable_spatial_join = 1
+
+# All build-side geometries are NULL: the join must produce no rows instead of
+# panicking on the build-side SRID lookup (regression for the all-NULL build
+# Option::unwrap panic).
+statement ok
+INSERT INTO build_t VALUES (1, NULL), (2, NULL)
+
+query II
+SELECT b.id, p.id FROM build_t b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+
+# The all-NULL build join must match the fallback (hash join) result.
+statement ok
+SET enable_spatial_join = 0
+
+query II
+SELECT b.id, p.id FROM build_t b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+
+statement ok
+SET enable_spatial_join = 1
+
+# Mixed NULL and valid build geometries: NULL rows are skipped, valid rows still
+# match every overlapping probe geometry.
+statement ok
+CREATE OR REPLACE TABLE build_mix(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO build_mix VALUES
+(1, NULL),
+(2, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(3, NULL)
+
+query II
+SELECT b.id, p.id FROM build_mix b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+2 10
+2 20
+2 30
+
+statement ok
+SET enable_spatial_join = 0
+
+query II
+SELECT b.id, p.id FROM build_mix b JOIN probe_t p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+2 10
+2 20
+2 30
+
+statement ok
+SET enable_spatial_join = 1
+
+# An incompatible SRID must fail the whole query rather than produce wrong
+# results. Standalone can report this from the spatial join path as 1090, while
+# cluster falls back to the regular join path and reports the function eval
+# error through HTTP as 1006.
+statement ok
+CREATE OR REPLACE TABLE build_srid(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO build_srid VALUES
+(1, TO_GEOMETRY('SRID=4326;POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(2, TO_GEOMETRY('SRID=3857;POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'))
+
+statement ok
+CREATE OR REPLACE TABLE probe_srid(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO probe_srid VALUES (10, TO_GEOMETRY('SRID=4326;POINT(1 1)'))
+
+statement error (?s)(1090|1006).*Incompatible SRID
+SELECT b.id, p.id FROM build_srid b JOIN probe_srid p ON ST_Intersects(b.geom, p.geom)
+
+# bbox-miss SRID errors must not be hidden by spatial join candidate pruning.
+statement ok
+CREATE OR REPLACE TABLE build_srid_miss(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO build_srid_miss VALUES
+(1, TO_GEOMETRY('SRID=3857;POLYGON((100 100, 100 101, 101 101, 101 100, 100 100))'))
+
+statement error (?s)(1090|1006).*Incompatible SRID
+SELECT b.id, p.id FROM build_srid_miss b JOIN probe_srid p ON ST_Intersects(b.geom, p.geom)
+
+# ST_DWithin uses expanded bbox candidates, but exact distance still filters
+# final output. Dynamic or invalid distances stay on the regular join path.
+statement ok
+CREATE OR REPLACE TABLE dwithin_probe(id INT, geom GEOMETRY)
+
+statement ok
+CREATE OR REPLACE TABLE dwithin_build(id INT, radius FLOAT64, geom GEOMETRY)
+
+statement ok
+INSERT INTO dwithin_probe VALUES
+(1, TO_GEOMETRY('POINT(0 0)')),
+(2, TO_GEOMETRY('POINT(3 0)'))
+
+statement ok
+INSERT INTO dwithin_build VALUES
+(10, 2.0, TO_GEOMETRY('POINT(0 0)')),
+(20, 2.0, TO_GEOMETRY('POINT(1.5 0)')),
+(30, 2.0, TO_GEOMETRY('POINT(10 0)'))
+
+query II
+SELECT p.id, b.id FROM dwithin_probe p JOIN dwithin_build b ON ST_DWithin(p.geom, b.geom, 2.0) ORDER BY p.id, b.id
+----
+1 10
+1 20
+2 20
+
+query II
+SELECT p.id, b.id FROM dwithin_probe p JOIN dwithin_build b ON ST_DWithin(p.geom, b.geom, 0.0) ORDER BY p.id, b.id
+----
+1 10
+
+query II
+SELECT p.id, b.id FROM dwithin_probe p JOIN dwithin_build b ON ST_DWithin(p.geom, b.geom, b.radius) ORDER BY p.id, b.id
+----
+1 10
+1 20
+2 20
+
+query II
+SELECT p.id, b.id FROM dwithin_probe p JOIN dwithin_build b ON ST_DWithin(p.geom, b.geom, -1.0) ORDER BY p.id, b.id
+----
+
+# Directional predicates must preserve SQL argument semantics after the planner
+# normalizes left/right geometry sides.
+statement ok
+CREATE OR REPLACE TABLE dir_left(id INT, geom GEOMETRY)
+
+statement ok
+CREATE OR REPLACE TABLE dir_right(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO dir_left VALUES
+(1, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))')),
+(2, TO_GEOMETRY('POLYGON((10 0, 10 5, 15 5, 15 0, 10 0))'))
+
+statement ok
+INSERT INTO dir_right VALUES
+(10, TO_GEOMETRY('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))')),
+(20, TO_GEOMETRY('POLYGON((11 1, 11 2, 12 2, 12 1, 11 1))')),
+(30, TO_GEOMETRY('POLYGON((100 100, 100 101, 101 101, 101 100, 100 100))'))
+
+query II
+SELECT l.id, r.id FROM dir_left l JOIN dir_right r ON ST_Contains(l.geom, r.geom) ORDER BY l.id, r.id
+----
+1 10
+2 20
+
+query II
+SELECT l.id, r.id FROM dir_left l JOIN dir_right r ON ST_Within(r.geom, l.geom) ORDER BY l.id, r.id
+----
+1 10
+2 20
+
+query II
+SELECT l.id, r.id FROM dir_left l JOIN dir_right r ON ST_Covers(l.geom, r.geom) ORDER BY l.id, r.id
+----
+1 10
+2 20
+
+query II
+SELECT l.id, r.id FROM dir_left l JOIN dir_right r ON ST_CoveredBy(r.geom, l.geom) ORDER BY l.id, r.id
+----
+1 10
+2 20
+
+query II
+SELECT l.id, r.id FROM dir_left l JOIN dir_right r ON ST_Contains(r.geom, l.geom) ORDER BY l.id, r.id
+----
+
+# Alias self join and multiple spatial joins should not duplicate rows or leak
+# internal state.
+query I
+SELECT count(*) FROM dir_left a JOIN dir_left b ON ST_Intersects(a.geom, b.geom)
+----
+2
+
+query I
+SELECT count(*) FROM dir_left a JOIN dir_left b ON a.id < b.id AND ST_Intersects(a.geom, b.geom)
+----
+0
+
+query III
+SELECT l.id, r.id, r2.id
+FROM dir_left l
+JOIN dir_right r ON ST_Intersects(l.geom, r.geom)
+JOIN dir_right r2 ON ST_Intersects(l.geom, r2.geom)
+ORDER BY l.id, r.id, r2.id
+----
+1 10 10
+2 20 20
+
+# EMPTY geometries do not match non-empty geometries.
+statement ok
+CREATE OR REPLACE TABLE empty_build(id INT, geom GEOMETRY)
+
+statement ok
+CREATE OR REPLACE TABLE empty_probe(id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO empty_build VALUES
+(1, TO_GEOMETRY('POINT EMPTY')),
+(2, TO_GEOMETRY('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'))
+
+statement ok
+INSERT INTO empty_probe VALUES
+(10, TO_GEOMETRY('POINT(1 1)')),
+(20, TO_GEOMETRY('POINT EMPTY'))
+
+query II
+SELECT b.id, p.id FROM empty_build b JOIN empty_probe p ON ST_Intersects(b.geom, p.geom) ORDER BY b.id, p.id
+----
+2 10
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE test_spatial_join

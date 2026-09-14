@@ -27,7 +27,7 @@ use crate::sql::planner::optimizer::test_utils::*;
 /// Runs the DeduplicateJoinConditionOptimizer on the given SExpr
 fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
     let mut optimizer = DeduplicateJoinConditionOptimizer::new();
-    optimizer.optimize_sync(&s_expr)
+    optimizer.optimize_sync(s_expr)
 }
 
 /// Converts an SExpr to a readable string representation using a simple indented format

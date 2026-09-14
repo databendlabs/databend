@@ -20,6 +20,9 @@ use databend_meta_client::kvapi;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
+use crate::KeyUnknownBuilder;
+use crate::app_error::UnknownDatabaseId;
+
 /// `__fd_database_by_id/<db_id>`
 #[derive(
     Clone, Debug, Copy, Default, Eq, PartialEq, PartialOrd, Ord, Deref, DerefMut, kvapi::StructKey,
@@ -47,6 +50,14 @@ impl Display for DatabaseId {
     }
 }
 
+impl KeyUnknownBuilder for DatabaseId {
+    type UnknownError = UnknownDatabaseId;
+
+    fn unknown_error(&self, ctx: impl Display) -> Self::UnknownError {
+        UnknownDatabaseId::new(self.db_id, ctx.to_string())
+    }
+}
+
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
 
@@ -56,10 +67,6 @@ mod kvapi_key_impl {
     impl kvapi::Key for DatabaseId {
         type ValueType = DatabaseMeta;
     }
-
-    impl kvapi::Value for DatabaseMeta {
-        type KeyType = DatabaseId;
-    }
 }
 
 #[cfg(test)]
@@ -67,9 +74,18 @@ mod tests {
     use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DatabaseId;
+    use crate::KeyUnknownBuilder;
 
     #[test]
     fn test_database_id_key_format() {
         assert_round_trip(DatabaseId::new(3), "__fd_database_by_id/3");
+    }
+
+    #[test]
+    fn test_database_id_unknown_builder() {
+        assert_eq!(
+            DatabaseId::new(3).unknown_error("ctx").to_string(),
+            "UnknownDatabaseId: `3` while `ctx`"
+        );
     }
 }

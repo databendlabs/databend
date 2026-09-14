@@ -26,6 +26,136 @@ FROM t1;
 2 1 0
 NULL 0 1
 
+statement ok
+CREATE OR REPLACE TABLE nullable_fixed_probe_a (
+    decimal_key DECIMAL(6, 0) NULL,
+    boolean_key BOOLEAN NULL,
+    timestamp_key TIMESTAMP NULL
+);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_fixed_probe_b (
+    decimal_key DECIMAL(6, 0) NULL,
+    boolean_key BOOLEAN NULL,
+    timestamp_key TIMESTAMP NULL
+);
+
+statement ok
+INSERT INTO nullable_fixed_probe_a VALUES
+    (NULL, NULL, NULL),
+    (0, false, TIMESTAMP '1970-01-01 00:00:00'),
+    (1, true, TIMESTAMP '1970-01-01 00:00:01');
+
+statement ok
+INSERT INTO nullable_fixed_probe_b VALUES
+    (0, false, TIMESTAMP '1970-01-01 00:00:00');
+
+query T rowsort
+SELECT to_string(decimal_key)
+FROM nullable_fixed_probe_a AS a
+WHERE EXISTS (
+    SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.decimal_key = a.decimal_key
+);
+----
+0
+
+query T rowsort
+SELECT to_string(decimal_key)
+FROM nullable_fixed_probe_a AS a
+WHERE NOT EXISTS (
+    SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.decimal_key = a.decimal_key
+);
+----
+1
+NULL
+
+query TBB rowsort
+SELECT
+    to_string(decimal_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.boolean_key = a.boolean_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.timestamp_key = a.timestamp_key)
+FROM nullable_fixed_probe_a AS a;
+----
+0 1 1
+1 0 0
+NULL 0 0
+
+query TI rowsort
+SELECT
+    to_string(decimal_key),
+    (SELECT COUNT(*) FROM nullable_fixed_probe_b AS b WHERE b.decimal_key = a.decimal_key)
+FROM nullable_fixed_probe_a AS a;
+----
+0 1
+1 0
+NULL 0
+
+statement ok
+CREATE OR REPLACE TABLE nullable_cross_type_probe_a (integer_key BIGINT NULL);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_cross_type_probe_b (decimal_key DECIMAL(20, 0) NULL);
+
+statement ok
+INSERT INTO nullable_cross_type_probe_a VALUES
+    (NULL), (NULL), (NULL), (2097735747), (2109914711);
+
+statement ok
+INSERT INTO nullable_cross_type_probe_b VALUES (0);
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+0
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE NOT EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+5
+
+statement ok
+SET enable_experimental_new_join = 0;
+
+query TBB rowsort
+SELECT
+    to_string(decimal_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.boolean_key = a.boolean_key),
+    EXISTS (SELECT 1 FROM nullable_fixed_probe_b AS b WHERE b.timestamp_key = a.timestamp_key)
+FROM nullable_fixed_probe_a AS a;
+----
+0 1 1
+1 0 0
+NULL 0 0
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+0
+
+query I
+SELECT COUNT(*)
+FROM nullable_cross_type_probe_a AS a
+WHERE NOT EXISTS (
+    SELECT 1 FROM nullable_cross_type_probe_b AS b WHERE b.decimal_key = a.integer_key
+);
+----
+5
+
+statement ok
+SET enable_experimental_new_join = 1;
+
 query IBB rowsort
 SELECT
       t1.a,
@@ -41,6 +171,31 @@ query III
 SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
 ----
 1 0 0
+
+statement ok
+CREATE OR REPLACE TABLE scalar_single_filter_lhs (k INT);
+
+statement ok
+CREATE OR REPLACE TABLE scalar_single_filter_rhs (k INT, v INT);
+
+statement ok
+INSERT INTO scalar_single_filter_lhs VALUES (1), (2), (3);
+
+statement ok
+INSERT INTO scalar_single_filter_rhs VALUES (1, 5), (2, NULL);
+
+query I rowsort
+SELECT k
+FROM scalar_single_filter_lhs AS lhs
+WHERE (
+    SELECT v
+    FROM scalar_single_filter_rhs AS rhs
+    WHERE rhs.k = lhs.k
+) IS NULL
+ORDER BY k;
+----
+2
+3
 
 statement ok
 CREATE OR REPLACE TABLE c (c_id INT NULL, bill VARCHAR NULL)
@@ -865,6 +1020,9 @@ insert into t1 values(1), (2), (3);
 query error 1001.*Scalar subquery can't return more than one row
 select (select sum(a) from t1 where t1.a >= t2.a group by t1.a) from t1 as t2;
 
+query error 1001.*Scalar subquery can't return more than one row
+SELECT 1 WHERE (SELECT number FROM numbers(2)) >= 0;
+
 
 
 statement ok
@@ -1275,3 +1433,42 @@ use default;
 
 statement ok
 drop database issue_13716_subquery;
+
+# https://github.com/databendlabs/databend/issues/20380
+# Lambda-function arguments must be flattened while decorrelating a correlated subquery.
+statement ok
+create or replace database issue_20380_subquery;
+
+statement ok
+use issue_20380_subquery;
+
+statement ok
+create table t1(c0array array(varchar) null);
+
+statement ok
+create table t66(c0array array(varchar) null);
+
+statement ok
+insert into t1 values (['other']);
+
+statement ok
+insert into t66 values (['baz', 'ab', 'baz']);
+
+query ?
+select ref0 from (
+    select t1.c0array as ref0,
+           exists (
+               select 1 from t66
+               where t66.c0array = t1.c0array
+                 and array_any(array_filter(t66.c0array, x -> x = 'baz')) = 'baz'
+           ) as ref1
+    from t1
+) as s
+where ref1;
+----
+
+statement ok
+use default;
+
+statement ok
+drop database issue_20380_subquery;

@@ -52,29 +52,31 @@ impl Interpreter for DropWorkloadGroupInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::WorkloadGroup)?;
 
-        let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+            let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
 
-        match WorkloadMgr::drop(&workload_mgr, self.plan.name.clone()).await {
-            Ok(_) => {
-                let user_info = self.ctx.get_current_user()?;
-                log::info!(
-                    target: "databend::log::audit",
-                    "{}",
-                    serde_json::to_string(&AuditElement::create(&user_info, "drop_workload", &self.plan))?
-                );
+            match WorkloadMgr::drop(&workload_mgr, self.plan.name.clone()).await {
+                Ok(_) => {
+                    let user_info = self.ctx.get_current_user()?;
+                    log::info!(
+                        target: "databend::log::audit",
+                        "{}",
+                        serde_json::to_string(&AuditElement::create(&user_info, "drop_workload", &self.plan))?
+                    );
 
-                Ok(PipelineBuildResult::create())
-            }
-            Err(cause) => {
-                match self.plan.if_exists && cause.code() == ErrorCode::UNKNOWN_WORKLOAD {
-                    true => Ok(PipelineBuildResult::create()),
-                    false => Err(cause),
+                    Ok(PipelineBuildResult::create())
+                }
+                Err(cause) => {
+                    match self.plan.if_exists && cause.code() == ErrorCode::UNKNOWN_WORKLOAD {
+                        true => Ok(PipelineBuildResult::create()),
+                        false => Err(cause),
+                    }
                 }
             }
-        }
+        })
     }
 }

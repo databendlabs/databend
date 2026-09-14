@@ -14,20 +14,25 @@
 
 use std::collections::HashMap;
 
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DecimalSize;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use databend_common_statistics::Histogram;
 use databend_common_storage::MetaHLL;
 
+use crate::meta::ColumnCountMinSketch;
+use crate::meta::ColumnTopN;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
+use crate::meta::TableSnapshot;
 use crate::meta::Versioned;
 use crate::meta::v1;
 use crate::meta::v2;
 use crate::meta::v3;
 
-#[frozen_api("d78e9c42")]
+#[frozen_api("99a917d0")]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshotStatistics {
     /// format version of snapshot
@@ -36,6 +41,10 @@ pub struct TableSnapshotStatistics {
     pub snapshot_id: SnapshotId,
     pub row_count: u64,
     pub hll: HashMap<ColumnId, MetaHLL>,
+    #[serde(default)]
+    pub top_n: HashMap<ColumnId, ColumnTopN>,
+    #[serde(default)]
+    pub count_min_sketch: HashMap<ColumnId, ColumnCountMinSketch>,
     #[serde(with = "crate::meta::histogram_serde")]
     pub histograms: HashMap<ColumnId, Histogram>,
 }
@@ -46,6 +55,8 @@ impl TableSnapshotStatistics {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
+            count_min_sketch: HashMap::new(),
             histograms: HashMap::new(),
             row_count: 0,
         }
@@ -53,6 +64,8 @@ impl TableSnapshotStatistics {
 
     pub fn new(
         hll: HashMap<ColumnId, MetaHLL>,
+        top_n: HashMap<ColumnId, ColumnTopN>,
+        count_min_sketch: HashMap<ColumnId, ColumnCountMinSketch>,
         histograms: HashMap<ColumnId, Histogram>,
         snapshot_id: SnapshotId,
         row_count: u64,
@@ -61,6 +74,8 @@ impl TableSnapshotStatistics {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id,
             hll,
+            top_n,
+            count_min_sketch,
             histograms,
             row_count,
         }
@@ -76,6 +91,24 @@ impl TableSnapshotStatistics {
             .map(|hll| (*hll.0, hll.1.count() as u64))
             .collect()
     }
+
+    /// Whether freshness-sensitive statistics describe all rows visible in `snapshot`.
+    pub fn is_fresh_for(&self, snapshot: &TableSnapshot) -> bool {
+        self.row_count == snapshot.summary.row_count
+            && snapshot
+                .prev_snapshot_id
+                .as_ref()
+                .is_none_or(|(snapshot_id, _)| *snapshot_id == self.snapshot_id)
+    }
+
+    /// Retag Top-N values for one Decimal column. Other statistics either do not store
+    /// DecimalSize or deliberately hash only the raw value.
+    pub fn widen_decimal_column(&mut self, column_id: ColumnId, size: DecimalSize) -> Result<()> {
+        if let Some(top_n) = self.top_n.get_mut(&column_id) {
+            top_n.widen_decimal_size(size)?;
+        }
+        Ok(())
+    }
 }
 
 impl From<v1::TableSnapshotStatistics> for TableSnapshotStatistics {
@@ -85,6 +118,8 @@ impl From<v1::TableSnapshotStatistics> for TableSnapshotStatistics {
             snapshot_id: value.snapshot_id,
             row_count: 0,
             hll: HashMap::new(),
+            top_n: HashMap::new(),
+            count_min_sketch: HashMap::new(),
             histograms: HashMap::new(),
         }
     }
@@ -98,6 +133,8 @@ impl From<v2::TableSnapshotStatistics> for TableSnapshotStatistics {
             snapshot_id: value.snapshot_id,
             row_count: 0,
             hll,
+            top_n: HashMap::new(),
+            count_min_sketch: HashMap::new(),
             histograms: HashMap::new(),
         }
     }
@@ -111,6 +148,8 @@ impl From<v3::TableSnapshotStatistics> for TableSnapshotStatistics {
             snapshot_id: value.snapshot_id,
             row_count: 0,
             hll,
+            top_n: HashMap::new(),
+            count_min_sketch: HashMap::new(),
             histograms: value.histograms,
         }
     }

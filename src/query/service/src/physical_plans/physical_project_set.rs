@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -155,7 +156,7 @@ impl PhysicalPlanBuilder {
         // 1. Prune unused Columns.
         let column_projections = required.clone().into_iter().collect::<Vec<_>>();
         for s in project_set.srfs.iter() {
-            required.extend(s.scalar.used_columns().iter().copied());
+            s.scalar.collect_used_columns(&mut required);
         }
 
         // 2. Build physical plan.
@@ -169,7 +170,8 @@ impl PhysicalPlanBuilder {
                     .scalar
                     .type_check(input_schema.as_ref())?
                     .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok((expr.as_remote_expr(), item.index))
             })
             .collect::<Result<Vec<_>>>()?;

@@ -40,7 +40,6 @@ roaring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-thrift = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }

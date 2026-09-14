@@ -42,8 +42,8 @@ impl FromToProto for tenant::TenantQuota {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TenantQuota, Incompatible> {
-        let p = pb::TenantQuota {
+    fn to_pb(&self) -> pb::TenantQuota {
+        pb::TenantQuota {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             max_databases: self.max_databases,
@@ -51,7 +51,6 @@ impl FromToProto for tenant::TenantQuota {
             max_stages: self.max_stages,
             max_files_per_stage: self.max_files_per_stage,
             max_users: self.max_users,
-        };
-        Ok(p)
+        }
     }
 }

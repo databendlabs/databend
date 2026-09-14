@@ -24,23 +24,18 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use geo::algorithm::bounding_rect::BoundingRect;
 
-use crate::physical_plans::SpatialRuntimeFilterMode;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
-use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SpatialPacket;
-use crate::pipelines::processors::transforms::hash_join::runtime_filter::spatial::build_rtree_from_rects_with_threshold;
 use crate::pipelines::processors::transforms::hash_join::util::hash_by_method_for_bloom;
 
 struct SingleFilterBuilder {
     id: usize,
-    data_type: DataType,
-    hash_method: Option<HashMethodKind>,
+    inlist_data_type: DataType,
+    hash_method: HashMethodKind,
 
     min_max_domain: Option<Domain>,
     min_max_threshold: usize,
@@ -50,12 +45,6 @@ struct SingleFilterBuilder {
 
     bloom_hashes: Option<Vec<u64>>,
     bloom_threshold: usize,
-
-    spatial_mode: Option<SpatialRuntimeFilterMode>,
-    spatial_rects: Vec<(f64, f64, f64, f64)>,
-    spatial_srid: Option<i32>,
-    spatial_srid_mixed: bool,
-    spatial_threshold: usize,
 }
 
 impl SingleFilterBuilder {
@@ -64,20 +53,14 @@ impl SingleFilterBuilder {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
-        spatial_threshold: usize,
     ) -> Result<Self> {
         let data_type = desc.build_key.data_type().clone();
-        let hash_method = if desc.spatial_mode.is_some() {
-            None
-        } else {
-            Some(DataBlock::choose_hash_method_with_types(&[
-                data_type.clone()
-            ])?)
-        };
+        let bloom_data_type = data_type.remove_nullable();
+        let hash_method = DataBlock::choose_hash_method_with_types(&[bloom_data_type.clone()])?;
 
         Ok(Self {
             id: desc.id,
-            data_type,
+            inlist_data_type: bloom_data_type,
             hash_method,
             min_max_domain: None,
             min_max_threshold: if desc.enable_min_max_runtime_filter {
@@ -97,20 +80,11 @@ impl SingleFilterBuilder {
             } else {
                 0
             },
-            spatial_mode: desc.spatial_mode.clone(),
-            spatial_rects: Vec::new(),
-            spatial_srid: None,
-            spatial_srid_mixed: false,
-            spatial_threshold,
         })
     }
 
     fn add_column(&mut self, column: &Column, total_rows: usize) -> Result<()> {
         let new_total = total_rows + column.len();
-        if self.spatial_mode.is_some() {
-            self.add_spatial_bbox(column)?;
-            return Ok(());
-        }
         self.add_min_max(column, new_total);
         self.add_inlist(column, new_total);
         self.add_bloom(column, new_total)?;
@@ -134,11 +108,12 @@ impl SingleFilterBuilder {
             self.inlist_builder = None;
             return;
         }
+        let column = column.remove_nullable();
         let mut builder = match self.inlist_builder.take() {
             Some(b) => b,
-            None => ColumnBuilder::with_capacity(&self.data_type, column.len()),
+            None => ColumnBuilder::with_capacity(&self.inlist_data_type, column.len()),
         };
-        builder.append_column(column);
+        builder.append_column(&column);
         self.inlist_builder = Some(builder);
     }
 
@@ -152,127 +127,41 @@ impl SingleFilterBuilder {
             None => Vec::with_capacity(column.len()),
         };
         hashes.reserve(column.len());
-        let entry = BlockEntry::from(column.clone());
-        let hash_method = self
-            .hash_method
-            .as_ref()
-            .expect("hash_method must exist for non-spatial filters");
-        hash_by_method_for_bloom(hash_method, (&[entry]).into(), column.len(), &mut hashes)?;
+        let entry = BlockEntry::from(column.remove_nullable());
+        hash_by_method_for_bloom(
+            &self.hash_method,
+            (&[entry]).into(),
+            column.len(),
+            &mut hashes,
+        )?;
         self.bloom_hashes = Some(hashes);
         Ok(())
     }
 
-    fn add_spatial_bbox(&mut self, column: &Column) -> Result<()> {
-        if self.spatial_srid_mixed {
-            return Ok(());
-        }
-
-        for value in column.iter() {
-            let Some((geo, srid)) = extract_geo_and_srid(value)? else {
-                continue;
-            };
-
-            if let Some(prev) = self.spatial_srid {
-                if prev != srid {
-                    self.spatial_srid_mixed = true;
-                    self.spatial_rects.clear();
-                    return Ok(());
-                }
-            } else {
-                self.spatial_srid = Some(srid);
-            }
-
-            if let Some(rect) = geo.bounding_rect() {
-                let min = rect.min();
-                let max = rect.max();
-                self.spatial_rects.push((min.x, min.y, max.x, max.y));
-            }
-        }
-
-        Ok(())
-    }
-
     fn finish(mut self, func_ctx: &FunctionContext) -> Result<RuntimeFilterPacket> {
-        if self.spatial_mode.is_some() {
-            let id = self.id;
-            let spatial_packet = self.finish_spatial_packet()?;
-            Ok(RuntimeFilterPacket {
-                id,
-                min_max: None,
-                inlist: None,
-                bloom: None,
-                spatial: Some(spatial_packet),
-            })
-        } else {
-            let min_max = self.min_max_domain.take().map(|domain| {
-                let (min, max) = domain.to_minmax();
-                SerializableDomain { min, max }
-            });
+        let min_max = self.min_max_domain.take().map(|domain| {
+            let (min, max) = domain.to_minmax();
+            SerializableDomain { min, max }
+        });
 
-            let inlist = if let Some(builder) = self.inlist_builder.take() {
-                let column = builder.build();
-                if column.len() == 0 {
-                    None
-                } else {
-                    Some(dedup_column(column, func_ctx, &self.data_type)?)
-                }
-            } else {
+        let inlist = if let Some(builder) = self.inlist_builder.take() {
+            let column = builder.build();
+            if column.len() == 0 {
                 None
-            };
+            } else {
+                Some(dedup_column(column, func_ctx, &self.inlist_data_type)?)
+            }
+        } else {
+            None
+        };
 
-            let bloom = self.bloom_hashes.take();
+        let bloom = self.bloom_hashes.take();
 
-            Ok(RuntimeFilterPacket {
-                id: self.id,
-                min_max,
-                inlist,
-                bloom,
-                spatial: None,
-            })
-        }
-    }
-
-    fn finish_spatial_packet(self) -> Result<SpatialPacket> {
-        let SingleFilterBuilder {
-            spatial_rects,
-            spatial_srid,
-            spatial_srid_mixed,
-            spatial_threshold,
-            spatial_mode,
-            ..
-        } = self;
-
-        let spatial_mode = spatial_mode.unwrap();
-        if spatial_srid_mixed {
-            return Ok(SpatialPacket {
-                valid: false,
-                srid: None,
-                mode: spatial_mode,
-                rtrees: Vec::new(),
-            });
-        }
-
-        let rect_count = spatial_rects.len();
-        let packet_mode = spatial_mode.clone();
-        let rect_mode = spatial_mode.clone();
-        let rects = spatial_rects
-            .into_iter()
-            .map(move |(min_x, min_y, max_x, max_y)| match rect_mode {
-                SpatialRuntimeFilterMode::DistanceWithin(distance) => (
-                    min_x - distance,
-                    min_y - distance,
-                    max_x + distance,
-                    max_y + distance,
-                ),
-                _ => (min_x, min_y, max_x, max_y),
-            });
-        let rtrees = build_rtree_from_rects_with_threshold(rects, rect_count, spatial_threshold)?;
-
-        Ok(SpatialPacket {
-            valid: true,
-            srid: spatial_srid,
-            mode: packet_mode,
-            rtrees,
+        Ok(RuntimeFilterPacket {
+            id: self.id,
+            min_max,
+            inlist,
+            bloom,
         })
     }
 }
@@ -291,7 +180,6 @@ impl RuntimeFilterLocalBuilder {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
-        spatial_threshold: usize,
     ) -> Result<Option<Self>> {
         if descs.is_empty() {
             return Ok(None);
@@ -304,7 +192,6 @@ impl RuntimeFilterLocalBuilder {
                 inlist_threshold,
                 bloom_threshold,
                 min_max_threshold,
-                spatial_threshold,
             )?);
         }
 
@@ -384,4 +271,42 @@ fn dedup_column(
     let value = evaluator.run(&expr)?;
 
     Ok(value.into_scalar().unwrap().into_array().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::StringType;
+
+    use super::*;
+
+    #[test]
+    fn test_inlist_runtime_filter_removes_nullable_build_key() -> Result<()> {
+        let desc = RuntimeFilterDesc {
+            id: 0,
+            build_key: Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Nullable(Box::new(DataType::String)),
+                display_name: "build_key".to_string(),
+            }),
+            probe_targets: vec![],
+            build_table_rows: Some(2),
+            enable_bloom_runtime_filter: false,
+            enable_inlist_runtime_filter: true,
+            enable_min_max_runtime_filter: false,
+        };
+
+        let mut builder = SingleFilterBuilder::new(&desc, 10, 0, 0)?;
+        let column = StringType::from_opt_data(vec![Some("a"), Some("b")]);
+        builder.add_column(&column, 0)?;
+
+        let packet = builder.finish(&FunctionContext::default())?;
+        let inlist = packet.inlist.unwrap();
+        assert_eq!(inlist.data_type(), DataType::String);
+        assert_eq!(inlist.len(), 2);
+        Ok(())
+    }
 }

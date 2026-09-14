@@ -31,7 +31,7 @@ runs:
         done
 
         tar -zcf logs/failure-${{ inputs.name }}.tar.gz logs/*
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.name }}
         path: logs/failure-${{ inputs.name }}.tar.gz

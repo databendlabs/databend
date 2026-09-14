@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::session_type::SessionType;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
@@ -51,6 +52,19 @@ pub async fn clustering_information_handler(
     Ok(Json(resp))
 }
 
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn clustering_information_local_handler(
+    Path((database, table)): Path<(String, String)>,
+    Query(params): Query<ClusteringInformationQuery>,
+) -> poem::Result<impl IntoResponse> {
+    let tenant = &GlobalConfig::instance().query.tenant_id;
+    let resp = load_clustering_information(tenant, &database, &table, params)
+        .await
+        .map_err(clustering_information_error)?;
+    Ok(Json(resp))
+}
+
 #[async_backtrace::framed]
 async fn load_clustering_information(
     tenant: &Tenant,
@@ -61,7 +75,7 @@ async fn load_clustering_information(
     let mut dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;
-    dummy_session.set_current_tenant(tenant.clone());
+    dummy_session.set_current_tenant(tenant.clone())?;
     let session = SessionManager::instance().register_session(dummy_session)?;
 
     let ctx: Arc<dyn TableContext> = session

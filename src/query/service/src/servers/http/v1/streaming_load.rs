@@ -97,6 +97,9 @@ fn execute_query(
     };
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.io_stats = Some(std::sync::Arc::new(
+        databend_common_base::runtime::IoStats::default(),
+    ));
     tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
 
@@ -114,6 +117,9 @@ pub async fn streaming_load_handler(
     let query_mem_stat = MemStat::create(ctx.query_id.clone());
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(ctx.query_id.clone());
+    tracking_payload.io_stats = Some(std::sync::Arc::new(
+        databend_common_base::runtime::IoStats::default(),
+    ));
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
 
     let root = get_http_tracing_span("http::streaming_load_handler", ctx, &ctx.query_id);
@@ -304,12 +310,6 @@ async fn read_multi_part(
     tx: Sender<Result<DataBlock>>,
     input_read_buffer_size: usize,
 ) -> poem::Result<()> {
-    if matches!(file_format, FileFormatParams::Lance(_)) {
-        return Err(poem::Error::from_string(
-            "Streaming load does not support LANCE file format",
-            StatusCode::BAD_REQUEST,
-        ));
-    }
     loop {
         match multipart.next_field().await {
             Err(cause) => {
@@ -342,7 +342,9 @@ async fn read_multi_part(
                 match file_format {
                     FileFormatParams::Parquet(_)
                     | FileFormatParams::Avro(_)
-                    | FileFormatParams::Orc(_) => {
+                    | FileFormatParams::Orc(_)
+                    | FileFormatParams::Arrow(_)
+                    | FileFormatParams::ArrowStream(_) => {
                         let mut data = Vec::new();
                         let mut buf = vec![0; input_read_buffer_size];
                         loop {
@@ -359,6 +361,8 @@ async fn read_multi_part(
                             path: filename.clone(),
                             offset: 0,
                             is_eof: true,
+                            content_key: None,
+                            last_modified: None,
                         };
                         let block = DataBlock::empty_with_meta(Box::new(batch));
                         if let Err(e) = tx.send(Ok(block)).await {
@@ -382,6 +386,8 @@ async fn read_multi_part(
                                 path: filename.clone(),
                                 offset,
                                 is_eof: n == 0,
+                                content_key: None,
+                                last_modified: None,
                             };
                             let block = DataBlock::empty_with_meta(Box::new(batch));
                             if let Err(e) = tx.send(Ok(block)).await {

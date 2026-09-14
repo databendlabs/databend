@@ -1,0 +1,43 @@
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#8)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#8)]
+    └── Exchange(Merge)
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#2)]
+            ├── probe keys: [lineitem.l_orderkey (#5)]
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── Join(Inner)
+            │       ├── build keys: [nation.n_nationkey (#7)]
+            │       ├── probe keys: [customer.c_nationkey (#1)]
+            │       ├── other filters: []
+            │       ├── Exchange(Broadcast)
+            │       │   └── Scan
+            │       │       ├── table: default.nation (#3)
+            │       │       ├── filters: []
+            │       │       ├── order by: []
+            │       │       └── limit: NONE
+            │       └── Join(Inner)
+            │           ├── build keys: [orders.o_custkey (#3)]
+            │           ├── probe keys: [customer.c_custkey (#0)]
+            │           ├── other filters: []
+            │           ├── Exchange(Broadcast)
+            │           │   └── Scan
+            │           │       ├── table: default.orders (#1)
+            │           │       ├── filters: [gte(orders.o_orderdate (#4), '1993-10-01'), lt(orders.o_orderdate (#4), '1994-01-01')]
+            │           │       ├── order by: []
+            │           │       └── limit: NONE
+            │           └── Scan
+            │               ├── table: default.customer (#0)
+            │               ├── filters: []
+            │               ├── order by: []
+            │               └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#2)
+                ├── filters: [eq(lineitem.l_returnflag (#6), 'R')]
+                ├── order by: []
+                └── limit: NONE
+

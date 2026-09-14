@@ -15,6 +15,7 @@
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -111,6 +112,10 @@ struct RewritePredicates {}
 
 impl RewritePredicates {
     fn rewrite(&mut self, predicates: &[ScalarExpr]) -> Result<Option<Vec<ScalarExpr>>> {
+        if !Self::may_rewrite(predicates) {
+            return Ok(None);
+        }
+
         let mut expr = if predicates.len() == 1 {
             predicates[0].clone()
         } else {
@@ -119,6 +124,7 @@ impl RewritePredicates {
                 func_name: "and_filters".to_string(),
                 params: vec![],
                 arguments: predicates.to_vec(),
+                return_type: Box::new(DataType::Boolean),
             }
             .into()
         };
@@ -138,6 +144,28 @@ impl RewritePredicates {
             }
             expr => Ok(Some(vec![expr])),
         }
+    }
+
+    fn may_rewrite(predicates: &[ScalarExpr]) -> bool {
+        predicates.is_empty()
+            || predicates.iter().any(|predicate| {
+                if is_true(predicate) || is_falsy(predicate) {
+                    return true;
+                }
+
+                let ScalarExpr::FunctionCall(call) = predicate else {
+                    return false;
+                };
+
+                match call.func_name.as_str() {
+                    "and" | "and_filters" | "or" | "or_filters" => true,
+                    "not" => matches!(
+                        call.arguments.first(),
+                        Some(ScalarExpr::FunctionCall(inner)) if inner.func_name == "not"
+                    ),
+                    _ => false,
+                }
+            })
     }
 
     fn rewrite_and(
@@ -237,18 +265,21 @@ impl<'a> VisitorMut<'a> for RewritePredicates {
                 span,
                 func_name,
                 arguments,
+                return_type,
                 ..
             }) => match func_name.as_str() {
                 "and" | "and_filters" => {
                     if func_name == "and" {
-                        *func_name = "and_filters".to_string()
+                        *func_name = "and_filters".to_string();
                     }
+                    *return_type = Box::new(DataType::Boolean);
                     self.rewrite_and(*span, arguments)?
                 }
                 "or" | "or_filters" => {
                     if func_name == "or" {
-                        *func_name = "or_filters".to_string()
+                        *func_name = "or_filters".to_string();
                     }
+                    *return_type = Box::new(DataType::Boolean);
                     self.rewrite_or(*span, arguments)?
                 }
                 "not" => {

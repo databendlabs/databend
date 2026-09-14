@@ -934,6 +934,28 @@ Functions overloads:
 1 bitmap_xor(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
+0 bucket(UInt64, String) :: UInt32
+1 bucket(UInt64 NULL, String NULL) :: UInt32 NULL
+2 bucket(UInt64, Date) :: UInt32
+3 bucket(UInt64 NULL, Date NULL) :: UInt32 NULL
+4 bucket(UInt64, Timestamp) :: UInt32
+5 bucket(UInt64 NULL, Timestamp NULL) :: UInt32 NULL
+6 bucket(UInt64, UInt8) :: UInt32
+7 bucket(UInt64 NULL, UInt8 NULL) :: UInt32 NULL
+8 bucket(UInt64, UInt16) :: UInt32
+9 bucket(UInt64 NULL, UInt16 NULL) :: UInt32 NULL
+10 bucket(UInt64, UInt32) :: UInt32
+11 bucket(UInt64 NULL, UInt32 NULL) :: UInt32 NULL
+12 bucket(UInt64, UInt64) :: UInt32
+13 bucket(UInt64 NULL, UInt64 NULL) :: UInt32 NULL
+14 bucket(UInt64, Int8) :: UInt32
+15 bucket(UInt64 NULL, Int8 NULL) :: UInt32 NULL
+16 bucket(UInt64, Int16) :: UInt32
+17 bucket(UInt64 NULL, Int16 NULL) :: UInt32 NULL
+18 bucket(UInt64, Int32) :: UInt32
+19 bucket(UInt64 NULL, Int32 NULL) :: UInt32 NULL
+20 bucket(UInt64, Int64) :: UInt32
+21 bucket(UInt64 NULL, Int64 NULL) :: UInt32 NULL
 0 build_bitmap(Array(UInt8 NULL)) :: Bitmap
 1 build_bitmap(Array(UInt8 NULL) NULL) :: Bitmap NULL
 2 build_bitmap(Array(UInt16 NULL)) :: Bitmap
@@ -2268,13 +2290,17 @@ Functions overloads:
 3 hex(Int64 NULL) :: String NULL
 4 hex(Binary) :: String
 5 hex(Binary NULL) :: String NULL
-0 hilbert_range_index FACTORY
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
 1 humanize_size(Float64 NULL) :: String NULL
 0 if FACTORY
 0 ignore FACTORY
+0 ilike(String, String) :: Boolean
+1 ilike(String NULL, String NULL) :: Boolean NULL
+2 ilike(String, String, String) :: Boolean
+3 ilike(String NULL, String NULL, String NULL) :: Boolean NULL
+0 ilike_any FACTORY
 0 inet_aton(String) :: UInt32
 1 inet_aton(String NULL) :: UInt32 NULL
 0 inet_ntoa(Int64) :: String
@@ -2943,8 +2969,8 @@ Functions overloads:
 233 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 234 minus(Interval, Interval) :: Interval
 235 minus(Interval NULL, Interval NULL) :: Interval NULL
-236 minus(Date, Interval) :: Date
-237 minus(Date NULL, Interval NULL) :: Date NULL
+236 minus(Date, Interval) :: Timestamp
+237 minus(Date NULL, Interval NULL) :: Timestamp NULL
 238 minus(Timestamp, Interval) :: Timestamp
 239 minus(Timestamp NULL, Interval NULL) :: Timestamp NULL
 240 minus(TimestampTz, Interval) :: TimestampTz
@@ -3670,10 +3696,10 @@ Functions overloads:
 204 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 205 plus(Interval, Interval) :: Interval
 206 plus(Interval NULL, Interval NULL) :: Interval NULL
-207 plus(Date, Interval) :: Date
-208 plus(Date NULL, Interval NULL) :: Date NULL
-209 plus(Interval, Date) :: Date
-210 plus(Interval NULL, Date NULL) :: Date NULL
+207 plus(Date, Interval) :: Timestamp
+208 plus(Date NULL, Interval NULL) :: Timestamp NULL
+209 plus(Interval, Date) :: Timestamp
+210 plus(Interval NULL, Date NULL) :: Timestamp NULL
 211 plus(Timestamp, Interval) :: Timestamp
 212 plus(Timestamp NULL, Interval NULL) :: Timestamp NULL
 213 plus(TimestampTz, Interval) :: TimestampTz
@@ -3701,8 +3727,6 @@ Functions overloads:
 1 range(Int64 NULL, Int64 NULL) :: Array(Int64) NULL
 2 range(Int64, Int64, Int64) :: Array(Int64)
 3 range(Int64 NULL, Int64 NULL, Int64 NULL) :: Array(Int64) NULL
-0 range_partition_id(T0, Array(T0)) :: UInt64
-1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64
 0 regexp(String, String) :: Boolean
 1 regexp(String NULL, String NULL) :: Boolean NULL
 0 regexp_extract(String, String) :: String
@@ -4490,6 +4514,8 @@ Functions overloads:
 1 to_quarter(Date NULL) :: UInt8 NULL
 2 to_quarter(Timestamp) :: UInt8
 3 to_quarter(Timestamp NULL) :: UInt8 NULL
+0 to_quarters(Int64) :: Interval
+1 to_quarters(Int64 NULL) :: Interval NULL
 0 to_second(Timestamp) :: UInt8
 1 to_second(Timestamp NULL) :: UInt8 NULL
 2 to_second(Interval) :: Float64
