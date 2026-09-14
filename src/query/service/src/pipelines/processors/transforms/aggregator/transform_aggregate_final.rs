@@ -22,6 +22,7 @@ use std::sync::atomic::Ordering;
 use async_channel::Receiver;
 use async_channel::Sender;
 use bumpalo::Bump;
+use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -31,6 +32,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -75,6 +77,7 @@ pub struct TransformFinalAggregate {
     should_finish: bool,
     tx: Option<Sender<FinalAggregateTask>>,
     rx: Receiver<FinalAggregateTask>,
+    output_finished: WatchNotify,
     stage: Stage,
     spilled_occurred: bool,
 
@@ -130,6 +133,7 @@ impl TransformFinalAggregate {
             should_finish: false,
             tx: Some(tx),
             rx,
+            output_finished: WatchNotify::new(),
             stage: Stage::Input,
             spilled_occurred: false,
             hashtable: HashTable::AggregateHashTable(hashtable),
@@ -535,17 +539,100 @@ impl Processor for TransformFinalAggregate {
         Ok(())
     }
 
+    fn un_reacted(&self, cause: EventCause, _id: usize) -> Result<()> {
+        if matches!(cause, EventCause::Output(_)) && self.output.is_finished() {
+            // event() cannot run while async_process() is waiting. Wake only
+            // this processor: peers may still need the shared task channel.
+            self.output_finished.notify_waiters();
+        }
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match self.rx.recv().await {
-            Ok(meta) => {
-                self.channel_data = Some(meta);
-            }
-            Err(_) => {
-                self.should_finish = true;
+        tokio::select! {
+            biased;
+            _ = self.output_finished.notified() => {}
+            task = self.rx.recv() => {
+                match task {
+                    Ok(meta) => self.channel_data = Some(meta),
+                    Err(_) => self.should_finish = true,
+                }
             }
         }
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_pipeline::core::ProcessorPtr;
+    use databend_common_pipeline::core::port::connect;
+    use futures::FutureExt;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_finished_output_interrupts_final_aggregate_receive() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let (tx, rx) = async_channel::unbounded();
+        let key_type = DataType::Number(NumberDataType::UInt64);
+        let params = AggregatorParams::try_create(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "key",
+                key_type.clone(),
+            )])),
+            vec![key_type],
+            &[0],
+            &[],
+            &[],
+            false,
+            1024,
+            1024 * 1024,
+        )?;
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let downstream = InputPort::create();
+        // The ports are not yet used by a processor or executor.
+        unsafe { connect(&downstream, &output) };
+        downstream.set_need_data();
+        input.finish();
+        let mut processor = TransformFinalAggregate::try_create(
+            input,
+            output,
+            params,
+            0,
+            0,
+            ctx,
+            tx.clone(),
+            rx,
+            Arc::new(AtomicU64::new(1)),
+        )?;
+        assert!(matches!(processor.event()?, Event::Sync));
+        processor.process()?;
+        assert!(matches!(processor.event()?, Event::Async));
+        let processor = ProcessorPtr::create(processor);
+
+        // Match executor scheduling: poll sequentially and invoke only the
+        // thread-safe un_reacted hook while async_process is pending.
+        let mut task = unsafe { processor.async_process() };
+        assert!(futures::poll!(&mut task).is_pending());
+        downstream.finish();
+        unsafe { processor.un_reacted(EventCause::Output(0))? };
+        task.now_or_never()
+            .expect("a finished output must wake the receiver even with a live sender")?;
+        assert!(matches!(
+            unsafe { processor.event(EventCause::Other)? },
+            Event::Finished
+        ));
+        drop(tx);
         Ok(())
     }
 }
