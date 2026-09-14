@@ -705,20 +705,8 @@ impl FuseTable {
             .is_some()
         {
             // if there are ordering + limit clause and no filter, use topn pruner
+            let schema = pruner.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
-            let schema = if let Some(field) = push_down.order_by_virtual_column() {
-                // Add the ORDER BY virtual field to schema, used only by TopN pruning.
-                // Its query column ID becomes the statistics lookup key.
-                let mut schema = pruner.table_schema.as_ref().clone();
-                schema.add_internal_field(
-                    &field.name,
-                    field.data_type.as_ref().clone(),
-                    field.query_column_id,
-                );
-                Arc::new(schema)
-            } else {
-                pruner.table_schema.clone()
-            };
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
             let filter_only_use_index = push_down.filter_only_use_index();

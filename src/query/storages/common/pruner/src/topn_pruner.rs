@@ -17,13 +17,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -117,43 +115,32 @@ impl TopNPruner {
             return self.prune_topn_by_score(*asc, metas);
         }
 
-        let Ok(sort_column_id) = self.schema.column_id_of(column.as_str()) else {
+        let sort_column_id = if let Ok(index) = self.schema.column_id_of(column.as_str()) {
+            index
+        } else {
             return Ok(metas);
         };
+
         // String Type min/max is truncated
         if matches!(
-            self.schema
-                .field_with_name(column)?
-                .data_type()
-                .remove_nullable(),
+            self.schema.field_with_name(column)?.data_type(),
             TableDataType::String
         ) {
             return Ok(metas);
         }
 
-        let mut id_stats = Vec::with_capacity(metas.len());
-        for (index, meta) in &metas {
-            let stat = meta.col_stats.get(&sort_column_id).or_else(|| {
-                index
-                    .virtual_block_meta
-                    .as_ref()?
-                    .virtual_column_stats
-                    .get(&sort_column_id)
-            });
-            let Some(stat) = stat else {
-                if (VIRTUAL_COLUMN_ID_START..FILE_LAST_MODIFIED_COLUMN_ID).contains(&sort_column_id)
-                {
-                    // Typed virtual statistics may be unavailable for incomplete metadata,
-                    // non-direct layouts, or unsafe physical-to-query type conversions.
-                    return Ok(metas);
-                }
-                return Err(ErrorCode::UnknownException(format!(
-                    "Unable to get the colStats by ColumnId: {}",
-                    sort_column_id
-                )));
-            };
-            id_stats.push((index.clone(), stat.clone(), meta.clone()));
-        }
+        let mut id_stats = metas
+            .iter()
+            .map(|(id, meta)| {
+                let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
+                    ErrorCode::UnknownException(format!(
+                        "Unable to get the colStats by ColumnId: {}",
+                        sort_column_id
+                    ))
+                })?;
+                Ok((id.clone(), stat.clone(), meta.clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         if self.filter_only_use_index {
             // For descending order, we determine a lower bound for the Nth largest value.
@@ -489,35 +476,6 @@ mod tests {
             let result = pruner.prune(vec![]).unwrap();
             assert_eq!(result.len(), 0);
         }
-    }
-
-    #[test]
-    fn test_prune_topn_keeps_blocks_when_virtual_column_statistics_are_missing() {
-        let virtual_column_id = VIRTUAL_COLUMN_ID_START;
-        let schema = Arc::new(TableSchema::new_from_column_ids(
-            vec![TableField::new_from_column_id(
-                "v['k']::Int64",
-                TableDataType::Number(NumberDataType::Int64),
-                virtual_column_id,
-            )],
-            Default::default(),
-            virtual_column_id + 1,
-        ));
-        assert_eq!(
-            schema.column_id_of("v['k']::Int64").unwrap(),
-            virtual_column_id
-        );
-        let sort_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: "v['k']::Int64".to_string(),
-            data_type: DataType::Number(NumberDataType::Int64),
-            display_name: "v['k']::Int64".to_string(),
-        };
-        let metas = vec![build_block(0, 0, 1, 10, 10), build_block(0, 1, 11, 20, 10)];
-        let pruner = TopNPruner::create(schema, vec![(sort_expr, true, false)], 1, false);
-
-        let result = pruner.prune(metas.clone()).unwrap();
-        assert_eq!(result.len(), metas.len());
     }
 
     #[test]
