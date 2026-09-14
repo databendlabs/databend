@@ -336,7 +336,28 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
-        let (scalars, _) = self.resolve_expr_args(arena, args)?;
+        let (mut scalars, _) = self.resolve_expr_args(arena, args)?;
+
+        // `grouping<...>(...)` with explicit params is the internal rewritten
+        // form; keep its arguments untouched (see `replace_grouping`).
+        if func_name.eq_ignore_ascii_case("grouping") && params.is_empty() {
+            for (scalar, arg) in scalars.iter_mut().zip(args) {
+                if let Some(group_item) = self.grouping_argument_group_item(arena, *arg, scalar) {
+                    *scalar = group_item;
+                }
+            }
+        }
+
+        if let Some(rewritten_variant_expr) =
+            self.try_rewrite_variant_function(span, func_name, &scalars)
+        {
+            return rewritten_variant_expr;
+        }
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &scalars)
+        {
+            return rewritten_vector_expr;
+        }
 
         self.resolve_scalar_function_call(span, func_name, params, scalars)
     }

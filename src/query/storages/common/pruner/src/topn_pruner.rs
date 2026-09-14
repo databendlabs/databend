@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -137,10 +138,12 @@ impl TopNPruner {
                     .virtual_column_stats
                     .get(&sort_column_id)
             });
-            let Some(stat) = stat else {
-                // TopN requires a reliable bound for every candidate block.
-                return Ok(metas);
-            };
+            let stat = stat.ok_or_else(|| {
+                ErrorCode::UnknownException(format!(
+                    "Unable to get the colStats by ColumnId: {}",
+                    sort_column_id
+                ))
+            })?;
             id_stats.push((index.clone(), stat.clone(), meta.clone()));
         }
 
