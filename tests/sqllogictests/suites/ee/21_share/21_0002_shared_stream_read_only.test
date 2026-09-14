@@ -1,0 +1,164 @@
+# Shared stream sources stay read only after caching and batch navigation.
+# Uses sandbox tenants and the fs connection, as in the other sharing suites.
+statement ok
+SET sandbox_tenant = 'shared_stream_readonly_provider'
+
+statement ok
+DROP SHARE IF EXISTS readonly_share
+
+statement ok
+DROP CONNECTION IF EXISTS readonly_conn
+
+statement ok
+CREATE OR REPLACE DATABASE readonly_provider
+
+statement ok
+CREATE TABLE readonly_provider.t(a INT) change_tracking = true
+
+statement ok
+CREATE CONNECTION readonly_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE SHARE readonly_share CONNECTION = readonly_conn
+
+statement ok
+GRANT USAGE ON DATABASE readonly_provider TO SHARE readonly_share
+
+statement ok
+GRANT SELECT ON TABLE readonly_provider.t TO SHARE readonly_share
+
+statement ok
+ALTER SHARE readonly_share ADD ACCOUNTS = shared_stream_readonly_consumer
+
+statement ok
+SET sandbox_tenant = 'shared_stream_readonly_consumer'
+
+statement ok
+DROP DATABASE IF EXISTS readonly_shared
+
+statement ok
+CREATE DATABASE readonly_shared FROM SHARE shared_stream_readonly_provider.readonly_share
+
+statement ok
+CREATE OR REPLACE DATABASE readonly_local
+
+statement ok
+CREATE STREAM readonly_local.s ON TABLE readonly_shared.t
+
+statement ok
+CREATE TABLE readonly_local.sink(a INT)
+
+statement ok
+SET sandbox_tenant = 'shared_stream_readonly_provider'
+
+statement ok
+INSERT INTO readonly_provider.t VALUES (1)
+
+statement ok
+INSERT INTO readonly_provider.t VALUES (2)
+
+statement ok
+SET sandbox_tenant = 'shared_stream_readonly_consumer'
+
+# Binding the stream first used to cache a writable provider FuseTable.
+statement error (?s).*READ ONLY.*
+INSERT ALL INTO readonly_shared.t SELECT a FROM readonly_local.s
+
+statement error (?s).*READ ONLY.*
+INSERT INTO readonly_shared.t SELECT a FROM readonly_local.s
+
+statement error (?s).*READ ONLY.*
+INSERT ALL INTO readonly_local.sink INTO readonly_shared.t SELECT a FROM readonly_local.s
+
+query I
+SELECT count(*) FROM readonly_local.sink
+----
+0
+
+# Both navigation algorithms must preserve the shared marker.
+statement ok
+SET enable_stream_batch_snapshot_forward_scan = 1
+
+statement error (?s).*READ ONLY.*
+INSERT ALL INTO readonly_shared.t SELECT a FROM readonly_local.s WITH(MAX_BATCH_SIZE = 1)
+
+statement ok
+SET enable_stream_batch_snapshot_forward_scan = 0
+
+statement error (?s).*READ ONLY.*
+INSERT ALL INTO readonly_shared.t SELECT a FROM readonly_local.s WITH(MAX_BATCH_SIZE = 1)
+
+# Restore a stream source from the transaction buffer in a later statement.
+statement ok
+BEGIN
+
+query I
+SELECT a FROM readonly_local.s WITH(MAX_BATCH_SIZE = 1)
+----
+1
+
+statement error (?s).*READ ONLY.*
+INSERT ALL INTO readonly_shared.t SELECT a FROM readonly_local.s WITH(MAX_BATCH_SIZE = 1)
+
+statement ok
+ROLLBACK
+
+statement error (?s).*READ ONLY.*
+INSERT ALL INTO readonly_shared.t SELECT 3
+
+statement error (?s).*READ ONLY.*
+TRUNCATE TABLE readonly_shared.t
+
+statement error (?s).*READ ONLY.*
+DROP TABLE readonly_shared.t
+
+# Failed writes neither advance the offset nor modify provider data.
+query I rowsort
+SELECT a FROM readonly_local.s
+----
+1
+2
+
+statement ok
+INSERT ALL INTO readonly_local.sink SELECT a FROM readonly_local.s
+
+query I rowsort
+SELECT a FROM readonly_local.sink
+----
+1
+2
+
+query I
+SELECT count(*) FROM readonly_local.s
+----
+0
+
+statement ok
+SET sandbox_tenant = 'shared_stream_readonly_provider'
+
+query I rowsort
+SELECT a FROM readonly_provider.t
+----
+1
+2
+
+statement ok
+DROP SHARE readonly_share
+
+statement ok
+DROP CONNECTION readonly_conn
+
+statement ok
+DROP DATABASE readonly_provider
+
+statement ok
+SET sandbox_tenant = 'shared_stream_readonly_consumer'
+
+statement ok
+DROP DATABASE readonly_shared
+
+statement ok
+DROP DATABASE readonly_local
+
+statement ok
+SET sandbox_tenant = ''

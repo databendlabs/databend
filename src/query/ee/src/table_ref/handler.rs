@@ -17,6 +17,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -139,6 +140,7 @@ impl TableRefHandler for RealTableRefHandler {
         let table = ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+        table.check_mutable()?;
         let table_id = table.get_table_info().ident.table_id;
         let catalog = ctx.get_catalog(&plan.catalog).await?;
         let seq_tag = catalog.get_table_tag(table_id, &plan.name, true).await?;
@@ -176,6 +178,7 @@ impl RealTableRefHandler {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let table = ctx.get_table(catalog, database, table_name).await?;
+        table.check_mutable()?;
 
         if table.is_temp() {
             return Err(ErrorCode::IllegalReference(format!(
