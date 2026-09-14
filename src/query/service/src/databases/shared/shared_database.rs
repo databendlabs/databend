@@ -78,6 +78,18 @@ impl SharedDatabase {
             .storage_factory
             .get_table(&table_info, self.ctx.disable_table_info_refresh)
     }
+
+    async fn get_table_with_handler(
+        &self,
+        manager: &DataSharingHandlerWrapper,
+        binding: &ShareDatabaseBinding,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let context = manager
+            .resolve_shared_table(self.get_tenant(), binding, table_name)
+            .await?;
+        self.shared_table(manager, context).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -93,17 +105,19 @@ impl Database for SharedDatabase {
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let binding = self.binding()?;
         let manager = self.share_handler().await?;
-        let context = manager
-            .resolve_shared_table(self.get_tenant(), &binding, table_name)
-            .await?;
-        self.shared_table(&manager, context).await
+        self.get_table_with_handler(&manager, &binding, table_name)
+            .await
     }
 
     async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
-        self.share_handler().await?;
+        let binding = self.binding()?;
+        let manager = self.share_handler().await?;
         let mut tables = Vec::with_capacity(table_names.len());
         for table_name in table_names {
-            match self.get_table(table_name).await {
+            match self
+                .get_table_with_handler(&manager, &binding, table_name)
+                .await
+            {
                 Ok(table) => tables.push(table),
                 Err(err) if err.code() == ErrorCode::UnknownTable("").code() => {}
                 Err(err) => return Err(err),

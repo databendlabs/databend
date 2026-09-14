@@ -123,11 +123,13 @@ async fn test_data_sharing_existing_bindings_require_license() -> anyhow::Result
     for sql in [
         "CREATE DATABASE provider",
         "CREATE TABLE provider.t(a INT) CHANGE_TRACKING = TRUE",
+        "CREATE TABLE provider.other(a INT)",
         "INSERT INTO provider.t VALUES (1)",
         "CREATE CONNECTION conn STORAGE_TYPE = 'fs'",
         "CREATE SHARE s CONNECTION = conn",
         "GRANT USAGE ON DATABASE provider TO SHARE s",
         "GRANT SELECT ON TABLE provider.t TO SHARE s",
+        "GRANT SELECT ON TABLE provider.other TO SHARE s",
         "ALTER SHARE s ADD ACCOUNTS = license_consumer",
     ] {
         fixture.execute_command(sql).await?;
@@ -167,6 +169,18 @@ async fn test_data_sharing_existing_bindings_require_license() -> anyhow::Result
     let database = catalog
         .get_database(&consumer.get_current_tenant(), "shared")
         .await?;
+    let batch_names = ["other", "missing", "t", "other"].map(String::from);
+    let tables = database.mget_tables(&batch_names).await?;
+    assert_eq!(
+        vec!["other", "t", "other"],
+        tables.iter().map(|table| table.name()).collect::<Vec<_>>()
+    );
+    assert!(
+        tables
+            .iter()
+            .all(|table| table.get_table_info().is_shared())
+    );
+    assert!(database.mget_tables(&[]).await?.is_empty());
     for (token, expected_code) in [
         (
             license(&key, Some(vec![Feature::Stream, Feature::TableRef]), false),
@@ -190,6 +204,12 @@ async fn test_data_sharing_existing_bindings_require_license() -> anyhow::Result
             expected_code,
             database.list_tables_names().await.unwrap_err().code()
         );
+        for names in [&batch_names[..], &[]] {
+            assert_eq!(
+                expected_code,
+                database.mget_tables(names).await.err().unwrap().code()
+            );
+        }
         assert_eq!(
             expected_code,
             cached_ctx
