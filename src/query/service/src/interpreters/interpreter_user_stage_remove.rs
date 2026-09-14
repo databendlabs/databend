@@ -86,24 +86,26 @@ impl Interpreter for RemoveUserStageInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");
 
-        let plan = self.plan.clone();
-        let op = init_stage_operator(&self.plan.stage)?;
-        let pattern = if plan.pattern.is_empty() {
-            None
-        } else {
-            Some(plan.pattern.clone())
-        };
-        let files_info = StageFilesInfo {
-            path: plan.path.clone(),
-            files: None,
-            pattern,
-        };
+            let plan = self.plan.clone();
+            let op = init_stage_operator(&self.plan.stage)?;
+            let pattern = if plan.pattern.is_empty() {
+                None
+            } else {
+                Some(plan.pattern.clone())
+            };
+            let files_info = StageFilesInfo {
+                path: plan.path.clone(),
+                files: None,
+                pattern,
+            };
 
-        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        Self::remove_all(table_ctx, op, files_info, false).await?;
-        Ok(PipelineBuildResult::create())
+            let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+            Self::remove_all(table_ctx, op, files_info, false).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

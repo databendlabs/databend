@@ -62,30 +62,32 @@ impl Interpreter for DescNotificationInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let config = GlobalConfig::instance();
-        if config
-            .query
-            .common
-            .cloud_control_grpc_server_address
-            .is_none()
-        {
-            return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot describe notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        }
-        let cloud_api = CloudControlApiProvider::instance();
-        let notification_cli = cloud_api.get_notification_client();
-        let req = self.build_request();
-        let config = get_notification_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let config = GlobalConfig::instance();
+            if config
+                .query
+                .common
+                .cloud_control_grpc_server_address
+                .is_none()
+            {
+                return Err(ErrorCode::CloudControlNotEnabled(
+                    "cannot describe notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                ));
+            }
+            let cloud_api = CloudControlApiProvider::instance();
+            let notification_cli = cloud_api.get_notification_client();
+            let req = self.build_request();
+            let config = get_notification_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+            let req = make_request(req, config);
 
-        let resp = notification_cli.desc_notification(req).await?;
-        if resp.notification.is_none() {
-            return Ok(PipelineBuildResult::create());
-        }
-        let tasks = vec![resp.notification.unwrap()];
-        let result = parse_notifications_to_datablock(tasks)?;
-        PipelineBuildResult::from_blocks(vec![result])
+            let resp = notification_cli.desc_notification(req).await?;
+            if resp.notification.is_none() {
+                return Ok(PipelineBuildResult::create());
+            }
+            let tasks = vec![resp.notification.unwrap()];
+            let result = parse_notifications_to_datablock(tasks)?;
+            PipelineBuildResult::from_blocks(vec![result])
+        })
     }
 }

@@ -156,7 +156,7 @@ impl InterpreterQueryLog {
         // Stats.
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
-        let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
+        let query_start_time = convert_query_log_timestamp(ctx.get_query_created_time());
         let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
 
         let written_rows = 0u64;
@@ -321,7 +321,7 @@ impl InterpreterQueryLog {
         // Stats.
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
-        let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
+        let query_start_time = convert_query_log_timestamp(ctx.get_query_created_time());
         let query_duration_ms = ctx.get_query_duration_ms();
         let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
         let data_metrics = ctx.get_data_metrics();

@@ -54,30 +54,32 @@ impl Interpreter for CreateRoleInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_role_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_role_execute");
 
-        // TODO: add privilege check about CREATE ROLE
-        let plan = self.plan.clone();
-        let role_name = plan.role_name;
-        if role_name.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN
-            || role_name.to_lowercase() == BUILTIN_ROLE_PUBLIC
-        {
-            return Err(ErrorCode::IllegalRole(
-                "Illegal Create Role command. Can not create built-in role [ account_admin | public ]",
-            ));
-        }
+            // TODO: add privilege check about CREATE ROLE
+            let plan = self.plan.clone();
+            let role_name = plan.role_name;
+            if role_name.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN
+                || role_name.to_lowercase() == BUILTIN_ROLE_PUBLIC
+            {
+                return Err(ErrorCode::IllegalRole(
+                    "Illegal Create Role command. Can not create built-in role [ account_admin | public ]",
+                ));
+            }
 
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
-        user_mgr
-            .create_role(
-                &tenant,
-                RoleInfo::new(&role_name, plan.comment),
-                &plan.create_option,
-            )
-            .await?;
-        RoleCacheManager::instance().force_reload(&tenant).await?;
-        Ok(PipelineBuildResult::create())
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
+            user_mgr
+                .create_role(
+                    &tenant,
+                    RoleInfo::new(&role_name, plan.comment),
+                    &plan.create_option,
+                )
+                .await?;
+            RoleCacheManager::instance().force_reload(&tenant).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

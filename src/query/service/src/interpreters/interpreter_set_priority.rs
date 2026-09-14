@@ -95,20 +95,22 @@ impl Interpreter for SetPriorityInterpreter {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let id = &self.plan.id;
-        match self.ctx.get_session_by_id(id) {
-            None => match self.proxy_to_warehouse {
-                true => self.set_warehouse_priority().await,
-                false => Err(ErrorCode::UnknownSession(format!(
-                    "Not found session id {}",
-                    id
-                ))),
-            },
-            Some(set_session) => {
-                set_session.set_query_priority(self.plan.priority);
-                Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let id = &self.plan.id;
+            match self.ctx.get_session_by_id(id) {
+                None => match self.proxy_to_warehouse {
+                    true => self.set_warehouse_priority().await,
+                    false => Err(ErrorCode::UnknownSession(format!(
+                        "Not found session id {}",
+                        id
+                    ))),
+                },
+                Some(set_session) => {
+                    set_session.set_query_priority(self.plan.priority);
+                    Ok(PipelineBuildResult::create())
+                }
             }
-        }
+        })
     }
 }

@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::SelectStageOptions;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::UriLocation;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 
@@ -53,33 +48,21 @@ impl Binder {
             };
 
             let user_api = UserApiProvider::instance();
-            let (mut stage_info, path) = StageResolver::from_table_context(
+            let file_format = if let Some(name) = &options.file_format {
+                let tenant = self.ctx.get_tenant();
+                Some(resolve_file_format(&tenant, &user_api, name).await?)
+            } else {
+                None
+            };
+            let (stage_info, path) = StageResolver::from_table_context(
                 self.ctx.clone(),
                 user_api.clone(),
                 databend_common_config::GlobalConfig::instance()
                     .storage
                     .allow_insecure,
             )?
-            .resolve_file_location(&location, StagePathAccess::Read)
+            .resolve_data_file_location(&location, StagePathAccess::Read, file_format)
             .await?;
-
-            if let Some(f) = &options.file_format {
-                stage_info.file_format_params = match StageFileFormatType::from_str(f) {
-                    Ok(t) => {
-                        if matches!(t, StageFileFormatType::Lance) {
-                            return Err(ErrorCode::IllegalFileFormat(
-                                "LANCE file format is only supported in COPY INTO <location>"
-                                    .to_string(),
-                            ));
-                        }
-                        FileFormatParams::default_by_type(t)?
-                    }
-                    _ => {
-                        let tenant = self.ctx.get_tenant();
-                        resolve_file_format(&tenant, &user_api, f).await?
-                    }
-                }
-            }
             let pattern = match &options.pattern {
                 None => None,
                 Some(pattern) => Some(Self::resolve_copy_pattern(self.ctx.clone(), pattern)?),

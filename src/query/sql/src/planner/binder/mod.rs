@@ -85,6 +85,7 @@ pub use ddl::database::DEFAULT_STORAGE_PATH;
 pub use ddl::table::verify_external_location_privileges;
 pub use default_expr::DefaultExprBinder;
 pub use explain::ExplainConfig;
+pub use file_format::parse_file_format;
 pub use file_format::resolve_file_format;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::get_storage_params_from_options;

@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result as DatabendResult;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -25,6 +26,8 @@ use databend_common_expression::TableField;
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::F32;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_vector::angular_distance;
@@ -429,6 +432,12 @@ impl ColumnStatistics {
         &self.max
     }
 
+    /// Retag Decimal bounds after a metadata-only precision widening.
+    pub fn widen_decimal_size(&mut self, size: DecimalSize) -> DatabendResult<()> {
+        widen_decimal_scalar(&mut self.min, size)?;
+        widen_decimal_scalar(&mut self.max, size)
+    }
+
     pub fn from_v0(
         v0: &crate::meta::v0::statistics::ColumnStatistics,
         data_type: &TableDataType,
@@ -482,6 +491,27 @@ impl ClusterStatistics {
         self.min.eq(&self.max)
     }
 
+    /// Retag one Decimal cluster-key dimension after a metadata-only precision widening.
+    pub fn widen_decimal_dimension(
+        &mut self,
+        index: usize,
+        size: DecimalSize,
+    ) -> DatabendResult<()> {
+        let min = self.min.get_mut(index).ok_or_else(|| {
+            ErrorCode::Internal(format!("cluster statistics dimension {index} is missing"))
+        })?;
+        let max = self.max.get_mut(index).ok_or_else(|| {
+            ErrorCode::Internal(format!("cluster statistics dimension {index} is missing"))
+        })?;
+        widen_decimal_scalar(min, size)?;
+        widen_decimal_scalar(max, size)?;
+        // `pages` is a legacy per-page index whose entries are tuples containing every
+        // cluster-key dimension, not a vector indexed by cluster-key dimension. Page pruning
+        // has been removed, and the field is retained only for rollback decoding, so keep it
+        // byte-for-byte unchanged.
+        Ok(())
+    }
+
     pub fn from_v0(
         v0: crate::meta::v0::statistics::ClusterStatistics,
         data_type: &TableDataType,
@@ -521,7 +551,55 @@ impl ClusterStatistics {
     }
 }
 
+/// Change only the logical Decimal precision carried by a persisted scalar.
+/// The raw integer, physical Decimal kind, and scale remain unchanged.
+pub fn widen_decimal_scalar(scalar: &mut Scalar, target: DecimalSize) -> DatabendResult<()> {
+    if scalar.is_null() {
+        return Ok(());
+    }
+    let Scalar::Decimal(decimal) = scalar else {
+        return Err(ErrorCode::Internal(format!(
+            "expected Decimal statistics, got {}",
+            scalar.as_ref().infer_data_type()
+        )));
+    };
+    let source = decimal.size();
+    if source.scale() != target.scale()
+        || source.data_kind() != target.data_kind()
+        || source.precision() > target.precision()
+    {
+        return Err(ErrorCode::Internal(format!(
+            "cannot widen Decimal statistics from {source} to {target}"
+        )));
+    }
+    *decimal = match decimal {
+        DecimalScalar::Decimal64(value, _) => DecimalScalar::Decimal64(*value, target),
+        DecimalScalar::Decimal128(value, _) => DecimalScalar::Decimal128(*value, target),
+        DecimalScalar::Decimal256(value, _) => DecimalScalar::Decimal256(*value, target),
+    };
+    Ok(())
+}
+
 impl Statistics {
+    /// Retag the persisted bounds for one Decimal column after a precision widening.
+    pub fn widen_decimal_column(
+        &mut self,
+        column_id: ColumnId,
+        size: DecimalSize,
+    ) -> DatabendResult<()> {
+        if let Some(stats) = self.col_stats.get_mut(&column_id) {
+            stats.widen_decimal_size(size)?;
+        }
+        if let Some(stats) = self
+            .virtual_col_stats
+            .as_mut()
+            .and_then(|stats| stats.get_mut(&column_id))
+        {
+            stats.widen_decimal_size(size)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn convert_column_stats(
         v0: &HashMap<ColumnId, v0::statistics::ColumnStatistics>,
         fields: &[TableField],
@@ -749,6 +827,8 @@ impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::i256;
+
     use super::*;
 
     #[derive(serde::Serialize)]
@@ -787,6 +867,83 @@ mod tests {
         let decoded: ClusterStatistics = rmp_serde::from_slice(&bytes).unwrap();
 
         assert_eq!(decoded, ClusterStatistics::new(7, stats.min, stats.max, 2));
+    }
+
+    #[test]
+    fn widens_decimal_statistics_without_changing_values() {
+        let old = DecimalSize::new_unchecked(1, 0);
+        let new = DecimalSize::new_unchecked(18, 0);
+        let mut column = ColumnStatistics::new(
+            Scalar::Decimal(DecimalScalar::Decimal64(-1, old)),
+            Scalar::Decimal(DecimalScalar::Decimal64(7, old)),
+            0,
+            16,
+            Some(2),
+        );
+
+        column.widen_decimal_size(new).unwrap();
+
+        assert_eq!(
+            column.min(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(-1, new))
+        );
+        assert_eq!(
+            column.max(),
+            &Scalar::Decimal(DecimalScalar::Decimal64(7, new))
+        );
+
+        let old = DecimalSize::new_unchecked(19, 2);
+        let new = DecimalSize::new_unchecked(38, 2);
+        let mut cluster = ClusterStatistics::new(
+            3,
+            vec![Scalar::Decimal(DecimalScalar::Decimal128(100, old))],
+            vec![Scalar::Decimal(DecimalScalar::Decimal128(900, old))],
+            0,
+        );
+        cluster.pages = Some(vec![Scalar::Tuple(vec![Scalar::Decimal(
+            DecimalScalar::Decimal128(500, old),
+        )])]);
+        let legacy_pages = cluster.pages.clone();
+
+        cluster.widen_decimal_dimension(0, new).unwrap();
+
+        assert_eq!(cluster.min(), &vec![Scalar::Decimal(
+            DecimalScalar::Decimal128(100, new)
+        )]);
+        assert_eq!(cluster.max(), &vec![Scalar::Decimal(
+            DecimalScalar::Decimal128(900, new)
+        )]);
+        assert_eq!(cluster.pages, legacy_pages);
+
+        let old = DecimalSize::new_unchecked(39, 3);
+        let new = DecimalSize::new_unchecked(76, 3);
+        let mut scalar = Scalar::Decimal(DecimalScalar::Decimal256(i256::from(42), old));
+        widen_decimal_scalar(&mut scalar, new).unwrap();
+        assert_eq!(
+            scalar,
+            Scalar::Decimal(DecimalScalar::Decimal256(i256::from(42), new))
+        );
+    }
+
+    #[test]
+    fn rejects_incompatible_decimal_statistics_retag() {
+        let scalar = || {
+            Scalar::Decimal(DecimalScalar::Decimal64(
+                1,
+                DecimalSize::new_unchecked(10, 2),
+            ))
+        };
+
+        assert!(widen_decimal_scalar(&mut scalar(), DecimalSize::new_unchecked(9, 2)).is_err());
+        assert!(widen_decimal_scalar(&mut scalar(), DecimalSize::new_unchecked(15, 3)).is_err());
+        assert!(widen_decimal_scalar(&mut scalar(), DecimalSize::new_unchecked(19, 2)).is_err());
+        assert!(
+            widen_decimal_scalar(
+                &mut Scalar::Number(1_i64.into()),
+                DecimalSize::new_unchecked(15, 2),
+            )
+            .is_err()
+        );
     }
 
     #[test]

@@ -96,30 +96,32 @@ impl Interpreter for ShowCreateTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
+            let table = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
+                .await?;
 
-        if is_materialized_view_engine(table.engine()) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
-                &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
-            )));
-        }
+            if is_materialized_view_engine(table.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
+                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                )));
+            }
 
-        Self::build_result(
-            self.ctx.as_ref(),
-            catalog.as_ref(),
-            &tenant,
-            &self.plan.database,
-            table.as_ref(),
-            self.plan.with_quoted_ident,
-        )
-        .await
+            Self::build_result(
+                self.ctx.as_ref(),
+                catalog.as_ref(),
+                &tenant,
+                &self.plan.database,
+                table.as_ref(),
+                self.plan.with_quoted_ident,
+            )
+            .await
+        })
     }
 }
 

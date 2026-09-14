@@ -14,7 +14,9 @@
 
 use std::collections::HashMap;
 
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DecimalSize;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use databend_common_statistics::Histogram;
@@ -24,6 +26,7 @@ use crate::meta::ColumnCountMinSketch;
 use crate::meta::ColumnTopN;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
+use crate::meta::TableSnapshot;
 use crate::meta::Versioned;
 use crate::meta::v1;
 use crate::meta::v2;
@@ -87,6 +90,24 @@ impl TableSnapshotStatistics {
             .iter()
             .map(|hll| (*hll.0, hll.1.count() as u64))
             .collect()
+    }
+
+    /// Whether freshness-sensitive statistics describe all rows visible in `snapshot`.
+    pub fn is_fresh_for(&self, snapshot: &TableSnapshot) -> bool {
+        self.row_count == snapshot.summary.row_count
+            && snapshot
+                .prev_snapshot_id
+                .as_ref()
+                .is_none_or(|(snapshot_id, _)| *snapshot_id == self.snapshot_id)
+    }
+
+    /// Retag Top-N values for one Decimal column. Other statistics either do not store
+    /// DecimalSize or deliberately hash only the raw value.
+    pub fn widen_decimal_column(&mut self, column_id: ColumnId, size: DecimalSize) -> Result<()> {
+        if let Some(top_n) = self.top_n.get_mut(&column_id) {
+            top_n.widen_decimal_size(size)?;
+        }
+        Ok(())
     }
 }
 
