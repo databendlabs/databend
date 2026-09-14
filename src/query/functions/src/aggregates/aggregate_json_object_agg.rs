@@ -394,7 +394,7 @@ where
         columns: ProjectedBlock,
     ) -> Result<(StringColumn, V::Column, Option<Bitmap>)> {
         let (key_column, key_validity) = match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
+            Column::Nullable(deref!(nullable_column)) => {
                 let column = StringType::try_downcast_column(&nullable_column.column).unwrap();
                 (column, Some(nullable_column.validity.clone()))
             }
@@ -404,7 +404,7 @@ where
             }
         };
         let (val_column, val_validity) = match &columns[1].to_column() {
-            Column::Nullable(box nullable_column) => {
+            Column::Nullable(deref!(nullable_column)) => {
                 let column = V::try_downcast_column(&nullable_column.column).unwrap();
                 (column, Some(nullable_column.validity.clone()))
             }

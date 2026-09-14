@@ -121,7 +121,7 @@ impl QuantileTDigestState {
     ) -> Result<()> {
         if levels.len() > 1 {
             let builder = match builder {
-                ColumnBuilder::Array(box b) => b,
+                ColumnBuilder::Array(deref!(b)) => b,
                 _ => unreachable!(),
             };
             levels.iter().for_each(|level| {

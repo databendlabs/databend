@@ -110,12 +110,12 @@ impl FieldEncoderToString {
                 self.encode_geography(unsafe { c.index_unchecked(row_index).0 })
             }
             Column::Opaque(c) => Ok(Cow::Owned(self.encode_opaque(c, row_index))),
-            Column::Array(box c) => {
+            Column::Array(deref!(c)) => {
                 let mut out = String::new();
                 self.write_array_root_to(c, row_index, &mut out)?;
                 Ok(Cow::Owned(out))
             }
-            Column::Map(box c) => {
+            Column::Map(deref!(c)) => {
                 let mut out = String::new();
                 self.write_map_root_to(c, row_index, &mut out)?;
                 Ok(Cow::Owned(out))
@@ -192,8 +192,8 @@ impl FieldEncoderToString {
             }
 
             // nested
-            Column::Array(box c) => self.write_array_root_to(c, row_index, out)?,
-            Column::Map(box c) => self.write_map_root_to(c, row_index, out)?,
+            Column::Array(deref!(c)) => self.write_array_root_to(c, row_index, out)?,
+            Column::Map(deref!(c)) => self.write_map_root_to(c, row_index, out)?,
             Column::Tuple(fields) => self.write_tuple_root_to(fields, row_index, out)?,
             Column::Vector(c) => self.write_vector_to(c, row_index, out),
         }

@@ -300,7 +300,7 @@ where A: TypeCheckAdapter
         let is_grouping = func_name.eq_ignore_ascii_case("grouping");
         let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
         for arg in args {
-            let box (mut scalar, _) = self.resolve_core(arena, *arg)?;
+            let deref!((mut scalar, _)) = self.resolve_core(arena, *arg)?;
             if is_grouping
                 && let Some(group_item) = self.grouping_argument_group_item(arena, *arg, &scalar)
             {
@@ -322,7 +322,7 @@ where A: TypeCheckAdapter
         {
             return rewritten_vector_expr;
         }
-        let box (scalar, data_type) =
+        let deref!((scalar, data_type)) =
             self.resolve_scalar_function_call(span, func_name, vec![], scalars.into_vec())?;
         if func_name == "eq" || func_name == "noteq" {
             self.rewrite_variant_compare_constant(scalar, data_type)
@@ -658,7 +658,7 @@ where A: TypeCheckAdapter
                         return arg;
                     }
                     match self.try_fold_constant(checked_arg.clone()) {
-                        Ok(box (constant, _)) => constant,
+                        Ok(deref!((constant, _))) => constant,
                         Err(_) => arg,
                     }
                 })

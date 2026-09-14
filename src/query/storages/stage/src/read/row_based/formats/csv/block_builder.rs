@@ -93,10 +93,12 @@ impl CsvDecoder {
                     ColumnBuilder::String(b) => {
                         b.put_and_commit("");
                     }
-                    ColumnBuilder::Nullable(box NullableColumnBuilder {
-                        builder: ColumnBuilder::String(b),
-                        validity,
-                    }) => {
+                    ColumnBuilder::Nullable(
+                        deref!(NullableColumnBuilder {
+                            builder: ColumnBuilder::String(b),
+                            validity,
+                        }),
+                    ) => {
                         b.put_and_commit("");
                         validity.push(true);
                     }

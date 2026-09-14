@@ -129,7 +129,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 })
             }
             ExplainKind::Memo(_) => {
-                if let box Plan::Query { ref s_expr, .. } = plan {
+                if let deref!( Plan::Query { ref s_expr, .. }) = plan {
                     let memo = get_optimized_memo(opt_ctx.clone(), *s_expr.clone()).await?;
                     Ok(Plan::Explain {
                         config,

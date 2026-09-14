@@ -200,7 +200,7 @@ impl AggregateFunction for MarkovTarin {
 
 impl MarkovTarin {
     fn append_model_result(&self, model: &MarkovModel, builder: &mut ColumnBuilder) -> Result<()> {
-        let ColumnBuilder::Array(box array_builder) = builder else {
+        let ColumnBuilder::Array(deref!(array_builder)) = builder else {
             unreachable!()
         };
         let ColumnBuilder::Tuple(builders) = &mut array_builder.builder else {

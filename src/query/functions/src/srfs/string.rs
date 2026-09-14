@@ -63,7 +63,10 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn is_string_like(dt: &DataType) -> bool {
-    matches!(dt, DataType::String | DataType::Nullable(box DataType::String))
+    matches!(
+        dt,
+        DataType::String | DataType::Nullable(deref!(DataType::String))
+    )
 }
 
 pub fn regexp_split_to_vec(

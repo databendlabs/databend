@@ -26,7 +26,8 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 

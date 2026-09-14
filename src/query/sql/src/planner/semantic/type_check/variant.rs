@@ -70,7 +70,7 @@ impl<'a> CoreExprArena<'a> {
         loop {
             let path = match accessor {
                 MapAccessor::Bracket {
-                    key: box Expr::Literal { value, .. },
+                    key: deref!(Expr::Literal { value, .. }),
                 } => {
                     if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
                         return Err(ErrorCode::SemanticError(format!(
@@ -190,7 +190,7 @@ where A: super::TypeCheckAdapter
 
         // try rewrite as virtual column and pushdown to storage layer.
         let rewritten = self.try_rewrite_variant_keypaths(span, &args[0], keypaths);
-        if let Some(box (scalar, data_type)) = rewritten {
+        if let Some(deref!((scalar, data_type))) = rewritten {
             if matches!(func_name, "get_string" | "get_by_keypath_string") {
                 let target_type = DataType::Nullable(Box::new(DataType::String));
                 let new_scalar = ScalarExpr::CastExpr(CastExpr {
@@ -242,7 +242,7 @@ where A: super::TypeCheckAdapter
         };
 
         paths.reverse();
-        let box (scalar, data_type) = match self.resolve_core(arena, base) {
+        let deref!((scalar, data_type)) = match self.resolve_core(arena, base) {
             Ok(resolved) => resolved,
             Err(err) => return Some(Err(err)),
         };
@@ -251,7 +251,7 @@ where A: super::TypeCheckAdapter
             let keypaths = OwnedKeyPaths {
                 paths: paths.iter().map(|(_, path)| path.clone()).collect(),
             };
-            if let Some(box (scalar, data_type)) =
+            if let Some(deref!((scalar, data_type))) =
                 self.try_rewrite_variant_keypaths(span, &scalar, keypaths)
             {
                 return Some(Ok(if string_result {
@@ -283,13 +283,13 @@ where A: super::TypeCheckAdapter
         let last_index = paths.len().saturating_sub(1);
         let mut data_type = scalar.data_type().into_owned();
         for (index, (path, _)) in paths.into_iter().enumerate() {
-            let box (path_scalar, _) = self.resolve_core(arena, path)?;
+            let deref!((path_scalar, _)) = self.resolve_core(arena, path)?;
             let func_name = if string_result && index == last_index {
                 "get_string"
             } else {
                 "get"
             };
-            let box (next_scalar, next_type) =
+            let deref!((next_scalar, next_type)) =
                 self.resolve_scalar_function_call(span, func_name, vec![], vec![
                     scalar,
                     path_scalar,
@@ -470,7 +470,7 @@ where A: super::TypeCheckAdapter
                     // Use data type from meta to get the field names of tuple type.
                     table_data_type = data_type.physical_type().into_owned();
                     if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
-                        let box (inner_scalar, _inner_data_type) = self
+                        let deref!((inner_scalar, _inner_data_type)) = self
                             .resolve_tuple_map_access_pushdown(
                                 expr_span,
                                 column.clone(),
@@ -533,7 +533,7 @@ where A: super::TypeCheckAdapter
                 .into();
                 continue;
             }
-            let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
+            let deref!((path_scalar, _)) = self.resolve_literal(span, &path_lit)?;
             table_data_type = match table_data_type {
                 TableDataType::Array(inner_type) => *inner_type,
                 TableDataType::Map(inner_type) => match inner_type.remove_nullable() {
@@ -768,7 +768,7 @@ where A: super::TypeCheckAdapter
         let keypaths = KeyPaths { paths: key_paths };
 
         // try rewrite as virtual column and pushdown to storage layer.
-        if let Some(box (scalar, data_type)) =
+        if let Some(deref!((scalar, data_type))) =
             self.try_rewrite_variant_keypaths(span, &scalar, keypaths.to_owned())
         {
             return Ok(Box::new((scalar, data_type)));

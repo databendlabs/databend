@@ -52,7 +52,7 @@ where A: TypeCheckAdapter
     fn try_fold_cast_to_vector(&self, expr: &ScalarExpr) -> Option<Vec<F32>> {
         if expr.evaluable() {
             let checked_expr = expr.as_expr().ok()?;
-            let box (folded, _) = self.try_fold_constant(checked_expr).ok()?;
+            let deref!((folded, _)) = self.try_fold_constant(checked_expr).ok()?;
             let constant = match folded {
                 ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _) => {
                     constant

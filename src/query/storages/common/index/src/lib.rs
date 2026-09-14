@@ -19,7 +19,8 @@
     clippy::needless_range_loop,
     clippy::uninlined_format_args
 )]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![feature(never_type)]
 
 mod bloom_index;
