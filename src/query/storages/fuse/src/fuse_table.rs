@@ -1554,6 +1554,10 @@ impl Table for FuseTable {
             || self.table_info.meta.engine == DYNAMIC_TABLE_ENGINE
     }
 
+    fn is_read_only_for_maintenance(&self) -> bool {
+        self.table_info.is_shared() || self.table_type.is_readonly()
+    }
+
     fn use_own_sample_block(&self) -> bool {
         true
     }

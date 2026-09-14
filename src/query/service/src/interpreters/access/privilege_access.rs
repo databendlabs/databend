@@ -2317,6 +2317,9 @@ impl AccessChecker for PrivilegeAccess {
                     false,
                 )
                 .await?;
+                if let Some(select_plan) = &plan.table_plan.as_select {
+                    self.check(ctx, select_plan).await?;
+                }
             }
             Plan::RefreshDynamicTable(plan) => {
                 self.validate_table_access(

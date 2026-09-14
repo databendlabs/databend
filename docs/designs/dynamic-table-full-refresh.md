@@ -100,10 +100,16 @@ system itself serialized, is parsed here.
 or the new ones, never a mixture, and a failed refresh leaves the previous contents intact. An empty
 result still overwrites old rows.
 
-`CREATE` is all-or-nothing. Since reads always serve stored data, an object that exists but was
-never populated would answer queries with zero rows instead of an error — silently wrong. So if the
-initial refresh fails, the table is dropped and the failure is surfaced. If that rollback itself
-fails, the original error is reported with the leaked table named, rather than hidden.
+`CREATE` uses the existing CTAS staging protocol: the table is created as dropped, populated,
+and published by the successful insert pipeline's completion hook. Concurrent readers cannot see
+an uninitialized table. `IF NOT EXISTS` skips initialization when the name already exists, and a
+failed `OR REPLACE` leaves the previous table visible. Failed staged tables remain eligible for
+vacuum; there is no rollback by public table name.
+
+Creation checks access to the defining query before staging; refresh checks the exact source plan
+it executes after acquiring the target lock. Both require source SELECT privileges, in addition to
+the target privileges. Physical compaction and vacuum operate on owned dynamic-table data while
+user DML remains blocked; shared and attached data remain ineligible for maintenance.
 
 ### Known limitation: no snapshot pinning
 
@@ -151,24 +157,15 @@ deliberately reintroduced checkpoint.
 
 ## Verification
 
-`tests/sqllogictests/suites/base/05_ddl/05_0066_ddl_dynamic_table.test` (94 assertions) covers the
-stale-read contract (a source commit does not change what the object returns), refresh publishing
-new rows, idempotent refresh, empty results, aggregates, self-joins, `CREATE` rollback on a failed
-initial refresh, reads surviving a dropped source while refresh fails, a database name containing a
-backtick, every read-only and option-forging guard, rejected policies, `SHOW CREATE` round-trip, and
-object-type reporting.
+- `tests/sqllogictests/suites/base/05_ddl/05_0066_ddl_dynamic_table.test` covers stale
+  reads, full refresh, empty results, joins, aggregates, source identity, read-only guards,
+  no-op creation, failed replacement, cross-database source resolution and compaction.
+- `tests/suites/0_stateless/02_ddl/02_0002_dynamic_table.py` checks source SELECT privileges
+  on creation and refresh, and round-trips SHOW CREATE with target types, comments, options,
+  transient status and quoted identifiers.
+- The Fuse table integration tests check that a staged dynamic table cannot be resolved before
+  its initialization pipeline finishes, and that maintenance permits owned derived tables while
+  rejecting shared and attached tables.
 
-Two assertions were verified non-vacuous by reverting their fix and observing the failure: the
-`CREATE` rollback (leaks the empty table), and the backtick identifier (error 1005 on the
-string-formatted overwrite). The stale-read contract was additionally confirmed against a live
-server with `EXPLAIN`: the plan is a plain `TableScan` of the object itself, unchanged by a source
-commit, and querying the base tables produces a join with no reference to the Dynamic Table.
-
-Regression suites at this commit: `05_ddl` 2273, `20+_others` 685, `01_system` 137, `06_show` 396.
-`01_system` and `06_show` fail when run immediately after the full `05_ddl` directory; this was
-confirmed pre-existing by reproducing it with this branch's test file removed entirely.
-
-Not run locally: the enterprise materialized-view suites under `suites/ee`.
-`CREATE MATERIALIZED VIEW` returns error 1006 (EE-only) in this environment. They exercise shared
-code this branch touches (`is_fuse_backed_engine`, table option key sets, `SHOW CREATE`) and should
-pass in CI before merge.
+Enterprise vacuum and materialized-view suites should also pass in CI: the maintenance guard and
+CTAS insertion path are shared with existing table lifecycle operations.

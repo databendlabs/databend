@@ -194,12 +194,10 @@ CREATE DYNAMIC TABLE from_view_dt AS SELECT order_id FROM orders_view
 statement error 1302
 CREATE DYNAMIC TABLE from_dt_dt AS SELECT order_id FROM order_detail
 
-# SHOW CREATE emits a re-executable CREATE DYNAMIC TABLE, not CREATE TABLE, and must not
-# echo a refresh policy the parser no longer accepts.
-query TT
+# The SHOW CREATE definition is round-tripped with explicit types, options and quoted
+# identifiers in 02_0002_dynamic_table.py.
+statement ok
 SHOW CREATE TABLE empty_dt
-----
-empty_dt CREATE DYNAMIC TABLE `dt_ddl`.`empty_dt` AS SELECT id FROM dt_ddl.empty_src
 
 # Schema-altering DDL must not desynchronize the stored result from its definition.
 statement error 3905
@@ -300,6 +298,119 @@ SELECT count(*) FROM "bt`db".dt
 
 statement ok
 DROP DATABASE "bt`db"
+
+# IF NOT EXISTS must not refresh an existing dynamic table, evaluate a failing
+# replacement definition, or remove the existing table when its source is gone.
+statement ok
+CREATE TABLE no_op_src(id INT NOT NULL)
+
+statement ok
+INSERT INTO no_op_src VALUES (7)
+
+statement ok
+CREATE DYNAMIC TABLE no_op_dt AS SELECT id FROM no_op_src
+
+statement ok
+INSERT INTO no_op_src VALUES (8)
+
+statement ok
+CREATE DYNAMIC TABLE IF NOT EXISTS no_op_dt AS SELECT id / (id-id) AS id FROM no_op_src
+
+query I
+SELECT id FROM no_op_dt
+----
+7
+
+statement ok
+DROP TABLE no_op_src
+
+statement ok
+CREATE DYNAMIC TABLE IF NOT EXISTS no_op_dt AS SELECT order_id FROM orders
+
+query I
+SELECT id FROM no_op_dt
+----
+7
+
+# An existing ordinary table is also untouched.
+statement ok
+CREATE DYNAMIC TABLE IF NOT EXISTS orders AS SELECT customer_id FROM customers
+
+query I
+SELECT count(*) FROM orders
+----
+2
+
+# A failed replacement leaves the old materialization and definition available.
+statement error
+CREATE OR REPLACE DYNAMIC TABLE no_op_dt AS SELECT order_id / (order_id-order_id) AS id FROM orders
+
+query I
+SELECT id FROM no_op_dt
+----
+7
+
+statement ok
+CREATE OR REPLACE DYNAMIC TABLE no_op_dt AS SELECT order_id AS id FROM orders
+
+query I
+SELECT id FROM no_op_dt ORDER BY id
+----
+1
+2
+
+# Qualified targets do not change resolution of unqualified sources.
+statement ok
+CREATE DATABASE dt_destination
+
+statement ok
+CREATE TABLE dt_destination.orders(order_id INT NOT NULL)
+
+statement ok
+INSERT INTO dt_destination.orders VALUES (99)
+
+statement ok
+CREATE DYNAMIC TABLE dt_destination.cross_db AS SELECT order_id FROM orders
+
+query I
+SELECT order_id FROM dt_destination.cross_db ORDER BY order_id
+----
+1
+2
+
+statement ok
+USE dt_destination
+
+statement ok
+REFRESH DYNAMIC TABLE cross_db
+
+query I
+SELECT order_id FROM cross_db ORDER BY order_id
+----
+1
+2
+
+# User-DML restrictions do not prohibit physical maintenance.
+statement ok
+OPTIMIZE TABLE cross_db COMPACT
+
+statement ok
+OPTIMIZE TABLE cross_db COMPACT SEGMENT
+
+query I
+SELECT order_id FROM cross_db ORDER BY order_id
+----
+1
+2
+
+statement error 3905
+INSERT INTO cross_db VALUES (3)
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE dt_destination
 
 statement ok
 DROP DATABASE dt_ddl

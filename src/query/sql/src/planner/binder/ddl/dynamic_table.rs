@@ -35,7 +35,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::is_fuse_engine;
 
-use crate::BindContext;
 use crate::Binder;
 use crate::binder::ddl::table::AnalyzeCreateTableResult;
 use crate::planner::semantic::ViewRewriter;
@@ -137,8 +136,14 @@ impl Binder {
             }
         }
 
-        let mut init_bind_context = BindContext::new();
-        let (_, bind_context) = self.bind_query(&mut init_bind_context, as_query)?;
+        // Resolve unqualified sources in the session database, even when the target is
+        // created in a different database. Bind exactly the definition we persist.
+        let mut canonical_query: Query = as_query.as_ref().clone();
+        canonical_query.walk_mut(&mut ViewRewriter {
+            current_database: self.ctx.get_current_database(),
+        })?;
+        let select_plan = self.as_query_plan(&canonical_query).await?;
+        let bind_context = select_plan.bind_context().unwrap();
         for source_entry in self.metadata.read().tables() {
             let source_table = source_entry.table();
             if source_entry.catalog() != catalog_name
@@ -216,10 +221,6 @@ impl Binder {
             ));
         }
 
-        let mut canonical_query: Query = as_query.as_ref().clone();
-        canonical_query.walk_mut(&mut ViewRewriter {
-            current_database: database.clone(),
-        })?;
         options.insert(OPT_KEY_AS_QUERY.to_owned(), canonical_query.to_string());
         let source_table_ids = self
             .metadata
@@ -240,9 +241,8 @@ impl Binder {
             .join(",");
         options.insert(OPT_KEY_SOURCE_TABLE_IDS.to_owned(), source_table_ids);
 
-        // Dynamic Table initialization is performed by its dedicated interpreter so that the
-        // first successful refresh also publishes the source endpoint checkpoint.
-        let as_select = None;
+        // Use CTAS staging so the name is published only after materialization succeeds.
+        let as_select = Some(Box::new(select_plan));
         let table_plan = crate::plans::CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),

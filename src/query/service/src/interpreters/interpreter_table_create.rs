@@ -299,7 +299,12 @@ impl CreateTableInterpreter {
             },
         };
 
-        let pipeline_result = match InsertInterpreter::try_create(self.ctx.clone(), insert_plan) {
+        let insert_interpreter = if self.plan.engine == Engine::DynamicTable {
+            InsertInterpreter::try_create_refresh(self.ctx.clone(), insert_plan, table_id)
+        } else {
+            InsertInterpreter::try_create(self.ctx.clone(), insert_plan)
+        };
+        let pipeline_result = match insert_interpreter {
             Ok(interpreter) => interpreter.execute2().await,
             Err(e) => Err(e),
         };

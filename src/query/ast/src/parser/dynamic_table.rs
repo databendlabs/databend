@@ -177,6 +177,17 @@ mod tests {
     }
 
     #[test]
+    fn test_dynamic_table_quoted_identifier_round_trip() {
+        let sql = "CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` BIGINT) AS SELECT id FROM src";
+        let statement = parse_create(sql);
+        assert_eq!(statement.database.as_ref().unwrap().name, "db`name");
+        assert_eq!(statement.table.name, "table`name");
+        let formatted = statement.to_string();
+        let reparsed = parse_create(&formatted);
+        assert_eq!(reparsed.to_string(), formatted);
+    }
+
+    #[test]
     fn test_dynamic_table_refresh_syntax() {
         let statement = parse_statement("REFRESH DYNAMIC TABLE db.dt");
         assert_eq!(statement.to_string(), "REFRESH DYNAMIC TABLE db.dt");
