@@ -99,13 +99,13 @@ impl Interpreter for AddTableColumnInterpreter {
             if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
+                    self.plan.database, self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
             let field = self.plan.field.clone();
@@ -133,13 +133,13 @@ impl Interpreter for AddTableColumnInterpreter {
             if self.plan.is_nextval && num_rows > 0 {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Cannot add column '{}' with `nextval` as default value to non-empty table '{}'",
-                    &self.plan.field.name, &self.plan.table
+                    self.plan.field.name, self.plan.table
                 )));
             }
             if self.plan.is_autoincrement && num_rows > 0 {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Cannot add column '{}' with `AUTOINCREMENT` to non-empty table '{}'",
-                    &self.plan.field.name, &self.plan.table
+                    self.plan.field.name, self.plan.table
                 )));
             }
             if field.default_expr().is_some() {

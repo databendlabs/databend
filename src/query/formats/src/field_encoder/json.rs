@@ -70,7 +70,7 @@ impl FieldEncoderJSON {
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
         match &column {
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf)?,
+            Column::Nullable(deref!(c)) => self.write_nullable(c, row_index, out_buf)?,
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
@@ -106,8 +106,8 @@ impl FieldEncoderJSON {
                 out_buf.extend_from_slice(Ewkb(v.0).to_json().unwrap().as_bytes())
             }
 
-            Column::Array(box c) => self.write_array(c, row_index, out_buf)?,
-            Column::Map(box c) => self.write_map(c, row_index, out_buf)?,
+            Column::Array(deref!(c)) => self.write_array(c, row_index, out_buf)?,
+            Column::Map(deref!(c)) => self.write_map(c, row_index, out_buf)?,
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf)?,
             Column::Vector(c) => self.simple.write_vector(c, row_index, out_buf),
 

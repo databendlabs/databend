@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 
 #[cfg(feature = "script-udf")]
 mod script_udf {

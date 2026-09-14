@@ -92,7 +92,7 @@ static PG_STRFTIME_MAPPINGS: LazyLock<Vec<(&'static str, &'static str)>> = LazyL
 
     // Critical: Sort by descending key length to ensure longest possible matches are found first
     // This prevents shorter patterns from incorrectly matching parts of longer patterns
-    mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    mappings.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     mappings
 });
 

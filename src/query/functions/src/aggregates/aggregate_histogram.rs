@@ -330,7 +330,7 @@ fn can_assign_into_buckets<T: Ord>(
     let mut used_buckets = 1;
     let mut current_bucket_size = 0;
 
-    for (_, count) in value_map.iter() {
+    for count in value_map.values() {
         current_bucket_size += count;
 
         // If adding the current value to the current bucket would exceed max_bucket_size,

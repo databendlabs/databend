@@ -1016,7 +1016,7 @@ impl HttpQuery {
             return Err(poem::error::Error::from_string(
                 format!(
                     "Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
-                    &self.client_session_id
+                    self.client_session_id
                 ),
                 StatusCode::UNAUTHORIZED,
             ));

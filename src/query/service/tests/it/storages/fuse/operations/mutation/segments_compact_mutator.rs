@@ -785,10 +785,8 @@ impl CompactSegmentTestFixture {
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
         let mut tasks = vec![];
-        for (num_blocks, rows_per_block) in block_num_of_segments
-            .into_iter()
-            .zip(rows_per_blocks.into_iter())
-            .rev()
+        for (num_blocks, rows_per_block) in
+            block_num_of_segments.into_iter().zip(rows_per_blocks).rev()
         {
             let location_gen = location_gen.clone();
             let data_accessor = data_accessor.clone();

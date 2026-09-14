@@ -798,11 +798,7 @@ impl GrantObjectVisibilityChecker {
         }
 
         let table: Arc<str> = Arc::from(table);
-        if self.granted_tables.contains(&(catalog, database, table)) {
-            return true;
-        }
-
-        false
+        self.granted_tables.contains(&(catalog, database, table))
     }
 
     #[inline]

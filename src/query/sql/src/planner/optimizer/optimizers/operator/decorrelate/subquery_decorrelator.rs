@@ -460,7 +460,7 @@ impl SubqueryDecorrelatorOptimizer {
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
                     Box::new(subquery.data_type.wrap_nullable())
-                } else if matches! {result, UnnestResult::MarkJoin {..}} {
+                } else if matches!(result, UnnestResult::MarkJoin { .. }) {
                     Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
                     subquery.data_type.clone()

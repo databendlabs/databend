@@ -1057,7 +1057,7 @@ pub fn generate_stored_computed_list(
             // If related column has updated, the stored computed column need to regenerate.
             let mut need_update = false;
             let field_indices = expr.column_refs();
-            for (field_index, _) in field_indices.iter() {
+            for field_index in field_indices.keys() {
                 if update_list.contains_key(field_index) {
                     need_update = true;
                     break;

@@ -72,7 +72,7 @@ impl AggregateIfCombinator {
         } else if !matches!(&arguments[argument_len - 1], DataType::Boolean) {
             return Err(ErrorCode::BadArguments(format!(
                 "The type of the last argument for {name} must be boolean type, but got {:?}",
-                &arguments[argument_len - 1]
+                arguments[argument_len - 1]
             )));
         }
 

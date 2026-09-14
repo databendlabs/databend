@@ -605,7 +605,7 @@ impl EagerCandidates {
             };
             match &*column.column.data_type {
                 DataType::Number(_) | DataType::Decimal(_) => (),
-                DataType::Nullable(box DataType::Number(_) | box DataType::Decimal(_)) => {}
+                DataType::Nullable(deref!(DataType::Number(_)) | deref!(DataType::Decimal(_))) => {}
                 _ => continue,
             }
 

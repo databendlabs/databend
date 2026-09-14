@@ -378,7 +378,7 @@ mod tests {
         let mut offsets = Vec::with_capacity(rows.len() + 1);
         offsets.push(0_u64);
         for row in rows {
-            values.extend(row.into_iter());
+            values.extend(row);
             offsets.push(values.len() as u64);
         }
         let col = ArrayColumn::<Int64Type>::new(Buffer::from(values), Buffer::from(offsets));

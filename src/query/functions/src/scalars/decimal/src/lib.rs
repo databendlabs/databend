@@ -17,10 +17,8 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::collapsible_if)]
-#![feature(box_patterns)]
-#![feature(type_ascription)]
+#![feature(deref_patterns)]
 #![feature(try_blocks)]
-#![feature(downcast_unchecked)]
 #![feature(likely_unlikely)]
 
 mod arithmetic;

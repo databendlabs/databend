@@ -31,7 +31,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::let_unit_value)]
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 
 mod auth;
 pub use auth::RefreshableToken;

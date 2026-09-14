@@ -337,7 +337,7 @@ async fn read_multi_part(
                     ));
                 }
                 let filename = require_upload_filename(name, field.file_name())?;
-                debug!("Started reading file: {}", &filename);
+                debug!("Started reading file: {}", filename);
                 let mut reader = field.into_async_read();
                 match file_format {
                     FileFormatParams::Parquet(_)
@@ -398,7 +398,7 @@ async fn read_multi_part(
                             if n == 0 {
                                 debug!(
                                     "Finished reading file: {}, total size: {} bytes",
-                                    &filename, offset
+                                    filename, offset
                                 );
                                 break;
                             }

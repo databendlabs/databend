@@ -127,7 +127,7 @@ impl SequenceCounter {
         #[cfg(test)]
         if self
             .fail_next_reserve
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
                 if v > 0 { Some(v - 1) } else { None }
             })
             .is_ok()
@@ -358,7 +358,7 @@ impl ReadFileContext {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &ctx.get_current_user()?.identity().display(),
+                    ctx.get_current_user()?.identity().display(),
                 )));
             }
         }

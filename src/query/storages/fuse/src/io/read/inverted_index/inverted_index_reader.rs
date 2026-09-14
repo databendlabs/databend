@@ -319,7 +319,7 @@ impl InvertedIndexReader {
                 let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
                 let term_info_store = TermInfoStore::open(term_dict_file)?;
 
-                for (_, (term_field_id, term_id)) in matched_terms.iter() {
+                for (term_field_id, term_id) in matched_terms.values() {
                     if field_id == term_field_id {
                         let term_info = term_info_store.get(*term_id);
                         term_infos.insert(*term_id, term_info);
@@ -487,10 +487,10 @@ impl InvertedIndexReader {
                         collector.calculate_scores(query.box_clone(), &matched_doc_ids, None)?;
                     let mut rows_scores = matched_doc_ids
                         .into_iter()
-                        .zip(scores.into_iter())
+                        .zip(scores)
                         .map(|(doc_id, score)| (doc_id as usize, score))
                         .collect::<Vec<_>>();
-                    rows_scores.sort_by(|a, b| b.1.cmp(&a.1));
+                    rows_scores.sort_by_key(|a| std::cmp::Reverse(a.1));
                     let (matched_rows, matched_scores) = rows_scores.into_iter().unzip();
                     (matched_rows, Some(matched_scores))
                 } else {

@@ -79,19 +79,19 @@ impl Interpreter for ModifyTableConnectionInterpreter {
             if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
+                    self.plan.database, self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
             let Some(old_sp) = table_info.meta.storage_params.clone() else {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is not an external table, cannot alter connection",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             };
 

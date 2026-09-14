@@ -216,7 +216,7 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
     unsafe {
         match scalar {
             Scalar::Null => {
-                if let Some(box data_type) = data_type.as_nullable() {
+                if let Some(deref!(data_type)) = data_type.as_nullable() {
                     serialize_const_column_to_rowformat(
                         arena,
                         &Scalar::default_value(data_type),

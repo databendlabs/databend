@@ -190,11 +190,11 @@ impl StreamHandler for RealStreamHandler {
             if engine != STREAM_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is not STREAM, please use `DROP {} {}.{}`",
-                    &plan.database,
-                    &plan.stream_name,
+                    plan.database,
+                    plan.stream_name,
                     if engine == "VIEW" { "VIEW" } else { "TABLE" },
-                    &plan.database,
-                    &plan.stream_name
+                    plan.database,
+                    plan.stream_name
                 )));
             }
 
@@ -217,7 +217,7 @@ impl StreamHandler for RealStreamHandler {
         } else {
             Err(ErrorCode::UnknownStream(format!(
                 "unknown stream `{}`.`{}` in catalog '{}'",
-                db_name, stream_name, &catalog_name
+                db_name, stream_name, catalog_name
             )))
         }
     }

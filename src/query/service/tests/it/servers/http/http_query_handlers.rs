@@ -300,7 +300,7 @@ impl TestHttpQueryRequest {
             .header(header::CONTENT_TYPE, content_type)
             .header(header::AUTHORIZATION, self.auth_header.clone())
             .body(body);
-        req.headers_mut().extend(self.headers.clone().into_iter());
+        req.headers_mut().extend(self.headers.clone());
 
         let resp = self
             .ep
@@ -1073,7 +1073,7 @@ async fn check_response(response: Response) -> Result<(StatusCode, TestQueryResp
     assert!(
         result.is_ok(),
         "body ='{}', result='{:?}'",
-        &body,
+        body,
         result.err()
     );
     Ok((status, result?))
@@ -1099,7 +1099,7 @@ async fn get_uri_with_headers(ep: &EndpointType, uri: &str, headers: HeaderMap) 
         .method(Method::GET)
         .typed_header(basic)
         .finish();
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     ep.call(req).await.unwrap_or_else(|err| err.into_response())
 }
@@ -1115,7 +1115,7 @@ async fn get_arrow_uri(
         .method(Method::GET)
         .typed_header(basic)
         .finish();
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     let response = ep.call(req).await?;
     assert_eq!(
@@ -1144,7 +1144,7 @@ async fn post_uri(
         .header(header::CONTENT_TYPE, content_type)
         .typed_header(basic)
         .body(body);
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     let response = ep
         .call(req)

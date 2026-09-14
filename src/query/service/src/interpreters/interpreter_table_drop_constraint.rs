@@ -64,13 +64,13 @@ impl Interpreter for DropTableConstraintInterpreter {
             let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
                 ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
+                    self.plan.database, self.plan.table, engine
                 ))
             })?;
             if table_info.db_type != DatabaseType::NormalDB {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
 

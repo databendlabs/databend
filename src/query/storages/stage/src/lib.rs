@@ -14,8 +14,7 @@
 
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 #![feature(iter_intersperse)]
 #![allow(
     clippy::collapsible_if,

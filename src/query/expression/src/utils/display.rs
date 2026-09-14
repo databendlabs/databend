@@ -497,14 +497,14 @@ impl Debug for NumberColumn {
                 .debug_tuple("Float32")
                 .field(&format_args!(
                     "[{}]",
-                    &val.iter().map(|x| display_f32(x.0)).join(", ")
+                    val.iter().map(|x| display_f32(x.0)).join(", ")
                 ))
                 .finish(),
             NumberColumn::Float64(val) => f
                 .debug_tuple("Float64")
                 .field(&format_args!(
                     "[{}]",
-                    &val.iter().map(|x| display_f64(x.0)).join(", ")
+                    val.iter().map(|x| display_f64(x.0)).join(", ")
                 ))
                 .finish(),
         }
@@ -1255,9 +1255,9 @@ impl Display for BooleanDomain {
 impl Display for StringDomain {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if let Some(max) = &self.max {
-            write!(f, "{{{:?}..={:?}}}", &self.min, max)
+            write!(f, "{{{:?}..={:?}}}", self.min, max)
         } else {
-            write!(f, "{{{:?}..}}", &self.min)
+            write!(f, "{{{:?}..}}", self.min)
         }
     }
 }

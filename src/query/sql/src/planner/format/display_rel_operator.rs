@@ -86,7 +86,7 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
         ScalarExpr::AggregateFunction(agg) => {
             format!(
                 "{}{}({})",
-                &agg.func_name,
+                agg.func_name,
                 if agg.params.is_empty() {
                     String::new()
                 } else {
@@ -113,10 +113,7 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
                 .map(|arg| format_scalar(id_humanizer, arg))
                 .collect::<Vec<String>>()
                 .join(", ");
-            format!(
-                "{}({}, {})",
-                &lambda.func_name, args, &lambda.lambda_display,
-            )
+            format!("{}({}, {})", lambda.func_name, args, lambda.lambda_display,)
         }
         ScalarExpr::FunctionCall(func) => {
             let params = func.params.iter().map(|param| param.to_string()).join(", ");
@@ -126,9 +123,9 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
                 .map(|arg| format_scalar(id_humanizer, arg))
                 .join(", ");
             if params.is_empty() {
-                format!("{}({})", &func.func_name, arguments)
+                format!("{}({})", func.func_name, arguments)
             } else {
-                format!("{}({})({})", &func.func_name, params, arguments)
+                format!("{}({})({})", func.func_name, params, arguments)
             }
         }
         ScalarExpr::CastExpr(cast) => {
@@ -144,7 +141,7 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
         ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
-                &udf.handler,
+                udf.handler,
                 udf.arguments
                     .iter()
                     .map(|arg| format_scalar(id_humanizer, arg))
@@ -155,7 +152,7 @@ fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> Strin
         ScalarExpr::UDFLambdaCall(udf) => {
             format!(
                 "{}({})",
-                &udf.func_name,
+                udf.func_name,
                 format_scalar(id_humanizer, &udf.scalar)
             )
         }

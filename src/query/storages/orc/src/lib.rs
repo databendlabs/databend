@@ -17,11 +17,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]
-#![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(core_intrinsics)]
-#![feature(int_roundings)]
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 
 mod chunk_reader_impl;
 mod copy_into_table;

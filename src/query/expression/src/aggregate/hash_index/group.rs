@@ -30,7 +30,7 @@ impl Group {
     #[inline]
     pub fn match_tag(self, tag: Tag) -> BitMask {
         let cmp = self.0.simd_eq(u8x8::splat(tag.0));
-        let vec_mask = cmp.to_int().cast::<u8>();
+        let vec_mask = cmp.to_simd().cast::<u8>();
 
         BitMask(u64::from_ne_bytes(vec_mask.to_array()))
     }
@@ -38,7 +38,7 @@ impl Group {
     #[inline]
     pub fn match_empty(self) -> BitMask {
         let mask = self.0.cast::<i8>().is_negative();
-        let vec_mask = mask.to_int().cast::<u8>();
+        let vec_mask = mask.to_simd().cast::<u8>();
 
         BitMask(u64::from_ne_bytes(vec_mask.to_array()))
     }

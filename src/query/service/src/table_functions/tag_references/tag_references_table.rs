@@ -604,7 +604,7 @@ async fn collect_tag_references(
     let obj_names: Vec<String> = vec![obj_name; len];
     let domains: Vec<String> = vec![domain_upper; len];
 
-    for (tag, name_opt) in tags.iter().zip(tag_names_result.into_iter()) {
+    for (tag, name_opt) in tags.iter().zip(tag_names_result) {
         let name = name_opt
             .ok_or_else(|| ErrorCode::UnknownTag(format!("Unknown tag_id: {}", tag.tag_id)))?
             .data

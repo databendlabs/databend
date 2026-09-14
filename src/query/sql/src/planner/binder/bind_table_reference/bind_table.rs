@@ -166,7 +166,7 @@ impl Binder {
             table.clone()
         } else {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
-                format!("{}${}", &table_name, cte_suffix_name)
+                format!("{}${}", table_name, cte_suffix_name)
             } else {
                 table_name.clone()
             };

@@ -298,11 +298,8 @@ impl OptimizerTraceCollector {
                 .unwrap();
 
                 if total_rules > 0 {
-                    let applied_percentage = if total_rules > 0 {
-                        (applied_rules * 100) / total_rules
-                    } else {
-                        0
-                    };
+                    let applied_percentage =
+                        (applied_rules * 100).checked_div(total_rules).unwrap_or(0);
 
                     writeln!(
                         summary,
@@ -417,11 +414,7 @@ impl OptimizerTraceCollector {
         let total_rules = optimizer_rules.len();
         let applied_rules = optimizer_rules.values().filter(|r| r.had_effect).count();
 
-        let applied_percentage = if total_rules > 0 {
-            (applied_rules * 100) / total_rules
-        } else {
-            0
-        };
+        let applied_percentage = (applied_rules * 100).checked_div(total_rules).unwrap_or(0);
 
         let non_applied_percentage = if total_rules > 0 {
             100 - applied_percentage

@@ -74,7 +74,7 @@ pub trait HashFunctionWithSeed: Hasher + 'static {
 fn decimal_hash_factory_1_arg<H: HashFunction>(args_type: &[DataType]) -> Option<Arc<Function>> {
     let (nullable, size) = match args_type {
         [DataType::Null] => (true, DecimalSize::default_128()),
-        [DataType::Nullable(box DataType::Decimal(size))] => (true, *size),
+        [DataType::Nullable(deref!(DataType::Decimal(size)))] => (true, *size),
         [DataType::Decimal(size)] => (false, *size),
         _ => return None,
     };
@@ -105,21 +105,21 @@ fn decimal_hash_factory_2_arg<H: HashFunctionWithSeed>(
     let (nullable, size, seed_type) = match args_type {
         [DataType::Null, DataType::Number(number)] => (true, DecimalSize::default_128(), *number),
         [
-            DataType::Nullable(box DataType::Decimal(size)),
+            DataType::Nullable(deref!(DataType::Decimal(size))),
             DataType::Number(number),
         ] => (true, *size, *number),
         [DataType::Decimal(size), DataType::Number(number)] => (false, *size, *number),
         [
             DataType::Null,
-            DataType::Nullable(box DataType::Number(number)),
+            DataType::Nullable(deref!(DataType::Number(number))),
         ] => (true, DecimalSize::default_128(), *number),
         [
-            DataType::Nullable(box DataType::Decimal(size)),
-            DataType::Nullable(box DataType::Number(number)),
+            DataType::Nullable(deref!(DataType::Decimal(size))),
+            DataType::Nullable(deref!(DataType::Number(number))),
         ] => (true, *size, *number),
         [
             DataType::Decimal(size),
-            DataType::Nullable(box DataType::Number(number)),
+            DataType::Nullable(deref!(DataType::Number(number))),
         ] => (true, *size, *number),
         _ => return None,
     };

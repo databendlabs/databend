@@ -87,7 +87,7 @@ impl Interpreter for CreateViewInterpreter {
                                     "VIEW QUERY: table `{}`.`{}` not exists in catalog '{}'",
                                     database_name,
                                     table_name,
-                                    &catalog.name()
+                                    catalog.name()
                                 ),
                             ));
                         }

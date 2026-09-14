@@ -208,7 +208,7 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
                     }
                 };
 
-                return self.metadata.multiplier * score as f32 + query.offset + vector_offset;
+                return self.metadata.multiplier * score + query.offset + vector_offset;
             }
         }
 

@@ -48,7 +48,7 @@ pub fn check_referenced_computed_columns(
                     return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
                         "column `{}` is referenced by computed column `{}`",
                         column,
-                        &f.name()
+                        f.name()
                     )));
                 }
             }

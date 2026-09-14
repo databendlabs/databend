@@ -714,7 +714,7 @@ impl PhysicalPlanBuilder {
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(
                             "Cannot find common type for {:?} and {:?}",
-                            &common_ty, &ty
+                            common_ty, ty
                         ))
                     })?;
                 }
@@ -846,7 +846,7 @@ impl PhysicalPlanBuilder {
                 let new_default = match &lag_lead.default {
                     None => LagLeadDefault::Null,
                     Some(d) => match d {
-                        box ScalarExpr::BoundColumnRef(col) => {
+                        deref!(ScalarExpr::BoundColumnRef(col)) => {
                             LagLeadDefault::Index(col.column.index)
                         }
                         _ => unreachable!(),

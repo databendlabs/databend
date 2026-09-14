@@ -39,7 +39,7 @@ impl TableMetaLocationGenerator {
         let part_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
         let location_path = format!(
             "{}/{}/{}{}_v{}.parquet",
-            &self.prefix,
+            self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
             VACUUM2_OBJECT_KEY_PREFIX,
             part_uuid.as_simple(),
@@ -53,7 +53,7 @@ impl TableMetaLocationGenerator {
         let segment_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
         format!(
             "{}/{}/{}{}_v{}.mpk",
-            &self.prefix,
+            self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
             VACUUM2_OBJECT_KEY_PREFIX,
             segment_uuid.as_simple(),

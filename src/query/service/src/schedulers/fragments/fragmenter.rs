@@ -179,7 +179,7 @@ impl Fragmenter {
             let mut visitor = EdgeVisitor::create(fragment.fragment_id);
             fragment.plan.visit(&mut visitor).unwrap();
             if let Some(v) = visitor.as_any().downcast_mut::<EdgeVisitor>() {
-                edges.extend(v.take().into_iter())
+                edges.extend(v.take())
             }
         }
 

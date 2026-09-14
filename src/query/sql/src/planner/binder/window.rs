@@ -212,7 +212,7 @@ pub struct WindowInfo {
 impl WindowInfo {
     pub fn reorder(&mut self) {
         self.window_functions
-            .sort_by(|a, b| b.order_by_items.len().cmp(&a.order_by_items.len()));
+            .sort_by_key(|a| std::cmp::Reverse(a.order_by_items.len()));
 
         self.window_functions_map.clear();
         for (i, window) in self.window_functions.iter().enumerate() {

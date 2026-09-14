@@ -275,7 +275,7 @@ pub fn init_logging(
             .chain([(Cow::from("category"), Cow::from("system"))]);
         let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
             log_name,
-            format!("{}/v1/logs", &cfg.otlp.endpoint.endpoint),
+            format!("{}/v1/logs", cfg.otlp.endpoint.endpoint),
         )
         .protocol(cfg.otlp.endpoint.protocol.into());
         for (k, v) in labels {
@@ -331,7 +331,7 @@ pub fn init_logging(
                 .chain([(Cow::from("category"), Cow::from("query"))]);
             let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
-                format!("{}/v1/logs", &endpoint.endpoint),
+                format!("{}/v1/logs", endpoint.endpoint),
             )
             .protocol(endpoint.protocol.into());
             for (k, v) in labels {
@@ -381,7 +381,7 @@ pub fn init_logging(
                 .chain([(Cow::from("category"), Cow::from("profile"))]);
             let otel = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
-                format!("{}/v1/logs", &endpoint.endpoint),
+                format!("{}/v1/logs", endpoint.endpoint),
             )
             .protocol(endpoint.protocol.into())
             .labels(labels)

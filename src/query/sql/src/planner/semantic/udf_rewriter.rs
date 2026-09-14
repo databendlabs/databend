@@ -109,7 +109,7 @@ impl UdfRewriter {
                         self.visit(condition)?;
                     }
                     if let Some(update) = matched_evaluator.update.as_mut() {
-                        for (_, scalar) in update.iter_mut() {
+                        for scalar in update.values_mut() {
                             self.visit(scalar)?;
                         }
                     }
@@ -188,7 +188,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
             let new_column_ref = if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
                 column_ref.clone()
             } else {
-                let name = format!("{}_arg_{}", &udf.display_name, i);
+                let name = format!("{}_arg_{}", udf.display_name, i);
                 let data_type = arg.data_type().into_owned();
                 let index = self
                     .metadata

@@ -539,16 +539,16 @@ impl<'a> Evaluator<'a> {
                 _ => unreachable!(),
             },
             (
-                DataType::Nullable(box DataType::Variant) | DataType::Variant,
-                DataType::Nullable(box DataType::Boolean)
-                | DataType::Nullable(box DataType::Number(_))
-                | DataType::Nullable(box DataType::Decimal(_))
-                | DataType::Nullable(box DataType::String)
-                | DataType::Nullable(box DataType::Binary)
-                | DataType::Nullable(box DataType::Date)
-                | DataType::Nullable(box DataType::Timestamp)
-                | DataType::Nullable(box DataType::TimestampTz)
-                | DataType::Nullable(box DataType::Interval),
+                DataType::Nullable(deref!(DataType::Variant)) | DataType::Variant,
+                DataType::Nullable(deref!(DataType::Boolean))
+                | DataType::Nullable(deref!(DataType::Number(_)))
+                | DataType::Nullable(deref!(DataType::Decimal(_)))
+                | DataType::Nullable(deref!(DataType::String))
+                | DataType::Nullable(deref!(DataType::Binary))
+                | DataType::Nullable(deref!(DataType::Date))
+                | DataType::Nullable(deref!(DataType::Timestamp))
+                | DataType::Nullable(deref!(DataType::TimestampTz))
+                | DataType::Nullable(deref!(DataType::Interval)),
             ) => {
                 // allow cast variant to nullable types.
                 let inner_dest_ty = dest_type.remove_nullable();
@@ -576,7 +576,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
             (
-                DataType::Nullable(box DataType::Variant) | DataType::Variant,
+                DataType::Nullable(deref!(DataType::Variant)) | DataType::Variant,
                 DataType::Boolean
                 | DataType::Number(_)
                 | DataType::Decimal(_)
@@ -880,7 +880,7 @@ impl<'a> Evaluator<'a> {
                     other => unreachable!("source: {}", other),
                 }
             }
-            (DataType::Variant, DataType::Map(box DataType::Tuple(fields_dest_ty)))
+            (DataType::Variant, DataType::Map(deref!(DataType::Tuple(fields_dest_ty))))
                 if fields_dest_ty.len() == 2 && fields_dest_ty[0] == DataType::String =>
             {
                 let empty_obj = BTreeMap::new();
@@ -2080,23 +2080,24 @@ impl<'a> Evaluator<'a> {
         if args.len() == 1 && matches!(args[0], Value::Column(_)) {
             let keep_outer_validity = data_types[0].is_nullable_or_null();
             let (inner_col, offsets, validity) = match &args[0] {
-                Value::Column(Column::Array(box array_col)) => (
+                Value::Column(Column::Array(deref!(array_col))) => (
                     array_col.underlying_column(),
                     array_col.underlying_offsets(),
                     None,
                 ),
-                Value::Column(Column::Map(box map_col)) => (
+                Value::Column(Column::Map(deref!(map_col))) => (
                     map_col.underlying_column(),
                     map_col.underlying_offsets(),
                     None,
                 ),
-                Value::Column(Column::Nullable(box nullable_col)) => match &nullable_col.column {
-                    Column::Array(box array_col) => (
+                Value::Column(Column::Nullable(deref!(nullable_col))) => match &nullable_col.column
+                {
+                    Column::Array(deref!(array_col)) => (
                         array_col.underlying_column(),
                         array_col.underlying_offsets(),
                         keep_outer_validity.then(|| nullable_col.validity.clone()),
                     ),
-                    Column::Map(box map_col) => (
+                    Column::Map(deref!(map_col)) => (
                         map_col.underlying_column(),
                         map_col.underlying_offsets(),
                         keep_outer_validity.then(|| nullable_col.validity.clone()),
@@ -2503,7 +2504,7 @@ impl<'a> Evaluator<'a> {
     ) -> DataType {
         match data_type {
             DataType::Generic(index) => generics[*index].clone(),
-            DataType::Nullable(box DataType::Generic(index)) => {
+            DataType::Nullable(deref!(DataType::Generic(index))) => {
                 DataType::Nullable(Box::new(generics[*index].clone()))
             }
             _ => data_type.clone(),

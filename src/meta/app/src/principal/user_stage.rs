@@ -391,7 +391,7 @@ impl Display for FileFormatOptions {
                 )?;
                 write!(f, " QUOTE = '{}'", escape_string(&self.quote))?;
                 write!(f, " ESCAPE = '{}'", escape_string(&self.escape))?;
-                write!(f, " SKIP_HEADER = {}", &self.skip_header)?;
+                write!(f, " SKIP_HEADER = {}", self.skip_header)?;
                 write!(f, " NAN_DISPLAY = '{}'", escape_string(&self.nan_display))?;
             }
             StageFileFormatType::Text => {

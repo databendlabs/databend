@@ -434,17 +434,17 @@ impl FromToProto for mt::principal::UserInfo {
             auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
                 Incompatible::new(format!(
                     "USER {}: UserInfo.auth_info cannot be None",
-                    &p.name
+                    p.name
                 ))
             })?)?,
             grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
-                Incompatible::new(format!("user {}: UserInfo.grants cannot be None", &p.name))
+                Incompatible::new(format!("user {}: UserInfo.grants cannot be None", p.name))
             })?)?,
             quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| {
-                Incompatible::new(format!("user {}: UserInfo.quota cannot be None", &p.name))
+                Incompatible::new(format!("user {}: UserInfo.quota cannot be None", p.name))
             })?)?,
             option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| {
-                Incompatible::new(format!("user {}: UserInfo.option cannot be None", &p.name))
+                Incompatible::new(format!("user {}: UserInfo.option cannot be None", p.name))
             })?)?,
             history_auth_infos: p
                 .history_auth_infos

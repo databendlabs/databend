@@ -684,10 +684,12 @@ impl QueryEntry {
             Plan::DropTable(v) if v.all => {
                 return true;
             }
-            Plan::ModifyTableColumn(box ModifyTableColumnPlan {
-                action: ModifyColumnAction::SetDataType(_),
-                ..
-            }) => {
+            Plan::ModifyTableColumn(
+                deref!(ModifyTableColumnPlan {
+                    action: ModifyColumnAction::SetDataType(_),
+                    ..
+                }),
+            ) => {
                 return true;
             }
 

@@ -19,8 +19,7 @@
     clippy::needless_range_loop,
     clippy::uninlined_format_args
 )]
-#![feature(box_patterns)]
-#![feature(never_type)]
+#![feature(deref_patterns)]
 
 mod bloom_index;
 mod eliminate_cast;

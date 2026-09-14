@@ -1,0 +1,49 @@
+# Exercise nested nullable/array/map patterns through binding, storage, filtering,
+# UPDATE and aggregation after the Rust box-pattern migration.
+statement ok
+CREATE OR REPLACE TABLE nested_type_patterns (
+    id INT,
+    a ARRAY(NULLABLE(INT)),
+    m MAP(STRING, NULLABLE(INT))
+)
+
+statement ok
+INSERT INTO nested_type_patterns VALUES
+    (1, [10, NULL], {'k': 2}),
+    (2, [20, 30], {'k': NULL}),
+    (3, [], {'k': 4})
+
+query III
+SELECT id, a[1], m['k'] FROM nested_type_patterns ORDER BY id
+----
+1 10 2
+2 20 NULL
+3 NULL 4
+
+statement ok
+UPDATE nested_type_patterns
+SET a = [a[1] + 1, NULL]
+WHERE id IN (SELECT number FROM numbers(3) WHERE number > 0)
+
+query III
+SELECT id, a[1], a[2] FROM nested_type_patterns ORDER BY id
+----
+1 11 NULL
+2 21 NULL
+3 NULL NULL
+
+query III
+SELECT count(), sum(a[1]), count(m['k'])
+FROM nested_type_patterns
+WHERE a[1] IS NOT NULL OR m['k'] = 4
+----
+3 32 2
+
+query II
+SELECT tuple(a[1], m['k']).1, tuple(a[1], m['k']).2
+FROM nested_type_patterns WHERE id = 1
+----
+11 2
+
+statement ok
+DROP TABLE nested_type_patterns ALL

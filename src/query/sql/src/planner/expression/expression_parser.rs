@@ -578,7 +578,7 @@ pub fn analyze_cluster_keys(
 
         let mut cluster_by = ast.clone();
         cluster_by.drive_mut(&mut normalizer);
-        cluster_keys.push(format!("{:#}", &cluster_by));
+        cluster_keys.push(format!("{:#}", cluster_by));
     }
 
     let cluster_by_str = format!("({})", cluster_keys.join(", "));

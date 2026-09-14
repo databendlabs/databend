@@ -244,7 +244,8 @@ where A: TypeCheckAdapter
         };
 
         // Get attr_name, attr_type and return_type.
-        let box (field_scalar, _field_data_type) = self.resolve_core(arena, function.field.expr)?;
+        let deref!((field_scalar, _field_data_type)) =
+            self.resolve_core(arena, function.field.expr)?;
         let Ok(field_expr) = ConstantExpr::try_from(field_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
@@ -264,7 +265,7 @@ where A: TypeCheckAdapter
                 .resolve_dictionary(db_name.as_deref(), &dict_name, attr_name)?;
 
         let mut args = Vec::with_capacity(1);
-        let box (key_scalar, key_type) = self.resolve_core(arena, function.key.expr)?;
+        let deref!((key_scalar, key_type)) = self.resolve_core(arena, function.key.expr)?;
 
         if dictionary.primary_type != key_type.remove_nullable() {
             args.push(wrap_cast(&key_scalar, &dictionary.primary_type));
@@ -299,7 +300,7 @@ where A: TypeCheckAdapter
         let mut has_nullable_arg = false;
 
         if let Some(stage) = function.stage.as_ref() {
-            let box (stage_scalar, stage_type) = self.resolve_core(arena, stage.expr)?;
+            let deref!((stage_scalar, stage_type)) = self.resolve_core(arena, stage.expr)?;
             has_nullable_arg |= stage_type.is_nullable_or_null();
             let stage_scalar = if stage_type.remove_nullable() != DataType::String {
                 wrap_cast(&stage_scalar, &DataType::String)
@@ -309,7 +310,7 @@ where A: TypeCheckAdapter
             resolved_args.push(stage_scalar);
         }
 
-        let box (location_scalar, location_type) =
+        let deref!((location_scalar, location_type)) =
             self.resolve_core(arena, function.location.expr)?;
         has_nullable_arg |= location_type.is_nullable_or_null();
         let location_scalar = if location_type.remove_nullable() != DataType::String {

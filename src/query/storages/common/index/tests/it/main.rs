@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 #![allow(clippy::uninlined_format_args)]
 
 mod bloom_pruner;

@@ -411,7 +411,7 @@ impl Value<AnyType> {
     pub fn remove_nullable(self) -> (Self, bool) {
         match self {
             Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
-            Value::Column(Column::Nullable(box nullable_column)) => (
+            Value::Column(Column::Nullable(deref!(nullable_column))) => (
                 Value::Column(nullable_column.column),
                 nullable_column.validity.null_count() > 0,
             ),
@@ -2009,14 +2009,14 @@ impl ColumnBuilder {
             Column::TimestampTz(col) => ColumnBuilder::TimestampTz(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Interval(col) => ColumnBuilder::Interval(buffer_into_mut(col)),
-            Column::Array(box col) => {
+            Column::Array(deref!(col)) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Map(box col) => {
+            Column::Map(deref!(col)) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
             Column::Bitmap(col) => ColumnBuilder::Bitmap(BinaryColumnBuilder::from_column(col)),
-            Column::Nullable(box col) => {
+            Column::Nullable(deref!(col)) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
             Column::Tuple(fields) => ColumnBuilder::Tuple(
@@ -2447,7 +2447,7 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
-                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                for (field, scalar) in fields.iter_mut().zip(value) {
                     field.push(scalar);
                 }
             }

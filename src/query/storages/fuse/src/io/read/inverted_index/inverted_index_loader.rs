@@ -180,7 +180,7 @@ pub(crate) async fn load_inverted_index_files<'a>(
     let start = Instant::now();
 
     let mut inverted_index_fields = Vec::with_capacity(inverted_index_meta_map.len());
-    for (name, _) in inverted_index_meta_map.iter() {
+    for name in inverted_index_meta_map.keys() {
         let field = Field::new(name, arrow::datatypes::DataType::Binary, false);
         inverted_index_fields.push(field);
     }

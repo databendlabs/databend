@@ -71,6 +71,10 @@ pub struct SubQueue {
 }
 
 impl SubQueue {
+    #[allow(
+        clippy::result_unit_err,
+        reason = "Callers only need a disconnect signal"
+    )]
     pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
         let size = flight_data_size(&data);
         let size = std::cmp::min(size, self.max_bytes_per_connection);

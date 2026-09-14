@@ -311,7 +311,7 @@ pub fn append_output_rows_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
+        for desc in get_statistics_desc().values() {
             if desc.display_name != "output rows" {
                 continue;
             }

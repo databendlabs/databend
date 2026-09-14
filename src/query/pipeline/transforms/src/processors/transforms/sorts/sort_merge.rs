@@ -149,7 +149,7 @@ impl<R: Rows> TransformSortMerge<R> {
         batch_size: usize,
         size_hint: usize,
     ) -> Result<Vec<DataBlock>> {
-        let streams = self.buffer.drain(..).collect::<Vec<BlockStream>>();
+        let streams = std::mem::take(&mut self.buffer);
         let mut result = Vec::with_capacity(size_hint);
 
         let mut merger = Merger::<A, _>::new(streams, batch_size, self.limit);

@@ -21,12 +21,7 @@
     clippy::uninlined_format_args
 )]
 #![allow(clippy::useless_asref)]
-#![feature(type_alias_impl_trait)]
-#![feature(iter_order_by)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(int_roundings)]
-#![feature(iterator_try_reduce)]
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 #![feature(try_blocks)]

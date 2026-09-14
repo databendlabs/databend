@@ -98,7 +98,7 @@ impl HeartbeatTask {
             return Ok(None);
         }
 
-        debug!("Heartbeat key created: {}", &heartbeat_key);
+        debug!("Heartbeat key created: {}", heartbeat_key);
 
         let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
         let loop_fut = HeartbeatTask::heartbeat_loop(
@@ -191,7 +191,7 @@ impl HeartbeatTask {
                         .await
                         .map_err(meta_service_error)?;
 
-                    debug!("Heartbeat key delete: {}", &heartbeat_key);
+                    debug!("Heartbeat key delete: {}", heartbeat_key);
 
                     return Ok(())
                 }

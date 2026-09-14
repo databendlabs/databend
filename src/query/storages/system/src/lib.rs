@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// System tables can invoke deeply nested async query planning futures.
+#![recursion_limit = "256"]
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 #![allow(clippy::useless_asref)]
-#![feature(type_alias_impl_trait)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(variant_count)]
 
 extern crate core;
 
