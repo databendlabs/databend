@@ -29,6 +29,7 @@ use super::IfCombinator;
 use super::LegacySignatureResolver;
 use super::MultiArgBuildContext;
 use super::MultiArgBuildFn;
+use super::MultiArgDistinctCombinator;
 use super::NullInput;
 use super::PlainCombinator;
 use super::RawAggregateCall;
@@ -694,19 +695,32 @@ impl RouteNode for DistinctAliasRoute {
 }
 
 pub(crate) struct DistinctRoute<const SKIP_NULLS: bool> {
-    build: RouteBuild<UnaryDistinctCombinator<SKIP_NULLS>>,
+    build: DistinctRouteBuild<SKIP_NULLS>,
+}
+
+enum DistinctRouteBuild<const SKIP_NULLS: bool> {
+    Unary(RouteBuild<UnaryDistinctCombinator<SKIP_NULLS>>),
+    MultiArg(RouteBuild<MultiArgDistinctCombinator>),
 }
 
 impl<const SKIP_NULLS: bool> DistinctRoute<SKIP_NULLS> {
     pub(crate) fn direct(build: DirectBuildFn<UnaryDistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
-            build: RouteBuild::Direct(build),
+            build: DistinctRouteBuild::Unary(RouteBuild::Direct(build)),
         }
     }
 
     pub(crate) fn unary(build: UnaryBuildFn<UnaryDistinctCombinator<SKIP_NULLS>>) -> Self {
         Self {
-            build: RouteBuild::Unary(build),
+            build: DistinctRouteBuild::Unary(RouteBuild::Unary(build)),
+        }
+    }
+}
+
+impl DistinctRoute<true> {
+    pub(crate) fn multi_arg(build: MultiArgBuildFn<MultiArgDistinctCombinator>) -> Self {
+        Self {
+            build: DistinctRouteBuild::MultiArg(RouteBuild::MultiArg(build)),
         }
     }
 }
@@ -735,7 +749,10 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
             && let Some(function) = null_argument_result(
                 &context.request,
                 &self.metadata(context.metadata),
-                NullArgumentMode::Only,
+                match &self.build {
+                    DistinctRouteBuild::Unary(build) => build.null_argument_mode(),
+                    DistinctRouteBuild::MultiArg(build) => build.null_argument_mode(),
+                },
             )?
         {
             return Ok(Some(function));
@@ -751,17 +768,23 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
             distinct: false,
             ..context.request.clone()
         };
-        let [arg_type] = args_type.as_slice() else {
-            return Err(ErrorCode::BadArguments(
-                "unary DISTINCT requires one argument",
-            ));
+        let function = match &self.build {
+            DistinctRouteBuild::Unary(build) => {
+                let [arg_type] = args_type.as_slice() else {
+                    return Err(ErrorCode::BadArguments(
+                        "unary DISTINCT requires one argument",
+                    ));
+                };
+                build.build(request, &args_type, metadata, UnaryDistinctCombinator {
+                    arg_type: arg_type.clone(),
+                })?
+            }
+            DistinctRouteBuild::MultiArg(build) => {
+                build.build(request, &args_type, metadata, MultiArgDistinctCombinator {
+                    args_type: args_type.clone(),
+                })?
+            }
         };
-        let combinator = UnaryDistinctCombinator {
-            arg_type: arg_type.clone(),
-        };
-        let function = self
-            .build
-            .build(request, &args_type, metadata, combinator)?;
         Ok(Some(function))
     }
 }

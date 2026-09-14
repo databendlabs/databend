@@ -83,6 +83,7 @@ impl CovarianceBuilder {
         .then(PlainRoute::multi_arg(Self::create::<TYPE>))
         .then(IfRoute::multi_arg(Self::create::<TYPE>))
         .then(StateRoute::multi_arg(Self::create::<TYPE>))
+        .then(DistinctRoute::<true>::multi_arg(Self::create::<TYPE>))
     }
 
     fn covariance_arguments() -> ArgumentsPattern {

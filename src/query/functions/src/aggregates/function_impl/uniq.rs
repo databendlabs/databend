@@ -89,6 +89,7 @@ impl UniqBuilder {
             .then(PlainRoute::new(UniqBuilder::create))
             .then(IfRoute::direct(UniqBuilder::create))
             .then(StateRoute::direct(UniqBuilder::create))
+            .then(DistinctAliasRoute::direct(UniqBuilder::create))
     }
 
     fn validate_request(request: &RawAggregateCall<'_>) -> Result<()> {
@@ -106,7 +107,15 @@ impl UniqBuilder {
         build: DirectBuildContext<'_, impl Combinator>,
     ) -> Result<AggregateCallRef> {
         if build.args_type().len() > 1 {
-            return super::multi_arg_uniq::create(build);
+            return build.create(
+                UInt64Type::data_type(),
+                AggregateStateDescription::new(
+                    vec![AggrStateType::Custom(Layout::new::<RowUniqSet>())],
+                    vec![RowUniqSet::serde_item()],
+                )
+                .with_manual_drop(true),
+                MultiArgSkipNullEval::new(RowUniqEval),
+            );
         }
         let data_type = build.args_type()[0].remove_nullable();
         with_number_mapped_type!(|NUM| match data_type {

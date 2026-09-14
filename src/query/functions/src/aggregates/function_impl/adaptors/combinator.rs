@@ -387,3 +387,31 @@ impl StateCombinator {
         ))
     }
 }
+
+#[derive(Debug, Clone)]
+pub(crate) struct MultiArgDistinctCombinator {
+    pub(crate) args_type: Vec<DataType>,
+}
+
+impl Combinator for MultiArgDistinctCombinator {
+    fn create<const ORDERED: bool>(
+        self,
+        signature: AggregateSignature,
+        metadata: AggregateMetadata,
+        state: AggregateStateDescription,
+        eval: impl AggregateEval,
+    ) -> Result<AggregateCallRef> {
+        if !signature.order_by.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "multi-argument DISTINCT does not support ORDER BY",
+            ));
+        }
+        super::multi_arg_distinct::create_multi_arg_distinct(
+            signature,
+            metadata,
+            eval,
+            state,
+            self.args_type,
+        )
+    }
+}

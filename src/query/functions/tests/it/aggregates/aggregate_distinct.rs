@@ -109,6 +109,9 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
         "quantile",
         "quantile_disc",
         "quantile_cont",
+        "quantile_tdigest",
+        "median_tdigest",
+        "uniq",
         "median",
         "std",
         "stddev",
@@ -145,6 +148,8 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
         for name in [
             "quantile_disc",
             "quantile_cont",
+            "quantile_tdigest",
+            "median_tdigest",
             "stddev_pop",
             "skewness",
             "histogram",
@@ -162,6 +167,8 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
         "quantile_distinct(0.25, 0.75)(n)",
         "quantile_disc_distinct(0.25, 0.75)(n)",
         "quantile_cont_distinct(0.25, 0.75)(n)",
+        "quantile_tdigest_distinct(0.25, 0.75)(n)",
+        "uniq_distinct(n, s)",
         "histogram_distinct(2)(n)",
         "histogram_distinct(2)(s)",
         "st_collect_distinct(to_geometry(point))",
@@ -170,6 +177,64 @@ fn run_aggregate_distinct_cases(file: &mut impl Write, simulator: impl Aggregati
     ] {
         write_aggregate_expr_case(file, expr, &columns, simulator, vec![]);
     }
+    // Two unique pairs keep exact float comparisons in the golden simulator stable.
+    // Overlapping multi-column keys are checked with a tolerance below.
+    let pairs = [
+        (
+            "x",
+            Int64Type::from_opt_data(vec![Some(1), Some(1), Some(1), Some(3), None, Some(9)])
+                .into(),
+        ),
+        (
+            "y",
+            UInt64Type::from_opt_data(vec![Some(1), Some(1), Some(1), Some(3), Some(5), None])
+                .into(),
+        ),
+    ];
+    let empty_pairs = [
+        ("x", Int64Type::from_data(vec![]).into()),
+        ("y", UInt64Type::from_data(vec![]).into()),
+    ];
+    for name in [
+        "covar_pop",
+        "covar_samp",
+        "var_pop",
+        "var_samp",
+        "variance_pop",
+        "variance_samp",
+        "quantile_tdigest_weighted",
+        "median_tdigest_weighted",
+    ] {
+        for args in [
+            "x, y",
+            "NULL, y",
+            "x, NULL",
+            "NULL, NULL",
+            "try_cast(x as float64), y",
+        ] {
+            write_aggregate_expr_case(
+                file,
+                &format!("{name}_distinct({args})"),
+                &pairs,
+                simulator,
+                vec![],
+            );
+        }
+        write_aggregate_expr_case(
+            file,
+            &format!("{name}_distinct(x, y)"),
+            &empty_pairs,
+            simulator,
+            vec![],
+        );
+    }
+    write_aggregate_expr_case(
+        file,
+        "quantile_tdigest_weighted_distinct(0.25, 0.75)(x, y)",
+        &pairs,
+        simulator,
+        vec![],
+    );
 }
 
 #[test]
@@ -203,6 +268,8 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         ("quantile_disc", "quantile_disc_distinct"),
         ("quantile_cont", "quantile_cont_distinct"),
         ("median", "median_distinct"),
+        ("quantile_tdigest", "quantile_tdigest_distinct"),
+        ("median_tdigest", "median_tdigest_distinct"),
         ("std", "std_distinct"),
         ("stddev", "stddev_distinct"),
         ("stddev_pop", "stddev_pop_distinct"),
@@ -277,46 +344,49 @@ fn test_semantic_distinct_resolves_visible_target_name() -> Result<()> {
         }
     }
 
-    assert_eq!(
-        AGGR_REGISTRY
-            .descriptor("min")
-            .unwrap()
-            .features()
-            .distinct_policy,
-        DistinctPolicy::Idempotent
-    );
-    let min = AGGR_REGISTRY.resolve(RawAggregateCall {
-        name: "min",
-        params: &[],
-        args_type: &args_type,
-        distinct: true,
-        order_by: &[],
-    })?;
-    assert_eq!(min.signature().name, "min");
-    assert!(!min.signature().distinct);
-
-    let explicit_min_distinct = AGGR_REGISTRY.resolve(RawAggregateCall {
-        name: "min_distinct",
-        params: &[],
-        args_type: &args_type,
-        distinct: false,
-        order_by: &[],
-    })?;
-    assert_eq!(explicit_min_distinct.signature().name, "min_distinct");
-
-    for intrinsic_name in ["uniq", "approx_count_distinct"] {
-        assert!(
+    for base in ["min", "uniq"] {
+        assert_eq!(
             AGGR_REGISTRY
-                .resolve(RawAggregateCall {
-                    name: intrinsic_name,
-                    params: &[],
-                    args_type: &args_type,
-                    distinct: true,
-                    order_by: &[],
-                })
-                .is_err()
+                .descriptor(base)
+                .unwrap()
+                .features()
+                .distinct_policy,
+            DistinctPolicy::Idempotent
+        );
+        let semantic = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: base,
+            params: &[],
+            args_type: &args_type,
+            distinct: true,
+            order_by: &[],
+        })?;
+        assert_eq!(semantic.signature().name, base);
+        assert!(!semantic.signature().distinct);
+
+        let explicit_distinct = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: &format!("{base}_distinct"),
+            params: &[],
+            args_type: &args_type,
+            distinct: false,
+            order_by: &[],
+        })?;
+        assert_eq!(
+            explicit_distinct.signature().name,
+            format!("{base}_distinct")
         );
     }
+
+    assert!(
+        AGGR_REGISTRY
+            .resolve(RawAggregateCall {
+                name: "approx_count_distinct",
+                params: &[],
+                args_type: &args_type,
+                distinct: true,
+                order_by: &[],
+            })
+            .is_err()
+    );
 
     let count_multiple_args = AGGR_REGISTRY.resolve(RawAggregateCall {
         name: "count",
@@ -488,5 +558,143 @@ fn test_count_distinct_rows() -> Result<()> {
         groups.index(1).unwrap(),
         ScalarRef::Number(NumberScalar::UInt64(1))
     );
+    Ok(())
+}
+
+#[test]
+fn test_multi_arg_distinct_merge_and_replay() -> Result<()> {
+    use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::aggregate_function::*;
+
+    // The first partition repeats (1, 1); the second overlaps it and adds (1, 2).
+    // Keeping distinct first/second columns independently would lose a pair.
+    let left: Vec<BlockEntry> = vec![
+        Int64Type::from_data(vec![1, 1, 3]).into(),
+        UInt64Type::from_data(vec![1, 1, 1]).into(),
+    ];
+    let right: Vec<BlockEntry> = vec![
+        Int64Type::from_data(vec![1, 1]).into(),
+        UInt64Type::from_data(vec![1, 2]).into(),
+    ];
+    let unique: Vec<BlockEntry> = vec![
+        Int64Type::from_data(vec![1, 3, 1]).into(),
+        UInt64Type::from_data(vec![1, 1, 2]).into(),
+    ];
+    for base in [
+        "covar_pop",
+        "covar_samp",
+        "var_pop",
+        "var_samp",
+        "variance_pop",
+        "variance_samp",
+        "quantile_tdigest_weighted",
+        "median_tdigest_weighted",
+    ] {
+        let args_type = left.iter().map(BlockEntry::data_type).collect::<Vec<_>>();
+        let name = format!("{base}_distinct");
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: base,
+            params: &[],
+            args_type: &args_type,
+            distinct: true,
+            order_by: &[],
+        })?;
+        assert_eq!(function.signature().name, name);
+        let explicit = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: &name,
+            params: &[],
+            args_type: &args_type,
+            distinct: false,
+            order_by: &[],
+        })?;
+        assert_eq!(function.signature(), explicit.signature());
+        let expected = eval_aggregate(base, vec![], &unique, 3, vec![])?.0;
+        for serialized in [false, true] {
+            let owner = AggregateStateOwner::new(vec![function.clone()])?;
+            let rhs = AggregateStateOwner::new(vec![function.clone()])?;
+            function.accumulate(AccumulateInput {
+                state: owner.state(0),
+                columns: left.as_slice().into(),
+                validity: None,
+            })?;
+            function.accumulate(AccumulateInput {
+                state: rhs.state(0),
+                columns: right.as_slice().into(),
+                validity: None,
+            })?;
+            // Finalizing before a merge must not make the nested cache authoritative.
+            let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
+            function.merge_result(MergeResultInput {
+                state: owner.state(0),
+                builder: &mut builder,
+            })?;
+            for _ in 0..2 {
+                if serialized {
+                    let mut builder = ColumnBuilder::with_capacity(&function.state_data_type(), 1);
+                    function.serialize(SerializeInput {
+                        states: rhs.state_set(0),
+                        builders: builder.as_tuple_mut().unwrap(),
+                    })?;
+                    function.merge_serialized(MergeSerializedInput {
+                        states: owner.state_set(0),
+                        state: &builder.build().into(),
+                        filter: None,
+                    })?;
+                } else {
+                    function.merge_states(MergeStatesInput {
+                        state: owner.state(0),
+                        rhs: rhs.state(0),
+                    })?;
+                }
+                for read_only in [true, false, true] {
+                    let mut builder =
+                        ColumnBuilder::with_capacity(&function.signature().return_type, 1);
+                    let input = MergeResultInput {
+                        state: owner.state(0),
+                        builder: &mut builder,
+                    };
+                    if read_only {
+                        function.merge_result_read_only(input)?;
+                    } else {
+                        function.merge_result(input)?;
+                    }
+                    let actual = builder.build();
+                    let ScalarRef::Number(NumberScalar::Float64(actual)) = actual.index(0).unwrap()
+                    else {
+                        panic!("expected float")
+                    };
+                    let ScalarRef::Number(NumberScalar::Float64(expected)) =
+                        expected.index(0).unwrap()
+                    else {
+                        panic!("expected float")
+                    };
+                    assert!(
+                        (actual.0 - expected.0).abs() < 1e-12,
+                        "{base}: {actual:?} != {expected:?}"
+                    );
+                }
+            }
+            // New input after finalization must also rebuild without double counting.
+            function.accumulate(AccumulateInput {
+                state: owner.state(0),
+                columns: right.as_slice().into(),
+                validity: None,
+            })?;
+            let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
+            function.merge_result(MergeResultInput {
+                state: owner.state(0),
+                builder: &mut builder,
+            })?;
+            let result = builder.build();
+            let ScalarRef::Number(NumberScalar::Float64(actual)) = result.index(0).unwrap() else {
+                panic!("expected float")
+            };
+            let ScalarRef::Number(NumberScalar::Float64(expected)) = expected.index(0).unwrap()
+            else {
+                panic!("expected float")
+            };
+            assert!((actual.0 - expected.0).abs() < 1e-12);
+        }
+    }
     Ok(())
 }

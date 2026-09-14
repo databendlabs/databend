@@ -56,6 +56,7 @@ impl QuantileTDigestWeightedBuilder {
         .then(PlainRoute::multi_arg(Self::create))
         .then(IfRoute::multi_arg(Self::create))
         .then(StateRoute::multi_arg(Self::create))
+        .then(DistinctRoute::<true>::multi_arg(Self::create))
         .register(registry);
         NameRoute::new(
             &["median_tdigest_weighted"],
@@ -68,6 +69,7 @@ impl QuantileTDigestWeightedBuilder {
         .then(PlainRoute::multi_arg(Self::create_median))
         .then(IfRoute::multi_arg(Self::create_median))
         .then(StateRoute::multi_arg(Self::create_median))
+        .then(DistinctRoute::<true>::multi_arg(Self::create_median))
         .register(registry);
     }
 }
