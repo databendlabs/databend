@@ -44,7 +44,6 @@ use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
-use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
@@ -179,11 +178,68 @@ impl NameResolutionCandidates {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug)]
 pub struct VirtualColumnName {
     pub table_index: IndexType,
     pub source_column_id: ColumnId,
     pub key_name: String,
+    /// The combination of `cast type` and `is try` originates from the `CAST(x AS T)`
+    /// and `TRY_CAST(x AS T)` functions, different types with the same `key_name`
+    /// will generate different virtual column binding.
+    pub target_cast: Option<(TableDataType, bool)>,
+    /// Cached sort key used by `Ord`/`Eq`, derived from `target_cast` once at construction.
+    sort_key: Option<Arc<str>>,
+}
+
+impl VirtualColumnName {
+    pub fn new(
+        table_index: IndexType,
+        source_column_id: ColumnId,
+        key_name: String,
+        target_cast: Option<(TableDataType, bool)>,
+    ) -> Self {
+        // Normalize: always store non-nullable target type so equivalent casts unify.
+        let target_cast = target_cast.map(|(ty, is_try)| (ty.remove_nullable(), is_try));
+        let sort_key = target_cast
+            .as_ref()
+            .map(|(ty, is_try)| Arc::<str>::from(format!("{}#{}", ty.wrapped_display(), *is_try)));
+        Self {
+            table_index,
+            source_column_id,
+            key_name,
+            target_cast,
+            sort_key,
+        }
+    }
+
+    fn cmp_key(&self) -> (IndexType, ColumnId, &str, Option<&str>) {
+        (
+            self.table_index,
+            self.source_column_id,
+            self.key_name.as_str(),
+            self.sort_key.as_deref(),
+        )
+    }
+}
+
+impl PartialEq for VirtualColumnName {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp_key() == other.cmp_key()
+    }
+}
+
+impl Eq for VirtualColumnName {}
+
+impl Ord for VirtualColumnName {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cmp_key().cmp(&other.cmp_key())
+    }
+}
+
+impl PartialOrd for VirtualColumnName {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -997,10 +1053,24 @@ impl BindContext {
                     });
 
                 let source_column_id = virtual_column_name.source_column_id;
-                let column_name = format_virtual_column_name(source_column_name, &key_paths);
-                // todo
-                let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-                let is_try = true;
+
+                // If a target type is provided, the virtual column is cast to that type at the storage layer.
+                // `target_cast.ty` is non-nullable, wrap it in Nullable here because variant cast to
+                // other types are always Nullable.
+                let (table_data_type, is_try) = match virtual_column_name.target_cast.clone() {
+                    Some((ty, cast_is_try)) => (TableDataType::Nullable(Box::new(ty)), cast_is_try),
+                    None => (
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        true,
+                    ),
+                };
+                // Column display name must be unique per `(path, cast)` so that
+                // `TableScan.name_mapping` (keyed by column name) does not collapse
+                // `data['user']::String` and `data['user']` into a single field.
+                let column_name = format_virtual_column_name(
+                    &virtual_column_name.key_name,
+                    virtual_column_name.target_cast.as_ref(),
+                );
 
                 let column_index = metadata.add_virtual_column(
                     table_index,
@@ -1104,13 +1174,28 @@ pub fn apply_alias_for_columns(
     Ok(())
 }
 
-fn format_virtual_column_name(source_column_name: &str, key_paths: &OwnedKeyPaths) -> String {
-    let mut name = source_column_name.to_string();
-    for path in &key_paths.paths {
-        match path {
-            OwnedKeyPath::Index(index) => name.push_str(&format!("[{index}]")),
-            OwnedKeyPath::Name(key) => name.push_str(&format!("['{key}']")),
+/// Build a unique display name for a virtual column, encoding the optional pushdown cast so
+/// that different cast targets on the same path never share a schema field name.
+///
+/// Examples:
+/// - no cast: `data['user']`
+/// - strict cast: `data['user']::String`
+/// - try cast: `try_cast(data['user'] AS Int32)`
+fn format_virtual_column_name(
+    key_name: &str,
+    target_cast: Option<&(TableDataType, bool)>,
+) -> String {
+    match target_cast {
+        None => key_name.to_string(),
+        Some((ty, is_try)) => {
+            let target_type = ty.remove_nullable();
+            if matches!(target_type, TableDataType::Variant) {
+                key_name.to_string()
+            } else if *is_try {
+                format!("try_cast({} AS {})", key_name, target_type)
+            } else {
+                format!("{}::{}", key_name, target_type)
+            }
         }
     }
-    name
 }

@@ -24,7 +24,9 @@ mod virtual_segment_schema;
 
 pub use block_meta::BlockMetaIndex;
 pub use block_meta::VirtualBlockMetaIndex;
-pub use block_meta::VirtualColumnReadPlan;
+pub use block_meta::VirtualFieldReadPlan;
+pub use block_meta::VirtualReadSlot;
+pub use block_meta::VirtualReadSlotId;
 pub use databend_storages_common_index::VirtualColumnSharedDataType;
 pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;

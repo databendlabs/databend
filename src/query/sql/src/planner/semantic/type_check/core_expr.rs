@@ -563,6 +563,15 @@ where A: TypeCheckAdapter
                 expr,
                 target_type,
             } => {
+                if let Some(result) = self.try_resolve_variant_cast_pushdown(
+                    arena,
+                    *span,
+                    *expr,
+                    target_type,
+                    *is_try,
+                )? {
+                    return Ok(result);
+                }
                 let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
                 self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
             }

@@ -39,6 +39,37 @@ use crate::sbbf::Sbbf;
 pub type RuntimeBloomFilter = Arc<Sbbf>;
 pub type RuntimeScanFilterFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
+#[derive(Clone, Copy)]
+pub struct RuntimeScanStatistics<'a> {
+    pub column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
+    pub virtual_column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
+}
+
+impl<'a> RuntimeScanStatistics<'a> {
+    pub fn new(
+        column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
+        virtual_column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
+    ) -> Self {
+        Self {
+            column_stats,
+            virtual_column_stats,
+        }
+    }
+
+    pub fn from_columns(column_stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>) -> Self {
+        Self::new(column_stats, None)
+    }
+
+    pub fn get(&self, column_id: ColumnId) -> Option<&'a ColumnStatistics> {
+        self.column_stats
+            .and_then(|stats| stats.get(&column_id))
+            .or_else(|| {
+                self.virtual_column_stats
+                    .and_then(|stats| stats.get(&column_id))
+            })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RuntimeScanOrder {
     pub column_id: ColumnId,
@@ -49,11 +80,8 @@ pub struct RuntimeScanOrder {
 impl RuntimeScanOrder {
     /// Rank column statistics for scheduling: parts more likely to hold top
     /// rows under this order rank first.
-    pub fn rank<'a>(
-        &self,
-        stats: Option<&'a HashMap<ColumnId, ColumnStatistics>>,
-    ) -> RuntimeTopNRank<&'a Scalar> {
-        let Some(stat) = stats.and_then(|stats| stats.get(&self.column_id)) else {
+    pub fn rank<'a>(&self, stats: RuntimeScanStatistics<'a>) -> RuntimeTopNRank<&'a Scalar> {
+        let Some(stat) = stats.get(self.column_id) else {
             return RuntimeTopNRank::Unknown;
         };
         // Under NULLS FIRST null rows sort before every value: parts holding
@@ -118,7 +146,7 @@ pub trait RuntimeScanFilter: Send + Sync {
         false
     }
 
-    fn should_prune(&self, stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool;
+    fn should_prune(&self, stats: RuntimeScanStatistics) -> bool;
 
     fn recheck_notified(&self) -> RuntimeScanFilterFuture;
 
@@ -141,7 +169,7 @@ impl RuntimeScanFilters {
         self.filters.push(filter);
     }
 
-    pub fn should_prune(&self, stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool {
+    pub fn should_prune(&self, stats: RuntimeScanStatistics) -> bool {
         for filter in &self.filters {
             if filter.should_prune(stats) {
                 return true;
@@ -297,12 +325,8 @@ impl RuntimeTopNFilter {
 }
 
 impl RuntimeScanFilter for RuntimeTopNFilter {
-    fn should_prune(&self, stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool {
-        let Some(stats) = stats else {
-            return false;
-        };
-
-        let Some(stat) = stats.get(&self.column_id) else {
+    fn should_prune(&self, stats: RuntimeScanStatistics) -> bool {
+        let Some(stat) = stats.get(self.column_id) else {
             return false;
         };
 
@@ -353,7 +377,7 @@ impl RuntimeScanFilter for RuntimeLimitFilter {
         self.finished.load(Ordering::Acquire)
     }
 
-    fn should_prune(&self, _stats: Option<&HashMap<ColumnId, ColumnStatistics>>) -> bool {
+    fn should_prune(&self, _stats: RuntimeScanStatistics) -> bool {
         self.finished()
     }
 
@@ -639,7 +663,7 @@ mod tests {
         filter.finish();
         timeout(Duration::from_secs(1), notified).await.unwrap();
         assert!(filter.finished());
-        assert!(filter.should_prune(None));
+        assert!(filter.should_prune(RuntimeScanStatistics::from_columns(None)));
 
         let unchanged = filter.recheck_notified();
         filter.finish();
@@ -663,12 +687,12 @@ mod tests {
 
         let kept = HashMap::from([(1, ColumnStatistics::new(int64(9), int64(20), 0, 0, None))]);
         let pruned = HashMap::from([(1, ColumnStatistics::new(int64(11), int64(20), 0, 0, None))]);
-        assert!(!filters.should_prune(Some(&kept)));
-        assert!(filters.should_prune(Some(&pruned)));
+        assert!(!filters.should_prune(RuntimeScanStatistics::from_columns(Some(&kept))));
+        assert!(filters.should_prune(RuntimeScanStatistics::from_columns(Some(&pruned))));
 
         limit.finish();
         assert!(filters.is_finished());
-        assert!(filters.should_prune(None));
+        assert!(filters.should_prune(RuntimeScanStatistics::from_columns(None)));
     }
 
     fn column_stats(min: i64, max: i64, null_count: u64) -> ColumnStatistics {
@@ -683,29 +707,50 @@ mod tests {
         asc.push(asc_filter);
 
         let mut columns = HashMap::from([(3, column_stats(11, 20, 0))]);
-        assert!(asc.should_prune(Some(&columns)));
+        assert!(asc.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
 
         // Boundary ties must be retained.
         columns.insert(3, column_stats(10, 20, 0));
-        assert!(!asc.should_prune(Some(&columns)));
+        assert!(!asc.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
         // Under NULLS LAST the null rows of a strictly worse block are worse too.
         columns.insert(3, column_stats(11, 20, 1));
-        assert!(asc.should_prune(Some(&columns)));
-        assert!(!asc.should_prune(None));
+        assert!(asc.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
+        assert!(!asc.should_prune(RuntimeScanStatistics::from_columns(None)));
 
         // Under NULLS FIRST null rows are always candidates.
         let nulls_first_filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
         nulls_first_filter.update(&int64(10));
         let mut nulls_first = RuntimeScanFilters::default();
         nulls_first.push(nulls_first_filter);
-        assert!(!nulls_first.should_prune(Some(&columns)));
+        assert!(!nulls_first.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
 
         let desc_filter = Arc::new(RuntimeTopNFilter::new(3, false, false));
         desc_filter.update(&int64(10));
         let mut desc = RuntimeScanFilters::default();
         desc.push(desc_filter);
         columns.insert(3, column_stats(1, 9, 0));
-        assert!(desc.should_prune(Some(&columns)));
+        assert!(desc.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
+    }
+
+    #[test]
+    fn runtime_topn_uses_separate_virtual_column_statistics() {
+        let query_column_id = 3_000_000_000;
+        let filter = RuntimeTopNFilter::new(query_column_id, true, false);
+        filter.update(&int64(10));
+
+        let base_stats = HashMap::from([(1, column_stats(1, 100, 0))]);
+        let virtual_stats = HashMap::from([(query_column_id, column_stats(11, 20, 0))]);
+        assert!(filter.should_prune(RuntimeScanStatistics::new(
+            Some(&base_stats),
+            Some(&virtual_stats),
+        )));
+
+        // Query-time virtual IDs are not resolved from ordinary column stats.
+        assert!(!filter.should_prune(RuntimeScanStatistics::from_columns(Some(&base_stats))));
+
+        let order = filter.preferred_order().unwrap();
+        let rank = order.rank(RuntimeScanStatistics::new(None, Some(&virtual_stats)));
+        assert!(matches!(rank, RuntimeTopNRank::Value(value) if value == &int64(11)));
     }
 
     #[test]
