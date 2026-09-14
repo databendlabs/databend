@@ -304,6 +304,7 @@ impl TableContextSettings for QueryContext {
             now,
             tz,
             rounding_mode,
+            max_sleep_seconds: GlobalConfig::instance().query.common.max_sleep_seconds,
             disable_variant_check,
             enable_selector_executor: settings.get_enable_selector_executor()?,
             geometry_output_format,

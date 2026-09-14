@@ -1,0 +1,3 @@
+sleep max_sleep_seconds=default: ok
+sleep max_sleep_seconds=4: ok
+sleep max_sleep_seconds=0: ok

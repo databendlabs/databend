@@ -140,6 +140,8 @@ pub struct FunctionContext {
     /// Instant the query started, used by `now()`, `today()` and friends.
     pub now: DateTime<Utc>,
     pub rounding_mode: bool,
+    /// Maximum duration of SLEEP() in seconds; zero means no limit.
+    pub max_sleep_seconds: u64,
     pub disable_variant_check: bool,
     pub enable_selector_executor: bool,
 
@@ -160,6 +162,7 @@ impl Default for FunctionContext {
             tz: Tz::UTC,
             now: DateTime::UNIX_EPOCH,
             rounding_mode: false,
+            max_sleep_seconds: 3,
             disable_variant_check: false,
             enable_selector_executor: true,
 

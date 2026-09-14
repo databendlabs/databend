@@ -1671,6 +1671,11 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "8")]
     pub max_running_queries: u64,
 
+    /// Maximum duration of SLEEP() in seconds. Zero means no limit.
+    /// SLEEP() blocks an execution thread for the requested duration.
+    #[clap(long, value_name = "VALUE", default_value = "3")]
+    pub max_sleep_seconds: u64,
+
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub global_statement_queue: bool,
 

@@ -128,11 +128,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Duration::try_from_secs_f64((*val).into()).map_err(|x| x.to_string());
                 match duration {
                     Ok(duration) => {
-                        // Note!!!: Don't increase the sleep time to a large value, it'll block the thread.
-                        if duration.gt(&Duration::from_secs(3)) {
+                        let max_sleep_seconds = ctx.func_ctx.max_sleep_seconds;
+                        if max_sleep_seconds != 0
+                            && duration > Duration::from_secs(max_sleep_seconds)
+                        {
                             let err = format!(
-                                "The maximum sleep time is 3 seconds. Requested: {:?}",
-                                duration
+                                "The maximum sleep time is {} seconds. Requested: {:?}",
+                                max_sleep_seconds, duration
                             );
                             ctx.set_error(0, err);
                         } else {
