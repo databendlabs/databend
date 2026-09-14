@@ -152,8 +152,10 @@ pub(super) fn json_op_core_function(op: &databend_common_ast::ast::JsonOperator)
 //          ├─ StaticVariantAccess::from_expr
 //          │    MapAccess | get* chain | get_by_keypath*
 //          ├─ resolve base once
-//          ├─ PushdownTarget::from_type_name    // non-nullable cast target
-//          ├─ success → BoundColumnRef
+//          ├─ PushdownTarget::from_type_name
+//          │    typed scalar → typed virtual column
+//          │    Variant      → untyped virtual column
+//          │    other type   → untyped virtual column + outer Cast
 //          └─ fail → rebuild access from the resolved base, then apply Cast
 //
 //   resolve_call                                // get(data, 'k'), get_by_keypath(data, ...)
@@ -181,6 +183,9 @@ pub(super) fn json_op_core_function(op: &databend_common_ast::ast::JsonOperator)
 //     5. add_virtual_column_binding (wrap target as Nullable)
 //
 // Target type rules:
+// - Scalar typed targets are stored as typed virtual columns without an outer cast.
+// - Variant targets are stored as untyped virtual columns.
+// - Other targets read an untyped Variant virtual column and retain the outer cast.
 // - Recorded pushdown cast types are always non-nullable inner types.
 // - Binding re-wraps as Nullable(...) because the path may be missing.
 // - Equivalent casts unify: CAST AS String / String NULL / get_string → one binding.
@@ -199,10 +204,11 @@ where A: super::TypeCheckAdapter
     /// - `get` chain: `get(get(v,'a'),'b')::int`
     /// - `get_by_keypath`: `get_by_keypath(v, '{"k"}')::int`
     ///
-    /// On successful pushdown the outer `CastExpr` is dropped and the returned scalar is a
-    /// `BoundColumnRef` whose column has the requested target type. Once the base has been
-    /// resolved, failed pushdown is handled here by rebuilding the access and applying the cast,
-    /// so callers only receive `Ok(None)` when no static access shape was recognized.
+    /// Supported scalar target types are pushed into the virtual column and remove the outer
+    /// `CastExpr`. For other target types, an untyped Variant virtual column is generated and
+    /// the original cast remains above it. Once the base has been resolved, failed pushdown is
+    /// handled here by rebuilding the access and applying the cast, so callers only receive
+    /// `Ok(None)` when no static access shape was recognized.
     pub(super) fn try_resolve_variant_cast_pushdown(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -234,12 +240,23 @@ where A: super::TypeCheckAdapter
                         .map(Some);
                 }
             } else {
-                let target = PushdownTarget::from_type_name(target_type, is_try)?;
-                if !matches!(target, PushdownTarget::Variant)
-                    && let Some(result) =
-                        self.try_pushdown_variant_paths(span, &scalar, &access.keypaths, target)
+                let (target, keep_outer_cast) =
+                    PushdownTarget::from_type_name(target_type, is_try)?;
+                if let Some(box (virtual_scalar, virtual_type)) =
+                    self.try_pushdown_variant_paths(span, &scalar, &access.keypaths, target)
                 {
-                    return Ok(Some(result));
+                    if keep_outer_cast {
+                        return self
+                            .resolve_cast_expr(
+                                span,
+                                virtual_scalar,
+                                virtual_type,
+                                target_type,
+                                is_try,
+                            )
+                            .map(Some);
+                    }
+                    return Ok(Some(Box::new((virtual_scalar, virtual_type))));
                 }
             }
         }
@@ -842,12 +859,15 @@ impl PushdownTarget {
         PushdownTarget::Cast(TableDataType::String, false)
     }
 
-    fn from_type_name(target: &TypeName, is_try: bool) -> Result<Self> {
+    fn from_type_name(target: &TypeName, is_try: bool) -> Result<(Self, bool)> {
         let ty = resolve_type_name(target, true)?;
         // Always strip Nullable so equivalent casts unify:
         // `CAST(x AS String)` / `CAST(x AS String NULL)` / `get_string` → same binding.
         let inner = ty.remove_nullable();
-        let target_type = if matches!(
+        if matches!(inner, TableDataType::Variant) {
+            return Ok((PushdownTarget::Variant, false));
+        }
+        if matches!(
             inner,
             TableDataType::Boolean
                 | TableDataType::String
@@ -856,11 +876,11 @@ impl PushdownTarget {
                 | TableDataType::Date
                 | TableDataType::Timestamp
         ) {
-            PushdownTarget::Cast(inner, is_try)
-        } else {
-            PushdownTarget::Variant
-        };
-        Ok(target_type)
+            return Ok((PushdownTarget::Cast(inner, is_try), false));
+        }
+        // Unsupported typed targets still benefit from reading the path as an
+        // untyped Variant virtual column, but must keep the original outer cast.
+        Ok((PushdownTarget::Variant, true))
     }
 
     fn into_option(self) -> Option<(TableDataType, bool)> {

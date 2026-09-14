@@ -1,6 +1,7 @@
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_expression::VariantDataType;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
@@ -144,7 +145,7 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn variant_access_fallback_reuses_resolved_base() -> Result<()> {
+async fn variant_cast_pushdown_and_non_column_fallback() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     let adapter = TestTypeCheckAdapter::new(settings.clone());
@@ -152,7 +153,6 @@ async fn variant_access_fallback_reuses_resolved_base() -> Result<()> {
     let metadata = Arc::new(RwLock::new(Metadata::default()));
 
     let mut bind_context = virtual_column_bind_context(metadata.clone())?;
-    bind_context.allow_virtual_column = false;
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
         adapter,
@@ -161,18 +161,150 @@ async fn variant_access_fallback_reuses_resolved_base() -> Result<()> {
         &[],
     )?;
 
-    for sql in [
-        "get(get(get(v, 'a'), 'b'), 'c')",
-        "get_string(get(v, 'a'), 'b')::Int64",
-        "parse_json('{\"k\":1}')['k']::Int64",
-        "{'k': 1}['k']::Int64",
-    ] {
-        type_checker.resolve(&parse_test_expr(sql)?)?;
+    let array_type = DataType::Nullable(Box::new(DataType::Array(Box::new(DataType::Nullable(
+        Box::new(DataType::Number(NumberDataType::Int32)),
+    )))));
+    let nullable_variant = DataType::Nullable(Box::new(DataType::Variant));
+    let nullable_int64 = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+    let cases = [
+        ("v['a']::ARRAY(INT32)", true, false, Some(2), array_type),
+        (
+            "v['b']['c']::Int64",
+            false,
+            false,
+            Some(3),
+            nullable_int64.clone(),
+        ),
+        (
+            "TRY_CAST(v['b']['c'] AS Int64)",
+            false,
+            false,
+            Some(4),
+            nullable_int64.clone(),
+        ),
+        (
+            "get_string(get(v, 'b'), 'c')::Int64",
+            true,
+            false,
+            Some(5),
+            nullable_int64.clone(),
+        ),
+        ("get(v, 'e')", false, false, Some(6), nullable_variant),
+        (
+            "parse_json('{\"k\":1}')['k']::Int64",
+            true,
+            false,
+            None,
+            nullable_int64,
+        ),
+    ];
+
+    for (sql, has_cast, is_try, virtual_column_index, expected_type) in cases {
+        let (scalar, data_type) = *type_checker.resolve(&parse_test_expr(sql)?)?;
+        let scalar = if has_cast {
+            let ScalarExpr::CastExpr(cast) = scalar else {
+                panic!("expected outer cast for {sql}, got {scalar:?}");
+            };
+            assert_eq!(cast.target_type.as_ref(), &data_type);
+            assert_eq!(cast.is_try, is_try, "unexpected cast mode for {sql}");
+            *cast.argument
+        } else {
+            assert!(
+                !matches!(&scalar, ScalarExpr::CastExpr(_)),
+                "unexpected outer cast for {sql}"
+            );
+            scalar
+        };
+
+        if let Some(column_index) = virtual_column_index {
+            assert_bound_column_index(&scalar, column_index);
+        } else {
+            // A computed Variant base cannot bind a virtual column. Its already-resolved
+            // scalar is reused to build get_by_keypath below the requested cast.
+            let ScalarExpr::FunctionCall(access) = scalar else {
+                panic!("expected get_by_keypath fallback for {sql}, got {scalar:?}");
+            };
+            assert_eq!(access.func_name, "get_by_keypath");
+            assert_eq!(access.arguments.len(), 2);
+            assert_eq!(
+                access.arguments[0].data_type().remove_nullable(),
+                DataType::Variant
+            );
+            assert!(!matches!(
+                &access.arguments[0],
+                ScalarExpr::BoundColumnRef(_)
+            ));
+        }
+
+        assert_eq!(data_type, expected_type, "unexpected type for {sql}");
     }
     drop(type_checker);
 
-    assert!(bind_context.bound_virtual_columns.is_empty());
-    assert_eq!(metadata.read().columns().len(), 2);
+    let metadata = metadata.read();
+    let virtual_columns = metadata
+        .columns()
+        .iter()
+        .filter_map(|column| match column {
+            ColumnEntry::VirtualColumn(column) => Some((
+                column.column_index.as_usize(),
+                column.source_column_id,
+                column.query_column_id,
+                column.column_name.as_str(),
+                column.data_type.clone(),
+                column.is_try,
+                column.key_paths.to_canonical_path(),
+            )),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(virtual_columns, vec![
+        (
+            2,
+            1,
+            VIRTUAL_COLUMN_ID_START,
+            "v['a']",
+            TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            true,
+            "a".to_string(),
+        ),
+        (
+            3,
+            1,
+            VIRTUAL_COLUMN_ID_START + 1,
+            "v['b']['c']::Int64",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+            false,
+            "b.c".to_string(),
+        ),
+        (
+            4,
+            1,
+            VIRTUAL_COLUMN_ID_START + 2,
+            "try_cast(v['b']['c'] AS Int64)",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+            true,
+            "b.c".to_string(),
+        ),
+        (
+            5,
+            1,
+            VIRTUAL_COLUMN_ID_START + 3,
+            "v['b']['c']::String",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+            false,
+            "b.c".to_string(),
+        ),
+        (
+            6,
+            1,
+            VIRTUAL_COLUMN_ID_START + 4,
+            "v['e']",
+            TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            true,
+            "e".to_string(),
+        ),
+    ]);
+
     Ok(())
 }
 

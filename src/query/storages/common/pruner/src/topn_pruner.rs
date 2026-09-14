@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
@@ -140,7 +141,8 @@ impl TopNPruner {
                     .get(&sort_column_id)
             });
             let Some(stat) = stat else {
-                if sort_column_id >= VIRTUAL_COLUMN_ID_START {
+                if (VIRTUAL_COLUMN_ID_START..FILE_LAST_MODIFIED_COLUMN_ID).contains(&sort_column_id)
+                {
                     // Typed virtual statistics may be unavailable for incomplete metadata,
                     // non-direct layouts, or unsafe physical-to-query type conversions.
                     return Ok(metas);
@@ -492,11 +494,19 @@ mod tests {
     #[test]
     fn test_prune_topn_keeps_blocks_when_virtual_column_statistics_are_missing() {
         let virtual_column_id = VIRTUAL_COLUMN_ID_START;
-        let schema = Arc::new(TableSchema::new(vec![TableField::new_from_column_id(
-            "v['k']::Int64",
-            TableDataType::Number(NumberDataType::Int64),
-            virtual_column_id,
-        )]));
+        let schema = Arc::new(TableSchema::new_from_column_ids(
+            vec![TableField::new_from_column_id(
+                "v['k']::Int64",
+                TableDataType::Number(NumberDataType::Int64),
+                virtual_column_id,
+            )],
+            Default::default(),
+            virtual_column_id + 1,
+        ));
+        assert_eq!(
+            schema.column_id_of("v['k']::Int64").unwrap(),
+            virtual_column_id
+        );
         let sort_expr = RemoteExpr::ColumnRef {
             span: None,
             id: "v['k']::Int64".to_string(),
