@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,6 +49,7 @@ impl FailSafeHandler for RealFailSafeHandler {
             table_info,
             ctx.get_settings().get_s3_storage_class()?,
         )?;
+        fuse_table.check_mutable()?;
         let op = fuse_table.get_operator();
 
         let amender = Amender::new(op);

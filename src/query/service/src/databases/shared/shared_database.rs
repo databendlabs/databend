@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::TableApi;
@@ -27,14 +28,15 @@ use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::tenant::Tenant;
 
-use super::shared_table::SharedTable;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::meta_service_error;
 use crate::share::ShareDatabaseBinding;
 use crate::share::ShareMgr;
 use crate::share::ShareTableContext;
+use crate::share::resolve_share_storage_params;
 
 #[derive(Clone)]
 pub struct SharedDatabase {
@@ -100,21 +102,29 @@ impl SharedDatabase {
             desc: format!("'{}'.'{}'", self.get_db_name(), table_name),
             name: table_name,
             meta: seq_meta.data,
-            db_type: DatabaseType::NormalDB,
+            db_type: DatabaseType::SharedDB,
             catalog_info: Default::default(),
         })
     }
 
     async fn shared_table(&self, context: ShareTableContext) -> Result<Arc<dyn Table>> {
-        let table_info = self.table_info(&context).await?;
-        SharedTable::try_create(
-            self.ctx.clone(),
-            self.get_tenant().clone(),
-            self.get_db_name(),
-            &context,
-            table_info,
+        let mut table_info = self.table_info(&context).await?;
+        let provider_storage = context
+            .storage_params
+            .or_else(|| table_info.meta.storage_params.take())
+            .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
+        let storage = resolve_share_storage_params(
+            &Tenant::new_literal(&context.binding.provider_tenant),
+            &context.connection,
+            provider_storage,
         )
-        .await
+        .await?;
+        table_info.name = context.provider_table;
+        table_info.desc = format!("'{}'.'{}'", self.get_db_name(), table_info.name);
+        table_info.meta.storage_params = Some(storage);
+        self.ctx
+            .storage_factory
+            .get_table(&table_info, self.ctx.disable_table_info_refresh)
     }
 }
 

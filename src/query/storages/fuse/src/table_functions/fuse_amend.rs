@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -87,6 +88,7 @@ impl SimpleTableFunc for FuseAmendTable {
         let tbl = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
         })?;
+        tbl.check_mutable()?;
 
         self.fail_safe_handler
             .recover(ctx, tbl.table_info.clone())
