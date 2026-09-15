@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 from unittest.mock import patch
 
 import databend
@@ -10,6 +12,26 @@ def test_connect_returns_session_context(tmp_path):
     conn = databend.connect(data_path=str(tmp_path / "embedded"))
     result = conn.sql("select 1").fetchone()
     assert result == (1,)
+
+
+def test_embedded_meta_persists_across_processes(tmp_path):
+    data_path = str(tmp_path / "persistent")
+    create_table = (
+        "conn.execute('create table persistent_meta(v int)')\n"
+        "conn.execute('insert into persistent_meta values (42)')\n"
+    )
+    for setup in (create_table, ""):
+        script = (
+            "import sys, databend\n"
+            "conn = databend.connect(data_path=sys.argv[1])\n"
+            + setup
+            + "assert conn.sql('select v from persistent_meta').fetchall() == [(42,)]\n"
+        )
+        subprocess.run(
+            [sys.executable, "-c", script, data_path],
+            check=True,
+            timeout=120,
+        )
 
 
 def test_execute_and_relation_fetch_helpers():

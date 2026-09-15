@@ -21,9 +21,11 @@ mod dataframe;
 mod schema;
 mod utils;
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_config::BuiltInConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::UserAuthConfig;
@@ -33,7 +35,9 @@ use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::LocalMetaService;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
 use utils::RUNTIME;
@@ -49,12 +53,34 @@ fn init_embedded(_py: Python, data_path: &str) -> PyResult<()> {
     }
 
     // Create configuration and initialize services
-    let conf = create_embedded_config(data_path).map_err(|e| {
+    let mut conf = create_embedded_config(data_path).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Config creation failed: {}", e))
     })?;
 
     // Initialize global instance
-    databend_common_base::base::GlobalInstance::init_production();
+    GlobalInstance::init_production();
+
+    // Open the persistent meta directory once. All query services must connect
+    // to this in-process endpoint instead of opening competing local stores.
+    let meta = RUNTIME
+        .block_on(LocalMetaService::new_with_fixed_dir::<DatabendRuntime>(
+            conf.meta.embedded_dir.clone(),
+            "python-binding",
+        ))
+        .map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Embedded meta initialization failed: {}",
+                e
+            ))
+        })?;
+    conf.meta.endpoints = RUNTIME.block_on(meta.get_cached_endpoints()).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Embedded meta endpoint lookup failed: {}",
+            e
+        ))
+    })?;
+    // Keep the embedded service alive alongside the global query services.
+    GlobalInstance::set(Arc::new(meta));
 
     // Initialize all Databend services
     RUNTIME
