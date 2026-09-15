@@ -29,11 +29,11 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::SyncTaskHandle;
+use databend_common_pipeline::core::SyncTaskSet;
 use petgraph::graph::NodeIndex;
 
-use crate::servers::flight::v1::network::InboundChannel;
-use crate::servers::flight::v1::network::SyncTaskHandle;
-use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::exchange::exchange_packet_receiver::InboundChannel;
 
 pub struct ExchangeRecvTransform {
     input: Arc<InputPort>,

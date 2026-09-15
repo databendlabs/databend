@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arrow_flight::FlightData;
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::MemStat;
@@ -32,16 +33,42 @@ use tokio::sync::oneshot;
 use tokio::time::sleep;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::flight::FlightExchange;
-use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
+use crate::servers::flight::v1::transport::OutboundStreamRef;
+use crate::servers::flight::v1::transport::StreamSendOutcome;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextTelemetry;
+
+/// Preserve the statistics error policy of the transport chosen during exchange setup.
+pub enum StatisticsStream {
+    Legacy(OutboundStreamRef),
+    Reliable(OutboundStreamRef),
+}
+
+impl StatisticsStream {
+    fn outbound(&self) -> &OutboundStreamRef {
+        match self {
+            Self::Legacy(tx) | Self::Reliable(tx) => tx,
+        }
+    }
+
+    /// Legacy profile and final-statistics failures are warnings. Reliable streams must
+    /// propagate them so the producer can terminate the logical stream with its cause.
+    fn check_best_effort_send(&self, kind: &str, result: Result<()>) -> Result<()> {
+        match (self, result) {
+            (Self::Legacy(_), Err(cause)) => {
+                warn!("{} send has error, cause: {:?}.", kind, cause);
+                Ok(())
+            }
+            (_, result) => result,
+        }
+    }
+}
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
@@ -53,13 +80,12 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        exchange: FlightExchange,
+        stream: StatisticsStream,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
-        let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner
@@ -67,6 +93,7 @@ impl StatisticsSender {
                 let query_id = query_id.to_string();
 
                 async move {
+                    let tx = stream.outbound();
                     let mut cnt = 0;
                     let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                     let mut notified = Box::pin(shutdown_flag_receiver.recv());
@@ -82,28 +109,25 @@ impl StatisticsSender {
                                 break;
                             }
                             Either::Right((Ok(Some(error_code)), _recv)) => {
-                                if let Err(error) = Self::send_io_stats(&tx).await {
+                                if let Err(error) = Self::send_io_stats(tx).await {
                                     warn!("IoStats send has error, cause: {:?}.", error);
                                 }
 
-                                let data = DataPacket::ErrorCode(error_code);
-                                if let Err(error_code) = tx.send(data).await {
-                                    warn!(
-                                        "Cannot send data via flight exchange, cause: {:?}",
-                                        error_code
-                                    );
-                                }
-
+                                tx.fail(error_code).await;
                                 return;
                             }
                             Either::Left((_, right)) => {
                                 notified = right;
                                 sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                                if let Err(cause) = Self::send_progress(&ctx, &mem_stat, &tx).await
-                                {
+                                if let Err(cause) = Self::send_progress(&ctx, &mem_stat, tx).await {
                                     ctx.get_exchange_manager()
-                                        .shutdown_query(&query_id, Some(cause));
+                                        .shutdown_query(&query_id, Some(cause.clone()));
+                                    // Legacy progress failures already stop the query, but
+                                    // only reliable streams need the failure handshake.
+                                    if matches!(&stream, StatisticsStream::Reliable(_)) {
+                                        tx.fail(cause).await;
+                                    }
                                     return;
                                 }
 
@@ -111,46 +135,64 @@ impl StatisticsSender {
 
                                 if cnt % 5 == 0 {
                                     // send profiles per 500 millis
-                                    if let Err(error) =
-                                        Self::send_profile(&executor, &tx, false).await
-                                    {
-                                        warn!("Profiles send has error, cause: {:?}.", error);
+                                    if let Err(cause) = stream.check_best_effort_send(
+                                        "Profiles",
+                                        Self::send_profile(&executor, tx, false).await,
+                                    ) {
+                                        ctx.get_exchange_manager()
+                                            .shutdown_query(&query_id, Some(cause.clone()));
+                                        tx.fail(cause).await;
+                                        return;
                                     }
                                 }
                             }
                         }
                     }
 
-                    if let Err(error) = Self::send_final_profile(profile_rx, &tx).await {
-                        warn!("Final profiles send has error, cause: {:?}.", error);
+                    let final_result = async {
+                        stream.check_best_effort_send(
+                            "Final profiles",
+                            Self::send_final_profile(profile_rx, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "CopyStatus",
+                            Self::send_copy_status(&ctx, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "MutationStatus",
+                            Self::send_mutation_status(&ctx, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "Statistics",
+                            Self::send_progress(&ctx, &mem_stat, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "Perf",
+                            Self::send_perf(&perf_guard, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "PerfCounters",
+                            Self::send_perf_counters(&ctx, &executor, tx).await,
+                        )?;
+                        stream.check_best_effort_send(
+                            "PartStatistics",
+                            Self::send_part_statistics(&ctx, tx).await,
+                        )?;
+                        stream.check_best_effort_send("IoStats", Self::send_io_stats(tx).await)
                     }
+                    .await;
 
-                    if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
-                        warn!("CopyStatus send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_mutation_status(&ctx, &tx).await {
-                        warn!("MutationStatus send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_progress(&ctx, &mem_stat, &tx).await {
-                        warn!("Statistics send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
-                        warn!("Perf send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_perf_counters(&ctx, &executor, &tx).await {
-                        warn!("PerfCounters send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
-                        warn!("PartStatistics send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_io_stats(&tx).await {
-                        warn!("IoStats send has error, cause: {:?}.", error);
+                    match final_result {
+                        Ok(()) => {
+                            if let Err(error) = tx.finish().await {
+                                warn!("Statistics sender finish has error, cause: {:?}.", error);
+                            }
+                        }
+                        Err(cause) => {
+                            ctx.get_exchange_manager()
+                                .shutdown_query(&query_id, Some(cause.clone()));
+                            tx.fail(cause).await;
+                        }
                     }
                 }
             }))
@@ -185,7 +227,7 @@ impl StatisticsSender {
     async fn send_progress(
         ctx: &Arc<QueryContext>,
         mem_stat: &Option<Arc<MemStat>>,
-        tx: &FlightSender,
+        tx: &OutboundStreamRef,
     ) -> Result<()> {
         let mut progress = Self::fetch_progress(ctx);
 
@@ -199,15 +241,18 @@ impl StatisticsSender {
         }
 
         let data_packet = DataPacket::SerializeProgress(progress);
-        tx.send(data_packet).await
+        Self::send_packet(tx, data_packet).await
     }
 
     #[async_backtrace::framed]
-    async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
+    async fn send_copy_status(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &OutboundStreamRef,
+    ) -> Result<()> {
         let copy_status = ctx.copy_state().copy_status();
         if !copy_status.files.is_empty() {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
-            flight_sender.send(data_packet).await?;
+            Self::send_packet(flight_sender, data_packet).await?;
         }
         Ok(())
     }
@@ -215,7 +260,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_mutation_status(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSender,
+        flight_sender: &OutboundStreamRef,
     ) -> Result<()> {
         let mutation_status = {
             let binding = ctx.mutation_state().mutation_status();
@@ -227,33 +272,33 @@ impl StatisticsSender {
             }
         };
         let data_packet = DataPacket::MutationStatus(mutation_status);
-        flight_sender.send(data_packet).await?;
+        Self::send_packet(flight_sender, data_packet).await?;
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn send_profile(
         executor: &PipelineExecutor,
-        tx: &FlightSender,
+        tx: &OutboundStreamRef,
         collect_metrics: bool,
     ) -> Result<()> {
         let plans_profile = executor.fetch_profiling(collect_metrics);
 
         if !plans_profile.is_empty() {
             let data_packet = DataPacket::QueryProfiles(plans_profile);
-            tx.send(data_packet).await?;
+            Self::send_packet(tx, data_packet).await?;
         }
 
         Ok(())
     }
 
     #[async_backtrace::framed]
-    async fn send_part_statistics(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
+    async fn send_part_statistics(ctx: &Arc<QueryContext>, tx: &OutboundStreamRef) -> Result<()> {
         let part_stats = ctx.get_pruned_partitions_stats();
 
         if !part_stats.is_empty() {
             let data_packet = DataPacket::PartStatistics(part_stats);
-            tx.send(data_packet).await?;
+            Self::send_packet(tx, data_packet).await?;
         }
 
         Ok(())
@@ -262,7 +307,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_final_profile(
         mut rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
-        tx: &FlightSender,
+        tx: &OutboundStreamRef,
     ) -> Result<()> {
         // The plans_profile comes from the executor's on_finish callback.
         // We use try_recv() instead of blocking recv() because the execution order
@@ -270,7 +315,7 @@ impl StatisticsSender {
         if let Ok(plans_profile) = rx.try_recv() {
             if !plans_profile.is_empty() {
                 let data_packet = DataPacket::QueryProfiles(plans_profile);
-                tx.send(data_packet).await?;
+                Self::send_packet(tx, data_packet).await?;
             }
         }
 
@@ -280,21 +325,21 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_scan_cache_metrics(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSender,
+        flight_sender: &OutboundStreamRef,
     ) -> Result<()> {
         let data_cache_metrics = ctx.get_data_cache_metrics();
         let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
-        flight_sender.send(data_packet).await
+        Self::send_packet(flight_sender, data_packet).await
     }
 
     async fn send_perf(
         perf_guard: &Option<QueryPerfGuard>,
-        flight_sender: &FlightSender,
+        flight_sender: &OutboundStreamRef,
     ) -> Result<()> {
         if let Some((_flag_guard, profiler_guard)) = perf_guard {
             let dumped = QueryPerf::dump(profiler_guard)?;
             let data_packet = DataPacket::QueryPerf(dumped);
-            flight_sender.send(data_packet).await?;
+            Self::send_packet(flight_sender, data_packet).await?;
         }
         Ok(())
     }
@@ -302,25 +347,35 @@ impl StatisticsSender {
     async fn send_perf_counters(
         ctx: &Arc<QueryContext>,
         executor: &Arc<PipelineExecutor>,
-        flight_sender: &FlightSender,
+        flight_sender: &OutboundStreamRef,
     ) -> Result<()> {
         if ctx.get_perf_config().has_hw_counters() {
             let counters = executor.fetch_perf_counters();
             if !counters.counters.is_empty() {
                 let data_packet = DataPacket::QueryPerfCounters(counters);
-                flight_sender.send(data_packet).await?;
+                Self::send_packet(flight_sender, data_packet).await?;
             }
         }
         Ok(())
     }
 
-    async fn send_io_stats(flight_sender: &FlightSender) -> Result<()> {
+    async fn send_io_stats(flight_sender: &OutboundStreamRef) -> Result<()> {
         let Some(stats) = ThreadTracker::io_stats() else {
             return Ok(());
         };
 
         let data_packet = DataPacket::IoStats(stats.snapshot());
-        flight_sender.send(data_packet).await
+        Self::send_packet(flight_sender, data_packet).await
+    }
+
+    async fn send_packet(tx: &OutboundStreamRef, packet: DataPacket) -> Result<()> {
+        let data = FlightData::try_from(packet)?;
+        if tx.send(0, data).await? == StreamSendOutcome::ConsumerClosed {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the remote statistics stream is closed.",
+            ));
+        }
+        Ok(())
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Vec<ProgressInfo> {

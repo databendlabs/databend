@@ -14,9 +14,9 @@
 
 pub mod actions;
 pub mod exchange;
-pub mod network;
 pub mod packets;
 pub mod scatter;
+pub mod transport;
 
 mod flight_service;
 
