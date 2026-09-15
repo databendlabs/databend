@@ -22,6 +22,7 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::check_interrupt;
 
 use super::Base;
 use super::MergeSort;
@@ -32,6 +33,7 @@ use super::TransformSortMergeLimit;
 use super::core::RowConverter;
 use super::core::Rows;
 use super::core::algorithm::SortAlgorithm;
+use super::create_memory_merger;
 use crate::traits::SortSpiller;
 
 #[allow(clippy::large_enum_variant)]
@@ -121,7 +123,11 @@ where
         Ok(())
     }
 
-    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>, no_spill: bool) {
+    fn collect_trans_to_spill(
+        &mut self,
+        input_data: Vec<DataBlock>,
+        no_spill: bool,
+    ) -> Result<bool> {
         let (num_rows, num_bytes) = input_data
             .iter()
             .map(|block| (block.num_rows(), ByteSize(block.memory_size() as _)))
@@ -139,19 +145,50 @@ where
         } else {
             self.determine_params(num_bytes, num_rows)
         };
-        let spill_sort = SortSpill::new(self.base.clone(), params);
-        self.inner = Inner::Spill(input_data, spill_sort);
+        let limit = if !no_spill
+            && let Some(limit) = self.base.limit
+            && input_data.len() > 1
+        {
+            limit
+        } else {
+            self.inner = Inner::Spill(input_data, SortSpill::new(self.base.clone(), params));
+            return Ok(true);
+        };
+
+        let mut merger = create_memory_merger::<A>(
+            input_data,
+            self.base.sort_row_offset,
+            Some(limit),
+            params.batch_rows,
+        );
+        let mut merged = Vec::new();
+        while let Some(block) = merger.next_block()? {
+            check_interrupt()?;
+            merged.push(block);
+        }
+        drop(merger);
+
+        let memory_settings = self.base.spiller.memory_settings();
+        if memory_settings.check_spill() {
+            self.inner = Inner::Spill(merged, SortSpill::new(self.base.clone(), params));
+            Ok(true)
+        } else {
+            self.inner = Inner::Collect(merged);
+            Ok(false)
+        }
     }
 
-    fn trans_to_spill(&mut self, no_spill: bool) -> Result<()> {
+    fn trans_to_spill(&mut self, no_spill: bool) -> Result<bool> {
         match &mut self.inner {
-            Inner::Limit(_) => self.limit_trans_to_spill(no_spill),
+            Inner::Limit(_) => {
+                self.limit_trans_to_spill(no_spill)?;
+                Ok(true)
+            }
             Inner::Collect(input_data) => {
                 let input_data = std::mem::take(input_data);
-                self.collect_trans_to_spill(input_data, no_spill);
-                Ok(())
+                self.collect_trans_to_spill(input_data, no_spill)
             }
-            Inner::Spill(_, _) => Ok(()),
+            Inner::Spill(_, _) => Ok(true),
             Inner::None => unreachable!(),
         }
     }
@@ -316,7 +353,9 @@ where
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let finished = self.input.is_finished();
-        self.trans_to_spill(finished)?;
+        if !self.trans_to_spill(finished)? {
+            return Ok(());
+        }
 
         let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
             unreachable!()

@@ -24,6 +24,7 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::check_interrupt;
 
 use super::Base;
 use super::MemoryMerger;
@@ -146,7 +147,7 @@ where
         Ok(())
     }
 
-    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
+    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) -> Result<bool> {
         let (num_rows, num_bytes) = input_data
             .iter()
             .map(|block| (block.num_rows(), ByteSize(block.memory_size() as _)))
@@ -154,19 +155,50 @@ where
                 (acc_rows + rows, acc_bytes + bytes)
             });
         let params = self.determine_params(num_bytes, num_rows);
-        let spill_sort = SortSpill::new(self.base.clone(), params);
-        self.inner = Inner::Spill(input_data, spill_sort);
+
+        let limit = if let Some(limit) = self.base.limit
+            && input_data.len() > 1
+        {
+            limit
+        } else {
+            self.inner = Inner::Spill(input_data, SortSpill::new(self.base.clone(), params));
+            return Ok(true);
+        };
+
+        let mut merger = create_memory_merger::<A>(
+            input_data,
+            self.base.sort_row_offset,
+            Some(limit),
+            params.batch_rows,
+        );
+        let mut merged = Vec::new();
+        while let Some(block) = merger.next_block()? {
+            check_interrupt()?;
+            merged.push(block.maybe_gc());
+        }
+        drop(merger);
+
+        let memory_settings = self.base.spiller.memory_settings();
+        if !memory_settings.check_spill() {
+            self.inner = Inner::Collect(merged);
+            Ok(false)
+        } else {
+            self.inner = Inner::Spill(merged, SortSpill::new(self.base.clone(), params));
+            Ok(true)
+        }
     }
 
-    fn trans_to_spill(&mut self) -> Result<()> {
+    fn trans_to_spill(&mut self) -> Result<bool> {
         match &mut self.inner {
-            Inner::Limit(_) => self.limit_trans_to_spill(),
+            Inner::Limit(_) => {
+                self.limit_trans_to_spill()?;
+                Ok(true)
+            }
             Inner::Collect(input_data) => {
                 let input_data = std::mem::take(input_data);
-                self.collect_trans_to_spill(input_data);
-                Ok(())
+                self.collect_trans_to_spill(input_data)
             }
-            Inner::Spill(_, _) => Ok(()),
+            Inner::Spill(_, _) => Ok(true),
             Inner::Memory(_) => unreachable!(),
         }
     }
@@ -401,7 +433,9 @@ where
         match &self.state {
             State::Collect => {
                 let finished = self.input.is_finished();
-                self.trans_to_spill()?;
+                if !self.trans_to_spill()? {
+                    return Ok(());
+                }
 
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
