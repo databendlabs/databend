@@ -76,7 +76,12 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -yq
-        sudo apt-get install -yq --no-install-recommends build-essential clang mold libssl-dev pkg-config cmake protobuf-compiler
+        sudo apt-get install -yq --no-install-recommends build-essential clang libssl-dev pkg-config cmake protobuf-compiler
+        # Older mold can assert when linking large ARM64 debug libraries (rui314/mold#1538).
+        curl -sSfL --retry 3 -o "${RUNNER_TEMP}/mold.tar.gz" \
+          "https://github.com/rui314/mold/releases/download/v2.42.1/mold-2.42.1-$(uname -m)-linux.tar.gz"
+        sudo tar --strip-components=1 -xzf "${RUNNER_TEMP}/mold.tar.gz" -C /usr/local
+        /usr/local/bin/mold --version
         if [[ "${{ inputs.target }}" == aarch64-* ]]; then
           echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
         else
