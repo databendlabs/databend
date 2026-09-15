@@ -54,10 +54,11 @@ pub fn is_cacheable_function(name: &str) -> bool {
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
-pub const ASYNC_FUNCTIONS: [Ascii<&str>; 3] = [
+pub const ASYNC_FUNCTIONS: [Ascii<&str>; 4] = [
     Ascii::new("nextval"),
     Ascii::new("dict_get"),
     Ascii::new("read_file"),
+    Ascii::new("sleep"),
 ];
 
 pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 5] = [

@@ -994,6 +994,10 @@ mod tests {
             assert!(matches!(arena.get(root), CoreExpr::SearchFunction { .. }));
         });
 
+        assert_sql_lowers_to("sleep(0.01)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::AsyncFunction { .. }));
+        });
+
         assert_sql_lowers_to("nextval(seq)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::AsyncFunction { .. }));
         });
