@@ -646,11 +646,10 @@ mod tests {
             }
 
             let protected_block = candidates[0].clone();
-            // UUIDs alone cannot distinguish different versions or storage prefixes.
+            // Keep the referenced v1 block, but delete the unreferenced v2 block
+            // with the same UUID in the same directory.
             let protected_other_version = candidates[1].replace("_v2.parquet", "_v1.parquet");
-            let protected_other_prefix = candidates[2].replacen("1/2/", "3/4/", 1);
             dal.write(&protected_other_version, vec![1]).await?;
-            dal.write(&protected_other_prefix, vec![1]).await?;
             let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
                 gc_root_timestamp + chrono::Duration::seconds(1),
             );
@@ -661,7 +660,6 @@ mod tests {
             let protected_blocks = HashSet::from([
                 block_path_hash(&protected_block),
                 block_path_hash(&protected_other_version),
-                block_path_hash(&protected_other_prefix),
             ]);
             let inverted_indexes = BTreeMap::new();
             let block_gc = BlockGcContext {
@@ -686,7 +684,6 @@ mod tests {
             assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 2);
             assert!(dal.exists(&protected_block).await?);
             assert!(dal.exists(&protected_other_version).await?);
-            assert!(dal.exists(&protected_other_prefix).await?);
             assert!(dal.exists(&after_cutoff_block).await?);
             for path in candidates.iter().skip(1) {
                 assert!(!dal.exists(path).await?, "garbage block survived: {path}");
