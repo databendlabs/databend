@@ -1201,9 +1201,8 @@ impl FuseTable {
 
         if let Some(virtual_block_meta) = virtual_block_meta {
             // Add bytes of virtual columns.
-            for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
-                let (_, len) = virtual_column_meta.offset_length();
-                statistics.read_bytes += len as usize;
+            for slot in &virtual_block_meta.read_slots {
+                statistics.read_bytes += slot.len as usize;
             }
 
             // Check whether source columns can be ignored. If not, add bytes of source columns.

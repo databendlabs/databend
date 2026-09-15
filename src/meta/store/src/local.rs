@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_base::testutil::next_port;
+use databend_base::uniq_id::GlobalUniq;
 use databend_meta::api::grpc::grpc_service::MetaServiceImpl;
 use databend_meta::configs;
 use databend_meta::meta_node::meta_handle::MetaHandle;
@@ -104,43 +104,40 @@ impl LocalMetaService {
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let temp_dir = tempfile::tempdir()?;
-        let raft_port = next_port();
-        let raft_dir = temp_dir
-            .path()
-            .join(format!("{name}-{raft_port}"))
-            .join("raft_dir");
+        let raft_dir = temp_dir.path().join(&name).join("raft_dir");
 
-        Self::create::<RT>(Some(temp_dir), name, raft_dir, raft_port).await
+        Self::create::<RT>(Some(temp_dir), name, raft_dir).await
     }
 
     /// Create an embedded meta service backed by a persistent directory.
     ///
     /// Client RPCs use an in-process gRPC channel. Raft still starts the
     /// listener required by `databend-meta`, but binds port 0 atomically.
-    /// The supplied directory is stable across restarts. The logical Raft port
-    /// remains the config ID even though the actual listener now binds port 0.
+    /// The supplied directory is stable across restarts.
+    ///
+    /// The store lives at `{dir}/raft_dir` and every start reopens it.
+    /// Before #20391 each start created a fresh `{dir}/{name}-{port}/raft_dir`
+    /// and never reopened it. Such directories are left in place and unused.
     pub async fn new_with_fixed_dir<RT: RuntimeApi>(
         dir: String,
         name: impl fmt::Display,
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
-        let raft_port = next_port();
         let raft_dir = PathBuf::from(dir).join("raft_dir");
 
-        Self::create::<RT>(None, name, raft_dir, raft_port).await
+        Self::create::<RT>(None, name, raft_dir).await
     }
 
     async fn create<RT: RuntimeApi>(
         temp_dir: Option<tempfile::TempDir>,
         name: String,
         raft_dir: PathBuf,
-        raft_port: u16,
     ) -> anyhow::Result<LocalMetaService> {
         let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = 0;
 
-        config.raft_config.config_id = raft_port.to_string();
+        config.raft_config.config_id = GlobalUniq::unique();
 
         config.raft_config.raft_dir = raft_dir.to_string_lossy().into_owned();
 
@@ -222,7 +219,10 @@ impl LocalMetaService {
 
         let join_handle = RT::spawn(
             async move {
+                // Same as `databend-meta`'s `GrpcServer`: hyper's default limit
+                // of 20 pending reset streams is too low under high concurrency.
                 let result = Server::builder()
+                    .http2_max_pending_accept_reset_streams(Some(4096))
                     .add_service(grpc_service)
                     .serve_with_incoming_shutdown(incoming, async move {
                         let _ = shutdown_rx.await;
@@ -260,6 +260,8 @@ impl LocalMetaService {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use databend_meta::runtime_api::TokioRuntime;
     use databend_meta_client::kvapi::KVApi;
     use databend_meta_client::kvapi::KvApiExt;
@@ -280,22 +282,33 @@ mod tests {
             LocalMetaService::new_with_fixed_dir::<TokioRuntime>(dir.clone(), "persistent-test")
                 .await?;
         let first_raft_dir = first.config.raft_config.raft_dir.clone();
-        let logical_raft_port = first.config.raft_config.config_id.parse::<u16>()?;
         assert_eq!(first.config.raft_config.raft_api_port, 0);
         assert_eq!(
             first_raft_dir,
             root.path().join("meta/raft_dir").to_string_lossy()
         );
-        assert_ne!(logical_raft_port, 0);
         let first = MetaStore::L(Arc::new(first));
         first.upsert_kv(UpsertKV::update(key, value)).await?;
         drop(first);
 
-        // Dropping the service signals its background server and Meta worker.
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        let second =
-            LocalMetaService::new_with_fixed_dir::<TokioRuntime>(dir, "persistent-test").await?;
+        // Dropping the service only signals its Meta worker; the worker releases
+        // the raft dir lock asynchronously, so retry the reopen until it does.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let second = loop {
+            let res = LocalMetaService::new_with_fixed_dir::<TokioRuntime>(
+                dir.clone(),
+                "persistent-test",
+            )
+            .await;
+            let err = match res {
+                Ok(second) => break second,
+                Err(err) => err,
+            };
+            if Instant::now() >= deadline {
+                return Err(err);
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        };
         assert_eq!(second.config.raft_config.raft_dir, first_raft_dir);
 
         let second = MetaStore::L(Arc::new(second));

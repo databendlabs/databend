@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeScanOrder;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::runtime_filter_info::RuntimeTopNRank;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
@@ -115,7 +116,7 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> RuntimeTopNSegmentReorder<M> {
     }
 
     fn should_prune(&self, block: &DataBlock) -> bool {
-        let stats = Self::column_stats(block);
+        let stats = RuntimeScanStatistics::from_columns(Self::column_stats(block));
         self.filter.should_prune(stats)
     }
 }
@@ -128,7 +129,12 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> AccumulatingTransform for RuntimeTopN
             return Ok(vec![]);
         }
 
-        let rank = self.order.rank(Self::column_stats(&block)).cloned();
+        let rank = self
+            .order
+            .rank(RuntimeScanStatistics::from_columns(Self::column_stats(
+                &block,
+            )))
+            .cloned();
         self.buffered.push(Entry {
             rank,
             order: self.order,

@@ -32,6 +32,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::read::SnapshotHistoryReader;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
+use databend_common_storages_fuse::table_functions::check_shared_table_select;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream::StreamExt;
@@ -95,6 +96,13 @@ impl SimpleTableFunc for TableStatisticsFunc {
                 .get_table(&tenant_id, &self.args.database_name, table_name)
                 .await
             {
+                check_shared_table_select(
+                    ctx.as_ref(),
+                    CATALOG_DEFAULT,
+                    &self.args.database_name,
+                    tbl.as_ref(),
+                )
+                .await?;
                 let engine = tbl.get_table_info().engine().to_string();
                 match engine.to_lowercase().as_str() {
                     "fuse" => {
@@ -132,6 +140,19 @@ impl SimpleTableFunc for TableStatisticsFunc {
                         .get_table(&tenant_id, &self.args.database_name, &table_name)
                         .await
                     {
+                        if let Err(err) = check_shared_table_select(
+                            ctx.as_ref(),
+                            CATALOG_DEFAULT,
+                            &self.args.database_name,
+                            tbl.as_ref(),
+                        )
+                        .await
+                        {
+                            if err.code() == ErrorCode::PERMISSION_DENIED {
+                                continue;
+                            }
+                            return Err(err);
+                        }
                         let engine = tbl.get_table_info().engine().to_string();
                         match engine.to_lowercase().as_str() {
                             "fuse" => {

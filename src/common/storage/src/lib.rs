@@ -31,6 +31,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::let_unit_value)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 
 mod auth;

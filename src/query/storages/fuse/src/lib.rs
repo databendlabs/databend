@@ -21,6 +21,7 @@
     clippy::uninlined_format_args
 )]
 #![allow(clippy::useless_asref)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]

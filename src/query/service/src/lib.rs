@@ -29,6 +29,7 @@
 )]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![feature(sync_unsafe_cell)]
 #![allow(mismatched_lifetime_syntaxes)]

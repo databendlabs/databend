@@ -349,5 +349,71 @@ select k from t_top_n_fuse order by d asc limit 2 offset 1
 statement ok
 drop table t_top_n_fuse;
 
+# Runtime TopN over a typed virtual column. The two inserts create separate
+# segments and `row_per_block` creates disjoint block ranges. The always-true
+# filter prevents static value TopN pruning from masking the runtime scan
+# filter, while still allowing Runtime TopN registration through Filter.
+statement ok
+set enable_experimental_virtual_column = 1;
+
+statement ok
+create or replace table t_top_n_virtual (
+    id int not null,
+    payload json not null
+) storage_format = 'parquet' enable_virtual_column = true row_per_block = 5;
+
+statement ok
+insert into t_top_n_virtual
+select number,
+       parse_json(concat('{"k":', to_string(number), '}'))
+from numbers(100);
+
+statement ok
+insert into t_top_n_virtual
+select number + 100,
+       parse_json(concat('{"k":', to_string(number + 100), '}'))
+from numbers(100);
+
+statement ok
+refresh virtual column on t_top_n_virtual;
+
+# The typed path is the Runtime TopN key; the projected base column makes the
+# expected result easy to verify without depending on Variant rendering.
+query I
+select id from t_top_n_virtual
+where id >= 0
+order by payload['k']::Int64 desc
+limit 4
+----
+199
+198
+197
+196
+
+query I
+select id from t_top_n_virtual
+where id >= 0
+order by payload['k']::Int64 asc
+limit 3 offset 2
+----
+2
+3
+4
+
+# The Sort + Limit path is the differential oracle.
+query I
+settings (enable_top_n = 0) select id from t_top_n_virtual where id >= 0 order by payload['k']::Int64 desc limit 4
+----
+199
+198
+197
+196
+
+statement ok
+drop table t_top_n_virtual;
+
+statement ok
+unset enable_experimental_virtual_column;
+
 statement ok
 unset enable_top_n;

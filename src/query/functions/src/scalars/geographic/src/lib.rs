@@ -19,6 +19,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::redundant_iter_cloned)]
 #![allow(internal_features)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 
 pub mod geo;

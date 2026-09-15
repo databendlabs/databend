@@ -31,6 +31,7 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
+use crate::table_functions::check_shared_table_select;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
 
@@ -144,6 +145,13 @@ where
                 args.table_name.as_str(),
             )
             .await?;
+        check_shared_table_select(
+            ctx.as_ref(),
+            CATALOG_DEFAULT,
+            &args.database_name,
+            tbl.as_ref(),
+        )
+        .await?;
         // Don't pass limit when order_by is present - table functions can't do TopN,
         // so limit must be applied by the upper Sort operator after ordering.
         let limit = plan

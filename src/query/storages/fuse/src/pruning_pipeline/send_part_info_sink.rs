@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -224,12 +225,31 @@ impl AsyncSink for SendPartInfoSink {
         self.statistics.partitions_scanned += block_metas.len();
         if !self.runtime_scan_filters.is_empty() {
             let filters = &self.runtime_scan_filters;
-            block_metas.retain(|(_, meta)| !filters.should_prune(Some(&meta.col_stats)));
+            block_metas.retain(|(index, meta)| {
+                let virtual_stats = index
+                    .virtual_block_meta
+                    .as_ref()
+                    .map(|meta| &meta.virtual_column_stats);
+                !filters.should_prune(RuntimeScanStatistics::new(
+                    Some(&meta.col_stats),
+                    virtual_stats,
+                ))
+            });
 
             if let Some((_, order)) = filters.preferred_filter() {
                 let mut ranked = Vec::with_capacity(block_metas.len());
                 for block_meta in block_metas.drain(..) {
-                    let rank = order.rank(Some(&block_meta.1.col_stats)).cloned();
+                    let virtual_stats = block_meta
+                        .0
+                        .virtual_block_meta
+                        .as_ref()
+                        .map(|meta| &meta.virtual_column_stats);
+                    let rank = order
+                        .rank(RuntimeScanStatistics::new(
+                            Some(&block_meta.1.col_stats),
+                            virtual_stats,
+                        ))
+                        .cloned();
                     ranked.push((rank, block_meta));
                 }
 
@@ -292,7 +312,11 @@ impl SendPartInfoSink {
         let mut parts = Vec::with_capacity(block_metas.len());
 
         for (block_meta_index, block_meta) in block_metas.iter() {
-            let stats = Some(&block_meta.col_stats);
+            let virtual_stats = block_meta_index
+                .virtual_block_meta
+                .as_ref()
+                .map(|meta| &meta.virtual_column_stats);
+            let stats = RuntimeScanStatistics::new(Some(&block_meta.col_stats), virtual_stats);
             if self.runtime_scan_filters.should_prune(stats) {
                 continue;
             }
@@ -344,7 +368,11 @@ impl SendPartInfoSink {
         };
 
         for (block_meta_index, block_meta) in block_metas.iter() {
-            let stats = Some(&block_meta.col_stats);
+            let virtual_stats = block_meta_index
+                .virtual_block_meta
+                .as_ref()
+                .map(|meta| &meta.virtual_column_stats);
+            let stats = RuntimeScanStatistics::new(Some(&block_meta.col_stats), virtual_stats);
             if self.runtime_scan_filters.should_prune(stats) {
                 continue;
             }
@@ -374,10 +402,9 @@ impl SendPartInfoSink {
             let virtual_block_meta = &block_meta_index.virtual_block_meta;
             if let Some(virtual_column) = virtual_column {
                 if let Some(virtual_block_meta) = virtual_block_meta {
-                    // Add bytes of virtual columns
-                    for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
-                        let (_, len) = virtual_column_meta.offset_length();
-                        self.statistics.read_bytes += len as usize;
+                    // Add bytes of virtual columns.
+                    for slot in &virtual_block_meta.read_slots {
+                        self.statistics.read_bytes += slot.len as usize;
                     }
 
                     // Check whether source columns can be ignored.

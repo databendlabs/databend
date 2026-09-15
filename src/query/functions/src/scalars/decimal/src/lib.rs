@@ -17,6 +17,7 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::collapsible_if)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![feature(try_blocks)]
 #![feature(likely_unlikely)]

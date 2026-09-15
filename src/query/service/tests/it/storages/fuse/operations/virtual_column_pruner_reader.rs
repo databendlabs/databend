@@ -25,7 +25,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::VariantType;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storages_fuse::FuseTable;
@@ -38,8 +40,9 @@ use databend_query::test_kits::*;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::ProjectedVirtualPath;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
-use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_pruner::VirtualColumnSharedDataType;
+use databend_storages_common_pruner::VirtualFieldReadPlan;
+use databend_storages_common_pruner::VirtualReadSlot;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualSegmentColumnPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentPath;
@@ -175,10 +178,8 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         .expect("virtual block meta index");
 
     let mut plan_kinds = HashSet::new();
-    for plans in virtual_block_meta_index.virtual_column_read_plan.values() {
-        for plan in plans {
-            collect_plan_kinds(plan, &mut plan_kinds);
-        }
+    for plan in virtual_block_meta_index.fields.values() {
+        collect_plan_kinds(plan, &mut plan_kinds);
     }
     assert!(plan_kinds.contains("Direct"));
     assert!(plan_kinds.contains("FromParent"));
@@ -188,10 +189,12 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     assert!(plan_kinds.contains("Coalesce"));
 
     let mut shared_data_types = HashSet::new();
-    for plans in virtual_block_meta_index.virtual_column_read_plan.values() {
-        for plan in plans {
-            collect_shared_data_types(plan, &mut shared_data_types);
-        }
+    for plan in virtual_block_meta_index.fields.values() {
+        collect_shared_data_types(
+            plan,
+            &virtual_block_meta_index.read_slots,
+            &mut shared_data_types,
+        );
     }
     for data_type in [
         VirtualColumnSharedDataType::Boolean,
@@ -212,42 +215,36 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let sparse_jsonb_arr0_column_id = column_ids[12];
     let root_array_k_column_id = column_ids[14];
 
-    let info_plans = virtual_block_meta_index
-        .virtual_column_read_plan
+    let info_plan = virtual_block_meta_index
+        .fields
         .get(&info_column_id)
-        .expect("user.info plans");
-    assert!(
-        info_plans
-            .iter()
-            .any(|plan| matches!(plan, VirtualColumnReadPlan::Object { .. }))
-    );
+        .expect("user.info plan");
+    assert!(matches!(info_plan, VirtualFieldReadPlan::Object { .. }));
 
-    let tags0_plans = virtual_block_meta_index
-        .virtual_column_read_plan
+    let tags0_plan = virtual_block_meta_index
+        .fields
         .get(&tags0_column_id)
-        .expect("tags[0] plans");
-    assert!(tags0_plans.iter().any(|plan| matches!(
-        plan,
-        VirtualColumnReadPlan::FromParent { suffix_path, .. } if suffix_path == "{0}"
-    )));
+        .expect("tags[0] plan");
+    assert!(matches!(
+        tags0_plan,
+        VirtualFieldReadPlan::FromParent { suffix_path, .. } if suffix_path == "{0}"
+    ));
 
-    let sparse_jsonb_arr0_plans = virtual_block_meta_index
-        .virtual_column_read_plan
+    let sparse_jsonb_arr0_plan = virtual_block_meta_index
+        .fields
         .get(&sparse_jsonb_arr0_column_id)
-        .expect("sparse_jsonb_arr[0] plans");
-    assert!(sparse_jsonb_arr0_plans.iter().any(|plan| matches!(
-        plan,
-        VirtualColumnReadPlan::FromParent { parent, suffix_path }
+        .expect("sparse_jsonb_arr[0] plan");
+    assert!(matches!(
+        sparse_jsonb_arr0_plan,
+        VirtualFieldReadPlan::FromParent { parent, suffix_path }
             if suffix_path == "{0}"
-                && matches!(parent.as_ref(), VirtualColumnReadPlan::Shared {
-                    data_type: VirtualColumnSharedDataType::Jsonb,
-                    ..
-                })
-    )));
+                && shared_plan_data_type(parent, &virtual_block_meta_index.read_slots)
+                    == Some(VirtualColumnSharedDataType::Jsonb)
+    ));
 
     assert!(
         !virtual_block_meta_index
-            .virtual_column_read_plan
+            .fields
             .contains_key(&root_array_k_column_id)
     );
     assert!(
@@ -256,17 +253,13 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
             .contains(&source_column_id)
     );
 
-    let extra_plans = virtual_block_meta_index
-        .virtual_column_read_plan
+    let extra_plan = virtual_block_meta_index
+        .fields
         .get(&extra_column_id)
-        .expect("user.extra plans");
-    assert!(
-        extra_plans
-            .iter()
-            .any(|plan| matches!(plan, VirtualColumnReadPlan::Shared {
-                data_type: VirtualColumnSharedDataType::String,
-                ..
-            }))
+        .expect("user.extra plan");
+    assert_eq!(
+        shared_plan_data_type(extra_plan, &virtual_block_meta_index.read_slots),
+        Some(VirtualColumnSharedDataType::String)
     );
 
     let plan = table
@@ -451,10 +444,17 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         .prune_virtual_columns(&Some(virtual_block_meta), Some(&projected_segment_schema))
         .await?
         .unwrap();
-    assert!(matches!(
-        index.virtual_column_read_plan[&query_column_id].as_slice(),
-        [VirtualColumnReadPlan::BlockMetaDirect { column_id }] if *column_id == segment_column_id
-    ));
+    let VirtualFieldReadPlan::Direct { slot } = &index.fields[&query_column_id] else {
+        panic!("expected direct block-meta read plan");
+    };
+    let read_slot = &index.read_slots[slot.as_usize()];
+    assert_eq!(read_slot.offset, draft_meta.column_meta.offset);
+    assert_eq!(read_slot.len, draft_meta.column_meta.len);
+    assert_eq!(read_slot.num_values, draft_meta.column_meta.num_values);
+    assert_eq!(
+        read_slot.data_type,
+        DataType::from(&draft_meta.column_meta.data_type())
+    );
 
     let plan = table
         .read_plan(ctx.clone(), None, None, false, true)
@@ -496,8 +496,8 @@ fn build_virtual_column_field(
         query_column_id,
         name: format_virtual_column_name(source_name, &key_paths),
         key_paths,
-        cast_func_name: None,
         data_type: Box::new(TableDataType::Variant),
+        is_try: true,
     }
 }
 
@@ -512,60 +512,83 @@ fn format_virtual_column_name(source: &str, key_paths: &OwnedKeyPaths) -> String
     name
 }
 
-fn collect_plan_kinds(plan: &VirtualColumnReadPlan, kinds: &mut HashSet<&'static str>) {
+fn collect_plan_kinds(plan: &VirtualFieldReadPlan, kinds: &mut HashSet<&'static str>) {
     match plan {
-        VirtualColumnReadPlan::Direct { .. } | VirtualColumnReadPlan::BlockMetaDirect { .. } => {
+        VirtualFieldReadPlan::Direct { .. } => {
             kinds.insert("Direct");
         }
-        VirtualColumnReadPlan::FromParent { parent, .. } => {
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
             kinds.insert("FromParent");
             collect_plan_kinds(parent, kinds);
         }
-        VirtualColumnReadPlan::Shared { .. } => {
+        VirtualFieldReadPlan::Shared { .. } => {
             kinds.insert("Shared");
         }
-        VirtualColumnReadPlan::Coalesce { plans } => {
+        VirtualFieldReadPlan::Coalesce { plans } => {
             kinds.insert("Coalesce");
             for child in plans {
                 collect_plan_kinds(child, kinds);
             }
         }
-        VirtualColumnReadPlan::Object { entries } => {
+        VirtualFieldReadPlan::Object { entries } => {
             kinds.insert("Object");
             for (_, child) in entries {
                 collect_plan_kinds(child, kinds);
             }
         }
-        VirtualColumnReadPlan::Missing => {
+        VirtualFieldReadPlan::Missing => {
             kinds.insert("Missing");
         }
     }
 }
 
+fn shared_plan_data_type(
+    plan: &VirtualFieldReadPlan,
+    read_slots: &[VirtualReadSlot],
+) -> Option<VirtualColumnSharedDataType> {
+    let VirtualFieldReadPlan::Shared { value_slot, .. } = plan else {
+        return None;
+    };
+    match read_slots
+        .get(value_slot.as_usize())?
+        .data_type
+        .remove_nullable()
+    {
+        DataType::Boolean => Some(VirtualColumnSharedDataType::Boolean),
+        DataType::Number(NumberDataType::UInt64) => Some(VirtualColumnSharedDataType::UInt64),
+        DataType::Number(NumberDataType::Int64) => Some(VirtualColumnSharedDataType::Int64),
+        DataType::Number(NumberDataType::Float64) => Some(VirtualColumnSharedDataType::Float64),
+        DataType::String => Some(VirtualColumnSharedDataType::String),
+        DataType::Variant => Some(VirtualColumnSharedDataType::Jsonb),
+        _ => None,
+    }
+}
+
 fn collect_shared_data_types(
-    plan: &VirtualColumnReadPlan,
+    plan: &VirtualFieldReadPlan,
+    read_slots: &[VirtualReadSlot],
     data_types: &mut HashSet<VirtualColumnSharedDataType>,
 ) {
     match plan {
-        VirtualColumnReadPlan::Shared { data_type, .. } => {
-            data_types.insert(*data_type);
+        VirtualFieldReadPlan::Shared { .. } => {
+            if let Some(data_type) = shared_plan_data_type(plan, read_slots) {
+                data_types.insert(data_type);
+            }
         }
-        VirtualColumnReadPlan::FromParent { parent, .. } => {
-            collect_shared_data_types(parent, data_types);
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
+            collect_shared_data_types(parent, read_slots, data_types);
         }
-        VirtualColumnReadPlan::Coalesce { plans } => {
+        VirtualFieldReadPlan::Coalesce { plans } => {
             for child in plans {
-                collect_shared_data_types(child, data_types);
+                collect_shared_data_types(child, read_slots, data_types);
             }
         }
-        VirtualColumnReadPlan::Object { entries } => {
+        VirtualFieldReadPlan::Object { entries } => {
             for (_, child) in entries {
-                collect_shared_data_types(child, data_types);
+                collect_shared_data_types(child, read_slots, data_types);
             }
         }
-        VirtualColumnReadPlan::Missing
-        | VirtualColumnReadPlan::Direct { .. }
-        | VirtualColumnReadPlan::BlockMetaDirect { .. } => {}
+        VirtualFieldReadPlan::Missing | VirtualFieldReadPlan::Direct { .. } => {}
     }
 }
 

@@ -17,6 +17,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 
 mod chunk_reader_impl;

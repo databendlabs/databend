@@ -18,6 +18,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![feature(try_blocks)]
 

@@ -23,6 +23,7 @@
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]
 #![feature(core_intrinsics)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]

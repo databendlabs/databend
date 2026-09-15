@@ -19,6 +19,7 @@
 #![allow(internal_features)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::unnecessary_unwrap)]
+#![allow(incomplete_features)]
 #![feature(deref_patterns)]
 extern crate core;
 
