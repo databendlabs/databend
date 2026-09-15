@@ -399,7 +399,7 @@ impl DataType {
 
     pub fn remove_nullable_ref(&self) -> &Self {
         match self {
-            DataType::Nullable(box inner) => inner,
+            DataType::Nullable(deref!(inner)) => inner,
             _ => self,
         }
     }
