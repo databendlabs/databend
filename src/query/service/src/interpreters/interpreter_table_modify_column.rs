@@ -48,6 +48,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_sql::analyze_cluster_keys;
+use databend_common_sql::analyze_ttl_expr;
 use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::ModifyColumnAction;
@@ -84,6 +85,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::stored_computed_column_references;
+use crate::interpreters::common::ttl_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::meta_service_error;
@@ -308,6 +310,23 @@ impl ModifyTableColumnInterpreter {
                         "Cannot modify column data type because it is referenced by partition key '{}'",
                         partition_key
                     )));
+                }
+            }
+            // A TTL must stay evaluable as a TIMESTAMP/DATE. Re-validate it
+            // against the new schema rather than assuming the old type holds,
+            // otherwise a type change would leave a TTL that can never be
+            // applied.
+            if let Some(ttl) = &table_info.meta.ttl {
+                let referenced = ttl_referenced_columns(ttl)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    let tmp_table = fuse_table.with_schema(new_schema.clone());
+                    if let Err(e) = analyze_ttl_expr(self.ctx.clone(), tmp_table, ttl) {
+                        return Err(ErrorCode::AlterTableError(format!(
+                            "Cannot modify column data type, because it is referenced by TTL '{}': {}",
+                            ttl,
+                            e.message()
+                        )));
+                    }
                 }
             }
         }
@@ -878,13 +897,10 @@ impl Interpreter for ModifyTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let table = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
+            // Preserve the version against which the new column definitions were bound.
+            let table = self
+                .ctx
+                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
                 .await?;
 
             table.check_mutable()?;

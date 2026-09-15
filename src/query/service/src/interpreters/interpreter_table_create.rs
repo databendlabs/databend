@@ -199,6 +199,31 @@ impl Interpreter for CreateTableInterpreter {
                 }
             }
 
+            // Row-level TTL relies on the FUSE mutation/commit path to remove
+            // expired rows, so it cannot be honored by other engines.
+            if self.plan.ttl.is_some() && self.plan.engine != Engine::Fuse {
+                return Err(ErrorCode::UnsupportedEngineParams(format!(
+                    "Unsupported TTL for engine: {}",
+                    self.plan.engine
+                )));
+            }
+
+            // TTL is removed by a background task that reads committed table meta.
+            // Transient and temporary tables are either not durably maintained or
+            // live only for the session, so a TTL on them would never be honored.
+            if self.plan.ttl.is_some() {
+                if self.plan.options.contains_key("TRANSIENT") {
+                    return Err(ErrorCode::BadArguments(
+                        "TTL is not supported for TRANSIENT tables",
+                    ));
+                }
+                if self.plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+                    return Err(ErrorCode::BadArguments(
+                        "TTL is not supported for TEMPORARY tables",
+                    ));
+                }
+            }
+
             match &self.plan.as_select {
                 Some(select_plan_node) => {
                     self.create_table_as_select(select_plan_node.clone()).await
@@ -605,6 +630,8 @@ impl CreateTableInterpreter {
             table_meta.cluster_key_seq += 1;
             table_meta.cluster_key_v2 = Some((table_meta.cluster_key_seq, cluster_key.clone()));
         }
+
+        table_meta.ttl = self.plan.ttl.clone();
 
         let req = CreateTableReq {
             create_option: self.plan.create_option,

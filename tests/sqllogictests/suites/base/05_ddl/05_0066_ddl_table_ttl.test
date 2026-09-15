@@ -1,0 +1,259 @@
+statement ok
+USE default
+
+statement ok
+set sql_dialect = 'PostgreSQL'
+
+# Keep the expected SHOW CREATE TABLE output independent of the default table
+# options, so this test only asserts on the TTL clause.
+statement ok
+set hide_options_in_show_create_table=1
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t0`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t1`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t2`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t3`
+
+# CREATE TABLE with a TTL expression over a column plus an interval.
+statement ok
+CREATE TABLE `05_0066_ttl_t0`(a int not null, event_time timestamp not null) TTL event_time + INTERVAL 30 DAY
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, event_time TIMESTAMP NOT NULL ) ENGINE=FUSE TTL event_time + INTERVAL 30 DAY
+
+# A bare TIMESTAMP column is a valid TTL expression.
+statement ok
+CREATE TABLE `05_0066_ttl_t1`(a int not null, expire_at timestamp not null) TTL expire_at
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t1`
+----
+05_0066_ttl_t1 CREATE TABLE "05_0066_ttl_t1" ( a INT NOT NULL, expire_at TIMESTAMP NOT NULL ) ENGINE=FUSE TTL expire_at
+
+# A DATE typed expression is accepted too.
+statement ok
+CREATE TABLE `05_0066_ttl_t2`(a int not null, d date not null) TTL d
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t2`
+----
+05_0066_ttl_t2 CREATE TABLE "05_0066_ttl_t2" ( a INT NOT NULL, d DATE NOT NULL ) ENGINE=FUSE TTL d
+
+# TTL must be TIMESTAMP or DATE typed.
+statement error 1065
+CREATE TABLE `05_0066_ttl_bad`(a int not null) TTL a
+
+# TTL must reference at least one column, otherwise it is either always or never
+# expired and cannot be pruned.
+statement error 1065
+CREATE TABLE `05_0066_ttl_bad`(a int not null) TTL '2020-01-01'::timestamp
+
+# TTL must be deterministic: `now()` would make the stored definition mean
+# something different on every evaluation.
+statement error 1065
+CREATE TABLE `05_0066_ttl_bad`(a int not null, t timestamp not null) TTL now()
+
+statement error 1065
+CREATE TABLE `05_0066_ttl_bad`(a int not null, t timestamp not null) TTL greatest(t, now())
+
+# Unknown column in a TTL expression.
+statement error 1065
+CREATE TABLE `05_0066_ttl_bad`(a int not null, t timestamp not null) TTL no_such_col
+
+# ALTER TABLE ... SET TTL
+statement ok
+ALTER TABLE `05_0066_ttl_t0` SET TTL event_time + INTERVAL 7 DAY
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, event_time TIMESTAMP NOT NULL ) ENGINE=FUSE TTL event_time + INTERVAL 7 DAY
+
+# SET TTL replaces an existing definition as well as setting a new one.
+statement ok
+ALTER TABLE `05_0066_ttl_t0` SET TTL event_time + INTERVAL 3 DAY
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, event_time TIMESTAMP NOT NULL ) ENGINE=FUSE TTL event_time + INTERVAL 3 DAY
+
+# Setting TTL on a table that has none.
+statement ok
+CREATE TABLE `05_0066_ttl_t3`(a int not null, t timestamp not null)
+
+statement ok
+ALTER TABLE `05_0066_ttl_t3` SET TTL t
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t3`
+----
+05_0066_ttl_t3 CREATE TABLE "05_0066_ttl_t3" ( a INT NOT NULL, t TIMESTAMP NOT NULL ) ENGINE=FUSE TTL t
+
+# SET TTL is validated against the table schema.
+statement error 1065
+ALTER TABLE `05_0066_ttl_t3` SET TTL no_such_col
+
+statement error 1065
+ALTER TABLE `05_0066_ttl_t3` SET TTL a
+
+# A column referenced by TTL cannot be dropped.
+statement error 1132
+ALTER TABLE `05_0066_ttl_t0` DROP COLUMN event_time
+
+# Dropping a column the TTL does not reference is still fine.
+statement ok
+ALTER TABLE `05_0066_ttl_t3` DROP COLUMN a
+
+# A type change that would leave the TTL unevaluable is rejected, rather than
+# leaving `TTL t + INTERVAL 3 DAY` sitting on a non-temporal column.
+statement error 1132
+ALTER TABLE `05_0066_ttl_t0` MODIFY COLUMN event_time string not null
+
+# The TTL is unchanged after the rejected MODIFY COLUMN.
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, event_time TIMESTAMP NOT NULL ) ENGINE=FUSE TTL event_time + INTERVAL 3 DAY
+
+# A type change that keeps the TTL evaluable is still allowed: DATE remains a
+# valid TTL operand.
+statement ok
+ALTER TABLE `05_0066_ttl_t0` MODIFY COLUMN event_time date not null
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, event_time DATE NOT NULL ) ENGINE=FUSE TTL event_time + INTERVAL 3 DAY
+
+statement ok
+ALTER TABLE `05_0066_ttl_t0` MODIFY COLUMN event_time timestamp not null
+
+# Modifying a column the TTL does not reference is unaffected. Asserted on t1 so
+# that t0's expected schema below stays stable.
+statement ok
+ALTER TABLE `05_0066_ttl_t1` MODIFY COLUMN a bigint not null
+
+# RENAME COLUMN rewrites the stored TTL expression.
+statement ok
+ALTER TABLE `05_0066_ttl_t0` RENAME COLUMN event_time TO created_at
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, created_at TIMESTAMP NOT NULL ) ENGINE=FUSE TTL created_at + INTERVAL 3 DAY
+
+# After renaming, the new column name is the one protected from DROP.
+statement error 1132
+ALTER TABLE `05_0066_ttl_t0` DROP COLUMN created_at
+
+# ALTER TABLE ... REMOVE TTL
+statement ok
+ALTER TABLE `05_0066_ttl_t0` REMOVE TTL
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, created_at TIMESTAMP NOT NULL ) ENGINE=FUSE
+
+# REMOVE TTL on a table without TTL is a no-op, not an error.
+statement ok
+ALTER TABLE `05_0066_ttl_t0` REMOVE TTL
+
+# Once TTL is removed, the previously protected column can be dropped.
+statement ok
+ALTER TABLE `05_0066_ttl_t0` DROP COLUMN created_at
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_t0`
+----
+05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL ) ENGINE=FUSE
+
+# CREATE TABLE ... AS SELECT shares the same table-meta build path, so TTL
+# applies there too.
+statement ok
+CREATE TABLE `05_0066_ttl_ctas` TTL t + INTERVAL 5 DAY AS SELECT * FROM `05_0066_ttl_t3`
+
+query TT
+SHOW CREATE TABLE `05_0066_ttl_ctas`
+----
+05_0066_ttl_ctas CREATE TABLE "05_0066_ttl_ctas" ( t TIMESTAMP NULL ) ENGINE=FUSE TTL t + INTERVAL 5 DAY
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_ctas`
+
+# TTL is applied asynchronously by a background task reading committed table
+# meta, so table kinds that cannot honor it are rejected up front.
+
+# TRANSIENT tables do not retain the history the task would rely on.
+statement error 1006
+CREATE TRANSIENT TABLE `05_0066_ttl_transient`(a int not null, t timestamp not null) TTL t
+
+statement ok
+CREATE TRANSIENT TABLE `05_0066_ttl_transient`(a int not null, t timestamp not null)
+
+statement error 1006
+ALTER TABLE `05_0066_ttl_transient` SET TTL t
+
+# REMOVE TTL is rejected for the same table kinds, so the two statements behave
+# uniformly rather than depending on whether a TTL happens to be set.
+statement error 1006
+ALTER TABLE `05_0066_ttl_transient` REMOVE TTL
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_transient`
+
+# TEMPORARY tables live only for the current session.
+statement error 1006
+CREATE TEMP TABLE `05_0066_ttl_temp`(a int not null, t timestamp not null) TTL t
+
+statement ok
+CREATE TEMP TABLE `05_0066_ttl_temp`(a int not null, t timestamp not null)
+
+statement error 1006
+ALTER TABLE `05_0066_ttl_temp` SET TTL t
+
+statement error 1006
+ALTER TABLE `05_0066_ttl_temp` REMOVE TTL
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_temp`
+
+# MATERIALIZE TTL parses but is not implemented yet.
+statement error 1002
+ALTER TABLE `05_0066_ttl_t1` MATERIALIZE TTL
+
+statement error 1002
+ALTER TABLE `05_0066_ttl_t1` MATERIALIZE TTL LIMIT 10
+
+# `ttl` is not a reserved word, so it remains usable as an identifier.
+statement ok
+CREATE TABLE `05_0066_ttl_ident`(ttl int not null, t timestamp not null) TTL t
+
+query I
+SELECT ttl FROM `05_0066_ttl_ident`
+----
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_ident`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t0`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t1`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t2`
+
+statement ok
+DROP TABLE IF EXISTS `05_0066_ttl_t3`

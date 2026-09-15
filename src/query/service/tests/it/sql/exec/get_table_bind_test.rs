@@ -132,6 +132,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
@@ -139,6 +140,7 @@ use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use futures_util::TryStreamExt;
 use parking_lot::Mutex;
 
 type MetaType = (String, String, String);
@@ -1101,6 +1103,76 @@ impl TableContextVariables for CtxDelegation {
     fn get_all_variables(&self) -> HashMap<String, Scalar> {
         HashMap::new()
     }
+}
+
+// Split binding and execution explicitly instead of relying on concurrent task
+// timing. A different context commits a DDL in between; the old plan must not
+// borrow that DDL's newer metadata sequence to commit its stale schema/expressions.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_schema_bound_ddl_preserves_table_version() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    // One representative case for each schema-bound ALTER interpreter.
+    let cases = [
+        ("SET TTL ts", "DROP COLUMN ts"),
+        ("CLUSTER BY (ts)", "DROP COLUMN ts"),
+        ("RENAME COLUMN ts TO renamed_ts", "ADD COLUMN extra INT"),
+        ("ADD COLUMN added INT", "ADD COLUMN extra INT"),
+        ("MODIFY COLUMN ts DATE", "ADD COLUMN extra INT"),
+    ];
+
+    for (i, (pending, concurrent)) in cases.iter().enumerate() {
+        let name = format!("ddl_table_version_{i}");
+        fixture
+            .execute_query(&format!(
+                "CREATE TABLE default.{name} (id INT, ts TIMESTAMP)"
+            ))
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let ctx = fixture.new_query_ctx().await?;
+        // Exercise optimistic concurrency without a binder-held table lock.
+        ctx.get_settings()
+            .set_setting("enable_table_lock".to_string(), "0".to_string())?;
+        let (plan, _) = Planner::new(ctx.clone())
+            .plan_sql(&format!("ALTER TABLE default.{name} {pending}"))
+            .await?;
+        let bound_table = ctx.get_table("default", "default", &name).await?;
+
+        fixture
+            .execute_query(&format!("ALTER TABLE default.{name} {concurrent}"))
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let catalog = ctx.get_catalog("default").await?;
+        let current = catalog
+            .get_table(&fixture.default_tenant(), "default", &name)
+            .await?;
+        assert_ne!(
+            bound_table.get_table_info().ident.seq,
+            current.get_table_info().ident.seq
+        );
+
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let err = match interpreter.execute2().await {
+            Ok(_) => panic!("stale ALTER {pending} succeeded after ALTER {concurrent}"),
+            Err(err) => err,
+        };
+        assert_eq!(
+            err.code(),
+            ErrorCode::TABLE_VERSION_MISMATCHED,
+            "{pending}: {err}"
+        );
+
+        // A failed stale DDL must preserve the concurrent DDL's entire metadata,
+        // not just reject the TTL string or leave unrelated schema fields intact.
+        let after = catalog
+            .get_table(&fixture.default_tenant(), "default", &name)
+            .await?;
+        assert_eq!(current.get_table_info().ident, after.get_table_info().ident);
+        assert_eq!(current.get_table_info().meta, after.get_table_info().meta);
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

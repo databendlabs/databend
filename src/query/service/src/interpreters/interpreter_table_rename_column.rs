@@ -32,6 +32,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::rename_column_in_cluster_key;
 use crate::interpreters::common::rename_column_in_comma_separated_ident;
+use crate::interpreters::common::rename_column_in_ttl;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::pipelines::PipelineBuildResult;
@@ -67,13 +68,10 @@ impl Interpreter for RenameTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let table = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
+            // The plan contains a full schema; do not apply it to a newer table version.
+            let table = self
+                .ctx
+                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
                 .await?;
 
             // check mutability
@@ -161,6 +159,16 @@ impl Interpreter for RenameTableColumnInterpreter {
                 )?;
             }
 
+            let mut new_ttl = None;
+            if let Some(ttl) = &new_table_meta.ttl {
+                new_ttl = rename_column_in_ttl(
+                    self.ctx.as_ref(),
+                    ttl,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
+
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -180,6 +188,9 @@ impl Interpreter for RenameTableColumnInterpreter {
                         if let Some((_, ref mut key)) = meta.cluster_key_v2 {
                             *key = cluster_key.clone();
                         }
+                    }
+                    if let Some(ttl) = &new_ttl {
+                        meta.ttl = Some(ttl.clone());
                     }
                 },
             )

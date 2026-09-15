@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
@@ -25,6 +27,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
@@ -583,4 +586,58 @@ pub fn analyze_cluster_keys(
 
     let cluster_by_str = format!("({})", cluster_keys.join(", "));
     Ok((cluster_by_str, exprs))
+}
+
+/// The semantic rules a row-level TTL expression must satisfy.
+///
+/// Shared by the binder (`CREATE`/`ALTER ... SET TTL`) and by the
+/// `MODIFY COLUMN` guard that re-validates the persisted TTL against a new
+/// schema, so the two can never disagree on what a valid TTL is.
+///
+/// A TTL decides when a row becomes eligible for deletion by a background
+/// task, so it must be reproducible by any node at any later time. The
+/// comparison is `ttl_expr <= cutoff`, with the cutoff supplied by the caller
+/// rather than embedded in the expression.
+pub fn validate_ttl_expr<I: ColumnIndex>(expr: &Expr<I>, display: &str) -> Result<()> {
+    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        return Err(ErrorCode::SemanticError(format!(
+            "TTL expression `{display}` is not deterministic"
+        )));
+    }
+
+    let data_type = expr.data_type();
+    if !matches!(
+        data_type.remove_nullable(),
+        DataType::Timestamp | DataType::Date
+    ) {
+        return Err(ErrorCode::SemanticError(format!(
+            "TTL expression `{display}` must be of type TIMESTAMP or DATE, but got '{data_type}'"
+        )));
+    }
+    Ok(())
+}
+
+/// Re-validate a persisted TTL expression against `table_meta`'s current schema.
+///
+/// Used by `MODIFY COLUMN` to reject a type change that would leave a stored
+/// TTL referencing a column it can no longer be evaluated on.
+pub fn analyze_ttl_expr(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<()> {
+    let ast = parse_expr(&tokenize_sql(sql)?, Dialect::default())?;
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx.clone(),
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let (scalar, _) = *type_checker.resolve(&ast)?;
+    validate_ttl_expr(&scalar.as_symbol_expr()?, &format!("{ast:#}"))
 }

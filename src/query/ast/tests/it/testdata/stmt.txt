@@ -2019,6 +2019,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2076,6 +2077,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2148,6 +2150,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: Some(
             [
@@ -2251,6 +2254,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2305,6 +2309,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2374,6 +2379,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2487,6 +2493,7 @@ CreateTable(
                 ],
             },
         ),
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2578,6 +2585,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2669,6 +2677,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2927,6 +2936,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3036,6 +3046,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3119,6 +3130,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3284,6 +3296,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3424,6 +3437,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3538,6 +3552,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3652,6 +3667,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3714,6 +3730,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3760,6 +3777,7 @@ CreateTable(
         ),
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3837,6 +3855,7 @@ CreateTable(
             },
         ),
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -5209,6 +5228,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {
             "bloom_index_columns": "a,b,c",
             "compression": "zstd",
@@ -5445,6 +5465,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7139,6 +7160,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7229,6 +7251,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7298,6 +7321,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7363,6 +7387,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7394,6 +7419,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7536,6 +7562,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7605,6 +7632,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -16760,6 +16788,724 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;
+---------- Output ---------
+ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: SetTableTtl {
+            ttl: BinaryOp {
+                span: Some(
+                    33..34,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        22..32,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    22..32,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        35..50,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            44..46,
+                        ),
+                        value: UInt64(
+                            30,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;
+---------- Output ---------
+ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: SetTableTtl {
+            ttl: BinaryOp {
+                span: Some(
+                    33..34,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        22..32,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    22..32,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        35..49,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            44..45,
+                        ),
+                        value: UInt64(
+                            7,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t SET TTL expire_at;
+---------- Output ---------
+ALTER TABLE t SET TTL expire_at
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: SetTableTtl {
+            ttl: ColumnRef {
+                span: Some(
+                    22..31,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                22..31,
+                            ),
+                            name: "expire_at",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t REMOVE TTL;
+---------- Output ---------
+ALTER TABLE t REMOVE TTL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: RemoveTableTtl,
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MATERIALIZE TTL;
+---------- Output ---------
+ALTER TABLE t MATERIALIZE TTL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: MaterializeTableTtl {
+            limit: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MATERIALIZE TTL LIMIT 10;
+---------- Output ---------
+ALTER TABLE t MATERIALIZE TTL LIMIT 10
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: MaterializeTableTtl {
+            limit: Some(
+                10,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a int, event_time timestamp) TTL event_time + INTERVAL 30 DAY;
+---------- Output ---------
+CREATE TABLE t (a Int32, event_time TIMESTAMP) TTL event_time + INTERVAL 30 DAY
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                23..33,
+                            ),
+                            name: "event_time",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Timestamp,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: Some(
+            BinaryOp {
+                span: Some(
+                    60..61,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        49..59,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    49..59,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        62..77,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            71..73,
+                        ),
+                        value: UInt64(
+                            30,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        ),
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a int, expire_at timestamp) TTL expire_at;
+---------- Output ---------
+CREATE TABLE t (a Int32, expire_at TIMESTAMP) TTL expire_at
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                23..32,
+                            ),
+                            name: "expire_at",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Timestamp,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: Some(
+            ColumnRef {
+                span: Some(
+                    48..57,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                48..57,
+                            ),
+                            name: "expire_at",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ),
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a int, event_time timestamp) CLUSTER BY (a) TTL event_time + INTERVAL 1 DAY;
+---------- Output ---------
+CREATE TABLE t (a Int32, event_time TIMESTAMP) CLUSTER BY (a) TTL event_time + INTERVAL 1 DAY
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                23..33,
+                            ),
+                            name: "event_time",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Timestamp,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            57..58,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        57..58,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                ],
+            },
+        ),
+        ttl: Some(
+            BinaryOp {
+                span: Some(
+                    75..76,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        64..74,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    64..74,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        77..91,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            86..87,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        ),
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (ttl int);
+---------- Output ---------
+CREATE TABLE t (ttl Int32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..19,
+                            ),
+                            name: "ttl",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
@@ -20148,6 +20894,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {
             "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
@@ -20347,6 +21094,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
