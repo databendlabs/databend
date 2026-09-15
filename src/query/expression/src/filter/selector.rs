@@ -363,9 +363,10 @@ impl<'a> Selector<'a> {
         let (value, data_type) = self
             .evaluator
             .get_select_child(column_ref, &mut eval_options)?;
-        debug_assert!(
-            matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
-        );
+        debug_assert!(matches!(
+            data_type,
+            DataType::String | DataType::Nullable(deref!(DataType::String))
+        ));
 
         if value.is_scalar_null() {
             return Ok(0);
@@ -482,7 +483,10 @@ impl<'a> Selector<'a> {
                 ..
             }) => {
                 debug_assert!(
-                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)),
+                    matches!(
+                        return_type,
+                        DataType::Boolean | DataType::Nullable(deref!(DataType::Boolean))
+                    ),
                     "{} return {} not boolean",
                     expr.sql_display(),
                     return_type

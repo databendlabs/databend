@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
@@ -22,19 +21,22 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline::basic::create_resize_item;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::BroadcastProcessor;
+use databend_common_storages_fuse::operations::ReplaceIntoMutatorParams;
+use databend_common_storages_fuse::operations::TransformReplaceBlockMutation;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use tokio::sync::Semaphore;
 
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::ReplaceIntoFormatter;
@@ -141,23 +143,25 @@ impl IPhysicalPlan for ReplaceInto {
                     broadcast_processor.into_pipe_item(),
                 ]));
             let max_threads = builder.settings.get_max_threads()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
-
-            let merge_into_operation_aggregators = table.merge_into_mutators(
-                builder.ctx.clone(),
-                segment_partition_num,
+            let params = ReplaceIntoMutatorParams::try_create(
                 block_builder,
                 self.on_conflicts.clone(),
                 self.bloom_filter_column_indexes.clone(),
-                &self.segments,
                 self.block_slots.clone(),
-                io_request_semaphore,
             )?;
+            let merge_into_operation_aggregators =
+                table.merge_into_mutators(segment_partition_num, &self.segments, params)?;
             builder.main_pipeline.add_pipe(Pipe::create(
                 segment_partition_num,
                 segment_partition_num,
                 merge_into_operation_aggregators,
             ));
+            add_replace_mutation_workers(
+                &mut builder.main_pipeline,
+                segment_partition_num,
+                max_threads as usize,
+                0,
+            );
             return Ok(());
         }
 
@@ -218,19 +222,16 @@ impl IPhysicalPlan for ReplaceInto {
             pipe_items.push(create_dummy_item());
 
             let max_threads = builder.settings.get_max_threads()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             // setup the merge into operation aggregators
-            let mut merge_into_operation_aggregators = table.merge_into_mutators(
-                builder.ctx.clone(),
-                segment_partition_num,
+            let params = ReplaceIntoMutatorParams::try_create(
                 block_builder,
                 self.on_conflicts.clone(),
                 self.bloom_filter_column_indexes.clone(),
-                &self.segments,
                 self.block_slots.clone(),
-                io_request_semaphore,
             )?;
+            let mut merge_into_operation_aggregators =
+                table.merge_into_mutators(segment_partition_num, &self.segments, params)?;
             assert_eq!(
                 segment_partition_num,
                 merge_into_operation_aggregators.len()
@@ -243,6 +244,60 @@ impl IPhysicalPlan for ReplaceInto {
             builder
                 .main_pipeline
                 .add_pipe(Pipe::create(item_size, item_size, pipe_items));
+            add_replace_mutation_workers(
+                &mut builder.main_pipeline,
+                segment_partition_num,
+                max_threads as usize,
+                1,
+            );
+        }
+        Ok(())
+    }
+}
+
+fn add_replace_mutation_workers(
+    pipeline: &mut Pipeline,
+    coordinator_width: usize,
+    worker_width: usize,
+    passthrough_width: usize,
+) {
+    let mut items = Vec::with_capacity(passthrough_width + 1);
+    items.extend((0..passthrough_width).map(|_| create_dummy_item()));
+    items.push(create_resize_item(coordinator_width, worker_width));
+    pipeline.add_pipe(Pipe::create(
+        passthrough_width + coordinator_width,
+        passthrough_width + worker_width,
+        items,
+    ));
+
+    let mut items = Vec::with_capacity(passthrough_width + worker_width);
+    items.extend((0..passthrough_width).map(|_| create_dummy_item()));
+    items.extend((0..worker_width).map(|_| TransformReplaceBlockMutation::into_pipe_item()));
+    pipeline.add_pipe(Pipe::create(
+        passthrough_width + worker_width,
+        passthrough_width + worker_width,
+        items,
+    ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_replace_mutation_worker_width() -> Result<()> {
+        for worker_width in [1, 4] {
+            let mut pipeline = Pipeline::create();
+            pipeline.add_source(databend_common_pipeline::sources::EmptySource::create, 2)?;
+            add_replace_mutation_workers(&mut pipeline, 2, worker_width, 0);
+
+            let worker_count = pipeline
+                .graph
+                .node_weights()
+                .filter(|node| unsafe { node.proc.name() == "ReplaceBlockMutationWorker" })
+                .count();
+            assert_eq!(worker_count, worker_width);
+            assert_eq!(pipeline.output_len(), worker_width);
         }
         Ok(())
     }

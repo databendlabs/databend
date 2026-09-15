@@ -296,7 +296,7 @@ where T: ScalarFunction
             }
             Value::Column(column) => {
                 let result = match column {
-                    Column::Nullable(box nullable_column) => NullableColumn::new_column(
+                    Column::Nullable(deref!(nullable_column)) => NullableColumn::new_column(
                         nullable_column.column,
                         nullable_column.validity.bitand(&bitmap),
                     ),
@@ -339,7 +339,7 @@ impl FunctionFactoryHelper {
             fixed_arg_count: Some(1),
             passthrough_nullable: true,
             create: Box::new(move |params, args: &[DataType]| match args {
-                [DataType::Nullable(box arg0)] => {
+                [DataType::Nullable(deref!(arg0))] => {
                     create(params, arg0).map(|func| Arc::new(func.passthrough_nullable()))
                 }
                 [arg0] => create(params, arg0).map(Arc::new),

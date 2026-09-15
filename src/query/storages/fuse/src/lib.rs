@@ -26,7 +26,8 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
 #![feature(iterator_try_reduce)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 #![feature(try_blocks)]
@@ -67,7 +68,6 @@ pub mod statistics;
 pub mod table_functions;
 
 pub use constants::*;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 pub use databend_common_catalog::table_context::TableContext;

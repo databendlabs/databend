@@ -433,13 +433,13 @@ where A: TypeCheckAdapter
         self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in &spec.partition_by {
-            let box (part, _part_type) = self.resolve_core(arena, *p)?;
+            let deref!((part, _part_type)) = self.resolve_core(arena, *p)?;
             partitions.push(part);
         }
 
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in &spec.order_by {
-            let box (order, _) = self.resolve_core(arena, o.expr)?;
+            let deref!((order, _)) = self.resolve_core(arena, o.expr)?;
 
             if matches!(order, ScalarExpr::ConstantExpr(_)) {
                 continue;
@@ -558,7 +558,7 @@ where A: TypeCheckAdapter
         match bound {
             CoreWindowFrameBound::Following(Some(expr))
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
-                let box (expr, _) = self.resolve_core(arena, *expr)?;
+                let deref!((expr, _)) = self.resolve_core(arena, *expr)?;
                 let (expr, _) = ConstantFolder::fold(
                     Cow::Owned(expr.as_expr()?),
                     &self.func_ctx,

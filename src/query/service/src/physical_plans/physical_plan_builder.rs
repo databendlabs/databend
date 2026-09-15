@@ -26,6 +26,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::RelOperator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -63,7 +64,8 @@ impl PhysicalPlanBuilder {
 
     pub fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let stat_info = rel_expr.derive_cardinality()?;
+        let stat_context = StatContext::new(self.func_ctx.clone());
+        let stat_info = rel_expr.derive_cardinality(&stat_context)?;
 
         Ok(PlanStatsInfo {
             estimated_rows: stat_info.cardinality,

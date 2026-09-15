@@ -44,6 +44,7 @@ use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
+use super::statement_settings::apply_statement_settings;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
@@ -51,8 +52,6 @@ use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::optimize;
-use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 use crate::plans::Plan;
 
@@ -275,6 +274,7 @@ impl Planner {
     ) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
+        apply_statement_settings(self.ctx.clone(), stmt)?;
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -314,7 +314,10 @@ impl Planner {
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
 
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
+        // Single-statement EXECUTE IMMEDIATE can apply inner settings during binding.
+        let settings = self.ctx.get_settings();
+        let func_ctx = self.ctx.get_function_context()?;
+        let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone(), func_ctx)
             .with_settings(&settings)?
             .set_enable_distributed_optimization(
                 !force_disable_distributed_optimization
@@ -323,22 +326,6 @@ impl Planner {
             )
             .set_sample_executor(self.query_executor.clone())
             .clone();
-
-        {
-            let mut agg_indices = metadata.read().agg_indices().clone();
-            let optimizer = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-                RuleID::NormalizeScalarFilter,
-                RuleID::FilterNulls,
-                RuleID::EliminateFilter,
-                RuleID::MergeFilter,
-            ]);
-            for indices in &mut agg_indices.values_mut() {
-                for (id, sql, s_expr) in std::mem::take(indices) {
-                    indices.push((id, sql, optimizer.optimize_sync(s_expr)?));
-                }
-            }
-            metadata.write().replace_agg_indices(agg_indices);
-        }
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 

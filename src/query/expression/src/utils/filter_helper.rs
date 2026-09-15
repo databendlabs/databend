@@ -59,7 +59,7 @@ impl FilterHelpers {
         match value {
             Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => Value::Scalar(false),
             Value::Scalar(Scalar::Boolean(true)) => Value::Scalar(true),
-            Value::Column(Column::Nullable(box NullableColumn { column, validity })) => {
+            Value::Column(Column::Nullable(deref!(NullableColumn { column, validity }))) => {
                 let boolean_column = column.into_boolean().unwrap();
                 Value::Column(&boolean_column & &validity)
             }

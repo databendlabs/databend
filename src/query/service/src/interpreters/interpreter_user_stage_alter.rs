@@ -51,58 +51,60 @@ impl Interpreter for AlterUserStageInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
-        let (stage_seq, mut stage) = match user_mgr
-            .get_stage_with_seq(&tenant, &self.plan.stage_name)
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => {
-                if self.plan.if_exists && e.code() == ErrorCode::UNKNOWN_STAGE {
-                    return Ok(PipelineBuildResult::create());
-                }
-                return Err(e);
-            }
-        };
-
-        if matches!(stage.stage_type, StageType::User) {
-            return Err(ErrorCode::StagePermissionDenied(
-                "user stage is not allowed to be altered",
-            ));
-        }
-
-        match &self.plan.action {
-            AlterStageActionPlan::Set(options) => {
-                if let Some(storage) = options.storage_params.as_ref() {
-                    if !matches!(stage.stage_type, StageType::External) {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "Stage {} is not external, LOCATION/URL can only be set for external stages",
-                            stage.stage_name
-                        )));
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
+            let (stage_seq, mut stage) = match user_mgr
+                .get_stage_with_seq(&tenant, &self.plan.stage_name)
+                .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    if self.plan.if_exists && e.code() == ErrorCode::UNKNOWN_STAGE {
+                        return Ok(PipelineBuildResult::create());
                     }
-                    stage.stage_params.storage = storage.clone();
+                    return Err(e);
                 }
-                if let Some(file_format) = options.file_format.as_ref() {
-                    stage.file_format_params = file_format.clone();
+            };
+
+            if matches!(stage.stage_type, StageType::User) {
+                return Err(ErrorCode::StagePermissionDenied(
+                    "user stage is not allowed to be altered",
+                ));
+            }
+
+            match &self.plan.action {
+                AlterStageActionPlan::Set(options) => {
+                    if let Some(storage) = options.storage_params.as_ref() {
+                        if !matches!(stage.stage_type, StageType::External) {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Stage {} is not external, LOCATION/URL can only be set for external stages",
+                                stage.stage_name
+                            )));
+                        }
+                        stage.stage_params.storage = storage.clone();
+                    }
+                    if let Some(file_format) = options.file_format.as_ref() {
+                        stage.file_format_params = file_format.clone();
+                    }
+                    if let Some(comment) = &options.comment {
+                        stage.comment = comment.clone();
+                    }
                 }
-                if let Some(comment) = &options.comment {
-                    stage.comment = comment.clone();
+                AlterStageActionPlan::Unset(options) => {
+                    if options.file_format {
+                        stage.file_format_params = FileFormatParams::default();
+                    }
+                    if options.comment {
+                        stage.comment.clear();
+                    }
                 }
             }
-            AlterStageActionPlan::Unset(options) => {
-                if options.file_format {
-                    stage.file_format_params = FileFormatParams::default();
-                }
-                if options.comment {
-                    stage.comment.clear();
-                }
-            }
-        }
 
-        user_mgr.update_stage(&tenant, stage, stage_seq).await?;
+            user_mgr.update_stage(&tenant, stage, stage_seq).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

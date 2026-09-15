@@ -55,48 +55,50 @@ impl Interpreter for CreateProcedureInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_procedure_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_procedure_execute");
 
-        let tenant = self.plan.tenant.clone();
-        let create_procedure_req: CreateProcedureReq = self.plan.clone().into();
-        let overriding = self.plan.create_option.is_overriding();
+            let tenant = self.plan.tenant.clone();
+            let create_procedure_req: CreateProcedureReq = self.plan.clone().into();
+            let overriding = self.plan.create_option.is_overriding();
 
-        let result = UserApiProvider::instance()
-            .procedure_api(&tenant)
-            .create_procedure(create_procedure_req, overriding)
-            .await?;
+            let result = UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .create_procedure(create_procedure_req, overriding)
+                .await?;
 
-        match result {
-            Ok(reply) => {
-                // Grant the ownership of the procedure to the current role.
-                let current_role = self.ctx.get_current_role();
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                if let Some(current_role) = current_role {
-                    role_api
-                        .grant_ownership(
-                            &OwnershipObject::Procedure {
-                                procedure_id: reply.procedure_id,
-                            },
-                            &current_role.name,
-                        )
-                        .await?;
-                    RoleCacheManager::instance().invalidate_cache(&tenant);
+            match result {
+                Ok(reply) => {
+                    // Grant the ownership of the procedure to the current role.
+                    let current_role = self.ctx.get_current_role();
+                    let role_api = UserApiProvider::instance().role_api(&tenant);
+                    if let Some(current_role) = current_role {
+                        role_api
+                            .grant_ownership(
+                                &OwnershipObject::Procedure {
+                                    procedure_id: reply.procedure_id,
+                                },
+                                &current_role.name,
+                            )
+                            .await?;
+                        RoleCacheManager::instance().invalidate_cache(&tenant);
+                    }
+                    Ok(PipelineBuildResult::create())
                 }
-                Ok(PipelineBuildResult::create())
+                Err(_exist_error) => match self.plan.create_option {
+                    CreateOption::Create => Err(ErrorCode::ProcedureAlreadyExists(format!(
+                        "Procedure '{}' already exists",
+                        self.plan.name.procedure_name()
+                    ))),
+                    CreateOption::CreateIfNotExists => Ok(PipelineBuildResult::create()),
+                    CreateOption::CreateOrReplace => {
+                        unreachable!(
+                            "create_procedure: CreateOrReplace should never conflict with existent"
+                        );
+                    }
+                },
             }
-            Err(_exist_error) => match self.plan.create_option {
-                CreateOption::Create => Err(ErrorCode::ProcedureAlreadyExists(format!(
-                    "Procedure '{}' already exists",
-                    self.plan.name.procedure_name()
-                ))),
-                CreateOption::CreateIfNotExists => Ok(PipelineBuildResult::create()),
-                CreateOption::CreateOrReplace => {
-                    unreachable!(
-                        "create_procedure: CreateOrReplace should never conflict with existent"
-                    );
-                }
-            },
-        }
+        })
     }
 }

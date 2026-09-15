@@ -2969,8 +2969,8 @@ Functions overloads:
 233 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 234 minus(Interval, Interval) :: Interval
 235 minus(Interval NULL, Interval NULL) :: Interval NULL
-236 minus(Date, Interval) :: Date
-237 minus(Date NULL, Interval NULL) :: Date NULL
+236 minus(Date, Interval) :: Timestamp
+237 minus(Date NULL, Interval NULL) :: Timestamp NULL
 238 minus(Timestamp, Interval) :: Timestamp
 239 minus(Timestamp NULL, Interval NULL) :: Timestamp NULL
 240 minus(TimestampTz, Interval) :: TimestampTz
@@ -3696,10 +3696,10 @@ Functions overloads:
 204 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 205 plus(Interval, Interval) :: Interval
 206 plus(Interval NULL, Interval NULL) :: Interval NULL
-207 plus(Date, Interval) :: Date
-208 plus(Date NULL, Interval NULL) :: Date NULL
-209 plus(Interval, Date) :: Date
-210 plus(Interval NULL, Date NULL) :: Date NULL
+207 plus(Date, Interval) :: Timestamp
+208 plus(Date NULL, Interval NULL) :: Timestamp NULL
+209 plus(Interval, Date) :: Timestamp
+210 plus(Interval NULL, Date NULL) :: Timestamp NULL
 211 plus(Timestamp, Interval) :: Timestamp
 212 plus(Timestamp NULL, Interval NULL) :: Timestamp NULL
 213 plus(TimestampTz, Interval) :: TimestampTz
@@ -4514,6 +4514,8 @@ Functions overloads:
 1 to_quarter(Date NULL) :: UInt8 NULL
 2 to_quarter(Timestamp) :: UInt8
 3 to_quarter(Timestamp NULL) :: UInt8 NULL
+0 to_quarters(Int64) :: Interval
+1 to_quarters(Int64 NULL) :: Interval NULL
 0 to_second(Timestamp) :: UInt8
 1 to_second(Timestamp NULL) :: UInt8 NULL
 2 to_second(Interval) :: Float64

@@ -106,6 +106,130 @@ statement ok
 drop table source
 
 statement ok
+CREATE TABLE mv_batch_source (id INT)
+
+statement ok
+CREATE MATERIALIZED VIEW test_mv_batch AS SELECT id FROM mv_batch_source WHERE 1 = 1
+
+statement ok
+INSERT INTO mv_batch_source
+SELECT number::INT FROM numbers(10000)
+
+statement ok
+INSERT INTO mv_batch_source
+SELECT (number + 10000)::INT FROM numbers(10000)
+
+statement ok
+INSERT INTO mv_batch_source
+SELECT (number + 20000)::INT FROM numbers(10000)
+
+statement ok
+INSERT INTO mv_batch_source
+SELECT (number + 30000)::INT FROM numbers(10000)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+10000
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+20000
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+30000
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch LIMIT 10000
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+40000
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_batch
+
+statement ok
+DROP TABLE mv_batch_source
+
+statement ok
+CREATE TABLE mv_batch_update_source (id INT, value INT)
+
+statement ok
+CREATE MATERIALIZED VIEW test_mv_batch_update AS
+SELECT id, value FROM mv_batch_update_source WHERE 1 = 1
+
+statement ok
+INSERT INTO mv_batch_update_source VALUES (1, 10)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch_update LIMIT 10
+
+statement ok
+UPDATE mv_batch_update_source SET value = 20 WHERE id = 1
+
+statement ok
+INSERT INTO mv_batch_update_source VALUES (2, 30)
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch_update LIMIT 1
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch_update')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+1
+
+query I
+SELECT value FROM test_mv_batch_update WHERE id = 1
+----
+20
+
+statement ok
+REFRESH MATERIALIZED VIEW test_mv_batch_update LIMIT 1
+
+query I
+SELECT row_count
+FROM fuse_snapshot('test_mv_ddl', 'test_mv_batch_update')
+ORDER BY timestamp DESC
+LIMIT 1
+----
+2
+
+statement ok
+DROP MATERIALIZED VIEW test_mv_batch_update
+
+statement ok
+DROP TABLE mv_batch_update_source
+
+statement ok
 CREATE TABLE mv_base_t (id INT, val VARCHAR, amount INT)
 
 statement ok
@@ -312,9 +436,6 @@ OPTIMIZE TABLE test_mv COMPACT SEGMENT
 # Purge still uses TABLE syntax against a read-only MV and stays blocked.
 statement error 3905
 OPTIMIZE TABLE test_mv PURGE
-
-statement error 3905
-OPTIMIZE TABLE test_mv ALL
 
 # Dedicated MV maintenance reuses Fuse plans without opening TABLE syntax on MVs.
 statement ok

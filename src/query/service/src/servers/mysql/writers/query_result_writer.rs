@@ -144,7 +144,8 @@ fn compute_length(data_type: &DataType) -> u32 {
         },
         DataType::Decimal(size) => size.precision() as u32,
         DataType::Date => 10,
-        DataType::Timestamp => 26,
+        // A timezone offset can move a valid UTC timestamp into local year 10000.
+        DataType::Timestamp => 28,
         DataType::Interval => 64,
         DataType::Geometry | DataType::Geography => 1024,
         DataType::Vector(_) => 1024,

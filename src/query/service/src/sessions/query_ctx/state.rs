@@ -144,16 +144,6 @@ impl TableContextPartitionStats for QueryContext {
         Ok(())
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
-    }
-
-    fn set_can_scan_from_agg_index(&self, enable: bool) {
-        self.shared
-            .can_scan_from_agg_index
-            .store(enable, Ordering::Release);
-    }
-
     fn get_enable_sort_spill(&self) -> bool {
         self.shared.enable_sort_spill.load(Ordering::Acquire)
     }

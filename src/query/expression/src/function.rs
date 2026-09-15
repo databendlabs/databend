@@ -22,6 +22,9 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
+use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -31,8 +34,6 @@ use databend_common_io::GeometryDataType;
 use databend_common_io::prelude::BinaryDisplayFormat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
 use smallvec::SmallVec;
@@ -135,8 +136,9 @@ pub enum FunctionEval {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionContext {
-    pub tz: TimeZone,
-    pub now: Zoned,
+    pub tz: Tz,
+    /// Instant the query started, used by `now()`, `today()` and friends.
+    pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
     pub enable_selector_executor: bool,
@@ -155,8 +157,8 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: TimeZone::UTC,
-            now: Default::default(),
+            tz: Tz::UTC,
+            now: DateTime::UNIX_EPOCH,
             rounding_mode: false,
             disable_variant_check: false,
             enable_selector_executor: true,
@@ -619,13 +621,21 @@ impl EvalContext<'_> {
         };
 
         let first_error_row = match selection {
-            None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+            None => {
+                let Some((row, _)) = valids.iter().enumerate().find(|(_, valid)| !valid) else {
+                    return Ok(());
+                };
+                row
+            }
             Some(selection) if valids.len() == 1 => {
-                if valids.get(0) || selection.is_empty() {
+                if valids.get(0) {
                     return Ok(());
                 }
 
-                selection.first().map(|x| *x as usize).unwrap()
+                let Some(row) = selection.first() else {
+                    return Ok(());
+                };
+                *row as usize
             }
             Some(selection) => {
                 let Some(first_invalid) = selection.iter().find(|idx| !valids.get(**idx as usize))
@@ -677,5 +687,41 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
                 )),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::bitmap::MutableBitmap;
+
+    use super::EvalContext;
+
+    #[test]
+    fn render_error_ignores_error_channel_without_invalid_rows() {
+        let errors = Some((MutableBitmap::from_len_set(2), "error".to_string()));
+
+        assert!(EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", None).is_ok());
+    }
+
+    #[test]
+    fn render_error_ignores_empty_selection() {
+        let errors = Some((MutableBitmap::from_len_zeroed(1), "error".to_string()));
+
+        assert!(
+            EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", Some(&[])).is_ok()
+        );
+    }
+
+    #[test]
+    fn render_error_returns_sql_error_for_invalid_row() {
+        let errors = Some((MutableBitmap::from_len_zeroed(1), "error".to_string()));
+
+        let err = EvalContext::render_error(None, &errors, &[], &[], "fn", "expr", None)
+            .expect_err("an invalid row must be reported as a SQL error");
+        assert_eq!(err.code(), 1006);
+        assert!(
+            err.message()
+                .contains("error while evaluating function `fn()`")
+        );
     }
 }

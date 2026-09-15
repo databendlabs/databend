@@ -1,0 +1,79 @@
+## Regression coverage for planner paths that used FunctionContext::default().
+## The fixed timestamp is 2022-02-01 20:00:00 UTC and
+## 2022-02-02 04:00:00 Asia/Shanghai. Expressions derived from its local
+## date/time therefore distinguish the query context from the default UTC context.
+
+## Time-travel OFFSET constant folding uses the query FunctionContext. In Shanghai
+## this is 2 - 2 = 0; the old default context produced the invalid positive offset 1.
+
+statement ok
+DROP TABLE IF EXISTS function_context_default_time_travel
+
+statement ok
+CREATE TABLE function_context_default_time_travel(a INT)
+
+statement ok
+INSERT INTO function_context_default_time_travel VALUES (1)
+
+query I
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT *
+FROM function_context_default_time_travel
+AT (OFFSET => (2 - to_day_of_month(1643745600000000::TIMESTAMP)))
+----
+1
+
+statement ok
+DROP TABLE function_context_default_time_travel
+
+## Window Top-N extraction folds the comparison bound with the query context.
+## The Shanghai day-of-month is 2, so both rows must survive the pushed limit.
+
+query II rowsort
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT number, row_number() OVER (ORDER BY number) AS rn
+FROM numbers(5)
+QUALIFY rn <= to_day_of_month(1643745600000000::TIMESTAMP)
+----
+0 1
+1 2
+
+## Aggregate argument rewriting uses the query context for num_buckets.
+
+query T
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT histogram(number, to_day_of_month(1643745600000000::TIMESTAMP))
+FROM numbers(10)
+----
+[{"lower":"0","upper":"4","ndv":5,"count":5,"pre_sum":0},{"lower":"5","upper":"9","ndv":5,"count":5,"pre_sum":5}]
+
+## Decimal round/truncate argument rewriting uses the query context for scale.
+
+query RTRT
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT
+    round(1.234::DECIMAL(10, 3), to_day_of_month(1643745600000000::TIMESTAMP)),
+    typeof(round(1.234::DECIMAL(10, 3), to_day_of_month(1643745600000000::TIMESTAMP))),
+    truncate(1.239::DECIMAL(10, 3), to_day_of_month(1643745600000000::TIMESTAMP)),
+    typeof(truncate(1.239::DECIMAL(10, 3), to_day_of_month(1643745600000000::TIMESTAMP)))
+----
+1.23 DECIMAL(3, 2) 1.23 DECIMAL(3, 2)
+
+## AS_DECIMAL argument rewriting uses the query context for precision and scale.
+## Shanghai yields precision 4 and scale 2; the default UTC context yields 20 and 1.
+
+query RT
+SETTINGS (timezone = 'Asia/Shanghai')
+SELECT
+    as_decimal(
+        parse_json('3.14'),
+        to_hour(1643745600000000::TIMESTAMP),
+        to_day_of_month(1643745600000000::TIMESTAMP)
+    ),
+    typeof(as_decimal(
+        parse_json('3.14'),
+        to_hour(1643745600000000::TIMESTAMP),
+        to_day_of_month(1643745600000000::TIMESTAMP)
+    ))
+----
+3.14 DECIMAL(3, 2)

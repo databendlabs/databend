@@ -117,4 +117,81 @@ select id, amount from detail_source where amount > 20
 6 35
 
 statement ok
+create table spans_source (
+    start_time timestamp,
+    trace_id string,
+    chat_id string,
+    span_id string,
+    payload variant
+) row_per_block=1 block_per_segment=2
+
+statement ok
+insert into spans_source values
+    ('2024-01-01 00:00:00', 'trace-1', 'chat-1', 'span-1', parse_json('{"route":"source"}')),
+    ('2024-01-01 00:00:01', 'trace-2', 'chat-2', 'span-2', parse_json('{"route":"source"}')),
+    ('2024-01-01 00:00:02', 'trace-1', 'chat-3', 'span-3', parse_json('{"route":"source"}')),
+    ('2024-01-01 00:00:03', 'trace-3', 'chat-2', 'span-4', parse_json('{"route":"source"}'))
+
+# This preserves the old routing coverage with materialized views: two equivalent
+# projections are stored with different cluster keys, and rewrite should pick the
+# candidate whose cluster key prefix matches the query predicate.
+statement ok
+create materialized view mv_spans_by_trace (
+    start_time,
+    trace_id,
+    chat_id,
+    span_id,
+    payload
+) cluster by(trace_id) as
+select start_time, trace_id, chat_id, span_id, payload
+from spans_source
+
+statement ok
+refresh materialized view mv_spans_by_trace
+
+statement ok
+create materialized view mv_spans_by_chat (
+    start_time,
+    trace_id,
+    chat_id,
+    span_id,
+    payload
+) cluster by(chat_id) as
+select start_time, trace_id, chat_id, span_id, payload
+from spans_source
+
+statement ok
+refresh materialized view mv_spans_by_chat
+
+query T
+explain select trace_id, span_id
+from spans_source
+where trace_id = 'trace-1'
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_spans_by_trace<slt:ignore>
+
+query TT rowsort
+select trace_id, span_id
+from spans_source
+where trace_id = 'trace-1'
+----
+trace-1 span-1
+trace-1 span-3
+
+query T
+explain select chat_id, span_id
+from spans_source
+where chat_id = 'chat-2'
+----
+<slt:ignore>table: default.test_materialized_view_cost.mv_spans_by_chat<slt:ignore>
+
+query TT rowsort
+select chat_id, span_id
+from spans_source
+where chat_id = 'chat-2'
+----
+chat-2 span-2
+chat-2 span-4
+
+statement ok
 drop database test_materialized_view_cost

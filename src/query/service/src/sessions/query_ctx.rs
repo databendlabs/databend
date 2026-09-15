@@ -34,6 +34,7 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use chrono_tz::Tz;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
@@ -156,8 +157,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use jiff::Zoned;
-use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
 use log::warn;
@@ -318,12 +317,26 @@ impl QueryContext {
             .clone()
     }
 
+    fn check_data_sharing_license(&self, table_info: &TableInfo) -> Result<()> {
+        if table_info.is_shared()
+            || (table_info.engine().eq_ignore_ascii_case("STREAM")
+                && table_info.meta.options.contains_key(
+                    databend_storages_common_table_meta::table::OPT_KEY_SOURCE_SHARED_DATABASE_ID,
+                ))
+        {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.get_license_key(), Feature::DataSharing)?;
+        }
+        Ok(())
+    }
+
     /// Build fuse/system normal table by table info.
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
+        self.check_data_sharing_license(table_info)?;
         let catalog_name = table_info.catalog();
         let catalog =
             databend_common_base::runtime::block_on(self.shared.catalog_manager.get_catalog(
@@ -614,8 +627,8 @@ impl QueryContext {
         self.attach_query_lineage((!lineage.targets.is_empty()).then_some(lineage));
     }
 
-    pub fn get_created_time(&self) -> SystemTime {
-        self.shared.created_time
+    pub fn get_query_created_time(&self) -> SystemTime {
+        self.shared.query_created_time
     }
 
     pub fn set_finish_time(&self, time: SystemTime) {
@@ -726,6 +739,7 @@ impl QueryContext {
             .shared
             .get_table(catalog, database, table, max_batch_size)
             .await?;
+        self.check_data_sharing_license(table.get_table_info())?;
         // the better place to do this is in the QueryContextShared::get_table() method,
         // but there is no way to access dyn TableContext.
         Ok(match table.engine() {

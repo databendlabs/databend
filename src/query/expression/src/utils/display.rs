@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Write;
 
+use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::QuotedString;
@@ -34,7 +35,6 @@ use databend_common_io::geo_to_wkt;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;
-use jiff::tz::TimeZone;
 use jsonb::RawJsonb;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
@@ -294,7 +294,9 @@ impl Display for ScalarRef<'_> {
             }
             ScalarRef::Opaque(o) => write!(f, "{o:?}"),
             ScalarRef::String(s) => write!(f, "{}", QuotedString(s, '\'')),
-            ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
+            ScalarRef::Timestamp(t) => {
+                write!(f, "'{}'", timestamp_to_string(*t, &Tz::UTC))
+            }
             ScalarRef::TimestampTz(t) => write!(f, "'{}'", t),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64)),
             ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
@@ -367,7 +369,7 @@ impl Display for Scalar {
 pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
     match value {
         ScalarRef::String(s) => s.to_string(),
-        ScalarRef::Timestamp(t) => format!("{}", timestamp_to_string(*t, &TimeZone::UTC)),
+        ScalarRef::Timestamp(t) => format!("{}", timestamp_to_string(*t, &Tz::UTC)),
         ScalarRef::Date(d) => format!("{}", date_to_string(*d as i64)),
         ScalarRef::Interval(interval) => format!("{}", interval_to_string(interval)),
         ScalarRef::Bitmap(bits) => {

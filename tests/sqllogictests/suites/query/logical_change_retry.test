@@ -1,0 +1,104 @@
+# Named connections share the file's sandbox, but retain independent sessions.
+# `connection` applies only to the immediately following statement/query.
+# ANALYZE and multi-table counter assertions live in the Rust integration test.
+
+statement ok
+CREATE DATABASE logical_change_retry
+
+statement ok
+USE logical_change_retry
+
+connection writer
+statement ok
+USE logical_change_retry
+
+# Keep the concurrent append from rewriting the transaction's base segments.
+statement ok
+SET auto_compaction_imperfect_blocks_threshold = 0
+
+statement ok
+SET enable_auto_analyze = 0
+
+connection writer
+statement ok
+SET auto_compaction_imperfect_blocks_threshold = 0
+
+connection writer
+statement ok
+SET enable_auto_analyze = 0
+
+statement ok
+CREATE TABLE t(id INT)
+
+statement ok
+INSERT INTO t VALUES (6), (9)
+
+# B commits after A buffers mutations, forcing a version conflict without sleeps.
+statement ok
+BEGIN
+
+statement ok
+UPDATE t SET id = 60 WHERE id = 6
+
+statement ok
+DELETE FROM t WHERE id = 9
+
+connection writer
+statement ok
+INSERT INTO t VALUES (7)
+
+statement ok
+COMMIT
+
+query I
+SELECT id FROM t ORDER BY id
+----
+7
+60
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM t
+
+statement ok
+ROLLBACK
+
+query I
+SELECT id FROM t ORDER BY id
+----
+7
+60
+
+# Reuse A after rollback; discarded writes must not affect this commit.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO t VALUES (8)
+
+connection writer
+statement ok
+INSERT INTO t VALUES (10)
+
+statement ok
+COMMIT
+
+query I
+SELECT id FROM t ORDER BY id
+----
+7
+8
+10
+60
+
+connection writer
+statement ok
+USE default
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE logical_change_retry

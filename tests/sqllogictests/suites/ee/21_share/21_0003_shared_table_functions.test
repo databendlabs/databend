@@ -1,0 +1,107 @@
+# Shared table diagnostics remain readable, but cannot restore provider objects
+# or read arbitrary block paths. Uses the sharing suites' sandbox tenants and fs
+# connection; per-user SELECT and ownership checks are covered by EE Rust tests.
+statement ok
+SET sandbox_tenant = 'shared_functions_provider'
+
+statement ok
+DROP SHARE IF EXISTS functions_share
+
+statement ok
+DROP CONNECTION IF EXISTS functions_conn
+
+statement ok
+CREATE OR REPLACE DATABASE functions_provider
+
+statement ok
+CREATE TABLE functions_provider.t(a INT, v VARIANT)
+
+statement ok
+INSERT INTO functions_provider.t SELECT 73, parse_json('{"public": 1}')
+
+statement ok
+CREATE CONNECTION functions_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE SHARE functions_share CONNECTION = functions_conn
+
+statement ok
+GRANT USAGE ON DATABASE functions_provider TO SHARE functions_share
+
+statement ok
+GRANT SELECT ON TABLE functions_provider.t TO SHARE functions_share
+
+statement ok
+ALTER SHARE functions_share ADD ACCOUNTS = shared_functions_consumer
+
+statement ok
+SET sandbox_tenant = 'shared_functions_consumer'
+
+statement ok
+DROP DATABASE IF EXISTS functions_shared
+
+statement ok
+CREATE DATABASE functions_shared FROM SHARE shared_functions_provider.functions_share
+
+query II
+SELECT statistics:min::INT, statistics:max::INT FROM fuse_block_statistics('functions_shared', 't') WHERE column_name = 'a'
+----
+73 73
+
+query I
+SELECT row_count FROM fuse_snapshot('functions_shared', 't')
+----
+1
+
+query T
+SELECT `table` FROM table_statistics('functions_shared')
+----
+t
+
+# Rejection must happen before the function attempts to read the supplied path.
+statement error (?s).*fuse_virtual_column_build is not supported on shared tables.*
+SELECT * FROM fuse_virtual_column_build('functions_shared', 't', 'another_table/_b/block.parquet')
+
+statement error (?s).*READ ONLY.*
+SELECT * FROM fuse_amend('functions_shared', 't')
+
+# Failed calls leave the provider's data readable and intact.
+query I
+SELECT a FROM functions_shared.t
+----
+73
+
+statement ok
+SET sandbox_tenant = 'shared_functions_provider'
+
+query T
+SELECT * FROM fuse_amend('functions_provider', 't')
+----
+Ok
+
+statement ok
+REVOKE SELECT ON TABLE functions_provider.t FROM SHARE functions_share
+
+statement ok
+SET sandbox_tenant = 'shared_functions_consumer'
+
+statement error (?s).*(not granted by share|Unknown table).*
+SELECT * FROM fuse_block_statistics('functions_shared', 't')
+
+statement ok
+DROP DATABASE functions_shared
+
+statement ok
+SET sandbox_tenant = 'shared_functions_provider'
+
+statement ok
+DROP SHARE functions_share
+
+statement ok
+DROP CONNECTION functions_conn
+
+statement ok
+DROP DATABASE functions_provider
+
+statement ok
+SET sandbox_tenant = ''

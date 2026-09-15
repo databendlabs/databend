@@ -141,7 +141,7 @@ impl FieldEncoderCSV {
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
         match &column {
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf)?,
+            Column::Nullable(deref!(c)) => self.write_nullable(c, row_index, out_buf)?,
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };

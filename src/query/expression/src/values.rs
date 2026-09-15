@@ -63,6 +63,7 @@ use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::date::check_date;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
@@ -94,6 +95,7 @@ use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::variant::JSONB_NULL;
@@ -409,7 +411,7 @@ impl Value<AnyType> {
     pub fn remove_nullable(self) -> (Self, bool) {
         match self {
             Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
-            Value::Column(Column::Nullable(box nullable_column)) => (
+            Value::Column(Column::Nullable(deref!(nullable_column))) => (
                 Value::Column(nullable_column.column),
                 nullable_column.validity.null_count() > 0,
             ),
@@ -2007,14 +2009,14 @@ impl ColumnBuilder {
             Column::TimestampTz(col) => ColumnBuilder::TimestampTz(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Interval(col) => ColumnBuilder::Interval(buffer_into_mut(col)),
-            Column::Array(box col) => {
+            Column::Array(deref!(col)) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Map(box col) => {
+            Column::Map(deref!(col)) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
             Column::Bitmap(col) => ColumnBuilder::Bitmap(BinaryColumnBuilder::from_column(col)),
-            Column::Nullable(box col) => {
+            Column::Nullable(deref!(col)) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
             Column::Tuple(fields) => ColumnBuilder::Tuple(
@@ -2631,11 +2633,12 @@ impl ColumnBuilder {
             }
             ColumnBuilder::TimestampTz(builder) => {
                 let value = timestamp_tz(i128::de_binary(reader));
+                check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
                 builder.push(value);
             }
             ColumnBuilder::Date(builder) => {
                 let value: i32 = reader.read_scalar()?;
-                builder.push(value);
+                builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
             }
             ColumnBuilder::Interval(builder) => {
                 let value = months_days_micros(i128::de_binary(reader));
@@ -2761,14 +2764,16 @@ impl ColumnBuilder {
             ColumnBuilder::TimestampTz(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
-                    builder.push(timestamp_tz(i128::de_binary(&mut reader)));
+                    let value = timestamp_tz(i128::de_binary(&mut reader));
+                    check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
+                    builder.push(value);
                 }
             }
             ColumnBuilder::Date(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
                     let value: i32 = reader.read_scalar()?;
-                    builder.push(value);
+                    builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
                 }
             }
             ColumnBuilder::Interval(builder) => {

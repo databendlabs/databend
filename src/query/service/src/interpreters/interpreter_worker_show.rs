@@ -54,45 +54,47 @@ impl Interpreter for ShowWorkersInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let config = GlobalConfig::instance();
-        if config
-            .query
-            .common
-            .cloud_control_grpc_server_address
-            .is_none()
-        {
-            return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot show workers without cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        }
-        let cloud_api = CloudControlApiProvider::instance();
-        let worker_client = cloud_api.get_worker_client();
-        let req = ListWorkersRequest {
-            tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
-        };
-        let config = get_worker_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
-        let resp = worker_client.list_workers(req).await?;
-        let mut names = Vec::new();
-        let mut tags = Vec::new();
-        let mut options = Vec::new();
-        let mut created_at = Vec::new();
-        let mut updated_at = Vec::new();
-        for worker in resp.workers {
-            names.push(worker.name);
-            tags.push(to_string(&worker.tags).unwrap_or_default());
-            options.push(to_string(&worker.options).unwrap_or_default());
-            created_at.push(worker.created_at);
-            updated_at.push(worker.updated_at);
-        }
-        let block = DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(tags),
-            StringType::from_data(options),
-            StringType::from_data(created_at),
-            StringType::from_data(updated_at),
-        ]);
-        PipelineBuildResult::from_blocks(vec![block])
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let config = GlobalConfig::instance();
+            if config
+                .query
+                .common
+                .cloud_control_grpc_server_address
+                .is_none()
+            {
+                return Err(ErrorCode::CloudControlNotEnabled(
+                    "cannot show workers without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                ));
+            }
+            let cloud_api = CloudControlApiProvider::instance();
+            let worker_client = cloud_api.get_worker_client();
+            let req = ListWorkersRequest {
+                tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
+            };
+            let config = get_worker_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
+            let req = make_request(req, config);
+            let resp = worker_client.list_workers(req).await?;
+            let mut names = Vec::new();
+            let mut tags = Vec::new();
+            let mut options = Vec::new();
+            let mut created_at = Vec::new();
+            let mut updated_at = Vec::new();
+            for worker in resp.workers {
+                names.push(worker.name);
+                tags.push(to_string(&worker.tags).unwrap_or_default());
+                options.push(to_string(&worker.options).unwrap_or_default());
+                created_at.push(worker.created_at);
+                updated_at.push(worker.updated_at);
+            }
+            let block = DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(tags),
+                StringType::from_data(options),
+                StringType::from_data(created_at),
+                StringType::from_data(updated_at),
+            ]);
+            PipelineBuildResult::from_blocks(vec![block])
+        })
     }
 }

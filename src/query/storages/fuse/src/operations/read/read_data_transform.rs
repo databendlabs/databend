@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -106,9 +107,17 @@ impl ReadDataTransform {
         for part in parts {
             if !self.runtime_scan_filters.is_empty() {
                 let part_info = FuseBlockPartInfo::from_part(&part)?;
+                let virtual_stats = part_info
+                    .block_meta_index
+                    .as_ref()
+                    .and_then(|index| index.virtual_block_meta.as_ref())
+                    .map(|meta| &meta.virtual_column_stats);
                 if self
                     .runtime_scan_filters
-                    .should_prune(part_info.columns_stat.as_ref())
+                    .should_prune(RuntimeScanStatistics::new(
+                        part_info.columns_stat.as_ref(),
+                        virtual_stats,
+                    ))
                 {
                     continue;
                 }
@@ -134,7 +143,15 @@ impl ReadDataTransform {
                         let rechecks = filters.recheck_notified();
                         debug_assert!(!rechecks.is_empty());
                         let part_info = FuseBlockPartInfo::from_part(&part)?;
-                        if filters.should_prune(part_info.columns_stat.as_ref()) {
+                        let virtual_stats = part_info
+                            .block_meta_index
+                            .as_ref()
+                            .and_then(|index| index.virtual_block_meta.as_ref())
+                            .map(|meta| &meta.virtual_column_stats);
+                        if filters.should_prune(RuntimeScanStatistics::new(
+                            part_info.columns_stat.as_ref(),
+                            virtual_stats,
+                        )) {
                             return Ok::<_, ErrorCode>(None);
                         }
 

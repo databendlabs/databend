@@ -47,7 +47,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
-use log::warn;
 use unicase::Ascii;
 
 use crate::AsyncFunctionRewriter;
@@ -418,15 +417,6 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
-        if let Some(hints) = &stmt.hints {
-            if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                warn!(
-                    "In SELECT resolve optimize hints {:?} failed, err: {:?}",
-                    hints, e
-                );
-            }
-        }
-
         // whether allow rewrite virtual column and pushdown
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 

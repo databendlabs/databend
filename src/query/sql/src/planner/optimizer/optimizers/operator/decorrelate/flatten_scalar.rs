@@ -43,7 +43,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let column_binding = bound_column.column.clone();
                 if correlated_columns.contains(&column_binding.index) {
                     let index = derived_columns.must_resolve(column_binding.index)?;
-                    let metadata = self.metadata.read();
+                    let metadata = self.ctx.metadata_read();
                     let column_entry = metadata.column(index);
                     return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: scalar.span(),

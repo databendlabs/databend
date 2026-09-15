@@ -144,6 +144,7 @@ impl OptimizerPipeline {
                     &before_expr,
                     &current_expr,
                     &metadata_ref.read(),
+                    self.opt_ctx.get_stat_context(),
                 )?;
             }
         }
@@ -153,7 +154,10 @@ impl OptimizerPipeline {
             self.trace_collector.log_report();
             info!(
                 "Final s_expr:\n {}",
-                current_expr.pretty_format(&self.opt_ctx.get_metadata().read())?
+                current_expr.pretty_format(
+                    &self.opt_ctx.get_metadata().read(),
+                    self.opt_ctx.get_stat_context(),
+                )?
             );
         }
 
@@ -169,7 +173,7 @@ impl OptimizerPipeline {
             Some(memo) => memo.clone(),
             None => {
                 // Create and return an empty memo
-                Memo::create()
+                Memo::new(self.opt_ctx.get_stat_context().clone())
             }
         }
     }

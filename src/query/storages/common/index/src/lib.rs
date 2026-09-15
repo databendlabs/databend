@@ -19,7 +19,8 @@
     clippy::needless_range_loop,
     clippy::uninlined_format_args
 )]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![feature(never_type)]
 
 mod bloom_index;
@@ -33,6 +34,7 @@ mod kmeans;
 mod range_index;
 mod spatial_index;
 mod spatial_predicate;
+mod statistics_cast;
 mod vector;
 mod virtual_column;
 
@@ -44,7 +46,8 @@ pub use bloom_index::BloomIndexType;
 pub use bloom_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 pub use bloom_index::FilterEvalResult;
 pub use bloom_index::NgramArgs;
-pub use bloom_index::NgramIterator;
+pub use bloom_index::NgramHashAlgorithm;
+pub use bloom_index::NgramLikeScalarMap;
 pub use eliminate_cast::eliminate_cast;
 pub use hnsw_index::DistanceType;
 pub use hnsw_index::FixedLengthPriorityQueue;
@@ -77,6 +80,7 @@ pub use spatial_predicate::SpatialPredicate;
 pub use spatial_predicate::SpatialPredicateOp;
 pub use spatial_predicate::SpatialPredicateResult;
 pub use spatial_predicate::collect_spatial_predicates;
+pub use statistics_cast::cast_virtual_column_statistics;
 pub use vector::normalize_vector;
 pub use vector::vector_stat_distance;
 pub use virtual_column::VIRTUAL_COLUMN_NODES_KEY;
@@ -92,6 +96,8 @@ pub use virtual_column::VirtualColumnSharedColumnIds;
 pub use virtual_column::VirtualColumnSharedColumnMetaMap;
 pub use virtual_column::VirtualColumnSharedColumnMetas;
 pub use virtual_column::VirtualColumnSharedDataType;
+pub use virtual_column::VirtualColumnStat;
+pub use virtual_column::VirtualColumnStatsOfNames;
 pub use virtual_column::encode_compact_virtual_column_nodes;
 pub use virtual_column::encode_compact_virtual_column_shared_ids;
 pub use virtual_column::encode_compact_virtual_column_string_table;

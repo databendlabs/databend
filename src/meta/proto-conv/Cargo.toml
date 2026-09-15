@@ -13,9 +13,7 @@ databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-protos = { workspace = true }
-databend-meta-client = { workspace = true }
 enumflags2 = { workspace = true }
-fastrace = { workspace = true }
 log = { workspace = true }
 num = { workspace = true }
 prost = { workspace = true }
@@ -24,6 +22,8 @@ thiserror = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 convert_case = { workspace = true }
+databend-meta-client = { workspace = true }
+fastrace = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }
 

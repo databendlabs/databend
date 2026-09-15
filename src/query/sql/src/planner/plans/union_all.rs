@@ -30,6 +30,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::EvalScalar;
@@ -54,11 +55,11 @@ pub struct UnionAll {
 impl UnionAll {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for (idx, _) in &self.left_outputs {
+        for (idx, expr) in self.left_outputs.iter().chain(&self.right_outputs) {
             used_columns.insert(*idx);
-        }
-        for (idx, _) in &self.right_outputs {
-            used_columns.insert(*idx);
+            if let Some(expr) = expr {
+                expr.collect_used_columns(&mut used_columns);
+            }
         }
         Ok(used_columns)
     }
@@ -67,6 +68,7 @@ impl UnionAll {
         &self,
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
+        stat_ctx: &StatContext,
     ) -> Result<Arc<StatInfo>> {
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
 
@@ -103,18 +105,24 @@ impl UnionAll {
                     let left = {
                         let statistics = &left_stat_info.statistics;
                         match left_expr.as_ref() {
-                            Some(expr) => {
-                                EvalScalar::derive_item_stat(expr, statistics, left_cardinality)?
-                            }
+                            Some(expr) => EvalScalar::derive_item_stat(
+                                expr,
+                                statistics,
+                                &stat_ctx.function_context,
+                                left_cardinality,
+                            )?,
                             None => statistics.column_stats.get(left_output).cloned(),
                         }
                     };
                     let right = {
                         let statistics = &right_stat_info.statistics;
                         match right_expr.as_ref() {
-                            Some(expr) => {
-                                EvalScalar::derive_item_stat(expr, statistics, right_cardinality)?
-                            }
+                            Some(expr) => EvalScalar::derive_item_stat(
+                                expr,
+                                statistics,
+                                &stat_ctx.function_context,
+                                right_cardinality,
+                            )?,
                             None => statistics.column_stats.get(right_output).cloned(),
                         }
                     };
@@ -247,18 +255,34 @@ impl Operator for UnionAll {
         2
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(
+            self.left_outputs
+                .iter()
+                .chain(&self.right_outputs)
+                .filter_map(|(_, expr)| expr.as_ref()),
+        )
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
-        // Derive output columns
         let output_columns = self.output_indexes.iter().cloned().collect();
         // Derive outer columns
-        let mut outer_columns = left_prop.outer_columns.clone();
-        outer_columns = outer_columns
-            .union(&right_prop.outer_columns)
+        let available_columns = left_prop
+            .output_columns
+            .union(&right_prop.output_columns)
             .cloned()
             .collect();
+        let outer_columns = self.derive_outer_columns(
+            left_prop
+                .outer_columns
+                .union(&right_prop.outer_columns)
+                .cloned()
+                .collect(),
+            &available_columns,
+        );
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -291,10 +315,10 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let left_stat_info = rel_expr.derive_cardinality_child(0)?;
-        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        self.derive_union_stats(left_stat_info, right_stat_info)
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
+        self.derive_union_stats(left_stat_info, right_stat_info, stat_ctx)
     }
 
     fn compute_required_prop_child(

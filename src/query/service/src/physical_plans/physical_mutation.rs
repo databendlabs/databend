@@ -40,9 +40,12 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline::basic::create_resize_item;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ColumnEntry;
@@ -64,13 +67,13 @@ use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::TransformMatchedBlockMutation;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
-use tokio::sync::Semaphore;
 
 use super::ColumnMutation;
 use super::CommitType;
@@ -171,7 +174,6 @@ impl IPhysicalPlan for Mutation {
             table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, input_schema)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
@@ -207,7 +209,6 @@ impl IPhysicalPlan for Mutation {
             pipe_items.push(table.rowid_aggregate_mutator(
                 builder.ctx.clone(),
                 cluster_stats_gen.clone(),
-                io_request_semaphore,
                 self.segments.clone(),
                 false,
                 self.table_meta_timestamps,
@@ -235,8 +236,36 @@ impl IPhysicalPlan for Mutation {
             pipe_items,
         ));
 
+        if self.need_match {
+            add_matched_mutation_workers(&mut builder.main_pipeline, serialize_len, max_threads);
+        }
+
         Ok(())
     }
+}
+
+fn add_matched_mutation_workers(
+    pipeline: &mut Pipeline,
+    passthrough_width: usize,
+    worker_width: usize,
+) {
+    let mut items = Vec::with_capacity(passthrough_width + 1);
+    items.push(create_resize_item(1, worker_width));
+    items.extend((0..passthrough_width).map(|_| create_dummy_item()));
+    pipeline.add_pipe(Pipe::create(
+        passthrough_width + 1,
+        passthrough_width + worker_width,
+        items,
+    ));
+
+    let mut items = Vec::with_capacity(passthrough_width + worker_width);
+    items.extend((0..worker_width).map(|_| TransformMatchedBlockMutation::into_pipe_item()));
+    items.extend((0..passthrough_width).map(|_| create_dummy_item()));
+    pipeline.add_pipe(Pipe::create(
+        passthrough_width + worker_width,
+        passthrough_width + worker_width,
+        items,
+    ));
 }
 
 impl PhysicalPlanBuilder {
@@ -1089,5 +1118,28 @@ fn build_field_id_to_schema_index(
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod mutation_worker_tests {
+    use super::*;
+
+    #[test]
+    fn test_matched_mutation_worker_width() -> Result<()> {
+        for worker_width in [1, 4] {
+            let mut pipeline = Pipeline::create();
+            pipeline.add_source(databend_common_pipeline::sources::EmptySource::create, 1)?;
+            add_matched_mutation_workers(&mut pipeline, 0, worker_width);
+
+            let worker_count = pipeline
+                .graph
+                .node_weights()
+                .filter(|node| unsafe { node.proc.name() == "MatchedBlockMutationWorker" })
+                .count();
+            assert_eq!(worker_count, worker_width);
+            assert_eq!(pipeline.output_len(), worker_width);
+        }
+        Ok(())
     }
 }

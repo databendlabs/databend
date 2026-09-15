@@ -124,7 +124,11 @@ impl Binder {
     }
 
     fn rewrite_nondeterministic_update(&mut self, plan: Plan) -> Result<Plan> {
-        let Plan::DataMutation { box s_expr, .. } = &plan else {
+        let Plan::DataMutation {
+            s_expr: deref!(s_expr),
+            ..
+        } = &plan
+        else {
             return Ok(plan);
         };
         let RelOperator::Mutation(mutation) = s_expr.plan() else {

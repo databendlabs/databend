@@ -49,36 +49,38 @@ impl Interpreter for AddTableConstraintInterpreter {
         true
     }
 
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog_name = self.plan.catalog.as_str();
-        let db_name = self.plan.database.as_str();
-        let tbl_name = self.plan.table.as_str();
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog_name = self.plan.catalog.as_str();
+            let db_name = self.plan.database.as_str();
+            let tbl_name = self.plan.table.as_str();
 
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        // check mutability
-        tbl.check_mutable()?;
-        let table_info = tbl.get_table_info();
-        let engine = table_info.engine();
-        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
-            ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support alter",
-                &self.plan.database, &self.plan.table, engine
-            ))
-        })?;
-        if table_info.db_type != DatabaseType::NormalDB {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} doesn't support alter",
-                &self.plan.database, &self.plan.table
-            )));
-        }
+            let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+            // check mutability
+            tbl.check_mutable()?;
+            let table_info = tbl.get_table_info();
+            let engine = table_info.engine();
+            let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
+                ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} engine is {} that doesn't support alter",
+                    &self.plan.database, &self.plan.table, engine
+                ))
+            })?;
+            if table_info.db_type != DatabaseType::NormalDB {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} doesn't support alter",
+                    &self.plan.database, &self.plan.table
+                )));
+            }
 
-        let mut new_table_meta = table_info.meta.clone();
-        new_table_meta.add_constraint(
-            self.plan.constraint_name.clone(),
-            self.plan.constraint.clone(),
-        )?;
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
-        Ok(PipelineBuildResult::create())
+            let mut new_table_meta = table_info.meta.clone();
+            new_table_meta.add_constraint(
+                self.plan.constraint_name.clone(),
+                self.plan.constraint.clone(),
+            )?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
+            update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

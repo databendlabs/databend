@@ -50,25 +50,27 @@ impl Interpreter for ShowFileFormatsInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "show_file_formats_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "show_file_formats_execute");
 
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.ctx.get_tenant();
-        let mut formats = user_mgr.get_file_formats(&tenant).await?;
+            let user_mgr = UserApiProvider::instance();
+            let tenant = self.ctx.get_tenant();
+            let mut formats = user_mgr.get_file_formats(&tenant).await?;
 
-        formats.sort_by(|a, b| a.name.cmp(&b.name));
+            formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let names = formats.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+            let names = formats.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
 
-        let options = formats
-            .iter()
-            .map(|x| x.file_format_params.to_string())
-            .collect::<Vec<_>>();
+            let options = formats
+                .iter()
+                .map(|x| x.file_format_params.to_string())
+                .collect::<Vec<_>>();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(options),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(options),
+            ])])
+        })
     }
 }

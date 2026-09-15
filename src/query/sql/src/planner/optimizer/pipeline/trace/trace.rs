@@ -22,6 +22,7 @@ use parking_lot::Mutex;
 
 use crate::Metadata;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 
 /// Represents a trace entry for a rule execution
 #[derive(Clone)]
@@ -137,9 +138,10 @@ impl OptimizerTraceCollector {
         before: &SExpr,
         after: &SExpr,
         metadata: &Metadata,
+        stat_context: &StatContext,
     ) -> Result<()> {
         // Calculate diff and determine if optimizer had an effect
-        let diff = before.diff(after, metadata)?;
+        let diff = before.diff(after, metadata, stat_context)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
         // Create and store the optimizer trace
@@ -170,9 +172,10 @@ impl OptimizerTraceCollector {
         before: &SExpr,
         after: &SExpr,
         metadata: &Metadata,
+        stat_context: &StatContext,
     ) -> Result<()> {
         // Calculate diff and determine if rule had an effect
-        let diff = before.diff(after, metadata)?;
+        let diff = before.diff(after, metadata, stat_context)?;
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
         // If rule had an effect, update the parent optimizer's status

@@ -57,49 +57,51 @@ impl Interpreter for CreateUserInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
 
-        let user_mgr = UserApiProvider::instance();
-        let user_counts = user_mgr
-            .user_api(&tenant)
-            .get_raw_users()
-            .await
-            .map_err(meta_service_error)?
-            .len();
+            let user_mgr = UserApiProvider::instance();
+            let user_counts = user_mgr
+                .user_api(&tenant)
+                .get_raw_users()
+                .await
+                .map_err(meta_service_error)?
+                .len();
 
-        let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
-        let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
-        if quota.max_users != 0 && user_counts >= quota.max_users as usize {
-            return Err(ErrorCode::TenantQuotaExceeded(format!(
-                "Max users quota exceeded: {}",
-                quota.max_users
-            )));
-        };
+            let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
+            let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
+            if quota.max_users != 0 && user_counts >= quota.max_users as usize {
+                return Err(ErrorCode::TenantQuotaExceeded(format!(
+                    "Max users quota exceeded: {}",
+                    quota.max_users
+                )));
+            };
 
-        let now = Utc::now();
-        let user_info = UserInfo {
-            auth_info: plan.auth_info.clone(),
-            name: plan.user.username,
-            hostname: plan.user.hostname,
-            grants: UserGrantSet::empty(),
-            quota: UserQuota::no_limit(),
-            option: plan.user_option,
-            history_auth_infos: vec![plan.auth_info.clone()],
-            password_fails: Vec::new(),
-            password_update_on: plan.password_update_on,
-            lockout_time: None,
+            let now = Utc::now();
+            let user_info = UserInfo {
+                auth_info: plan.auth_info.clone(),
+                name: plan.user.username,
+                hostname: plan.user.hostname,
+                grants: UserGrantSet::empty(),
+                quota: UserQuota::no_limit(),
+                option: plan.user_option,
+                history_auth_infos: vec![plan.auth_info.clone()],
+                password_fails: Vec::new(),
+                password_update_on: plan.password_update_on,
+                lockout_time: None,
 
-            created_on: now,
-            update_on: now,
-        };
-        user_mgr
-            .create_user(&tenant, user_info, &plan.create_option)
-            .await?;
+                created_on: now,
+                update_on: now,
+            };
+            user_mgr
+                .create_user(&tenant, user_info, &plan.create_option)
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

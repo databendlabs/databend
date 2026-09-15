@@ -36,6 +36,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -619,13 +620,19 @@ where
         &case.column_stats,
         &case.histogram_stats,
     )?;
-    let raw = raw_plan.format_indent(databend_common_sql::FormatOptions { verbose: false })?;
+    let raw = raw_plan.format_indent(
+        databend_common_sql::FormatOptions { verbose: false },
+        &StatContext::default(),
+    )?;
     write_result(mint, &format!("{}_raw.txt", case.stem), |f| {
         writeln!(f, "{}", raw).map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))
     })?;
 
     let optimized_plan = runner.optimize_plan(raw_plan).await?;
-    let optimized = optimized_plan.format_indent(databend_common_sql::FormatOptions::default())?;
+    let optimized = optimized_plan.format_indent(
+        databend_common_sql::FormatOptions::default(),
+        &StatContext::default(),
+    )?;
     write_result(mint, &format!("{}_optimized.txt", case.stem), |f| {
         writeln!(f, "{}", optimized)
             .map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))

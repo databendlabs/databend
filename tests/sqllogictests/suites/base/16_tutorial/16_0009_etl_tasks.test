@@ -1,0 +1,110 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/008-etl-tasks.sql
+# CREATE TASK only parses the body SQL; run the COPY/INSERT statements here so
+# semantic errors such as ARRAY(...)[expr] are caught. RAND() is replaced with
+# a constant so the result is deterministic.
+
+statement ok
+CREATE OR REPLACE DATABASE citydrive_demo
+
+statement ok
+USE citydrive_demo
+
+statement ok
+CREATE OR REPLACE STAGE citydrive_logs_stage
+
+statement ok
+CREATE OR REPLACE TABLE raw_logs (
+    doc_id    STRING,
+    doc_body  VARIANT,
+    loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+statement ok
+CREATE OR REPLACE TABLE parsed_logs (
+    doc_id      STRING,
+    event_tag   STRING,
+    speed_kmh   DOUBLE,
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+query TT
+SELECT CONCAT('FRAME-', LPAD(CAST(number AS STRING), 4, '0')) AS doc_id,
+       GET(
+           ARRAY('hard_brake', 'pedestrian', 'lane_merge'),
+           number % 3 + 1
+       ) AS event_tag
+FROM numbers(3)
+ORDER BY number
+----
+FRAME-0000 hard_brake
+FRAME-0001 pedestrian
+FRAME-0002 lane_merge
+
+query III
+COPY INTO @citydrive_logs_stage
+FROM (
+    SELECT CONCAT('FRAME-', LPAD(CAST(number AS STRING), 4, '0')) AS doc_id,
+           GET(
+               ARRAY('hard_brake', 'pedestrian', 'lane_merge'),
+               number % 3 + 1
+           ) AS event_tag,
+           20 + 0.5 * 40 AS speed_kmh
+    FROM numbers(3)
+)
+FILE_FORMAT = (TYPE = NDJSON)
+----
+3 198 198
+
+query TTR
+SELECT $1:doc_id::STRING AS doc_id,
+       $1:event_tag::STRING AS event_tag,
+       $1:speed_kmh::DOUBLE AS speed_kmh
+FROM @citydrive_logs_stage (FILE_FORMAT=>'ndjson')
+ORDER BY doc_id
+----
+FRAME-0000 hard_brake 40.0
+FRAME-0001 pedestrian 40.0
+FRAME-0002 lane_merge 40.0
+
+statement ok
+COPY INTO raw_logs (doc_id, doc_body)
+FROM (
+    SELECT $1:doc_id::STRING,
+           $1 AS doc_body
+    FROM @citydrive_logs_stage
+)
+PATTERN = '.*[.]ndjson'
+FILE_FORMAT = (TYPE = NDJSON)
+
+query TTR
+SELECT doc_id,
+       doc_body['event_tag']::STRING AS event_tag,
+       doc_body['speed_kmh']::DOUBLE AS speed_kmh
+FROM raw_logs
+ORDER BY doc_id
+----
+FRAME-0000 hard_brake 40.0
+FRAME-0001 pedestrian 40.0
+FRAME-0002 lane_merge 40.0
+
+statement ok
+INSERT INTO parsed_logs (doc_id, event_tag, speed_kmh)
+SELECT doc_id,
+       doc_body['event_tag']::STRING AS event_tag,
+       doc_body['speed_kmh']::DOUBLE AS speed_kmh
+FROM raw_logs
+
+query TTR
+SELECT doc_id, event_tag, speed_kmh
+FROM parsed_logs
+ORDER BY doc_id
+----
+FRAME-0000 hard_brake 40.0
+FRAME-0001 pedestrian 40.0
+FRAME-0002 lane_merge 40.0
+
+statement ok
+DROP STAGE IF EXISTS citydrive_logs_stage
+
+statement ok
+DROP DATABASE IF EXISTS citydrive_demo

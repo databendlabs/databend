@@ -54,46 +54,50 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
-        let tenant = self.plan.tenant.clone();
-        let policy_id = match handler
-            .get_row_access_policy(meta_api.clone(), &tenant, self.plan.name.clone())
-            .await
-        {
-            Ok((policy_id, _)) => Some(*policy_id.data),
-            Err(e) if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists => {
-                None
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            let handler = get_row_access_policy_handler();
+            let tenant = self.plan.tenant.clone();
+            let policy_id = match handler
+                .get_row_access_policy(meta_api.clone(), &tenant, self.plan.name.clone())
+                .await
+            {
+                Ok((policy_id, _)) => Some(*policy_id.data),
+                Err(e)
+                    if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists =>
+                {
+                    None
+                }
+                Err(e) => return Err(e),
+            };
+            if let Err(e) = handler
+                .drop_row_access_policy(meta_api, self.plan.clone().into())
+                .await
+            {
+                if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists {
+                    return Ok(PipelineBuildResult::create());
+                } else {
+                    return Err(e);
+                }
             }
-            Err(e) => return Err(e),
-        };
-        if let Err(e) = handler
-            .drop_row_access_policy(meta_api, self.plan.clone().into())
-            .await
-        {
-            if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists {
-                return Ok(PipelineBuildResult::create());
-            } else {
-                return Err(e);
+
+            if let Some(policy_id) = policy_id {
+                SecurityPolicyCacheManager::instance().invalidate(
+                    PolicyType::RowAccessPolicy,
+                    &tenant,
+                    policy_id,
+                );
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .revoke_ownership(&OwnershipObject::RowAccessPolicy { policy_id })
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
             }
-        }
 
-        if let Some(policy_id) = policy_id {
-            SecurityPolicyCacheManager::instance().invalidate(
-                PolicyType::RowAccessPolicy,
-                &tenant,
-                policy_id,
-            );
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .revoke_ownership(&OwnershipObject::RowAccessPolicy { policy_id })
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

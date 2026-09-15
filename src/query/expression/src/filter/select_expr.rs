@@ -170,13 +170,21 @@ impl SelectExprBuilder {
                                 (
                                     Expr::ColumnRef(ColumnRef { data_type, .. }),
                                     Expr::Constant(Constant { scalar, .. }),
-                                ) if matches!(data_type, DataType::String | DataType::Nullable(box DataType::String)) => {
+                                ) if matches!(
+                                    data_type,
+                                    DataType::String | DataType::Nullable(deref!(DataType::String))
+                                ) =>
+                                {
                                     (&args[0], data_type, scalar)
                                 }
                                 (
                                     Expr::Constant(Constant { scalar, .. }),
                                     Expr::ColumnRef(ColumnRef { data_type, .. }),
-                                ) if matches!(data_type, DataType::String | DataType::Nullable(box DataType::String)) => {
+                                ) if matches!(
+                                    data_type,
+                                    DataType::String | DataType::Nullable(deref!(DataType::String))
+                                ) =>
+                                {
                                     (&args[1], data_type, scalar)
                                 }
                                 _ => {
@@ -194,7 +202,10 @@ impl SelectExprBuilder {
                                 _ => None,
                             });
                             let can_reorder = Self::can_reorder(column);
-                            let is_string = matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String));
+                            let is_string = matches!(
+                                column_data_type,
+                                DataType::String | DataType::Nullable(deref!(DataType::String))
+                            );
 
                             match (scalar, is_string) {
                                 (Scalar::String(like_str), true) => {
@@ -228,14 +239,19 @@ impl SelectExprBuilder {
                     }
                 }
             }
-            Expr::ColumnRef(ColumnRef { id, data_type, .. }) if matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)) => {
+            Expr::ColumnRef(ColumnRef { id, data_type, .. })
+                if matches!(
+                    data_type,
+                    DataType::Boolean | DataType::Nullable(deref!(DataType::Boolean))
+                ) =>
+            {
                 SelectExprBuildResult::new(SelectExpr::BooleanColumn((*id, data_type.clone())))
                     .can_push_down_not(false)
             }
             Expr::Constant(Constant {
                 scalar,
                 data_type:
-                    data_type @ (DataType::Boolean | DataType::Nullable(box DataType::Boolean)),
+                    data_type @ (DataType::Boolean | DataType::Nullable(deref!(DataType::Boolean))),
                 ..
             }) => {
                 let scalar = if not {
@@ -279,7 +295,10 @@ impl SelectExprBuilder {
 
     fn other_select_expr(&self, expr: &Expr, not: bool) -> SelectExprBuildResult {
         let can_push_down_not = !not
-            || matches!(expr.data_type_remove_generics(), DataType::Boolean | DataType::Nullable(box DataType::Boolean));
+            || matches!(
+                expr.data_type_remove_generics(),
+                DataType::Boolean | DataType::Nullable(deref!(DataType::Boolean))
+            );
 
         let expr = SelectExpr::Others(if not && can_push_down_not {
             self.wrap_not(expr.clone())

@@ -28,7 +28,6 @@ use databend_common_pipeline::core::Pipeline;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_source_pipeline;
@@ -97,22 +96,6 @@ impl FuseTable {
 
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
-
-        let index_reader = Arc::new(
-            plan.push_downs
-                .as_ref()
-                .and_then(|p| p.agg_index.as_ref())
-                .map(|agg| {
-                    AggIndexReader::try_create(
-                        ctx.clone(),
-                        self.operator.clone(),
-                        agg,
-                        self.table_compression,
-                        put_cache,
-                    )
-                })
-                .transpose()?,
-        );
 
         let virtual_reader = Arc::new(
             PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
@@ -196,7 +179,6 @@ impl FuseTable {
             max_threads,
             plan,
             max_io_requests,
-            index_reader,
             virtual_reader,
             rx,
         )?;

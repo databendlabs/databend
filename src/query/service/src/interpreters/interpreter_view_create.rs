@@ -54,102 +54,106 @@ impl Interpreter for CreateViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-        let table_function = catalog.list_table_functions();
-        let mut options = BTreeMap::new();
-        let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
-        match plan.clone() {
-            Plan::Query { metadata, .. } => {
-                let metadata = metadata.read().clone();
-                if self.plan.create_option.is_overriding() {
-                    check_view_circular_dependency(
-                        &metadata,
-                        &self.plan.catalog,
-                        &self.plan.database,
-                        &self.plan.view_name,
-                    )?;
-                }
-                for table in metadata.tables() {
-                    let database_name = table.database();
-                    let table_name = table.name();
-                    if !catalog
-                        .exists_table(&tenant, database_name, table_name)
-                        .await?
-                        && !table_function.contains(&table_name.to_string())
-                        && !table.table().is_stage_table()
-                    {
-                        return Err(databend_common_exception::ErrorCode::UnknownTable(format!(
-                            "VIEW QUERY: table `{}`.`{}` not exists in catalog '{}'",
-                            database_name,
-                            table_name,
-                            &catalog.name()
-                        )));
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let tenant = self.ctx.get_tenant();
+            let table_function = catalog.list_table_functions();
+            let mut options = BTreeMap::new();
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+            match plan.clone() {
+                Plan::Query { metadata, .. } => {
+                    let metadata = metadata.read().clone();
+                    if self.plan.create_option.is_overriding() {
+                        check_view_circular_dependency(
+                            &metadata,
+                            &self.plan.catalog,
+                            &self.plan.database,
+                            &self.plan.view_name,
+                        )?;
+                    }
+                    for table in metadata.tables() {
+                        let database_name = table.database();
+                        let table_name = table.name();
+                        if !catalog
+                            .exists_table(&tenant, database_name, table_name)
+                            .await?
+                            && !table_function.contains(&table_name.to_string())
+                            && !table.table().is_stage_table()
+                        {
+                            return Err(databend_common_exception::ErrorCode::UnknownTable(
+                                format!(
+                                    "VIEW QUERY: table `{}`.`{}` not exists in catalog '{}'",
+                                    database_name,
+                                    table_name,
+                                    &catalog.name()
+                                ),
+                            ));
+                        }
                     }
                 }
+                _ => {
+                    // This logic will never be used, because of QUERY parse as query
+                    return Err(ErrorCode::Unimplemented("create view only support Query"));
+                }
             }
-            _ => {
-                // This logic will never be used, because of QUERY parse as query
-                return Err(ErrorCode::Unimplemented("create view only support Query"));
-            }
-        }
 
-        let subquery = if self.plan.column_names.is_empty() {
-            self.plan.subquery.clone()
-        } else {
-            if plan.schema().fields().len() != self.plan.column_names.len() {
-                return Err(ErrorCode::BadDataArrayLength(format!(
-                    "column name length mismatch, expect {}, got {}",
-                    plan.schema().fields().len(),
-                    self.plan.column_names.len(),
-                )));
-            }
-            format!(
-                "select * from ({}) {}({})",
-                self.plan.subquery,
-                self.plan.view_name,
-                self.plan.column_names.join(", ")
-            )
-        };
-        options.insert(QUERY.to_string(), subquery);
-
-        let plan = CreateTableReq {
-            create_option: self.plan.create_option,
-            catalog_name: if self.plan.create_option.is_overriding() {
-                Some(self.plan.catalog.to_string())
+            let subquery = if self.plan.column_names.is_empty() {
+                self.plan.subquery.clone()
             } else {
-                None
-            },
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name: self.plan.database.clone(),
-                table_name: self.plan.view_name.clone(),
-            },
-            table_meta: TableMeta {
-                engine: VIEW_ENGINE.to_string(),
-                options,
-                ..Default::default()
-            },
-            source_table_option: None,
-            as_dropped: false,
-            materialized_view: None,
-            table_properties: None,
-            table_partition: None,
-        };
-        let reply = catalog.create_table(plan).await?;
-        if !reply.new_table && !self.plan.create_option.is_overriding() {
-            self.ctx.attach_query_lineage(None);
-        } else {
-            self.ctx.update_query_lineage_target_id(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.view_name,
-                reply.table_id,
-            );
-        }
+                if plan.schema().fields().len() != self.plan.column_names.len() {
+                    return Err(ErrorCode::BadDataArrayLength(format!(
+                        "column name length mismatch, expect {}, got {}",
+                        plan.schema().fields().len(),
+                        self.plan.column_names.len(),
+                    )));
+                }
+                format!(
+                    "select * from ({}) {}({})",
+                    self.plan.subquery,
+                    self.plan.view_name,
+                    self.plan.column_names.join(", ")
+                )
+            };
+            options.insert(QUERY.to_string(), subquery);
 
-        Ok(PipelineBuildResult::create())
+            let plan = CreateTableReq {
+                create_option: self.plan.create_option,
+                catalog_name: if self.plan.create_option.is_overriding() {
+                    Some(self.plan.catalog.to_string())
+                } else {
+                    None
+                },
+                name_ident: TableNameIdent {
+                    tenant: self.plan.tenant.clone(),
+                    db_name: self.plan.database.clone(),
+                    table_name: self.plan.view_name.clone(),
+                },
+                table_meta: TableMeta {
+                    engine: VIEW_ENGINE.to_string(),
+                    options,
+                    ..Default::default()
+                },
+                source_table_option: None,
+                as_dropped: false,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            };
+            let reply = catalog.create_table(plan).await?;
+            if !reply.new_table && !self.plan.create_option.is_overriding() {
+                self.ctx.attach_query_lineage(None);
+            } else {
+                self.ctx.update_query_lineage_target_id(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.view_name,
+                    reply.table_id,
+                );
+            }
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use crate::IndexType;
 use crate::optimizer::ir::Group;
 use crate::optimizer::ir::GroupState;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::expr::MExpr;
 use crate::optimizer::ir::expr::SExpr;
 use crate::optimizer::ir::property::RelExpr;
@@ -35,6 +36,7 @@ use crate::plans::RelOperator;
 pub struct Memo {
     pub groups: Vec<Group>,
     pub root: Option<IndexType>,
+    stat_context: StatContext,
 
     /// Hash table for detecting duplicated expressions.
     /// The entry is `(plan, children) -> (group_index, m_expr_index)`.
@@ -42,10 +44,11 @@ pub struct Memo {
 }
 
 impl Memo {
-    pub fn create() -> Self {
+    pub fn new(stat_context: StatContext) -> Self {
         Memo {
             groups: vec![],
             root: None,
+            stat_context,
             m_expr_lookup_table: HashMap::new(),
         }
     }
@@ -103,7 +106,7 @@ impl Memo {
             _ => {
                 let rel_expr = RelExpr::with_s_expr(&s_expr);
                 let relational_prop = rel_expr.derive_relational_prop()?;
-                let stat_info = rel_expr.derive_cardinality()?;
+                let stat_info = rel_expr.derive_cardinality(&self.stat_context)?;
                 self.add_group(relational_prop, stat_info)
             }
         };

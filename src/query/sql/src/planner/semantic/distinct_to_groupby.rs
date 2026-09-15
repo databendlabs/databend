@@ -47,19 +47,18 @@ impl DistinctToGroupBy {
         if group_by.is_none() && select_list.len() == 1 && from.len() == 1 {
             if let databend_common_ast::ast::SelectTarget::AliasedExpr {
                 expr:
-                    box Expr::FunctionCall {
+                    deref!(Expr::FunctionCall {
                         span,
-                        func:
-                            FunctionCall {
-                                distinct,
-                                name,
-                                args,
-                                order_by,
-                                filter,
-                                window,
-                                ..
-                            },
-                    },
+                        func: FunctionCall {
+                            distinct,
+                            name,
+                            args,
+                            order_by,
+                            filter,
+                            window,
+                            ..
+                        },
+                    }),
                 alias,
             } = &select_list[0]
             {

@@ -18,15 +18,12 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_storages_common_io::ReadSettings;
-use log::debug;
 
 use super::block_format::FuseParquetBlockFormat;
 use super::parquet_data_source::ParquetDataSource;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
-use crate::io::AggIndexReader;
 use crate::io::BlockReadContext;
-use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
 
@@ -35,7 +32,6 @@ pub struct ReadBlockContext {
     storage_format: FuseStorageFormat,
     block_read_ctx: BlockReadContext,
     block_format: FuseParquetBlockFormat,
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 }
 
@@ -45,7 +41,6 @@ impl ReadBlockContext {
         storage_format: FuseStorageFormat,
         block_read_ctx: BlockReadContext,
         block_format: FuseParquetBlockFormat,
-        index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
@@ -53,7 +48,6 @@ impl ReadBlockContext {
             storage_format,
             block_read_ctx,
             block_format,
-            index_reader,
             virtual_reader,
         }))
     }
@@ -66,10 +60,6 @@ impl ReadBlockContext {
     #[async_backtrace::framed]
     pub async fn read_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-
-        if let Some(data_source) = self.read_agg_index_data(fuse_part).await? {
-            return Ok(data_source);
-        }
 
         let virtual_source = self.read_virtual_data(fuse_part).await;
         let ignore_column_ids = virtual_source
@@ -87,62 +77,10 @@ impl ReadBlockContext {
             )
             .await?;
 
-        Ok(ParquetDataSource::Normal((data, virtual_source)))
-    }
-
-    async fn read_agg_index_data(
-        &self,
-        fuse_part: &FuseBlockPartInfo,
-    ) -> Result<Option<ParquetDataSource>> {
-        let Some(index_reader) = self.index_reader.as_ref() else {
-            return Ok(None);
-        };
-
-        let location = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-            &fuse_part.location,
-            index_reader.index_id(),
-        );
-        let index_block_read_ctx = index_reader.block_read_context();
-
-        let Some(block_meta) = self
-            .block_format
-            .read_block_meta(index_block_read_ctx.operator(), &location)
-            .await
-        else {
-            return Ok(None);
-        };
-
-        let data = match self
-            .block_format
-            .read_data_by_merge_io(
-                &index_block_read_ctx,
-                &self.read_settings,
-                &location,
-                &block_meta.columns_meta,
-                &None,
-            )
-            .await
-        {
-            Ok(data) => data,
-            Err(err) => {
-                debug!("Read aggregating index `{location}` failed: {err}");
-                return Ok(None);
-            }
-        };
-
-        let part = FuseBlockPartInfo::create(
-            location,
-            None,
-            0,
-            block_meta.num_rows,
-            block_meta.columns_meta,
-            None,
-            index_reader.compression().into(),
-            None,
-            None,
-            None,
-        );
-        Ok(Some(ParquetDataSource::AggIndex((part, data))))
+        Ok(ParquetDataSource {
+            data,
+            virtual_data: virtual_source,
+        })
     }
 
     async fn read_virtual_data(

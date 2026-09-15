@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
+
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,8 +47,8 @@ use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use log::debug;
 use log::error;
+use log::info;
 use log::warn;
 use rand::Rng;
 
@@ -77,6 +79,23 @@ use crate::sessions::TableContextTableManagement;
 use crate::sessions::TableContextTelemetry;
 
 const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
+
+#[derive(Debug, PartialEq, Eq)]
+enum ReclusterRoundOutcome {
+    Committed,
+    NoParts,
+    ClaimRetriesExhausted,
+}
+
+impl ReclusterRoundOutcome {
+    fn stop_reason(&self) -> Option<&'static str> {
+        match self {
+            Self::Committed => None,
+            Self::NoParts => Some("no_recluster_parts"),
+            Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
+        }
+    }
+}
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -109,102 +128,118 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let ctx = self.ctx.clone();
-        let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let ctx = self.ctx.clone();
+            let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 
-        let mut times = 0;
-        let mut push_downs = None;
-        // FINAL carry is scoped to this fixed-scan statement loop.
-        // A new FINAL statement starts from the table head again.
-        let mut linear_final_carry = ReclusterFinalCarry::default();
-        let start = SystemTime::now();
-        let timeout = Duration::from_secs(recluster_timeout_secs);
-        let is_final = self.plan.is_final;
-        let mut committed = false;
-        let result = loop {
-            if let Err(err) = ctx.check_aborting() {
-                error!(
-                    "recluster: statement aborted, server is shutting down or the query was killed, round={}",
-                    times + 1
-                );
-                break Err(err.with_context("failed to execute"));
-            }
-
-            let res = self
-                .execute_recluster(&mut push_downs, &mut linear_final_carry)
-                .await;
-
-            match res {
-                Ok(true) => {
-                    debug!(
-                        "recluster: final loop stop reason=no_recluster_parts round={}",
-                        times + 1,
+            let mut rounds = 0;
+            let mut push_downs = None;
+            // FINAL carry is scoped to this fixed-scan statement loop.
+            // A new FINAL statement starts from the table head again.
+            let mut linear_final_carry = ReclusterFinalCarry::default();
+            let start = SystemTime::now();
+            let timeout = Duration::from_secs(recluster_timeout_secs);
+            let is_final = self.plan.is_final;
+            let mut committed_rounds = 0;
+            let (result, stop_reason) = loop {
+                if let Err(err) = ctx.check_aborting() {
+                    error!(
+                        event = "recluster.aborted",
+                        rounds;
+                        "Recluster aborted before next round"
                     );
-                    break Ok(());
+                    break (Err(err.with_context("failed to execute")), "aborted");
                 }
-                Ok(false) => committed = true,
-                Err(e) => {
-                    if is_final
-                        && matches!(
-                            e.code(),
-                            ErrorCode::LEASE_EXPIRED
-                                | ErrorCode::TABLE_ALREADY_LOCKED
-                                | ErrorCode::TABLE_VERSION_MISMATCHED
-                                | ErrorCode::UNRESOLVABLE_CONFLICT
-                        )
-                    {
-                        // Keep FINAL carry across retryable conflicts. FINAL is
-                        // a bounded fixed scan and does not restart from table
-                        // head to chase concurrent snapshot drift.
-                        warn!(
-                            "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
-                            times + 1,
-                            e.code(),
-                            e,
-                        );
-                    } else {
-                        error!(
-                            "recluster: final loop stop reason=error round={} code={} error={:?}",
-                            times + 1,
-                            e.code(),
-                            e,
-                        );
-                        break Err(e);
+
+                rounds += 1;
+                let res = self
+                    .execute_recluster(&mut push_downs, &mut linear_final_carry)
+                    .await;
+
+                match res {
+                    Ok(outcome) => {
+                        if let Some(reason) = outcome.stop_reason() {
+                            break (Ok(()), reason);
+                        }
+                        committed_rounds += 1;
+                    }
+                    Err(e) => {
+                        if is_final
+                            && matches!(
+                                e.code(),
+                                ErrorCode::LEASE_EXPIRED
+                                    | ErrorCode::TABLE_ALREADY_LOCKED
+                                    | ErrorCode::TABLE_VERSION_MISMATCHED
+                                    | ErrorCode::UNRESOLVABLE_CONFLICT
+                            )
+                        {
+                            // Keep FINAL carry across retryable conflicts. FINAL is
+                            // a bounded fixed scan and does not restart from table
+                            // head to chase concurrent snapshot drift.
+                            warn!(
+                                event = "recluster.retry",
+                                reason = "retryable_conflict",
+                                round = rounds,
+                                code = e.code(),
+                                error :? = e;
+                                "Recluster round failed with retryable conflict"
+                            );
+                        } else {
+                            error!(
+                                event = "recluster.failed",
+                                round = rounds,
+                                code = e.code(),
+                                error :? = e;
+                                "Recluster round failed"
+                            );
+                            break (Err(e), "error");
+                        }
                     }
                 }
+
+                let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
+                ctx.set_status_info(&format!(
+                    "[FUSE-RECLUSTER] Executed rounds={} committed_rounds={} elapsed={:?}",
+                    rounds, committed_rounds, elapsed_time,
+                ));
+
+                if !is_final {
+                    break (Ok(()), "single_round_completed");
+                }
+
+                if elapsed_time >= timeout {
+                    warn!(
+                        event = "recluster.timeout",
+                        rounds,
+                        timeout_secs = recluster_timeout_secs;
+                        "Recluster stopped at time limit"
+                    );
+                    break (Ok(()), "timeout");
+                }
+            };
+
+            info!(
+                event = "recluster.finished",
+                catalog = self.plan.catalog.as_str(),
+                database = self.plan.database.as_str(),
+                table = self.plan.table.as_str(),
+                is_final,
+                rounds,
+                committed_rounds,
+                stop_reason,
+                success = result.is_ok(),
+                elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
+                "Recluster finished"
+            );
+
+            if committed_rounds > 0 {
+                self.vacuum_table_history().await;
             }
 
-            let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
-            times += 1;
-            // Status.
-            {
-                let status = format!(
-                    "[FUSE-RECLUSTER] Run recluster tasks:{} times, cost:{:?}",
-                    times, elapsed_time
-                );
-                ctx.set_status_info(&status);
-            }
-
-            if !is_final {
-                break Ok(());
-            }
-
-            if elapsed_time >= timeout {
-                warn!(
-                    "recluster: final loop stop reason=timeout round={} timeout={:?}",
-                    times, timeout,
-                );
-                break Ok(());
-            }
-        };
-
-        if committed {
-            self.vacuum_table_history().await;
-        }
-
-        result?;
-        Ok(PipelineBuildResult::create())
+            result?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 
@@ -254,7 +289,7 @@ impl ReclusterTableInterpreter {
         &self,
         push_downs: &mut Option<PushDownInfo>,
         linear_final_carry: &mut ReclusterFinalCarry,
-    ) -> Result<bool> {
+    ) -> Result<ReclusterRoundOutcome> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
         let settings = self.ctx.get_settings();
@@ -311,7 +346,7 @@ impl ReclusterTableInterpreter {
                 )
                 .await?;
             let Some((parts, snapshot, segments)) = candidate else {
-                return Ok(true);
+                return Ok(ReclusterRoundOutcome::NoParts);
             };
             let Some(claim_manager) = &claim_manager else {
                 break (parts, snapshot, None);
@@ -327,10 +362,12 @@ impl ReclusterTableInterpreter {
             metrics_inc_segment_claim_conflicts();
             if claim_retries >= MAX_SEGMENT_CLAIM_RETRIES {
                 warn!(
-                    "recluster: stop after {} segment claim retries",
-                    MAX_SEGMENT_CLAIM_RETRIES
+                    event = "recluster.claim_retries_exhausted",
+                    table_id = tbl.get_id(),
+                    claim_retries;
+                    "Recluster stopped at segment claim retry limit"
                 );
-                return Ok(true);
+                return Ok(ReclusterRoundOutcome::ClaimRetriesExhausted);
             }
             claim_retries += 1;
 
@@ -404,7 +441,7 @@ impl ReclusterTableInterpreter {
         drop(complete_executor);
 
         execution_result?;
-        Ok(false)
+        Ok(ReclusterRoundOutcome::Committed)
     }
 
     async fn build_linear_candidate(

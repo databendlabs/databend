@@ -33,6 +33,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -199,7 +200,7 @@ impl TableMetaFunc for FuseBlockStatistics {
 }
 
 fn build_column_statistics_variant(
-    column_stat: &databend_storages_common_table_meta::meta::ColumnStatistics,
+    column_stat: &ColumnStatistics,
     field_type: TableDataType,
     func_ctx: &FunctionContext,
 ) -> Vec<u8> {
@@ -308,7 +309,11 @@ fn build_vector_statistics_variant(
     build_variant(scalar, &data_type, func_ctx)
 }
 
-fn build_variant(scalar: Scalar, data_type: &TableDataType, func_ctx: &FunctionContext) -> Vec<u8> {
+pub(crate) fn build_variant(
+    scalar: Scalar,
+    data_type: &TableDataType,
+    func_ctx: &FunctionContext,
+) -> Vec<u8> {
     let mut buf = Vec::new();
     cast_scalar_to_variant(scalar.as_ref(), &func_ctx.tz, &mut buf, Some(data_type));
     buf
