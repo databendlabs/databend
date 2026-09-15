@@ -1620,9 +1620,8 @@ impl AccessChecker for PrivilegeAccess {
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowUserFunctions)
-                    | Some(RewriteKind::ShowDictionaries(_)) => {
-                        return Ok(());
-                    }
+                    | Some(RewriteKind::ShowDictionaries(_))
+                    | Some(RewriteKind::ShowMaterializedViews)
                     | Some(RewriteKind::ShowTableFunctions) => {
                         return Ok(());
                     }
