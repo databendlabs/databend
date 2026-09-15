@@ -25,7 +25,6 @@ pub use transform_deserializer::*;
 pub use transform_exchange_aggregate_serializer::*;
 
 pub mod exchange_defines {
-    use arrow_schema::Schema;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchema;
     use databend_common_expression::types::DataType;
@@ -37,10 +36,5 @@ pub mod exchange_defines {
             DataField::new("location", DataType::String),
             DataField::new("row_group", DataType::Binary),
         ])
-    }
-
-    pub fn spilled_arrow_schema() -> Schema {
-        let schema = spilled_schema();
-        Schema::from(&schema)
     }
 }
