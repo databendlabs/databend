@@ -40,7 +40,7 @@ pub(crate) async fn vacuum_table(
         ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
     })?;
 
-    table.check_mutable()?;
+    table.check_mutable_for_maintenance()?;
     get_vacuum_handler()
         .do_vacuum2(table, ctx.clone(), respect_flash_back)
         .await
@@ -104,7 +104,7 @@ async fn vacuum_database(
             continue;
         };
 
-        if table.is_read_only() {
+        if table.is_read_only_for_maintenance() {
             info!("Bypass read only table {}.{}", database_name, table_name);
             continue;
         }

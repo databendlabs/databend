@@ -152,6 +152,7 @@ use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
+use crate::plans::RefreshDynamicTablePlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshLineagePlan;
 use crate::plans::RefreshMaterializedViewPlan;
@@ -487,6 +488,7 @@ pub enum Plan {
     ExecuteTask(Box<ExecuteTaskPlan>),
 
     CreateDynamicTable(Box<CreateDynamicTablePlan>),
+    RefreshDynamicTable(Box<RefreshDynamicTablePlan>),
 
     // Txn
     Begin,
