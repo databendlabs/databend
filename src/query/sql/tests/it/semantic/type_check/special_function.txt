@@ -107,7 +107,7 @@ type: Variant
 description: try_to_variant should use the fallible variant cast rewrite.
 sql: try_to_variant([number, delta])
 status: ok
-scalar: try_to_variant(array(number (#0), delta (#3)))
+scalar: CAST(array(number (#0), delta (#3)) AS Variant NULL)
 type: Variant NULL
 
 === greatest_rewrites_through_array_max ===
