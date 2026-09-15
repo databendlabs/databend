@@ -331,10 +331,8 @@ impl<R: Reader> Unit<R> {
                         name = self.attr_str(attr.value());
                     }
                 }
-                gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                    if name.is_none() {
-                        name = self.name_attr(attr.value(), 16)?;
-                    }
+                gimli::DW_AT_abstract_origin | gimli::DW_AT_specification if name.is_none() => {
+                    name = self.name_attr(attr.value(), 16)?;
                 }
                 _ => {}
             };

@@ -16,6 +16,7 @@
 #![allow(incomplete_features)]
 #![feature(allocator_api)]
 #![feature(thread_local)]
+#![feature(ptr_metadata)]
 #![feature(alloc_error_hook)]
 #![feature(slice_swap_unchecked)]
 #![feature(variant_count)]
