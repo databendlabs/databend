@@ -353,6 +353,35 @@ fn new_table_index() -> databend_common_meta_app::schema::TableIndex {
 }
 
 #[test]
+fn test_table_meta_skips_unknown_index_type() -> anyhow::Result<()> {
+    // A TableMeta that contains an index whose type was written by a newer binary
+    // (an unrecognized `TableIndexType` discriminant) must still deserialize: the
+    // unknown index is skipped rather than failing the whole TableMeta with
+    // `Incompatible`, so an older binary can still read the table. See #20113.
+    let valid = new_table_index().to_pb();
+    let mut unknown = valid.clone();
+    unknown.name = "future_idx".to_string();
+    unknown.index_type = 9999; // not a known TableIndexType value
+
+    let tbl = new_table_meta();
+    let mut p = tbl.to_pb();
+    p.indexes.clear();
+    p.indexes.insert("idx1".to_string(), valid);
+    p.indexes.insert("future_idx".to_string(), unknown);
+
+    let got = mt::TableMeta::from_pb(p)?;
+    assert!(
+        got.indexes.contains_key("idx1"),
+        "index with a known type must be preserved"
+    );
+    assert!(
+        !got.indexes.contains_key("future_idx"),
+        "index with an unknown type must be skipped, not fail the whole TableMeta"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
     let p = db.to_pb();
