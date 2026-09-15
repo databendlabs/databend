@@ -1,0 +1,66 @@
+# Requires the CloudControl mock configured as described in
+# tests/cloud_control_server/README.md. This covers parsing, binding, and stored
+# definitions, not task execution: the mock does not execute task bodies.
+
+statement ok
+DROP TASK IF EXISTS nested_ddl_driver
+
+statement ok
+CREATE TASK nested_ddl_driver
+    WAREHOUSE = 'mywh'
+    SCHEDULE = 60 MINUTE
+AS BEGIN
+    ALTER TASK nested_ddl_target MODIFY AS SELECT 2;
+END;
+
+query T
+SELECT SPLIT(definition, '\n') FROM system.tasks WHERE name = 'nested_ddl_driver'
+----
+["BEGIN","ALTER TASK nested_ddl_target MODIFY AS SELECT 2;","END;"]
+
+statement ok
+ALTER TASK nested_ddl_driver MODIFY AS BEGIN
+    SELECT 'before;';
+    ALTER TASK nested_ddl_target MODIFY AS SELECT 2;
+    SELECT 'after;';
+END;
+
+query T
+SELECT SPLIT(definition, '\n') FROM system.tasks WHERE name = 'nested_ddl_driver'
+----
+["BEGIN","SELECT 'before;';","ALTER TASK nested_ddl_target MODIFY AS SELECT 2;","SELECT 'after;';","END;"]
+
+statement ok
+ALTER TASK nested_ddl_driver MODIFY AS BEGIN
+    ALTER TASK nested_ddl_target MODIFY AS BEGIN
+        SELECT 2;
+        SELECT 'value;';
+    END;
+    SELECT 3;
+END;
+
+query T
+SELECT SPLIT(definition, '\n') FROM system.tasks WHERE name = 'nested_ddl_driver'
+----
+["BEGIN","ALTER TASK nested_ddl_target MODIFY AS BEGIN","SELECT 2;","SELECT 'value;';","END;","SELECT 3;","END;"]
+
+statement ok
+ALTER TASK nested_ddl_driver MODIFY AS BEGIN
+    CREATE TASK nested_ddl_target AS SELECT 1;
+    CREATE TASK nested_ddl_child AS BEGIN
+        ALTER TASK nested_ddl_target MODIFY AS BEGIN SELECT 2; END;
+    END;
+END;
+
+query T
+SELECT SPLIT(definition, '\n') FROM system.tasks WHERE name = 'nested_ddl_driver'
+----
+["BEGIN","CREATE TASK nested_ddl_target AS SELECT 1;","CREATE TASK nested_ddl_child AS BEGIN","ALTER TASK nested_ddl_target MODIFY AS BEGIN","SELECT 2;","END;","END;","END;"]
+
+statement error 1005
+ALTER TASK nested_ddl_driver MODIFY AS BEGIN
+    ALTER TASK nested_ddl_target MODIFY AS SELECT 2
+END;
+
+statement ok
+DROP TASK nested_ddl_driver

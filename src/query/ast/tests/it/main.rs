@@ -18,5 +18,6 @@
 mod decimal;
 mod display;
 mod parser;
+mod task;
 mod token;
 mod visit;

@@ -42,7 +42,9 @@ impl Display for TaskSql {
             TaskSql::ScriptBlock(stmts) => {
                 writeln!(f, "BEGIN")?;
                 for stmt in stmts {
-                    writeln!(f, "{};", stmt)?;
+                    // Nested task blocks already include their terminating semicolon.
+                    let terminator = if stmt.ends_with(';') { "" } else { ";" };
+                    writeln!(f, "{stmt}{terminator}")?;
                 }
                 write!(f, "END;")?;
                 Ok(())

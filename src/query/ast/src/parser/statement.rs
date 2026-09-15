@@ -5509,14 +5509,13 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 }
 
 pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
+    // The enclosing statement or block owns the terminator. Using `statement`
+    // here would require EOI and reject task DDL nested inside another task.
     let single_statement = map(
         rule! {
-            #statement
+            #statement_body ~ ( FORMAT ~ ^#ident )?
         },
-        |stmt| {
-            let sql = format!("{}", stmt.stmt);
-            TaskSql::SingleStatement(sql)
-        },
+        |(stmt, _)| TaskSql::SingleStatement(stmt.to_string()),
     );
     let task_block = map(
         rule! {
@@ -5532,7 +5531,8 @@ pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
             TaskSql::ScriptBlock(sql)
         },
     );
-    alt((single_statement, task_block)).parse(i)
+    // Try the block first so its BEGIN is not consumed as a transaction statement.
+    alt((task_block, single_statement)).parse(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
