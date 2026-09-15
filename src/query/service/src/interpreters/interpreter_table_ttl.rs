@@ -51,11 +51,12 @@ impl Interpreter for AlterTableTtlInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let plan = &self.plan;
-            let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-            let table = catalog
-                .get_table(&tenant, &plan.database, &plan.table)
+            // Keep the schema used during binding and the commit sequence together.
+            let table = self
+                .ctx
+                .get_table(&plan.catalog, &plan.database, &plan.table)
                 .await?;
 
             // Checked before the no-op below, so rejecting a table kind that cannot

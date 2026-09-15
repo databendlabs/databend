@@ -78,9 +78,9 @@ SHOW CREATE TABLE `05_0066_ttl_t0`
 ----
 05_0066_ttl_t0 CREATE TABLE "05_0066_ttl_t0" ( a INT NOT NULL, event_time TIMESTAMP NOT NULL ) ENGINE=FUSE TTL event_time + INTERVAL 7 DAY
 
-# MODIFY TTL is an accepted alias of SET TTL.
+# SET TTL replaces an existing definition as well as setting a new one.
 statement ok
-ALTER TABLE `05_0066_ttl_t0` MODIFY TTL event_time + INTERVAL 3 DAY
+ALTER TABLE `05_0066_ttl_t0` SET TTL event_time + INTERVAL 3 DAY
 
 query TT
 SHOW CREATE TABLE `05_0066_ttl_t0`

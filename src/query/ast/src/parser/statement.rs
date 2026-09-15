@@ -5249,10 +5249,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _)| AlterTableAction::DropTableClusterKey,
     );
 
-    // `SET TTL <expr>` and `MODIFY TTL <expr>` are accepted as aliases.
     let set_table_ttl = map(
         rule! {
-            ( SET | MODIFY ) ~ TTL ~ ^#expr
+            SET ~ TTL ~ ^#expr
         },
         |(_, _, ttl)| AlterTableAction::SetTableTtl { ttl },
     );

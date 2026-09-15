@@ -16865,7 +16865,7 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY;
+ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;
 ---------- Output ---------
 ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY
 ---------- AST ------------
@@ -16899,12 +16899,12 @@ AlterTable(
         action: SetTableTtl {
             ttl: BinaryOp {
                 span: Some(
-                    36..37,
+                    33..34,
                 ),
                 op: Plus,
                 left: ColumnRef {
                     span: Some(
-                        25..35,
+                        22..32,
                     ),
                     column: ColumnRef {
                         database: None,
@@ -16912,7 +16912,7 @@ AlterTable(
                         column: Name(
                             Identifier {
                                 span: Some(
-                                    25..35,
+                                    22..32,
                                 ),
                                 name: "event_time",
                                 quote: None,
@@ -16923,11 +16923,11 @@ AlterTable(
                 },
                 right: Interval {
                     span: Some(
-                        38..52,
+                        35..49,
                     ),
                     expr: Literal {
                         span: Some(
-                            47..48,
+                            44..45,
                         ),
                         value: UInt64(
                             7,

@@ -32,6 +32,40 @@ use goldenfile::Mint;
 use nom::Parser;
 use nom_rule::rule;
 
+#[test]
+fn test_set_ttl_and_modify_column_are_distinct() {
+    use databend_common_ast::ast::AlterTableAction;
+    use databend_common_ast::ast::Statement;
+
+    for expr in ["timestamp", "date", "timestamp + INTERVAL 1 DAY"] {
+        let sql = format!("ALTER TABLE t SET TTL {expr}");
+        let tokens = tokenize_sql(&sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let Statement::AlterTable(stmt) = stmt else {
+            panic!("expected ALTER TABLE: {sql}");
+        };
+        assert!(matches!(stmt.action, AlterTableAction::SetTableTtl { .. }));
+    }
+
+    for sql in [
+        "ALTER TABLE t MODIFY ttl TIMESTAMP",
+        "ALTER TABLE t MODIFY COLUMN ttl TIMESTAMP",
+        "ALTER TABLE t MODIFY \"ttl\" TIMESTAMP",
+        "ALTER TABLE t MODIFY ttl DATE",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let Statement::AlterTable(stmt) = stmt else {
+            panic!("expected ALTER TABLE: {sql}");
+        };
+        assert!(matches!(stmt.action, AlterTableAction::ModifyColumn { .. }));
+    }
+
+    // MODIFY is exclusively column syntax, not an alias for SET TTL.
+    let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
+}
+
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
     P: FnMut(Input) -> IResult<O>,
@@ -373,7 +407,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;"#,
-        r#"ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY;"#,
+        r#"ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;"#,
         r#"ALTER TABLE t SET TTL expire_at;"#,
         r#"ALTER TABLE t REMOVE TTL;"#,
         r#"ALTER TABLE t MATERIALIZE TTL;"#,

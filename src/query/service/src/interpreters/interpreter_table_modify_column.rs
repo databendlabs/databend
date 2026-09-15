@@ -889,13 +889,10 @@ impl Interpreter for ModifyTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let table = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
+            // Preserve the version against which the new column definitions were bound.
+            let table = self
+                .ctx
+                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
                 .await?;
 
             table.check_mutable()?;

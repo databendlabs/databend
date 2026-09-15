@@ -68,13 +68,10 @@ impl Interpreter for RenameTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let table = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
+            // The plan contains a full schema; do not apply it to a newer table version.
+            let table = self
+                .ctx
+                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
                 .await?;
 
             // check mutability

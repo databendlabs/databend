@@ -483,7 +483,7 @@ pub enum AlterTableAction {
         partition_by: Vec<Expr>,
     },
     DropTableClusterKey,
-    /// `ALTER TABLE ... SET TTL <expr>` and its `MODIFY TTL` alias.
+    /// `ALTER TABLE ... SET TTL <expr>` sets or replaces the TTL definition.
     SetTableTtl {
         ttl: Expr,
     },
