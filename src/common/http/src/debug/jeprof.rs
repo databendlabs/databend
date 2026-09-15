@@ -42,6 +42,6 @@ pub async fn debug_jeprof_dump_handler(
 
     Ok(body.with_header("content-length", body_len).with_header(
         "Content-Disposition",
-        format!("attachment; filename=\"{}\"", &path.to_string_lossy()),
+        format!("attachment; filename=\"{}\"", path.to_string_lossy()),
     ))
 }
