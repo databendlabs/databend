@@ -12,16 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_common_users::UserApiProvider;
-pub use databend_enterprise_data_sharing::*;
+mod handler;
+mod types;
 
-use crate::sessions::QueryContext;
-use crate::sessions::TableContextLicense;
-
-pub(crate) fn share_mgr(ctx: &QueryContext) -> Result<DataSharingHandlerWrapper> {
-    get_data_sharing_handler(
-        UserApiProvider::instance().get_meta_store_client(),
-        ctx.get_license_key(),
-    )
-}
+pub use handler::DataSharingHandler;
+pub use handler::DataSharingHandlerWrapper;
+pub use handler::ShareMetaStore;
+pub use handler::get_data_sharing_handler;
+pub use types::*;

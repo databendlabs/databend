@@ -30,6 +30,7 @@ mod parquet_rs;
 mod pipelines;
 mod servers;
 mod sessions;
+mod share;
 mod spillers;
 mod sql;
 mod storages;

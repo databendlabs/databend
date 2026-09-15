@@ -42,7 +42,11 @@ pub struct EESetup {
 
 impl EESetup {
     pub fn new() -> Self {
-        let key_pair = ES256KeyPair::generate();
+        Self::new_with_key_pair(&ES256KeyPair::generate())
+    }
+
+    /// Allow tests to sign replacement licenses with the same public key.
+    pub fn new_with_key_pair(key_pair: &ES256KeyPair) -> Self {
         let claims = Claims::with_custom_claims(
             build_custom_claims("trial".to_string(), "databend".to_string()),
             Duration::from_hours(2),

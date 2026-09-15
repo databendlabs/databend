@@ -4872,6 +4872,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-license",
  "databend-common-meta-app",
  "databend-common-pipeline",
  "databend-common-sql",
@@ -5067,6 +5068,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-data-sharing"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-license",
+ "databend-common-meta-app",
+ "databend-meta-client 260205.13.4",
+]
+
+[[package]]
 name = "databend-enterprise-fail-safe"
 version = "0.1.0"
 dependencies = [
@@ -5116,14 +5129,17 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-store",
+ "databend-common-settings",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-fuse",
  "databend-common-storages-stream",
  "databend-common-tracing",
+ "databend-common-users",
  "databend-common-version",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-data-sharing",
  "databend-enterprise-fail-safe",
  "databend-enterprise-materialized-view",
  "databend-enterprise-resources-management",
@@ -5139,6 +5155,7 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "fastrace",
  "futures",
  "futures-util",
  "jsonb",
@@ -5147,6 +5164,7 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "siphasher 0.3.11",
  "tempfile",
  "tokio",
  "walkdir",
@@ -6112,6 +6130,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-data-sharing",
  "databend-enterprise-materialized-view",
  "databend-enterprise-query",
  "databend-enterprise-resources-management",

@@ -317,12 +317,26 @@ impl QueryContext {
             .clone()
     }
 
+    fn check_data_sharing_license(&self, table_info: &TableInfo) -> Result<()> {
+        if table_info.is_shared()
+            || (table_info.engine().eq_ignore_ascii_case("STREAM")
+                && table_info.meta.options.contains_key(
+                    databend_storages_common_table_meta::table::OPT_KEY_SOURCE_SHARED_DATABASE_ID,
+                ))
+        {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.get_license_key(), Feature::DataSharing)?;
+        }
+        Ok(())
+    }
+
     /// Build fuse/system normal table by table info.
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
+        self.check_data_sharing_license(table_info)?;
         let catalog_name = table_info.catalog();
         let catalog =
             databend_common_base::runtime::block_on(self.shared.catalog_manager.get_catalog(
@@ -725,6 +739,7 @@ impl QueryContext {
             .shared
             .get_table(catalog, database, table, max_batch_size)
             .await?;
+        self.check_data_sharing_license(table.get_table_info())?;
         // the better place to do this is in the QueryContextShared::get_table() method,
         // but there is no way to access dyn TableContext.
         Ok(match table.engine() {
