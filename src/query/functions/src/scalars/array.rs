@@ -38,10 +38,13 @@ use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_expression::aggregate::AggrState;
-use databend_common_expression::aggregate::AggregateFunctionRef;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
-use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::domain_evaluator;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
@@ -86,7 +89,7 @@ use jsonb::RawJsonb;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use crate::AggregateFunctionFactory;
+use crate::aggregates::registry::AGGR_REGISTRY;
 
 const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 14] = &[
     ("array_avg", "avg"),
@@ -1224,7 +1227,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 struct ArrayAggEvaluator<'a> {
-    func: &'a AggregateFunctionRef,
+    func: &'a AggregateCallRef,
     state_layout: &'a StatesLayout,
     addr: StateAddr,
     need_manual_drop_state: bool,
@@ -1232,14 +1235,14 @@ struct ArrayAggEvaluator<'a> {
 }
 
 impl<'a> ArrayAggEvaluator<'a> {
-    fn new(func: &'a AggregateFunctionRef, state_layout: &'a StatesLayout) -> Self {
+    fn new(func: &'a AggregateCallRef, state_layout: &'a StatesLayout) -> Self {
         let arena = Bump::new();
         let addr = arena.alloc_layout(state_layout.layout).into();
         func.init_state(AggrState::new(addr, &state_layout.states_loc[0]));
         Self {
             state_layout,
             addr,
-            need_manual_drop_state: func.need_manual_drop_state(),
+            need_manual_drop_state: func.state().need_manual_drop(),
             func,
             _arena: arena,
         }
@@ -1257,10 +1260,14 @@ impl<'a> ArrayAggEvaluator<'a> {
             }
         }
         self.func.init_state(state);
-        let rows = entry.len();
         let entries = &[entry];
-        self.func.accumulate(state, entries.into(), None, rows)?;
-        self.func.merge_result(state, false, builder)?;
+        self.func.accumulate(AccumulateInput {
+            state,
+            columns: entries.into(),
+            validity: None,
+        })?;
+        self.func
+            .merge_result(MergeResultInput { state, builder })?;
         Ok(())
     }
 }
@@ -1277,16 +1284,21 @@ impl Drop for ArrayAggEvaluator<'_> {
 }
 
 struct ArrayAggDesc {
-    func: AggregateFunctionRef,
+    func: AggregateCallRef,
     state_layout: Arc<StatesLayout>,
     return_type: DataType,
 }
 
 impl ArrayAggDesc {
     fn new(name: &str, array_type: &DataType) -> Result<Self> {
-        let factory = AggregateFunctionFactory::instance();
-        let func = factory.get(name, vec![], vec![array_type.clone()], vec![])?;
-        let return_type = func.return_type()?;
+        let func = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name,
+            params: &[],
+            args_type: std::slice::from_ref(array_type),
+            distinct: false,
+            order_by: &[],
+        })?;
+        let return_type = func.signature().return_type.clone();
         let funcs = [func.clone()];
         let state_layout = Arc::new(get_states_layout(&funcs)?);
         Ok(Self {

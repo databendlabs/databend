@@ -37,6 +37,7 @@ pub mod string;
 pub mod timestamp;
 pub mod timestamp_tz;
 pub mod tuple;
+pub mod type_name;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
