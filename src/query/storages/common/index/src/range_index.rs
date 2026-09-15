@@ -363,7 +363,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
         return Domain::full(data_type);
     }
     match data_type {
-        DataType::Nullable(box inner_ty) => {
+        DataType::Nullable(deref!(inner_ty)) => {
             if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
                 return Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -394,13 +394,13 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                 .collect::<Vec<_>>();
             Domain::Tuple(inner_domains)
         }
-        DataType::Array(box inner_ty) => {
+        DataType::Array(deref!(inner_ty)) => {
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
             let inner_domain = statistics_to_domain(stats, inner_ty);
             Domain::Array(Some(Box::new(inner_domain)))
         }
-        DataType::Map(box inner_ty) => {
+        DataType::Map(deref!(inner_ty)) => {
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
             let inner_domain = statistics_to_domain(stats, inner_ty);

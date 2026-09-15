@@ -261,7 +261,7 @@ fn check_boolean_distribution<D>(
     let valid_domain = match &stat.domain {
         Domain::Boolean(_) => true,
         Domain::Nullable(NullableDomain {
-            value: Some(box Domain::Boolean(_)),
+            value: Some(deref!(Domain::Boolean(_))),
             ..
         }) => true,
         Domain::Nullable(NullableDomain { value: None, .. }) => {

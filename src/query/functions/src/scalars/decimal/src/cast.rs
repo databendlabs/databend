@@ -421,7 +421,7 @@ pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
     // decimal to string
     let factory = |_params: &[Scalar], args_type: &[DataType]| {
         let (size, nullable) = match args_type {
-            [DataType::Nullable(box DataType::Decimal(size))] => (*size, true),
+            [DataType::Nullable(deref!(DataType::Decimal(size)))] => (*size, true),
             [DataType::Decimal(size)] => (*size, false),
             _ => return None,
         };

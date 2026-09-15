@@ -128,13 +128,15 @@ impl Interpreter for ExplainInterpreter {
                         replace_plan.explain(options, &stat_context).await?
                     }
                     Plan::CreateTable(plan) => match &plan.as_select {
-                        Some(box Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            formatted_ast,
-                            ..
-                        }) => {
+                        Some(
+                            deref!(Plan::Query {
+                                s_expr,
+                                metadata,
+                                bind_context,
+                                formatted_ast,
+                                ..
+                            }),
+                        ) => {
                             let mut res =
                                 vec![DataBlock::new_from_columns(vec![StringType::from_data(
                                     vec!["CreateTableAsSelect:", ""],

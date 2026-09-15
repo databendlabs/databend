@@ -736,7 +736,7 @@ where A: super::TypeCheckAdapter
         let arguments = args
             .iter()
             .map(|(display_name, arg)| {
-                let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+                let deref!((scalar, data_type)) = self.resolve_core(arena, *arg)?;
                 Ok(UdfArgument {
                     display_name: display_name.clone(),
                     scalar,
@@ -837,7 +837,7 @@ where A: super::TypeCheckAdapter
             deny_column_reference: false,
             ..self.name_resolution_ctx.clone()
         };
-        let box (scalar, data_type) = TypeChecker::try_create_with_adapter(
+        let deref!((scalar, data_type)) = TypeChecker::try_create_with_adapter(
             &mut bind_context,
             self.adapter.clone(),
             &name_resolution_ctx,

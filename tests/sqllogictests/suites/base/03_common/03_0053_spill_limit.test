@@ -1,0 +1,85 @@
+# LIMIT finishes downstream while parallel final aggregators are receiving
+# recursively spilled tasks. Two groups leave most receivers waiting.
+# They must exit without waiting for all senders.
+statement ok
+set max_threads = 32;
+
+statement ok
+set max_block_size = 256;
+
+statement ok
+set force_aggregate_data_spill = 1;
+
+query II
+select count(*), sum(cnt)
+from (
+    select number % 2 as k, count(*) as cnt
+    from numbers_mt(8192)
+    group by k
+    having cnt >= 2
+    limit 1
+);
+----
+1 4096
+
+# Without early termination, all tasks must still be consumed by live peers.
+query II
+select count(*), sum(cnt)
+from (
+    select number % 2 as k, count(*) as cnt
+    from numbers_mt(8192)
+    group by k
+);
+----
+2 8192
+
+statement ok
+unset force_aggregate_data_spill;
+
+# Keep old hash join workers in the spill round protocol after LIMIT finishes.
+statement ok
+set max_threads = 4;
+
+statement ok
+set enable_experimental_new_join = 0;
+
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+query I
+select count(*) from (
+    select p.number from numbers_mt(8192) p
+    inner join numbers_mt(16384) b on p.number = b.number
+    limit 10
+);
+----
+10
+
+# Unmatched build rows exercise final scan before LIMIT closes the outputs.
+query I
+select count(*) from (
+    select b.number from numbers_mt(8192) p
+    right join numbers_mt(16384) b on p.number = b.number
+    where p.number is null
+    limit 10
+);
+----
+10
+
+# Check complete results as well as early termination.
+query II
+select count(*), count(p.number)
+from numbers_mt(8192) p
+right join numbers_mt(16384) b on p.number = b.number;
+----
+16384 8192
+
+statement ok
+unset (enable_experimental_new_join, force_join_data_spill, disable_join_reorder,
+       max_threads, max_block_size, join_spilling_buffer_threshold_per_proc_mb);

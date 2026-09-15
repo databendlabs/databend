@@ -155,7 +155,7 @@ impl FieldEncoderBytes {
             },
             Column::Decimal(c) => self.write_decimal(c, row_index, out_buf),
 
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, in_nested)?,
+            Column::Nullable(deref!(c)) => self.write_nullable(c, row_index, out_buf, in_nested)?,
 
             Column::Binary(c) => self.write_binary(c, row_index, out_buf)?,
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
@@ -168,8 +168,8 @@ impl FieldEncoderBytes {
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
             Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
 
-            Column::Array(box c) => self.write_array(c, row_index, out_buf)?,
-            Column::Map(box c) => self.write_map(c, row_index, out_buf)?,
+            Column::Array(deref!(c)) => self.write_array(c, row_index, out_buf)?,
+            Column::Map(deref!(c)) => self.write_map(c, row_index, out_buf)?,
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf)?,
             Column::Vector(c) => self.write_vector(c, row_index, out_buf),
             Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),

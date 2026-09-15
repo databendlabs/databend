@@ -146,7 +146,7 @@ fn normalize_bitmap_in_column(column: Column) -> Column {
             std::borrow::Cow::Borrowed(_) => Column::Bitmap(col),
             std::borrow::Cow::Owned(col) => Column::Bitmap(col),
         },
-        Column::Nullable(box nullable) => {
+        Column::Nullable(deref!(nullable)) => {
             let (col, validity) = nullable.destructure();
             Column::Nullable(Box::new(NullableColumn::<AnyType> {
                 column: normalize_bitmap_in_column(col),
