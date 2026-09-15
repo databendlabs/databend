@@ -5147,6 +5147,7 @@ dependencies = [
  "opendal",
  "serde",
  "serde_json",
+ "siphasher 0.3.11",
  "tempfile",
  "tokio",
  "walkdir",
