@@ -43,6 +43,39 @@ SELECT count() FROM numbers_mt (10) where -1
 ----
 10
 
+query I
+SELECT count(*) FROM numbers(10) WHERE to_int64(number) % -2 = 0
+----
+5
+
+query I
+SELECT count(*)
+FROM numbers(1)
+WHERE (to_int64(number) + 9223372036854775807)
+      % (-9223372036854775807 - 1)
+      = 9223372036854775807
+----
+1
+
+query I
+SELECT count(*)
+FROM numbers(1)
+WHERE (number + 18446744073709551615) % to_int64(-2) = 255
+----
+1
+
+query I
+SELECT count(*)
+FROM numbers(1)
+WHERE (to_int64(number) - 9223372036854775807 - 1) % -1 = -1
+----
+0
+
+statement error Division by zero
+SELECT count(*)
+FROM numbers(1)
+WHERE (to_int64(number) - 9223372036854775807 - 1) % 0 = -1
+
 query II
 SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number >1
 ----

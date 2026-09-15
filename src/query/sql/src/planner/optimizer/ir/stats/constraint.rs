@@ -65,14 +65,10 @@ impl ValueConstraint {
                 column_stat.set_null_count(StatCount::exact(0));
             }
             ValueConstraint::Eq(datum) => {
-                if column_stat
-                    .bounds()
-                    .is_some_and(|bounds| bounds.contains_datum(datum))
-                {
-                    *column_stat = ColumnStat::from_const(datum.clone());
-                } else {
-                    clear_for_empty_result(column_stat);
-                }
+                // The stored range may be stale. Every surviving row still
+                // equals the predicate value, so record that exact output fact
+                // without treating an old disjoint range as proof of emptiness.
+                *column_stat = ColumnStat::from_const(datum.clone());
             }
             ValueConstraint::NotEq => {}
             ValueConstraint::Range { lower, upper } => {
@@ -80,19 +76,32 @@ impl ValueConstraint {
                     clear_for_empty_result(column_stat);
                     return Ok(());
                 };
-                let bounds = bounds.restrict_by_range(lower, upper);
-                match bounds {
-                    StatRangeBounds::Bounds(bounds) => {
-                        apply_range_bounds(column_stat, bounds)?;
-                    }
-                    StatRangeBounds::Empty => {
-                        clear_for_empty_result(column_stat);
-                    }
-                    StatRangeBounds::Imprecise => {}
+                match bounds.restrict_by_range(lower, upper) {
+                    StatRangeBounds::Bounds(bounds) => apply_range_bounds(column_stat, bounds)?,
+                    // A disjoint stored range may be stale. There is no safe
+                    // non-empty range refinement, so retain the coarse input
+                    // statistics instead of manufacturing an empty result.
+                    StatRangeBounds::Empty | StatRangeBounds::Imprecise => {}
                 }
             }
         }
         Ok(())
+    }
+
+    pub(super) fn is_disjoint_from(&self, column_stat: &ColumnStat) -> bool {
+        let Some(bounds) = column_stat.bounds() else {
+            return true;
+        };
+        match self {
+            ValueConstraint::Eq(datum) => !bounds.contains_datum(datum),
+            ValueConstraint::Range { lower, upper } => {
+                matches!(
+                    bounds.restrict_by_range(lower, upper),
+                    StatRangeBounds::Empty
+                )
+            }
+            ValueConstraint::NotEq | ValueConstraint::NotNull => false,
+        }
     }
 
     pub(super) fn apply_all(

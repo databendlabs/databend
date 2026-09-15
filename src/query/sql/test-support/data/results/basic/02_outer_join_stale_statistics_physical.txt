@@ -1,0 +1,41 @@
+Exchange
+├── output columns: [outer_join_preserved.join_key (#0)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [outer_join_preserved.join_key (#0)]
+    ├── join type: RIGHT OUTER
+    ├── build keys: [p.join_key (#0)]
+    ├── probe keys: [o.join_key (#3)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters(distributed):
+    │   └── filter id:0, build key:p.join_key (#0), probe targets:[o.join_key (#3)@scan1], filter type:bloom,inlist,min_max
+    ├── estimated rows: 1.00
+    ├── Exchange(Build)
+    │   ├── output columns: [outer_join_preserved.join_key (#0)]
+    │   ├── exchange type: Hash(p.join_key (#0))
+    │   └── TableScan
+    │       ├── table: default.default.outer_join_preserved
+    │       ├── scan id: 0
+    │       ├── output columns: [join_key (#0)]
+    │       ├── read rows: 0
+    │       ├── read size: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [outer_join_preserved.range_value (#1) > 10 and outer_join_preserved.selective_value (#2) = 42], limit: NONE]
+    │       └── estimated rows: 1.00
+    └── Exchange(Probe)
+        ├── output columns: [outer_join_other.join_key (#3)]
+        ├── exchange type: Hash(o.join_key (#3))
+        └── TableScan
+            ├── table: default.default.outer_join_other
+            ├── scan id: 1
+            ├── output columns: [join_key (#3)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [is_true(outer_join_other.range_value (#4) > 10)], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 20.00
+

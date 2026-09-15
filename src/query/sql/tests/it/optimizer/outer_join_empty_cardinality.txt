@@ -1,0 +1,492 @@
+=== commute_proven_empty_probe_to_build ===
+description: When both LEFT JOIN inputs estimate to zero, commute the proven-empty probe input to the hash-build side.
+sql: SELECT p.k, e.k
+FROM proven_empty AS p
+LEFT JOIN estimated_empty AS e ON p.k = e.k
+raw_plan:
+EvalScalar
+├── scalars: [proven_empty.k (#0) AS (#0), estimated_empty.k (#1) AS (#1)]
+├── output columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(Left)
+    ├── build keys: [estimated_empty.k (#1)]
+    ├── probe keys: [proven_empty.k (#0)]
+    ├── other filters: []
+    ├── output columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.estimated_empty (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [estimated_empty.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [estimated_empty.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.proven_empty (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [proven_empty.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [proven_empty.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(Right)
+├── build keys: [proven_empty.k (#0)]
+├── probe keys: [estimated_empty.k (#1)]
+├── other filters: []
+├── output columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#1), proven_empty.k (#0)]
+├── cardinality: 0.000
+├── precise cardinality: 0
+├── statistics
+├── Scan
+│   ├── table: default.proven_empty (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [proven_empty.k (#0)]
+│   ├── outer columns: []
+│   ├── used columns: [proven_empty.k (#0)]
+│   ├── cardinality: 0.000
+│   ├── precise cardinality: 0
+│   └── statistics
+└── Scan
+    ├── table: default.estimated_empty (#1)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [estimated_empty.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    └── statistics
+
+
+=== keep_proven_empty_build_side ===
+description: When the proven-empty input is already the hash-build side, keep the LEFT JOIN orientation.
+sql: SELECT e.k, p.k
+FROM estimated_empty AS e
+LEFT JOIN proven_empty AS p ON e.k = p.k
+raw_plan:
+EvalScalar
+├── scalars: [estimated_empty.k (#0) AS (#0), proven_empty.k (#1) AS (#1)]
+├── output columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(Left)
+    ├── build keys: [proven_empty.k (#1)]
+    ├── probe keys: [estimated_empty.k (#0)]
+    ├── other filters: []
+    ├── output columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.proven_empty (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [proven_empty.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [proven_empty.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.estimated_empty (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [estimated_empty.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [estimated_empty.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(Left)
+├── build keys: [proven_empty.k (#1)]
+├── probe keys: [estimated_empty.k (#0)]
+├── other filters: []
+├── output columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── outer columns: []
+├── used columns: [estimated_empty.k (#0), proven_empty.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+├── Scan
+│   ├── table: default.proven_empty (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [proven_empty.k (#1)]
+│   ├── outer columns: []
+│   ├── used columns: [proven_empty.k (#1)]
+│   ├── cardinality: 0.000
+│   ├── precise cardinality: 0
+│   └── statistics
+└── Scan
+    ├── table: default.estimated_empty (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [estimated_empty.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [estimated_empty.k (#0)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    └── statistics
+
+
+=== catalog_all_null_does_not_fold_count ===
+description: Potentially stale catalog all-NULL statistics must not fold an IS NOT NULL count to a constant zero.
+sql: SELECT count(*) FROM stale_all_null WHERE k IS NOT NULL
+raw_plan:
+EvalScalar
+├── scalars: [COUNT(*) (#1) AS (#1)]
+├── output columns: [COUNT(*) (#1)]
+├── outer columns: []
+├── used columns: [COUNT(*) (#1), stale_all_null.k (#0)]
+├── cardinality: 1.000
+├── precise cardinality: 1
+├── statistics
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#1)]
+    ├── output columns: [COUNT(*) (#1)]
+    ├── outer columns: []
+    ├── used columns: [COUNT(*) (#1), stale_all_null.k (#0)]
+    ├── cardinality: 1.000
+    ├── precise cardinality: 1
+    ├── statistics
+    └── Filter
+        ├── filters: [is_not_null(stale_all_null.k (#0))]
+        ├── output columns: [stale_all_null.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [stale_all_null.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        ├── statistics
+        └── Scan
+            ├── table: default.stale_all_null (#0)
+            ├── filters: []
+            ├── order by: []
+            ├── limit: NONE
+            ├── output columns: [stale_all_null.k (#0)]
+            ├── outer columns: []
+            ├── used columns: [stale_all_null.k (#0)]
+            ├── cardinality: 0.000
+            ├── precise cardinality: N/A
+            └── statistics
+
+optimized_plan:
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#1)]
+├── output columns: [COUNT(*) (#1)]
+├── outer columns: []
+├── used columns: [COUNT(*) (#1), stale_all_null.k (#0)]
+├── cardinality: 1.000
+├── precise cardinality: 1
+├── statistics
+│   └── stale_all_null.k (#0): { min: 0, max: 5, ndv: 0, null count: 0 }
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#1)]
+    ├── output columns: [COUNT(*) (#1)]
+    ├── outer columns: []
+    ├── used columns: [COUNT(*) (#1), stale_all_null.k (#0)]
+    ├── cardinality: 1.000
+    ├── precise cardinality: 1
+    ├── statistics
+    │   └── stale_all_null.k (#0): { min: 0, max: 5, ndv: 0, null count: 0 }
+    └── Scan
+        ├── table: default.stale_all_null (#0)
+        ├── filters: [is_not_null(stale_all_null.k (#0))]
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [stale_all_null.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [stale_all_null.k (#0)]
+        ├── cardinality: 1.600
+        ├── precise cardinality: N/A
+        └── statistics
+            └── stale_all_null.k (#0): { min: 0, max: 5, ndv: 0, null count: 0 }
+
+
+=== stale_residual_range_is_not_proven_false ===
+description: Disjoint column ranges may be stale: a cross-side residual must not prove that an INNER join has no matches.
+sql: SELECT l.k, r.k FROM residual_left l INNER JOIN residual_right r ON l.k > r.k
+raw_plan:
+EvalScalar
+├── scalars: [residual_left.k (#0) AS (#0), residual_right.k (#1) AS (#1)]
+├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+├── outer columns: []
+├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(Inner)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: [gt(residual_left.k (#0), residual_right.k (#1))]
+    ├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.residual_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [residual_right.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [residual_right.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.residual_left (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [residual_left.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [residual_left.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(Inner)
+├── build keys: []
+├── probe keys: []
+├── other filters: [gt(residual_left.k (#0), residual_right.k (#1))]
+├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+├── outer columns: []
+├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+├── cardinality: 32.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── residual_left.k (#0): { min: 0, max: 5, ndv: 6, null count: 0 }
+│   └── residual_right.k (#1): { min: 10, max: 15, ndv: 6, null count: 0 }
+├── Scan
+│   ├── table: default.residual_right (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [residual_right.k (#1)]
+│   ├── outer columns: []
+│   ├── used columns: [residual_right.k (#1)]
+│   ├── cardinality: 8.000
+│   ├── precise cardinality: 8
+│   └── statistics
+│       └── residual_right.k (#1): { min: 10, max: 15, ndv: 6, null count: 0 }
+└── Scan
+    ├── table: default.residual_left (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [residual_left.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [residual_left.k (#0)]
+    ├── cardinality: 8.000
+    ├── precise cardinality: 8
+    └── statistics
+        └── residual_left.k (#0): { min: 0, max: 5, ndv: 6, null count: 0 }
+
+
+=== stale_residual_range_is_not_proven_true ===
+description: An apparently always-true residual from stale ranges must not count as confirmed matches that eliminate every ANTI join row.
+sql: SELECT l.k FROM residual_left l LEFT ANTI JOIN residual_right r ON l.k < r.k
+raw_plan:
+EvalScalar
+├── scalars: [residual_left.k (#0) AS (#0)]
+├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+├── outer columns: []
+├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(LeftAnti)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: [lt(residual_left.k (#0), residual_right.k (#1))]
+    ├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.residual_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [residual_right.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [residual_right.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.residual_left (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [residual_left.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [residual_left.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(LeftAnti)
+├── build keys: []
+├── probe keys: []
+├── other filters: [lt(residual_left.k (#0), residual_right.k (#1))]
+├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+├── outer columns: []
+├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+├── cardinality: 0.800
+├── precise cardinality: N/A
+├── statistics
+│   ├── residual_left.k (#0): { min: 0, max: 5, ndv: 0.786357323129599, null count: 0 }
+│   └── residual_right.k (#1): { min: 10, max: 15, ndv: 0.7999999999999998, null count: 0 }
+├── Scan
+│   ├── table: default.residual_right (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [residual_right.k (#1)]
+│   ├── outer columns: []
+│   ├── used columns: [residual_right.k (#1)]
+│   ├── cardinality: 8.000
+│   ├── precise cardinality: 8
+│   └── statistics
+│       └── residual_right.k (#1): { min: 10, max: 15, ndv: 6, null count: 0 }
+└── Scan
+    ├── table: default.residual_left (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [residual_left.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [residual_left.k (#0)]
+    ├── cardinality: 8.000
+    ├── precise cardinality: 8
+    └── statistics
+        └── residual_left.k (#0): { min: 0, max: 5, ndv: 6, null count: 0 }
+
+
+=== residual_modulo_signedness ===
+description: The non-equi Join estimation entry must preserve the modulo safeguards used by ordinary filters.
+sql: SELECT l.k FROM residual_left l LEFT ANTI JOIN residual_right r ON l.k % -2 = r.k
+raw_plan:
+EvalScalar
+├── scalars: [residual_left.k (#0) AS (#0)]
+├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+├── outer columns: []
+├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(LeftAnti)
+    ├── build keys: [residual_right.k (#1)]
+    ├── probe keys: [modulo(residual_left.k (#0), -2)]
+    ├── other filters: []
+    ├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+    ├── outer columns: []
+    ├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: default.residual_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [residual_right.k (#1)]
+    │   ├── outer columns: []
+    │   ├── used columns: [residual_right.k (#1)]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── Scan
+        ├── table: default.residual_left (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        ├── output columns: [residual_left.k (#0)]
+        ├── outer columns: []
+        ├── used columns: [residual_left.k (#0)]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        └── statistics
+
+optimized_plan:
+Join(LeftAnti)
+├── build keys: [residual_right.k (#1)]
+├── probe keys: [modulo(residual_left.k (#0), -2)]
+├── other filters: []
+├── output columns: [residual_left.k (#0), residual_right.k (#1)]
+├── outer columns: []
+├── used columns: [residual_left.k (#0), residual_right.k (#1)]
+├── cardinality: 8.000
+├── precise cardinality: N/A
+├── statistics
+│   ├── residual_left.k (#0): { min: 0, max: 5, ndv: 6, null count: 0 }
+│   └── residual_right.k (#1): { min: 10, max: 15, ndv: 6, null count: 0 }
+├── Scan
+│   ├── table: default.residual_right (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   ├── limit: NONE
+│   ├── output columns: [residual_right.k (#1)]
+│   ├── outer columns: []
+│   ├── used columns: [residual_right.k (#1)]
+│   ├── cardinality: 8.000
+│   ├── precise cardinality: 8
+│   └── statistics
+│       └── residual_right.k (#1): { min: 10, max: 15, ndv: 6, null count: 0 }
+└── Scan
+    ├── table: default.residual_left (#0)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    ├── output columns: [residual_left.k (#0)]
+    ├── outer columns: []
+    ├── used columns: [residual_left.k (#0)]
+    ├── cardinality: 8.000
+    ├── precise cardinality: 8
+    └── statistics
+        └── residual_left.k (#0): { min: 0, max: 5, ndv: 6, null count: 0 }
+
+

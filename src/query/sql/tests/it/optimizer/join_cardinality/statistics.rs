@@ -687,8 +687,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )])?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_domain_true_non_equi",
-            description: "Domain folding proves a cross-side predicate true for every pair and bypasses probabilistic residual estimation.",
+            name: "inner_stale_range_non_equi",
+            description: "Disjoint statistics ranges do not prove a cross-side predicate true for every pair; use residual estimation rather than confirmed matches.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k < r.c",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k INT NOT NULL)", 10, [(
@@ -1353,8 +1353,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )])?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_all_null_equality",
-            description: "Regular equality with an all-NULL key produces no matches through the scan-to-join statistics path.",
+            name: "inner_catalog_all_null_is_not_a_proof",
+            description: "Catalog all-NULL statistics may be stale, so regular equality keeps a non-zero fallback estimate instead of proving no matches.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k = r.k",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k INT NULL)", 4, [(

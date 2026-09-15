@@ -10,7 +10,7 @@ explain select 1 from range_t where c > 'efg'
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 0.40
 └── TableScan
     ├── table: default.default.range_t
     ├── scan id: 0
@@ -21,7 +21,7 @@ EvalScalar
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(range_t.c (#0) > 'efg')], limit: NONE]
-    └── estimated rows: 0.00
+    └── estimated rows: 0.40
 
 
 query T
@@ -35,7 +35,7 @@ explain select 1 from range_t where i > 20
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 0.40
 └── TableScan
     ├── table: default.default.range_t
     ├── scan id: 0
@@ -46,7 +46,7 @@ EvalScalar
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(range_t.i (#1) > 20)], limit: NONE]
-    └── estimated rows: 0.00
+    └── estimated rows: 0.40
 
 statement ok
 create or replace table range_pruner_trust_loan_daily(contract_no varchar, notify_date int)
@@ -60,7 +60,7 @@ explain select 1 from range_pruner_trust_loan_daily where notify_date = '2024051
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 0.20
 └── TableScan
     ├── table: default.default.range_pruner_trust_loan_daily
     ├── scan id: 0
@@ -71,7 +71,7 @@ EvalScalar
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [range_pruner_trust_loan_daily.notify_date (#1) = '20240513' and range_pruner_trust_loan_daily.contract_no (#0) = '20240508003088208902099794704998'], limit: NONE]
-    └── estimated rows: 0.00
+    └── estimated rows: 0.20
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;

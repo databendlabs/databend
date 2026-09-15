@@ -28,11 +28,11 @@ out stats     :
 description: Constant constraints should apply only when the typed comparison is compatible.
 expr          : d = cast(10 as date)
 cardinality   : 100
-estimated     : 0
+estimated     : 20
 in stats      :
 0 ColumnStat { min: Int(20), max: Int(29), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(20), max: Int(29), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: Int(10), max: Int(10), ndv: 1.0, null_count: 0, histogram: None }
 
 expr          : d = cast(25 as date)
 cardinality   : 100
@@ -60,11 +60,11 @@ out stats     :
 
 expr          : dec = cast(5.00 as decimal(10, 2))
 cardinality   : 100
-estimated     : 0
+estimated     : 20
 in stats      :
 0 ColumnStat { min: Float(1.0), max: Float(4.0), ndv: 4.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Float(1.0), max: Float(4.0), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: Float(5.0), max: Float(5.0), ndv: 1.0, null_count: 0, histogram: None }
 
 expr          : dec = cast(2.00 as decimal(10, 2))
 cardinality   : 100
@@ -78,11 +78,11 @@ out stats     :
 description: String equality should use domain and function statistics without assuming unbounded strings are impossible.
 expr          : s = 'a'
 cardinality   : 100
-estimated     : 0
+estimated     : 20
 in stats      :
 0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 4.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: Bytes([97]), max: Bytes([97]), ndv: 1.0, null_count: 0, histogram: None }
 
 expr          : s = 'c'
 cardinality   : 100
