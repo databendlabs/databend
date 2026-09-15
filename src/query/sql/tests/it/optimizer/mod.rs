@@ -20,6 +20,7 @@ use databend_common_sql_test_support::ColumnStats;
 use databend_common_sql_test_support::HistogramStats;
 use databend_common_statistics::Histogram;
 
+mod cluster_key_join_order;
 mod collect_statistics;
 mod decorrelate_correlated_aliases;
 mod distributed_join;

@@ -216,7 +216,7 @@ pub fn parse_exprs_to_field_index(
         .collect()
 }
 
-fn parse_ast_exprs(
+pub(crate) fn parse_ast_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
