@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[FUSE-VACUUM2]");
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -37,6 +38,8 @@ use databend_storages_common_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
+use siphasher::sip128::Hasher128;
+use siphasher::sip128::SipHasher24;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
@@ -77,8 +80,8 @@ struct BlockGcContext<'a> {
     /// GC-root object metadata timestamp used by the common vacuum safety helper
     /// for legacy object-key handling.
     gc_root_meta_ts: DateTime<Utc>,
-    /// Protected data block paths that are still referenced by the gc root or refs.
-    gc_root_blocks: &'a HashSet<String>,
+    /// Hashes of data block paths still referenced by the gc root or refs.
+    gc_root_blocks: &'a HashSet<u128>,
     /// Inverted index metadata used to derive index object paths from data blocks.
     inverted_indexes: &'a BTreeMap<String, TableIndex>,
     /// Start time of the block GC phase, used only for status reporting.
@@ -199,7 +202,12 @@ pub async fn do_vacuum2(
             .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
             .await?;
         for segment in segments {
-            gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+            gc_root_blocks.extend(
+                segment?
+                    .block_metas()?
+                    .iter()
+                    .map(|b| block_path_hash(&b.location.0)),
+            );
         }
         ctx.set_status_info(&format!(
             "Read protected segment chunk for table {}, elapsed: {:?}, segment chunk: {}/{}, segments in chunk: {}, total protected blocks: {}",
@@ -295,6 +303,16 @@ pub async fn do_vacuum2(
     Ok(())
 }
 
+/// Hash the full path, including legacy names, prefixes and format versions.
+/// Keeping only 16 bytes per path avoids retaining a String and its heap allocation
+/// for every protected block. A collision can only retain garbage, never delete a
+/// protected block.
+fn block_path_hash(path: &str) -> u128 {
+    let mut hasher = SipHasher24::new();
+    hasher.write(path.as_bytes());
+    hasher.finish128().into()
+}
+
 async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
     info!("Listing block files until prefix: {}", block_gc.until);
 
@@ -332,7 +350,10 @@ async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result
     };
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     for block_path in blocks_before_gc_root {
-        if !block_gc.gc_root_blocks.contains(&block_path) {
+        if !block_gc
+            .gc_root_blocks
+            .contains(&block_path_hash(&block_path))
+        {
             block_chunk.push(block_path);
             if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
                 purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
@@ -380,7 +401,7 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
         }
 
         stats.scanned_blocks += 1;
-        if block_gc.gc_root_blocks.contains(path) {
+        if block_gc.gc_root_blocks.contains(&block_path_hash(path)) {
             continue;
         }
 
@@ -625,6 +646,10 @@ mod tests {
             }
 
             let protected_block = candidates[0].clone();
+            // Keep the referenced v1 block, but delete the unreferenced v2 block
+            // with the same UUID in the same directory.
+            let protected_other_version = candidates[1].replace("_v2.parquet", "_v1.parquet");
+            dal.write(&protected_other_version, vec![1]).await?;
             let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
                 gc_root_timestamp + chrono::Duration::seconds(1),
             );
@@ -632,7 +657,10 @@ mod tests {
                 format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
             dal.write(&after_cutoff_block, vec![1]).await?;
 
-            let protected_blocks = HashSet::from([protected_block.clone()]);
+            let protected_blocks = HashSet::from([
+                block_path_hash(&protected_block),
+                block_path_hash(&protected_other_version),
+            ]);
             let inverted_indexes = BTreeMap::new();
             let block_gc = BlockGcContext {
                 dal: &dal,
@@ -650,11 +678,12 @@ mod tests {
 
             let stats = purge_blocks_before_gc_root(&block_gc).await?;
 
-            assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS);
+            assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS + 1);
             assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
             // Each removed block also contributes its derived bloom-index path.
             assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 2);
             assert!(dal.exists(&protected_block).await?);
+            assert!(dal.exists(&protected_other_version).await?);
             assert!(dal.exists(&after_cutoff_block).await?);
             for path in candidates.iter().skip(1) {
                 assert!(!dal.exists(path).await?, "garbage block survived: {path}");
@@ -738,7 +767,7 @@ mod tests {
                     format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
                 dal.write(&after_cutoff_block, vec![1]).await?;
 
-                let protected_blocks = HashSet::from([protected_block.clone()]);
+                let protected_blocks = HashSet::from([block_path_hash(&protected_block)]);
                 let inverted_indexes = BTreeMap::new();
                 let block_gc = BlockGcContext {
                     dal: &dal,
