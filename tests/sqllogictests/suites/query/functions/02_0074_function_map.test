@@ -65,7 +65,7 @@ SELECT map([[1]], [1], true)
 
 # Repeated keys across rows are valid: the seen-key set must reset for every row.
 statement ok
-CREATE TABLE map_create_rows(id INT, keys ARRAY(INT), vals ARRAY(INT), allow_duplicates BOOLEAN)
+CREATE TABLE map_create_rows(id INT, keys ARRAY(INT NOT NULL), vals ARRAY(INT), allow_duplicates BOOLEAN)
 
 statement ok
 INSERT INTO map_create_rows VALUES
