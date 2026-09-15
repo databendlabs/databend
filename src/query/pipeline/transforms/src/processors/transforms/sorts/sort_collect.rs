@@ -31,18 +31,17 @@ use super::SortSpillParams;
 use super::TransformSortMergeLimit;
 use super::core::RowConverter;
 use super::core::Rows;
-use super::core::algorithm::SortAlgorithm;
 use crate::traits::SortSpiller;
 
 #[allow(clippy::large_enum_variant)]
-enum Inner<A: SortAlgorithm, S: SortSpiller> {
+enum Inner<R: Rows, S: SortSpiller> {
     Collect(Vec<DataBlock>),
-    Limit(TransformSortMergeLimit<A::Rows>),
-    Spill(Vec<DataBlock>, SortSpill<A, S>),
+    Limit(TransformSortMergeLimit<R>),
+    Spill(Vec<DataBlock>, SortSpill<R, S>),
     None,
 }
 
-pub struct TransformSortCollect<A: SortAlgorithm, S: SortSpiller> {
+pub struct TransformSortCollect<R: Rows, S: SortSpiller> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -50,18 +49,18 @@ pub struct TransformSortCollect<A: SortAlgorithm, S: SortSpiller> {
 
     max_block_size: usize,
     default_num_merge: usize,
-    order_col_converter: Option<<A::Rows as Rows>::Converter>,
+    order_col_converter: Option<R::Converter>,
 
     base: Base<S>,
-    inner: Inner<A, S>,
+    inner: Inner<R, S>,
 
     enable_restore_prefetch: bool,
     enable_sort_spill_stream_regroup: bool,
 }
 
-impl<A, S> TransformSortCollect<A, S>
+impl<R, S> TransformSortCollect<R, S>
 where
-    A: SortAlgorithm,
+    R: Rows,
     S: SortSpiller,
 {
     pub fn new(
@@ -71,7 +70,7 @@ where
         max_block_size: usize,
         default_num_merge: usize,
         sort_limit: bool,
-        order_col_converter: Option<<A::Rows as Rows>::Converter>,
+        order_col_converter: Option<R::Converter>,
         enable_restore_prefetch: bool,
         enable_sort_spill_stream_regroup: bool,
     ) -> Result<Self> {
@@ -183,7 +182,7 @@ where
             }
             None => match &mut self.inner {
                 Inner::Limit(limit_sort) => {
-                    let rows = A::Rows::from_column(
+                    let rows = R::from_column(
                         &block.get_by_offset(self.base.sort_row_offset).to_column(),
                     )?;
                     limit_sort.add_block(block, rows)
@@ -234,11 +233,10 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A, S> Processor for TransformSortCollect<A, S>
+impl<R, S> Processor for TransformSortCollect<R, S>
 where
-    A: SortAlgorithm + 'static,
-    A::Rows: 'static,
-    <A::Rows as Rows>::Converter: Send + 'static,
+    R: Rows + 'static,
+    R::Converter: Send + 'static,
     S: SortSpiller,
 {
     fn name(&self) -> String {

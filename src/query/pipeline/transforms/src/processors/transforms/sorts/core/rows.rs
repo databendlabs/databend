@@ -24,17 +24,31 @@ use databend_common_expression::types::DataType;
 use super::RowConverter;
 
 /// Rows can be compared.
-pub trait Rows
-where Self: Sized + Clone + Debug + Send
+///
+/// # Safety
+/// Items returned by [`Rows::row`] must remain valid when `Self` is moved. They
+/// may only be invalidated when the originating `Rows` value is dropped.
+pub unsafe trait Rows
+where Self: Sized + Clone + Debug + Send + 'static
 {
     const IS_ASC_COLUMN: bool;
-    type Item<'a>: Ord + Debug
+    type Item<'a>: Ord + Debug + Copy + Send
     where Self: 'a;
     type Type: ArgType;
     type Converter: RowConverter<Self>;
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
+
+    /// Returns an item whose lifetime is managed by the caller.
+    ///
+    /// # Safety
+    /// The caller must keep this `Rows` value alive for the returned lifetime.
+    unsafe fn row_stable<'a>(&self, index: usize) -> Self::Item<'a> {
+        let item = self.row(index);
+        unsafe { std::mem::transmute_copy(&item) }
+    }
+
     fn to_column(&self) -> Column;
 
     fn from_column(col: &Column) -> Result<Self>;

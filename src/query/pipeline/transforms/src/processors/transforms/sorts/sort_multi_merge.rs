@@ -34,7 +34,7 @@ use super::core::RowsTypeVisitor;
 use super::core::SortKeyDescription;
 use super::core::SortedStream;
 use super::core::algorithm::HeapSort;
-use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::LoserTreeTop2Sort;
 use super::core::algorithm::SortAlgorithm;
 use super::core::select_row_type;
 
@@ -99,7 +99,7 @@ impl RowsTypeVisitor for MultiSortMergeBuilder {
         R::Converter: Send + 'static,
     {
         if self.enable_loser_tree {
-            self.create_processor::<LoserTreeSort<R>>()
+            self.create_processor::<LoserTreeTop2Sort<R>>()
         } else {
             self.create_processor::<HeapSort<R>>()
         }
