@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
@@ -47,6 +49,7 @@ pub struct ReadDataTransform {
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
     runtime_scan_filters: RuntimeScanFilters,
+    record_partitions: bool,
 }
 
 impl ReadDataTransform {
@@ -57,6 +60,7 @@ impl ReadDataTransform {
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
+        record_partitions: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
@@ -73,6 +77,7 @@ impl ReadDataTransform {
                 scan_id,
                 context: ctx,
                 runtime_scan_filters,
+                record_partitions,
             },
         )))
     }
@@ -193,6 +198,10 @@ impl AsyncTransform for ReadDataTransform {
             .and_then(BlockPartitionMeta::downcast_ref_from)
             .and_then(|meta| (!meta.part_ptr.is_empty()).then(|| meta.part_ptr.clone()))
             .ok_or_else(|| ErrorCode::Internal("AsyncReadDataTransform got wrong meta data"))?;
+
+        if self.record_partitions {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, parts.len());
+        }
 
         self.read_parts(parts).await
     }
