@@ -66,6 +66,7 @@ fn select_task_candidates(
     let mut selected_segment_locations = HashSet::new();
     let mut selected_count = 0;
     let mut selected_repack_only = false;
+    let mut task_segment_locations = HashSet::new();
 
     for &(window_idx, task_idx, _, _) in sorted_tasks {
         if selected_count >= max_tasks {
@@ -80,13 +81,9 @@ fn select_task_candidates(
             continue;
         }
 
-        let task_segment_locations = window.task_segment_locations(task_idx);
-        let additional_segment_count = task_segment_locations
-            .difference(&selected_segment_locations)
-            .count();
-        if selected_segment_locations.len() + additional_segment_count
-            > MAX_SEGMENT_LOCATIONS_PER_CLAIM
-        {
+        task_segment_locations.clear();
+        task_segment_locations.extend(window.task_segment_locations(task_idx));
+        if !fits_segment_claim(&selected_segment_locations, &task_segment_locations) {
             debug!(
                 "recluster: skip task candidate window_idx={} task_idx={} task_segments={} selected_segments={} max_claim_segments={}",
                 window_idx,
@@ -101,12 +98,122 @@ fn select_task_candidates(
         if task.is_repack_only() {
             selected_repack_only = true;
         }
-        selected_segment_locations.extend(task_segment_locations);
+        selected_segment_locations.extend(task_segment_locations.iter().copied());
         selected_task_indices[window_idx].push(task_idx);
         selected_count += 1;
     }
 
     selected_task_indices
+}
+
+// Both selectors enforce the same union-of-segments claim limit.
+fn fits_segment_claim(selected: &HashSet<&str>, additional: &HashSet<&str>) -> bool {
+    selected.union(additional).count() <= MAX_SEGMENT_LOCATIONS_PER_CLAIM
+}
+
+// Bounded joint search: keep at most K batches at each size, and choose the
+// best across all sizes. This is approximate (including K=2), but does not
+// force full batches or stop at a non-improving intermediate layer.
+// With C candidates, score calls are bounded by C + (K-1)*K*C.
+fn select_joint_task_candidates(
+    windows: &[ReclusterCandidateWindow],
+    tasks: &[RankedTaskCandidate],
+    max_tasks: usize,
+    stats: &super::ReclusterDepthStats,
+    properties: &super::ReclusterProperties,
+) -> Result<Vec<Vec<usize>>> {
+    let limit = max_tasks.min(tasks.len());
+    let mut selected = vec![Vec::new(); windows.len()];
+    if limit == 0 {
+        return Ok(selected);
+    }
+    let inputs = |i: usize| {
+        let (window, task, _, _) = tasks[i];
+        windows[window].task_blocks(task)
+    };
+    // Sort higher gain first, then lower bytes, then canonical task indices.
+    let compare = |gain: i64, bytes: usize, batch: &[usize], other: &(i64, usize, Vec<usize>)| {
+        other
+            .0
+            .cmp(&gain)
+            .then_with(|| bytes.cmp(&other.1))
+            .then_with(|| batch.cmp(&other.2))
+    };
+    let mut best = None::<(i64, usize, Vec<usize>)>;
+    let mut frontier = vec![(0, 0, Vec::new())];
+    let mut next = Vec::<(i64, usize, Vec<usize>)>::with_capacity(limit);
+    let mut extended = Vec::with_capacity(limit);
+    let mut seen = HashSet::new();
+    let mut segments = HashSet::new();
+    let mut blocks = HashSet::new();
+    for _ in 0..limit {
+        next.clear();
+        seen.clear();
+        for (_, _, batch) in &frontier {
+            for candidate in 0..tasks.len() {
+                let Err(position) = batch.binary_search(&candidate) else {
+                    continue;
+                };
+                extended.clone_from(batch);
+                extended.insert(position, candidate);
+                if seen.contains(&extended) {
+                    continue;
+                }
+                seen.insert(extended.clone());
+                segments.clear();
+                blocks.clear();
+                let mut repack = false;
+                let mut bytes = 0;
+                let legal = extended.iter().all(|&i| {
+                    let (w, t, score, _) = tasks[i];
+                    let task = &windows[w].tasks[t];
+                    if task.is_repack_only() && repack {
+                        return false;
+                    }
+                    repack |= task.is_repack_only();
+                    bytes += score.selected_total_bytes;
+                    segments.extend(windows[w].task_segment_locations(t));
+                    segments.len() <= MAX_SEGMENT_LOCATIONS_PER_CLAIM
+                        && inputs(i).all(|block| blocks.insert(block.meta.location.0.as_str()))
+                });
+                if !legal {
+                    continue;
+                }
+                let gain = stats.gain(extended.iter().copied().map(inputs), properties)?;
+                if best
+                    .as_ref()
+                    .is_none_or(|b| compare(gain, bytes, &extended, b).is_lt())
+                {
+                    let best = best.get_or_insert_with(|| (gain, bytes, Vec::new()));
+                    best.0 = gain;
+                    best.1 = bytes;
+                    best.2.clone_from(&extended);
+                }
+                let position = next.partition_point(|b| compare(gain, bytes, &extended, b).is_gt());
+                if position < limit {
+                    // Reuse an evicted batch's capacity; only retained states own copies.
+                    let mut retained = if next.len() == limit {
+                        next.pop().unwrap().2
+                    } else {
+                        Vec::new()
+                    };
+                    retained.clone_from(&extended);
+                    next.insert(position, (gain, bytes, retained));
+                }
+            }
+        }
+        if next.is_empty() {
+            break;
+        }
+        std::mem::swap(&mut frontier, &mut next);
+    }
+    if let Some((_, _, batch)) = best {
+        for i in batch {
+            let (window, task, _, _) = tasks[i];
+            selected[window].push(task);
+        }
+    }
+    Ok(selected)
 }
 
 impl FuseTable {
@@ -419,7 +526,7 @@ impl FuseTable {
                 }
             }
 
-            mutator.build_decoded_window_tasks(&mut pending_windows)?;
+            let joint_stats = mutator.build_decoded_window_tasks(&mut pending_windows)?;
 
             let (_, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
@@ -441,34 +548,44 @@ impl FuseTable {
                         ));
                     }
                 }
-                if enable_v2 {
-                    sorted_tasks.sort_by(|left, right| {
-                        right.2.cmp_desc_v2(&left.2).then_with(|| {
-                            pending_windows[left.0].tasks[left.1]
-                                .base_level
-                                .cmp(&pending_windows[right.0].tasks[right.1].base_level)
-                        })
-                    });
-                    let mut chain: Vec<&ReclusterTaskCandidate> = Vec::new();
-                    let mut overlapping = Vec::new();
-                    let mut ordered = Vec::with_capacity(sorted_tasks.len());
-                    for candidate in sorted_tasks {
-                        let task = &pending_windows[candidate.0].tasks[candidate.1];
-                        if chain.iter().any(|picked| picked.key_span_intersects(task)) {
-                            overlapping.push(candidate);
+                let mut selected_task_indices = match joint_stats.as_ref() {
+                    // Joint selection preserves candidate order.
+                    Some(stats) => select_joint_task_candidates(
+                        &pending_windows,
+                        &sorted_tasks,
+                        mutator.max_tasks,
+                        stats,
+                        &mutator.properties,
+                    )?,
+                    None => {
+                        if enable_v2 {
+                            sorted_tasks.sort_by(|left, right| {
+                                right.2.cmp_desc_v2(&left.2).then_with(|| {
+                                    pending_windows[left.0].tasks[left.1]
+                                        .base_level
+                                        .cmp(&pending_windows[right.0].tasks[right.1].base_level)
+                                })
+                            });
+                            let mut chain: Vec<&ReclusterTaskCandidate> = Vec::new();
+                            let mut overlapping = Vec::new();
+                            let mut ordered = Vec::with_capacity(sorted_tasks.len());
+                            for candidate in sorted_tasks {
+                                let task = &pending_windows[candidate.0].tasks[candidate.1];
+                                if chain.iter().any(|picked| picked.key_span_intersects(task)) {
+                                    overlapping.push(candidate);
+                                } else {
+                                    chain.push(task);
+                                    ordered.push(candidate);
+                                }
+                            }
+                            ordered.extend(overlapping);
+                            sorted_tasks = ordered;
                         } else {
-                            chain.push(task);
-                            ordered.push(candidate);
+                            sort_task_candidates(&mut sorted_tasks);
                         }
+                        select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks)
                     }
-                    ordered.extend(overlapping);
-                    sorted_tasks = ordered;
-                } else {
-                    sort_task_candidates(&mut sorted_tasks);
-                }
-
-                let mut selected_task_indices =
-                    select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks);
+                };
 
                 let mut selected = Vec::new();
                 let mut remaining_windows = Vec::with_capacity(pending_windows.len());
@@ -702,6 +819,236 @@ mod tests {
         }
         window.tasks = vec![candidate(std::iter::empty())];
         window
+    }
+
+    #[test]
+    fn test_joint_selection_prefers_singleton_and_plateau_members() {
+        use databend_common_expression::BlockThresholds;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_storages_common_table_meta::meta::BlockMeta;
+        use databend_storages_common_table_meta::meta::ClusterKeyInfo;
+        use databend_storages_common_table_meta::meta::ClusterStatistics;
+        use databend_storages_common_table_meta::meta::Compression;
+        use databend_storages_common_table_meta::table::ClusterType;
+
+        use crate::operations::recluster::ReclusterBlock;
+        use crate::operations::recluster::ReclusterBlockStats;
+        use crate::operations::recluster::ReclusterDepthStats;
+        use crate::operations::recluster::ReclusterGroup;
+        use crate::operations::recluster::ReclusterProperties;
+        use crate::operations::recluster::linear_recluster::LinearReclusterStrategy;
+        use crate::operations::recluster::task_candidate;
+
+        let properties = ReclusterProperties {
+            mode: ReclusterMode::Aggressive,
+            depth_threshold: 1.0,
+            block_thresholds: BlockThresholds::new(10, 10, 10, 10),
+            cluster_key_info: ClusterKeyInfo::new((0, "(key)".to_string()), ClusterType::Linear),
+            partition_key_count: 0,
+            memory_threshold: 20,
+            enable_task_selection_v2: true,
+            prepared_cluster_key_exprs: Vec::new(),
+            scalar_cluster_key_types: vec![DataType::Number(NumberDataType::Int32)],
+        };
+        let blocks = [(0i32, 1i32), (0, 1), (3, 3), (5, 5), (4, 4)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, (lo, hi))| ReclusterBlock {
+                index: crate::operations::common::BlockMetaIndex {
+                    segment_idx: 0,
+                    block_idx: i,
+                },
+                meta: Arc::new(BlockMeta::new(
+                    8,
+                    10,
+                    10,
+                    HashMap::new(),
+                    HashMap::new(),
+                    None,
+                    (format!("b{i}"), 2),
+                    None,
+                    0,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Compression::Lz4Raw,
+                    None,
+                )),
+                stats: ReclusterBlockStats::Normalized(ClusterStatistics::new(
+                    0,
+                    vec![Scalar::from(lo)],
+                    vec![Scalar::from(hi)],
+                    0,
+                )),
+            })
+            .collect::<Vec<_>>();
+        let refs = blocks.iter().collect::<Vec<_>>();
+        let stats =
+            ReclusterDepthStats::create(blocks.iter(), &properties.scalar_cluster_key_types)
+                .unwrap();
+        let a = task_candidate(ReclusterGroup::Level(0), score(20), &[0, 1], &refs);
+        let b = task_candidate(ReclusterGroup::Level(0), score(20), &[2, 3], &refs);
+        assert!(
+            stats
+                .gain([refs[..2].iter().copied()], &properties)
+                .unwrap()
+                > stats
+                    .gain(
+                        [refs[..2].iter().copied(), refs[2..4].iter().copied()],
+                        &properties
+                    )
+                    .unwrap()
+        );
+        let windows = vec![ReclusterCandidateWindow {
+            segments: vec![(("segment".to_string(), 4), None)],
+            tasks: vec![a, b],
+            decoded_blocks: Arc::new(blocks),
+        }];
+        let ranked = vec![(0, 0, score(20), false), (0, 1, score(20), false)];
+        assert_eq!(
+            select_joint_task_candidates(&windows, &ranked, 2, &stats, &properties).unwrap(),
+            vec![vec![0]]
+        );
+        assert_eq!(
+            select_joint_task_candidates(&windows, &ranked, 0, &stats, &properties).unwrap(),
+            vec![Vec::<usize>::new()]
+        );
+
+        // More than two slots uses the same search, without rejecting the budget.
+        // Independent pairs in a fully overlapping layout have additive improvement.
+        let blocks = (0..16)
+            .map(|i| ReclusterBlock {
+                index: crate::operations::common::BlockMetaIndex {
+                    segment_idx: 0,
+                    block_idx: i,
+                },
+                meta: windows[0].decoded_blocks[0].meta.clone(),
+                stats: ReclusterBlockStats::Normalized(ClusterStatistics::new(
+                    0,
+                    vec![Scalar::from(0i32)],
+                    vec![Scalar::from(1i32)],
+                    0,
+                )),
+            })
+            .map(|mut b| {
+                Arc::make_mut(&mut b.meta).location.0 =
+                    format!("independent-{}", b.index.block_idx);
+                b
+            })
+            .collect::<Vec<_>>();
+        let refs = blocks.iter().collect::<Vec<_>>();
+        let many_stats =
+            ReclusterDepthStats::create(blocks.iter(), &properties.scalar_cluster_key_types)
+                .unwrap();
+        let many_tasks = (0..8)
+            .map(|i| {
+                task_candidate(
+                    ReclusterGroup::Level(0),
+                    score(20),
+                    &[2 * i, 2 * i + 1],
+                    &refs,
+                )
+            })
+            .collect::<Vec<_>>();
+        let many_windows = vec![ReclusterCandidateWindow {
+            segments: vec![(("segment".into(), 4), None)],
+            tasks: many_tasks,
+            decoded_blocks: Arc::new(blocks),
+        }];
+        let many_ranked = (0..8).map(|i| (0, i, score(20), false)).collect::<Vec<_>>();
+        for budget in [1, 2, 3, 4, 8] {
+            let selected = select_joint_task_candidates(
+                &many_windows,
+                &many_ranked,
+                budget,
+                &many_stats,
+                &properties,
+            )
+            .unwrap();
+            assert_eq!(selected[0], (0..budget).collect::<Vec<_>>());
+        }
+
+        // A lower shoulder intersects the component but not its highest plateau.
+        let mut blocks = windows[0]
+            .decoded_blocks
+            .iter()
+            .map(|b| ReclusterBlock {
+                index: b.index.clone(),
+                meta: b.meta.clone(),
+                stats: ReclusterBlockStats::Normalized(b.stats().clone()),
+            })
+            .collect::<Vec<_>>();
+        for (block, (lo, hi)) in blocks
+            .iter_mut()
+            .zip([(0, 4), (2, 4), (2, 6), (0, 1), (5, 6)])
+        {
+            block.stats = ReclusterBlockStats::Normalized(ClusterStatistics::new(
+                0,
+                vec![Scalar::from(lo)],
+                vec![Scalar::from(hi)],
+                0,
+            ));
+        }
+        let refs = blocks.iter().collect::<Vec<_>>();
+        let ids = (0..5).collect::<Vec<_>>();
+        let scan = LinearReclusterStrategy::scan_hotspots(&properties, &ids, &refs).unwrap();
+        let candidates = scan.peak_candidates(
+            scan.peaks[0].0,
+            1,
+            ReclusterGroup::Level(0),
+            &ids,
+            &refs,
+            &properties,
+        );
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].selected_blocks, vec![(0, vec![0, 1])]);
+
+        // Two orders share one quota; neither shoulder block enters either task.
+        for (block, (lo, hi)) in blocks
+            .iter_mut()
+            .zip([(0, 10), (4, 6), (4, 6), (0, 1), (9, 10)])
+        {
+            block.stats = ReclusterBlockStats::Normalized(ClusterStatistics::new(
+                0,
+                vec![Scalar::from(lo)],
+                vec![Scalar::from(hi)],
+                0,
+            ));
+        }
+        let refs = blocks.iter().collect::<Vec<_>>();
+        let scan = LinearReclusterStrategy::scan_hotspots(&properties, &ids, &refs).unwrap();
+        let candidates = scan.peak_candidates(
+            scan.peaks[0].0,
+            2,
+            ReclusterGroup::Level(0),
+            &ids,
+            &refs,
+            &properties,
+        );
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].selected_blocks, vec![(0, vec![1, 2])]);
+        assert_eq!(candidates[1].selected_blocks, vec![(0, vec![0, 1])]);
+        let windows = vec![ReclusterCandidateWindow {
+            segments: vec![(("segment".into(), 4), None)],
+            tasks: candidates,
+            decoded_blocks: Arc::new(blocks),
+        }];
+        let stats = ReclusterDepthStats::create(
+            windows[0].decoded_blocks.iter(),
+            &properties.scalar_cluster_key_types,
+        )
+        .unwrap();
+        // The two orderings share block1; never schedule both despite two slots.
+        let selected =
+            select_joint_task_candidates(&windows, &ranked, 2, &stats, &properties).unwrap();
+        assert_eq!(selected[0].len(), 1);
     }
 
     #[test]

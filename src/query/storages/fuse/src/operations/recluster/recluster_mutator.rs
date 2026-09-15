@@ -117,21 +117,41 @@ impl ReclusterCandidateWindow {
         self.tasks[task_idx].score
     }
 
-    /// Unique segment paths removed when the task is materialized.
-    pub(crate) fn task_segment_locations(&self, task_idx: usize) -> HashSet<&str> {
+    /// Borrow candidate inputs from the segment-major, block-major decode order.
+    /// Candidates are built from this window's decoded blocks and retain their indices.
+    pub(crate) fn task_blocks(&self, task_idx: usize) -> impl Iterator<Item = &ReclusterBlock> {
+        self.tasks[task_idx]
+            .selected_blocks
+            .iter()
+            .flat_map(|(segment, ids)| ids.iter().map(move |block| (*segment, *block)))
+            .map(|position| {
+                let index = self
+                    .decoded_blocks
+                    .binary_search_by_key(&position, |block| {
+                        (block.index.segment_idx, block.index.block_idx)
+                    })
+                    .expect("candidate input must belong to its decoded window");
+                &self.decoded_blocks[index]
+            })
+    }
+
+    /// Borrow segment paths removed by the task; callers deduplicate as needed.
+    pub(crate) fn task_segment_locations(&self, task_idx: usize) -> impl Iterator<Item = &str> {
         let task = &self.tasks[task_idx];
-        if task.is_repack_only() {
-            self.segments
-                .iter()
-                .filter(|(_, segment_info)| segment_info.is_some())
-                .map(|(location, _)| location.0.as_str())
-                .collect()
-        } else {
-            task.selected_blocks
-                .iter()
-                .map(|(window_pos, _)| self.segments[*window_pos].0.0.as_str())
-                .collect()
-        }
+        let repack = task.is_repack_only();
+        repack
+            .then_some(self.segments.iter())
+            .into_iter()
+            .flatten()
+            .filter(|(_, info)| info.is_some())
+            .map(|(location, _)| location.0.as_str())
+            .chain(
+                (!repack)
+                    .then_some(task.selected_blocks.iter())
+                    .into_iter()
+                    .flatten()
+                    .map(|(position, _)| self.segments[*position].0.0.as_str()),
+            )
     }
 }
 
@@ -395,9 +415,50 @@ impl ReclusterMutator {
     pub(crate) fn build_decoded_window_tasks(
         &self,
         windows: &mut [ReclusterCandidateWindow],
-    ) -> Result<()> {
+    ) -> Result<Option<super::ReclusterDepthStats>> {
         if !self.builds_tasks_after_decode() || windows.is_empty() {
-            return Ok(());
+            return Ok(None);
+        }
+        let mut groups = Vec::new();
+        let mut peaks = Vec::new();
+        for (window_idx, window) in windows.iter().enumerate() {
+            let blocks = window.decoded_blocks.iter().collect::<Vec<_>>();
+            for ((group, _partition), ids) in self.bin_blocks_into_groups(&blocks) {
+                let Some(scan) = super::linear_recluster::LinearReclusterStrategy::scan_hotspots(
+                    &self.properties,
+                    &ids,
+                    &blocks,
+                ) else {
+                    continue;
+                };
+                for &(peak, height, _) in &scan.peaks {
+                    peaks.push((groups.len(), peak, height));
+                }
+                groups.push((window_idx, group, ids, scan));
+            }
+        }
+        peaks.sort_by_key(|&(g, peak, height)| {
+            (std::cmp::Reverse(height), (groups[g].0, groups[g].1), peak)
+        });
+        for window in windows.iter_mut() {
+            window.tasks.clear();
+        }
+        let budget = self.max_tasks * 2;
+        let mut seen = HashSet::new();
+        for (rank, &(g, peak, _)) in peaks.iter().enumerate() {
+            let quota = budget / peaks.len() + usize::from(rank < budget % peaks.len());
+            if quota == 0 {
+                continue;
+            }
+            let (window_idx, group, ids, scan) = &groups[g];
+            let window = &mut windows[*window_idx];
+            let blocks = window.decoded_blocks.iter().collect::<Vec<_>>();
+            for task in scan.peak_candidates(peak, quota, *group, ids, &blocks, &self.properties) {
+                let identity = (*window_idx, task.selected_blocks.clone());
+                if seen.insert(identity) {
+                    window.tasks.push(task);
+                }
+            }
         }
         let stats = super::ReclusterDepthStats::create(
             windows
@@ -405,10 +466,14 @@ impl ReclusterMutator {
                 .flat_map(|window| window.decoded_blocks.iter()),
             &self.properties.scalar_cluster_key_types,
         )?;
-        for window in windows {
+        if windows.iter().any(|window| !window.tasks.is_empty()) {
+            return Ok(Some(stats));
+        }
+        // Preserve the tested empty-pool fallback until repack is separated.
+        for window in windows.iter_mut() {
             self.build_window_tasks(window, self.max_tasks, Some(&stats))?;
         }
-        Ok(())
+        Ok(None)
     }
 
     fn build_window_tasks(
