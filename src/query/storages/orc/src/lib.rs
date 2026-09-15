@@ -21,7 +21,8 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 
 mod chunk_reader_impl;
 mod copy_into_table;

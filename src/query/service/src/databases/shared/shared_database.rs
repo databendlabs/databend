@@ -14,117 +14,81 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::table::Table;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::TableApi;
-use databend_common_meta_api::kv_pb_api::KVPbApi;
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::UnknownTable;
-use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseInfo;
-use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::TableIdToName;
-use databend_common_meta_app::schema::TableIdent;
-use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::Settings;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-use crate::meta_service_error;
+use crate::share::DataSharingHandlerWrapper;
 use crate::share::ShareDatabaseBinding;
-use crate::share::ShareMgr;
 use crate::share::ShareTableContext;
-use crate::share::resolve_share_storage_params;
+use crate::share::get_data_sharing_handler;
 
 #[derive(Clone)]
 pub struct SharedDatabase {
     ctx: DatabaseContext,
     db_info: DatabaseInfo,
+    version: BuildInfoRef,
 }
 
 impl SharedDatabase {
     pub const NAME: &'static str = "SHARE";
 
-    pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
+    pub fn try_create(
+        ctx: DatabaseContext,
+        db_info: DatabaseInfo,
+        version: BuildInfoRef,
+    ) -> Result<Box<dyn Database>> {
         ShareDatabaseBinding::from_engine_options(&db_info.meta.engine_options)?;
-        Ok(Box::new(Self { ctx, db_info }))
+        Ok(Box::new(Self {
+            ctx,
+            db_info,
+            version,
+        }))
     }
 
     fn binding(&self) -> Result<ShareDatabaseBinding> {
         ShareDatabaseBinding::from_engine_options(&self.db_info.meta.engine_options)
     }
 
-    async fn table_info(&self, context: &ShareTableContext) -> Result<TableInfo> {
-        let table_name = self
-            .ctx
-            .meta
-            .get_pb(&TableIdToName {
-                table_id: context.provider_table_id,
-            })
-            .await
-            .map_err(meta_service_error)?
-            .map(|name| name.data.table_name)
-            .unwrap_or_else(|| context.provider_table.clone());
-        let name_ident = DBIdTableName::new(context.binding.provider_database_id, &table_name);
-        let table_niv = self
-            .ctx
-            .meta
-            .get_table_in_db(&name_ident)
-            .await
-            .map_err(meta_service_error)?;
-
-        let Some(table_niv) = table_niv else {
-            return Err(AppError::from(UnknownTable::new(
-                &table_name,
-                format!(
-                    "shared table id {} in provider database {}",
-                    context.provider_table_id, context.binding.provider_database_id
-                ),
-            ))
-            .into());
-        };
-
-        let (_name, id, seq_meta) = table_niv.unpack();
-        if id.table_id != context.provider_table_id {
-            return Err(ErrorCode::InvalidOperation(format!(
-                "Shared table binding is stale: expected provider table id {}, got {}",
-                context.provider_table_id, id.table_id
-            )));
-        }
-
-        Ok(TableInfo {
-            ident: TableIdent {
-                table_id: id.table_id,
-                seq: seq_meta.seq,
-            },
-            desc: format!("'{}'.'{}'", self.get_db_name(), table_name),
-            name: table_name,
-            meta: seq_meta.data,
-            db_type: DatabaseType::SharedDB,
-            catalog_info: Default::default(),
-        })
+    async fn share_handler(&self) -> Result<DataSharingHandlerWrapper> {
+        // Database APIs have no query context. Load the consumer's effective
+        // license using the same config/global/embedded precedence as a session.
+        let settings = Settings::create(self.get_tenant().clone());
+        settings.load_changes().await?;
+        get_data_sharing_handler(
+            Arc::new(self.ctx.meta.clone()),
+            settings.get_enterprise_license(self.version),
+        )
     }
 
-    async fn shared_table(&self, context: ShareTableContext) -> Result<Arc<dyn Table>> {
-        let mut table_info = self.table_info(&context).await?;
-        let provider_storage = context
-            .storage_params
-            .or_else(|| table_info.meta.storage_params.take())
-            .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
-        let storage = resolve_share_storage_params(
-            &Tenant::new_literal(&context.binding.provider_tenant),
-            &context.connection,
-            provider_storage,
-        )
-        .await?;
-        table_info.name = context.provider_table;
-        table_info.desc = format!("'{}'.'{}'", self.get_db_name(), table_info.name);
-        table_info.meta.storage_params = Some(storage);
+    async fn shared_table(
+        &self,
+        manager: &DataSharingHandlerWrapper,
+        context: ShareTableContext,
+    ) -> Result<Arc<dyn Table>> {
+        let table_info = manager
+            .get_shared_table_info(self.get_db_name(), context)
+            .await?;
         self.ctx
             .storage_factory
             .get_table(&table_info, self.ctx.disable_table_info_refresh)
+    }
+
+    async fn get_table_with_handler(
+        &self,
+        manager: &DataSharingHandlerWrapper,
+        binding: &ShareDatabaseBinding,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let context = manager
+            .resolve_shared_table(self.get_tenant(), binding, table_name)
+            .await?;
+        self.shared_table(manager, context).await
     }
 }
 
@@ -140,17 +104,20 @@ impl Database for SharedDatabase {
 
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let binding = self.binding()?;
-        let manager = ShareMgr::create(Arc::new(self.ctx.meta.clone()));
-        let context = manager
-            .resolve_shared_table(self.get_tenant(), &binding, table_name)
-            .await?;
-        self.shared_table(context).await
+        let manager = self.share_handler().await?;
+        self.get_table_with_handler(&manager, &binding, table_name)
+            .await
     }
 
     async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
+        let binding = self.binding()?;
+        let manager = self.share_handler().await?;
         let mut tables = Vec::with_capacity(table_names.len());
         for table_name in table_names {
-            match self.get_table(table_name).await {
+            match self
+                .get_table_with_handler(&manager, &binding, table_name)
+                .await
+            {
                 Ok(table) => tables.push(table),
                 Err(err) if err.code() == ErrorCode::UnknownTable("").code() => {}
                 Err(err) => return Err(err),
@@ -161,20 +128,20 @@ impl Database for SharedDatabase {
 
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let binding = self.binding()?;
-        let manager = ShareMgr::create(Arc::new(self.ctx.meta.clone()));
+        let manager = self.share_handler().await?;
         let contexts = manager
             .list_shared_tables(self.get_tenant(), &binding)
             .await?;
         let mut tables = Vec::with_capacity(contexts.len());
         for context in contexts {
-            tables.push(self.shared_table(context).await?);
+            tables.push(self.shared_table(&manager, context).await?);
         }
         Ok(tables)
     }
 
     async fn list_tables_names(&self) -> Result<Vec<String>> {
         let binding = self.binding()?;
-        let manager = ShareMgr::create(Arc::new(self.ctx.meta.clone()));
+        let manager = self.share_handler().await?;
         let contexts = manager
             .list_shared_tables(self.get_tenant(), &binding)
             .await?;

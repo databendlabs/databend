@@ -347,7 +347,7 @@ where A: TypeCheckAdapter
                 if disallow_alias_resolution {
                     self.bind_context.expr_context = original_context;
                 }
-                let box (scalar_expr, _) = result?;
+                let deref!((scalar_expr, _)) = result?;
 
                 Ok(AggregateFunctionScalarSortDesc {
                     expr: scalar_expr,

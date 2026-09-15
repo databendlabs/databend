@@ -381,7 +381,7 @@ impl Payload {
                     }
                     write_offset += 1;
                 }
-                BlockEntry::Column(Column::Nullable(box c)) => {
+                BlockEntry::Column(Column::Nullable(deref!(c))) => {
                     let bitmap = c.validity();
                     if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
                         let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };

@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]

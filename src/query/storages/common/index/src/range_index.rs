@@ -48,6 +48,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
+use databend_storages_common_table_meta::meta::supported_stat_type;
 use geo::Point;
 use geo::Rect;
 
@@ -56,6 +57,7 @@ use crate::Index;
 use crate::SpatialPredicate;
 use crate::SpatialPredicateOp;
 use crate::VirtualColumnStatsOfNames;
+use crate::cast_virtual_column_statistics;
 use crate::collect_spatial_predicates;
 use crate::rect_contains;
 use crate::rects_distance_intersect;
@@ -213,6 +215,12 @@ impl RangeIndex {
                         let data_type = DataType::from(&stat.data_type);
                         if slot.data_type == data_type {
                             statistics_to_domain(vec![&column_stat], &data_type)
+                        } else if let Some(converted_stat) = cast_virtual_column_statistics(
+                            &column_stat,
+                            &data_type,
+                            &slot.data_type,
+                        ) {
+                            statistics_to_domain(vec![&converted_stat], &slot.data_type)
                         } else if cast_input_columns.contains(&slot.name) {
                             let domain = statistics_to_domain(vec![&column_stat], &data_type);
                             virtual_column_types.insert(slot.name.clone(), data_type);
@@ -355,7 +363,7 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
         return Domain::full(data_type);
     }
     match data_type {
-        DataType::Nullable(box inner_ty) => {
+        DataType::Nullable(deref!(inner_ty)) => {
             if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
                 return Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -386,13 +394,13 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                 .collect::<Vec<_>>();
             Domain::Tuple(inner_domains)
         }
-        DataType::Array(box inner_ty) => {
+        DataType::Array(deref!(inner_ty)) => {
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
             let inner_domain = statistics_to_domain(stats, inner_ty);
             Domain::Array(Some(Box::new(inner_domain)))
         }
-        DataType::Map(box inner_ty) => {
+        DataType::Map(deref!(inner_ty)) => {
             let n = inner_ty.num_leaf_columns();
             let stats = stats.drain(..n).collect();
             let inner_domain = statistics_to_domain(stats, inner_ty);
@@ -462,6 +470,6 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
 
 impl Index for RangeIndex {
     fn supported_type(data_type: &DataType) -> bool {
-        databend_storages_common_table_meta::meta::supported_stat_type(data_type)
+        supported_stat_type(data_type)
     }
 }

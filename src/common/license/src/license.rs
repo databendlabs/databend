@@ -31,6 +31,8 @@ pub enum Feature {
     Test,
     #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
+    #[serde(alias = "data_sharing", alias = "DATA_SHARING")]
+    DataSharing,
     #[serde(alias = "computed_column", alias = "COMPUTED_COLUMN")]
     ComputedColumn,
     #[serde(alias = "storage_encryption", alias = "STORAGE_ENCRYPTION")]
@@ -76,6 +78,7 @@ impl fmt::Display for Feature {
             Feature::Vacuum => write!(f, "vacuum"),
             Feature::Test => write!(f, "test"),
             Feature::DataMask => write!(f, "data_mask"),
+            Feature::DataSharing => write!(f, "data_sharing"),
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
@@ -183,6 +186,40 @@ impl LicenseInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_data_sharing_feature() {
+        for name in ["DataSharing", "data_sharing", "DATA_SHARING"] {
+            assert_eq!(
+                Feature::DataSharing,
+                serde_json::from_value(serde_json::json!(name)).unwrap()
+            );
+        }
+        assert_eq!("data_sharing", Feature::DataSharing.to_string());
+        assert!(matches!(
+            Feature::DataSharing.verify(&Feature::DataSharing).unwrap(),
+            VerifyResult::Success
+        ));
+        assert!(matches!(
+            Feature::Stream.verify(&Feature::DataSharing).unwrap(),
+            VerifyResult::MissMatch
+        ));
+        assert!(
+            Feature::DataSharing
+                .verify_default("license required")
+                .is_err()
+        );
+        let license = LicenseInfo {
+            r#type: None,
+            org: None,
+            tenants: None,
+            features: Some(vec![Feature::Stream, Feature::DataSharing]),
+        };
+        assert_eq!(
+            "data_sharing,stream",
+            license.display_features().to_string()
+        );
+    }
 
     #[test]
     fn test_deserialize_feature_from_string() {

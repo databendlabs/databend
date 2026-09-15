@@ -31,6 +31,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
+use databend_storages_common_table_meta::meta::supported_stat_type;
 use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
 
@@ -65,10 +66,11 @@ pub struct VirtualColumnField {
     pub name: String,
     /// Paths to generate virtual column from source column.
     pub key_paths: OwnedKeyPaths,
-    /// optional cast function name, used to cast value to other type.
-    pub cast_func_name: Option<String>,
-    /// Virtual column data type.
+    /// Virtual column data type (the type requested by the user).
+    /// Stored virtual columns may use a different concrete type, the reader casts to this type.
     pub data_type: Box<TableDataType>,
+    /// Whether the cast follows `try_cast` semantics (NULL on failure).
+    pub is_try: bool,
 }
 
 /// Query-time identity of a virtual column referenced by a pushed-down filter
@@ -242,6 +244,28 @@ impl PushDownInfo {
                 encoded_path: field.key_paths.to_canonical_path(),
             })
             .collect()
+    }
+
+    /// Return the typed virtual column used by a single-column `ORDER BY ... LIMIT`.
+    /// The ORDER BY column reference name and logical type must exactly match the
+    /// query-time virtual field identity.
+    pub fn order_by_virtual_column(&self) -> Option<&VirtualColumnField> {
+        self.limit?;
+        let [(RemoteExpr::ColumnRef { id, data_type, .. }, _, _)] = self.order_by.as_slice() else {
+            return None;
+        };
+        if !supported_stat_type(data_type) {
+            return None;
+        }
+
+        self.virtual_column
+            .as_ref()?
+            .virtual_column_fields
+            .iter()
+            .find(|field| {
+                field.name.as_str() == id.as_str()
+                    && DataType::from(field.data_type.as_ref()) == *data_type
+            })
     }
 
     pub fn add_internal_column_dependencies<'a>(

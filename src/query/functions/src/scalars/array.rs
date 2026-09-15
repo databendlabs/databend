@@ -198,7 +198,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             .map(|arg_type| {
                 let is_nullable = arg_type.is_nullable();
                 match arg_type.remove_nullable() {
-                    DataType::Array(box inner_type) => {
+                    DataType::Array(deref!(inner_type)) => {
                         if is_nullable {
                             inner_type.wrap_nullable()
                         } else {
@@ -222,7 +222,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .iter()
                         .map(|arg_domain| match arg_domain {
                             Domain::Nullable(nullable_domain) => match &nullable_domain.value {
-                                Some(box Domain::Array(Some(inner_domain))) => {
+                                Some(deref!(Domain::Array(Some(inner_domain)))) => {
                                     Domain::Nullable(NullableDomain {
                                         has_null: nullable_domain.has_null,
                                         value: Some(Box::new(*inner_domain.clone())),
@@ -230,7 +230,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                                 _ => Domain::Nullable(nullable_domain.clone()),
                             },
-                            Domain::Array(Some(box inner_domain)) => inner_domain.clone(),
+                            Domain::Array(Some(deref!(inner_domain))) => inner_domain.clone(),
                             _ => arg_domain.clone(),
                         })
                         .collect();
@@ -742,7 +742,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = array_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|inner_domain| inner_domain.merge(item_domain))
@@ -768,7 +768,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = array_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|inner_domain| inner_domain.merge(item_domain))
@@ -1321,7 +1321,7 @@ struct ArrayAggFunctionImpl {
 impl ArrayAggFunctionImpl {
     fn new(name: &'static str, arg_type: &DataType) -> Option<Self> {
         let (desc, return_type) = match arg_type {
-            DataType::Nullable(box DataType::EmptyArray) | DataType::EmptyArray => (
+            DataType::Nullable(deref!(DataType::EmptyArray)) | DataType::EmptyArray => (
                 None,
                 if name == "count" {
                     UInt64Type::data_type()
@@ -1329,9 +1329,9 @@ impl ArrayAggFunctionImpl {
                     DataType::Null
                 },
             ),
-            DataType::Nullable(box DataType::Array(box array_type))
-            | DataType::Array(box array_type)
-            | DataType::Nullable(box array_type @ DataType::Variant)
+            DataType::Nullable(deref!(DataType::Array(deref!(array_type))))
+            | DataType::Array(deref!(array_type))
+            | DataType::Nullable(deref!( array_type @ DataType::Variant))
             | array_type @ DataType::Variant => {
                 let desc = ArrayAggDesc::new(name, array_type).ok()?;
                 let return_type = desc.return_type.clone();
@@ -1375,12 +1375,12 @@ impl ArrayAggFunctionImpl {
                     })
             }
             [Value::Scalar(_)] => unreachable!(),
-            [Value::Column(Column::Nullable(box column))]
+            [Value::Column(Column::Nullable(deref!(column)))]
                 if desc.return_type != self.return_type =>
             {
                 let mut builder = ColumnBuilder::with_capacity(&self.return_type, column.len());
                 let mut evaluator = desc.create_evaluator();
-                let ColumnBuilder::Nullable(box nullable) = &mut builder else {
+                let ColumnBuilder::Nullable(deref!(nullable)) = &mut builder else {
                     unreachable!()
                 };
                 for (row_index, scalar) in column.iter().enumerate() {

@@ -533,7 +533,7 @@ where A: TypeCheckAdapter
                 expr,
                 paths,
             } => {
-                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
+                let deref!((scalar, data_type)) = self.resolve_core(arena, *expr)?;
                 self.resolve_map_access_from_scalar(
                     *span,
                     *expr_span,
@@ -564,7 +564,16 @@ where A: TypeCheckAdapter
                 expr,
                 target_type,
             } => {
-                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
+                if let Some(result) = self.try_resolve_variant_cast_pushdown(
+                    arena,
+                    *span,
+                    *expr,
+                    target_type,
+                    *is_try,
+                )? {
+                    return Ok(result);
+                }
+                let deref!((scalar, data_type)) = self.resolve_core(arena, *expr)?;
                 self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
             }
             CoreExpr::AggregateFunction {
@@ -700,7 +709,7 @@ where A: TypeCheckAdapter
         let mut scalars = Vec::with_capacity(args.len());
         let mut data_types = Vec::with_capacity(args.len());
         for arg in args {
-            let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+            let deref!((scalar, data_type)) = self.resolve_core(arena, *arg)?;
             scalars.push(scalar);
             data_types.push(data_type);
         }
@@ -716,7 +725,7 @@ where A: TypeCheckAdapter
     ) -> Result<Vec<Scalar>> {
         let mut new_params = Vec::with_capacity(params.len());
         for (display_name, param) in params {
-            let box (scalar, _) = self.resolve_core(arena, *param)?;
+            let deref!((scalar, _)) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
             let (expr, _) =
                 ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);

@@ -20,6 +20,7 @@ use chrono::DateTime;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -199,7 +200,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                     let row_count = row_count_col[block_idx];
                     let range_input = RangeIndexInput::from_columns(&columns_stat);
                     if !range_pruner.should_keep(&range_input, None)
-                        || runtime_scan_filters.should_prune(Some(&columns_stat))
+                        || runtime_scan_filters
+                            .should_prune(RuntimeScanStatistics::from_columns(Some(&columns_stat)))
                     {
                         return Ok::<_, ()>(());
                     }

@@ -191,26 +191,22 @@ Filter
 query T
 explain select a, get_by_keypath_string(v, '{"a",0}') from t2 where get_by_keypath_string(v, '{"b","c"}') like '%10%'
 ----
-EvalScalar
-├── output columns: [t2.a (#0), get_by_keypath_string(v, '{"a",0}') (#4)]
-├── expressions: [CAST(t2.v['a'][0] (#2) AS String NULL)]
+Filter
+├── output columns: [t2.a (#0), t2.v['a'][0]::String (#2)]
+├── filters: [is_true(like(t2.v['b']['c']::String (#3), '%10%'))]
 ├── estimated rows: 0.50
-└── Filter
-    ├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
-    ├── filters: [is_true(like(CAST(t2.v['b']['c'] (#3) AS String NULL), '%10%'))]
-    ├── estimated rows: 0.50
-    └── TableScan
-        ├── table: default.test_virtual_db.t2
-        ├── scan id: 0
-        ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#3)]
-        ├── read rows: 1
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(like(CAST(t2.v['b']['c'] (#3) AS String NULL), '%10%'))], limit: NONE]
-        ├── virtual columns: [v['a'][0], v['b']['c']]
-        └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
+    ├── output columns: [a (#0), v['a'][0]::String (#2), v['b']['c']::String (#3)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(like(t2.v['b']['c']::String (#3), '%10%'))], limit: NONE]
+    ├── virtual columns: [v['a'][0]::String, v['b']['c']::String]
+    └── estimated rows: 1.00
 
 query T
 explain select a, get(v, 'd') from t2 where get(v, 'd') = 20
@@ -251,51 +247,90 @@ TableScan
 query T
 explain select v['d']::string, v['d']::int from t2;
 ----
-EvalScalar
-├── output columns: [v['d'] (#3), v['d'] (#4)]
-├── expressions: [CAST(t2.v['d'] (#2) AS String NULL), CAST(t2.v['d'] (#2) AS Int32 NULL)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.test_virtual_db.t2
-    ├── scan id: 0
-    ├── output columns: [v['d'] (#2)]
-    ├── read rows: 1
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
-    ├── virtual columns: [v['d']]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.test_virtual_db.t2
+├── scan id: 0
+├── output columns: [v['d']::String (#2), v['d']::Int32 (#3)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['d']::Int32, v['d']::String]
+└── estimated rows: 1.00
 
 query TI
 select v['d']::string, v['d']::int from t2;
 ----
 20 20
 
+# Typed virtual-column pruning uses the final query type even when the JSONB
+# materialization uses UInt64 physically. Two inserts create two blocks with
+# disjoint ranges so range pruning must reduce 2 blocks to 1.
+statement ok
+create table t_typed_virtual_pruning (
+    id int not null,
+    payload json not null
+) storage_format = 'parquet' enable_virtual_column = true row_per_block = 5
+
+statement ok
+insert into t_typed_virtual_pruning
+select number + 1, parse_json(concat('{"k":', to_string(number + 1), '}'))
+from numbers(5)
+
+statement ok
+insert into t_typed_virtual_pruning
+select number + 101, parse_json(concat('{"k":', to_string(number + 101), '}'))
+from numbers(5)
+
+statement ok
+refresh virtual column on t_typed_virtual_pruning
+
+# The filter contains a typed virtual ColumnRef without an outer CAST. Range
+# pruning converts the physical UInt64 statistics to the logical Int64 domain.
+query T
+explain select id from t_typed_virtual_pruning where payload['k']::Int64 > 100
+----
+Filter
+├── output columns: [t_typed_virtual_pruning.id (#0)]
+├── filters: [is_true(t_typed_virtual_pruning.payload['k']::Int64 (#2) > 100)]
+├── estimated rows: 5.00
+└── TableScan
+    ├── table: default.test_virtual_db.t_typed_virtual_pruning
+    ├── scan id: 0
+    ├── output columns: [id (#0), payload['k']::Int64 (#2)]
+    ├── read rows: 5
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t_typed_virtual_pruning.payload['k']::Int64 (#2) > 100)], limit: NONE]
+    ├── virtual columns: [payload['k']::Int64]
+    └── estimated rows: 10.00
+
+statement ok
+drop table t_typed_virtual_pruning
+
 query T
 explain select a, get_string(v, 'd') from t2 where get_string(v, 'd') like '%20%'
 ----
-EvalScalar
-├── output columns: [t2.a (#0), get_string(v, 'd') (#3)]
-├── expressions: [CAST(t2.v['d'] (#2) AS String NULL)]
+Filter
+├── output columns: [t2.a (#0), t2.v['d']::String (#2)]
+├── filters: [is_true(like(t2.v['d']::String (#2), '%20%'))]
 ├── estimated rows: 0.50
-└── Filter
-    ├── output columns: [t2.a (#0), t2.v['d'] (#2)]
-    ├── filters: [is_true(like(CAST(t2.v['d'] (#2) AS String NULL), '%20%'))]
-    ├── estimated rows: 0.50
-    └── TableScan
-        ├── table: default.test_virtual_db.t2
-        ├── scan id: 0
-        ├── output columns: [a (#0), v['d'] (#2)]
-        ├── read rows: 1
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(like(CAST(t2.v['d'] (#2) AS String NULL), '%20%'))], limit: NONE]
-        ├── virtual columns: [v['d']]
-        └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
+    ├── output columns: [a (#0), v['d']::String (#2)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(like(t2.v['d']::String (#2), '%20%'))], limit: NONE]
+    ├── virtual columns: [v['d']::String]
+    └── estimated rows: 1.00
 
 query T
 explain select t2.a, t2.v['b'] from t2 left outer join t1 on t2.v['b']['c'] = t1.a
@@ -549,6 +584,9 @@ INSERT INTO data_source_a VALUES
 statement ok
 INSERT INTO config_table VALUES('ENTITY1', 'SRC1', 'standard_mode');
 
+statement ok
+refresh virtual column on data_source_a
+
 query T
 EXPLAIN WITH processed_dates AS (
     SELECT
@@ -592,26 +630,26 @@ data_aggregation AS (
 SELECT * FROM data_aggregation;
 ----
 EvalScalar
-├── output columns: [a.entity_id (#0), a.source_id (#1), event_date (#15), type_code (#24), primary_category (#25), secondary_category (#26)]
-├── expressions: [group_item (#21), group_item (#22), group_item (#23)]
+├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['category_a']::String (#19), a.content_object['category_b']::String (#20), event_date (#15), type_code (#22)]
+├── expressions: [group_item (#21)]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── output columns: [a.entity_id (#0), a.source_id (#1), type_code (#21), primary_category (#22), secondary_category (#23), event_date (#15)]
-    ├── group by: [entity_id, source_id, type_code, primary_category, secondary_category, event_date]
+    ├── output columns: [a.entity_id (#0), a.source_id (#1), type_code (#21), a.content_object['category_a']::String (#19), a.content_object['category_b']::String (#20), event_date (#15)]
+    ├── group by: [entity_id, source_id, type_code, content_object['category_a']::String, content_object['category_b']::String, event_date]
     ├── aggregate functions: []
     ├── estimated rows: 1.00
     └── AggregatePartial
-        ├── group by: [entity_id, source_id, type_code, primary_category, secondary_category, event_date]
+        ├── group by: [entity_id, source_id, type_code, content_object['category_a']::String, content_object['category_b']::String, event_date]
         ├── aggregate functions: []
         ├── estimated rows: 1.00
         └── EvalScalar
-            ├── output columns: [event_date (#15), a.entity_id (#0), a.source_id (#1), type_code (#21), primary_category (#22), secondary_category (#23)]
-            ├── expressions: [if(CAST(is_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS Boolean NULL), CAST(assume_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS String NULL), 'Unknown'), CAST(data_source_a.content_object['category_a'] (#19) AS String NULL), CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)]
+            ├── output columns: [event_date (#15), a.content_object['category_a']::String (#19), a.content_object['category_b']::String (#20), a.entity_id (#0), a.source_id (#1), type_code (#21)]
+            ├── expressions: [if(CAST(is_not_null(data_source_a.metadata_object['type']::String (#18)) AS Boolean NULL), CAST(assume_not_null(data_source_a.metadata_object['type']::String (#18)) AS String NULL), 'Unknown')]
             ├── estimated rows: 0.20
             └── HashJoin
-                ├── output columns: [event_date (#15), a.metadata_object['type'] (#18), a.content_object['category_a'] (#19), a.content_object['category_b'] (#20), a.entity_id (#0), a.source_id (#1)]
+                ├── output columns: [event_date (#15), a.metadata_object['type']::String (#18), a.content_object['category_a']::String (#19), a.content_object['category_b']::String (#20), a.entity_id (#0), a.source_id (#1)]
                 ├── join type: INNER
-                ├── build keys: [a.entity_id (#0), a.source_id (#1), CAST(CAST(CAST(data_source_a.content_object['event_date'] (#16) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)]
+                ├── build keys: [a.entity_id (#0), a.source_id (#1), CAST(CAST(data_source_a.content_object['event_date']::Int64 (#16) AS Timestamp NULL) AS Date NULL)]
                 ├── probe keys: [p.entity_id (#5), p.source_id (#6), p.event_date (#15)]
                 ├── keys is null equal: [false, false, false]
                 ├── filters: []
@@ -620,20 +658,20 @@ EvalScalar
                 │   └── filter id:3, build key:a.source_id (#1), probe targets:[p.source_id (#6)@scan1, c.source_id (#11)@scan2], filter type:bloom,inlist,min_max
                 ├── estimated rows: 0.20
                 ├── Filter(Build)
-                │   ├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['event_date'] (#16), a.metadata_object['type'] (#18), a.content_object['category_a'] (#19), a.content_object['category_b'] (#20)]
-                │   ├── filters: [is_not_null(CAST(data_source_a.content_object['category_a'] (#19) AS String NULL)), is_not_null(CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)), is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#16) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))]
+                │   ├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['event_date']::Int64 (#16), a.metadata_object['type']::String (#18), a.content_object['category_a']::String (#19), a.content_object['category_b']::String (#20)]
+                │   ├── filters: [is_not_null(data_source_a.content_object['category_a']::String (#19)), is_not_null(data_source_a.content_object['category_b']::String (#20)), is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#16) AS Timestamp NULL) AS Date NULL))]
                 │   ├── estimated rows: 0.20
                 │   └── TableScan
                 │       ├── table: default.test_virtual_db.data_source_a
                 │       ├── scan id: 0
-                │       ├── output columns: [entity_id (#0), source_id (#1), content_object['event_date'] (#16), metadata_object['type'] (#18), content_object['category_a'] (#19), content_object['category_b'] (#20)]
+                │       ├── output columns: [entity_id (#0), source_id (#1), content_object['event_date']::Int64 (#16), metadata_object['type']::String (#18), content_object['category_a']::String (#19), content_object['category_b']::String (#20)]
                 │       ├── read rows: 1
                 │       ├── read size: < 1 KiB
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [is_not_null(CAST(data_source_a.content_object['category_a'] (#19) AS String NULL)) and is_not_null(CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)) and is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#16) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
-                │       ├── virtual columns: [content_object['category_a'], content_object['category_b'], content_object['event_date'], metadata_object['type']]
+                │       ├── push downs: [filters: [is_not_null(data_source_a.content_object['category_a']::String (#19)) and is_not_null(data_source_a.content_object['category_b']::String (#20)) and is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#16) AS Timestamp NULL) AS Date NULL))], limit: NONE]
+                │       ├── virtual columns: [content_object['category_a']::String, content_object['category_b']::String, content_object['event_date']::Int64, metadata_object['type']::String]
                 │       └── estimated rows: 1.00
                 └── EvalScalar(Probe)
                     ├── output columns: [a.entity_id (#5), a.source_id (#6), event_date (#15)]
@@ -650,10 +688,10 @@ EvalScalar
                             ├── estimated rows: 1.00
                             └── EvalScalar
                                 ├── output columns: [a.entity_id (#5), a.source_id (#6), event_date (#14)]
-                                ├── expressions: [CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)]
+                                ├── expressions: [CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL)]
                                 ├── estimated rows: 0.20
                                 └── HashJoin
-                                    ├── output columns: [a.content_object['event_date'] (#13), a.entity_id (#5), a.source_id (#6)]
+                                    ├── output columns: [a.content_object['event_date']::Int64 (#13), a.entity_id (#5), a.source_id (#6)]
                                     ├── join type: INNER
                                     ├── build keys: [a.entity_id (#5), a.source_id (#6)]
                                     ├── probe keys: [c.entity_id (#10), c.source_id (#11)]
@@ -664,21 +702,21 @@ EvalScalar
                                     │   └── filter id:1, build key:a.source_id (#6), probe targets:[c.source_id (#11)@scan2], filter type:bloom,inlist,min_max
                                     ├── estimated rows: 0.20
                                     ├── Filter(Build)
-                                    │   ├── output columns: [a.entity_id (#5), a.source_id (#6), a.content_object['event_date'] (#13)]
-                                    │   ├── filters: [is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))]
+                                    │   ├── output columns: [a.entity_id (#5), a.source_id (#6), a.content_object['event_date']::Int64 (#13)]
+                                    │   ├── filters: [is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL))]
                                     │   ├── estimated rows: 0.20
                                     │   └── TableScan
                                     │       ├── table: default.test_virtual_db.data_source_a
                                     │       ├── scan id: 1
-                                    │       ├── output columns: [entity_id (#5), source_id (#6), content_object['event_date'] (#13)]
+                                    │       ├── output columns: [entity_id (#5), source_id (#6), content_object['event_date']::Int64 (#13)]
                                     │       ├── read rows: 1
                                     │       ├── read size: < 1 KiB
                                     │       ├── partitions total: 1
                                     │       ├── partitions scanned: 1
                                     │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                                    │       ├── push downs: [filters: [is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
+                                    │       ├── push downs: [filters: [is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL))], limit: NONE]
                                     │       ├── apply join filters: [#2, #3]
-                                    │       ├── virtual columns: [content_object['event_date']]
+                                    │       ├── virtual columns: [content_object['event_date']::Int64]
                                     │       └── estimated rows: 1.00
                                     └── TableScan(Probe)
                                         ├── table: default.test_virtual_db.config_table

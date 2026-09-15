@@ -30,7 +30,7 @@
 #![feature(const_try)]
 #![feature(trivial_bounds)]
 #![feature(iterator_try_reduce)]
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 #![feature(type_ascription)]
 #![allow(clippy::type_complexity)]
 #![feature(associated_type_defaults)]

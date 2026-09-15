@@ -1218,7 +1218,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Value::Column(col) => {
                         let validity = match col {
                             Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
-                            Column::Nullable(box nullable_column) => {
+                            Column::Nullable(deref!(nullable_column)) => {
                                 Some(nullable_column.validity.clone())
                             }
                             _ => None,
@@ -1264,7 +1264,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col) => {
                 let validity = match col {
                     Column::Null { len } => Bitmap::new_constant(false, len),
-                    Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
+                    Column::Nullable(deref!(ref nullable_column)) => {
+                        nullable_column.validity.clone()
+                    }
                     _ => Bitmap::new_constant(true, col.len()),
                 };
                 let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
