@@ -7,6 +7,86 @@ CREATE DATABASE IF NOT EXISTS map_func_test
 statement ok
 USE map_func_test
 
+# map's optional flag allows duplicate keys, keeping the first value.
+query TTT
+SELECT map([], [], true), map([], [], false), map(['a'], [1], true)
+----
+{} {} {"a":1}
+
+query TT
+SELECT map(['a', 'b'], [1, 2], false), map(['a', 'b'], [1, 2], true)
+----
+{"a":1,"b":2} {"a":1,"b":2}
+
+statement error map keys have to be unique
+SELECT map(['a', 'a'], [1, 2])
+
+statement error map keys have to be unique
+SELECT map(['a', 'a'], [1, 2], false)
+
+query TTT
+SELECT map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true),
+       map_keys(map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true)),
+       map_values(map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true))
+----
+{"b":1,"a":2,"c":4} ["b","a","c"] [1,2,4]
+
+query TT
+SELECT map([1, 2, 1], ['a', 'b', 'c'], true), map(['a', 'a'], [[1], [2, 3]], true)
+----
+{1:"a",2:"b"} {"a":[1]}
+
+query TT
+SELECT map(['a', 'a'], [NULL, 2], true), map(['a', 'a'], [1, NULL], true)
+----
+{"a":NULL} {"a":1}
+
+query TTTT
+SELECT map(NULL::Nullable(Array(String)), [1], true), map(['a'], NULL::Nullable(Array(Int64)), true),
+       map(['a', 'a'], [1, 2], NULL), map([], [], NULL)
+----
+NULL NULL NULL NULL
+
+statement error key list has a different size from value list
+SELECT map(['a'], [1, 2], true)
+
+statement error map keys can not be
+SELECT map([[1]], [1], true)
+
+# Repeated keys across rows are valid: the seen-key set must reset for every row.
+statement ok
+CREATE TABLE map_create_rows(id INT, keys ARRAY(INT), vals ARRAY(INT), allow_duplicates BOOLEAN)
+
+statement ok
+INSERT INTO map_create_rows VALUES
+(0, [1, 2], [10, 11], true),
+(1, [2, 1], [20, 21], false),
+(2, [1, 2], [30, 31], true),
+(3, [2, 1], [40, 41], false)
+
+query TTTT
+SELECT map(keys, vals), map(keys, vals, false), map(keys, vals, true), map(keys, vals, allow_duplicates)
+FROM map_create_rows ORDER BY id
+----
+{1:10,2:11} {1:10,2:11} {1:10,2:11} {1:10,2:11}
+{2:20,1:21} {2:20,1:21} {2:20,1:21} {2:20,1:21}
+{1:30,2:31} {1:30,2:31} {1:30,2:31} {1:30,2:31}
+{2:40,1:41} {2:40,1:41} {2:40,1:41} {2:40,1:41}
+
+statement ok
+DROP TABLE map_create_rows ALL
+
+# Duplicate keys within a row, mixed flags, and a NULL flag masking a duplicate.
+query T
+SELECT map([1, if(number = 0, 2, 1)], [number, number + 10],
+           if(number = 3, NULL, number != 0))
+FROM numbers(4) ORDER BY number
+----
+{1:0,2:10}
+{1:1}
+{1:2}
+NULL
+
 query TT
 select map_keys({}), map_values({})
 ----
