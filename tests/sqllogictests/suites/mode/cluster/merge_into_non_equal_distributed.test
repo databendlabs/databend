@@ -64,7 +64,7 @@ CommitSink
             ├── unmatched insert: [condition: None, insert into (a) values(a (#0))]
             └── Exchange
                 ├── output columns: [t2.a (#0), t1._row_id (#2)]
-                ├── exchange type: Hash(bit_and(bit_shift_right(t1._row_id (#2), CAST(31 AS UInt64 NULL)), CAST(2047 AS UInt64 NULL)))
+                ├── exchange type: NodeToNodeHash(bit_and(bit_shift_right(t1._row_id (#2), CAST(31 AS UInt64 NULL)), CAST(2047 AS UInt64 NULL)))
                 └── HashJoin
                     ├── output columns: [t2.a (#0), t1._row_id (#2)]
                     ├── join type: LEFT OUTER
@@ -75,11 +75,11 @@ CommitSink
                     ├── estimated rows: 1.00
                     ├── Exchange(Build)
                     │   ├── output columns: [t1._row_id (#2)]
-                    │   ├── exchange type: Hash()
+                    │   ├── exchange type: NodeToNodeHash()
                     │   └── EmptyResultScan
                     └── Exchange(Probe)
                         ├── output columns: [t2.a (#0)]
-                        ├── exchange type: Hash()
+                        ├── exchange type: NodeToNodeHash()
                         └── TableScan
                             ├── table: default.default.t2
                             ├── scan id: 0
@@ -251,7 +251,7 @@ CommitSink
             ├── unmatched insert: [condition: None, insert into (a) values(CAST(a (#0) AS Int32 NULL))]
             └── Exchange
                 ├── output columns: [t1.a (#1), t1._row_id (#2), stage._$1 (#0)]
-                ├── exchange type: Hash(bit_and(bit_shift_right(t1._row_id (#2), CAST(31 AS UInt64 NULL)), CAST(2047 AS UInt64 NULL)))
+                ├── exchange type: NodeToNodeHash(bit_and(bit_shift_right(t1._row_id (#2), CAST(31 AS UInt64 NULL)), CAST(2047 AS UInt64 NULL)))
                 └── HashJoin
                     ├── output columns: [t1.a (#1), t1._row_id (#2), stage._$1 (#0)]
                     ├── join type: RIGHT OUTER

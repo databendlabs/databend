@@ -5,8 +5,8 @@ Exchange(Merge)
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#18) AS (#18)]
         ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
-        └── Exchange(Hash)
-            ├── Exchange(Hash): keys: [orders.o_orderkey (#18)]
+        └── Exchange(NodeToNodeHash)
+            ├── Exchange(NodeToNodeHash): keys: [orders.o_orderkey (#18)]
             └── EvalScalar
                 ├── scalars: [sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17), orders.o_orderkey (#18) AS (#18), lineitem.l_orderkey (#0) AS (#29), orders.o_orderdate (#22) AS (#30)]
                 └── Join(Inner)
@@ -25,8 +25,8 @@ Exchange(Merge)
                         └── Aggregate(Partial)
                             ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
                             ├── aggregate functions: [sum(sum_arg_0 (#16)) AS (#17)]
-                            └── Exchange(Hash)
-                                ├── Exchange(Hash): keys: [lineitem.l_orderkey (#0)]
+                            └── Exchange(NodeToNodeHash)
+                                ├── Exchange(NodeToNodeHash): keys: [lineitem.l_orderkey (#0)]
                                 └── EvalScalar
                                     ├── scalars: [lineitem.l_orderkey (#0) AS (#0), multiply(lineitem.l_extendedprice (#5), minus(1, lineitem.l_discount (#6))) AS (#16), lineitem.l_returnflag (#8) AS (#28)]
                                     └── Scan

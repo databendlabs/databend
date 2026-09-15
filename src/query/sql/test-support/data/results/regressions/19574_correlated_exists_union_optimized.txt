@@ -36,8 +36,8 @@ EvalScalar
                     │           └── Aggregate(Partial)
                     │               ├── group items: [f1 (#4) AS (#4)]
                     │               ├── aggregate functions: []
-                    │               └── Exchange(Hash)
-                    │                   ├── Exchange(Hash): keys: [f1 (#4)]
+                    │               └── Exchange(NodeToNodeHash)
+                    │                   ├── Exchange(NodeToNodeHash): keys: [f1 (#4)]
                     │                   └── ConstantTableScan
                     │                       ├── columns: [f1 (#4)]
                     │                       └── num_rows: [1]
@@ -55,8 +55,8 @@ EvalScalar
                                     └── Aggregate(Partial)
                                         ├── group items: [f1 (#5) AS (#5)]
                                         ├── aggregate functions: []
-                                        └── Exchange(Hash)
-                                            ├── Exchange(Hash): keys: [f1 (#5)]
+                                        └── Exchange(NodeToNodeHash)
+                                            ├── Exchange(NodeToNodeHash): keys: [f1 (#5)]
                                             └── Filter
                                                 ├── filters: [eq(f1 (#5), 1)]
                                                 └── ConstantTableScan
