@@ -21,6 +21,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::DeclareItem;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
@@ -30,6 +31,7 @@ use databend_common_ast::ast::IterableItem;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::ReturnItem;
+use databend_common_ast::ast::ScriptBlock;
 use databend_common_ast::ast::ScriptStatement;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
@@ -51,6 +53,18 @@ use crate::ir::ScriptIR;
 use crate::ir::SetRef;
 use crate::ir::StatementTemplate;
 use crate::ir::VarRef;
+
+/// Compile a block with its declarations in the same scope as its body.
+/// This only produces IR; it does not execute any statements.
+pub fn compile_block(block: ScriptBlock) -> Result<Vec<ScriptIR>> {
+    let mut code = Vec::with_capacity(block.declares.len() + block.body.len());
+    code.extend(block.declares.into_iter().map(|declare| match declare {
+        DeclareItem::Var(declare) => ScriptStatement::LetVar { declare },
+        DeclareItem::Set(declare) => ScriptStatement::LetStatement { declare },
+    }));
+    code.extend(block.body);
+    compile(&code)
+}
 
 #[fastrace::trace]
 pub fn compile(code: &[ScriptStatement]) -> Result<Vec<ScriptIR>> {

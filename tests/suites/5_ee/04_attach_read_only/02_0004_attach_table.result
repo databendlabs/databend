@@ -105,7 +105,7 @@ c2_new
 >>>> alter table base DROP COLUMN c4
 select the dropped column will fail
 >>>> select c4 from attach_tbl
-Error: APIError: QueryFailed: [1065]error: 
+Error: APIError: QueryFailed: [1058]error: 
   --> SQL:1:8
   |
 1 | select c4 from attach_tbl
