@@ -367,42 +367,9 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _>(
         "to_timestamp",
-        |ctx, d| {
-            let max = d.max.clone().unwrap_or_default();
-            let mut res = Vec::with_capacity(2);
-            for (i, v) in [&d.min, &max].iter().enumerate() {
-                let mut extend_num = 0;
-                if i == 1 && d.max.is_none() {
-                    // the max domain is unbounded
-                    res.push(TIMESTAMP_MAX);
-                    break;
-                }
-                let mut d = string_to_timestamp(v, &ctx.tz);
-                // the string max domain maybe truncated into `"2024-09-02 00:0�"`
-                const MAX_LEN: usize = "1000-01-01".len();
-                if d.is_err()
-                    && v.len() > MAX_LEN
-                    && let Some(prefix) = v.get(..MAX_LEN)
-                {
-                    d = string_to_timestamp(prefix, &ctx.tz);
-                    if i == 0 {
-                        extend_num = -1;
-                    } else {
-                        extend_num = 1;
-                    }
-                }
-
-                if let Ok(ts) = d {
-                    res.push(ts + extend_num * (24 * 60 * 60 * MICROS_PER_SEC - 1));
-                } else {
-                    return FunctionDomain::MayThrow;
-                }
-            }
-            FunctionDomain::Domain(SimpleDomain {
-                min: res[0].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
-                max: res[1].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
-            })
-        },
+        // String ordering does not preserve timestamp ordering across accepted
+        // formats or timezone offsets. Valid endpoints can also enclose invalid strings.
+        |_, _| FunctionDomain::MayThrow,
         eval_string_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
