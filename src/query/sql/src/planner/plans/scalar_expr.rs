@@ -1388,6 +1388,7 @@ pub enum AsyncFunctionArgument {
     DictGetFunction(DictGetFunctionArgument),
     // Used by `read_file` function to read stage files.
     ReadFile(ReadFileFunctionArgument),
+    Sleep,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
@@ -1502,6 +1503,9 @@ impl AsyncFunctionCall {
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))
+            }
+            AsyncFunctionArgument::Sleep => {
+                Err(ErrorCode::Internal("Cannot generate sleep function"))
             }
             AsyncFunctionArgument::ReadFile(_) => {
                 Err(ErrorCode::Internal("Cannot generate read_file function"))

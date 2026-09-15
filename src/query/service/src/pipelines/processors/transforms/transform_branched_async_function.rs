@@ -97,6 +97,13 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::DictGetFunction(_) => unreachable!(),
+                AsyncFunctionArgument::Sleep => {
+                    TransformAsyncFunction::transform_sleep(
+                        &mut block,
+                        async_func_desc.arg_indices[0],
+                    )
+                    .await?;
+                }
                 AsyncFunctionArgument::ReadFile(read_file_arg) => {
                     self.read_file_ctx
                         .transform_read_file(

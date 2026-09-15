@@ -20,6 +20,7 @@ use std::sync::atomic::AtomicU64;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
@@ -36,6 +37,8 @@ use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -731,6 +734,23 @@ impl TransformAsyncFunction {
             .collect()
     }
 
+    pub async fn transform_sleep(data_block: &mut DataBlock, arg_index: usize) -> Result<()> {
+        let Some(Scalar::Number(NumberScalar::Float64(seconds))) =
+            data_block.get_by_offset(arg_index).as_scalar()
+        else {
+            return Err(ErrorCode::BadArguments("Must be constant value"));
+        };
+        let duration = Duration::try_from_secs_f64((*seconds).into())
+            .map_err(|err| ErrorCode::BadArguments(err.to_string()))?;
+        tokio::time::sleep(duration).await;
+        data_block.add_entry(BlockEntry::Const(
+            Scalar::Number(NumberScalar::UInt8(0)),
+            DataType::Number(NumberDataType::UInt8),
+            data_block.num_rows(),
+        ));
+        Ok(())
+    }
+
     // transform add sequence nextval column.
     pub async fn transform<T: NextValFetcher>(
         ctx: Arc<QueryContext>,
@@ -983,6 +1003,9 @@ impl AsyncTransform for TransformAsyncFunction {
                     )
                     .await?;
                 }
+                AsyncFunctionArgument::Sleep => {
+                    Self::transform_sleep(&mut data_block, async_func_desc.arg_indices[0]).await?;
+                }
                 AsyncFunctionArgument::ReadFile(read_file_arg) => {
                     let read_file_ctx = self.read_file_ctx.as_mut().ok_or_else(|| {
                         ErrorCode::Internal("read_file context is not initialized".to_string())
@@ -1023,6 +1046,65 @@ mod tests {
 
     use super::SequenceCounter;
     use super::TransformAsyncFunction;
+
+    #[tokio::test]
+    async fn test_sleep_yields_and_can_be_cancelled() {
+        use databend_common_expression::BlockEntry;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        let mut block = DataBlock::new(
+            vec![BlockEntry::Const(
+                Scalar::Number(NumberScalar::Float64(4.0.into())),
+                DataType::Number(NumberDataType::Float64),
+                1,
+            )],
+            1,
+        );
+        // A duration above the former three-second limit is accepted.
+        // Poll once on the current-thread runtime: blocking sleep would complete
+        // here instead of yielding Pending, and could not be cancelled.
+        {
+            let future = TransformAsyncFunction::transform_sleep(&mut block, 0);
+            tokio::pin!(future);
+            assert!(futures::poll!(&mut future).is_pending());
+        }
+        assert_eq!(block.num_columns(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_sleep_validation_and_result() {
+        use databend_common_expression::BlockEntry;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        for seconds in [-1.0, f64::NAN, f64::INFINITY, 0.0] {
+            let mut block = DataBlock::new(
+                vec![BlockEntry::Const(
+                    Scalar::Number(NumberScalar::Float64(seconds.into())),
+                    DataType::Number(NumberDataType::Float64),
+                    3,
+                )],
+                3,
+            );
+            let result = TransformAsyncFunction::transform_sleep(&mut block, 0).await;
+            if seconds == 0.0 {
+                result.unwrap();
+                assert_eq!(block.num_rows(), 3);
+                assert_eq!(
+                    block.get_by_offset(1).as_scalar(),
+                    Some(&Scalar::Number(NumberScalar::UInt8(0)))
+                );
+            } else {
+                assert!(result.is_err());
+                assert_eq!(block.num_columns(), 1);
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_no_stall_when_refill_lock_waiting() {
