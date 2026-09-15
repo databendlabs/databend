@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(unwrap_infallible)]
+mod data_sharing;
 mod license;
 mod storages;
 mod stream;

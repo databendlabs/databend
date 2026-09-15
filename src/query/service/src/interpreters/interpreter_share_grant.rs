@@ -22,7 +22,6 @@ use databend_common_sql::plans::GrantSharePlan;
 use databend_common_sql::plans::RevokeSharePlan;
 use databend_common_sql::plans::ShareGrantObject;
 use databend_common_sql::plans::ShareGrantObjectPrivilege;
-use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::access::validate_share_management_for_connection;
@@ -34,14 +33,8 @@ use crate::share::ProviderObjectIds;
 use crate::share::SHARE_ENGINE;
 use crate::share::ShareGrantDatabase;
 use crate::share::ShareGrantTable;
-use crate::share::ShareMgr;
 use crate::share::ShareRevokeTarget;
-use crate::share::ensure_provider_table_can_be_shared;
-use crate::share::resolve_share_storage_params;
-
-fn share_mgr() -> ShareMgr {
-    ShareMgr::create(UserApiProvider::instance().get_meta_store_client())
-}
+use crate::share::share_mgr;
 
 pub struct GrantShareInterpreter {
     ctx: Arc<QueryContext>,
@@ -70,6 +63,7 @@ impl Interpreter for GrantShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
+            let manager = share_mgr(&self.ctx)?;
             match (&self.plan.privilege, &self.plan.object) {
                 (ShareGrantObjectPrivilege::Usage, ShareGrantObject::Database { database }) => {
                     let db = provider_database(&self.ctx, &self.plan.tenant, database).await?;
@@ -80,7 +74,7 @@ impl Interpreter for GrantShareInterpreter {
                         database_meta_seq: db.get_db_info().meta.seq,
                     };
                     validate_share_database_grant(self.ctx.clone(), &grant).await?;
-                    share_mgr()
+                    manager
                         .grant_database(&self.plan.tenant, &self.plan.share, grant)
                         .await?;
                 }
@@ -92,7 +86,8 @@ impl Interpreter for GrantShareInterpreter {
                     let db = provider_database(&self.ctx, &self.plan.tenant, &database).await?;
                     ensure_database_can_be_shared(db.as_ref())?;
                     let table_ref = db.get_table(table).await?;
-                    ensure_provider_table_can_be_shared(&table_ref.get_table_info().meta)?;
+                    manager
+                        .ensure_provider_table_can_be_shared(&table_ref.get_table_info().meta)?;
                     let storage_params = table_ref
                         .get_table_info()
                         .meta
@@ -109,13 +104,17 @@ impl Interpreter for GrantShareInterpreter {
                         storage_params: storage_params.without_credentials(),
                     };
                     validate_share_table_grant(self.ctx.clone(), &grant).await?;
-                    let manager = share_mgr();
                     let connection = manager
                         .get_connection_name(&self.plan.tenant, &self.plan.share)
                         .await?;
                     validate_share_management_for_connection(self.ctx.clone(), Some(&connection))
                         .await?;
-                    resolve_share_storage_params(&self.plan.tenant, &connection, storage_params)
+                    manager
+                        .resolve_share_storage_params(
+                            &self.plan.tenant,
+                            &connection,
+                            storage_params,
+                        )
                         .await?;
                     manager
                         .grant_table(&self.plan.tenant, &self.plan.share, grant, connection)
@@ -156,7 +155,7 @@ impl Interpreter for RevokeShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let manager = share_mgr();
+            let manager = share_mgr(&self.ctx)?;
             match (&self.plan.privilege, &self.plan.object) {
                 (ShareGrantObjectPrivilege::Usage, ShareGrantObject::Database { database }) => {
                     let current_database_id =

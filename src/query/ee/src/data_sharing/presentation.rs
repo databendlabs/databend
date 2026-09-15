@@ -1,10 +1,10 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2023 Databend Cloud
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Elastic License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.elastic.co/licensing/elastic-license
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,26 +13,6 @@
 // limitations under the License.
 
 use databend_common_expression::generate_like_pattern;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ShareShowEntry {
-    pub created_on: String,
-    pub kind: String,
-    pub owner_account: String,
-    pub name: String,
-    pub database_name: String,
-    pub to: String,
-    pub owner: String,
-    pub comment: String,
-    pub listing_global_name: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ShareDescEntry {
-    pub kind: String,
-    pub name: String,
-    pub shared_on: String,
-}
 
 pub(super) fn like_match(pattern: &str, value: &str) -> bool {
     generate_like_pattern(pattern.as_bytes(), value.len()).compare(value.as_bytes())
