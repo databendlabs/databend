@@ -144,11 +144,11 @@ AggregateFinal
 ├── output columns: [count(r.id) (#4), l.id (#0)]
 ├── group by: [id]
 ├── aggregate functions: [count(id)]
-├── estimated rows: 1.00
+├── estimated rows: 2.00
 └── AggregatePartial
     ├── group by: [id]
     ├── aggregate functions: [count(id)]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 2.00
     └── SpatialJoin
         ├── output columns: [r.id (#2), l.id (#0)]
         ├── build side: Right

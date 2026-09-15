@@ -81,52 +81,52 @@ pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarE
 
     let converted_value = match *column.data_type {
         DataType::Number(NumberDataType::UInt8)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt8))) => {
             let (is_trivial, value) = check_uint_range(u8::MAX as u64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::UInt8(value as u8)))
         }
         DataType::Number(NumberDataType::UInt16)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt16)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt16))) => {
             let (is_trivial, value) = check_uint_range(u16::MAX as u64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::UInt16(value as u16)))
         }
         DataType::Number(NumberDataType::UInt32)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt32)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt32))) => {
             let (is_trivial, value) = check_uint_range(u32::MAX as u64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::UInt32(value as u32)))
         }
         DataType::Number(NumberDataType::UInt64)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt64)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt64))) => {
             let (is_trivial, value) = check_uint_range(u64::MAX, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::UInt64(value)))
         }
         DataType::Number(NumberDataType::Int8)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int8)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int8))) => {
             let (is_trivial, value) = check_int_range(i8::MIN as i64, i8::MAX as i64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::Int8(value as i8)))
         }
         DataType::Number(NumberDataType::Int16)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int16)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int16))) => {
             let (is_trivial, value) = check_int_range(i16::MIN as i64, i16::MAX as i64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::Int16(value as i16)))
         }
         DataType::Number(NumberDataType::Int32)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int32)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int32))) => {
             let (is_trivial, value) = check_int_range(i32::MIN as i64, i32::MAX as i64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::Int32(value as i32)))
         }
         DataType::Number(NumberDataType::Int64)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int64)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int64))) => {
             let (is_trivial, value) = check_int_range(i64::MIN, i64::MAX, value);
             is_trivial.then(|| Scalar::Number(value.into()))
         }
         DataType::Number(NumberDataType::Float32)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Float32)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Float32))) => {
             let (is_trivial, value) = check_float_range(f32::MIN as f64, f32::MAX as f64, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::Float32(OrderedFloat(value as f32))))
         }
         DataType::Number(NumberDataType::Float64)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Float64)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Float64))) => {
             let (is_trivial, value) = check_float_range(f64::MIN, f64::MAX, value);
             is_trivial.then(|| Scalar::Number(NumberScalar::Float64(OrderedFloat(value))))
         }

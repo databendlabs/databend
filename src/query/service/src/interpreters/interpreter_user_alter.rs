@@ -49,17 +49,19 @@ impl Interpreter for AlterUserInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        if plan.change_auth || plan.change_user_option {
-            UserApiProvider::instance()
-                .alter_user(&tenant, &plan.user_info, plan.seq)
-                .await?;
-        }
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            if plan.change_auth || plan.change_user_option {
+                UserApiProvider::instance()
+                    .alter_user(&tenant, &plan.user_info, plan.seq)
+                    .await?;
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

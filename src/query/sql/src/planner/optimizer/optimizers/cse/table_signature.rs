@@ -99,7 +99,6 @@ fn scan_signature(scan: &Scan, metadata: &Metadata) -> Option<IndexType> {
     });
     if has_internal_column
         || scan.prewhere.is_some()
-        || scan.agg_index.is_some()
         || scan.change_type.is_some()
         || scan.update_stream_columns
         || scan.inverted_index.is_some()

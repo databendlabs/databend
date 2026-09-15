@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
@@ -31,12 +33,16 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
 
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;
-    writeln!(file, "{}", raw_plan.format_indent(Default::default())?)?;
+    writeln!(
+        file,
+        "{}",
+        raw_plan.format_indent(Default::default(), &StatContext::default())?
+    )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default())?
+        optimized_plan.format_indent(Default::default(), &StatContext::default())?
     )?;
     writeln!(file)?;
 
@@ -102,7 +108,7 @@ GROUP BY ss_store_sk",
         unreachable!("test query should bind to Plan::Query")
     };
 
-    let opt_ctx = OptimizerContext::new(ctx, metadata.clone());
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
     let split =
         RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(*s_expr)?;
     let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;

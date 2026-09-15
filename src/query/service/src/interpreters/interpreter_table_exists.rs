@@ -50,23 +50,25 @@ impl Interpreter for ExistsTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.plan.catalog.as_str();
-        let database = self.plan.database.as_str();
-        let table = self.plan.table.as_str();
-        let exists = self.ctx.get_table(catalog, database, table).await.is_ok();
-        let result = match exists {
-            true => 1u8,
-            false => 0u8,
-        };
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let catalog = self.plan.catalog.as_str();
+            let database = self.plan.database.as_str();
+            let table = self.plan.table.as_str();
+            let exists = self.ctx.get_table(catalog, database, table).await.is_ok();
+            let result = match exists {
+                true => 1u8,
+                false => 0u8,
+            };
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![BlockEntry::new_const_column(
-                DataType::Number(NumberDataType::UInt8),
-                Scalar::Number(NumberScalar::UInt8(result)),
+            PipelineBuildResult::from_blocks(vec![DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    DataType::Number(NumberDataType::UInt8),
+                    Scalar::Number(NumberScalar::UInt8(result)),
+                    1,
+                )],
                 1,
-            )],
-            1,
-        )])
+            )])
+        })
     }
 }

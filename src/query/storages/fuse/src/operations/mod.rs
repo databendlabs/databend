@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index_sink;
 mod analyze;
 mod append;
 mod changes;
 mod commit;
 mod common;
 mod compact;
-mod gc;
 mod inverted_index;
 mod merge;
 mod merge_into;
@@ -41,7 +39,6 @@ mod util;
 mod vacuum;
 mod virtual_column;
 
-pub use agg_index_sink::AggIndexSink;
 pub use analyze::AnalyzeHistogramInfo;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;

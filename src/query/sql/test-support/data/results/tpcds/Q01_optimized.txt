@@ -56,7 +56,7 @@ TopN
                 │       │       │                                       │       └── limit: NONE
                 │       │       │                                       └── Scan
                 │       │       │                                           ├── table: default.store_returns (#4)
-                │       │       │                                           ├── filters: []
+                │       │       │                                           ├── filters: [eq(store_returns.sr_store_sk (#103), store_returns.sr_store_sk (#103))]
                 │       │       │                                           ├── order by: []
                 │       │       │                                           └── limit: NONE
                 │       │       └── Scan

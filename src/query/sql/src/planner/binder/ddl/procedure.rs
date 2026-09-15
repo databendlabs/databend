@@ -48,10 +48,12 @@ use databend_common_users::UserApiProvider;
 
 use crate::BindContext;
 use crate::Binder;
+use crate::NameResolutionContext;
 use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::binder::show::get_show_options;
 use crate::meta_service_error;
+use crate::planner::apply_statement_settings;
 use crate::plans::CallProcedurePlan;
 use crate::plans::ConstantExpr;
 use crate::plans::CreateProcedurePlan;
@@ -102,7 +104,13 @@ impl Binder {
                 })))
             }
             ScriptBlockOrStmt::Statement(stmt) => {
-                let binder = self.clone();
+                apply_statement_settings(self.ctx.clone(), &stmt)?;
+                let binder = Self {
+                    name_resolution_ctx: NameResolutionContext::try_from(
+                        self.ctx.get_settings().as_ref(),
+                    )?,
+                    ..self.clone()
+                };
                 binder.bind(&stmt).await
             }
         }
@@ -191,7 +199,7 @@ impl Binder {
         )?;
         let mut arg_types = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let box (arg, mut arg_type) = type_checker.resolve(argument)?;
+            let deref!((arg, mut arg_type)) = type_checker.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
                 if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
                     arg_type = arg_type.wrap_nullable();

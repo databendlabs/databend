@@ -597,7 +597,7 @@ where
                 let column = entry.clone().remove_nullable().downcast().unwrap();
                 state.add_batch(column, None)
             }
-            BlockEntry::Column(Column::Nullable(box nullable_column)) => {
+            BlockEntry::Column(Column::Nullable(deref!(nullable_column))) => {
                 let c = T::try_downcast_column(nullable_column.column()).unwrap();
                 state.add_batch(ColumnView::Column(c), Some(nullable_column.validity()))
             }

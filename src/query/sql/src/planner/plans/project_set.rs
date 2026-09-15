@@ -21,6 +21,7 @@ use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -74,12 +75,8 @@ impl Operator for ProjectSet {
         used_columns.extend(srf_used_columns.iter().copied());
 
         // Derive outer columns
-        let mut outer_columns = child_prop.outer_columns.clone();
-        outer_columns.extend(
-            srf_used_columns
-                .difference(&child_prop.output_columns)
-                .copied(),
-        );
+        let outer_columns =
+            self.derive_outer_columns(child_prop.outer_columns.clone(), &child_prop.output_columns);
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
@@ -90,8 +87,15 @@ impl Operator for ProjectSet {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
-        let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
+    fn derive_stats(
+        &self,
+        rel_expr: &RelExpr,
+        stat_ctx: &StatContext,
+    ) -> databend_common_exception::Result<Arc<StatInfo>> {
+        let mut input_stat = rel_expr
+            .derive_cardinality_child(0, stat_ctx)?
+            .deref()
+            .clone();
         self.derive_project_set_stats(&mut input_stat)
     }
 }

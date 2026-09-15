@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
@@ -92,10 +93,12 @@ impl<'expr, 'stats> EquiCondition<'expr, 'stats> {
         right_input: &'stats Statistics,
         left_cardinality: StatCardinality,
         right_cardinality: StatCardinality,
+        func_ctx: &FunctionContext,
     ) -> Result<Self> {
-        let left_value_distribution = derive_expression_stat(left, left_input, left_cardinality)?;
+        let left_value_distribution =
+            derive_expression_stat(left, left_input, func_ctx, left_cardinality)?;
         let right_value_distribution =
-            derive_expression_stat(right, right_input, right_cardinality)?;
+            derive_expression_stat(right, right_input, func_ctx, right_cardinality)?;
         let stats = match (left_value_distribution, right_value_distribution) {
             (Some(left_stat), Some(right_stat)) => {
                 let left_rows = left_cardinality.value();
@@ -142,6 +145,7 @@ impl NonEquiCondition {
         input: &Statistics,
         input_cardinality: StatCardinality,
         column_row_scales: &HashMap<Symbol, StatCardinality>,
+        func_ctx: &FunctionContext,
     ) -> Result<Self> {
         let selectivity = SelectivityVisitor::estimate(
             predicate,
@@ -150,6 +154,7 @@ impl NonEquiCondition {
             &input.top_n,
             &input.count_min_sketch,
             column_row_scales,
+            func_ctx,
         )?;
         Ok(Self { selectivity })
     }
@@ -158,6 +163,7 @@ impl NonEquiCondition {
 fn derive_expression_stat<'a>(
     scalar: &ScalarExpr,
     statistics: &'a Statistics,
+    func_ctx: &FunctionContext,
     cardinality: StatCardinality,
 ) -> Result<Option<Cow<'a, ColumnStat>>> {
     if let ScalarExpr::BoundColumnRef(column) = scalar {
@@ -167,7 +173,7 @@ fn derive_expression_stat<'a>(
             .map(Cow::Borrowed));
     }
 
-    EvalScalar::derive_item_stat(scalar, statistics, cardinality)
+    EvalScalar::derive_item_stat(scalar, statistics, func_ctx, cardinality)
         .map(|distribution| distribution.map(Cow::Owned))
 }
 
@@ -544,6 +550,7 @@ mod tests {
             &right_input,
             StatCardinality::estimate(200.0),
             StatCardinality::exact(100),
+            &FunctionContext::default(),
         )?;
 
         let EquiStats::Complete(stats) = condition.stats else {

@@ -160,64 +160,65 @@ impl Interpreter for AnalyzeTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
-        let table = self
-            .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
-            .await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let plan = &self.plan;
+            let table = self
+                .ctx
+                .get_table(&plan.catalog, &plan.database, &plan.table)
+                .await?;
 
-        // check mutability
-        table.check_mutable()?;
+            // check mutability
+            table.check_mutable()?;
 
-        // Only fuse table can apply analyze
-        let table = match FuseTable::try_from_table(table.as_ref()) {
-            Ok(t) => t,
-            Err(_) => return Ok(PipelineBuildResult::create()),
-        };
+            // Only fuse table can apply analyze
+            let table = match FuseTable::try_from_table(table.as_ref()) {
+                Ok(t) => t,
+                Err(_) => return Ok(PipelineBuildResult::create()),
+            };
 
-        let Some(snapshot) = table.read_table_snapshot().await? else {
-            return Ok(PipelineBuildResult::create());
-        };
+            let Some(snapshot) = table.read_table_snapshot().await? else {
+                return Ok(PipelineBuildResult::create());
+            };
 
-        let mut build_res = PipelineBuildResult::create();
-        let table_options = table.get_table_info().options();
-        // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
-        // It's possible to OOM if the table is too large and spilling isn't enabled.
-        //
-        // `enable_analyze_histogram` controls the default behavior. An explicit
-        // statement-level `WITH HISTOGRAM` clause or a table-level histogram policy
-        // opts in for this analyze job regardless of the default setting.
-        let histogram_algorithm = AnalyzeHistogramAlgorithm::from_policy(
-            &self.ctx.get_settings(),
-            plan.histogram_algorithm.as_deref(),
-            table_options,
-        )?;
-        let mut histogram_info = AnalyzeHistogramInfo::None;
-        let quote = self
-            .ctx
-            .get_settings()
-            .get_sql_dialect()?
-            .default_ident_quote();
-        let collect_histogram = plan.histogram_requested
-            || has_table_histogram_policy(table_options)
-            || self.ctx.get_settings().get_enable_analyze_histogram()?;
-        let top_n_size = analyze_top_n_size_from_options(table_options)?;
-        let count_min_sketch_error_rate =
-            analyze_count_min_sketch_error_rate_from_options(table_options)?;
-        let frequency_columns = table_options
-            .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
-            .cloned();
-        if collect_histogram {
-            if self.plan.no_scan {
-                return Err(ErrorCode::BadArguments(
-                    "ANALYZE TABLE NOSCAN cannot be used with histogram collection because histogram collection must scan table data",
-                ));
-            }
-            match histogram_algorithm {
-                AnalyzeHistogramAlgorithm::Window => {
-                    let mut histogram_info_receivers = HashMap::new();
-                    let histogram_sqls = table
+            let mut build_res = PipelineBuildResult::create();
+            let table_options = table.get_table_info().options();
+            // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
+            // It's possible to OOM if the table is too large and spilling isn't enabled.
+            //
+            // `enable_analyze_histogram` controls the default behavior. An explicit
+            // statement-level `WITH HISTOGRAM` clause or a table-level histogram policy
+            // opts in for this analyze job regardless of the default setting.
+            let histogram_algorithm = AnalyzeHistogramAlgorithm::from_policy(
+                &self.ctx.get_settings(),
+                plan.histogram_algorithm.as_deref(),
+                table_options,
+            )?;
+            let mut histogram_info = AnalyzeHistogramInfo::None;
+            let quote = self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()?
+                .default_ident_quote();
+            let collect_histogram = plan.histogram_requested
+                || has_table_histogram_policy(table_options)
+                || self.ctx.get_settings().get_enable_analyze_histogram()?;
+            let top_n_size = analyze_top_n_size_from_options(table_options)?;
+            let count_min_sketch_error_rate =
+                analyze_count_min_sketch_error_rate_from_options(table_options)?;
+            let frequency_columns = table_options
+                .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+                .cloned();
+            if collect_histogram {
+                if self.plan.no_scan {
+                    return Err(ErrorCode::BadArguments(
+                        "ANALYZE TABLE NOSCAN cannot be used with histogram collection because histogram collection must scan table data",
+                    ));
+                }
+                match histogram_algorithm {
+                    AnalyzeHistogramAlgorithm::Window => {
+                        let mut histogram_info_receivers = HashMap::new();
+                        let histogram_sqls = table
                     .schema()
                     .fields()
                     .iter()
@@ -242,75 +243,76 @@ impl Interpreter for AnalyzeTableInterpreter {
                         )
                     })
                     .collect::<Vec<_>>();
-                    for (sql, col_id) in histogram_sqls.into_iter() {
-                        info!("Analyze histogram via sql: {sql}");
-                        let (histogram_plan, bind_context) = self.plan_sql(sql, true).await?;
-                        let mut histogram_build_res = build_query_pipeline(
-                            &QueryContext::create_from(self.ctx.as_ref()),
-                            &bind_context.columns,
-                            &histogram_plan,
-                            false,
-                        )
-                        .await?;
-                        let (tx, rx) = async_channel::unbounded();
-                        histogram_build_res.main_pipeline.add_sink(|input_port| {
-                            Ok(ProcessorPtr::create(HistogramInfoSink::create(
-                                Some(tx.clone()),
-                                input_port.clone(),
-                            )))
-                        })?;
+                        for (sql, col_id) in histogram_sqls.into_iter() {
+                            info!("Analyze histogram via sql: {sql}");
+                            let (histogram_plan, bind_context) = self.plan_sql(sql, true).await?;
+                            let mut histogram_build_res = build_query_pipeline(
+                                &QueryContext::create_from(self.ctx.as_ref()),
+                                &bind_context.columns,
+                                &histogram_plan,
+                                false,
+                            )
+                            .await?;
+                            let (tx, rx) = async_channel::unbounded();
+                            histogram_build_res.main_pipeline.add_sink(|input_port| {
+                                Ok(ProcessorPtr::create(HistogramInfoSink::create(
+                                    Some(tx.clone()),
+                                    input_port.clone(),
+                                )))
+                            })?;
 
-                        build_res
-                            .sources_pipelines
-                            .push(histogram_build_res.main_pipeline.finalize(None));
-                        build_res
-                            .sources_pipelines
-                            .extend(histogram_build_res.sources_pipelines);
-                        histogram_info_receivers.insert(col_id, rx);
+                            build_res
+                                .sources_pipelines
+                                .push(histogram_build_res.main_pipeline.finalize(None));
+                            build_res
+                                .sources_pipelines
+                                .extend(histogram_build_res.sources_pipelines);
+                            histogram_info_receivers.insert(col_id, rx);
+                        }
+                        histogram_info = AnalyzeHistogramInfo::Window(histogram_info_receivers);
                     }
-                    histogram_info = AnalyzeHistogramInfo::Window(histogram_info_receivers);
-                }
-                AnalyzeHistogramAlgorithm::KllFast => {
-                    histogram_info = AnalyzeHistogramInfo::KllFast {
-                        relative_error: analyze_histogram_kll_relative_error(
-                            &self.ctx.get_settings(),
-                            plan.histogram_kll_relative_error,
-                            table_options,
-                        )?,
-                    };
-                }
-                AnalyzeHistogramAlgorithm::KllFull => {
-                    histogram_info = AnalyzeHistogramInfo::KllFull {
-                        relative_error: analyze_histogram_kll_relative_error(
-                            &self.ctx.get_settings(),
-                            plan.histogram_kll_relative_error,
-                            table_options,
-                        )?,
-                    };
+                    AnalyzeHistogramAlgorithm::KllFast => {
+                        histogram_info = AnalyzeHistogramInfo::KllFast {
+                            relative_error: analyze_histogram_kll_relative_error(
+                                &self.ctx.get_settings(),
+                                plan.histogram_kll_relative_error,
+                                table_options,
+                            )?,
+                        };
+                    }
+                    AnalyzeHistogramAlgorithm::KllFull => {
+                        histogram_info = AnalyzeHistogramInfo::KllFull {
+                            relative_error: analyze_histogram_kll_relative_error(
+                                &self.ctx.get_settings(),
+                                plan.histogram_kll_relative_error,
+                                table_options,
+                            )?,
+                        };
+                    }
                 }
             }
-        }
-        if self.plan.no_scan
-            && (top_n_size.is_some() || count_min_sketch_error_rate.is_some())
-            && frequency_columns
-                .as_ref()
-                .is_some_and(|columns| !columns.trim().is_empty())
-        {
-            return Err(ErrorCode::BadArguments(
-                "ANALYZE TABLE NOSCAN cannot be used with frequency statistics collection because frequency statistics collection must scan table data",
-            ));
-        }
-        table.do_analyze(
-            self.ctx.clone(),
-            snapshot,
-            &mut build_res.main_pipeline,
-            histogram_info,
-            top_n_size,
-            frequency_columns,
-            count_min_sketch_error_rate,
-            self.plan.no_scan,
-            true,
-        )?;
-        Ok(build_res)
+            if self.plan.no_scan
+                && (top_n_size.is_some() || count_min_sketch_error_rate.is_some())
+                && frequency_columns
+                    .as_ref()
+                    .is_some_and(|columns| !columns.trim().is_empty())
+            {
+                return Err(ErrorCode::BadArguments(
+                    "ANALYZE TABLE NOSCAN cannot be used with frequency statistics collection because frequency statistics collection must scan table data",
+                ));
+            }
+            table.do_analyze(
+                self.ctx.clone(),
+                snapshot,
+                &mut build_res.main_pipeline,
+                histogram_info,
+                top_n_size,
+                frequency_columns,
+                count_min_sketch_error_rate,
+                self.plan.no_scan,
+                true,
+            )?;
+            Ok(build_res)
+        })
     }
 }

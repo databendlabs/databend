@@ -12,4 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod shared_stream;
+mod shared_table_functions;
+mod shared_table_tags;
 mod stream_create;

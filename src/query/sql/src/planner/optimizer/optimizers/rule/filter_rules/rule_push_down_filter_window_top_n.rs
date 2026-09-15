@@ -23,6 +23,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::MetadataRef;
 use crate::Symbol;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -54,15 +55,17 @@ use crate::plans::WindowGroup;
 ///              Sort(top n)
 pub struct RulePushDownFilterWindowTopN {
     id: RuleID,
+    ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
     matchers: Vec<Matcher>,
 }
 
 impl RulePushDownFilterWindowTopN {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
         Self {
             id: RuleID::PushDownFilterWindowTopN,
-            metadata,
+            metadata: ctx.get_metadata(),
+            ctx,
             matchers: vec![
                 Matcher::MatchOp {
                     op_type: RelOp::Filter,
@@ -92,10 +95,11 @@ impl Rule for RulePushDownFilterWindowTopN {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let window_expr = s_expr.child(0)?;
         if matches!(window_expr.plan().rel_op(), RelOp::WindowGroup) {
-            return self.apply_window_group(s_expr, filter, window_expr, state);
+            return self.apply_window_group(s_expr, filter, window_expr, &func_ctx, state);
         }
 
         let window: Window = window_expr.plan().clone().try_into()?;
@@ -109,7 +113,7 @@ impl Rule for RulePushDownFilterWindowTopN {
         let predicates = filter
             .predicates
             .into_iter()
-            .filter_map(|predicate| extract_top_n(window.index, predicate))
+            .filter_map(|predicate| extract_top_n(window.index, predicate, &func_ctx))
             .collect::<Vec<_>>();
 
         let Some(top_n) = predicates.into_iter().min() else {
@@ -163,6 +167,7 @@ impl RulePushDownFilterWindowTopN {
         s_expr: &SExpr,
         filter: Filter,
         window_expr: &SExpr,
+        func_ctx: &FunctionContext,
         state: &mut TransformResult,
     ) -> Result<()> {
         let mut window_group: WindowGroup = window_expr.plan().clone().try_into()?;
@@ -176,7 +181,7 @@ impl RulePushDownFilterWindowTopN {
             let predicates = filter
                 .predicates
                 .iter()
-                .filter_map(|predicate| extract_top_n(window.index, predicate.clone()))
+                .filter_map(|predicate| extract_top_n(window.index, predicate.clone(), func_ctx))
                 .collect::<Vec<_>>();
             if let Some(top_n) = predicates.into_iter().min() {
                 top_n_windows.push((index, top_n));
@@ -218,7 +223,11 @@ impl RulePushDownFilterWindowTopN {
     }
 }
 
-fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
+fn extract_top_n(
+    column: Symbol,
+    predicate: ScalarExpr,
+    func_ctx: &FunctionContext,
+) -> Option<usize> {
     let ScalarExpr::FunctionCall(call) = predicate else {
         return None;
     };
@@ -230,7 +239,7 @@ fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
             | (number, ScalarExpr::BoundColumnRef(col))
                 if col.column.index == column =>
             {
-                extract_i32(number).map(|n| n.max(0) as usize)
+                extract_i32(number, func_ctx).map(|n| n.max(0) as usize)
             }
             _ => None,
         };
@@ -257,7 +266,7 @@ fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
     let eq = func_name == ComparisonOp::GTE.to_func_name()
         || func_name == ComparisonOp::LTE.to_func_name();
 
-    extract_i32(right).map(|n| {
+    extract_i32(right, func_ctx).map(|n| {
         if eq {
             n.max(0) as usize
         } else {
@@ -266,14 +275,8 @@ fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
     })
 }
 
-fn extract_i32(expr: &ScalarExpr) -> Option<i32> {
-    check_number(
-        None,
-        &FunctionContext::default(),
-        expr.as_expr().ok()?,
-        &BUILTIN_FUNCTIONS,
-    )
-    .ok()
+fn extract_i32(expr: &ScalarExpr, func_ctx: &FunctionContext) -> Option<i32> {
+    check_number(None, func_ctx, expr.as_expr().ok()?, &BUILTIN_FUNCTIONS).ok()
 }
 
 fn is_ranking_function(func: &WindowFuncType) -> bool {

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fuse_block_format;
 mod parquet;
 
-pub use fuse_block_format::ReadBlockMeta;
 pub use parquet::FuseParquetBlockFormat;

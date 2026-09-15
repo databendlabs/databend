@@ -48,12 +48,14 @@ impl Interpreter for DropCatalogInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_catalog_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_catalog_execute");
 
-        let mgr = CatalogManager::instance();
-        mgr.drop_catalog(self.plan.clone().into()).await?;
+            let mgr = CatalogManager::instance();
+            mgr.drop_catalog(self.plan.clone().into()).await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

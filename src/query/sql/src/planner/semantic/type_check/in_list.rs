@@ -80,8 +80,8 @@ where A: super::TypeCheckAdapter
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let inlist_to_join_threshold = self.adapter.settings().get_inlist_to_join_threshold()?;
         if list.len() >= inlist_to_join_threshold {
-            let box (expr_scalar, expr_ty) = self.resolve_core(arena, expr)?;
-            let box (subquery, data_type) =
+            let deref!((expr_scalar, expr_ty)) = self.resolve_core(arena, expr)?;
+            let deref!((subquery, data_type)) =
                 self.resolve_in_list_as_subquery(arena, span, expr_scalar, expr_ty, list)?;
             return if not {
                 self.resolve_scalar_function_call(span, "not", vec![], vec![subquery])
@@ -90,7 +90,7 @@ where A: super::TypeCheckAdapter
             };
         }
 
-        let box (expr_scalar, _) = self.resolve_core(arena, expr)?;
+        let deref!((expr_scalar, _)) = self.resolve_core(arena, expr)?;
         let max_inlist_to_or = self.adapter.settings().get_max_inlist_to_or()? as usize;
 
         if list.len() > max_inlist_to_or
@@ -99,11 +99,11 @@ where A: super::TypeCheckAdapter
                 .all(|item| satisfy_core_contain_func(arena, *item))
         {
             let (list_scalars, _) = self.resolve_expr_args(arena, list)?;
-            let box (array, _) =
+            let deref!((array, _)) =
                 self.resolve_scalar_function_call(span, "array", vec![], list_scalars)?;
-            let box (array, _) =
+            let deref!((array, _)) =
                 self.resolve_scalar_function_call(span, "array_distinct", vec![], vec![array])?;
-            let box (contains, data_type) =
+            let deref!((contains, data_type)) =
                 self.resolve_scalar_function_call(span, "contains", vec![], vec![
                     array,
                     expr_scalar,
@@ -117,8 +117,8 @@ where A: super::TypeCheckAdapter
 
         let mut predicate_levels = Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
         for item in list {
-            let box (item, _) = self.resolve_core(arena, *item)?;
-            let box (predicate, _) =
+            let deref!((item, _)) = self.resolve_core(arena, *item)?;
+            let deref!((predicate, _)) =
                 self.resolve_scalar_function_call(span, "eq", vec![], vec![
                     expr_scalar.clone(),
                     item,
@@ -259,7 +259,7 @@ where A: super::TypeCheckAdapter
             }
 
             if let Some(left) = predicate_levels[level].take() {
-                let box (or_predicate, _) =
+                let deref!((or_predicate, _)) =
                     self.resolve_scalar_function_call(span, "or", vec![], vec![left, predicate])?;
                 predicate = or_predicate;
                 level += 1;
@@ -281,7 +281,7 @@ where A: super::TypeCheckAdapter
             result = Some(match result {
                 None => predicate,
                 Some(acc) => {
-                    let box (or_predicate, _) =
+                    let deref!((or_predicate, _)) =
                         self.resolve_scalar_function_call(span, "or", vec![], vec![
                             acc, predicate,
                         ])?;

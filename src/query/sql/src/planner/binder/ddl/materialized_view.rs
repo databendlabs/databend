@@ -169,10 +169,7 @@ impl Binder {
         bind_context: &mut BindContext,
         metadata: &MetadataRef,
     ) -> Result<()> {
-        if bind_context.planning_agg_index
-            || bind_context.planning_materialized_view_rewrite
-            || !self.ctx.get_can_scan_from_agg_index()
-            || !self.enable_materialized_view_rewrite
+        if bind_context.planning_materialized_view_rewrite || !self.enable_materialized_view_rewrite
         {
             return Ok(());
         }
@@ -180,10 +177,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let source_entries = metadata.read().tables().to_vec();
         for source_entry in source_entries {
-            if source_entry.is_source_of_view()
-                || source_entry.is_source_of_index()
-                || source_entry.is_source_of_stage()
-            {
+            if source_entry.is_source_of_view() || source_entry.is_source_of_stage() {
                 continue;
             }
             let source_table = source_entry.table();
@@ -909,9 +903,15 @@ impl Binder {
             catalog,
             database,
             view,
+            limit,
         } = stmt;
         let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
+        if *limit == Some(0) {
+            return Err(ErrorCode::SemanticError(
+                "REFRESH MATERIALIZED VIEW LIMIT must be greater than 0",
+            ));
+        }
 
         Ok(Plan::RefreshMaterializedView(Box::new(
             RefreshMaterializedViewPlan {
@@ -919,6 +919,7 @@ impl Binder {
                 catalog,
                 database,
                 view_name,
+                max_batch_size: *limit,
             },
         )))
     }

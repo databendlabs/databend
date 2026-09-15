@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[SINK-COMMIT]");
+
 use std::any::Any;
 use std::sync::Arc;
 
@@ -92,7 +94,19 @@ impl SnapshotGenerator for MutationGenerator {
                         &ctx.removed_segment_indexes,
                     )
                 {
-                    info!("resolvable conflicts detected");
+                    let snapshot_changed =
+                        self.base_snapshot.snapshot_id() != previous.snapshot_id();
+                    if snapshot_changed {
+                        info!(
+                            event = "commit.segments_validated",
+                            table_id = table_info.ident.table_id,
+                            operation = self.mutation_kind.to_string().to_ascii_lowercase().as_str(),
+                            snapshot_changed,
+                            removed_segment_count = removed.len(),
+                            replaced_segment_count = replaced.len();
+                            "Mutation segments validated against latest snapshot"
+                        );
+                    }
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
                         previous.segments().to_vec(),

@@ -150,7 +150,6 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         None,
         false,
         false,
-        false,
         None,
     );
 

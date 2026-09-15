@@ -57,35 +57,37 @@ impl Interpreter for DropWarehouseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        let tenant = self.ctx.get_tenant();
-        let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .drop_warehouse(self.plan.warehouse.clone())
-            .await?;
+            let tenant = self.ctx.get_tenant();
+            let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .drop_warehouse(self.plan.warehouse.clone())
+                .await?;
 
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "drop_warehouse", &self.plan))?
-        );
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "drop_warehouse", &self.plan))?
+            );
 
-        if let WarehouseInfo::SystemManaged(sw) = warehouse {
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Warehouse { id: sw.role_id },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
+            if let WarehouseInfo::SystemManaged(sw) = warehouse {
+                if let Some(current_role) = self.ctx.get_current_role() {
+                    let role_api = UserApiProvider::instance().role_api(&tenant);
+                    role_api
+                        .grant_ownership(
+                            &OwnershipObject::Warehouse { id: sw.role_id },
+                            &current_role.name,
+                        )
+                        .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
             }
-        }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

@@ -30,18 +30,13 @@ use databend_common_pipeline::sources::EmptySource;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_partitions_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_read_transform_pipeline;
 
-type FuseDataReaders = (
-    Arc<BlockReader>,
-    Arc<Option<AggIndexReader>>,
-    Arc<Option<VirtualColumnReader>>,
-);
+type FuseDataReaders = (Arc<BlockReader>, Arc<Option<VirtualColumnReader>>);
 
 impl FuseTable {
     pub fn create_block_reader(
@@ -91,21 +86,6 @@ impl FuseTable {
         put_cache: bool,
     ) -> Result<FuseDataReaders> {
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
-        let index_reader = Arc::new(
-            plan.push_downs
-                .as_ref()
-                .and_then(|p| p.agg_index.as_ref())
-                .map(|agg| {
-                    AggIndexReader::try_create(
-                        ctx.clone(),
-                        self.operator.clone(),
-                        agg,
-                        self.table_compression,
-                        put_cache,
-                    )
-                })
-                .transpose()?,
-        );
         let virtual_reader = Arc::new(
             PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
                 .as_ref()
@@ -122,7 +102,7 @@ impl FuseTable {
                 .transpose()?,
         );
 
-        Ok((block_reader, index_reader, virtual_reader))
+        Ok((block_reader, virtual_reader))
     }
 
     /// Build a source that only emits the block partitions produced by the pruning pipeline.
@@ -157,7 +137,7 @@ impl FuseTable {
         put_cache: bool,
     ) -> Result<()> {
         self.check_format_supported()?;
-        let (block_reader, index_reader, virtual_reader) =
+        let (block_reader, virtual_reader) =
             self.build_data_readers(ctx.clone(), plan, put_cache)?;
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = self.adjust_io_request(&ctx)?;
@@ -170,8 +150,8 @@ impl FuseTable {
             block_reader,
             max_threads,
             max_io_requests,
+            max_io_requests,
             plan,
-            index_reader,
             virtual_reader,
             true,
         )
@@ -198,7 +178,7 @@ impl FuseTable {
             }
         }
 
-        let (block_reader, index_reader, virtual_reader) =
+        let (block_reader, virtual_reader) =
             self.build_data_readers(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
@@ -268,7 +248,6 @@ impl FuseTable {
             max_threads,
             plan,
             max_io_requests,
-            index_reader,
             virtual_reader,
             rx,
         )?;

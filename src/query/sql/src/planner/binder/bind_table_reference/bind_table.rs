@@ -226,7 +226,6 @@ impl Binder {
                         branch_name,
                         table_name_alias,
                         !bind_context.binding_views.is_empty(),
-                        bind_context.planning_agg_index,
                         false,
                         cte_suffix_name,
                     );
@@ -321,7 +320,6 @@ impl Binder {
                         table_name_alias.clone(),
                         false,
                         false,
-                        false,
                         None,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -378,7 +376,6 @@ impl Binder {
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
-                    bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
                 );

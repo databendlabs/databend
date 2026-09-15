@@ -29,6 +29,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -349,12 +350,18 @@ impl Operator for Aggregate {
             output_columns.insert(agg.index);
         }
 
-        // Derive outer columns
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        // GROUPING SETS rewrites use local producer symbols that are not necessarily
+        // exposed by the child property. Treating those symbols as outer references
+        // makes unrelated full outer joins fail during decorrelation.
+        let outer_columns = if self.grouping_sets.is_some() {
+            input_prop
+                .outer_columns
+                .difference(&output_columns)
+                .cloned()
+                .collect()
+        } else {
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns)
+        };
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -369,11 +376,11 @@ impl Operator for Aggregate {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         if self.mode == AggregateMode::Final {
-            return rel_expr.derive_cardinality_child(0);
+            return rel_expr.derive_cardinality_child(0, stat_ctx);
         }
-        let stat_info = rel_expr.derive_cardinality_child(0)?;
+        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         self.derive_agg_stats(stat_info)
     }
 

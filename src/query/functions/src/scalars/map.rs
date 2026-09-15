@@ -304,7 +304,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
-                                    DataType::Map(box typ) => typ,
+                                    DataType::Map(deref!(typ)) => typ,
                                     _ => unreachable!(),
                                 };
 
@@ -359,7 +359,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = map_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
@@ -398,7 +398,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = map_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
@@ -499,7 +499,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
-                                    DataType::Map(box typ) => typ,
+                                    DataType::Map(deref!(typ)) => typ,
                                     _ => unreachable!(),
                                 };
 
@@ -546,7 +546,7 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
     }
 
     let map_key_type = match args_type[0].remove_nullable() {
-        DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
+        DataType::Map(deref!(DataType::Tuple(type_tuple))) if type_tuple.len() == 2 => {
             Some(type_tuple[0].clone())
         }
         DataType::EmptyMap => None,
@@ -555,7 +555,7 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
 
     // the second argument can be an array of keys.
     let (is_array, array_key_type) = match args_type[1].remove_nullable() {
-        DataType::Array(box key_type) => (true, Some(key_type.remove_nullable())),
+        DataType::Array(deref!(key_type)) => (true, Some(key_type.remove_nullable())),
         DataType::EmptyArray => (true, None),
         _ => (false, None),
     };

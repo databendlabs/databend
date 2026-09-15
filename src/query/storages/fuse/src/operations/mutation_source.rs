@@ -231,7 +231,8 @@ impl FuseTable {
         if !block_metas.is_empty() {
             if let Some(range_index) = pruner.get_inverse_range_index() {
                 for (block_meta_idx, block_meta) in &block_metas {
-                    let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
+                    let range_input =
+                        RangeIndexInput::from_block_meta(block_meta.as_ref(), None, None);
                     if !range_index.should_keep(&range_input, None) {
                         // this block should be deleted completely
                         whole_block_deletions

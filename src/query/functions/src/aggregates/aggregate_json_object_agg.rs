@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrStateRegistry;
@@ -38,7 +39,6 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::*;
-use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
@@ -174,7 +174,7 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let tz = TimeZone::UTC;
+        let tz = Tz::UTC;
         let mut values = Vec::with_capacity(self.kvs.len());
         let kvs = mem::take(&mut self.kvs);
         let data_type = builder.data_type();
@@ -394,7 +394,7 @@ where
         columns: ProjectedBlock,
     ) -> Result<(StringColumn, V::Column, Option<Bitmap>)> {
         let (key_column, key_validity) = match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
+            Column::Nullable(deref!(nullable_column)) => {
                 let column = StringType::try_downcast_column(&nullable_column.column).unwrap();
                 (column, Some(nullable_column.validity.clone()))
             }
@@ -404,7 +404,7 @@ where
             }
         };
         let (val_column, val_validity) = match &columns[1].to_column() {
-            Column::Nullable(box nullable_column) => {
+            Column::Nullable(deref!(nullable_column)) => {
                 let column = V::try_downcast_column(&nullable_column.column).unwrap();
                 (column, Some(nullable_column.validity.clone()))
             }

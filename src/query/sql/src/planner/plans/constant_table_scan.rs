@@ -39,6 +39,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -161,7 +162,7 @@ impl Operator for ConstantTableScan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
             let (is_all_null, bitmap) = value.validity();

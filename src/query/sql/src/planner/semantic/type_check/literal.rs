@@ -91,7 +91,7 @@ where A: super::TypeCheckAdapter
         let mut data_type_set = HashSet::with_capacity(2);
 
         for expr in exprs {
-            let box (arg, data_type) = self.resolve_core(arena, *expr)?;
+            let deref!((arg, data_type)) = self.resolve_core(arena, *expr)?;
             if let Some(values) = constant_values.as_mut() {
                 let maybe_constant = match &arg {
                     ScalarExpr::ConstantExpr(constant) => Some(constant.value.clone()),
@@ -173,14 +173,14 @@ where A: super::TypeCheckAdapter
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
-            let box (key_arg, _data_type) = self.resolve_literal(span, key_expr)?;
+            let deref!((key_arg, _data_type)) = self.resolve_literal(span, key_expr)?;
             keys.push(key_arg);
-            let box (val_arg, _data_type) = self.resolve_core(arena, *val_expr)?;
+            let deref!((val_arg, _data_type)) = self.resolve_core(arena, *val_expr)?;
             vals.push(val_arg);
         }
-        let box (key_arg, _data_type) =
+        let deref!((key_arg, _data_type)) =
             self.resolve_scalar_function_call(span, "array", vec![], keys)?;
-        let box (val_arg, _data_type) =
+        let deref!((val_arg, _data_type)) =
             self.resolve_scalar_function_call(span, "array", vec![], vals)?;
         self.resolve_scalar_function_call(span, "map", vec![], vec![key_arg, val_arg])
     }
@@ -193,7 +193,7 @@ where A: super::TypeCheckAdapter
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve_core(arena, *expr)?;
+            let deref!((arg, _data_type)) = self.resolve_core(arena, *expr)?;
             args.push(arg);
         }
         self.resolve_scalar_function_call(span, "tuple", vec![], args)

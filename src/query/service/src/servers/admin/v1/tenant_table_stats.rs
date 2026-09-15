@@ -88,13 +88,17 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
             }
         };
         for table in tables {
-            // local tables are not included in the stats
-            if matches!(table.distribution_level(), DistributionLevel::Local) {
+            let table_info = table.get_table_info();
+            // Shared tables are excluded from consumer aggregates regardless of
+            // execution distribution. Local tables are also excluded.
+            if table_info.is_shared()
+                || matches!(table.distribution_level(), DistributionLevel::Local)
+            {
                 continue;
             }
             let engine = table.engine().to_string();
-            let stats = &table.get_table_info().meta.statistics;
-            let is_external = table.get_table_info().meta.storage_params.is_some();
+            let stats = &table_info.meta.statistics;
+            let is_external = table_info.meta.storage_params.is_some();
             if is_external {
                 external_stats.entry(engine).or_default().merge(stats);
             } else {

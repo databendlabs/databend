@@ -163,7 +163,7 @@ mod range_index_apply {
         let blocks = block_stats(&schema);
         let kept = blocks
             .iter()
-            .filter(|stats| index.apply(stats, None, |_| false).unwrap())
+            .filter(|stats| index.apply(stats, None, None, |_| false).unwrap())
             .count();
         assert_eq!(kept, MATCHING_BLOCKS);
         (index, blocks)
@@ -178,7 +178,7 @@ mod range_index_apply {
             let mut kept = 0usize;
             for stats in &blocks {
                 if index
-                    .apply(divan::black_box(stats), None, |_| false)
+                    .apply(divan::black_box(stats), None, None, |_| false)
                     .unwrap()
                 {
                     kept += 1;
@@ -195,10 +195,10 @@ mod range_index_apply {
     fn single_block_short_circuit(bencher: divan::Bencher, in_len: usize) {
         let (index, blocks) = build_index(in_len);
         let stats = blocks.last().unwrap();
-        assert!(!index.apply(stats, None, |_| false).unwrap());
+        assert!(!index.apply(stats, None, None, |_| false).unwrap());
         bencher.bench(|| {
             index
-                .apply(divan::black_box(stats), None, |_| false)
+                .apply(divan::black_box(stats), None, None, |_| false)
                 .unwrap()
         });
     }
@@ -209,10 +209,10 @@ mod range_index_apply {
     fn single_block_kept(bencher: divan::Bencher, in_len: usize) {
         let (index, blocks) = build_index(in_len);
         let stats = blocks.first().unwrap();
-        assert!(index.apply(stats, None, |_| false).unwrap());
+        assert!(index.apply(stats, None, None, |_| false).unwrap());
         bencher.bench(|| {
             index
-                .apply(divan::black_box(stats), None, |_| false)
+                .apply(divan::black_box(stats), None, None, |_| false)
                 .unwrap()
         });
     }

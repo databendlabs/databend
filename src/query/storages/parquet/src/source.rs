@@ -443,18 +443,27 @@ impl ParquetSource {
                 .await?;
 
         let from_stage_table = matches!(self.source_type, ParquetSourceType::StageTable);
+        let expected_schema = self.row_group_reader.schema_desc();
+        let file_schema = meta.file_metadata().schema_descr();
         if from_stage_table {
+            let schema_from = self.row_group_reader.schema_desc_from().ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Parquet StageTable reader is missing the source of its inferred schema",
+                )
+            })?;
             check_parquet_schema(
-                self.row_group_reader.schema_desc(),
-                meta.file_metadata().schema_descr(),
-                "first_file",
+                expected_schema,
+                file_schema,
                 part.file.as_str(),
+                schema_from,
+                self.row_group_reader.schema_desc_from_arrow_fallback(),
             )?;
         }
         // The schema of the table in iceberg may be inconsistent with the schema in parquet
-        let reader = if self.row_group_reader.schema_desc().root_schema()
-            != meta.file_metadata().schema_descr().root_schema()
-        {
+        // Stage schema mismatches returned above, so only non-stage readers may need rebuilding.
+        let schema_differs =
+            !from_stage_table && expected_schema.root_schema() != file_schema.root_schema();
+        let reader = if schema_differs {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);

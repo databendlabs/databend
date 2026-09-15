@@ -45,7 +45,7 @@ impl PullUpFilterOptimizer {
         PullUpFilterOptimizer {
             opt_ctx,
             predicates: vec![],
-            metadata: metadata.clone(),
+            metadata,
         }
     }
 

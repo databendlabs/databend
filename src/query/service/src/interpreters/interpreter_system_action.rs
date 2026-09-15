@@ -67,38 +67,40 @@ impl Interpreter for SystemActionInterpreter {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if self.proxy_to_warehouse {
-            let warehouse = self.ctx.get_warehouse_cluster().await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if self.proxy_to_warehouse {
+                let warehouse = self.ctx.get_warehouse_cluster().await?;
 
-            let mut message = HashMap::with_capacity(warehouse.nodes.len());
-            for node_info in &warehouse.nodes {
-                if node_info.id != warehouse.local_id {
-                    message.insert(node_info.id.clone(), self.plan.clone());
+                let mut message = HashMap::with_capacity(warehouse.nodes.len());
+                for node_info in &warehouse.nodes {
+                    if node_info.id != warehouse.local_id {
+                        message.insert(node_info.id.clone(), self.plan.clone());
+                    }
+                }
+
+                let settings = self.ctx.get_settings();
+                let flight_params = FlightParams {
+                    timeout: settings.get_flight_client_timeout()?,
+                    retry_times: settings.get_flight_max_retry_times()?,
+                    retry_interval: settings.get_flight_retry_interval()?,
+                    keep_alive: settings.get_flight_keep_alive_params()?,
+                };
+                warehouse
+                    .do_action::<_, ()>(SYSTEM_ACTION, message, flight_params)
+                    .await?;
+            }
+
+            match self.plan.action {
+                SystemAction::Backtrace(switch) => {
+                    set_backtrace(switch);
+                }
+                SystemAction::FlushPrivileges => {
+                    let tenant = self.ctx.get_tenant();
+                    RoleCacheManager::instance().force_reload(&tenant).await?;
                 }
             }
-
-            let settings = self.ctx.get_settings();
-            let flight_params = FlightParams {
-                timeout: settings.get_flight_client_timeout()?,
-                retry_times: settings.get_flight_max_retry_times()?,
-                retry_interval: settings.get_flight_retry_interval()?,
-                keep_alive: settings.get_flight_keep_alive_params()?,
-            };
-            warehouse
-                .do_action::<_, ()>(SYSTEM_ACTION, message, flight_params)
-                .await?;
-        }
-
-        match self.plan.action {
-            SystemAction::Backtrace(switch) => {
-                set_backtrace(switch);
-            }
-            SystemAction::FlushPrivileges => {
-                let tenant = self.ctx.get_tenant();
-                RoleCacheManager::instance().force_reload(&tenant).await?;
-            }
-        }
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

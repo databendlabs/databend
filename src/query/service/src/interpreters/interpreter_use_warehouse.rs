@@ -49,21 +49,23 @@ impl Interpreter for UseWarehouseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        // check warehouse exists
-        let _nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .inspect_warehouse(self.plan.warehouse.clone())
-            .await?;
+            // check warehouse exists
+            let _nodes = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .inspect_warehouse(self.plan.warehouse.clone())
+                .await?;
 
-        unsafe {
-            self.ctx
-                .get_session_settings()
-                .set_warehouse(self.plan.warehouse.clone())?;
-        }
+            unsafe {
+                self.ctx
+                    .get_session_settings()
+                    .set_warehouse(self.plan.warehouse.clone())?;
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

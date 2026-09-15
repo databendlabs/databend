@@ -33,8 +33,6 @@ use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateIndexReply;
-use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
@@ -47,7 +45,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -57,8 +54,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetIndexReply;
-use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -91,8 +86,6 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateIndexReply;
-use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -221,22 +214,6 @@ impl Catalog for PaimonCatalog {
 
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         self.paimon_catalog.undrop_database(req).await
-    }
-
-    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
-        self.paimon_catalog.create_index(req).await
-    }
-
-    async fn drop_index(&self, req: DropIndexReq) -> Result<()> {
-        self.paimon_catalog.drop_index(req).await
-    }
-
-    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
-        self.paimon_catalog.get_index(req).await
-    }
-
-    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        self.paimon_catalog.update_index(req).await
     }
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {

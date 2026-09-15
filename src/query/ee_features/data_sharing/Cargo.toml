@@ -1,0 +1,19 @@
+[package]
+name = "databend-enterprise-data-sharing"
+description = "data sharing feature interface"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-meta-client = { workspace = true }
+
+[lints]
+workspace = true

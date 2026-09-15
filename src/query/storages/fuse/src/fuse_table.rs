@@ -67,6 +67,8 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
@@ -126,11 +128,12 @@ use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
-use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
 
+use crate::DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use crate::DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -142,9 +145,10 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
-use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -153,6 +157,7 @@ use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
@@ -187,6 +192,14 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
+    fn check_data_sharing_license(&self, ctx: &dyn TableContext) -> Result<()> {
+        if self.table_info.is_shared() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
+        }
+        Ok(())
+    }
+
     pub fn create_and_refresh_table_info(
         table_info: TableInfo,
         s3storage_class: S3StorageClass,
@@ -207,8 +220,13 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
+        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
+            return Err(ErrorCode::Internal(
+                "Shared table requires resolved provider storage parameters",
+            ));
+        }
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
+            DatabaseType::NormalDB | DatabaseType::SharedDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
@@ -446,6 +464,19 @@ impl FuseTable {
 
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
+    }
+
+    pub fn virtual_column_layout_policy(&self) -> VirtualColumnLayoutPolicy {
+        VirtualColumnLayoutPolicy {
+            max_direct_columns: self.get_option(
+                FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS,
+                DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS,
+            ),
+            max_path_statistics: self.get_option(
+                FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS,
+                DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS,
+            ),
+        }
     }
 
     pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
@@ -1034,7 +1065,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        true
+        !self.table_info.is_shared()
     }
 
     fn support_column_projection(&self) -> bool {
@@ -1091,6 +1122,7 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
@@ -1104,6 +1136,7 @@ impl Table for FuseTable {
         dry_run: bool,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
         self.do_read_partitions_with_reusable_pruned_metas(
             ctx,
@@ -1122,6 +1155,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
@@ -1143,6 +1177,7 @@ impl Table for FuseTable {
         source_pipeline: &mut Pipeline,
         plan_id: u32,
     ) -> Result<Option<Pipeline>> {
+        self.check_data_sharing_license(table_ctx.as_ref())?;
         self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, plan_id)
     }
 
@@ -1173,29 +1208,6 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
-    }
-
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => {
-                table
-                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
-                    .await
-            }
-            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
-                warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
-            }
-            Err(e) => Err(e),
-        }
     }
 
     async fn table_statistics(
@@ -1295,13 +1307,7 @@ impl Table for FuseTable {
                 .unwrap_or_default();
             let aligned_table_statistics = table_statistics
                 .as_ref()
-                .filter(|v| v.row_count == snapshot.summary.row_count)
-                .filter(|v| {
-                    snapshot
-                        .prev_snapshot_id
-                        .as_ref()
-                        .is_none_or(|(snapshot_id, _)| *snapshot_id == v.snapshot_id)
-                });
+                .filter(|stats| stats.is_fresh_for(&snapshot));
             let top_n = aligned_table_statistics
                 .map(|v| v.top_n.clone())
                 .unwrap_or_default();
@@ -1545,27 +1551,30 @@ impl Table for FuseTable {
     }
 
     fn result_can_be_cached(&self) -> bool {
-        true
+        !self.table_info.is_shared()
+    }
+
+    fn plan_can_be_cached(&self) -> bool {
+        // A new statement or transaction must resolve the share again, even
+        // when the provider's snapshot has not changed.
+        !self.table_info.is_shared()
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly() || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+        self.table_info.is_shared()
+            || self.table_type.is_readonly()
+            || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
     }
 
     fn use_own_sample_block(&self) -> bool {
         true
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        index_id: u64,
-    ) -> Result<u64> {
-        let prefix = format!(
-            "{}/{}",
-            self.meta_location_generator.agg_index_location_prefix(),
-            index_id
-        );
+    async fn remove_aggregating_index_files(&self, ctx: Arc<dyn TableContext>) -> Result<u64> {
+        let prefix = self
+            .meta_location_generator
+            .agg_index_location_prefix()
+            .to_string();
         let op = &self.operator;
         info!("remove_aggregating_index_files: {}", prefix);
         let mut lister = op.lister_with(&prefix).recursive(true).await?;

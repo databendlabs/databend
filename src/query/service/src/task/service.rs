@@ -329,7 +329,13 @@ impl TaskService {
                                 let tz = schedule_options
                                     .time_zone
                                     .as_ref()
-                                    .map(|tz| tz.parse::<Tz>())
+                                    .map(|tz| {
+                                        tz.parse::<Tz>().map_err(|error| {
+                                            ErrorCode::InvalidTimezone(format!(
+                                                "Invalid task timezone {tz}: {error}"
+                                            ))
+                                        })
+                                    })
                                     .transpose()?
                                     .unwrap_or(Tz::UCT);
                                 let schedule = Schedule::from_str(cron_expr).unwrap();
@@ -745,7 +751,7 @@ impl TaskService {
         };
 
         let session = create_session(user, role).await?;
-        session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO)
+        session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO, None)
     }
 
     async fn create_task_context(&self, user: UserInfo, task: &Task) -> Result<Arc<QueryContext>> {

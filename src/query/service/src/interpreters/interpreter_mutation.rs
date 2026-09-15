@@ -110,45 +110,47 @@ impl Interpreter for MutationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            self.ctx.attach_query_lineage(None);
-            return Ok(PipelineBuildResult::create());
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
 
-        let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
+            let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
 
-        // Build physical plan.
-        let physical_plan = self.build_physical_plan(&mutation, false).await?;
+            // Build physical plan.
+            let physical_plan = self.build_physical_plan(&mutation, false).await?;
 
-        let query_plan = {
-            let metadata = self.metadata.read();
-            physical_plan
-                .format(&metadata, Default::default())?
-                .format_pretty()?
-        };
+            let query_plan = {
+                let metadata = self.metadata.read();
+                physical_plan
+                    .format(&metadata, Default::default())?
+                    .format_pretty()?
+            };
 
-        info!("Query physical plan: \n{}", query_plan);
+            info!("Query physical plan: \n{}", query_plan);
 
-        // Build pipeline.
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        if mutation.no_effect {
-            build_res
-                .main_pipeline
-                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
-        }
+            // Build pipeline.
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+            if mutation.no_effect {
+                build_res
+                    .main_pipeline
+                    .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+            }
 
-        // Execute hook.
-        self.execute_hook(&mutation, &mut build_res).await;
+            // Execute hook.
+            self.execute_hook(&mutation, &mut build_res).await;
 
-        let lock_guard = mutation
-            .lock_guard
-            .as_ref()
-            .and_then(|holder| holder.try_take());
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+            let lock_guard = mutation
+                .lock_guard
+                .as_ref()
+                .and_then(|holder| holder.try_take());
+            build_res.main_pipeline.add_lock_guard(lock_guard);
 
-        Ok(build_res)
+            Ok(build_res)
+        })
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {

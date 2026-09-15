@@ -1,0 +1,288 @@
+=== inner ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l INNER JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : INNER cardinality=100.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+
+=== inner ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l INNER JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : INNER cardinality=100.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
+
+=== left_semi ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT SEMI cardinality=10.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=6.513 (upper=10.000), null=0.000, histogram=rows=10.000, ndv=6.513, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+
+=== left_semi ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT SEMI cardinality=10.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : l.k2 (#1) min=1, max=10, ndv=6.513 (upper=10.000), null=0.000, histogram=rows=10.000, ndv=6.513, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+
+=== right_semi ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT SEMI cardinality=10.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=6.513 (upper=10.000), null=0.000, histogram=rows=10.000, ndv=6.513, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+
+=== right_semi ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT SEMI cardinality=10.000
+stat          : l.k1 (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=6.513 (upper=10.000), null=0.000, histogram=rows=10.000, ndv=6.513, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+stat          : r.k2 (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=10.000, ndv=10.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000, 4..4:1.000/1.000, 5..5:1.000/1.000, 6..6:1.000/1.000, 7..7:1.000/1.000, 8..8:1.000/1.000, 9..9:1.000/1.000, 10..10:1.000/1.000]
+
+=== left_anti ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l LEFT ANTI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT ANTI cardinality=90.000
+stat          : l.k1 (#0) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+
+=== left_anti ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l LEFT ANTI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT ANTI cardinality=90.000
+stat          : l.k1 (#0) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+
+=== right_anti ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l RIGHT ANTI JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT ANTI cardinality=90.000
+stat          : l.k1 (#0) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+
+=== right_anti ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l RIGHT ANTI JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT ANTI cardinality=90.000
+stat          : l.k1 (#0) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=90.000, null=0.000, histogram=none
+
+=== left_outer ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l LEFT JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT OUTER cardinality=190.000
+stat          : l.k1 (#0) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=6.513 (upper=10.000), null=90.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=10.000, null=90.000, histogram=none
+stat          : k1 (#4) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k2 (#5) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+
+=== left_outer ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l LEFT JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT OUTER cardinality=190.000
+stat          : l.k1 (#0) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=6.513 (upper=10.000), null=90.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=10.000, null=90.000, histogram=none
+stat          : k1 (#4) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k2 (#5) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+
+=== right_outer ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l RIGHT JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT OUTER cardinality=190.000
+stat          : l.k1 (#0) min=1, max=100, ndv=10.000, null=90.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=6.513 (upper=10.000), null=90.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : k1 (#4) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k2 (#5) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+
+=== right_outer ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l RIGHT JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : LEFT OUTER cardinality=190.000
+stat          : l.k1 (#0) min=1, max=100, ndv=10.000, null=90.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=6.513 (upper=10.000), null=90.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=100.000, null=0.000, histogram=none
+stat          : k1 (#4) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k2 (#5) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+
+=== full_outer ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l FULL JOIN r ON l.k1 = r.k1 AND l.k2 = r.k2
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : FULL OUTER cardinality=280.000
+stat          : l.k1 (#0) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+stat          : k1 (#4) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+stat          : k2 (#5) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k1 (#6) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k2 (#7) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+
+=== full_outer ===
+description: Equal pair estimates with opposite side coverage combine all conditions independently of ON order.
+sql           : SELECT * FROM l FULL JOIN r ON l.k2 = r.k2 AND l.k1 = r.k1
+left ddl      : CREATE TABLE l(k1 INT NOT NULL, k2 INT NOT NULL)
+left rows     : 100
+input stat    : left.k1 min=1, max=100, ndv=Some(100), null=0
+input stat    : left.k2 min=1, max=10, ndv=Some(10), null=0
+right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
+right rows     : 100
+input stat    : right.k1 min=1, max=10, ndv=Some(10), null=0
+input stat    : right.k2 min=1, max=100, ndv=Some(100), null=0
+join          : FULL OUTER cardinality=280.000
+stat          : l.k1 (#0) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+stat          : l.k2 (#1) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : r.k1 (#2) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : r.k2 (#3) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+stat          : k1 (#4) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+stat          : k2 (#5) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k1 (#6) min=1, max=10, ndv=10.000, null=90.000, histogram=none
+stat          : k2 (#7) min=1, max=100, ndv=100.000, null=90.000, histogram=none
+

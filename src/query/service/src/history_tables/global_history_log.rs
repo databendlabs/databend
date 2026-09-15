@@ -509,7 +509,7 @@ impl GlobalHistoryLog {
 
         let cluster_id = dummy_cluster.get_cluster_id()?;
         let session = create_session(&self.tenant_id, &cluster_id).await?;
-        session.create_query_context_with_cluster(dummy_cluster, self.version)
+        session.create_query_context_with_cluster(dummy_cluster, self.version, None)
     }
 }
 

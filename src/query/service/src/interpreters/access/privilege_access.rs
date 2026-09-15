@@ -72,7 +72,7 @@ use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
-use crate::share::ShareMgr;
+use crate::share::share_mgr;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -1561,6 +1561,19 @@ impl PrivilegeAccess {
 impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
+        if matches!(
+            plan,
+            Plan::CreateShare(_)
+                | Plan::DropShare(_)
+                | Plan::AlterShare(_)
+                | Plan::ShowShares(_)
+                | Plan::DescShare(_)
+                | Plan::GrantShare(_)
+                | Plan::RevokeShare(_)
+                | Plan::CreateDatabaseFromShare(_)
+        ) {
+            share_mgr(ctx)?;
+        }
         let user = self.ctx.get_current_user()?;
         if let Plan::AlterUser(plan) = plan {
             // Alter current user's password do not need to check privileges.
@@ -1744,8 +1757,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CreateShare(plan) => {
                 self.validate_share_management_access(None).await?;
-                let manager =
-                    ShareMgr::create(UserApiProvider::instance().get_meta_store_client());
+                let manager = share_mgr(ctx)?;
                 let is_no_op = plan.create_option.if_not_exist()
                     && manager.exists(&plan.tenant, &plan.name).await?;
                 if !is_no_op {
@@ -1763,8 +1775,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::AlterShare(plan) => {
                 self.validate_share_management_access(None).await?;
-                let manager =
-                    ShareMgr::create(UserApiProvider::instance().get_meta_store_client());
+                let manager = share_mgr(ctx)?;
                 let is_no_op =
                     plan.if_exists && !manager.exists(&plan.tenant, &plan.name).await?;
                 if !is_no_op {
@@ -1799,9 +1810,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_share_management_access(None).await?;
                 self.validate_share_object_access(&plan.object).await?;
                 if matches!(plan.object, ShareGrantObject::Table { .. }) {
-                    let manager = ShareMgr::create(
-                        UserApiProvider::instance().get_meta_store_client(),
-                    );
+                    let manager = share_mgr(ctx)?;
                     let connection = manager
                         .get_connection_name(&plan.tenant, &plan.share)
                         .await?;
@@ -2143,9 +2152,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::TruncateTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false, false).await?
             }
-            Plan::OptimizePurge(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
-            }
             Plan::OptimizeCompactSegment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
@@ -2156,8 +2162,22 @@ impl AccessChecker for PrivilegeAccess {
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            Plan::VacuumTables(plan) => {
+                if let Some(database) = &plan.database {
+                    self.validate_db_access(&plan.catalog, database, UserPrivilegeType::Super, false).await?
+                } else {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+                }
+            }
+            Plan::VacuumAll(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+            }
             Plan::VacuumDropTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
+                if plan.database.is_empty() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+                } else {
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
+                }
             }
             Plan::VacuumTemporaryFiles(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?

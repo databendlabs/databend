@@ -48,5 +48,6 @@ pub use stats::CountMinSketchSet;
 pub(crate) use stats::JoinStatsEstimator;
 pub use stats::MAX_SELECTIVITY;
 pub use stats::SelectivityEstimator;
+pub use stats::StatContext;
 pub use stats::TopNSet;
 pub(crate) use stats::cap_stat_info_by_rows;

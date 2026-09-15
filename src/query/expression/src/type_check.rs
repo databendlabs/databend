@@ -606,12 +606,12 @@ impl Substitution {
             DataType::Generic(idx) => self.0.get(idx).cloned().ok_or_else(|| {
                 ErrorCode::from_string_no_backtrace(format!("unbound generic type `T{idx}`"))
             }),
-            DataType::Nullable(box ty) => {
+            DataType::Nullable(deref!(ty)) => {
                 let inner_ty = self.apply(ty)?;
                 Ok(inner_ty.wrap_nullable())
             }
-            DataType::Array(box ty) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
-            DataType::Map(box ty) => {
+            DataType::Array(deref!(ty)) => Ok(DataType::Array(Box::new(self.apply(ty)?))),
+            DataType::Map(deref!(ty)) => {
                 let inner_ty = self.apply(ty)?;
                 Ok(DataType::Map(Box::new(inner_ty)))
             }
@@ -729,12 +729,14 @@ pub fn unify(
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
             unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
         }
-        (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
-            (DataType::Tuple(_), DataType::Tuple(_)) => {
-                unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+        (DataType::Map(deref!(src_ty)), DataType::Map(deref!(dest_ty))) => {
+            match (src_ty, dest_ty) {
+                (DataType::Tuple(_), DataType::Tuple(_)) => {
+                    unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+                }
+                (_, _) => unreachable!(),
             }
-            (_, _) => unreachable!(),
-        },
+        }
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
             if src_tys.len() == dest_tys.len() =>
         {
@@ -789,11 +791,11 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         {
             true
         }
-        (DataType::Nullable(box inner_src_ty), DataType::Nullable(box inner_dest_ty))
-        | (DataType::Nullable(box inner_src_ty), inner_dest_ty)
-        | (inner_src_ty, DataType::Nullable(box inner_dest_ty))
-        | (DataType::Array(box inner_src_ty), DataType::Array(box inner_dest_ty))
-        | (DataType::Map(box inner_src_ty), DataType::Map(box inner_dest_ty)) => {
+        (DataType::Nullable(deref!(inner_src_ty)), DataType::Nullable(deref!(inner_dest_ty)))
+        | (DataType::Nullable(deref!(inner_src_ty)), inner_dest_ty)
+        | (inner_src_ty, DataType::Nullable(deref!(inner_dest_ty)))
+        | (DataType::Array(deref!(inner_src_ty)), DataType::Array(deref!(inner_dest_ty)))
+        | (DataType::Map(deref!(inner_src_ty)), DataType::Map(deref!(inner_dest_ty))) => {
             can_cast_to(inner_src_ty, inner_dest_ty)
         }
         (DataType::AggregateState(state), dest_ty) => can_cast_to(state.physical_type(), dest_ty),
@@ -830,12 +832,14 @@ pub fn can_auto_cast_to(
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
             can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
         }
-        (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
-            (DataType::Tuple(_), DataType::Tuple(_)) => {
-                can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+        (DataType::Map(deref!(src_ty)), DataType::Map(deref!(dest_ty))) => {
+            match (src_ty, dest_ty) {
+                (DataType::Tuple(_), DataType::Tuple(_)) => {
+                    can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+                }
+                (_, _) => unreachable!(),
             }
-            (_, _) => unreachable!(),
-        },
+        }
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
             src_tys.len() == dest_tys.len()
                 && src_tys.iter().zip(dest_tys).all(|(src_ty, dest_ty)| {
@@ -875,19 +879,19 @@ pub fn common_super_type(
         (DataType::Null, ty @ DataType::Nullable(_))
         | (ty @ DataType::Nullable(_), DataType::Null) => Some(ty),
         (DataType::Null, ty) | (ty, DataType::Null) => Some(DataType::Nullable(Box::new(ty))),
-        (DataType::Nullable(box ty1), DataType::Nullable(box ty2))
-        | (DataType::Nullable(box ty1), ty2)
-        | (ty1, DataType::Nullable(box ty2)) => Some(DataType::Nullable(Box::new(
+        (DataType::Nullable(deref!(ty1)), DataType::Nullable(deref!(ty2)))
+        | (DataType::Nullable(deref!(ty1)), ty2)
+        | (ty1, DataType::Nullable(deref!(ty2))) => Some(DataType::Nullable(Box::new(
             common_super_type(ty1, ty2, auto_cast_rules)?,
         ))),
         (DataType::EmptyArray, ty @ DataType::Array(_))
         | (ty @ DataType::Array(_), DataType::EmptyArray) => Some(ty),
-        (DataType::Array(box ty1), DataType::Array(box ty2)) => Some(DataType::Array(Box::new(
-            common_super_type(ty1, ty2, auto_cast_rules)?,
-        ))),
+        (DataType::Array(deref!(ty1)), DataType::Array(deref!(ty2))) => Some(DataType::Array(
+            Box::new(common_super_type(ty1, ty2, auto_cast_rules)?),
+        )),
         (DataType::EmptyMap, ty @ DataType::Map(_))
         | (ty @ DataType::Map(_), DataType::EmptyMap) => Some(ty),
-        (DataType::Map(box ty1), DataType::Map(box ty2)) => Some(DataType::Map(Box::new(
+        (DataType::Map(deref!(ty1)), DataType::Map(deref!(ty2))) => Some(DataType::Map(Box::new(
             common_super_type(ty1, ty2, auto_cast_rules)?,
         ))),
         (DataType::Tuple(tys1), DataType::Tuple(tys2)) if tys1.len() == tys2.len() => {

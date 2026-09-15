@@ -43,3 +43,4 @@ pub use segment::ColumnOrientedSegment;
 pub use segment::deserialize_column_oriented_segment;
 pub use segment_builder::ColumnOrientedSegmentBuilder;
 pub use segment_builder::SegmentBuilder;
+pub use segment_builder::VirtualBlockInput;

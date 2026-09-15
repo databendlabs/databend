@@ -3,23 +3,23 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-## test vacuum drop table dry run output
-echo "drop database if exists test_vacuum_drop_dry_run" | bendsql_connect_root
-echo "CREATE DATABASE test_vacuum_drop_dry_run" | bendsql_connect_root
-echo "create table test_vacuum_drop_dry_run.a(c int)" | bendsql_connect_root
-echo "INSERT INTO test_vacuum_drop_dry_run.a VALUES (1)" | bendsql_connect_root_null
-echo "drop table test_vacuum_drop_dry_run.a" | bendsql_connect_root
-count=$(echo "set data_retention_time_in_days=0; vacuum drop table dry run" | bendsql_connect_root | wc -l)
-if [[ ! "$count" ]]; then
-  echo "vacuum drop table dry run, count:$count"
+## test vacuum drop table empty output
+
+echo "drop database if exists test_vacuum_drop_empty_output" | bendsql_connect_root
+echo "CREATE DATABASE test_vacuum_drop_empty_output" | bendsql_connect_root
+echo "create table test_vacuum_drop_empty_output.a(c int)" | bendsql_connect_root
+echo "INSERT INTO test_vacuum_drop_empty_output.a VALUES (1)" | bendsql_connect_root_null
+echo "drop table test_vacuum_drop_empty_output.a" | bendsql_connect_root
+output=$(echo "set data_retention_time_in_days=0; vacuum drop table from test_vacuum_drop_empty_output" | bendsql_connect_root)
+if [[ -n "$output" ]]; then
+  echo "vacuum drop table returned unexpected output: $output"
   exit 1
 fi
-count=$(echo "set data_retention_time_in_days=0; vacuum drop table dry run summary" | bendsql_connect_root | wc -l)
-if [[ ! "$count" ]]; then
-  echo "vacuum drop table dry run summary, count:$count"
+if echo "undrop table test_vacuum_drop_empty_output.a" | bendsql_connect_root > /dev/null 2>&1; then
+  echo "vacuumed table should not be recoverable"
   exit 1
 fi
-echo "drop database if exists test_vacuum_drop_dry_run" | bendsql_connect_root
+echo "drop database if exists test_vacuum_drop_empty_output" | bendsql_connect_root
 
 ## Setup
 echo "drop database if exists test_vacuum_drop" | bendsql_connect_root
@@ -97,15 +97,7 @@ echo "drop table table_drop_external_location;" | bendsql_connect_root
 
 echo "set data_retention_time_in_days=0;vacuum drop table" | bendsql_connect_root > /dev/null
 
-## dry run
 echo "CREATE DATABASE test_vacuum_drop_4" | bendsql_connect_root
-echo "create table test_vacuum_drop_4.a(c int)" | bendsql_connect_root
-echo "INSERT INTO test_vacuum_drop_4.a VALUES (1)" | bendsql_connect_root_null
-echo "select * from test_vacuum_drop_4.a"  | bendsql_connect_root
-echo "drop table test_vacuum_drop_4.a" | bendsql_connect_root
-echo "set data_retention_time_in_days=0;vacuum drop table dry run" | bendsql_connect_root > /dev/null
-echo "undrop table test_vacuum_drop_4.a" | bendsql_connect_root
-echo "select * from test_vacuum_drop_4.a"  | bendsql_connect_root
 
 # check vacuum drop table with the same name
 echo "create table test_vacuum_drop_4.b(c int)" | bendsql_connect_root
@@ -117,17 +109,17 @@ echo "select * from test_vacuum_drop_4.b"  | bendsql_connect_root
 echo "set data_retention_time_in_days=0; vacuum drop table" | bendsql_connect_root > /dev/null
 echo "select * from test_vacuum_drop_4.b"  | bendsql_connect_root
 
-## test vacuum table output
+## test vacuum table empty output
 echo "create table test_vacuum_drop_4.c(c int)" | bendsql_connect_root
 echo "INSERT INTO test_vacuum_drop_4.c VALUES (1),(2)" | bendsql_connect_root_null
-count=$(echo "set data_retention_time_in_days=0; vacuum table test_vacuum_drop_4.c" | bendsql_connect_root | awk '{print $9}')
-if [[ "$count" != "4" ]]; then
-  echo "vacuum table, count:$count"
+output=$(echo "set data_retention_time_in_days=0; vacuum table test_vacuum_drop_4.c" | bendsql_connect_root)
+if [[ -n "$output" ]]; then
+  echo "vacuum table returned unexpected output: $output"
   exit 1
 fi
-count=$(echo "set data_retention_time_in_days=0; vacuum table test_vacuum_drop_4.c dry run summary" | bendsql_connect_root | wc -l)
-if [[ "$count" != "1" ]]; then
-  echo "vacuum table dry run summary, count:$count"
+row_count=$(echo "select count(*) from test_vacuum_drop_4.c" | bendsql_connect_root)
+if [[ "$row_count" != "2" ]]; then
+  echo "vacuum table changed live rows, count:$row_count"
   exit 1
 fi
 

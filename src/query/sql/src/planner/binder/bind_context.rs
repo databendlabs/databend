@@ -178,11 +178,68 @@ impl NameResolutionCandidates {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug)]
 pub struct VirtualColumnName {
     pub table_index: IndexType,
     pub source_column_id: ColumnId,
     pub key_name: String,
+    /// The combination of `cast type` and `is try` originates from the `CAST(x AS T)`
+    /// and `TRY_CAST(x AS T)` functions, different types with the same `key_name`
+    /// will generate different virtual column binding.
+    pub target_cast: Option<(TableDataType, bool)>,
+    /// Cached sort key used by `Ord`/`Eq`, derived from `target_cast` once at construction.
+    sort_key: Option<Arc<str>>,
+}
+
+impl VirtualColumnName {
+    pub fn new(
+        table_index: IndexType,
+        source_column_id: ColumnId,
+        key_name: String,
+        target_cast: Option<(TableDataType, bool)>,
+    ) -> Self {
+        // Normalize: always store non-nullable target type so equivalent casts unify.
+        let target_cast = target_cast.map(|(ty, is_try)| (ty.remove_nullable(), is_try));
+        let sort_key = target_cast
+            .as_ref()
+            .map(|(ty, is_try)| Arc::<str>::from(format!("{}#{}", ty.wrapped_display(), *is_try)));
+        Self {
+            table_index,
+            source_column_id,
+            key_name,
+            target_cast,
+            sort_key,
+        }
+    }
+
+    fn cmp_key(&self) -> (IndexType, ColumnId, &str, Option<&str>) {
+        (
+            self.table_index,
+            self.source_column_id,
+            self.key_name.as_str(),
+            self.sort_key.as_deref(),
+        )
+    }
+}
+
+impl PartialEq for VirtualColumnName {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp_key() == other.cmp_key()
+    }
+}
+
+impl Eq for VirtualColumnName {}
+
+impl Ord for VirtualColumnName {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cmp_key().cmp(&other.cmp_key())
+    }
+}
+
+impl PartialOrd for VirtualColumnName {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -242,10 +299,6 @@ pub struct BindContext {
     pub allow_virtual_column: bool,
 
     pub expr_context: ExprContext,
-
-    /// If true, the query is planning for aggregate index.
-    /// It's used to avoid infinite loop.
-    pub planning_agg_index: bool,
 
     /// If true, the query is binding materialized-view rewrite candidates.
     /// It's used to avoid recursively discovering candidates for candidate plans.
@@ -334,7 +387,6 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            planning_agg_index: false,
             planning_materialized_view_rewrite: false,
             window_definitions: DashMap::new(),
         }
@@ -382,7 +434,6 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
-            planning_agg_index: false,
             planning_materialized_view_rewrite: parent.planning_materialized_view_rewrite,
             window_definitions: DashMap::new(),
         })
@@ -985,56 +1036,41 @@ impl BindContext {
         {
             btree_map::Entry::Vacant(e) => {
                 let mut metadata = metadata.write();
-                let table_entry = metadata.table(table_index);
-                let table = table_entry.table();
-                let table_info = table.get_table_info();
-
-                let virtual_schema = table_info.meta.virtual_schema.as_ref();
-                let column_id = virtual_schema
-                    .and_then(|virtual_schema| {
-                        virtual_schema
-                            .fields
-                            .iter()
-                            .find(|virtual_field| {
-                                virtual_field.source_column_id
-                                    == virtual_column_name.source_column_id
-                                    && virtual_field.name == virtual_column_name.key_name
-                            })
-                            .map(|virtual_field| virtual_field.column_id)
+                // Allocate a query-time temporary virtual column id. This is not
+                // a persisted segment-local column id: every segment resolves the
+                // canonical path to its own physical column id during pruning/read.
+                let column_id = metadata
+                    .virtual_columns_by_table_index(table_index)
+                    .filter_map(|column| match column {
+                        ColumnEntry::VirtualColumn(VirtualColumn {
+                            query_column_id, ..
+                        }) => Some(*query_column_id),
+                        _ => None,
                     })
-                    .unwrap_or_else(|| {
-                        // If the column_id does not exist, generate a temporary column_id.
-                        // This may occur in the following scenarios:
-                        // 1. The path is not an independent virtual column but is stored within shared data column.
-                        // 2. The path is an object composed of multiple virtual columns.
-                        // 3. The path is extracted from columns within a virtual column itself.
-                        // 4. The table option enables virtual columns, but no data has been written
-                        //    yet, so TableMeta.virtual_schema is still empty.
-                        let next_virtual_column_id = virtual_schema
-                            .map(|virtual_schema| virtual_schema.next_column_id)
-                            .unwrap_or(VIRTUAL_COLUMN_ID_START);
-                        let max_column_id = metadata
-                            .virtual_columns_by_table_index(table_index)
-                            .filter_map(|column| match column {
-                                ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) => {
-                                    Some(*column_id)
-                                }
-                                _ => None,
-                            })
-                            .max()
-                            .unwrap_or_else(|| next_virtual_column_id.saturating_sub(1));
-                        if max_column_id >= next_virtual_column_id {
-                            max_column_id + 1
-                        } else {
-                            next_virtual_column_id
-                        }
+                    .max()
+                    .map_or(VIRTUAL_COLUMN_ID_START, |column_id| {
+                        column_id.saturating_add(1)
                     });
 
                 let source_column_id = virtual_column_name.source_column_id;
-                let column_name = virtual_column_name.key_name.clone();
-                // todo
-                let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-                let is_try = true;
+
+                // If a target type is provided, the virtual column is cast to that type at the storage layer.
+                // `target_cast.ty` is non-nullable, wrap it in Nullable here because variant cast to
+                // other types are always Nullable.
+                let (table_data_type, is_try) = match virtual_column_name.target_cast.clone() {
+                    Some((ty, cast_is_try)) => (TableDataType::Nullable(Box::new(ty)), cast_is_try),
+                    None => (
+                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        true,
+                    ),
+                };
+                // Column display name must be unique per `(path, cast)` so that
+                // `TableScan.name_mapping` (keyed by column name) does not collapse
+                // `data['user']::String` and `data['user']` into a single field.
+                let column_name = format_virtual_column_name(
+                    &virtual_column_name.key_name,
+                    virtual_column_name.target_cast.as_ref(),
+                );
 
                 let column_index = metadata.add_virtual_column(
                     table_index,
@@ -1136,4 +1172,30 @@ pub fn apply_alias_for_columns(
         columns[index].column_name = column_name;
     }
     Ok(())
+}
+
+/// Build a unique display name for a virtual column, encoding the optional pushdown cast so
+/// that different cast targets on the same path never share a schema field name.
+///
+/// Examples:
+/// - no cast: `data['user']`
+/// - strict cast: `data['user']::String`
+/// - try cast: `try_cast(data['user'] AS Int32)`
+fn format_virtual_column_name(
+    key_name: &str,
+    target_cast: Option<&(TableDataType, bool)>,
+) -> String {
+    match target_cast {
+        None => key_name.to_string(),
+        Some((ty, is_try)) => {
+            let target_type = ty.remove_nullable();
+            if matches!(target_type, TableDataType::Variant) {
+                key_name.to_string()
+            } else if *is_try {
+                format!("try_cast({} AS {})", key_name, target_type)
+            } else {
+                format!("{}::{}", key_name, target_type)
+            }
+        }
+    }
 }

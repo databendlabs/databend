@@ -22,6 +22,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::RelOperator;
@@ -155,7 +156,7 @@ pub(super) fn collect_join_cardinalities(
             join.join_type, expected_join_type,
             "unexpected join type for {case_name}"
         );
-        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality()?;
+        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
         writeln!(
             file,
             "join          : {:<11} cardinality={:.3}",

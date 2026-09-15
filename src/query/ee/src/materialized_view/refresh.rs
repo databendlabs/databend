@@ -62,6 +62,7 @@ use databend_query::interpreters::QueryFinishHooks;
 use databend_query::interpreters::execute_commit_statement;
 use databend_query::schedulers::ServiceQueryExecutor;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -102,6 +103,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         catalog: &str,
         database: &str,
         view_name: &str,
+        max_batch_size: Option<u64>,
     ) -> Result<Option<Self>> {
         let mv_meta = &mv_table.get_table_info().meta;
         let source_table_id = mv_meta
@@ -172,8 +174,8 @@ impl<'a> MaterializedViewRefresh<'a> {
                 database, view_name, source_table_id
             )));
         }
-        let source_seq = source_meta.seq;
-        let source_snapshot_location = source_meta
+        let mut source_seq = source_meta.seq;
+        let mut source_snapshot_location = source_meta
             .data
             .options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -249,10 +251,30 @@ impl<'a> MaterializedViewRefresh<'a> {
             DatabaseType::NormalDB,
         );
         let source_table = catalog_obj.get_table_by_info(&source_table_info)?;
-        let source_table = FuseTable::try_from_table(source_table.as_ref())?;
+        let mut source_table = FuseTable::try_from_table(source_table.as_ref())?.clone();
         if let Some((mv_source_seq, Some(_))) = &checkpoint {
             source_table
                 .check_changes_valid(&source_table.get_table_info().desc, *mv_source_seq)?;
+        }
+
+        if let Some(batch_limit) = max_batch_size {
+            if let Some((batch_table, batch_seq)) = source_table
+                .find_stream_batch_snapshot(
+                    checkpoint
+                        .as_ref()
+                        .and_then(|(_, location)| location.as_ref()),
+                    &StreamMode::Standard,
+                    batch_limit,
+                    ctx.get_settings()
+                        .get_enable_stream_batch_snapshot_forward_scan()?,
+                    ctx.get_settings().get_s3_storage_class()?,
+                )
+                .await?
+            {
+                source_seq = batch_seq;
+                source_snapshot_location = batch_table.snapshot_loc();
+                source_table = batch_table.as_ref().clone();
+            }
         }
 
         Ok(Some(Self {
@@ -261,7 +283,7 @@ impl<'a> MaterializedViewRefresh<'a> {
             catalog: catalog.to_string(),
             database: database.to_string(),
             view_name: view_name.to_string(),
-            source_table: source_table.clone(),
+            source_table,
             physical_query: definition.data.query.clone(),
             source_database,
             source_table_name,
@@ -601,11 +623,21 @@ impl<'a> MaterializedViewRefresh<'a> {
             return Ok(RefreshStrategy::CheckpointOnly);
         }
 
-        let (checkpoint_seq, start_snapshot) = match checkpoint.clone() {
-            Some((checkpoint_seq, Some(start_snapshot))) => (checkpoint_seq, Some(start_snapshot)),
-            None | Some((_, None)) => (0, None),
+        // 3. With no previous data endpoint, scan the captured source snapshot directly. A changes
+        // scan would eagerly expand every block on the coordinator; a normal scan can distribute
+        // lazy segment partitions. Keep the captured table attached so later source commits cannot
+        // move the scan past the checkpoint we will persist.
+        let Some((checkpoint_seq, Some(start_snapshot))) = checkpoint else {
+            self.attach_source(
+                &self.catalog,
+                source_database,
+                source_table_name,
+                Arc::new(source_table.clone()),
+            )?;
+            return self.rebuild_strategy(physical_query);
         };
-        let starts_from_empty_endpoint = start_snapshot.is_none();
+        let checkpoint_seq = *checkpoint_seq;
+        let start_snapshot = Some(start_snapshot.clone());
         let changes_source_name =
             format!("_mv_changes_{}_{}", self.mv_table.get_id(), checkpoint_seq);
         let changes = source_table
@@ -622,12 +654,9 @@ impl<'a> MaterializedViewRefresh<'a> {
             )
             .await?;
 
-        // 3. Aggregate states cannot retract UPDATE/DELETE effects. Recompute globally merged states
+        // 4. Aggregate states cannot retract UPDATE/DELETE effects. Recompute globally merged states
         // from the current source and replace all persisted state rows.
-        if !starts_from_empty_endpoint
-            && self.is_aggregating
-            && changes.mode == StreamMode::Standard
-        {
+        if self.is_aggregating && changes.mode == StreamMode::Standard {
             self.attach_source(
                 &self.catalog,
                 source_database,
@@ -656,12 +685,6 @@ impl<'a> MaterializedViewRefresh<'a> {
             "invalid materialized view physical query",
         )?;
         Self::apply_changes_query(&mut query, changes_query.clone(), "INSERT")?;
-        // 4. The first refresh consumes all tracked inserts with INSERT OVERWRITE. For aggregate MVs,
-        // this also establishes a globally merged baseline.
-        if starts_from_empty_endpoint {
-            return Ok(RefreshStrategy::Rebuild(self.target_insert(query, true)));
-        }
-
         // 5. Standard non-aggregate changes apply UPDATE/DELETE/INSERT through one internal MERGE.
         if changes.mode == StreamMode::Standard {
             let source = self.build_standard_refresh_source(physical_query, &changes_query)?;

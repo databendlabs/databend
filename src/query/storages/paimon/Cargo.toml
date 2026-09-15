@@ -29,7 +29,6 @@ futures = { workspace = true }
 paimon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 typetag = { workspace = true }
 
 [features]

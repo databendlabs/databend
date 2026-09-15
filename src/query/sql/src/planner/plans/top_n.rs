@@ -22,6 +22,7 @@ use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -100,18 +101,24 @@ impl Operator for TopN {
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let mut outer_columns = input_prop.outer_columns.clone();
+        outer_columns.extend(
+            self.used_columns()
+                .difference(&input_prop.output_columns)
+                .copied(),
+        );
 
         Ok(Arc::new(RelationalProperty {
             output_columns: input_prop.output_columns.clone(),
-            outer_columns: input_prop.outer_columns.clone(),
+            outer_columns,
             used_columns: input_prop.used_columns.clone(),
             orderings: self.items.clone(),
             partition_orderings: None,
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let stat_info = rel_expr.derive_cardinality_child(0)?;
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         let partial = self.after_exchange == Some(false);
         let output_rows = if partial {
             self.candidate_count()

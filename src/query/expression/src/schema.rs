@@ -1648,9 +1648,9 @@ impl TableDataType {
     // Returns the number of leaf columns of the TableDataType
     pub fn num_leaf_columns(&self) -> usize {
         match self {
-            TableDataType::Nullable(box inner_ty)
-            | TableDataType::Array(box inner_ty)
-            | TableDataType::Map(box inner_ty) => inner_ty.num_leaf_columns(),
+            TableDataType::Nullable(deref!(inner_ty))
+            | TableDataType::Array(deref!(inner_ty))
+            | TableDataType::Map(deref!(inner_ty)) => inner_ty.num_leaf_columns(),
             TableDataType::Tuple { fields_type, .. } => fields_type
                 .iter()
                 .map(|inner_ty| inner_ty.num_leaf_columns())

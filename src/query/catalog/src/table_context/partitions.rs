@@ -37,14 +37,6 @@ pub trait TableContextPartitionStats: Send + Sync {
         unimplemented!()
     }
 
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        unimplemented!()
-    }
-
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {
-        unimplemented!()
-    }
-
     fn get_enable_sort_spill(&self) -> bool {
         unimplemented!()
     }

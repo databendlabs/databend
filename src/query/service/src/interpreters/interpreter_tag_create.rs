@@ -53,49 +53,51 @@ impl Interpreter for CreateTagInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let meta_client = UserApiProvider::instance().get_meta_store_client();
-        let comment = self.plan.comment.clone().unwrap_or_default();
-        let normalized_allowed_values = self
-            .plan
-            .allowed_values
-            .as_ref()
-            .map(|vals| normalize_allowed_values(vals));
-        let meta = TagMeta {
-            allowed_values: normalized_allowed_values,
-            comment,
-            created_on: Utc::now(),
-            updated_on: None,
-            drop_on: None,
-        };
-        if self.plan.create_option.is_overriding() {
-            return Err(ErrorCode::InvalidArgument(
-                "Not support create or replace tag",
-            ));
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let meta_client = UserApiProvider::instance().get_meta_store_client();
+            let comment = self.plan.comment.clone().unwrap_or_default();
+            let normalized_allowed_values = self
+                .plan
+                .allowed_values
+                .as_ref()
+                .map(|vals| normalize_allowed_values(vals));
+            let meta = TagMeta {
+                allowed_values: normalized_allowed_values,
+                comment,
+                created_on: Utc::now(),
+                updated_on: None,
+                drop_on: None,
+            };
+            if self.plan.create_option.is_overriding() {
+                return Err(ErrorCode::InvalidArgument(
+                    "Not support create or replace tag",
+                ));
+            }
 
-        let ignore_exists = self.plan.create_option.if_not_exist();
-        let req = CreateTagReq {
-            name_ident: TagNameIdent::new(&self.plan.tenant, &self.plan.name),
-            meta,
-        };
-        match meta_client
-            .create_tag(req)
-            .await
-            .map_err(meta_service_error)?
-        {
-            Ok(_) => Ok(PipelineBuildResult::create()),
-            Err(_exist_err) => {
-                if ignore_exists {
-                    Ok(PipelineBuildResult::create())
-                } else {
-                    Err(ErrorCode::TagAlreadyExists(format!(
-                        "Tag '{}' already exists",
-                        self.plan.name
-                    )))
+            let ignore_exists = self.plan.create_option.if_not_exist();
+            let req = CreateTagReq {
+                name_ident: TagNameIdent::new(&self.plan.tenant, &self.plan.name),
+                meta,
+            };
+            match meta_client
+                .create_tag(req)
+                .await
+                .map_err(meta_service_error)?
+            {
+                Ok(_) => Ok(PipelineBuildResult::create()),
+                Err(_exist_err) => {
+                    if ignore_exists {
+                        Ok(PipelineBuildResult::create())
+                    } else {
+                        Err(ErrorCode::TagAlreadyExists(format!(
+                            "Tag '{}' already exists",
+                            self.plan.name
+                        )))
+                    }
                 }
             }
-        }
+        })
     }
 }
 

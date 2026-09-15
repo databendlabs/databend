@@ -201,14 +201,14 @@ impl HashFlightScatter {
 
 fn shuffle_by_block_id_in_merge_into(expr: &RemoteExpr) -> bool {
     if let RemoteExpr::FunctionCall {
-        id: box FunctionID::Builtin { name, .. },
+        id: deref!(FunctionID::Builtin { name, .. }),
         args,
         ..
     } = expr
     {
         if name == "bit_and" {
             if let RemoteExpr::FunctionCall {
-                id: box FunctionID::Builtin { name, .. },
+                id: deref!(FunctionID::Builtin { name, .. }),
                 ..
             } = &args[0]
             {

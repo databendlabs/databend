@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[FUSE-SOURCE]");
+
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -21,6 +23,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
@@ -34,7 +37,6 @@ use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::DeserializeDataTransform;
@@ -53,10 +55,10 @@ pub fn build_fuse_source_pipeline(
     mut max_threads: usize,
     plan: &DataSourcePlan,
     mut max_io_requests: usize,
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
     receiver: Option<Receiver<Result<PartInfoPtr>>>,
 ) -> Result<()> {
+    let original_max_io_requests = max_io_requests;
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
@@ -78,8 +80,8 @@ pub fn build_fuse_source_pipeline(
         block_reader,
         max_threads,
         max_io_requests,
+        original_max_io_requests,
         plan,
-        index_reader,
         virtual_reader,
         false,
     )
@@ -133,8 +135,8 @@ pub(crate) fn build_fuse_read_transform_pipeline(
     block_reader: Arc<BlockReader>,
     max_threads: usize,
     max_io_requests: usize,
+    original_max_io_requests: usize,
     plan: &DataSourcePlan,
-    index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
     record_partitions: bool,
 ) -> Result<()> {
@@ -152,7 +154,6 @@ pub(crate) fn build_fuse_read_transform_pipeline(
         storage_format,
         block_reader.read_context(),
         block_format,
-        index_reader.clone(),
         virtual_reader.clone(),
     )?;
 
@@ -169,18 +170,20 @@ pub(crate) fn build_fuse_read_transform_pipeline(
         )
     })?;
 
-    info!(
-        "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
-        max_io_requests
-    );
-
+    let original_output_streams = pipeline.output_len();
     pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+    let output_streams = pipeline.output_len();
 
-    info!(
-        "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
-        max_io_requests,
-        pipeline.output_len()
-    );
+    if output_streams != original_output_streams {
+        info!(
+            event = "fuse_source.configured",
+            original_max_io_requests,
+            max_io_requests,
+            original_output_streams,
+            output_streams;
+            "Block read pipeline configuration adjusted"
+        );
+    }
 
     match storage_format {
         FuseStorageFormat::Parquet => {
@@ -191,7 +194,6 @@ pub(crate) fn build_fuse_read_transform_pipeline(
                     plan,
                     transform_input,
                     transform_output,
-                    index_reader.clone(),
                     virtual_reader.clone(),
                 )
             })?;
@@ -260,13 +262,22 @@ fn front_load_parts_for_runtime_top_n(
     };
     let head = head.max(1);
     let compare = |left: &PartInfoPtr, right: &PartInfoPtr| {
-        let left_stats = FuseBlockPartInfo::from_part(left)
-            .ok()
-            .and_then(|info| info.columns_stat.as_ref());
-        let right_stats = FuseBlockPartInfo::from_part(right)
-            .ok()
-            .and_then(|info| info.columns_stat.as_ref());
-        order.compare_ranks(&order.rank(left_stats), &order.rank(right_stats))
+        let left_info = FuseBlockPartInfo::from_part(left).ok();
+        let left_stats = left_info.and_then(|info| info.columns_stat.as_ref());
+        let left_virtual_stats = left_info
+            .and_then(|info| info.block_meta_index.as_ref())
+            .and_then(|index| index.virtual_block_meta.as_ref())
+            .map(|meta| &meta.virtual_column_stats);
+        let right_info = FuseBlockPartInfo::from_part(right).ok();
+        let right_stats = right_info.and_then(|info| info.columns_stat.as_ref());
+        let right_virtual_stats = right_info
+            .and_then(|info| info.block_meta_index.as_ref())
+            .and_then(|index| index.virtual_block_meta.as_ref())
+            .map(|meta| &meta.virtual_column_stats);
+        order.compare_ranks(
+            &order.rank(RuntimeScanStatistics::new(left_stats, left_virtual_stats)),
+            &order.rank(RuntimeScanStatistics::new(right_stats, right_virtual_stats)),
+        )
     };
 
     if parts.len() > head {
@@ -296,8 +307,11 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+    use databend_common_expression::ColumnId;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::NumberScalar;
+    use databend_storages_common_pruner::BlockMetaIndex;
+    use databend_storages_common_pruner::VirtualBlockMetaIndex;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;
 
@@ -329,6 +343,33 @@ mod tests {
             Compression::Lz4Raw,
             None,
             None,
+            None,
+        )
+    }
+
+    fn part_with_virtual_stats(
+        location: &str,
+        query_column_id: ColumnId,
+        min: i64,
+        max: i64,
+    ) -> PartInfoPtr {
+        let block_meta_index = BlockMetaIndex {
+            virtual_block_meta: Some(VirtualBlockMetaIndex {
+                virtual_column_stats: HashMap::from([(query_column_id, stats(min, max, 0))]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        FuseBlockPartInfo::create(
+            location.to_string(),
+            None,
+            0,
+            1,
+            HashMap::new(),
+            None,
+            Compression::Lz4Raw,
+            None,
+            Some(block_meta_index),
             None,
         )
     }
@@ -379,6 +420,29 @@ mod tests {
         let mut tail = part_locations(&parts)[2..].to_vec();
         tail.sort_unstable();
         assert_eq!(tail, vec!["high", "no_stats"]);
+    }
+
+    #[test]
+    fn test_front_load_parts_uses_virtual_column_statistics() {
+        let query_column_id = 3_000_000_000;
+        let mut filters = RuntimeScanFilters::default();
+        filters.push(Arc::new(RuntimeTopNFilter::new(
+            query_column_id,
+            true,
+            false,
+        )));
+        let mut parts = vec![
+            part_with_virtual_stats("high", query_column_id, 30, 39),
+            part_with_stats("no_virtual_stats", Some((1, 2))),
+            part_with_virtual_stats("low", query_column_id, 10, 19),
+        ];
+
+        front_load_parts_for_runtime_top_n(&mut parts, &filters, 1024);
+        assert_eq!(part_locations(&parts), vec![
+            "low",
+            "high",
+            "no_virtual_stats"
+        ]);
     }
 
     #[test]

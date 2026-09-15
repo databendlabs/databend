@@ -424,7 +424,7 @@ where A: super::TypeCheckAdapter
             }
         }
 
-        let box mut data_type = output_context.columns[0].data_type.clone();
+        let deref!(mut data_type) = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;

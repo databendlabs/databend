@@ -17,13 +17,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -61,6 +61,8 @@ use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
+use crate::io::VirtualColumnLayoutPlanner;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
@@ -170,6 +172,7 @@ pub struct ReclusterMutator {
     pub(crate) max_tasks: usize,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
+    virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
 /// Caps the selected block bytes of one recluster task.
@@ -277,6 +280,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
     }
 
@@ -318,6 +322,7 @@ impl ReclusterMutator {
             max_tasks,
             properties,
             strategy,
+            virtual_column_layout_policy: Default::default(),
         }
     }
 
@@ -402,8 +407,9 @@ impl ReclusterMutator {
                         average_depth: 0.0,
                     },
                     selected_blocks: Vec::new(),
-                    output_level: 0,
-                    all_ordered: false,
+                    base_level: 0,
+                    input_level_stats: Vec::new(),
+                    kind: ReclusterTaskKind::SortBlocks,
                 });
             } else {
                 return Ok(candidate_window);
@@ -489,7 +495,7 @@ impl ReclusterMutator {
                     && (candidate.score.max_depth as f64) < 4.0 * self.properties.depth_threshold;
                 if defer {
                     debug!(
-                        "recluster: defer candidate group={} selected_bytes={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
+                        "recluster: defer candidate group={} block_size={} max_depth={} depth_threshold={} skip_reason=deferred_small_shallow_task",
                         group,
                         candidate.score.selected_total_bytes,
                         candidate.score.max_depth,
@@ -577,6 +583,35 @@ impl ReclusterMutator {
                     }
                 }
 
+                if self.properties.split_sort_tasks {
+                    match candidate.kind {
+                        ReclusterTaskKind::MergeBlocks => {
+                            if block_metas.iter().any(|(_, meta)| {
+                                !meta.cluster_stats.as_ref().is_some_and(|stats| {
+                                    self.strategy
+                                        .can_reuse_cluster_stats(&self.properties, stats)
+                                })
+                            }) {
+                                return Err(ErrorCode::Internal(
+                                    "MergeBlocks requires sources ordered by the current cluster key",
+                                ));
+                            }
+                        }
+                        ReclusterTaskKind::SortBlocks => {
+                            if block_metas.len() > 1
+                                && !self
+                                    .properties
+                                    .block_thresholds
+                                    .check_for_compact(total_rows, total_bytes)
+                            {
+                                return Err(ErrorCode::Internal(
+                                    "multi-source SortBlocks exceeds the small-block group limits",
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 let (stats, parts) = FuseTable::to_partitions(
                     Some(&self.schema),
                     &block_metas,
@@ -584,14 +619,28 @@ impl ReclusterMutator {
                     None,
                     None,
                 );
+                let mut planner =
+                    VirtualColumnLayoutPlanner::create(self.virtual_column_layout_policy);
+                for (window_pos, block_indices) in &candidate.selected_blocks {
+                    let segment_info = window.segments[*window_pos].1.as_ref().unwrap();
+                    planner.add_blocks(
+                        segment_info.summary.virtual_segment_schema.as_ref(),
+                        block_indices
+                            .iter()
+                            .map(|block_idx| segment_info.blocks[*block_idx].as_ref()),
+                    );
+                }
+                let virtual_column_layout = planner.build();
                 tasks.push(ReclusterTask {
                     parts,
                     stats,
                     total_rows,
                     total_bytes,
                     total_compressed,
-                    level: candidate.output_level,
-                    all_ordered: candidate.all_ordered,
+                    level: candidate.base_level,
+                    input_level_stats: candidate.input_level_stats.clone(),
+                    kind: candidate.kind,
+                    virtual_column_layout,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -661,6 +710,8 @@ impl ReclusterMutator {
         }))
     }
 
+    // Capture group selection time in tracing without duplicating strategy summaries.
+    #[fastrace::trace]
     fn build_recluster_task_candidates_for_indices(
         &self,
         group: ReclusterGroup,
@@ -669,9 +720,8 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
-        let group_start = Instant::now();
         let block_count = indices.len();
-        if block_count < 2 {
+        if block_count < 2 && !self.properties.split_sort_tasks {
             return Ok(Vec::new());
         }
         if block_count == 2
@@ -695,10 +745,11 @@ impl ReclusterMutator {
         // Physical small-block compaction intentionally takes precedence over strategy-specific
         // overlap depth gates. A compactable group is rewritten even when its strategy depth
         // is below the recluster threshold, so RECLUSTER also converges fragmented layouts.
-        if self
-            .properties
-            .block_thresholds
-            .check_for_compact(total_rows as usize, total_bytes as usize)
+        if block_count >= 2
+            && self
+                .properties
+                .block_thresholds
+                .check_for_compact(total_rows as usize, total_bytes as usize)
             && total_bytes as usize <= self.properties.memory_threshold
         {
             let score = CandidateScore {
@@ -706,26 +757,65 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            return Ok(vec![task_candidate(group, score, &indices, blocks)]);
+            return Ok(vec![task_candidate(
+                self.strategy.supports_ordered_merge(),
+                group,
+                score,
+                &indices,
+                blocks,
+            )]);
         }
 
-        let candidates = self.strategy.fetch_task_candidates(
-            &self.properties,
-            group,
-            &indices,
-            blocks,
-            task_budget,
-        )?;
+        if self.properties.split_sort_tasks
+            && indices
+                .iter()
+                .any(|idx| matches!(blocks[*idx].stats, ReclusterBlockStats::Normalized(_)))
+        {
+            // A large mixed group is not a full-sort task. Establish order in each
+            // unordered block independently; only ordered blocks enter merge selection.
+            let (ordered, unordered): (Vec<_>, Vec<_>) = indices
+                .into_iter()
+                .partition(|idx| matches!(blocks[*idx].stats, ReclusterBlockStats::Original));
+            let mut candidates = match ordered.len() {
+                0 | 1 => Vec::new(),
+                _ => {
+                    // Reapply the small-group and level gates to the ordered subset.
+                    // All inputs are now ordered, so the helper cannot split again.
+                    self.build_recluster_task_candidates_for_indices(
+                        group,
+                        ordered,
+                        blocks,
+                        task_budget,
+                    )?
+                }
+            };
+            for idx in unordered {
+                let bytes = blocks[idx].meta.block_size as usize;
+                if bytes > self.properties.memory_threshold {
+                    continue;
+                }
+                candidates.push(task_candidate(
+                    self.strategy.supports_ordered_merge(),
+                    group,
+                    CandidateScore {
+                        selected_total_bytes: bytes,
+                        max_depth: 1,
+                        average_depth: 1.0,
+                    },
+                    &[idx],
+                    blocks,
+                ));
+            }
+            candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
+            candidates.truncate(task_budget);
+            return Ok(candidates);
+        }
 
-        debug!(
-            "recluster: candidate selection group={} block_count={} task_count={} elapsed={:?}",
-            group,
-            block_count,
-            candidates.len(),
-            group_start.elapsed(),
-        );
-
-        Ok(candidates)
+        if block_count < 2 {
+            return Ok(Vec::new());
+        }
+        self.strategy
+            .fetch_task_candidates(&self.properties, group, &indices, blocks, task_budget)
     }
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.

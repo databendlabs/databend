@@ -960,97 +960,99 @@ impl Interpreter for CopyIntoTableInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
-        if check_deduplicate_label(self.ctx.clone()).await? {
-            self.ctx.attach_query_lineage(None);
-            return Ok(PipelineBuildResult::create());
-        }
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            }
 
-        let plan = &self.plan;
-        let to_table = self
-            .ctx
-            .get_table(
+            let plan = &self.plan;
+            let to_table = self
+                .ctx
+                .get_table(
+                    plan.catalog_info.catalog_name(),
+                    &plan.database_name,
+                    &plan.table_name,
+                )
+                .await?;
+
+            self.ctx.update_query_lineage_target_id(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
-            )
-            .await?;
-
-        self.ctx.update_query_lineage_target_id(
-            plan.catalog_info.catalog_name(),
-            &plan.database_name,
-            &plan.table_name,
-            to_table.get_table_info().ident.table_id,
-        );
-
-        to_table.check_mutable()?;
-
-        if self.plan.no_file_to_copy {
-            self.ctx.attach_query_lineage(None);
-            info!("no file to copy");
-            return self.on_no_files_to_copy().await;
-        }
-
-        let snapshot = FuseTable::try_from_table(to_table.as_ref())?
-            .read_table_snapshot()
-            .await?;
-        let table_meta_timestamps = self
-            .ctx
-            .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
-
-        let (physical_plan, update_stream_meta, new_schema) = self
-            .build_physical_plan(
-                to_table.get_table_info().clone(),
-                &self.plan,
-                table_meta_timestamps,
-            )
-            .await?;
-
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-
-        // Build commit insertion pipeline.
-        {
-            let files_to_copy = self
-                .plan
-                .stage_table_info
-                .files_to_copy
-                .clone()
-                .unwrap_or_default();
-
-            let duplicated_files_detected =
-                self.plan.stage_table_info.duplicated_files_detected.clone();
-
-            self.commit_insertion(
-                &mut build_res.main_pipeline,
-                &self.plan,
-                files_to_copy,
-                duplicated_files_detected,
-                update_stream_meta,
-                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-                self.plan.path_prefix.clone(),
-                table_meta_timestamps,
-                new_schema,
-            )
-            .await?;
-        }
-
-        // Execute hook.
-        {
-            let hook_operator = HookOperator::create(
-                self.ctx.clone(),
-                self.plan.catalog_info.catalog_name().to_string(),
-                self.plan.database_name.to_string(),
-                self.plan.table_name.to_string(),
-                MutationKind::Insert,
-                LockTableOption::LockNoRetry,
+                to_table.get_table_info().ident.table_id,
             );
-            hook_operator.execute(&mut build_res.main_pipeline).await;
-        }
 
-        Ok(build_res)
+            to_table.check_mutable()?;
+
+            if self.plan.no_file_to_copy {
+                self.ctx.attach_query_lineage(None);
+                info!("no file to copy");
+                return self.on_no_files_to_copy().await;
+            }
+
+            let snapshot = FuseTable::try_from_table(to_table.as_ref())?
+                .read_table_snapshot()
+                .await?;
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
+
+            let (physical_plan, update_stream_meta, new_schema) = self
+                .build_physical_plan(
+                    to_table.get_table_info().clone(),
+                    &self.plan,
+                    table_meta_timestamps,
+                )
+                .await?;
+
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+
+            // Build commit insertion pipeline.
+            {
+                let files_to_copy = self
+                    .plan
+                    .stage_table_info
+                    .files_to_copy
+                    .clone()
+                    .unwrap_or_default();
+
+                let duplicated_files_detected =
+                    self.plan.stage_table_info.duplicated_files_detected.clone();
+
+                self.commit_insertion(
+                    &mut build_res.main_pipeline,
+                    &self.plan,
+                    files_to_copy,
+                    duplicated_files_detected,
+                    update_stream_meta,
+                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                    self.plan.path_prefix.clone(),
+                    table_meta_timestamps,
+                    new_schema,
+                )
+                .await?;
+            }
+
+            // Execute hook.
+            {
+                let hook_operator = HookOperator::create(
+                    self.ctx.clone(),
+                    self.plan.catalog_info.catalog_name().to_string(),
+                    self.plan.database_name.to_string(),
+                    self.plan.table_name.to_string(),
+                    MutationKind::Insert,
+                    LockTableOption::LockNoRetry,
+                );
+                hook_operator.execute(&mut build_res.main_pipeline).await;
+            }
+
+            Ok(build_res)
+        })
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {

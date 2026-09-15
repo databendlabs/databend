@@ -21,6 +21,7 @@ use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -39,10 +40,11 @@ pub struct RuleFilterNulls {
     id: RuleID,
     matchers: Vec<Matcher>,
     is_distributed: bool,
+    stat_context: StatContext,
 }
 
 impl RuleFilterNulls {
-    pub fn new(is_distributed: bool) -> Self {
+    pub fn new(is_distributed: bool, stat_context: StatContext) -> Self {
         Self {
             id: RuleID::FilterNulls,
             // Join
@@ -53,6 +55,7 @@ impl RuleFilterNulls {
                 children: vec![Matcher::Leaf, Matcher::Leaf],
             }],
             is_distributed,
+            stat_context,
         }
     }
 
@@ -111,8 +114,9 @@ impl Rule for RuleFilterNulls {
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
 
-        let left_stat = RelExpr::with_s_expr(left_child).derive_cardinality()?;
-        let right_stat = RelExpr::with_s_expr(right_child).derive_cardinality()?;
+        let left_stat = RelExpr::with_s_expr(left_child).derive_cardinality(&self.stat_context)?;
+        let right_stat =
+            RelExpr::with_s_expr(right_child).derive_cardinality(&self.stat_context)?;
         let mut left_null_predicates = vec![];
         let mut right_null_predicates = vec![];
         for join_key in join.equi_conditions.iter() {
