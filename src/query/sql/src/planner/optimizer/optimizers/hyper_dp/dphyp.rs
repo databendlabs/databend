@@ -26,6 +26,9 @@ use super::algorithm::HyperDp;
 use super::algorithm::JoinEdgeRef;
 use super::algorithm::JoinNode;
 use super::algorithm::JoinOrderModel;
+use super::cluster_key::ClusterKeyCostModel;
+use super::cluster_key::ClusterKeyState;
+use super::cluster_key::normalize_key;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::optimizer::Optimizer;
@@ -58,7 +61,15 @@ pub struct DPhpyOptimizer {
     filters: HashSet<Filter>,
 }
 
+#[derive(Clone)]
+struct DPhypNodeState {
+    s_expr: SExpr,
+    cluster_keys: ClusterKeyState,
+    filter_factor: f64,
+}
+
 struct DPhypJoinOrderModel<'a> {
+    cluster_key_cost: ClusterKeyCostModel<'a>,
     join_relations: &'a [JoinRelation],
     join_conditions: &'a [(ScalarExpr, ScalarExpr)],
     stat_context: &'a StatContext,
@@ -67,12 +78,12 @@ struct DPhypJoinOrderModel<'a> {
 impl DPhypJoinOrderModel<'_> {
     fn join_s_expr(
         &self,
-        left: &JoinNode<SExpr>,
-        right: &JoinNode<SExpr>,
+        left: &JoinNode<DPhypNodeState>,
+        right: &JoinNode<DPhypNodeState>,
         edge_refs: &[JoinEdgeRef],
     ) -> SExpr {
-        let left_expr = left.state().clone();
-        let right_expr = right.state().clone();
+        let left_expr = left.state().s_expr.clone();
+        let right_expr = right.state().s_expr.clone();
         let mut left_conditions = Vec::with_capacity(edge_refs.len());
         let mut right_conditions = Vec::with_capacity(edge_refs.len());
 
@@ -119,12 +130,21 @@ impl DPhypJoinOrderModel<'_> {
 }
 
 impl JoinOrderModel for DPhypJoinOrderModel<'_> {
-    type NodeState = SExpr;
+    type NodeState = DPhypNodeState;
 
     fn base_node(&self, relation: RelationId) -> Result<(f64, Self::NodeState)> {
+        let s_expr = self.join_relations[relation].s_expr();
+        let cluster_keys = self.cluster_key_cost.collect(&s_expr)?;
+        let filter_factor = self
+            .cluster_key_cost
+            .factor(&cluster_keys.keys, &cluster_keys.filter_keys);
         Ok((
             self.join_relations[relation].cardinality(self.stat_context)?,
-            self.join_relations[relation].s_expr(),
+            DPhypNodeState {
+                s_expr,
+                cluster_keys,
+                filter_factor,
+            },
         ))
     }
 
@@ -138,7 +158,21 @@ impl JoinOrderModel for DPhypJoinOrderModel<'_> {
         let cardinality = RelExpr::with_s_expr(&s_expr)
             .derive_cardinality(self.stat_context)
             .map(|stat| stat.cardinality)?;
-        Ok((cardinality, s_expr))
+        // Only probe-side locality is carried through an enumerated inner join.
+        // Cross joins do not provide the same locality assumption.
+        let cluster_keys = if edge_refs.is_empty() {
+            ClusterKeyState::default()
+        } else {
+            left.state().cluster_keys.clone()
+        };
+        let filter_factor = self
+            .cluster_key_cost
+            .factor(&cluster_keys.keys, &cluster_keys.filter_keys);
+        Ok((cardinality, DPhypNodeState {
+            s_expr,
+            cluster_keys,
+            filter_factor,
+        }))
     }
 
     fn join_cost(
@@ -151,8 +185,36 @@ impl JoinOrderModel for DPhypJoinOrderModel<'_> {
         if edge_refs.is_empty() {
             Ok(left.cardinality() * right.cardinality())
         } else {
-            Ok(cardinality + left.cost() + right.cost())
+            let factor = if self.cluster_key_cost.enabled() {
+                let probe_keys = edge_refs
+                    .iter()
+                    .map(|edge| {
+                        let condition = &self.join_conditions[edge.id];
+                        if edge.reversed {
+                            &condition.1
+                        } else {
+                            &condition.0
+                        }
+                        .as_symbol_expr()
+                        .map(normalize_key)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                self.cluster_key_cost
+                    .factor(&left.state().cluster_keys.keys, &probe_keys)
+            } else {
+                1.0
+            };
+            Ok(cardinality * factor + left.cost() + right.cost())
         }
+    }
+
+    fn should_flip_join_inputs(
+        &self,
+        left: &JoinNode<Self::NodeState>,
+        right: &JoinNode<Self::NodeState>,
+    ) -> bool {
+        left.cardinality() * left.state().filter_factor
+            < right.cardinality() * right.state().filter_factor
     }
 }
 
@@ -720,7 +782,16 @@ impl DPhpyOptimizer {
             return Ok(Arc::unwrap_or_clone(s_expr));
         }
 
+        let metadata = self.opt_ctx.get_metadata();
         let model = DPhypJoinOrderModel {
+            cluster_key_cost: ClusterKeyCostModel::new(
+                &metadata,
+                self.opt_ctx.get_table_ctx(),
+                self.opt_ctx
+                    .get_table_ctx()
+                    .get_settings()
+                    .get_cost_factor_cluster_key()?,
+            ),
             join_relations: &self.join_relations,
             join_conditions: &join_conditions,
             stat_context: self.opt_ctx.get_stat_context(),
@@ -733,7 +804,7 @@ impl DPhpyOptimizer {
         }
 
         if let Some(join_expr) = hyper_dp.find_best_order()? {
-            let join_expr = self.apply_filters(&join_expr)?;
+            let join_expr = self.apply_filters(&join_expr.s_expr)?;
             let new_s_expr = Self::replace_join_expr(&join_expr, &s_expr)?;
             self.opt_ctx.set_flag("dphyp_optimized", true);
             Ok(new_s_expr)
