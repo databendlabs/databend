@@ -14,8 +14,16 @@
 
 use std::io::Write;
 
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_expression::type_check;
 use databend_common_expression::types::*;
+use databend_common_expression_test_support::parse_raw_expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -35,6 +43,39 @@ fn test_map() {
     test_map_contains_key(file);
     test_map_pick(file);
     test_map_insert(file)
+}
+
+#[test]
+fn test_empty_map_nullable_flags() {
+    let flags = BooleanType::from_data_with_validity(vec![false, true, false, false], vec![
+        false, true, true, false,
+    ]);
+    let raw_expr = parse_raw_expr(
+        "map([], [], flag)",
+        &[("flag", flags.data_type())],
+        &BUILTIN_FUNCTIONS,
+    );
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let block = DataBlock::new(vec![flags.into()], 4);
+    let func_ctx = FunctionContext::default();
+    let result = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+        .run(&expr)
+        .unwrap();
+    let Value::Column(column) = result else {
+        panic!("a nullable flag column must produce a map column");
+    };
+    assert_eq!(column.len(), 4);
+    for (row, expected) in [
+        Scalar::Null,
+        Scalar::EmptyMap,
+        Scalar::EmptyMap,
+        Scalar::Null,
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(column.index(row).unwrap(), expected.as_ref());
+    }
 }
 
 fn test_map_cat(file: &mut impl Write) {

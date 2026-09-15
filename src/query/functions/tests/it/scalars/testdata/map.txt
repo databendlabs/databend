@@ -599,9 +599,24 @@ ast            : map([], [], flag)
 raw expr       : map(array(), array(), flag::Boolean NULL)
 checked expr   : map<Array(Nothing) NULL, Array(Nothing) NULL, Boolean NULL>(CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), flag)
 optimized expr : map<Array(Nothing) NULL, Array(Nothing) NULL, Boolean NULL>([] :: Array(Nothing), [] :: Array(Nothing), flag)
-output type    : Map(Nothing) NULL
-output domain  : {} ∪ {NULL}
-output         : {}
+evaluation:
++--------+------------------------+-------------------+
+|        | flag                   | Output            |
++--------+------------------------+-------------------+
+| Type   | Boolean NULL           | Map(Nothing) NULL |
+| Domain | {FALSE, TRUE} ∪ {NULL} | {} ∪ {NULL}       |
+| Row 0  | false                  | {}                |
+| Row 1  | true                   | {}                |
+| Row 2  | true                   | {}                |
+| Row 3  | NULL                   | NULL              |
++--------+------------------------+-------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------+
+| Column | Data                                                                             |
++--------+----------------------------------------------------------------------------------+
+| flag   | Column(NullableColumn { column: Boolean([0b____0110]), validity: [0b____0111] }) |
+| Output | NullableColumn { column: EmptyMap { len: 4 }, validity: [0b____0111] }           |
++--------+----------------------------------------------------------------------------------+
 
 
 ast            : map([],[])[1]

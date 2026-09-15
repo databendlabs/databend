@@ -70,10 +70,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_3_arg::<EmptyArrayType, EmptyArrayType, BooleanType, EmptyMapType, _, _>(
+    registry.register_3_arg::<EmptyArrayType, EmptyArrayType, BooleanType, EmptyMapType, _, _>(
         "map",
         |_, _, _, _| FunctionDomain::Full,
-        |_, _, _, _| Value::Scalar(()),
+        |_, _, _, _| (),
     );
 
     // Unlike map_insert's update flag, allow_duplicate_keys keeps the first value.

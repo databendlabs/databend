@@ -47,6 +47,16 @@ SELECT map(NULL::Nullable(Array(String)), [1], true), map(['a'], NULL::Nullable(
 ----
 NULL NULL NULL NULL
 
+# Empty arrays must preserve per-row NULL flags rather than collapse to a scalar map.
+query T
+SELECT map([], [], if(number = 0 OR number = 3, NULL, number = 1))
+FROM numbers(4) ORDER BY number
+----
+NULL
+{}
+{}
+NULL
+
 statement error key list has a different size from value list
 SELECT map(['a'], [1, 2], true)
 
