@@ -64,7 +64,7 @@ pub fn txn_backoff(
             let sleep = Duration::from_secs_f64(backoff * scale);
             let ctx2 = ctx.clone();
 
-            let msg = format!("{}: txn-retry for {}th time, sleep {:?}", &ctx2, i, sleep);
+            let msg = format!("{}: txn-retry for {}th time, sleep {:?}", ctx2, i, sleep);
 
             let fu = async move {
                 if i >= 5 {

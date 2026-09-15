@@ -308,7 +308,7 @@ impl Binder {
             }
 
             if let Some(update) = &mut eval.update {
-                for (_, expr) in update.iter_mut() {
+                for expr in update.values_mut() {
                     for col in &any_columns {
                         expr.replace_column(col.old, col.new)?
                     }
@@ -316,7 +316,7 @@ impl Binder {
             }
         }
 
-        for (_, column) in mutation.field_index_map.iter_mut() {
+        for column in mutation.field_index_map.values_mut() {
             if let Some(col) = any_columns.iter().find(|c| c.old.to_string() == *column) {
                 *column = col.new.to_string()
             };

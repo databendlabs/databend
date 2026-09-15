@@ -65,7 +65,7 @@ impl Interpreter for DescribeTableInterpreter {
             if is_materialized_view_engine(tbl_info.engine()) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "DESCRIBE is not supported for MATERIALIZED VIEW {}.{}",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
 

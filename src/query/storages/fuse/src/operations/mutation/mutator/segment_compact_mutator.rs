@@ -289,7 +289,7 @@ impl<'a> SegmentCompactor<'a> {
                     number_segments,
                     start.elapsed()
                 );
-                info!("{}", &status);
+                info!("{}", status);
                 (status_callback)(status);
             }
 

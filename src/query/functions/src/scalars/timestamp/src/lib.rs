@@ -19,16 +19,8 @@
 #![allow(internal_features)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::unnecessary_unwrap)]
-#![feature(core_intrinsics)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(type_ascription)]
-#![feature(try_blocks)]
-#![feature(downcast_unchecked)]
-#![feature(str_internals)]
-#![feature(fmt_internals)]
-#![feature(formatting_options)]
-#![feature(int_roundings)]
 extern crate core;
 
 pub mod date_arithmetic;

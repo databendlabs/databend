@@ -184,7 +184,7 @@ fn assert_table_id_is_latest(
 
 fn validate_index_columns(meta: &TableMeta) -> Result<(), KVAppError> {
     let mut seen = HashSet::new();
-    for (_, index) in meta.indexes.iter() {
+    for index in meta.indexes.values() {
         for &column_id in &index.column_ids {
             if meta.schema.is_column_deleted(column_id) {
                 return Err(KVAppError::AppError(AppError::IndexColumnIdNotFound(
@@ -1531,8 +1531,7 @@ where
             })
             .collect::<Vec<_>>();
         let stream_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(self, &sid_vec).await?;
-        for (req, (stream_meta_seq, stream_meta)) in
-            update_stream_metas.iter().zip(stream_meta_vec.into_iter())
+        for (req, (stream_meta_seq, stream_meta)) in update_stream_metas.iter().zip(stream_meta_vec)
         {
             let stream_id = TableId {
                 table_id: req.stream_id,

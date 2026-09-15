@@ -802,7 +802,7 @@ impl ResidualClasses {
     // Residual subsumption test.
     fn check(&self, view_residual_classes: &ResidualClasses) -> (bool, Option<Vec<ScalarExpr>>) {
         let mut extra_residual_preds = Vec::new();
-        for (view_residual_key, _) in view_residual_classes.residual_preds.iter() {
+        for view_residual_key in view_residual_classes.residual_preds.keys() {
             if !self.residual_preds.contains_key(view_residual_key) {
                 return (false, None);
             }
@@ -1263,9 +1263,9 @@ pub(crate) fn format_scalar(
                 .map(|arg| format_scalar(arg, column_map))
                 .join(", ");
             if !params.is_empty() {
-                format!("{}({})({})", &func.func_name, params, args)
+                format!("{}({})({})", func.func_name, params, args)
             } else {
-                format!("{}({})", &func.func_name, args)
+                format!("{}({})", func.func_name, args)
             }
         }
         ScalarExpr::CastExpr(cast) => {
@@ -1291,9 +1291,9 @@ pub(crate) fn format_scalar(
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut scalar = if !params.is_empty() {
-                format!("{}<{}>({})", &agg.func_name, params, args)
+                format!("{}<{}>({})", agg.func_name, params, args)
             } else {
-                format!("{}({})", &agg.func_name, args)
+                format!("{}({})", agg.func_name, args)
             };
             if !agg.sort_descs.is_empty() {
                 let sort_descs = agg
@@ -1312,11 +1312,11 @@ pub(crate) fn format_scalar(
                 .map(|arg| format_scalar(arg, column_map))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}({})", &udaf.name, args)
+            format!("{}({})", udaf.name, args)
         }
         ScalarExpr::UDFCall(udf) => format!(
             "{}({})",
-            &udf.handler,
+            udf.handler,
             udf.arguments
                 .iter()
                 .map(|arg| { format_scalar(arg, column_map) })

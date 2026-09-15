@@ -671,10 +671,7 @@ impl TransformWindow {
         debug_assert!(self.order_by.len() == 1);
         let col = self.entry_at(&self.current_row, self.order_by[0].offset);
         let value = unsafe { col.index_unchecked(self.current_row.row) };
-        if value.is_null() {
-            return true;
-        }
-        false
+        value.is_null()
     }
 
     #[inline]

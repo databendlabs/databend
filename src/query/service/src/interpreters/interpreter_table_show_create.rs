@@ -108,7 +108,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             if is_materialized_view_engine(table.engine()) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
-                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table, self.plan.database, self.plan.table
                 )));
             }
 

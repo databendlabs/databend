@@ -189,17 +189,13 @@ impl Table for NumbersTable {
 
         let mut source_builder = SourcePipeBuilder::create();
 
-        for part_index in 0..plan.parts.len() {
+        for part in &plan.parts.partitions {
             let source_ctx = ctx.clone();
             let source_output_port = OutputPort::create();
 
             source_builder.add_source(
                 source_output_port.clone(),
-                NumbersSource::create(
-                    source_output_port,
-                    source_ctx,
-                    &plan.parts.partitions[part_index],
-                )?,
+                NumbersSource::create(source_output_port, source_ctx, part)?,
             );
         }
 

@@ -642,7 +642,7 @@ where A: super::TypeCheckAdapter
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
-                                name, &fields_name
+                                name, fields_name
                             )));
                         }
                     },
@@ -727,7 +727,7 @@ where A: super::TypeCheckAdapter
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
-                                name, &fields_name
+                                name, fields_name
                             ))
                             .set_span(span));
                         }

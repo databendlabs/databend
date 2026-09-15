@@ -81,20 +81,20 @@ pub struct TableMetaLocationGenerator {
 
 impl TableMetaLocationGenerator {
     pub fn new(prefix: String) -> Self {
-        let block_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_BLOCK_PREFIX,);
+        let block_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_BLOCK_PREFIX,);
         let bloom_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
-        let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
-        let snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SNAPSHOT_PREFIX);
-        let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
+        let segment_info_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_PREFIX);
+        let snapshot_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_SNAPSHOT_PREFIX);
+        let agg_index_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_AGG_INDEX_PREFIX);
         let inverted_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
-        let vector_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
+        let vector_index_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
         let spatial_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
         let segment_statistics_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
-        let ref_snapshot_location_prefix = format!("{}/{}/", &prefix, LEGACY_FUSE_TBL_REF_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
+        let ref_snapshot_location_prefix = format!("{}/{}/", prefix, LEGACY_FUSE_TBL_REF_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -209,13 +209,13 @@ impl TableMetaLocationGenerator {
         match is_column_oriented {
             true => format!(
                 "{}{}{}.col",
-                &self.segment_location_prefix(),
+                self.segment_location_prefix(),
                 VACUUM2_OBJECT_KEY_PREFIX,
                 segment_uuid.as_simple(),
             ),
             false => format!(
                 "{}{}{}_v{}.mpk",
-                &self.segment_location_prefix(),
+                self.segment_location_prefix(),
                 VACUUM2_OBJECT_KEY_PREFIX,
                 segment_uuid.as_simple(),
                 SegmentInfo::VERSION,
@@ -253,7 +253,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
-        format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2)
+        format!("{}/{}", self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2)
     }
 
     /// Generates an immutable location for one virtual-column sidecar generation.

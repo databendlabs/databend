@@ -21,7 +21,6 @@
 )]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(never_type)]
 
 mod bloom_index;
 mod eliminate_cast;

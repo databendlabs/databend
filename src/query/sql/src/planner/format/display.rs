@@ -328,18 +328,15 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
                 .map(format_scalar)
                 .collect::<Vec<String>>()
                 .join(", ");
-            format!(
-                "{}({}, {})",
-                &lambda.func_name, args, &lambda.lambda_display,
-            )
+            format!("{}({}, {})", lambda.func_name, args, lambda.lambda_display,)
         }
         ScalarExpr::FunctionCall(func) => {
             let params = func.params.iter().map(|param| param.to_string()).join(", ");
             let arguments = func.arguments.iter().map(format_scalar).join(", ");
             if params.is_empty() {
-                format!("{}({})", &func.func_name, arguments)
+                format!("{}({})", func.func_name, arguments)
             } else {
-                format!("{}({})({})", &func.func_name, params, arguments)
+                format!("{}({})({})", func.func_name, params, arguments)
             }
         }
         ScalarExpr::CastExpr(cast) => {
@@ -353,7 +350,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
-                &udf.handler,
+                udf.handler,
                 udf.arguments
                     .iter()
                     .map(format_scalar)
@@ -362,7 +359,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::UDFLambdaCall(udf) => {
-            format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
+            format!("{}({})", udf.func_name, format_scalar(&udf.scalar))
         }
         ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),
         ScalarExpr::AsyncFunctionCall(async_func) => async_func.display_name.clone(),

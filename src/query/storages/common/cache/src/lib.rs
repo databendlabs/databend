@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #![feature(write_all_vectored)]
-#![feature(associated_type_defaults)]
-#![feature(assert_matches)]
 #![feature(io_const_error)]
 #![allow(clippy::collapsible_if, clippy::let_and_return)]
 

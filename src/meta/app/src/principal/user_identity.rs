@@ -24,7 +24,7 @@ pub struct UserIdentity {
 }
 
 impl UserIdentity {
-    const ESCAPE_CHARS: [u8; 2] = [b'\'', b'@'];
+    const ESCAPE_CHARS: [u8; 2] = *b"'@";
 
     pub fn new(name: impl ToString, host: impl ToString) -> Self {
         Self {

@@ -243,7 +243,7 @@ impl GlobalHistoryLog {
         let create_stage = if let Some(connection) = &self.connection {
             connection.to_create_stage_sql(&self.stage_name)
         } else {
-            format!("CREATE STAGE IF NOT EXISTS {}", &self.stage_name)
+            format!("CREATE STAGE IF NOT EXISTS {}", self.stage_name)
         };
         self.execute_sql(&create_stage).await?;
 

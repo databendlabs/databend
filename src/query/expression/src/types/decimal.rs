@@ -678,13 +678,8 @@ pub trait Decimal:
         let multiplier = Self::e(size.scale());
         let min_for_precision = Self::min_for_precision(size.precision());
         let max_for_precision = Self::max_for_precision(size.precision());
-        self.checked_mul(multiplier).and_then(|v| {
-            if v > max_for_precision || v < min_for_precision {
-                None
-            } else {
-                Some(v)
-            }
-        })
+        self.checked_mul(multiplier)
+            .filter(|&v| !(v > max_for_precision || v < min_for_precision))
     }
 }
 

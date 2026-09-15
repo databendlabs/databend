@@ -69,7 +69,7 @@ static PY_VERSION: LazyLock<String> =
 
 impl ScriptRuntime {
     pub fn try_create(func: &ScriptUdfFunctionDesc, _temp_dir: Option<TempDir>) -> Result<Self> {
-        let UDFType::Script(deref!( UDFScriptCode { language, code, .. })) = &func.udf_type else {
+        let UDFType::Script(deref!(UDFScriptCode { language, code, .. })) = &func.udf_type else {
             unreachable!()
         };
         match language {
@@ -271,9 +271,12 @@ if '{dir}' not in sys.path:
     #[cfg(feature = "python-udf")]
     fn collect_stage_sys_paths(func: &ScriptUdfFunctionDesc, temp_dir: &TempDir) -> Vec<String> {
         match &func.udf_type {
-            UDFType::Script(deref!( UDFScriptCode {
-                imports_stage_info, ..
-            })) => imports_stage_info
+            UDFType::Script(
+                deref!(UDFScriptCode {
+                    imports_stage_info,
+                    ..
+                }),
+            ) => imports_stage_info
                 .iter()
                 .filter_map(|(_, stage_path)| {
                     let name = stage_path
@@ -393,9 +396,7 @@ fn wasm_compatible_data_type(data_type: &ArrowDataType) -> Result<ArrowDataType>
         ArrowDataType::LargeList(field) => {
             ArrowDataType::List(Arc::new(wasm_compatible_field(field)?))
         }
-        ArrowDataType::List(field) => {
-            ArrowDataType::List(Arc::new(wasm_compatible_field(field)?))
-        }
+        ArrowDataType::List(field) => ArrowDataType::List(Arc::new(wasm_compatible_field(field)?)),
         ArrowDataType::Struct(fields) => ArrowDataType::Struct(Fields::from(
             fields
                 .iter()
@@ -769,17 +770,19 @@ impl TransformUdfScript {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
             let code = match &func.udf_type {
-                UDFType::Script(deref!( script_code)) => script_code,
+                UDFType::Script(deref!(script_code)) => script_code,
                 _ => continue,
             };
 
             let temp_dir = match &func.udf_type {
-                UDFType::Script(deref!( UDFScriptCode {
-                    language: UDFLanguage::Python,
-                    packages,
-                    imports_stage_info,
-                    ..
-                })) => {
+                UDFType::Script(
+                    deref!(UDFScriptCode {
+                        language: UDFLanguage::Python,
+                        packages,
+                        imports_stage_info,
+                        ..
+                    }),
+                ) => {
                     let code_str = String::from_utf8(code.code.to_vec())?;
                     let mut dependencies = Self::extract_deps(&code_str)?;
                     dependencies.extend_from_slice(packages.as_slice());
@@ -866,7 +869,9 @@ impl TransformUdfScript {
         }
 
         let parsed = ss.parse::<toml::Value>().map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to parse UDF script metadata as TOML: {err}"))
+            ErrorCode::SemanticError(format!(
+                "Failed to parse UDF script metadata as TOML: {err}"
+            ))
         })?;
 
         if parsed.get("dependencies").is_none() {
@@ -874,8 +879,7 @@ impl TransformUdfScript {
         }
 
         let deps = if let Some(deps) = parsed["dependencies"].as_array() {
-            deps
-                .iter()
+            deps.iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
         } else {
@@ -1646,15 +1650,13 @@ mod tests {
                 .with_metadata([(EXTENSION_KEY.to_string(), extension.to_string())].into());
 
             let restored =
-                restore_wasm_result_batch(
-                    wasm_result,
-                    &return_field,
-                    "wasm_extension",
-                    extension,
-                )
-                .unwrap();
+                restore_wasm_result_batch(wasm_result, &return_field, "wasm_extension", extension)
+                    .unwrap();
             assert_eq!(restored.schema().field(0).name(), "result");
-            assert_eq!(restored.schema().field(0).metadata()[EXTENSION_KEY], extension);
+            assert_eq!(
+                restored.schema().field(0).metadata()[EXTENSION_KEY],
+                extension
+            );
             assert_eq!(restored.column(0).data_type(), &ArrowDataType::LargeBinary);
             assert!(restored.column(0).is_null(1));
         }
@@ -1697,13 +1699,9 @@ mod tests {
                 vec![wasm_batch.column(index).clone()],
             )
             .unwrap();
-            let restored = restore_wasm_result_batch(
-                wasm_result,
-                return_field,
-                "wasm_decimal",
-                "Decimal",
-            )
-            .unwrap();
+            let restored =
+                restore_wasm_result_batch(wasm_result, return_field, "wasm_decimal", "Decimal")
+                    .unwrap();
             assert_eq!(
                 restored.schema().field(0).data_type(),
                 return_field.data_type()
@@ -1722,5 +1720,4 @@ mod tests {
             }
         }
     }
-
 }

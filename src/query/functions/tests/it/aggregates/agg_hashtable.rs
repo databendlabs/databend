@@ -133,7 +133,7 @@ fn test_agg_hashtable() {
                 Ok(true) => {
                     let mut entries = merge_state.take_group_columns();
                     let agg_results = merge_state.take_aggregate_results();
-                    entries.extend(agg_results.into_iter());
+                    entries.extend(agg_results);
 
                     let num_rows = entries[0].len();
                     blocks.push(DataBlock::new(entries, num_rows));

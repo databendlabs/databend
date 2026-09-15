@@ -238,7 +238,7 @@ impl Config {
 
             if !final_config_file.is_empty() {
                 let toml = TomlIgnored::new(Box::new(|path| {
-                    log::warn!("unknown field in config: {}", &path);
+                    log::warn!("unknown field in config: {}", path);
                 }));
                 builder = builder.collect(from_file(toml, &final_config_file));
             }
@@ -272,7 +272,7 @@ impl Config {
 
             if !config_file.is_empty() {
                 let toml = TomlIgnored::new(Box::new(|path| {
-                    log::warn!("unknown field in config: {}", &path);
+                    log::warn!("unknown field in config: {}", path);
                 }));
                 builder = builder.collect(from_file(toml, &config_file));
             }
@@ -2170,7 +2170,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
                 ));
             } else {
-                query.dir = format!("{}/query-details", &file.dir);
+                query.dir = format!("{}/query-details", file.dir);
             }
         }
 
@@ -2181,7 +2181,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `profile.dir` is empty".to_string(),
                 ));
             } else {
-                profile.dir = format!("{}/profiles", &file.dir);
+                profile.dir = format!("{}/profiles", file.dir);
             }
         }
 
@@ -2192,7 +2192,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `structlog.on` is true".to_string(),
                 ));
             } else {
-                structlog.dir = format!("{}/structlogs", &file.dir);
+                structlog.dir = format!("{}/structlogs", file.dir);
             }
         }
 

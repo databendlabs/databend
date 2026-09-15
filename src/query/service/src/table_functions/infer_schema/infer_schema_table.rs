@@ -197,7 +197,7 @@ impl Table for InferSchemaTable {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &ctx.get_current_user()?.identity().display(),
+                    ctx.get_current_user()?.identity().display(),
                 )));
             }
         }

@@ -208,7 +208,7 @@ impl RuleEliminateSelfJoin {
         let mut remove_relations: HashSet<usize> = HashSet::new();
         let mut removed_to_keep_column_mapping: HashMap<Symbol, Symbol> = HashMap::new();
         let mut extra_scalar_items: Vec<ScalarItem> = Vec::new();
-        for (_key, group_candidates) in groups.iter() {
+        for group_candidates in groups.values() {
             let has_strict = group_candidates.iter().any(|c| c.strict);
             let has_loose = group_candidates.iter().any(|c| !c.strict);
             if !has_strict || !has_loose {

@@ -127,7 +127,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         levels.push(original_input_level);
 
         // Sort by specificity (most detailed first)
-        levels.sort_by(|a, b| b.level.cmp(&a.level));
+        levels.sort_by_key(|a| std::cmp::Reverse(a.level));
 
         // Build parent-child relationships
         for i in 0..levels.len() {

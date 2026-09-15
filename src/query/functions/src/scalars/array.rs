@@ -1519,7 +1519,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                                         let val = scalar.as_variant().unwrap();
                                         sorted_vals.push(RawJsonb::new(val));
                                     }
-                                    match OwnedJsonb::build_array(sorted_vals.into_iter()) {
+                                    match OwnedJsonb::build_array(sorted_vals) {
                                         Ok(owned_jsonb) => {
                                             output.put_slice(owned_jsonb.as_ref());
                                         }

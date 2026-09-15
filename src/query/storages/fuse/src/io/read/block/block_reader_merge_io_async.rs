@@ -70,7 +70,7 @@ impl BlockReadContext {
 
         let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
 
-        for (_index, (column_id, _, data_type)) in self.project_indices().iter() {
+        for (column_id, _, data_type) in self.project_indices().values() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
                     continue;

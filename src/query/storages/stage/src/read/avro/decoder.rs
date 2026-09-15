@@ -282,7 +282,7 @@ impl AvroDecoder {
                                 reason: Some(e.reason.unwrap_or_else(|| {
                                     format!(
                                         "can not load value of type {:?} to {}",
-                                        &matched_schema,
+                                        matched_schema,
                                         column_builder.data_type()
                                     )
                                 })),

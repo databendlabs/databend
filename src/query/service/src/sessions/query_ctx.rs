@@ -684,7 +684,7 @@ impl QueryContext {
     pub fn get_total_spill_progress(&self) -> SpillProgress {
         let r = self.shared.cluster_spill_progress.read();
         let mut total = SpillProgress::default();
-        for (_, stats) in r.iter() {
+        for stats in r.values() {
             total.incr(stats);
         }
         total

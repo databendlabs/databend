@@ -113,7 +113,7 @@ impl Planner {
                 let options = prqlc::Options::default();
                 match prqlc::compile(sql, &options) {
                     Ok(res) => {
-                        info!("PRQL to SQL conversion successful: {}", &res);
+                        info!("PRQL to SQL conversion successful: {}", res);
                         prql_converted = true;
                         res
                     }

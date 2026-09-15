@@ -924,12 +924,12 @@ impl Compiler {
         let name = self.normalize_ident(ident);
         let continue_label = LabelRef::new(
             ident.span,
-            &format!("{}_LOOP", &name.0),
+            &format!("{}_LOOP", name.0),
             &mut self.ref_allocator,
         );
         let break_label = LabelRef::new(
             ident.span,
-            &format!("{}_LOOP_END", &name.0),
+            &format!("{}_LOOP_END", name.0),
             &mut self.ref_allocator,
         );
         let loop_item = LoopItem {

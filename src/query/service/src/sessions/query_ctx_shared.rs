@@ -820,7 +820,7 @@ impl QueryContextShared {
             }
         };
 
-        for (_, node_memory_updater) in self.node_memory_usage.read().iter() {
+        for node_memory_updater in self.node_memory_usage.read().values() {
             memory_usage += node_memory_updater.memory_usage.load(Ordering::Relaxed);
         }
 

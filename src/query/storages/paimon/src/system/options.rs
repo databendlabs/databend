@@ -19,7 +19,7 @@ use databend_common_expression::types::StringType;
 
 pub fn read(table: &paimon::Table) -> Result<DataBlock> {
     let mut options: Vec<_> = table.schema().options().iter().collect();
-    options.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
+    options.sort_unstable_by_key(|(left, _)| *left);
     let keys = options.iter().map(|(key, _)| key.as_str()).collect();
     let values = options.iter().map(|(_, value)| value.as_str()).collect();
     Ok(DataBlock::new_from_columns(vec![
