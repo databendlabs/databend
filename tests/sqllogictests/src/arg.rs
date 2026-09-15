@@ -154,4 +154,12 @@ pub struct SqlLogicTestArgs {
         help = "The databend server http port"
     )]
     pub port: u16,
+
+    #[arg(
+        long = "http-ports",
+        use_value_delimiter = true,
+        value_delimiter = ',',
+        help = "Databend server HTTP ports. When set, HTTP test files are distributed across these ports."
+    )]
+    pub http_ports: Option<Vec<u16>>,
 }
