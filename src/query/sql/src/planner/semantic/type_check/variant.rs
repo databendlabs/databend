@@ -67,7 +67,7 @@ impl<'a> CoreExprArena<'a> {
         loop {
             let path = match accessor {
                 MapAccessor::Bracket {
-                    key: box Expr::Literal { value, .. },
+                    key: deref!(Expr::Literal { value, .. }),
                 } => {
                     if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
                         return Err(ErrorCode::SemanticError(format!(
@@ -226,10 +226,10 @@ where A: super::TypeCheckAdapter
         // generally equivalent. Push down the String-producing access on its own
         // when possible; otherwise rebuild it from the resolved base below. The
         // outer cast is applied only after String semantics have been preserved.
-        let box (scalar, data_type) = self.resolve_core(arena, access.base)?;
+        let deref!((scalar, data_type)) = self.resolve_core(arena, access.base)?;
         if data_type.remove_nullable() == DataType::Variant {
             if access.string_result {
-                if let Some(box (string_scalar, string_type)) = self.try_pushdown_variant_paths(
+                if let Some(deref!((string_scalar, string_type))) = self.try_pushdown_variant_paths(
                     span,
                     &scalar,
                     &access.keypaths,
@@ -242,7 +242,7 @@ where A: super::TypeCheckAdapter
             } else {
                 let (target, keep_outer_cast) =
                     PushdownTarget::from_type_name(target_type, is_try)?;
-                if let Some(box (virtual_scalar, virtual_type)) =
+                if let Some(deref!((virtual_scalar, virtual_type))) =
                     self.try_pushdown_variant_paths(span, &scalar, &access.keypaths, target)
                 {
                     if keep_outer_cast {
@@ -263,7 +263,7 @@ where A: super::TypeCheckAdapter
 
         // Resolving the base can bind subqueries and update metadata. Reuse that
         // result when pushdown is unavailable instead of resolving the access again.
-        let box (scalar, data_type) =
+        let deref!((scalar, data_type)) =
             self.resolve_static_variant_access_fallback(arena, span, scalar, data_type, access)?;
         self.resolve_cast_expr(span, scalar, data_type, target_type, is_try)
             .map(Some)
@@ -293,7 +293,7 @@ where A: super::TypeCheckAdapter
             PushdownTarget::Variant
         };
 
-        let box (scalar, data_type) = match self.resolve_core(arena, access.base) {
+        let deref!((scalar, data_type)) = match self.resolve_core(arena, access.base) {
             Ok(resolved) => resolved,
             Err(err) => return Some(Err(err)),
         };
@@ -335,13 +335,13 @@ where A: super::TypeCheckAdapter
                 let last_index = path_ids.len().saturating_sub(1);
                 let mut result_type = data_type;
                 for (index, path_id) in path_ids.into_iter().enumerate() {
-                    let box (path_scalar, _) = self.resolve_core(arena, path_id)?;
+                    let deref!((path_scalar, _)) = self.resolve_core(arena, path_id)?;
                     let func_name = if string_result && index == last_index {
                         "get_string"
                     } else {
                         "get"
                     };
-                    let box (next_scalar, next_type) =
+                    let deref!((next_scalar, next_type)) =
                         self.resolve_scalar_function_call(span, func_name, vec![], vec![
                             scalar,
                             path_scalar,
@@ -352,7 +352,7 @@ where A: super::TypeCheckAdapter
                 Ok(Box::new((scalar, result_type)))
             }
             StaticVariantAccessKind::KeyPathCall { path_id } => {
-                let box (path_scalar, _) = self.resolve_core(arena, path_id)?;
+                let deref!((path_scalar, _)) = self.resolve_core(arena, path_id)?;
                 let func_name = if string_result {
                     "get_by_keypath_string"
                 } else {
@@ -600,7 +600,7 @@ where A: super::TypeCheckAdapter
                     // Use data type from meta to get the field names of tuple type.
                     table_data_type = data_type.physical_type().into_owned();
                     if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
-                        let box (inner_scalar, _inner_data_type) = self
+                        let deref!((inner_scalar, _inner_data_type)) = self
                             .resolve_tuple_map_access_pushdown(
                                 expr_span,
                                 column.clone(),
@@ -663,7 +663,7 @@ where A: super::TypeCheckAdapter
                 .into();
                 continue;
             }
-            let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
+            let deref!((path_scalar, _)) = self.resolve_literal(span, &path_lit)?;
             table_data_type = match table_data_type {
                 TableDataType::Array(inner_type) => *inner_type,
                 TableDataType::Map(inner_type) => match inner_type.remove_nullable() {

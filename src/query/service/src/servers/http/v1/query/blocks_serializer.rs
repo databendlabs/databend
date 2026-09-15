@@ -65,7 +65,7 @@ use serde::ser::SerializeSeq;
 fn data_is_null(column: &Column, row_index: usize) -> bool {
     match column {
         Column::Null { .. } => true,
-        Column::Nullable(box inner) => !inner.validity.get_bit(row_index),
+        Column::Nullable(deref!(inner)) => !inner.validity.get_bit(row_index),
         _ => false,
     }
 }

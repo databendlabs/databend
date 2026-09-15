@@ -1605,7 +1605,7 @@ impl DecimalDataType {
             Value::Column(Column::Decimal(column)) => with_decimal_type!(|T| match column {
                 DecimalColumn::T(_, size) => Some((DecimalDataType::T(*size), false)),
             }),
-            Value::Column(Column::Nullable(box column)) => {
+            Value::Column(Column::Nullable(deref!(column))) => {
                 with_decimal_type!(|T| match &column.column {
                     Column::Decimal(DecimalColumn::T(_, size)) =>
                         Some((DecimalDataType::T(*size), true)),

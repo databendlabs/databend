@@ -200,15 +200,15 @@ impl Domain {
             Domain::Number(domain) => domain.finite_cardinality_upper(),
             Domain::Nullable(NullableDomain { value: None, .. }) => Some(0),
             Domain::Nullable(NullableDomain {
-                value: Some(box Domain::Boolean(domain)),
+                value: Some(deref!(Domain::Boolean(domain))),
                 ..
             }) => Some((domain.has_false as u8 + domain.has_true as u8).into()),
             Domain::Nullable(NullableDomain {
-                value: Some(box Domain::Number(domain)),
+                value: Some(deref!(Domain::Number(domain))),
                 ..
             }) => domain.finite_cardinality_upper(),
             Domain::Nullable(NullableDomain {
-                value: Some(box Domain::Nullable(_)),
+                value: Some(deref!(Domain::Nullable(_))),
                 ..
             }) => unreachable!(),
             _ => None,

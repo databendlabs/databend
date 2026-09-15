@@ -46,7 +46,7 @@ impl AggregateFunctionCombinatorNull {
 
         for arg in arguments.iter() {
             match arg {
-                DataType::Nullable(box ty) => {
+                DataType::Nullable(deref!(ty)) => {
                     results.push(ty.clone());
                 }
                 _ => {

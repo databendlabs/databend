@@ -890,7 +890,7 @@ impl<'a> JoinProperty<'a> {
 pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExpr) {
     match data_type {
         DataType::Number(NumberDataType::UInt8)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt8))) => {
             let (ok, v) = check_uint_range(u8::MAX as u64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -900,7 +900,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::UInt16)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt16)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt16))) => {
             let (ok, v) = check_uint_range(u16::MAX as u64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -910,7 +910,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::UInt32)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt32)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt32))) => {
             let (ok, v) = check_uint_range(u32::MAX as u64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -920,7 +920,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::UInt64)
-        | DataType::Nullable(box DataType::Number(NumberDataType::UInt64)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::UInt64))) => {
             let (ok, v) = check_uint_range(u64::MAX, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -930,7 +930,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::Int8)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int8)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int8))) => {
             let (ok, v) = check_int_range(i8::MIN as i64, i8::MAX as i64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -940,7 +940,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::Int16)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int16)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int16))) => {
             let (ok, v) = check_int_range(i16::MIN as i64, i16::MAX as i64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -950,7 +950,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::Int32)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int32)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int32))) => {
             let (ok, v) = check_int_range(i32::MIN as i64, i32::MAX as i64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -960,7 +960,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::Int64)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Int64)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Int64))) => {
             let (ok, v) = check_int_range(i64::MIN, i64::MAX, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -970,7 +970,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::Float32)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Float32)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Float32))) => {
             let (ok, v) = check_float_range(f32::MIN as f64, f32::MAX as f64, &scalar);
             if ok {
                 return (true, ConstantExpr {
@@ -980,7 +980,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: &DataType) -> (bool, ConstantExp
             }
         }
         DataType::Number(NumberDataType::Float64)
-        | DataType::Nullable(box DataType::Number(NumberDataType::Float64)) => {
+        | DataType::Nullable(deref!(DataType::Number(NumberDataType::Float64))) => {
             let (ok, v) = check_float_range(f64::MIN, f64::MAX, &scalar);
             if ok {
                 return (true, ConstantExpr {

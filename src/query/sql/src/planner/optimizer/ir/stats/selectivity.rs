@@ -158,7 +158,7 @@ impl SelectivityEstimator {
         if output_domain.as_ref().is_some_and(|domain| match domain {
             Domain::Boolean(domain)
             | Domain::Nullable(NullableDomain {
-                value: Some(box Domain::Boolean(domain)),
+                value: Some(deref!(Domain::Boolean(domain))),
                 ..
             }) => !domain.has_true,
             _ => false,
@@ -540,12 +540,12 @@ fn deterministic_folded_selectivity(
         Domain::Boolean(domain) if !domain.has_false => Some(Selectivity::All),
         Domain::Nullable(NullableDomain { value: None, .. }) => Some(Selectivity::Zero),
         Domain::Nullable(NullableDomain {
-            value: Some(box Domain::Boolean(domain)),
+            value: Some(deref!(Domain::Boolean(domain))),
             ..
         }) if !domain.has_true => Some(Selectivity::Zero),
         Domain::Nullable(NullableDomain {
             has_null: false,
-            value: Some(box Domain::Boolean(domain)),
+            value: Some(deref!(Domain::Boolean(domain))),
         }) if !domain.has_false => Some(Selectivity::All),
         _ => None,
     }

@@ -384,7 +384,7 @@ where A: TypeCheckAdapter
             SpecialFunction::LastQueryId { arg } => {
                 let scalar = match arg {
                     Some((_, arg)) => {
-                        let box (scalar, _) = self.resolve_core(arena, *arg)?;
+                        let deref!((scalar, _)) = self.resolve_core(arena, *arg)?;
                         Some(scalar)
                     }
                     None => None,
@@ -456,7 +456,7 @@ where A: TypeCheckAdapter
         arg: &'f CoreDisplayExprArg,
     ) -> Result<(&'f str, ScalarExpr, DataType)> {
         let (display, arg) = arg;
-        let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+        let deref!((scalar, data_type)) = self.resolve_core(arena, *arg)?;
         Ok((display.as_str(), scalar, data_type))
     }
 
@@ -479,7 +479,7 @@ where A: TypeCheckAdapter
     ) -> Result<Vec<(&'f str, ScalarExpr, DataType)>> {
         let mut resolved_args = Vec::with_capacity(args.len());
         for (display, arg) in args {
-            let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+            let deref!((scalar, data_type)) = self.resolve_core(arena, *arg)?;
             resolved_args.push((display.as_str(), scalar, data_type));
         }
         Ok(resolved_args)
@@ -513,7 +513,7 @@ where A: TypeCheckAdapter
                 span,
                 value: Scalar::String(effective_role),
             });
-            let box (predicate, _) =
+            let deref!((predicate, _)) =
                 self.resolve_scalar_function_call(span, "eq", vec![], vec![
                     role.clone(),
                     role_literal,
@@ -572,7 +572,7 @@ where A: TypeCheckAdapter
             ) {
                 continue;
             }
-            let box (is_not_null, _) =
+            let deref!((is_not_null, _)) =
                 self.resolve_scalar_function_call(span, "is_not_null", vec![], vec![arg.clone()])?;
             if let ScalarExpr::ConstantExpr(ConstantExpr {
                 value: Scalar::Boolean(false),
@@ -581,7 +581,7 @@ where A: TypeCheckAdapter
             {
                 continue;
             }
-            let box (assume_not_null, _) =
+            let deref!((assume_not_null, _)) =
                 self.resolve_scalar_function_call(span, "assume_not_null", vec![], vec![
                     arg.clone(),
                 ])?;
@@ -624,25 +624,25 @@ where A: TypeCheckAdapter
             }
             let search = &args[i].1;
             let result = args[i + 1].1.clone();
-            let box (eq, _) = self.resolve_scalar_function_call(span, "eq", vec![], vec![
+            let deref!((eq, _)) = self.resolve_scalar_function_call(span, "eq", vec![], vec![
                 search_expr.clone(),
                 search.clone(),
             ])?;
-            let box (a_not_null, _) =
+            let deref!((a_not_null, _)) =
                 self.resolve_scalar_function_call(span, "is_not_null", vec![], vec![
                     search_expr.clone(),
                 ])?;
-            let box (a_null, _) =
+            let deref!((a_null, _)) =
                 self.resolve_scalar_function_call(span, "not", vec![], vec![a_not_null])?;
-            let box (b_not_null, _) =
+            let deref!((b_not_null, _)) =
                 self.resolve_scalar_function_call(span, "is_not_null", vec![], vec![
                     search.clone(),
                 ])?;
-            let box (b_null, _) =
+            let deref!((b_null, _)) =
                 self.resolve_scalar_function_call(span, "not", vec![], vec![b_not_null])?;
-            let box (both_null, _) =
+            let deref!((both_null, _)) =
                 self.resolve_scalar_function_call(span, "and", vec![], vec![a_null, b_null])?;
-            let box (condition, _) =
+            let deref!((condition, _)) =
                 self.resolve_scalar_function_call(span, "or", vec![], vec![eq, both_null])?;
             new_args.push(condition);
             new_args.push(result);
@@ -754,7 +754,8 @@ where A: TypeCheckAdapter
             "array_min"
         };
         let scalars = args.iter().map(|(_, scalar, _)| scalar.clone()).collect();
-        let box (array, _) = self.resolve_scalar_function_call(span, "array", vec![], scalars)?;
+        let deref!((array, _)) =
+            self.resolve_scalar_function_call(span, "array", vec![], scalars)?;
         if ignore_nulls {
             return self.resolve_scalar_function_call(span, array_func, vec![], vec![array]);
         }
@@ -762,12 +763,12 @@ where A: TypeCheckAdapter
             span: None,
             value: Scalar::Null,
         });
-        let box (contains_null, _) =
+        let deref!((contains_null, _)) =
             self.resolve_scalar_function_call(span, "array_contains", vec![], vec![
                 array.clone(),
                 null_scalar.clone(),
             ])?;
-        let box (max_or_min, _) =
+        let deref!((max_or_min, _)) =
             self.resolve_scalar_function_call(span, array_func, vec![], vec![array])?;
         self.resolve_scalar_function_call(span, "if", vec![], vec![
             contains_null,
@@ -809,7 +810,7 @@ where A: TypeCheckAdapter
         scalar: &ScalarExpr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let binary_func_name = func_name.replace("_string", "_binary");
-        let box (binary, _) =
+        let deref!((binary, _)) =
             self.resolve_scalar_function_call(span, &binary_func_name, vec![], vec![
                 scalar.clone(),
             ])?;
