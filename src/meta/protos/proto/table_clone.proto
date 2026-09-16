@@ -12,26 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::DateTime;
-use chrono::Utc;
+syntax = "proto3";
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct LeastVisibleTime {
-    pub time: DateTime<Utc>,
-}
+package databend_proto;
 
-impl LeastVisibleTime {
-    pub fn new(time: DateTime<Utc>) -> Self {
-        Self { time }
-    }
+// Direct lineage for a zero-copy clone table. Identity is carried by
+// (clone_group_id, clone_table_id) in the key.
+message TableCloneBinding {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
 
-    /// A writable fence without a historical lower bound. Every representable snapshot
-    /// timestamp is >= this value, including timestamps before the Unix epoch.
-    pub fn unbounded() -> Self {
-        Self::new(DateTime::<Utc>::MIN_UTC)
-    }
-
-    pub fn is_unbounded(&self) -> bool {
-        self.time == DateTime::<Utc>::MIN_UTC
-    }
+  uint64 source_table_id = 1;
 }

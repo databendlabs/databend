@@ -30,6 +30,7 @@ use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
 use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::InvalidMaterializedView;
+use databend_common_meta_app::app_error::InvalidTableClone;
 use databend_common_meta_app::app_error::MaterializedViewAlreadyExists;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
@@ -45,13 +46,20 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::AutoIncrementKey;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableCloneMeta;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -74,12 +82,15 @@ use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::MVSourceBinding;
 use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableCloneBinding;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -102,6 +113,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::invalidates_mv_source_bindings;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::value_id::ValueId;
@@ -201,6 +213,143 @@ fn validate_index_columns(meta: &TableMeta) -> Result<(), KVAppError> {
     Ok(())
 }
 
+async fn build_create_table_clone_txn(
+    kv_api: &(impl KVPbApi<Error = MetaError> + ?Sized),
+    req: &CreateTableReq,
+    clone: &CreateTableCloneMeta,
+    table_id: u64,
+    txn: &mut TxnRequest,
+) -> Result<(), KVAppError> {
+    let source_id = TableId::new(clone.source_table_id);
+    let source_meta = kv_api.get_pb(&source_id).await?.ok_or_else(|| {
+        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+            clone.source_table_id,
+            "create table clone source",
+        )))
+    })?;
+    if clone.source_table_seq.match_seq(&source_meta).is_err() {
+        return Err(KVAppError::AppError(AppError::from(
+            TableVersionMismatched::new(
+                clone.source_table_id,
+                clone.source_table_seq,
+                source_meta.seq,
+                "create table clone source",
+            ),
+        )));
+    }
+    if source_meta.drop_on.is_some() {
+        return Err(KVAppError::AppError(AppError::UnknownTableId(
+            UnknownTableId::new(
+                clone.source_table_id,
+                "create table clone source is dropped",
+            ),
+        )));
+    }
+
+    // The group is derived from the source: its own group option, else its table ID as a new
+    // group root. The request must carry the same value in the target's options.
+    let clone_group_id = parse_clone_group_id(&source_meta.options)
+        .map_err(|err| {
+            KVAppError::AppError(
+                InvalidTableClone::new(format!(
+                    "invalid clone_group_id on source table {}: {}",
+                    clone.source_table_id, err
+                ))
+                .into(),
+            )
+        })?
+        .unwrap_or(clone.source_table_id);
+    let clone_group_option = clone_group_id.to_string();
+    if req.table_meta.options.get(OPT_KEY_CLONE_GROUP_ID) != Some(&clone_group_option) {
+        return Err(KVAppError::AppError(
+            InvalidTableClone::new("inconsistent table clone group").into(),
+        ));
+    }
+
+    txn.condition
+        .push(txn_cond_seq(&source_id, Eq, source_meta.seq));
+    if !source_meta.options.contains_key(OPT_KEY_CLONE_GROUP_ID) {
+        let mut updated_source_meta = source_meta.data.clone();
+        updated_source_meta
+            .options
+            .insert(OPT_KEY_CLONE_GROUP_ID.to_string(), clone_group_option);
+        txn.if_then
+            .push(txn_put_pb(&source_id, &updated_source_meta));
+    } else if clone.source_table_id != clone_group_id {
+        // A non-root member must still be bound into the group; a missing binding is corrupted
+        // lineage that must not gain new children.
+        let source_binding_ident =
+            TableCloneByGroupIdent::new(clone_group_id, clone.source_table_id);
+        let source_binding = kv_api.get_pb(&source_binding_ident).await?;
+        let Some(source_binding) = source_binding else {
+            return Err(KVAppError::AppError(
+                InvalidTableClone::new("clone source binding disappeared during create").into(),
+            ));
+        };
+        txn.condition
+            .push(txn_cond_seq(&source_binding_ident, Eq, source_binding.seq));
+    }
+
+    let lvt_ident = LeastVisibleTimeIdent::new(req.tenant(), clone.source_table_id);
+    let (lvt_seq, lvt) = kv_api.get_pb_seq_and_value(&lvt_ident).await?;
+    if let Some(lvt) = lvt.as_ref()
+        && lvt.time > clone.snapshot_timestamp
+    {
+        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+            TableSnapshotExpired::new(
+                clone.source_table_id,
+                format!(
+                    "clone snapshot timestamp {:?} is older than least visible time {:?}",
+                    clone.snapshot_timestamp, lvt.time
+                ),
+            ),
+        )));
+    }
+    txn.condition.push(txn_cond_seq(&lvt_ident, Eq, lvt_seq));
+    if let Some(lvt) = lvt {
+        txn.if_then.push(txn_put_pb(
+            &LeastVisibleTimeIdent::new(req.tenant(), table_id),
+            &lvt,
+        ));
+    }
+    txn.if_then.push(txn_put_pb(
+        &TableCloneByGroupIdent::new(clone_group_id, table_id),
+        &TableCloneBinding {
+            source_table_id: clone.source_table_id,
+        },
+    ));
+
+    // Security policies are embedded in TableMeta, but their reverse references are keyed by
+    // table ID. Recreate them for the clone. No policy CAS is needed: the policies come from the
+    // source version fixed by the source seq condition above, so the source's own references
+    // still exist and block a concurrent DROP of the policy definition.
+    let mask_policy_ids = req
+        .table_meta
+        .column_mask_policy_columns_ids
+        .values()
+        .map(|policy| policy.policy_id)
+        .collect::<HashSet<_>>();
+    for policy_id in mask_policy_ids {
+        txn.if_then.push(txn_put_pb(
+            &MaskPolicyTableIdIdent::new_generic(req.tenant(), MaskPolicyIdTableId {
+                policy_id,
+                table_id,
+            }),
+            &MaskPolicyTableId,
+        ));
+    }
+    if let Some(policy) = &req.table_meta.row_access_policy_columns_ids {
+        txn.if_then.push(txn_put_pb(
+            &RowAccessPolicyTableIdIdent::new_generic(req.tenant(), RowAccessPolicyIdTableId {
+                policy_id: policy.policy_id,
+                table_id,
+            }),
+            &RowAccessPolicyTableId,
+        ));
+    }
+    Ok(())
+}
+
 fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError> {
     let name = &req.name_ident.table_name;
     if !req.as_dropped && req.table_meta.drop_on.is_some() {
@@ -214,6 +363,18 @@ fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError>
         ));
     }
     let is_mv = is_materialized_view_engine(&req.table_meta.engine);
+    if req.clone.is_some()
+        && (!req.table_meta.engine.eq_ignore_ascii_case("FUSE")
+            || !req.as_dropped
+            || req.source_table_option.is_some())
+    {
+        return Err(KVAppError::AppError(
+            InvalidTableClone::new(
+                "table clone must create a staged FUSE table without a source option update",
+            )
+            .into(),
+        ));
+    }
     if is_mv != req.materialized_view.is_some() || (is_mv && req.as_dropped) {
         return Err(KVAppError::AppError(
             InvalidMaterializedView::new("invalid materialized view create request").into(),
@@ -524,6 +685,10 @@ where
                         .push(txn_put_pb(&source_id, &updated_source_meta));
                 }
 
+                if let Some(clone) = &req.clone {
+                    build_create_table_clone_txn(self, &req, clone, table_id, &mut txn).await?;
+                }
+
                 if let Some(ref mv) = req.materialized_view {
                     let def_ident = MVDefinitionIdent::new(req.tenant(), table_id);
                     txn.if_then.push(txn_put_pb(&def_ident, &mv.definition));
@@ -589,6 +754,44 @@ where
                     ));
                 }
 
+                // Keep counter writes before the staged-table Get below: staged callers read its
+                // final transaction response to obtain the new TableMeta sequence.
+                for table_field in req.table_meta.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
+                    };
+
+                    let storage_value = if let Some(clone) = &req.clone {
+                        let source_key =
+                            AutoIncrementKey::new(clone.source_table_id, table_field.column_id());
+                        let source_ident =
+                            AutoIncrementStorageIdent::new_generic(req.tenant(), source_key);
+                        let source_value = self.get_pb(&source_ident).await?.ok_or_else(|| {
+                            KVAppError::AppError(
+                                InvalidTableClone::new(format!(
+                                    "auto-increment counter for clone source table {} column {} is missing",
+                                    clone.source_table_id,
+                                    table_field.column_id()
+                                ))
+                                .into(),
+                            )
+                        })?;
+                        // Auto-increment counters are table-ID-scoped and advance independently of
+                        // TableMeta. CAS the source counter so the clone captures one coherent
+                        // counter value, then install an independent target counter below.
+                        txn.condition
+                            .push(txn_cond_seq(&source_ident, Eq, source_value.seq));
+                        source_value.data
+                    } else {
+                        ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start)
+                    };
+
+                    let target_key = AutoIncrementKey::new(table_id, table_field.column_id());
+                    let target_ident =
+                        AutoIncrementStorageIdent::new_generic(req.tenant(), target_key);
+                    txn.if_then.push(txn_put_pb(&target_ident, &storage_value));
+                }
+
                 if req.as_dropped {
                     // To create the table in a "dropped" state,
                     // - we intentionally omit the tuple (key_dbid_name, table_id).
@@ -602,21 +805,6 @@ where
                     // (tenant, db_id, tb_name) -> tb_id
                     txn.if_then
                         .push(txn_put_pb(&key_dbid_tbname, &TableId::new(table_id)))
-                }
-
-                for table_field in req.table_meta.schema.fields() {
-                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
-                        continue;
-                    };
-
-                    let auto_increment_key =
-                        AutoIncrementKey::new(table_id, table_field.column_id());
-                    let storage_ident =
-                        AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
-                    let storage_value =
-                        ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start);
-                    txn.if_then
-                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;
@@ -1386,6 +1574,9 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
+        // Capture every LVT condition so the transaction's else branch can atomically report
+        // whether an LVT sequence changed while metadata was being published.
+        let mut lvt_guards = Vec::new();
         // If a request repeats a table ID, use the final update to decide whether its MV bindings
         // are invalidated, matching the transaction's final put for that table.
         let mut invalidates_mv_source_bindings_by_table_id = HashMap::new();
@@ -1410,15 +1601,15 @@ where
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
 
-            // Add LVT check if provided
+            // Add a per-table LVT check if provided.
             if let Some(check) = req.lvt_check.as_ref() {
-                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
+                let lvt_ident = LeastVisibleTimeIdent::new(tenant, req.table_id);
                 let res = self.get_pb(&lvt_ident).await?;
                 let (seq, current_lvt) = match res {
                     Some(v) => (v.seq, Some(v.data)),
                     None => (0, None),
                 };
-                if let Some(current_lvt) = current_lvt {
+                if let Some(current_lvt) = current_lvt.as_ref() {
                     if current_lvt.time > check.time {
                         return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
                             TableSnapshotExpired::new(
@@ -1431,8 +1622,16 @@ where
                         )));
                     }
                 }
-                // no other one has updated LVT since we read it
+                // No other operation may advance this table's LVT before the metadata update
+                // commits. Record its sequence so an LVT race can be returned as retryable.
                 txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
+                if check.touch {
+                    txn.if_then.push(txn_put_pb(
+                        &lvt_ident,
+                        &current_lvt.unwrap_or_else(LeastVisibleTime::unbounded),
+                    ));
+                }
+                lvt_guards.push((req.table_id, lvt_ident, seq));
             }
 
             txn.if_then.push(txn_put_pb(&tbid, &new_table_meta));
@@ -1568,6 +1767,14 @@ where
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
 
+        // Keep these after the table metadata gets: failure parsing relies on the first N
+        // responses matching `update_table_metas`, followed by one response per LVT guard.
+        for (_, lvt_ident, _) in &lvt_guards {
+            txn.else_then.push(TxnOp {
+                request: Some(Request::Get(TxnGetRequest::new(lvt_ident.to_string_key()))),
+            });
+        }
+
         let txn_response = txn_sender.send_txn(self, txn).await?;
 
         let else_branch_op_responses = match txn_response {
@@ -1584,9 +1791,12 @@ where
             IdempotentKVTxnResponse::Failed(op_responses) => op_responses,
         };
 
+        let table_response_count = update_table_metas.len();
         let mut mismatched_tbs = vec![];
+        let mut current_table_metas = HashMap::new();
         for (resp, req) in else_branch_op_responses
             .iter()
+            .take(table_response_count)
             .zip(update_table_metas.iter())
         {
             let Some(Response::Get(get_resp)) = &resp.response else {
@@ -1595,7 +1805,7 @@ where
                     resp.response
                 )
             };
-            // deserialize table version info
+            // Deserialize the table state returned atomically by the failed transaction.
             let (tb_meta_seq, table_meta): (_, TableMeta) = if let Some(seq_v) = &get_resp.value {
                 (seq_v.seq, deserialize_struct(&seq_v.data)?)
             } else {
@@ -1604,30 +1814,60 @@ where
                 )));
             };
 
-            // check table version
+            current_table_metas.insert(req.0.table_id, (tb_meta_seq, table_meta.clone()));
             if req.0.seq.match_seq(&tb_meta_seq).is_err() {
                 mismatched_tbs.push((req.0.table_id, tb_meta_seq, table_meta));
             }
         }
 
+        // A table-version conflict already forces the caller to rebuild its snapshot. Otherwise,
+        // return an LVT sequence race through the same retry path. If the new LVT has passed this
+        // commit's timestamp, the retry's normal precheck returns TableSnapshotExpired.
         if mismatched_tbs.is_empty() {
-            if !insert_if_not_exists_table_ids.is_empty() {
-                // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files
-                Err(KVAppError::AppError(AppError::from(
-                    DuplicatedUpsertFiles::new(
-                        insert_if_not_exists_table_ids,
-                        "update_multi_table_meta",
-                    ),
-                )))
-            } else {
-                // if all table version does match, but tx failed, we don't know why, just return error
-                Err(KVAppError::AppError(AppError::from(
-                    MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
-                )))
+            for (resp, (table_id, _, observed_seq)) in else_branch_op_responses
+                .iter()
+                .skip(table_response_count)
+                .zip(lvt_guards.iter())
+            {
+                let Some(Response::Get(get_resp)) = &resp.response else {
+                    unreachable!(
+                        "internal error: expect LVT TxnGetResponseGet, but got {:?}",
+                        resp.response
+                    )
+                };
+                let current_seq = get_resp.value.as_ref().map_or(0, |seq_v| seq_v.seq);
+                if current_seq == *observed_seq {
+                    continue;
+                }
+
+                let (table_seq, table_meta) =
+                    current_table_metas.get(table_id).ok_or_else(|| {
+                        KVAppError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                            *table_id,
+                            "update_multi_table_meta LVT retry",
+                        )))
+                    })?;
+                mismatched_tbs.push((*table_id, *table_seq, table_meta.clone()));
             }
+        }
+
+        if !mismatched_tbs.is_empty() {
+            // The upper layer rebuilds snapshots against the returned current table state.
+            return Ok(Err(mismatched_tbs));
+        }
+        if !insert_if_not_exists_table_ids.is_empty() {
+            // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files.
+            Err(KVAppError::AppError(AppError::from(
+                DuplicatedUpsertFiles::new(
+                    insert_if_not_exists_table_ids,
+                    "update_multi_table_meta",
+                ),
+            )))
         } else {
-            // up layer will retry
-            Ok(Err(mismatched_tbs))
+            // All known table and LVT conditions still match; another transaction condition failed.
+            Err(KVAppError::AppError(AppError::from(
+                MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+            )))
         }
     }
 
@@ -2171,6 +2411,20 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>, KVAppError> {
+        Ok(self
+            .get_pb_vec(table_ids.iter().copied().map(TableId::new))
+            .await?
+            .into_iter()
+            .map(|(ident, meta)| (ident.table_id, meta))
+            .collect())
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
     async fn set_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
@@ -2192,15 +2446,76 @@ where
         return Ok(transition.unwrap().result.into_value().unwrap_or_default());
     }
 
+    /// Atomically advance LVTs for `(table_id, observed_lvt_seq, candidate_lvt)` entries.
+    /// `Ok(true)` commits the entire batch; `Ok(false)` means a sequence conflict and no
+    /// writes from this batch. Neither outcome allows partial publication.
+    /// An error may leave the transaction outcome unknown (e.g. a transport failure after
+    /// commit). Callers must not sweep on either false or error, and must re-mark rather than
+    /// retry with fresh sequences and an old mark set. Repeated IDs must have the same
+    /// observed sequence; their candidates are merged with max before constructing writes.
+    async fn set_table_lvts(
+        &self,
+        tenant: &Tenant,
+        updates: &[(u64, u64, LeastVisibleTime)],
+    ) -> Result<bool, KVAppError> {
+        if updates.is_empty() {
+            return Ok(true);
+        }
+        let mut unique_updates = BTreeMap::new();
+        for (id, expected_seq, candidate) in updates {
+            let (seq, value) = unique_updates
+                .entry(*id)
+                .or_insert_with(|| (*expected_seq, candidate.clone()));
+            if *seq != *expected_seq {
+                return Ok(false);
+            }
+            value.time = value.time.max(candidate.time);
+        }
+        let current = self
+            .get_pb_vec(
+                unique_updates
+                    .keys()
+                    .map(|id| LeastVisibleTimeIdent::new(tenant, *id)),
+            )
+            .await?;
+        let mut txn = TxnRequest::default();
+        for (ident, value) in current {
+            let table_id = ident.table_id();
+            let (expected_seq, candidate) = unique_updates.get(&table_id).ok_or_else(|| {
+                KVAppError::AppError(
+                    InvalidTableClone::new(format!(
+                        "unexpected table {} in batched LVT read",
+                        table_id
+                    ))
+                    .into(),
+                )
+            })?;
+            let (seq, time) = value
+                .map(|v| (v.seq, v.data.time))
+                .unwrap_or((0, DateTime::<Utc>::MIN_UTC));
+            if seq != *expected_seq {
+                return Ok(false);
+            }
+            txn.condition.push(txn_cond_seq(&ident, Eq, *expected_seq));
+            // Touch even when the lower bound is unchanged, serializing concurrent GC rounds.
+            txn.if_then.push(txn_put_pb(
+                &ident,
+                &LeastVisibleTime::new(time.max(candidate.time)),
+            ));
+        }
+        let (success, _) = send_txn(self, txn).await?;
+        Ok(success)
+    }
+
+    /// Read the LVT and its sequence before observing snapshot heads. An absent key has seq 0.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn get_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
+    ) -> Result<Option<SeqV<LeastVisibleTime>>, KVAppError> {
         debug!(req :? =(&name_ident); "TableApi: {}", func_name!());
-        let res = self.get_pb(name_ident).await?;
-        Ok(res.map(|v| v.data))
+        Ok(self.get_pb(name_ident).await?)
     }
 }
 

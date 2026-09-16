@@ -212,6 +212,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
+    /// Batch get table metadata by table IDs. Missing tables remain `None` in the result.
+    async fn mget_table_metas_by_ids(
+        &self,
+        _table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        Err(ErrorCode::Unimplemented(
+            "'mget_table_metas_by_ids' not implemented",
+        ))
+    }
+
+    /// List lightweight direct-source bindings in a zero-copy clone group.
+    async fn list_clone_group_bindings(&self, _clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        Err(ErrorCode::Unimplemented(
+            "'list_clone_group_bindings' not implemented",
+        ))
+    }
+
     /// Get a materialized-view definition by its table ID.
     async fn get_mv_definition(
         &self,
@@ -728,10 +745,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
+    /// Atomically advance `(table_id, observed_lvt_seq, candidate_lvt)` entries.
+    /// True confirms the entire batch committed; false means a conflict with no batch writes.
+    /// Errors can have an unknown commit outcome. GC must not sweep on false or error.
+    async fn set_table_lvts(
+        &self,
+        _tenant: &Tenant,
+        _updates: &[(u64, u64, LeastVisibleTime)],
+    ) -> Result<bool> {
+        unimplemented!()
+    }
+
     async fn get_table_lvt(
         &self,
         _name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>> {
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
         unimplemented!()
     }
 

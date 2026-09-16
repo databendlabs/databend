@@ -178,6 +178,20 @@ impl InvalidMaterializedView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("InvalidTableClone: {reason}")]
+pub struct InvalidTableClone {
+    reason: String,
+}
+
+impl InvalidTableClone {
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("MaterializedViewAlreadyExists: {view_name} while {context}")]
 pub struct MaterializedViewAlreadyExists {
     view_name: String,
@@ -941,6 +955,9 @@ pub enum AppError {
     InvalidMaterializedView(#[from] InvalidMaterializedView),
 
     #[error(transparent)]
+    InvalidTableClone(#[from] InvalidTableClone),
+
+    #[error(transparent)]
     MaterializedViewAlreadyExists(#[from] MaterializedViewAlreadyExists),
 
     #[error(transparent)]
@@ -1243,6 +1260,8 @@ impl AppErrorMessage for SharedTableSecurityPolicy {}
 
 impl AppErrorMessage for InvalidMaterializedView {}
 
+impl AppErrorMessage for InvalidTableClone {}
+
 impl AppErrorMessage for MaterializedViewAlreadyExists {
     fn message(&self) -> String {
         format!("Materialized view '{}' already exists", self.view_name)
@@ -1467,6 +1486,7 @@ impl From<AppError> for ErrorCode {
             AppError::InvalidMaterializedView(err) => {
                 ErrorCode::InvalidMaterializedView(err.message())
             }
+            AppError::InvalidTableClone(err) => ErrorCode::InvalidTableClone(err.message()),
             AppError::MaterializedViewAlreadyExists(err) => {
                 ErrorCode::MaterializedViewAlreadyExists(err.message())
             }

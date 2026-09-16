@@ -181,6 +181,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=256)),
                 }),
+                ("enable_experimental_clone_table", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental CREATE TABLE ... CLONE. Clone table data integrity and safety are not guaranteed in mixed-version deployments.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_vacuum_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets the maximum number of threads to execute vacuum operation.",

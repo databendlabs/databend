@@ -132,6 +132,7 @@ async fn vacuum_database(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::sync::Mutex;
     use std::time::Duration;
 
@@ -180,6 +181,7 @@ mod tests {
             _threads_nums: usize,
             _tables: Vec<Arc<dyn Table>>,
             _dry_run_limit: Option<usize>,
+            _safe_clone_table_ids: HashSet<u64>,
         ) -> VacuumDropTablesResult {
             unreachable!("batch vacuum must not vacuum dropped tables")
         }

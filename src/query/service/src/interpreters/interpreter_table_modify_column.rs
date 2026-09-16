@@ -1213,6 +1213,7 @@ async fn rewrite_decimal_stats_and_commit(
         new_snapshot.table_statistics_location = Some(location);
     }
 
+    let gc_safe_time = new_snapshot.timestamp;
     let new_snapshot_location = fuse_table
         .meta_location_generator()
         .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -1226,7 +1227,14 @@ async fn rewrite_decimal_stats_and_commit(
         new_snapshot_location.clone(),
     );
     new_table_meta.updated_on = Utc::now();
-    update_table_meta(fuse_table, &new_table_meta, catalog, ctx.get_tenant()).await?;
+    update_table_meta(
+        fuse_table,
+        &new_table_meta,
+        catalog,
+        ctx.get_tenant(),
+        gc_safe_time,
+    )
+    .await?;
     FuseTable::write_last_snapshot_hint(
         ctx.as_ref(),
         operator,
