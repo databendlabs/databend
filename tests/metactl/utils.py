@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 
 import os
+import socket
 import subprocess
 import time
-import sys
-import socket
 from pathlib import Path
 
 BUILD_PROFILE = os.environ.get("BUILD_PROFILE", "debug")
 SCRIPT_PATH = Path(__file__).parent.absolute()
 
 
-def run_command(cmd, check=True, shell=False):
-    """Run a command and return its output"""
+def run_command_result(cmd, shell=False):
+    """Run a command and return its complete result."""
     if isinstance(cmd, str) and not shell:
         cmd = cmd.split()
 
@@ -28,9 +27,15 @@ def run_command(cmd, check=True, shell=False):
 
     print(result)
 
+    return result
+
+
+def run_command(cmd, check=True, shell=False):
+    """Run a command and return its stdout."""
+    result = run_command_result(cmd, shell=shell)
+
     if check:
-        if result.returncode != 0:
-            raise Exception(result)
+        result.check_returncode()
 
     if result.stderr:
         print(f"STDERR: {result.stderr}")
