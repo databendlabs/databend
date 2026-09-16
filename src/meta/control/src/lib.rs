@@ -20,6 +20,7 @@ pub mod dump_raft_log_wal;
 pub mod export_from_disk;
 pub mod export_from_grpc;
 pub mod filter_tenant;
+pub mod grpc_client_auth;
 pub mod import;
 mod import_v004;
 pub mod keys_layout_from_grpc;

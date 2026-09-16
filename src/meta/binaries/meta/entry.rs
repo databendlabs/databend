@@ -40,16 +40,16 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::metrics::server_metrics;
 use databend_meta::openraft::MessageSummary;
+use databend_meta::raft_client::connect_raft_service;
 use databend_meta::raft_config::config::RaftConfig;
 use databend_meta::raft_config::data_version::DATA_VERSION;
-use databend_meta::raft_secret::connect_raft_service;
+use databend_meta::raft_transport::RaftPeerTarget;
 use databend_meta::raft_version::raft_client_requires;
 use databend_meta::raft_version::raft_server_provides;
 use databend_meta::runtime_api::RuntimeApi;
 use databend_meta::store_compat::ondisk::OnDisk;
 use databend_meta::types::Cmd;
 use databend_meta::types::LogEntry;
-use databend_meta::types::node::Node;
 use databend_meta::types::raft_types::NodeId;
 use databend_meta::util::reply_to_api_result;
 use databend_meta_admin::HttpService;
@@ -231,9 +231,8 @@ async fn do_register<RT: RuntimeApi>(
     leader_id: NodeId,
 ) -> anyhow::Result<()> {
     let node_id = meta_handle.id;
-    let raft_endpoint = config.raft_config.raft_api_advertise_host_endpoint();
-    let node = Node::new(node_id, raft_endpoint)
-        .with_grpc_advertise_address(config.grpc.advertise_address());
+    let mut node = config.get_node();
+    node.name = node_id.to_string();
 
     println!("Register this node: {{{}}}", node);
     println!();
@@ -271,7 +270,8 @@ async fn do_register<RT: RuntimeApi>(
 
         // Not the generated stub: a raft RPC that carries no shared secret is
         // refused by a leader running with `raft_secret_strict` on.
-        let client = connect_raft_service(&leader_raft_endpoint, &config.raft_config).await?;
+        let leader_target = RaftPeerTarget::plaintext(leader_raft_endpoint);
+        let client = connect_raft_service(&leader_target, &config.raft_config).await?;
 
         let max_msg_size = config.raft_config.raft_grpc_max_message_size();
         let mut client = client
