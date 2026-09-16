@@ -333,12 +333,15 @@ pub struct DraftVirtualBlockMeta {
     pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
 }
 
-/// Metadata of one inverted index generated for a block.
+/// Metadata of one independently stored table-index object generated for a block.
+///
+/// Currently used by inverted indexes. Vector and spatial indexes can reuse the same layout once
+/// they move to one object per index.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub struct BlockInvertedIndexMeta {
+pub struct BlockIndexMeta {
     /// Logical index name.
     pub index_name: String,
-    /// Complete object location. `Location.1` is the outer inverted-index file format version.
+    /// Complete object location. `Location.1` is the outer object format version of this index.
     pub location: Location,
     /// Object size in bytes.
     pub size: u64,
@@ -370,7 +373,7 @@ pub struct BlockMeta {
     /// `None` means legacy metadata without an authoritative index list. `Some` is authoritative,
     /// including `Some(Vec::new())`. Entries are kept sorted by `index_name`.
     #[serde(default)]
-    pub inverted_index_metas: Option<Vec<BlockInvertedIndexMeta>>,
+    pub inverted_index_metas: Option<Vec<BlockIndexMeta>>,
     pub ngram_filter_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
     pub vector_index_location: Option<Location>,
@@ -442,7 +445,7 @@ impl BlockMeta {
     /// Returns metadata for the named inverted index.
     ///
     /// The entries are expected to be sorted by `index_name` and unique.
-    pub fn inverted_index_meta(&self, index_name: &str) -> Option<&BlockInvertedIndexMeta> {
+    pub fn inverted_index_meta(&self, index_name: &str) -> Option<&BlockIndexMeta> {
         let metas = self.inverted_index_metas.as_ref()?;
         metas
             .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))

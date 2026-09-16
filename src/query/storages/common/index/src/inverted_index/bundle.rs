@@ -28,7 +28,7 @@ const BUNDLE_TRAILER_MAGIC: [u8; 4] = *b"DBIV";
 pub const MANAGED_JSON_PATH: &str = ".managed.json";
 pub const META_JSON_PATH: &str = "meta.json";
 
-/// Outer inverted-index object format stored in `BlockInvertedIndexMeta.location.1`.
+/// Outer inverted-index object format stored in `BlockIndexMeta.location.1`.
 /// This is the first raw Tantivy bundle object format.
 pub const INVERTED_INDEX_FILE_FORMAT_VERSION: u64 = 1;
 

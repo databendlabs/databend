@@ -44,7 +44,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
-use databend_storages_common_table_meta::meta::BlockInvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -410,7 +410,7 @@ impl AsyncTransform for InvertedIndexTransform {
                             version,
                         );
                     match self.operator.stat(&location).await {
-                        Ok(metadata) => legacy_metas.push(BlockInvertedIndexMeta {
+                        Ok(metadata) => legacy_metas.push(BlockIndexMeta {
                             index_name: name.clone(),
                             location: (location, 0),
                             size: metadata.content_length(),
@@ -424,7 +424,7 @@ impl AsyncTransform for InvertedIndexTransform {
                 legacy_metas
             }
         };
-        let new_meta = BlockInvertedIndexMeta {
+        let new_meta = BlockIndexMeta {
             index_name: self.index_name.clone(),
             location: (index_location, INVERTED_INDEX_FILE_FORMAT_VERSION),
             size: index_size,

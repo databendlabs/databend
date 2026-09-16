@@ -44,7 +44,7 @@ use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
-use databend_storages_common_table_meta::meta::BlockInvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -419,7 +419,7 @@ impl StreamBlockBuilder {
             .reduce(|a, b| a + b);
         let mut inverted_index_metas = inverted_index_states
             .iter()
-            .map(|state| BlockInvertedIndexMeta {
+            .map(|state| BlockIndexMeta {
                 index_name: state.index_name.clone(),
                 location: state.location.clone(),
                 size: state.size,

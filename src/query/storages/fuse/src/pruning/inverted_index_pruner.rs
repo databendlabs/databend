@@ -19,7 +19,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
-use databend_storages_common_table_meta::meta::BlockInvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use opendal::Operator;
 use tantivy::query::Query;
 use tantivy::query::QueryClone;
@@ -100,7 +100,7 @@ impl InvertedIndexPruner {
     pub async fn should_keep(
         &self,
         _block_location: &str,
-        inverted_index_metas: Option<&[BlockInvertedIndexMeta]>,
+        inverted_index_metas: Option<&[BlockIndexMeta]>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
         let index_meta = inverted_index_metas

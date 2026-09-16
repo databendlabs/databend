@@ -14,7 +14,7 @@
 
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v2::AdditionalStatsMeta;
-pub use v2::BlockInvertedIndexMeta;
+pub use v2::BlockIndexMeta;
 pub use v2::BlockMeta;
 pub use v2::ClusterStatistics;
 pub use v2::ColumnMeta;

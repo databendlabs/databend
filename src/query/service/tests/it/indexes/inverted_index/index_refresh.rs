@@ -37,6 +37,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::trim_object_prefix;
 use futures_util::TryStreamExt;
 
@@ -154,11 +155,13 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     assert!(index_loc.contains(&format!("/_i_i_v2/{index_version}/")));
     let index_file = index_loc.rsplit('/').next().unwrap();
     let index_object_id = index_file.strip_suffix(".index").unwrap();
-    assert_eq!(index_object_id.len(), 32);
-    assert!(index_object_id.chars().all(|ch| ch.is_ascii_hexdigit()));
+    assert!(index_object_id.starts_with(VACUUM2_OBJECT_KEY_PREFIX));
+    let index_uuid = trim_object_prefix(index_object_id);
+    assert_eq!(index_uuid.len(), 32);
+    assert!(index_uuid.chars().all(|ch| ch.is_ascii_hexdigit()));
     let block_file = block_meta.location.0.rsplit('/').next().unwrap();
     let block_object_id = trim_object_prefix(block_file).split('_').next().unwrap();
-    assert_ne!(index_object_id, block_object_id);
+    assert_ne!(index_uuid, block_object_id);
     let bundle = dal.read(index_loc).await?.to_bytes();
     assert_eq!(u64::try_from(bundle.len()).unwrap(), index_meta.size);
     let footer = InvertedIndexBundleFooter::open(bundle.as_ref())?;

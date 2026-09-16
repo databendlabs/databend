@@ -46,7 +46,7 @@ use super::block_meta::AbstractBlockMeta;
 use super::block_meta::ColumnOrientedBlockMeta;
 use super::meta_name;
 use super::stat_name;
-use crate::meta::BlockInvertedIndexMeta;
+use crate::meta::BlockIndexMeta;
 use crate::meta::BlockMeta;
 use crate::meta::CompactSegmentInfo;
 use crate::meta::MetaCompression;
@@ -170,7 +170,7 @@ impl ColumnOrientedSegment {
             .clone()
     }
 
-    pub fn inverted_index_metas(&self, row: usize) -> Result<Option<Vec<BlockInvertedIndexMeta>>> {
+    pub fn inverted_index_metas(&self, row: usize) -> Result<Option<Vec<BlockIndexMeta>>> {
         let Some(column) = self.col_by_name(&[INVERTED_INDEX_METAS]) else {
             return Ok(None);
         };

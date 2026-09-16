@@ -34,7 +34,7 @@ use databend_common_expression::types::VariantType;
 use databend_storages_common_index::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
-use databend_storages_common_table_meta::meta::BlockInvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use futures::StreamExt;
 use jsonb::Object as JsonbObject;
@@ -66,7 +66,7 @@ impl From<&FuseInvertedIndexArgs> for TableArgs {
 /// Inspects inverted-index bundle footers for a Fuse table.
 ///
 /// Usage: `SELECT * FROM fuse_inverted_index('<database>', '<table>')`.
-/// One row is returned per bundle object referenced by `BlockInvertedIndexMeta`. If a block has
+/// One row is returned per bundle object referenced by `BlockIndexMeta`. If a block has
 /// multiple indexes, it produces multiple rows. The bundle's raw Tantivy files are listed in
 /// `footer.raw_files`. A damaged index has a null `footer` and a diagnostic in `error` without
 /// preventing other index rows from being returned.
@@ -239,7 +239,7 @@ impl SimpleTableFunc for FuseInvertedIndexTable {
 struct IndexInspectionTask {
     block_location: String,
     row_count: u64,
-    meta: BlockInvertedIndexMeta,
+    meta: BlockIndexMeta,
 }
 
 struct IndexInspection {
@@ -275,7 +275,7 @@ async fn inspect_index(operator: &Operator, task: IndexInspectionTask) -> IndexI
 
 async fn load_footer(
     operator: &Operator,
-    meta: &BlockInvertedIndexMeta,
+    meta: &BlockIndexMeta,
 ) -> Result<InvertedIndexBundleFooter> {
     if meta.location.1 != INVERTED_INDEX_FILE_FORMAT_VERSION {
         return Err(ErrorCode::StorageOther(format!(
