@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
-use databend_common_expression::local_block_meta_serde;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BlockPartitionMeta {
     pub part_ptr: Vec<PartInfoPtr>,
 }
@@ -37,8 +37,6 @@ impl Debug for BlockPartitionMeta {
             .finish()
     }
 }
-
-local_block_meta_serde!(BlockPartitionMeta);
 
 #[typetag::serde(name = "block_partition_meta")]
 impl BlockMetaInfo for BlockPartitionMeta {}
