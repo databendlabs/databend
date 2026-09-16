@@ -68,7 +68,7 @@ impl InvertedIndexReader {
 
         if index_format_version != INVERTED_INDEX_FILE_FORMAT_VERSION {
             return Err(ErrorCode::RefreshIndexError(format!(
-                "inverted index `{index_loc}` uses outdated format version {index_format_version}; run `REFRESH TABLE INDEX` to rebuild it"
+                "inverted index `{index_loc}` uses outdated format version {index_format_version}; run `REFRESH INVERTED INDEX` to rebuild it"
             )));
         }
 

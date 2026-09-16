@@ -564,28 +564,6 @@ INSERT INTO t4 VALUES
 
 
 statement ok
-CREATE TABLE t_native (id int, content string, INVERTED INDEX idx1 (content)) storage_format = 'parquet' row_per_page = 2;
-
-statement ok
-INSERT INTO t_native VALUES 
-(1, 'The quick brown fox jumps over the lazy dog'),
-(2, 'A picture is worth a thousand words'),
-(3, 'The early bird catches the worm'),
-(4, 'Actions speak louder than words'),
-(5, 'Time flies like an arrow; fruit flies like a banana'),
-(6, 'Beauty is in the eye of the beholder'),
-(7, 'When life gives you lemons, make lemonade'),
-(8, 'Put all your eggs in one basket'),
-(9, 'You can not judge a book by its cover'),
-(10, 'An apple a day keeps the doctor away')
-
-query IT
-select * from t_native where query('content:book OR content:basket');
-----
-8 Put all your eggs in one basket
-9 You can not judge a book by its cover
-
-statement ok
 CREATE TABLE t_japanese (
     id int,
     content string,

@@ -59,7 +59,6 @@ pub struct PreparedInvertedIndexQuery {
 }
 
 pub struct InvertedIndexPruner {
-    has_score: bool,
     index_name: String,
     index_version: String,
     reader: InvertedIndexReader,
@@ -86,7 +85,6 @@ impl InvertedIndexPruner {
             );
 
             return Ok(Some(Arc::new(InvertedIndexPruner {
-                has_score,
                 index_name,
                 index_version,
                 reader,
@@ -115,7 +113,7 @@ impl InvertedIndexPruner {
                 && meta.location.1 == INVERTED_INDEX_FILE_FORMAT_VERSION
         }) else {
             return Err(ErrorCode::RefreshIndexError(format!(
-                "inverted index `{}` is missing or uses an outdated format on block {}; run `REFRESH TABLE INDEX {}` to rebuild it",
+                "inverted index `{}` is missing or uses an outdated format on block {}; run `REFRESH INVERTED INDEX {}` to rebuild it",
                 self.index_name, block_location, self.index_name
             )));
         };
