@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::F32;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use opendal::Operator;
@@ -99,37 +99,26 @@ impl InvertedIndexPruner {
     #[async_backtrace::framed]
     pub async fn should_keep(
         &self,
-        _block_location: &str,
+        block_location: &str,
         inverted_index_metas: Option<&[BlockIndexMeta]>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let index_meta = inverted_index_metas
-            .and_then(|index_metas| {
-                index_metas
-                    .binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name))
-                    .ok()
-                    .and_then(|index| index_metas.get(index))
-            })
-            .filter(|meta| meta.index_version == self.index_version);
-
-        let Some(index_meta) = index_meta else {
-            // Blocks without explicit metadata predate V2. Keep them rather than producing a
-            // false negative; explicit non-V2 metadata below is rejected.
-            let row_count = usize::try_from(row_count).map_err(|_| {
-                databend_common_exception::ErrorCode::StorageOther(
-                    "inverted-index row count exceeds this platform",
-                )
-            })?;
-            let rows = (0..row_count).collect();
-            let scores = self.has_score.then(|| vec![F32::from(0.0); row_count]);
-            return Ok(Some((rows, scores)));
-        };
-        if index_meta.location.1 != INVERTED_INDEX_FILE_FORMAT_VERSION {
-            return Err(databend_common_exception::ErrorCode::StorageOther(format!(
-                "unsupported inverted-index file format version {}; expected {}",
-                index_meta.location.1, INVERTED_INDEX_FILE_FORMAT_VERSION
+        let index_meta = inverted_index_metas.and_then(|index_metas| {
+            index_metas
+                .binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name))
+                .ok()
+                .and_then(|index| index_metas.get(index))
+        });
+        let Some(index_meta) = index_meta.filter(|meta| {
+            !meta.location.0.is_empty()
+                && meta.index_version == self.index_version
+                && meta.location.1 == INVERTED_INDEX_FILE_FORMAT_VERSION
+        }) else {
+            return Err(ErrorCode::RefreshIndexError(format!(
+                "inverted index `{}` is missing or uses an outdated format on block {}; run `REFRESH TABLE INDEX {}` to rebuild it",
+                self.index_name, block_location, self.index_name
             )));
-        }
+        };
 
         self.reader
             .do_filter(

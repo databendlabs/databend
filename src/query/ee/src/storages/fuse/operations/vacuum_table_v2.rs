@@ -340,6 +340,11 @@ async fn purge_inverted_index_v2_objects(
     let mut removed = 0;
 
     while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index V2 objects under {prefix}"
+            )));
+        }
         if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
             continue;
         }
