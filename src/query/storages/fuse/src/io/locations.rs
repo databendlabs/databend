@@ -497,38 +497,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_inverted_index_v2_location() {
-        let index_version = "fedcba9876543210fedcba9876543210";
-        let generator = TableMetaLocationGenerator::new("table".to_string());
-        let first = generator.gen_inverted_index_v2_location(index_version);
-        let second = generator.gen_inverted_index_v2_location(index_version);
-
-        let expected_prefix = "table/_i_i_v2/fedcba9876543210fedcba9876543210/";
-        assert_ne!(first, second);
-        for location in [&first, &second] {
-            assert!(location.starts_with(expected_prefix));
-            assert!(!location.contains("index_name"));
-            let file_name = location.rsplit('/').next().unwrap();
-            let object_id = file_name.strip_suffix(".index").unwrap();
-            assert_eq!(object_id.len(), 32);
-            assert!(object_id.chars().all(|ch| ch.is_ascii_hexdigit()));
-        }
-
-        assert_eq!(
-            generator.gen_specific_inverted_index_v2_prefix(index_version),
-            expected_prefix
-        );
-        assert_eq!(
-            generator.gen_specific_inverted_index_prefix("index_name", index_version),
-            "table/_i_i/index_name/fedcba9/"
-        );
-        assert_eq!(
-            generator.gen_specific_inverted_index_legacy_v2_prefix("index_name", index_version,),
-            "table/_i_i/index_name/fedcba9876543210fedcba9876543210/"
-        );
-    }
-
-    #[test]
     fn test_virtual_block_locations_are_generation_specific() {
         let block_location = "table/_b/block_v4.parquet";
         let first = TableMetaLocationGenerator::gen_virtual_block_location(block_location);

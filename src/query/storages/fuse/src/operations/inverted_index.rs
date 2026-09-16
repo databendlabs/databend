@@ -125,7 +125,7 @@ impl FuseTable {
 
         let operator = self.get_operator_ref();
 
-        // Read segment metadata and collect blocks without the requested index generation.
+        // Rebuild only when the block has no explicit metadata, no location, or a different generation.
         let mut block_metas = VecDeque::new();
         for (segment_idx, (segment_loc, ver)) in snapshot.segments.iter().enumerate() {
             if target_segments
@@ -148,10 +148,11 @@ impl FuseTable {
             };
 
             for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
-                let generated = is_current_inverted_index(
-                    block_meta.inverted_index_meta(&index_name),
-                    &index_version,
-                );
+                let generated = block_meta
+                    .inverted_index_meta(&index_name)
+                    .is_some_and(|meta| {
+                        !meta.location.0.is_empty() && meta.index_version == index_version
+                    });
                 if !generated {
                     block_metas.push_back(RefreshInvertedIndexMeta {
                         index: BlockMetaIndex {
@@ -454,8 +455,4 @@ impl AsyncTransform for InvertedIndexTransform {
             ..Default::default()
         })))
     }
-}
-
-fn is_current_inverted_index(meta: Option<&BlockInvertedIndexMeta>, index_version: &str) -> bool {
-    meta.is_some_and(|meta| meta.index_version == index_version)
 }
