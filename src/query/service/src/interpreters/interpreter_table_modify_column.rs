@@ -614,52 +614,60 @@ impl ModifyTableColumnInterpreter {
                         )
                     }
                     (
-                        TableDataType::Array(box TableDataType::Tuple {
-                            fields_name: old_fields_name,
-                            ..
-                        }),
-                        TableDataType::Array(box TableDataType::Tuple {
-                            fields_name: new_fields_name,
-                            fields_type: new_fields_type,
-                        }),
-                    )
-                    | (
-                        TableDataType::Array(box TableDataType::Nullable(
-                            box TableDataType::Tuple {
+                        TableDataType::Array(
+                            deref!(TableDataType::Tuple {
                                 fields_name: old_fields_name,
                                 ..
-                            },
-                        )),
-                        TableDataType::Array(box TableDataType::Tuple {
-                            fields_name: new_fields_name,
-                            fields_type: new_fields_type,
-                        }),
-                    )
-                    | (
-                        TableDataType::Array(box TableDataType::Tuple {
-                            fields_name: old_fields_name,
-                            ..
-                        }),
-                        TableDataType::Array(box TableDataType::Nullable(
-                            box TableDataType::Tuple {
+                            }),
+                        ),
+                        TableDataType::Array(
+                            deref!(TableDataType::Tuple {
                                 fields_name: new_fields_name,
                                 fields_type: new_fields_type,
-                            },
-                        )),
+                            }),
+                        ),
                     )
                     | (
-                        TableDataType::Array(box TableDataType::Nullable(
-                            box TableDataType::Tuple {
+                        TableDataType::Array(
+                            deref!(TableDataType::Nullable(deref!(TableDataType::Tuple {
                                 fields_name: old_fields_name,
                                 ..
-                            },
-                        )),
-                        TableDataType::Array(box TableDataType::Nullable(
-                            box TableDataType::Tuple {
+                            }),)),
+                        ),
+                        TableDataType::Array(
+                            deref!(TableDataType::Tuple {
                                 fields_name: new_fields_name,
                                 fields_type: new_fields_type,
-                            },
-                        )),
+                            }),
+                        ),
+                    )
+                    | (
+                        TableDataType::Array(
+                            deref!(TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            }),
+                        ),
+                        TableDataType::Array(
+                            deref!(TableDataType::Nullable(deref!(TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            }),)),
+                        ),
+                    )
+                    | (
+                        TableDataType::Array(
+                            deref!(TableDataType::Nullable(deref!(TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            }),)),
+                        ),
+                        TableDataType::Array(
+                            deref!(TableDataType::Nullable(deref!(TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            }),)),
+                        ),
                     ) => {
                         let transform_funcs = new_fields_name
                             .iter()

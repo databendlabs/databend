@@ -190,7 +190,7 @@ where
 {
     fn update_column(&mut self, column: &Column) {
         let (column, validity) = match column {
-            Column::Nullable(box inner) => {
+            Column::Nullable(deref!(inner)) => {
                 let validity = if inner.validity.null_count() == 0 {
                     None
                 } else {

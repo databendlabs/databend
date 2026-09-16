@@ -303,7 +303,7 @@ where A: TypeCheckAdapter
         let is_grouping = func_name.eq_ignore_ascii_case("grouping");
         let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
         for arg in args {
-            let box (mut scalar, _) = self.resolve_core(arena, *arg)?;
+            let deref!((mut scalar, _)) = self.resolve_core(arena, *arg)?;
             if is_grouping
                 && let Some(group_item) = self.grouping_argument_group_item(arena, *arg, &scalar)
             {
@@ -318,7 +318,7 @@ where A: TypeCheckAdapter
             return rewritten_vector_expr;
         }
 
-        let box (scalar, data_type) =
+        let deref!((scalar, data_type)) =
             self.resolve_scalar_function_call(span, func_name, vec![], scalars.into_vec())?;
         if func_name == "eq" || func_name == "noteq" {
             self.rewrite_variant_compare_constant(scalar, data_type)
@@ -624,7 +624,15 @@ where A: TypeCheckAdapter
         };
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        let expr = type_check::rewrite_function_to_cast(expr);
+        if let [argument] = args.as_slice()
+            && expr == argument.as_expr()?
+        {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                self.adapter.set_result_cache_uncacheable();
+            }
+            return Ok(Box::new((argument.clone(), expr.data_type().clone())));
+        }
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
         let is_top_level_cast = matches!(&expr, expr::Expr::Cast(_));
 
         // Run constant folding for arguments of the scalar function.
@@ -653,7 +661,7 @@ where A: TypeCheckAdapter
                         return arg;
                     }
                     match self.try_fold_constant(checked_arg.clone()) {
-                        Ok(box (constant, _)) => constant,
+                        Ok(deref!((constant, _))) => constant,
                         Err(_) => arg,
                     }
                 })

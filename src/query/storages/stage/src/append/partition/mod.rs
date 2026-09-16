@@ -146,7 +146,7 @@ impl PartitionByRuntime {
 fn extract_string_column(column: Column) -> Result<(StringColumn, Option<Bitmap>)> {
     match column {
         Column::String(col) => Ok((col, None)),
-        Column::Nullable(box NullableColumn { column, validity }) => {
+        Column::Nullable(deref!(NullableColumn { column, validity })) => {
             let inner = column.as_string().cloned().ok_or_else(|| {
                 ErrorCode::Internal("PARTITION BY expression must evaluate to STRING".to_string())
             })?;

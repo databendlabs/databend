@@ -198,7 +198,7 @@ impl Binder {
             }
 
             Statement::StatementWithSettings { settings: _, stmt } => {
-                if let box Statement::StatementWithSettings { .. } = stmt {
+                if let deref!(Statement::StatementWithSettings { .. }) = stmt {
                     return Err(ErrorCode::SyntaxException("Invalid statement"));
                 } else {
                     self.bind_statement(bind_context, stmt).await?

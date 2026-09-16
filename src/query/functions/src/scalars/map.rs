@@ -16,7 +16,9 @@ use std::collections::HashSet;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
@@ -41,6 +43,7 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::vectorize_1_arg;
@@ -63,41 +66,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         "map",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<1>>, MapType<GenericType<0>, GenericType<1>>>(
-            |keys, vals, output, ctx| {
-                let key_type = &ctx.generics[0];
-                if !check_valid_map_key_type(key_type) {
-                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
-                } else if keys.len() != vals.len() {
-                    ctx.set_error(output.len(), format!(
-                        "key list has a different size from value list ({} keys, {} values)",
-                        keys.len(), vals.len()
-                    ));
-                } else if keys.len() <= 1 {
-                    for idx in 0..keys.len() {
-                        let key = unsafe { keys.index_unchecked(idx) };
-                        let val = unsafe { vals.index_unchecked(idx) };
-                        output.put_item((key, val));
-                    }
-                } else {
-                    let mut set: StackHashSet<u128, 16> =
-                        StackHashSet::with_capacity(keys.len());
-                    for idx in 0..keys.len() {
-                        let key = unsafe { keys.index_unchecked(idx) };
-                        let mut hasher = SipHasher24::new();
-                        key.hash(&mut hasher);
-                        let hash128 = hasher.finish128();
-                        let hash_key = hash128.into();
-                        if set.contains(&hash_key) {
-                            ctx.set_error(output.len(), "map keys have to be unique");
-                            break;
-                        }
-                        let _ = set.set_insert(hash_key);
-                        let val = unsafe { vals.index_unchecked(idx) };
-                        output.put_item((key, val));
-                    }
-                }
-                output.commit_row();
-            }
+            |keys, vals, output, ctx| build_map(keys, vals, false, output, ctx)
+        ),
+    );
+
+    registry.register_3_arg::<EmptyArrayType, EmptyArrayType, BooleanType, EmptyMapType, _, _>(
+        "map",
+        |_, _, _, _| FunctionDomain::Full,
+        |_, _, _, _| (),
+    );
+
+    // Unlike map_insert's update flag, allow_duplicate_keys keeps the first value.
+    registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<1>>, BooleanType, MapType<GenericType<0>, GenericType<1>>, _, _>(
+        "map",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<1>>, BooleanType, MapType<GenericType<0>, GenericType<1>>>(
+            build_map
         ),
     );
 
@@ -304,7 +288,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
-                                    DataType::Map(box typ) => typ,
+                                    DataType::Map(deref!(typ)) => typ,
                                     _ => unreachable!(),
                                 };
 
@@ -359,7 +343,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = map_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
@@ -398,7 +382,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = map_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
@@ -499,7 +483,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
 
                                 let inner_builder_type = match input_map.infer_data_type() {
-                                    DataType::Map(box typ) => typ,
+                                    DataType::Map(deref!(typ)) => typ,
                                     _ => unreachable!(),
                                 };
 
@@ -546,7 +530,7 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
     }
 
     let map_key_type = match args_type[0].remove_nullable() {
-        DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
+        DataType::Map(deref!(DataType::Tuple(type_tuple))) if type_tuple.len() == 2 => {
             Some(type_tuple[0].clone())
         }
         DataType::EmptyMap => None,
@@ -555,7 +539,7 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
 
     // the second argument can be an array of keys.
     let (is_array, array_key_type) = match args_type[1].remove_nullable() {
-        DataType::Array(box key_type) => (true, Some(key_type.remove_nullable())),
+        DataType::Array(deref!(key_type)) => (true, Some(key_type.remove_nullable())),
         DataType::EmptyArray => (true, None),
         _ => (false, None),
     };
@@ -595,6 +579,55 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
     }
     let return_type = args_type[0].clone();
     Some(return_type)
+}
+
+#[inline]
+fn build_map(
+    keys: Column,
+    vals: Column,
+    allow_duplicate_keys: bool,
+    output: &mut <MapType<GenericType<0>, GenericType<1>> as ValueType>::ColumnBuilder,
+    ctx: &mut EvalContext,
+) {
+    let key_type = &ctx.generics[0];
+    if !check_valid_map_key_type(key_type) {
+        ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+    } else if keys.len() != vals.len() {
+        ctx.set_error(
+            output.len(),
+            format!(
+                "key list has a different size from value list ({} keys, {} values)",
+                keys.len(),
+                vals.len()
+            ),
+        );
+    } else if keys.len() <= 1 {
+        for idx in 0..keys.len() {
+            let key = unsafe { keys.index_unchecked(idx) };
+            let val = unsafe { vals.index_unchecked(idx) };
+            output.put_item((key, val));
+        }
+    } else {
+        let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(keys.len());
+        for idx in 0..keys.len() {
+            let key = unsafe { keys.index_unchecked(idx) };
+            let mut hasher = SipHasher24::new();
+            key.hash(&mut hasher);
+            let hash128 = hasher.finish128();
+            let hash_key = hash128.into();
+            if set.contains(&hash_key) {
+                if allow_duplicate_keys {
+                    continue;
+                }
+                ctx.set_error(output.len(), "map keys have to be unique");
+                break;
+            }
+            let _ = set.set_insert(hash_key);
+            let val = unsafe { vals.index_unchecked(idx) };
+            output.put_item((key, val));
+        }
+    }
+    output.commit_row();
 }
 
 fn check_valid_map_key_type(key_type: &DataType) -> bool {

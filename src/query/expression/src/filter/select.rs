@@ -230,9 +230,10 @@ impl Selector<'_> {
         buffers: SelectionBuffers,
         has_false: bool,
     ) -> Result<usize> {
-        debug_assert!(
-            matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
-        );
+        debug_assert!(matches!(
+            data_type,
+            DataType::Boolean | DataType::Nullable(deref!(DataType::Boolean))
+        ));
 
         let count = match FilterHelpers::decode_predicate(value) {
             Value::Scalar(scalar) => self.select_boolean_scalar_adapt(scalar, buffers, has_false),

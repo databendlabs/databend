@@ -19,6 +19,7 @@ use databend_query::sessions::BuildInfoRef;
 
 use crate::attach_table::RealAttachTableHandler;
 use crate::data_mask::RealDatamaskHandler;
+use crate::data_sharing::RealDataSharingHandler;
 use crate::fail_safe::RealFailSafeHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::materialized_view::RealMaterializedViewHandler;
@@ -37,6 +38,7 @@ impl EnterpriseServices {
         RealStorageEncryptionHandler::init(&cfg, version)?;
         RealVacuumHandler::init()?;
         RealDatamaskHandler::init()?;
+        RealDataSharingHandler::init()?;
         RealRowAccessPolicyHandler::init()?;
         RealMaterializedViewHandler::init()?;
         RealStreamHandler::init()?;

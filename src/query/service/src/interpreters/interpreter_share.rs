@@ -44,15 +44,10 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
+use crate::share::DataSharingHandlerWrapper;
 use crate::share::SHARE_ENGINE;
 use crate::share::SetShareRequest;
-use crate::share::ShareMgr;
-use crate::share::ensure_provider_table_can_be_shared;
-use crate::share::resolve_share_storage_params;
-
-fn share_mgr() -> ShareMgr {
-    ShareMgr::create(UserApiProvider::instance().get_meta_store_client())
-}
+use crate::share::share_mgr;
 
 pub struct CreateShareInterpreter {
     ctx: Arc<QueryContext>,
@@ -77,7 +72,7 @@ impl Interpreter for CreateShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let service = share_mgr();
+            let service = share_mgr(&self.ctx)?;
             if service.exists(&self.plan.tenant, &self.plan.name).await? {
                 match self.plan.create_option {
                     CreateOption::CreateIfNotExists => {
@@ -120,12 +115,13 @@ impl Interpreter for CreateShareInterpreter {
 }
 
 pub struct DropShareInterpreter {
+    ctx: Arc<QueryContext>,
     plan: DropSharePlan,
 }
 
 impl DropShareInterpreter {
-    pub fn try_create(_ctx: Arc<QueryContext>, plan: DropSharePlan) -> Result<Self> {
-        Ok(Self { plan })
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropSharePlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
@@ -141,7 +137,7 @@ impl Interpreter for DropShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let service = share_mgr();
+            let service = share_mgr(&self.ctx)?;
             if self.plan.if_exists && !service.exists(&self.plan.tenant, &self.plan.name).await? {
                 return Ok(PipelineBuildResult::create());
             }
@@ -165,7 +161,7 @@ impl AlterShareInterpreter {
 
     async fn validate_replacement_connection(
         &self,
-        service: &ShareMgr,
+        service: &DataSharingHandlerWrapper,
         connection: &str,
     ) -> Result<BTreeSet<u64>> {
         validate_share_management_for_connection(self.ctx.clone(), Some(connection)).await?;
@@ -186,18 +182,23 @@ impl AlterShareInterpreter {
                         table_id
                     ))
                 })?;
-            ensure_provider_table_can_be_shared(&table_meta.data)?;
+            service.ensure_provider_table_can_be_shared(&table_meta.data)?;
             let storage_params = table_meta
                 .data
                 .storage_params
                 .clone()
                 .unwrap_or_else(|| GlobalConfig::instance().storage.params.clone());
-            resolve_share_storage_params(&self.plan.tenant, connection, storage_params).await?;
+            service
+                .resolve_share_storage_params(&self.plan.tenant, connection, storage_params)
+                .await?;
         }
         Ok(table_ids)
     }
 
-    async fn authorize_required_current_connection(&self, service: &ShareMgr) -> Result<String> {
+    async fn authorize_required_current_connection(
+        &self,
+        service: &DataSharingHandlerWrapper,
+    ) -> Result<String> {
         let connection = service
             .get_connection_name(&self.plan.tenant, &self.plan.name)
             .await?;
@@ -218,7 +219,7 @@ impl Interpreter for AlterShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let service = share_mgr();
+            let service = share_mgr(&self.ctx)?;
             if self.plan.if_exists && !service.exists(&self.plan.tenant, &self.plan.name).await? {
                 return Ok(PipelineBuildResult::create());
             }
@@ -285,12 +286,13 @@ impl Interpreter for AlterShareInterpreter {
 }
 
 pub struct ShowSharesInterpreter {
+    ctx: Arc<QueryContext>,
     plan: ShowSharesPlan,
 }
 
 impl ShowSharesInterpreter {
-    pub fn try_create(_ctx: Arc<QueryContext>, plan: ShowSharesPlan) -> Result<Self> {
-        Ok(Self { plan })
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowSharesPlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
@@ -306,7 +308,8 @@ impl Interpreter for ShowSharesInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let rows = share_mgr()
+            let service = share_mgr(&self.ctx)?;
+            let rows = service
                 .show_shares(
                     &self.plan.tenant,
                     self.plan.like.as_deref(),
@@ -350,12 +353,13 @@ impl Interpreter for ShowSharesInterpreter {
 }
 
 pub struct DescShareInterpreter {
+    ctx: Arc<QueryContext>,
     plan: DescSharePlan,
 }
 
 impl DescShareInterpreter {
-    pub fn try_create(_ctx: Arc<QueryContext>, plan: DescSharePlan) -> Result<Self> {
-        Ok(Self { plan })
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DescSharePlan) -> Result<Self> {
+        Ok(Self { ctx, plan })
     }
 }
 
@@ -371,7 +375,8 @@ impl Interpreter for DescShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let rows = share_mgr()
+            let service = share_mgr(&self.ctx)?;
+            let rows = service
                 .describe_share(
                     &self.plan.tenant,
                     self.plan.provider_tenant.as_deref(),
@@ -415,6 +420,7 @@ impl Interpreter for CreateDatabaseFromShareInterpreter {
 
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
+            let service = share_mgr(&self.ctx)?;
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
             if catalog.is_external() {
                 return Err(ErrorCode::InvalidOperation(
@@ -430,7 +436,7 @@ impl Interpreter for CreateDatabaseFromShareInterpreter {
                 return Ok(PipelineBuildResult::create());
             }
 
-            let binding = share_mgr()
+            let binding = service
                 .bind_share_database(
                     &self.plan.tenant,
                     &self.plan.provider_tenant,

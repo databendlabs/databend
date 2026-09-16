@@ -7,6 +7,14 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TLS_SHARE_USER_CONNECT="bendsql_connect_user tls_share_user 123 -A --quote-style=never"
 
+# Match the provider storage: EE CI uses S3/MinIO, while local runs can use fs.
+share_connection_options="storage_type = '${STORAGE_TYPE:-fs}'"
+if [[ "${STORAGE_TYPE:-fs}" == s3 ]]; then
+	share_connection_options+=" access_key_id = '${STORAGE_S3_ACCESS_KEY_ID:-minioadmin}'
+secret_access_key = '${STORAGE_S3_SECRET_ACCESS_KEY:-minioadmin}'
+endpoint_url = '${STORAGE_S3_ENDPOINT_URL:-http://127.0.0.1:9900}'"
+fi
+
 bendsql_connect_root_null <<SQL
 set global enable_experimental_connection_privilege_check=1;
 set sandbox_tenant = 'tls_share_provider';
@@ -20,7 +28,7 @@ drop share if exists tls_share;
 drop database if exists tls_share_db;
 drop connection if exists tls_share_conn;
 
-create connection tls_share_conn storage_type = 'fs';
+create connection tls_share_conn ${share_connection_options};
 create share tls_share connection = tls_share_conn;
 create database tls_share_db;
 create table tls_share_db.orders(id int);
@@ -32,7 +40,7 @@ create user tls_share_user identified by '123' with default_role='tls_share_role
 grant role tls_share_role to tls_share_user;
 
 set sandbox_tenant = 'tls_share_provider';
-create connection tls_inbound_conn storage_type = 'fs';
+create connection tls_inbound_conn ${share_connection_options};
 create share tls_inbound_share connection = tls_inbound_conn;
 create database tls_inbound_db;
 create table tls_inbound_db.orders(id int);
