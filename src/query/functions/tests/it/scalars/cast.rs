@@ -192,6 +192,11 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
         "a",
         gen_bitmap_data(),
     )]);
+
+    run_ast(file, format!("{prefix}CAST(a AS VARIANT NULL)"), &[(
+        "a",
+        Int64Type::from_data_with_validity(vec![1, 2, 3], vec![true, false, true]),
+    )]);
 }
 
 fn test_cast_number_to_timestamp(file: &mut impl Write, is_try: bool) {
