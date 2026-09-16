@@ -414,19 +414,19 @@ in stats      :
 out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(3), ndv: 1.0, null_count: 0, histogram: None }
 
-=== domain_folded_logical_predicates ===
-description: Domain-folded constants should still compose with remaining predicate selectivity.
+=== stale_range_logical_predicates ===
+description: Potentially stale range statistics should remain estimates when composing logical predicates.
 expr          : or_filters(and_filters(a > 1, c > 2), and_filters(b < 3, d < 4))
 cardinality   : 10
-estimated     : 8
+estimated     : 8.8
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(0), ndv: 1.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(0), ndv: 1.0, null_count: 0, histogram: None }
 2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
 3 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999998976[..1.0], null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999998976[..1.0], null_count: 0, histogram: None }
-2 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.8[..5.0], null_count: 0, histogram: None }
-3 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.8[..5.0], null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999999993808264[..1.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999999993808264[..1.0], null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.928[..5.0], null_count: 0, histogram: None }
+3 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.928[..5.0], null_count: 0, histogram: None }
 

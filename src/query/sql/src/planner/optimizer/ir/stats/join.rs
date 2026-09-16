@@ -420,8 +420,42 @@ impl JoinStatsEstimator {
     pub(crate) fn finish(self) -> Result<Arc<StatInfo>> {
         let mut stats = self.finish_join_stats()?;
         let output_rows = stats.output_rows;
-        let column_stats = if output_rows == 0.0 {
+        let left_proven_empty = self.left_input.statistics.precise_cardinality == Some(0);
+        let right_proven_empty = self.right_input.statistics.precise_cardinality == Some(0);
+        let proven_empty = match self.join_type {
+            JoinType::Inner
+            | JoinType::InnerAny
+            | JoinType::Asof
+            | JoinType::Cross
+            | JoinType::LeftSemi
+            | JoinType::RightSemi => left_proven_empty || right_proven_empty,
+            JoinType::Left
+            | JoinType::LeftAny
+            | JoinType::LeftSingle
+            | JoinType::RightMark
+            | JoinType::LeftAnti => left_proven_empty,
+            JoinType::Right
+            | JoinType::RightAny
+            | JoinType::RightSingle
+            | JoinType::LeftMark
+            | JoinType::RightAnti => right_proven_empty,
+            // ASOF plans swap their logical children.
+            JoinType::LeftAsof => right_proven_empty,
+            JoinType::RightAsof => left_proven_empty,
+            JoinType::Full | JoinType::FullAsof => left_proven_empty && right_proven_empty,
+        };
+        let column_stats = if proven_empty {
             HashMap::new()
+        } else if output_rows == 0.0 {
+            // Potentially stale distributions can estimate zero without proving
+            // emptiness. Preserve them for downstream estimation in that case.
+            self.left_input
+                .statistics
+                .column_stats
+                .iter()
+                .chain(&self.right_input.statistics.column_stats)
+                .map(|(column, stat)| (*column, stat.clone()))
+                .collect()
         } else {
             std::iter::chain(
                 stats.output_column_stats(&self.left_input.statistics.column_stats, Side::Left)?,
@@ -433,7 +467,7 @@ impl JoinStatsEstimator {
         Ok(Arc::new(StatInfo {
             cardinality: output_rows,
             statistics: Statistics {
-                precise_cardinality: None,
+                precise_cardinality: proven_empty.then_some(0),
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),

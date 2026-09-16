@@ -22,6 +22,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_expression::StatEvaluator;
 use databend_common_expression::stat_distribution::ArgStat;
@@ -68,6 +69,7 @@ pub struct SelectivityEstimator {
     top_n: TopNSet,
     count_min_sketch: CountMinSketchSet,
     overrides: ColumnStatSet,
+    proven_empty: bool,
 }
 
 impl SelectivityEstimator {
@@ -78,6 +80,7 @@ impl SelectivityEstimator {
             top_n: TopNSet::new(),
             count_min_sketch: CountMinSketchSet::new(),
             overrides: ColumnStatSet::new(),
+            proven_empty: cardinality == StatCardinality::Exact(0),
         }
     }
 
@@ -89,6 +92,13 @@ impl SelectivityEstimator {
     pub fn with_count_min_sketch(mut self, count_min_sketch: CountMinSketchSet) -> Self {
         self.count_min_sketch = count_min_sketch;
         self
+    }
+
+    /// Returns true when the predicates deterministically produce no rows.
+    ///
+    /// This is deliberately stronger than an estimated cardinality of zero.
+    pub fn is_proven_empty(&self) -> bool {
+        self.proven_empty
     }
 
     fn merged_column_stats(&self) -> ColumnStatSet {
@@ -127,8 +137,9 @@ impl SelectivityEstimator {
             }),
         };
         let expr = scalar_expr.as_expr()?;
-        let input_domains = self.build_input_domains(&expr)?;
-        let (expr, output_domain) = ConstantFolder::fold_with_domain(
+        let input_domains =
+            build_constraint_domains(&expr, &self.column_stats, self.cardinality, None)?;
+        let (expr, output_domain) = fold_for_proven_empty(
             Cow::Owned(expr),
             &input_domains,
             func_ctx,
@@ -143,6 +154,7 @@ impl SelectivityEstimator {
             return match constant_filter_truthiness(&constant.scalar) {
                 Some(true) => Ok(self.cardinality.value()),
                 Some(false) => {
+                    self.proven_empty = true;
                     self.clear_column_stats_for_empty_result();
                     Ok(0.0)
                 }
@@ -163,6 +175,10 @@ impl SelectivityEstimator {
             }) => !domain.has_true,
             _ => false,
         }) {
+            // These domains contain only type constraints and exact all-null
+            // facts, so an expression with no true result is deterministically
+            // false for every input row.
+            self.proven_empty = true;
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
         }
@@ -193,13 +209,6 @@ impl SelectivityEstimator {
         Ok(output_cardinality)
     }
 
-    fn build_input_domains(
-        &self,
-        expr: &Expr<ColumnBinding>,
-    ) -> Result<HashMap<ColumnBinding, Domain>> {
-        build_input_domains(expr, &self.column_stats)
-    }
-
     fn clear_column_stats_for_empty_result(&mut self) {
         for (index, column_stat) in &self.column_stats {
             let mut column_stat = column_stat.clone();
@@ -219,6 +228,7 @@ impl SelectivityEstimator {
             Selectivity::Unknown => DEFAULT_SELECTIVITY,
             Selectivity::LowerBound => UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND,
             Selectivity::Zero => {
+                self.proven_empty = true;
                 self.clear_column_stats_for_empty_result();
                 return 0.0;
             }
@@ -377,41 +387,39 @@ impl SelectivityEstimator {
     }
 }
 
-fn build_input_domains(
+// Domains used for deterministic folding must not inherit potentially stale
+// min/max or NDV bounds. Only type constraints and exact all-NULL inputs prove
+// predicate truth. Join residuals express side-local null counts in pair rows.
+fn build_constraint_domains(
     expr: &Expr<ColumnBinding>,
     column_stats: &ColumnStatSet,
+    cardinality: StatCardinality,
+    column_row_scales: Option<&HashMap<Symbol, StatCardinality>>,
 ) -> Result<HashMap<ColumnBinding, Domain>> {
     expr.column_refs()
         .into_iter()
         .map(|(binding, data_type)| {
-            let Some(column_stat) = column_stats.get(&binding.index) else {
-                return Ok((binding, Domain::full(&data_type)));
-            };
-
-            if !matches!(
-                data_type.remove_nullable(),
-                DataType::Boolean
-                    | DataType::String
-                    | DataType::Number(_)
-                    | DataType::Decimal(_)
-                    | DataType::Date
-                    | DataType::Timestamp
-            ) {
-                return Ok((binding, Domain::full(&data_type)));
+            let scale = column_row_scales
+                .and_then(|scales| scales.get(&binding.index))
+                .copied()
+                .unwrap_or_else(|| StatCardinality::exact(1));
+            if matches!(data_type, DataType::Nullable(_))
+                && let StatCardinality::Exact(cardinality) = cardinality
+                && let StatCardinality::Exact(scale) = scale
+                && let Some(ColumnStat::AllNull {
+                    null_count: StatCount::Exact(null_count),
+                }) = column_stats.get(&binding.index)
+                && null_count.checked_mul(scale) == Some(cardinality)
+            {
+                return Ok((
+                    binding,
+                    Domain::Nullable(NullableDomain {
+                        has_null: true,
+                        value: None,
+                    }),
+                ));
             }
-
-            match column_stat.to_arg_stat(&data_type) {
-                Ok(arg_stat) => Ok((binding, arg_stat.domain)),
-                Err(msg) => {
-                    log::warn!(
-                        data_type:?,
-                        column_stat:?,
-                        msg;
-                        "Failed to build input domain"
-                    );
-                    Ok((binding, Domain::full(&data_type)))
-                }
-            }
+            Ok((binding, Domain::full(&data_type)))
         })
         .collect()
 }
@@ -551,6 +559,158 @@ fn deterministic_folded_selectivity(
     }
 }
 
+fn fold_for_proven_empty<'e>(
+    expr: Cow<'e, Expr<ColumnBinding>>,
+    input_domains: &HashMap<ColumnBinding, Domain>,
+    func_ctx: &FunctionContext,
+    fn_registry: &FunctionRegistry,
+) -> (Cow<'e, Expr<ColumnBinding>>, Option<Domain>) {
+    if !contains_modulo(expr.as_ref()) {
+        return ConstantFolder::fold_with_domain(expr, input_domains, func_ctx, fn_registry);
+    }
+
+    let Cow::Owned(Expr::FunctionCall(mut call)) = expr else {
+        return (expr, None);
+    };
+    if !matches!(
+        call.function.signature.name.as_str(),
+        "and_filters" | "or_filters"
+    ) {
+        return (Cow::Owned(Expr::FunctionCall(call)), None);
+    }
+
+    let is_or = call.function.signature.name == "or_filters";
+    let args = std::mem::take(&mut call.args);
+    let mut folded_args = Vec::with_capacity(args.len());
+    let mut safe_segment = Vec::new();
+    let mut blocked_seen = false;
+
+    for arg in args {
+        if !contains_modulo(&arg) {
+            safe_segment.push(arg);
+            continue;
+        }
+
+        if let Some(result) = flush_safe_filter_segment(
+            &call,
+            &mut safe_segment,
+            &mut folded_args,
+            blocked_seen,
+            is_or,
+            input_domains,
+            func_ctx,
+            fn_registry,
+        ) {
+            return result;
+        }
+
+        let (arg, _) = fold_for_proven_empty(Cow::Owned(arg), input_domains, func_ctx, fn_registry);
+        folded_args.push(arg.into_owned());
+        blocked_seen = true;
+    }
+
+    flush_safe_filter_segment(
+        &call,
+        &mut safe_segment,
+        &mut folded_args,
+        blocked_seen,
+        is_or,
+        input_domains,
+        func_ctx,
+        fn_registry,
+    );
+
+    call.args = folded_args;
+    (Cow::Owned(Expr::FunctionCall(call)), None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn flush_safe_filter_segment<'e>(
+    call: &databend_common_expression::FunctionCall<ColumnBinding>,
+    safe_segment: &mut Vec<Expr<ColumnBinding>>,
+    folded_args: &mut Vec<Expr<ColumnBinding>>,
+    blocked_seen: bool,
+    is_or: bool,
+    input_domains: &HashMap<ColumnBinding, Domain>,
+    func_ctx: &FunctionContext,
+    fn_registry: &FunctionRegistry,
+) -> Option<(Cow<'e, Expr<ColumnBinding>>, Option<Domain>)> {
+    if safe_segment.is_empty() {
+        return None;
+    }
+
+    let segment = fold_filter_segment(
+        call,
+        std::mem::take(safe_segment),
+        input_domains,
+        func_ctx,
+        fn_registry,
+    );
+    if is_decisive_filter_constant(&segment, is_or) && !blocked_seen {
+        return Some((
+            Cow::Owned(Expr::Constant(Constant {
+                span: call.span,
+                scalar: Scalar::Boolean(is_or),
+                data_type: DataType::Boolean,
+            })),
+            None,
+        ));
+    }
+    folded_args.push(segment);
+    None
+}
+
+fn fold_filter_segment(
+    call: &databend_common_expression::FunctionCall<ColumnBinding>,
+    mut args: Vec<Expr<ColumnBinding>>,
+    input_domains: &HashMap<ColumnBinding, Domain>,
+    func_ctx: &FunctionContext,
+    fn_registry: &FunctionRegistry,
+) -> Expr<ColumnBinding> {
+    if args.len() == 1 {
+        return ConstantFolder::fold_with_domain(
+            Cow::Owned(args.pop().unwrap()),
+            input_domains,
+            func_ctx,
+            fn_registry,
+        )
+        .0
+        .into_owned();
+    }
+
+    let mut segment_call = call.clone();
+    segment_call.args = args;
+    ConstantFolder::fold_with_domain(
+        Cow::Owned(Expr::FunctionCall(segment_call)),
+        input_domains,
+        func_ctx,
+        fn_registry,
+    )
+    .0
+    .into_owned()
+}
+
+fn is_decisive_filter_constant(expr: &Expr<ColumnBinding>, is_or: bool) -> bool {
+    matches!(
+        expr,
+        Expr::Constant(Constant {
+            scalar: Scalar::Boolean(value),
+            ..
+        }) if *value == is_or
+    )
+}
+
+fn contains_modulo(expr: &Expr<ColumnBinding>) -> bool {
+    match expr {
+        Expr::Constant(_) | Expr::ColumnRef(_) => false,
+        Expr::Cast(cast) => contains_modulo(&cast.expr),
+        Expr::FunctionCall(call) => {
+            call.function.signature.name == "modulo" || call.args.iter().any(contains_modulo)
+        }
+        Expr::LambdaFunctionCall(call) => call.args.iter().any(contains_modulo),
+    }
+}
+
 // SelectivityVisitor consumes the expression after ConstantFolder has applied
 // expression/domain reasoning. Deterministic predicate truth, boolean
 // short-circuiting, and contradictions visible from input domains should already
@@ -613,6 +773,13 @@ impl ValueConstraintState {
         if !column_stats.contains_key(&index) {
             return Ok(());
         }
+        if matches!(constraint, ValueConstraint::Range { .. })
+            && constraint.is_disjoint_from(&column_stats[&index])
+        {
+            // A range that misses stored bounds may match newer data. Do not
+            // materialize the stale contradiction into output statistics.
+            return Ok(());
+        }
         let mut constraints = self.pending.get(&index).cloned().unwrap_or_default();
         constraints.push(constraint);
         self.pending.insert(index, constraints);
@@ -650,6 +817,12 @@ type ExprCall = databend_common_expression::FunctionCall<ColumnBinding>;
 
 impl Selectivity {
     fn checked_estimate(value: f64) -> Result<Self> {
+        // Column distributions are estimates and may lag behind appended data.
+        // Reserve exact zero for expression-local facts and exact constraints;
+        // a statistics-derived zero falls back to the unknown-filter heuristic.
+        if value == 0.0 {
+            return Ok(Selectivity::Unknown);
+        }
         if value.is_finite() && (0.0..=1.0).contains(&value) {
             return Ok(Selectivity::N(value));
         }
@@ -694,15 +867,16 @@ impl SelectivityVisitor<'_> {
         column_row_scales: &HashMap<Symbol, StatCardinality>,
         func_ctx: &FunctionContext,
     ) -> Result<Selectivity> {
-        if cardinality.is_zero() {
+        if cardinality == StatCardinality::Exact(0) {
             return Ok(Selectivity::Zero);
         }
         let expr = predicate.as_expr()?;
-        // This direct visitor entry is used for Join residuals, which do not pass through
-        // SelectivityEstimator::apply. Fold here so domain contradictions and tautologies retain
-        // their deterministic Zero/All semantics instead of becoming probability estimates.
-        let input_domains = build_input_domains(&expr, column_stats)?;
-        let (expr, output_domain) = ConstantFolder::fold_with_domain(
+        // Join residuals bypass SelectivityEstimator::apply, but must use the
+        // same proof domains and modulo safeguards. Zero/All here are consumed
+        // as confirmed matches by JoinStatsEstimator, not just numeric estimates.
+        let input_domains =
+            build_constraint_domains(&expr, column_stats, cardinality, Some(column_row_scales))?;
+        let (expr, output_domain) = fold_for_proven_empty(
             Cow::Owned(expr),
             &input_domains,
             func_ctx,
@@ -885,6 +1059,8 @@ impl SelectivityVisitor<'_> {
                 let Some(const_datum) = constant.scalar.clone().to_datum() else {
                     return self.derive_function_selectivity(func);
                 };
+                let constraint = ValueConstraint::from_comparison(op, const_datum.clone());
+                let disjoint_from_stored_range = constraint.is_disjoint_from(column_stat);
 
                 let histogram_is_range_distorted = column_stat
                     .histogram()
@@ -894,17 +1070,17 @@ impl SelectivityVisitor<'_> {
                     ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE
                 ) && histogram_is_range_distorted;
                 if matches!(self.constraint_context, ConstraintContext::And) {
-                    self.constraints.add(
-                        self.column_stats,
-                        column_index,
-                        ValueConstraint::from_comparison(op, const_datum.clone()),
-                    )?;
+                    self.constraints
+                        .add(self.column_stats, column_index, constraint)?;
                     if let Some(selectivity) = self.derive_frequency_equality_selectivity(
                         column_index,
                         op,
                         &constant.scalar,
                     )? {
                         return Ok(selectivity);
+                    }
+                    if disjoint_from_stored_range {
+                        return Ok(Selectivity::Unknown);
                     }
                     if distorted_range {
                         return Ok(Selectivity::LowerBound);
@@ -1230,6 +1406,7 @@ impl SelectivityVisitor<'_> {
                 let mut has_lower_bound = false;
                 let mut has_zero = false;
                 let mut has_n = false;
+                let mut error_sensitive_seen = false;
                 let mut acc = 1.0_f64;
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child(ConstraintContext::And);
@@ -1242,10 +1419,11 @@ impl SelectivityVisitor<'_> {
                     match selectivity {
                         Selectivity::Unknown => has_unknown = true,
                         Selectivity::LowerBound => has_lower_bound = true,
-                        Selectivity::Zero => {
+                        Selectivity::Zero if !error_sensitive_seen => {
                             has_zero = true;
                             acc = 0.0;
                         }
+                        Selectivity::Zero => {}
                         Selectivity::All => {}
                         Selectivity::N(n) => {
                             has_n = true;
@@ -1260,6 +1438,7 @@ impl SelectivityVisitor<'_> {
                             acc = acc.min(n);
                         }
                     }
+                    error_sensitive_seen |= contains_modulo(arg);
                     self.constraints = constraints;
                 }
 
@@ -1372,4 +1551,117 @@ fn boolean_comparison_selectivity(op: ComparisonOp, constant: bool) -> Selectivi
         (ComparisonOp::GTE, false) | (ComparisonOp::LTE, true) => MAX_SELECTIVITY,
     };
     Selectivity::N(selectivity)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ConstantExpr;
+
+    #[test]
+    fn join_residuals_distinguish_estimates_from_proofs() -> Result<()> {
+        let index = Symbol::new(0);
+        let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "k".to_string(),
+                index,
+                Box::new(DataType::Nullable(Box::new(DataType::Number(
+                    NumberDataType::UInt64,
+                )))),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        let predicate = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "gt".to_string(),
+            params: vec![],
+            arguments: vec![
+                column.clone(),
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::UInt64(10)),
+                }),
+            ],
+            return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
+        });
+        let stats = ColumnStatSet::from_iter([(index, ColumnStat::UInt {
+            min: 0,
+            max: 5,
+            ndv: NdvEstimate::exact(6.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        })]);
+        let estimate = |predicate: &ScalarExpr,
+                        cardinality,
+                        stats: &ColumnStatSet,
+                        scales: &HashMap<Symbol, StatCardinality>| {
+            SelectivityVisitor::estimate(
+                predicate,
+                cardinality,
+                stats,
+                &TopNSet::new(),
+                &CountMinSketchSet::new(),
+                scales,
+                &FunctionContext::default(),
+            )
+        };
+        assert!(matches!(
+            estimate(
+                &predicate,
+                StatCardinality::exact(80),
+                &stats,
+                &HashMap::new()
+            )?,
+            Selectivity::Unknown
+        ));
+        // A numeric zero input cannot upgrade a statistical predicate to a proof.
+        assert!(!matches!(
+            estimate(
+                &predicate,
+                StatCardinality::estimate(0.0),
+                &stats,
+                &HashMap::new()
+            )?,
+            Selectivity::Zero
+        ));
+        assert!(matches!(
+            estimate(
+                &predicate,
+                StatCardinality::exact(0),
+                &stats,
+                &HashMap::new()
+            )?,
+            Selectivity::Zero
+        ));
+
+        let not_null = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "is_not_null".to_string(),
+            params: vec![],
+            arguments: vec![column],
+            return_type: Box::new(DataType::Boolean),
+        });
+        let stats = ColumnStatSet::from_iter([(index, ColumnStat::AllNull {
+            null_count: StatCount::exact(8),
+        })]);
+        let scales = HashMap::from([(index, StatCardinality::exact(10))]);
+        assert!(matches!(
+            estimate(&not_null, StatCardinality::exact(80), &stats, &scales)?,
+            Selectivity::Zero
+        ));
+        let scales = HashMap::from([(index, StatCardinality::estimate(10.0))]);
+        assert!(!matches!(
+            estimate(&not_null, StatCardinality::estimate(80.0), &stats, &scales)?,
+            Selectivity::Zero
+        ));
+        Ok(())
+    }
 }
