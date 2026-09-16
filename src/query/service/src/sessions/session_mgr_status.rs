@@ -14,6 +14,8 @@
 
 use std::time::SystemTime;
 
+use databend_common_metrics::session::set_session_running_queries;
+
 #[derive(Clone)]
 pub struct SessionManagerStatus {
     pub running_queries_count: u64,
@@ -27,12 +29,14 @@ pub struct SessionManagerStatus {
 impl SessionManagerStatus {
     pub(crate) fn query_start(&mut self, now: SystemTime) {
         self.running_queries_count += 1;
-        self.last_query_started_at = Some(now)
+        self.last_query_started_at = Some(now);
+        set_session_running_queries(self.running_queries_count);
     }
 
     pub(crate) fn query_finish(&mut self, now: SystemTime) {
         self.running_queries_count = self.running_queries_count.saturating_sub(1);
-        self.last_query_finished_at = Some(now)
+        self.last_query_finished_at = Some(now);
+        set_session_running_queries(self.running_queries_count);
     }
 }
 
