@@ -43,3 +43,10 @@ query I
 SELECT sleep(3.01)
 ----
 0
+
+# A scan spanning many blocks and parallel transforms shares one pipeline-level
+# sleep state and still yields one value per row.
+query II
+SELECT count(*), sum(sleep(0.001)) FROM numbers(1000000)
+----
+1000000 0
