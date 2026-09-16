@@ -18,7 +18,10 @@ use databend_common_exception::ErrorCode;
 use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::de::Error;
+use serde_json::Value;
 
 // All enterprise features are defined here.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -124,6 +127,82 @@ impl Feature {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum LicenseAudiences {
+    Single(String),
+    Multiple(std::collections::HashSet<String>),
+}
+
+/// Accepts the integer and floating-point Unix seconds that the previous JWT
+/// verifier allowed, truncating fractions the same way it did.
+///
+/// Routes through `serde_json::Value` rather than `deserialize_any`: the query
+/// build enables `serde_json/arbitrary_precision` through `jsonb`, which hands
+/// numbers to custom deserializers as an internal map instead of calling
+/// `visit_u64` or `visit_f64`.
+fn deserialize_unix_seconds<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error> {
+    let Some(value) = Option::<Value>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    let number = match &value {
+        Value::Null => return Ok(None),
+        Value::Number(number) => number,
+        _ => return Err(D::Error::custom("Unix timestamp must be a number")),
+    };
+    if let Some(seconds) = number.as_u64() {
+        return Ok(Some(seconds));
+    }
+    let seconds = number
+        .as_f64()
+        .ok_or_else(|| D::Error::custom("Unix timestamp is not representable"))?;
+    if !seconds.is_finite() || seconds < 0.0 || seconds >= u64::MAX as f64 {
+        return Err(D::Error::custom("Unix timestamp is out of range"));
+    }
+    Ok(Some(seconds as u64))
+}
+
+/// JWT timestamps are Unix seconds, not `coarsetime` fixed-point durations.
+/// Keeping them as u64 preserves licenses whose expiry is after February 2106.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LicenseClaims {
+    #[serde(
+        rename = "iat",
+        default,
+        deserialize_with = "deserialize_unix_seconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub issued_at: Option<u64>,
+    #[serde(
+        rename = "exp",
+        default,
+        deserialize_with = "deserialize_unix_seconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub expires_at: Option<u64>,
+    #[serde(
+        rename = "nbf",
+        default,
+        deserialize_with = "deserialize_unix_seconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub invalid_before: Option<u64>,
+    #[serde(rename = "iss", skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
+    #[serde(rename = "sub", skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(rename = "aud", skip_serializing_if = "Option::is_none")]
+    pub audiences: Option<LicenseAudiences>,
+    #[serde(rename = "jti", skip_serializing_if = "Option::is_none")]
+    pub jwt_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+    #[serde(flatten)]
+    pub custom: LicenseInfo,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LicenseInfo {
     #[serde(rename = "type")]
@@ -186,6 +265,53 @@ impl LicenseInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_license_claim_timestamps() {
+        for seconds in [u32::MAX as u64, u32::MAX as u64 + 1, 4_891_363_200] {
+            let payload = serde_json::json!({
+                "iat": seconds,
+                "exp": seconds,
+                "nbf": seconds,
+                "type": "enterprise",
+                "org": "Test Organization",
+                "tenants": ["test-tenant"],
+                "features": ["LicenseInfo", {"MaxCpuQuota": 32}]
+            });
+            let claims: LicenseClaims = serde_json::from_value(payload.clone()).unwrap();
+            assert_eq!(claims.issued_at, Some(seconds));
+            assert_eq!(claims.expires_at, Some(seconds));
+            assert_eq!(claims.invalid_before, Some(seconds));
+            assert_eq!(serde_json::to_value(&claims).unwrap(), payload);
+        }
+
+        // The previous verifier accepted and truncated fractional Unix seconds.
+        let claims: LicenseClaims = serde_json::from_str(
+            r#"{"iat":1617757825.8,"exp":4891363200.0,"nbf":1.6e9,"type":"enterprise"}"#,
+        )
+        .unwrap();
+        assert_eq!(claims.issued_at, Some(1_617_757_825));
+        assert_eq!(claims.expires_at, Some(4_891_363_200));
+        assert_eq!(claims.invalid_before, Some(1_600_000_000));
+
+        let claims: LicenseClaims =
+            serde_json::from_str(r#"{"exp":null,"type":"enterprise"}"#).unwrap();
+        assert_eq!(claims.issued_at, None);
+        assert_eq!(claims.expires_at, None);
+        assert_eq!(claims.invalid_before, None);
+
+        for raw in [
+            r#"{"exp":-1}"#,
+            r#"{"exp":-1.5}"#,
+            r#"{"exp":1e30}"#,
+            r#"{"exp":"4891363200"}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<LicenseClaims>(raw).is_err(),
+                "should reject: {raw}"
+            );
+        }
+    }
 
     #[test]
     fn test_data_sharing_feature() {
