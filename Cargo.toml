@@ -307,6 +307,7 @@ jaq-json = "2.0.1"
 jaq-std = "3.0.1"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.6"
+jsonwebtoken = "9.3.1"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
