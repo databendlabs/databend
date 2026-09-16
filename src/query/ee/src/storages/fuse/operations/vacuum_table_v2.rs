@@ -204,7 +204,7 @@ pub async fn do_vacuum2(
             .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
             .await?;
         for segment in segments {
-            for block in segment?.block_metas()? {
+            for block in segment.clone()?.block_metas()? {
                 protected_inverted_index_locations.extend(
                     block
                         .inverted_index_metas
