@@ -328,10 +328,6 @@ impl AsyncSink for InvertedIndexSink {
     #[async_backtrace::framed]
     async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
         let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);
-        if num > 1 {
-            return Ok(false);
-        }
-
-        Ok(true)
+        Ok(num <= 1)
     }
 }

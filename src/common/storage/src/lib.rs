@@ -33,6 +33,8 @@
 #![allow(clippy::let_unit_value)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
+// OpenDAL layers produce deeply nested async future types.
+#![recursion_limit = "256"]
 
 mod auth;
 pub use auth::RefreshableToken;

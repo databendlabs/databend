@@ -173,7 +173,7 @@ impl Partitions {
                     .into_iter()
                     .map(|p| (p.hash() % num_executors as u64, p.clone()))
                     .collect::<Vec<_>>();
-                parts.sort_by(|a, b| a.0.cmp(&b.0));
+                parts.sort_by_key(|a| a.0);
                 parts.into_iter().map(|x| x.1).collect()
             }
             PartitionsShuffleKind::ConsistentHash => {
@@ -209,7 +209,7 @@ impl Partitions {
                     })
                     .collect::<Vec<_>>();
 
-                ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
+                ring.sort_by_key(|&(_, a)| a);
 
                 for p in &regular_partitions {
                     let k = p.hash();

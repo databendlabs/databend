@@ -282,7 +282,7 @@ impl UserApiProvider {
         if have_cycle {
             return Err(ErrorCode::InvalidRole(format!(
                 "{} contains {}, can not be grant to {}",
-                &grant_role, &target_role, &target_role
+                grant_role, target_role, target_role
             )));
         }
 

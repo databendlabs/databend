@@ -306,9 +306,9 @@ fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i6
                 val
             )))
         });
-        match dtparse_result {
-            Ok(ts) => return Ok(ts),
-            Err(e) => return Err(e),
+        {
+            let ts = dtparse_result?;
+            return Ok(ts);
         }
     }
     Err(iso_err)
@@ -345,9 +345,9 @@ fn parse_string_to_date(val: &str, func_ctx: &FunctionContext) -> Result<i32, Er
                 val
             )))
         });
-        match dtparse_result {
-            Ok(days) => return Ok(days),
-            Err(e) => return Err(e),
+        {
+            let days = dtparse_result?;
+            return Ok(days);
         }
     }
     Err(iso_err)

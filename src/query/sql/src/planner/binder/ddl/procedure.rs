@@ -265,7 +265,7 @@ impl Binder {
 
         let args = arguments
             .iter()
-            .zip(casts_to_apply.into_iter())
+            .zip(casts_to_apply)
             .map(|(expr, cast)| match cast {
                 Some(target_type) => Expr::Cast {
                     span: expr.span(),

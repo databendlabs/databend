@@ -116,10 +116,9 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         .clone();
     dal.write(&virtual_location, state.data.clone()).await?;
 
-    let mut column_id = schema.next_column_id();
     let mut virtual_column_fields = Vec::new();
     let mut column_ids = Vec::new();
-    for key_path in [
+    for (column_id, key_path) in (schema.next_column_id()..).zip([
         "{id}",
         "{text}",
         "{user,info}",
@@ -135,12 +134,11 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         "{sparse_jsonb_arr,0}",
         "{container}",
         "{0,k}",
-    ] {
+    ]) {
         let key_paths = parse_key_paths(key_path.as_bytes()).unwrap().to_owned();
         let field = build_virtual_column_field(source_column_id, "v", column_id, key_paths);
         virtual_column_fields.push(field);
         column_ids.push(column_id);
-        column_id += 1;
     }
 
     let mut source_column_ids = HashSet::new();

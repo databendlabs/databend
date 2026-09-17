@@ -5881,7 +5881,7 @@ impl SchemaApiTestSuite {
                     format!(
                         "'{}'.'{}'",
                         db_name_ident.database_name(),
-                        &table_niv.name().table_name
+                        table_niv.name().table_name
                     )
                 })
                 .collect();
@@ -5924,7 +5924,7 @@ impl SchemaApiTestSuite {
                     format!(
                         "'{}'.'{}'",
                         db_name_ident.database_name(),
-                        &table_niv.name().table_name
+                        table_niv.name().table_name
                     )
                 })
                 .collect();

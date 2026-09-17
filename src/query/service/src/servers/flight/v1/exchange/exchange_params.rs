@@ -257,7 +257,7 @@ impl ShuffleExchangeParams {
                             self.executor_id, self.fragment_id
                         )));
                     };
-                    exchanges.extend(receivers.into_iter());
+                    exchanges.extend(receivers);
                 }
             }
         }

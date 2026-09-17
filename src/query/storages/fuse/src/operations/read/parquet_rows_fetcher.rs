@@ -166,7 +166,7 @@ impl RowsFetcher for ParquetRowsFetcher {
         cache_end = std::cmp::min(cache_end, blocks.len());
         let metadata = self.build_metadata(&blocks[cache_start..cache_end])?;
 
-        for (block_index, metadata) in (cache_start..cache_end).zip(metadata.into_iter()) {
+        for (block_index, metadata) in (cache_start..cache_end).zip(metadata) {
             let block_id = block_id_in_segment(blocks.len(), block_index);
             let block_id = compute_row_id_prefix(segment, block_id as u64);
             self.block_meta_lru_cache

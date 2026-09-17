@@ -16,16 +16,12 @@
 #![allow(incomplete_features)]
 #![feature(allocator_api)]
 #![feature(thread_local)]
-#![feature(ptr_metadata)]
-#![feature(try_trait_v2)]
-#![feature(thread_id_value)]
-#![feature(backtrace_frames)]
+#![cfg_attr(all(target_os = "linux", feature = "jemalloc"), feature(ptr_metadata))]
 #![feature(alloc_error_hook)]
 #![feature(slice_swap_unchecked)]
 #![feature(variant_count)]
 #![feature(ptr_alignment_type)]
 #![feature(slice_ptr_get)]
-#![feature(alloc_layout_extra)]
 
 pub mod base;
 pub mod containers;

@@ -75,7 +75,7 @@ impl RangeMerger {
         I: IntoIterator<Item = Range<u64>>,
     {
         let mut raw_ranges: Vec<_> = iter.into_iter().collect();
-        raw_ranges.sort_by(|a, b| a.start.cmp(&b.start));
+        raw_ranges.sort_by_key(|a| a.start);
 
         let mut rs = RangeMerger {
             max_gap_size,

@@ -714,7 +714,7 @@ impl PhysicalPlanBuilder {
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(
                             "Cannot find common type for {:?} and {:?}",
-                            &common_ty, &ty
+                            common_ty, ty
                         ))
                     })?;
                 }

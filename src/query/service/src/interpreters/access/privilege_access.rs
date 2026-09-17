@@ -424,7 +424,7 @@ impl PrivilegeAccess {
                                 privileges,
                                 catalog_name,
                                 db_name,
-                                &current_user.identity().display(),
+                                current_user.identity().display(),
                                 roles_name,
                             )));
                         }
@@ -541,7 +541,7 @@ impl PrivilegeAccess {
                                         catalog_name,
                                         db_name,
                                         table_name,
-                                        &current_user.identity().display(),
+                                        current_user.identity().display(),
                                         roles_name,
                                     )));
                                 }
@@ -777,7 +777,7 @@ impl PrivilegeAccess {
                                     catalog_name,
                                     db_name,
                                     table_name,
-                                    &current_user.identity().display(),
+                                    current_user.identity().display(),
                                     roles_name,
                                 )))
                             }
@@ -1157,7 +1157,7 @@ impl PrivilegeAccess {
                         "Permission denied: privilege [{:?}] is required on PROCEDURE for user {} with roles [{}]. \
                         Note: Please ensure that your current role have the appropriate permissions to create a new Object",
                         privilege,
-                        &current_user.identity().display(),
+                        current_user.identity().display(),
                         roles_name,
                     ))),
                     GrantObject::Global
@@ -1174,7 +1174,7 @@ impl PrivilegeAccess {
                         Note: Please ensure that your current role have the appropriate permissions to create a new Object",
                         privilege,
                         grant_object,
-                        &current_user.identity().display(),
+                        current_user.identity().display(),
                         roles_name,
                     ))),
                 }
@@ -1487,7 +1487,7 @@ impl PrivilegeAccess {
                         "Permission denied: privilege [{:?}] is required to invoke table function [{}] for user {} with roles [{}]",
                         privilege,
                         table_func_name,
-                        &current_user.identity().display(),
+                        current_user.identity().display(),
                         role_name,
                     ))
                 }

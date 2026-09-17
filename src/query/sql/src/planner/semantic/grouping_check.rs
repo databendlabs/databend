@@ -233,7 +233,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         // If this is a group item, then it should have been replaced with `group_items_map`
         Err(ErrorCode::SemanticError(format!(
             "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-            &column.column.column_name
+            column.column.column_name
         ))
         .set_span(column.span))
     }

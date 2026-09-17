@@ -47,7 +47,7 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
     let transfer_url = || {
         format!(
             "http://{}/v1/ctrl/trigger_transfer_leader?to=2",
-            &tcs[0].admin.api_address
+            tcs[0].admin.api_address
         )
     };
 

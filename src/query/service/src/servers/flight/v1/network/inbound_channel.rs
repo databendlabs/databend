@@ -120,6 +120,10 @@ impl NetworkInboundSender {
     ///
     /// Returns `Err(())` only when ALL receivers are closed (network should disconnect).
     /// If only the target tid's receiver is closed, discards the data and returns `Ok(())`.
+    #[allow(
+        clippy::result_unit_err,
+        reason = "Callers only need a disconnect signal"
+    )]
     pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
         if is_batch(&data) {
             return self.add_batch_data(data).await;

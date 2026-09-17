@@ -367,7 +367,7 @@ mod thrift_file_meta_read {
 
     const HEADER_SIZE: u64 = PARQUET_MAGIC.len() as u64;
     const FOOTER_SIZE: u64 = 8;
-    const PARQUET_MAGIC: [u8; 4] = [b'P', b'A', b'R', b'1'];
+    const PARQUET_MAGIC: [u8; 4] = *b"PAR1";
 
     #[async_backtrace::framed]
     async fn stream_len(

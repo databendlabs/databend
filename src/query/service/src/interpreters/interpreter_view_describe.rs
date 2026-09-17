@@ -75,15 +75,15 @@ impl Interpreter for DescribeViewInterpreter {
             } else {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is not VIEW, please use `DESC {} {}.{}`",
-                    &self.plan.database,
-                    &self.plan.view_name,
+                    self.plan.database,
+                    self.plan.view_name,
                     if engine == STREAM_ENGINE {
                         "STREAM"
                     } else {
                         "TABLE"
                     },
-                    &self.plan.database,
-                    &self.plan.view_name
+                    self.plan.database,
+                    self.plan.view_name
                 )));
             }?;
 

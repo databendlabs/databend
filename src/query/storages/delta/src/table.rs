@@ -431,7 +431,7 @@ pub fn get_partition_values(add: &Add, fields: &[TableField]) -> Result<Vec<Scal
             None => {
                 return Err(ErrorCode::BadArguments(format!(
                     "partition value for column {} not found",
-                    &f.name
+                    f.name
                 )));
             }
         }

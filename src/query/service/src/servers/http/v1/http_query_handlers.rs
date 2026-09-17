@@ -838,8 +838,8 @@ pub(crate) async fn query_handler(
                 };
                 info!(
                     "Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    &query.id,
-                    &resp.state,
+                    query.id,
+                    resp.state,
                     rows,
                     next_page,
                     mask_connection_info(&sql)

@@ -55,7 +55,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             .ok_or_else(|| {
                 ErrorCode::StorageOther(format!(
                     "hint file of table {}.{} does not exist",
-                    &plan.database, &plan.table
+                    plan.database, plan.table
                 ))
             })?;
 

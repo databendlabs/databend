@@ -357,7 +357,7 @@ impl Catalog for MutableCatalog {
         info!(
             "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
-            &req.meta.engine
+            req.meta.engine
         );
 
         // Initial the database after creating.

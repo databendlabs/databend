@@ -491,7 +491,7 @@ impl PlanFragment {
             .enumerate()
             .map(|(idx, p)| (idx % num_executors, p))
             .collect::<Vec<_>>();
-        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        parts.sort_by_key(|a| a.0);
         let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
 
         // parts_per_executor = num_parts / num_executors

@@ -16,11 +16,8 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(internal_features)]
-#![feature(can_vector)]
-#![feature(read_buf)]
 #![feature(slice_internals)]
 #![feature(cursor_split)]
-#![feature(buf_read_has_data_left)]
 
 pub mod constants;
 pub mod datetime;

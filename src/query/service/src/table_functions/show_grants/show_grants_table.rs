@@ -370,7 +370,7 @@ async fn show_account_grants(
 
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
-                    &current_user.identity().display(),
+                    current_user.identity().display(),
                     roles.join(",")
                 )));
             }
@@ -393,7 +393,7 @@ async fn show_account_grants(
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
-                    &current_user.identity().display(),
+                    current_user.identity().display(),
                     roles.join(",")
                 )));
             }
@@ -780,7 +780,7 @@ async fn show_account_grants(
         let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
         let db_map = db_ids
             .into_iter()
-            .zip(db_names.into_iter())
+            .zip(db_names)
             .filter(|(_, db_name)| db_name.is_some())
             .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
             .collect::<HashMap<_, _>>();
@@ -809,7 +809,7 @@ async fn show_account_grants(
         let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
         let db_map = db_ids
             .into_iter()
-            .zip(db_names.into_iter())
+            .zip(db_names)
             .filter(|(_, db_name)| db_name.is_some())
             .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
             .collect::<HashMap<_, _>>();
@@ -825,7 +825,7 @@ async fn show_account_grants(
             .await?;
         let table_map = table_ids
             .into_iter()
-            .zip(table_names.into_iter())
+            .zip(table_names)
             .filter(|(_, table_name)| table_name.is_some())
             .map(|(table_id, table_name)| (table_id, table_name.unwrap()))
             .collect::<HashMap<_, _>>();
@@ -835,7 +835,7 @@ async fn show_account_grants(
                 if let Some(table_name) = table_map.get(&table_id) {
                     let grant_str = format!(
                         "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                        &privilege_str, catalog_name, db_name, table_name, identity
+                        privilege_str, catalog_name, db_name, table_name, identity
                     );
                     object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
                     object_id.push(Some(table_id.to_string()));

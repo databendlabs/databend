@@ -840,7 +840,7 @@ impl OptimizeTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        write!(f, " {}", &self.action)?;
+        write!(f, " {}", self.action)?;
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
         }

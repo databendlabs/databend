@@ -129,10 +129,8 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                         };
                     }
                     // replace json operator `?` to placeholder.
-                    ExprElement::JsonOp { op } => {
-                        if *op == JsonOperator::Question {
-                            *elem = ExprElement::Placeholder;
-                        }
+                    ExprElement::JsonOp { op } if *op == JsonOperator::Question => {
+                        *elem = ExprElement::Placeholder;
                     }
                     _ => {}
                 }

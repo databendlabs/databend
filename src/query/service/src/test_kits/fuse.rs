@@ -125,7 +125,7 @@ pub async fn generate_segments_v2(
         let uuid = Uuid::new_v4();
         let location = format!(
             "{}/{}/{}_v{}.json",
-            &fuse_table.meta_location_generator().prefix(),
+            fuse_table.meta_location_generator().prefix(),
             FUSE_TBL_SEGMENT_PREFIX,
             uuid,
             SegmentInfoV2::VERSION,

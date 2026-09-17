@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(iter_advance_by)]
 #![feature(portable_simd)]
 #![allow(clippy::unconditional_recursion)]
 #![allow(clippy::non_canonical_partial_ord_impl)]

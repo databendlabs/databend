@@ -72,7 +72,7 @@ impl Deref for DataflowDiagram {
 
 impl Debug for DataflowDiagram {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", &Dot::new(&self.graph))
+        write!(f, "{:?}", Dot::new(&self.graph))
     }
 }
 

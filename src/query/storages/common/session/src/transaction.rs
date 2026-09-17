@@ -471,7 +471,7 @@ impl TxnManager {
             let reqs = self.txn_buffer.copied_files.get(&table_id);
             if let Some(reqs) = reqs {
                 for req in reqs {
-                    ret.extend(req.file_info.clone().into_iter());
+                    ret.extend(req.file_info.clone());
                 }
             }
         }

@@ -143,7 +143,7 @@ impl<C> ErrorCode<C> {
     }
 
     pub fn backtrace_str(&self) -> String {
-        format!("{:?}", &self.backtrace)
+        format!("{:?}", self.backtrace)
     }
 
     pub fn stacks(&self) -> &[ErrorFrame] {
@@ -173,7 +173,7 @@ impl<C> Debug for ErrorCode<C> {
                 f,
                 "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
             ),
-            false => write!(f, "\n\n{:?}", &self.backtrace),
+            false => write!(f, "\n\n{:?}", self.backtrace),
         }
     }
 }

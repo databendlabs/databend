@@ -236,7 +236,7 @@ impl fmt::Display for GrantEntry {
         } else {
             privileges.to_string()
         };
-        write!(f, "GRANT {} ON {}", &privileges_str, self.object)
+        write!(f, "GRANT {} ON {}", privileges_str, self.object)
     }
 }
 
