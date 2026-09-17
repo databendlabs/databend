@@ -1,0 +1,2 @@
+source privileges checked on create and refresh
+SHOW CREATE preserves schema, options and quoted identifiers

@@ -231,6 +231,7 @@ impl Walk for Statement {
             Statement::DropTask(_) => {}
             Statement::ShowTasks(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateDynamicTable(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::RefreshDynamicTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreatePipe(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DescribePipe(_) | Statement::DropPipe(_) | Statement::AlterPipe(_) => {}
             Statement::ExecuteImmediate(stmt) => try_walk!(stmt.walk(visitor)),
@@ -459,6 +460,7 @@ impl WalkMut for Statement {
             Statement::DropTask(_) => {}
             Statement::ShowTasks(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateDynamicTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::RefreshDynamicTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreatePipe(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DescribePipe(_) | Statement::DropPipe(_) | Statement::AlterPipe(_) => {}
             Statement::ExecuteImmediate(stmt) => try_walk!(stmt.walk_mut(visitor)),

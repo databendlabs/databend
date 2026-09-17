@@ -36,7 +36,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Histogram;
 use databend_common_storage::StorageMetrics;
@@ -446,6 +445,11 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// Whether physical maintenance is forbidden (for example, on shared or attached data).
+    fn is_read_only_for_maintenance(&self) -> bool {
+        self.is_read_only()
+    }
+
     fn is_temp(&self) -> bool {
         is_temp_table_by_table_info(self.get_table_info())
     }
@@ -526,16 +530,13 @@ pub trait TableExt: Table {
         }
     }
 
-    /// Compact is storage maintenance, not a user DML write. Materialized views are marked
-    /// read-only so INSERT/UPDATE stay blocked, but compact may still rewrite physical blocks.
-    fn check_mutable_or_materialized_view(&self) -> Result<()> {
-        self.check_mutable().or_else(|error| {
-            if is_materialized_view_engine(self.engine()) {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })
+    /// Owned derived tables allow physical maintenance while rejecting user DML.
+    fn check_mutable_for_maintenance(&self) -> Result<()> {
+        if self.is_read_only_for_maintenance() {
+            self.check_mutable()
+        } else {
+            Ok(())
+        }
     }
 }
 impl<T: ?Sized> TableExt for T where T: Table {}

@@ -230,6 +230,12 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
             Ok(Plan::CreateTable(plan))
         }
+        Plan::CreateDynamicTable(mut plan) => {
+            if let Some(p) = plan.table_plan.as_select.take() {
+                plan.table_plan.as_select = Some(Box::new(optimize(opt_ctx.clone(), *p).await?));
+            }
+            Ok(Plan::CreateDynamicTable(plan))
+        }
         Plan::CreateView(mut plan) => {
             if let Some(p) = &plan.query_plan {
                 let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;

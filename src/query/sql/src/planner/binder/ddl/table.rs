@@ -628,9 +628,9 @@ impl Binder {
         // CREATE TABLE ... ENGINE = MATERIALIZED_VIEW is still parseable via Engine::MaterializedView,
         // but it would bypass CREATE MATERIALIZED VIEW (definition, source binding, generation).
         // Reject here so MV can only be published through bind_create_materialized_view.
-        if engine == Engine::MaterializedView {
+        if matches!(engine, Engine::MaterializedView | Engine::DynamicTable) {
             return Err(ErrorCode::TableEngineNotSupported(
-                "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",
+                "MATERIALIZED_VIEW and DYNAMIC_TABLE engines can only be created with their dedicated CREATE statements",
             ));
         }
         let stage_resolver = StageResolver::from_table_context(
