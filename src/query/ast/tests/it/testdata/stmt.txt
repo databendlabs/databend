@@ -28251,6 +28251,813 @@ ShowPasswordPolicies {
 
 
 ---------- Input ----------
+CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` BIGINT) AS SELECT id FROM src
+---------- Output ---------
+CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` Int64) AS SELECT id FROM src
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    21..31,
+                ),
+                name: "db`name",
+                quote: Some(
+                    '`',
+                ),
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                32..45,
+            ),
+            name: "table`name",
+            quote: Some(
+                '`',
+            ),
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                47..58,
+                            ),
+                            name: "col`name",
+                            quote: Some(
+                                '`',
+                            ),
+                            ident_type: None,
+                        },
+                        data_type: Int64,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                70..88,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        70..88,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    77..79,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                77..79,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                85..88,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        85..88,
+                                    ),
+                                    name: "src",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+REFRESH DYNAMIC TABLE db.dt
+---------- Output ---------
+REFRESH DYNAMIC TABLE db.dt
+---------- AST ------------
+RefreshDynamicTable(
+    RefreshDynamicTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    22..24,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                25..27,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id
+---------- Output ---------
+CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a INNER JOIN b ON a.id = b.id
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                27..67,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        27..67,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                36..38,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Join {
+                            span: Some(
+                                46..50,
+                            ),
+                            join: Join {
+                                op: Inner,
+                                condition: On(
+                                    BinaryOp {
+                                        span: Some(
+                                            61..62,
+                                        ),
+                                        op: Eq,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                56..57,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            56..57,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            58..60,
+                                                        ),
+                                                        name: "id",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                63..64,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            63..64,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            65..67,
+                                                        ),
+                                                        name: "id",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                ),
+                                left: Table {
+                                    span: Some(
+                                        44..45,
+                                    ),
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                                right: Table {
+                                    span: Some(
+                                        51..52,
+                                    ),
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                51..52,
+                                            ),
+                                            name: "b",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            },
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                27..43,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        27..43,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    34..36,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                34..36,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                42..43,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        42..43,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt TARGET_LAG = 600 SECOND AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: IntervalSecs(
+            600,
+        ),
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                50..66,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..66,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    57..59,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                57..59,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                65..66,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        65..66,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Downstream,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                51..67,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        51..67,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    58..60,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                58..60,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                66..67,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        66..67,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt INITIALIZE = ON_CREATE AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt initialize = 'ON_CREATE' AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {
+            "initialize": "ON_CREATE",
+        },
+        as_query: Query {
+            span: Some(
+                50..66,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..66,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    57..59,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                57..59,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                65..66,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        65..66,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
     TARGET_LAG = 10 SECOND
     WAREHOUSE = 'MyWarehouse'

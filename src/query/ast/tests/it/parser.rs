@@ -18,6 +18,7 @@ use std::io::Write;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::LambdaArgument;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -868,6 +869,14 @@ SELECT * from s;"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         r#"SHOW PASSWORD POLICIES LIKE 'p%'"#,
         // dynamic tables
+        r#"CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` BIGINT) AS SELECT id FROM src"#,
+        r#"REFRESH DYNAMIC TABLE db.dt"#,
+        r#"CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id"#,
+        r#"CREATE DYNAMIC TABLE dt AS SELECT id FROM a"#,
+        r#"CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE AS SELECT id FROM a"#,
+        r#"CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a"#,
+        // INITIALIZE is a generic table option, not a dynamic table option; the binder rejects it.
+        r#"CREATE DYNAMIC TABLE dt INITIALIZE = ON_CREATE AS SELECT id FROM a"#,
         r#"
             CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
                 TARGET_LAG = 10 SECOND
@@ -1198,6 +1207,15 @@ SELECT * from s;"#,
         let src = src.trim();
         let tokens = tokenize_sql(src).unwrap();
         let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        if matches!(
+            stmt,
+            Statement::CreateDynamicTable(_) | Statement::RefreshDynamicTable(_)
+        ) {
+            let formatted = stmt.to_string();
+            let tokens = tokenize_sql(&formatted).unwrap();
+            let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            assert_eq!(reparsed.to_string(), formatted);
+        }
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", src).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -1220,6 +1238,8 @@ fn test_statement_error() {
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
         r#"SET SECONDARY ROLES"#,
+        // REFRESH_MODE is no longer a dynamic table option.
+        r#"CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a"#,
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
