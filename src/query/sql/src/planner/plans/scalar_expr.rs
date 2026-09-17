@@ -1335,18 +1335,20 @@ impl LambdaFunc {
 
         // Degenerate collection types can be introduced by a rewrite even
         // though the binder folds them before constructing a LambdaFunc.
-        if collection_type == DataType::Null {
-            self.return_type = Box::new(DataType::Null);
-        } else if collection_type == DataType::EmptyArray {
-            self.return_type = Box::new(if self.func_name == "array_reduce" {
-                DataType::Null
-            } else {
-                DataType::EmptyArray
-            });
-        } else if collection_type == DataType::EmptyMap {
-            self.return_type = Box::new(DataType::EmptyMap);
-        } else if self.func_name != "array_reduce" {
-            self.sync_return_type_nullability(is_nullable);
+        match collection_type {
+            DataType::Null => self.return_type = Box::new(DataType::Null),
+            DataType::EmptyArray => {
+                self.return_type = Box::new(if self.func_name == "array_reduce" {
+                    DataType::Null
+                } else {
+                    DataType::EmptyArray
+                });
+            }
+            DataType::EmptyMap => self.return_type = Box::new(DataType::EmptyMap),
+            _ if self.func_name != "array_reduce" => {
+                self.sync_return_type_nullability(is_nullable);
+            }
+            _ => {}
         }
         Ok(())
     }
