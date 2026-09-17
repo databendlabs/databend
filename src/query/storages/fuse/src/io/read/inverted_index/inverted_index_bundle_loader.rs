@@ -88,6 +88,9 @@ fn component_name(path: &Path) -> &str {
 }
 
 fn range_cache_policy(path: &Path, file_len: u64) -> RangeCachePolicy {
+    // Policy is a function of component and file length only, so a later read uses the same cache
+    // as the tail prefill. Small `.fieldnorm` / `.fast` files live entirely in Lookup; large ones
+    // are Payload pages. They are never stored in both caches.
     match component_name(path) {
         "term" if file_len <= MAX_FULL_LOOKUP_CACHE_SIZE as u64 => RangeCachePolicy::LookupWhole,
         "term" => RangeCachePolicy::LookupPages,
@@ -591,6 +594,8 @@ impl FooterCacheState {
         tail_start: u64,
         footer: &InvertedIndexBundleFooter,
     ) {
+        // Only whole Lookup files that are fully covered by this tail are stored. `.idx` / `.pos`
+        // / `.store` stay uncached even when the tail already contains them.
         if self.lookup_cache.is_none() {
             return;
         }

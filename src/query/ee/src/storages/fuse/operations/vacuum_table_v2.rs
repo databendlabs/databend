@@ -24,6 +24,7 @@ use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
@@ -36,6 +37,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -252,8 +254,9 @@ pub async fn do_vacuum2(
 
     let start = std::time::Instant::now();
 
-    // Bloom indexes are still derived from data-block paths. Current inverted-index objects live
-    // under `_i_i_v2` and are deleted by the reference-aware scan above.
+    // Bloom indexes are still derived from data-block paths. Current `_i_i_v2` objects are deleted
+    // by the reference-aware scan above. Historical `_i_i` objects are removed as a whole directory
+    // after block GC, because this inverted-index format is a breaking change.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
     let block_gc_ctx = BlockGcContext {
         dal: fuse_table.get_operator_ref(),
@@ -303,6 +306,24 @@ pub async fn do_vacuum2(
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 
+    // Historical inverted-index objects under `_i_i/` are no longer readable. If this table still
+    // has an inverted index, remove the whole directory after block/snapshot GC. Tables that never
+    // created one skip the extra delete. Dropped indexes are cleaned by fuse_vacuum_drop_inverted_index.
+    if table_info
+        .meta
+        .indexes
+        .values()
+        .any(|index| matches!(index.index_type, TableIndexType::Inverted))
+    {
+        let legacy_inverted_index_dir = fuse_table
+            .meta_location_generator()
+            .inverted_index_location_prefix();
+        let _ = fuse_table
+            .get_operator()
+            .remove_all(legacy_inverted_index_dir)
+            .await;
+    }
+
     // Legacy branch/tag refs were removed without compatibility guarantees.
     // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
     // operation is idempotent even if the prefix is already absent.
@@ -348,8 +369,17 @@ async fn purge_inverted_index_v2_objects(
         if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
             continue;
         }
-        let Some(object_timestamp) = try_extract_uuid_v7_timestamp_from_path(entry.path())? else {
-            continue;
+        let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+            Ok(Some(timestamp)) => timestamp,
+            Ok(None) => continue,
+            Err(error) => {
+                warn!(
+                    "skip inverted-index V2 object with unparseable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
         };
         if object_timestamp >= gc_root_timestamp {
             continue;
@@ -681,11 +711,13 @@ mod tests {
             let protected = format!("{PREFIX}generation/h{}.index", old_uuid.simple());
             let orphan = format!("{PREFIX}generation/h{}.index", orphan_uuid.simple());
             let after_cutoff = format!("{PREFIX}generation/h{}.index", after_cutoff_uuid.simple());
+            let stray = format!("{PREFIX}generation/not-a-uuid.index");
             let outside = "1/2/_b/outside.parquet".to_string();
             dal.write(&protected, vec![1]).await?;
             dal.write(&orphan, vec![2]).await?;
             dal.write(&after_cutoff, vec![3]).await?;
-            dal.write(&outside, vec![4]).await?;
+            dal.write(&stray, vec![4]).await?;
+            dal.write(&outside, vec![5]).await?;
 
             let protected_locations = HashSet::from([protected.clone()]);
             let removed = purge_inverted_index_v2_objects(
@@ -702,6 +734,7 @@ mod tests {
             assert!(dal.exists(&protected).await?);
             assert!(!dal.exists(&orphan).await?);
             assert!(dal.exists(&after_cutoff).await?);
+            assert!(dal.exists(&stray).await?);
             assert!(dal.exists(&outside).await?);
             Ok(())
         }

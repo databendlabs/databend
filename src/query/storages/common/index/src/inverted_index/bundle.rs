@@ -30,6 +30,12 @@ pub const META_JSON_PATH: &str = "meta.json";
 
 /// Outer inverted-index object format stored in `BlockIndexMeta.location.1`.
 /// This is the first raw Tantivy bundle object format.
+///
+/// The footer also stores the opaque byte ranges this Tantivy revision reads while opening an
+/// index. Bumping the Tantivy crate without bumping this constant leaves existing objects
+/// unreadable: a newly required synchronous range misses the footer and returns `WouldBlock`.
+/// A Tantivy upgrade that changes index-open IO therefore requires a new format version and a
+/// full `REFRESH TABLE INDEX`.
 pub const INVERTED_INDEX_FILE_FORMAT_VERSION: u64 = 1;
 
 /// Fixed trailer: footer start, bundle version, and magic.
@@ -41,6 +47,10 @@ pub const INVERTED_INDEX_BUNDLE_TRAILER_LEN: usize = size_of::<u64>() + size_of:
 /// immediately before it (`.term`, `.fieldnorm`, and `.fast`). If the footer starts before this
 /// tail, readers issue one additional read for the exact persisted footer range reported by the
 /// trailer.
+///
+/// For objects ≤ 1 MiB this first IO is the whole bundle, including `.idx` / `.pos`. Those payload
+/// pages are not stored from the tail; a later term warmup may read them again. Repeat queries
+/// still only cache the needed 64 KiB payload pages.
 pub const INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 1024 * 1024;
 
 /// Maximum persisted footer size accepted by V1 readers and writers.

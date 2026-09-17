@@ -444,7 +444,7 @@ sub-cache = "0.2.1"
 syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = { version = "0.26.1", features = ["quickwit"] }
+tantivy = { version = "0.26.2", features = ["quickwit"] }
 tantivy-common = "0.11.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.20.0"

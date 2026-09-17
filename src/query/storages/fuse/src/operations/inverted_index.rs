@@ -30,7 +30,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
-use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
@@ -195,14 +194,6 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
-        let legacy_inverted_indexes = self
-            .table_info
-            .meta
-            .indexes
-            .values()
-            .filter(|index| matches!(index.index_type, TableIndexType::Inverted))
-            .map(|index| (index.name.clone(), index.version.clone()))
-            .collect::<Vec<_>>();
         let meta_location_generator = self.meta_location_generator.clone();
         pipeline.add_async_transformer(|| {
             InvertedIndexTransform::new(
@@ -211,7 +202,6 @@ impl FuseTable {
                 index_options.clone(),
                 data_schema.clone(),
                 index_schema.clone(),
-                legacy_inverted_indexes.clone(),
                 operator.clone(),
                 meta_location_generator.clone(),
             )
@@ -337,7 +327,6 @@ pub struct InvertedIndexTransform {
     index_options: BTreeMap<String, String>,
     data_schema: DataSchemaRef,
     source_schema: TableSchemaRef,
-    legacy_inverted_indexes: Vec<(String, String)>,
     operator: Operator,
     meta_location_generator: TableMetaLocationGenerator,
 }
@@ -349,7 +338,6 @@ impl InvertedIndexTransform {
         index_options: BTreeMap<String, String>,
         data_schema: DataSchemaRef,
         source_schema: TableSchemaRef,
-        legacy_inverted_indexes: Vec<(String, String)>,
         operator: Operator,
         meta_location_generator: TableMetaLocationGenerator,
     ) -> Self {
@@ -359,7 +347,6 @@ impl InvertedIndexTransform {
             index_options,
             data_schema,
             source_schema,
-            legacy_inverted_indexes,
             operator,
             meta_location_generator,
         }
@@ -402,35 +389,10 @@ impl AsyncTransform for InvertedIndexTransform {
         );
 
         let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
-        let mut index_metas = match new_block_meta.inverted_index_metas.take() {
-            Some(index_metas) => index_metas,
-            None => {
-                let mut legacy_metas = Vec::new();
-                for (name, version) in &self.legacy_inverted_indexes {
-                    if name == &self.index_name {
-                        continue;
-                    }
-                    let location =
-                        TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                            &block_meta.location.0,
-                            name,
-                            version,
-                        );
-                    match self.operator.stat(&location).await {
-                        Ok(metadata) => legacy_metas.push(BlockIndexMeta {
-                            index_name: name.clone(),
-                            location: (location, 0),
-                            size: metadata.content_length(),
-                            index_version: version.clone(),
-                        }),
-                        Err(error) if error.kind() == opendal::ErrorKind::NotFound => {}
-                        Err(error) => return Err(error.into()),
-                    }
-                }
-                legacy_metas.sort_unstable_by(|left, right| left.index_name.cmp(&right.index_name));
-                legacy_metas
-            }
-        };
+        let mut index_metas = new_block_meta
+            .inverted_index_metas
+            .take()
+            .unwrap_or_default();
         let new_meta = BlockIndexMeta {
             index_name: self.index_name.clone(),
             location: (index_location, INVERTED_INDEX_FILE_FORMAT_VERSION),

@@ -54,6 +54,7 @@ pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 /// Count-limited cache of complete persisted raw-bundle footers.
 pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
 /// Byte-limited cache of term dictionaries and small fieldnorm/fast components.
+/// Large `.fieldnorm` / `.fast` files are stored as payload pages instead.
 pub type InvertedIndexLookupCache = HybridCache<InvertedIndexLookupBytes>;
 /// Byte-limited cache of postings, positions, store, and other payload pages.
 pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;

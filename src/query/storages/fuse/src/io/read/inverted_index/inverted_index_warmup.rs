@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
@@ -30,6 +31,8 @@ use tantivy::query::Query;
 use tantivy::query::RangeQuery;
 use tantivy::query::TermQuery;
 use tantivy::schema::Field;
+
+const MERGE_POSTINGS_HOLES_UNDER_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
 enum WarmupAction {
@@ -93,16 +96,17 @@ impl InvertedIndexWarmupInfo {
         }
 
         for segment_reader in searcher.segment_readers() {
+            let mut term_groups: BTreeMap<(u32, bool), Vec<&Term>> = BTreeMap::new();
             for action in &self.actions {
                 match action {
                     WarmupAction::Term {
                         term,
                         with_positions,
                     } => {
-                        segment_reader
-                            .inverted_index(term.field())?
-                            .warm_postings(term, *with_positions)
-                            .await?;
+                        term_groups
+                            .entry((term.field().field_id(), *with_positions))
+                            .or_default()
+                            .push(term);
                     }
                     WarmupAction::Full {
                         field,
@@ -120,6 +124,12 @@ impl InvertedIndexWarmupInfo {
                         }
                     }
                 }
+            }
+            for ((field_id, with_positions), terms) in term_groups {
+                segment_reader
+                    .inverted_index(Field::from_field_id(field_id))?
+                    .warm_postings_terms(terms, with_positions, MERGE_POSTINGS_HOLES_UNDER_BYTES)
+                    .await?;
             }
 
             if has_score {
@@ -164,6 +174,15 @@ fn collect_warmups(
         actions.push(WarmupAction::Range {
             field: range_query.field(),
         });
+    } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
+        collect_warmups(boost_query.inner(), fallback_fields, need_position, actions)?;
+    } else if let Some(const_score_query) = query.downcast_ref::<ConstScoreQuery>() {
+        collect_warmups(
+            const_score_query.inner(),
+            fallback_fields,
+            need_position,
+            actions,
+        )?;
     } else if query.downcast_ref::<PhrasePrefixQuery>().is_some() {
         // TODO: Replace this paged full-field fallback with Tantivy-native prefix expansion
         // warmup. Databend must not duplicate Tantivy's prefix/range semantics.
@@ -172,13 +191,6 @@ fn collect_warmups(
         // TODO: Replace this paged full-field fallback with Tantivy-native automaton warmup,
         // including JSON-path bounds.
         add_full_field_warmups(query, fallback_fields, need_position, actions);
-    } else if query.downcast_ref::<BoostQuery>().is_some()
-        || query.downcast_ref::<ConstScoreQuery>().is_some()
-    {
-        // These wrappers do not expose their child query. Query::query_terms is sufficient for an
-        // exact-term child, but range and automaton children may expose no terms at all.
-        add_query_term_warmups(query, fallback_fields, need_position, actions);
-        add_range_warmups(query, fallback_fields, actions);
     } else if query.downcast_ref::<AllQuery>().is_none()
         && query.downcast_ref::<EmptyQuery>().is_none()
     {
@@ -190,24 +202,6 @@ fn collect_warmups(
         add_range_warmups(query, fallback_fields, actions);
     }
     Ok(())
-}
-
-fn add_query_term_warmups(
-    query: &dyn Query,
-    fallback_fields: &[Field],
-    need_position: bool,
-    actions: &mut Vec<WarmupAction>,
-) {
-    let start_len = actions.len();
-    query.query_terms(&mut |term, positions| {
-        actions.push(WarmupAction::Term {
-            term: term.clone(),
-            with_positions: need_position || positions,
-        });
-    });
-    if actions.len() == start_len {
-        add_full_field_warmups(query, fallback_fields, need_position, actions);
-    }
 }
 
 fn add_range_warmups(

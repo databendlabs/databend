@@ -66,6 +66,11 @@ fn merge_ranges(mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
 ///
 /// The two index-level JSON files are excluded because their complete bytes are stored separately
 /// in the bundle footer. Databend does not interpret any bytes collected by this function.
+///
+/// These ranges are specific to the Tantivy revision that built the bundle. If a later Tantivy
+/// upgrade reads additional ranges during `Index::open` / `SegmentReader` setup, existing footers
+/// will miss them and synchronous search will fail with `WouldBlock`. Bump
+/// [`super::bundle::INVERTED_INDEX_FILE_FORMAT_VERSION`] and rebuild indexes in that case.
 pub fn collect_index_open_slices<D: Directory + Clone>(
     directory: D,
 ) -> tantivy::Result<BTreeMap<PathBuf, Vec<BundleOpenSlice>>> {
@@ -298,24 +303,54 @@ mod tests {
     use super::*;
 
     #[derive(Clone, Debug)]
-    struct RawBodyDirectory {
-        body: OwnedBytes,
+    struct SyncWouldBlockDirectory {
         file_ranges: BundleFileRanges,
     }
 
-    impl Directory for RawBodyDirectory {
+    #[derive(Debug)]
+    struct SyncWouldBlockFileHandle {
+        path: PathBuf,
+        len: usize,
+    }
+
+    impl HasLen for SyncWouldBlockFileHandle {
+        fn len(&self) -> usize {
+            self.len
+        }
+    }
+
+    #[async_trait]
+    impl FileHandle for SyncWouldBlockFileHandle {
+        fn read_bytes(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
+            Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                format!(
+                    "raw-region range {}..{} for {} must be served from the footer",
+                    range.start,
+                    range.end,
+                    self.path.display()
+                ),
+            ))
+        }
+
+        async fn read_bytes_async(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
+            self.read_bytes(range)
+        }
+    }
+
+    impl Directory for SyncWouldBlockDirectory {
         fn get_file_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>, OpenReadError> {
             let range = self
                 .file_ranges
                 .get(path)
                 .ok_or_else(|| OpenReadError::FileDoesNotExist(path.to_path_buf()))?;
-            let start = usize::try_from(range.start).map_err(|error| {
+            let len = usize::try_from(range.end - range.start).map_err(|error| {
                 OpenReadError::wrap_io_error(io::Error::other(error), path.to_path_buf())
             })?;
-            let end = usize::try_from(range.end).map_err(|error| {
-                OpenReadError::wrap_io_error(io::Error::other(error), path.to_path_buf())
-            })?;
-            Ok(Arc::new(self.body.slice(start..end)))
+            Ok(Arc::new(SyncWouldBlockFileHandle {
+                path: path.to_path_buf(),
+                len,
+            }))
         }
 
         fn atomic_read(&self, path: &Path) -> Result<Vec<u8>, OpenReadError> {
@@ -414,9 +449,7 @@ mod tests {
         )
         .unwrap();
         let footer = super::super::bundle::InvertedIndexBundleFooter::open(&bundle_bytes).unwrap();
-        let footer_start = usize::try_from(footer.footer_start).unwrap();
-        let raw_bundle_directory = RawBodyDirectory {
-            body: OwnedBytes::new(bundle_bytes).slice(0..footer_start),
+        let raw_bundle_directory = SyncWouldBlockDirectory {
             file_ranges: footer.file_ranges.clone(),
         };
 
@@ -425,7 +458,11 @@ mod tests {
 
         let reopened = Index::open(directory).unwrap();
         let reader = reopened.reader().unwrap();
-        assert_eq!(reader.searcher().segment_readers().len(), 1);
+        let searcher = reader.searcher();
+        assert_eq!(searcher.segment_readers().len(), 1);
+        let segment_reader = &searcher.segment_readers()[0];
+        assert!(segment_reader.inverted_index(text).is_ok());
+        assert!(segment_reader.fieldnorms_readers().get_field(text).is_ok());
     }
 
     #[test]
