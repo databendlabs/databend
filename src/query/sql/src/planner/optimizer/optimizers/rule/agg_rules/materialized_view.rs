@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast;
-use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use log::info;
 
@@ -55,15 +54,15 @@ const COMPUTE_PER_ROW: f64 = 1.0;
 const AGGREGATE_PER_ROW: f64 = 5.0;
 
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
-struct PrefixRouteScore {
-    matched_prefix: usize,
-    equality_prefix: usize,
+struct ClusterRouteScore {
+    equality_keys: usize,
+    range_keys: usize,
 }
 
-#[derive(Default)]
-struct PredicateColumns<'a> {
-    equality: HashSet<&'a str>,
-    range: HashSet<&'a str>,
+#[derive(Clone, Default)]
+struct PredicateColumns {
+    equality: HashSet<Symbol>,
+    range: HashSet<Symbol>,
 }
 
 struct RewriteCandidate {
@@ -98,13 +97,12 @@ impl RewriteCandidate {
 /// Cluster-key pruning is part of scan cost, not an independent candidate
 /// ordering rule. The factor is deliberately conservative because optimizer
 /// statistics do not contain per-block pruning results.
-const CLUSTER_PREFIX_PRUNING_FACTOR: f64 = 0.5;
+const CLUSTER_KEY_PRUNING_FACTOR: f64 = 0.5;
 
-fn cluster_pruning_factor(score: PrefixRouteScore) -> f64 {
-    let equality_factor = CLUSTER_PREFIX_PRUNING_FACTOR.powi(score.equality_prefix as i32);
-    let range_prefix = score.matched_prefix.saturating_sub(score.equality_prefix);
-    let range_factor = CLUSTER_PREFIX_PRUNING_FACTOR
-        .powi(range_prefix as i32)
+fn cluster_pruning_factor(score: ClusterRouteScore) -> f64 {
+    let equality_factor = CLUSTER_KEY_PRUNING_FACTOR.powi(score.equality_keys as i32);
+    let range_factor = CLUSTER_KEY_PRUNING_FACTOR
+        .powi(score.range_keys as i32)
         .sqrt();
     (equality_factor * range_factor).max(0.01)
 }
@@ -134,6 +132,9 @@ pub(crate) fn try_rewrite(
     let query_aggregate = query_info.aggregate.clone();
     let matcher = ViewMatcher::new(query_info).with_aggregate_rollup();
 
+    // A valid substitution is not necessarily an improvement. Keep the source
+    // on ties, including when neither plan has usable scan statistics.
+    let source_cost = estimate_rewrite_cost(s_expr, metadata, stat_context);
     let mut best: Option<RewriteCandidate> = None;
     for candidate in candidates {
         let Some((replacement, requires_aggregate_rollup)) = try_build_replacement(
@@ -148,8 +149,10 @@ pub(crate) fn try_rewrite(
         else {
             continue;
         };
-        let scan_pruning_factor = scan_pruning_factor_for_plan(metadata, &replacement);
-        let cost = estimate_rewrite_cost(&replacement, scan_pruning_factor, stat_context);
+        let cost = estimate_rewrite_cost(&replacement, metadata, stat_context);
+        if cost.partial_cmp(&source_cost) != Some(Ordering::Less) {
+            continue;
+        }
         let current = RewriteCandidate {
             replacement,
             mv_table_id: candidate.mv_table_id,
@@ -166,13 +169,13 @@ pub(crate) fn try_rewrite(
     if let Some(best) = best {
         if best.requires_aggregate_rollup {
             info!(
-                "Use materialized view {} with aggregate-state rollup (cost={}): {}",
-                best.mv_table_id, best.cost, best.logical_sql
+                "Use materialized view {} with aggregate-state rollup (cost={}, source_cost={}): {}",
+                best.mv_table_id, best.cost, source_cost, best.logical_sql
             );
         } else {
             info!(
-                "Use materialized view {} (cost={}): {}",
-                best.mv_table_id, best.cost, best.logical_sql
+                "Use materialized view {} (cost={}, source_cost={}): {}",
+                best.mv_table_id, best.cost, source_cost, best.logical_sql
             );
         }
         Ok(Some((best.replacement, best.mv_table_id)))
@@ -389,13 +392,9 @@ fn try_rewrite_aggregate_input(
     Ok(replacement.map(|replacement| s_expr.replace_children([Arc::new(replacement)])))
 }
 
-fn estimate_rewrite_cost(
-    s_expr: &SExpr,
-    scan_pruning_factor: f64,
-    stat_context: &StatContext,
-) -> f64 {
+fn estimate_rewrite_cost(s_expr: &SExpr, metadata: &Metadata, stat_context: &StatContext) -> f64 {
     estimate_compute_cost(s_expr, stat_context)
-        + estimate_scan_cost(s_expr, scan_pruning_factor, stat_context)
+        + estimate_scan_cost(s_expr, metadata, &PredicateColumns::default())
 }
 
 fn estimate_compute_cost(s_expr: &SExpr, stat_context: &StatContext) -> f64 {
@@ -405,6 +404,15 @@ fn estimate_compute_cost(s_expr: &SExpr, stat_context: &StatContext) -> f64 {
         .sum();
     let node_cost = match s_expr.plan() {
         RelOperator::Scan(_) => 0.0,
+        // Symbol mappings inserted by substitution do not execute expressions.
+        RelOperator::EvalScalar(eval)
+            if eval
+                .items
+                .iter()
+                .all(|item| matches!(item.scalar, ScalarExpr::BoundColumnRef(_))) =>
+        {
+            0.0
+        }
         RelOperator::Aggregate(_) => {
             input_cardinality(s_expr, stat_context).unwrap_or(UNKNOWN_CARDINALITY_COST)
                 * AGGREGATE_PER_ROW
@@ -429,49 +437,87 @@ fn estimate_compute_cost(s_expr: &SExpr, stat_context: &StatContext) -> f64 {
     children_cost + node_cost
 }
 
-/// Estimate the read cost of a rewritten plan. Cluster-key pruning is applied
-/// at the scan itself; relational operators only adjust the amount of data
-/// flowing through their child scans.
-///
-/// The rewrite cost is modeled as:
-///
-/// ```text
-/// C_rewrite = C_scan + C_compute
-/// C_compute = sum(output_rows of non-scan operators)
-///             + 5 * sum(input_rows of aggregate operators)
-/// C_scan = sum(table_rows * cluster_pruning_factor * filter_selectivity)
-/// filter_selectivity = clamp(output_rows / input_rows, 0, 1)
-/// ```
-///
-/// Unknown cardinalities use `UNKNOWN_CARDINALITY_COST` rather than being
-/// treated as free.
-fn estimate_scan_cost(s_expr: &SExpr, scan_pruning_factor: f64, stat_context: &StatContext) -> f64 {
+/// Estimate IO independently of filter selectivity: returning one row can still
+/// require reading every block's Bloom index. Resolve predicates per scan, so a
+/// hybrid plan never shares the first scan's clustering discount across branches.
+fn estimate_scan_cost(s_expr: &SExpr, metadata: &Metadata, predicates: &PredicateColumns) -> f64 {
+    let mut predicates = predicates.clone();
     match s_expr.plan() {
-        RelOperator::Scan(scan) => scan_cost(scan, scan_pruning_factor),
-        RelOperator::Filter(_) => {
-            let Some(child) = s_expr.child(0).ok() else {
-                return UNKNOWN_CARDINALITY_COST;
-            };
-            let child_cost = estimate_scan_cost(child, scan_pruning_factor, stat_context);
-            let Some(child_rows) = output_cardinality(child, stat_context) else {
-                return child_cost;
-            };
-            let Some(output_rows) = output_cardinality(s_expr, stat_context) else {
-                return child_cost;
-            };
-            if child_rows > 0.0 && output_rows.is_finite() {
-                child_cost * (output_rows / child_rows).clamp(0.0, 1.0)
-            } else {
-                child_cost
+        RelOperator::Scan(scan) => {
+            for predicate in scan.push_down_predicates.iter().flatten().chain(
+                scan.prewhere
+                    .iter()
+                    .flat_map(|prewhere| &prewhere.predicates),
+            ) {
+                collect_predicate_columns_from_scalar(predicate, &mut predicates);
             }
+            let table = metadata.table(scan.table_index).table();
+            let keys = table.resolve_cluster_keys().unwrap_or_default();
+            let score = cluster_key_score(&keys, |name| {
+                metadata
+                    .columns_by_table_index(scan.table_index)
+                    .into_iter()
+                    .find(|column| column.name() == name)
+                    .map(|column| {
+                        (
+                            predicates.equality.contains(&column.index()),
+                            predicates.range.contains(&column.index()),
+                        )
+                    })
+                    .unwrap_or_default()
+            });
+            scan_cost(scan, cluster_pruning_factor(score))
         }
-        RelOperator::UnionAll(_) => s_expr
-            .children()
-            .map(|child| estimate_scan_cost(child, scan_pruning_factor, stat_context))
+        RelOperator::Filter(filter) => {
+            for predicate in &filter.predicates {
+                collect_predicate_columns_from_scalar(predicate, &mut predicates);
+            }
+            s_expr
+                .children()
+                .map(|child| estimate_scan_cost(child, metadata, &predicates))
+                .sum()
+        }
+        RelOperator::EvalScalar(eval) => {
+            // Only direct aliases preserve the recognized predicate.
+            for item in &eval.items {
+                if let ScalarExpr::BoundColumnRef(column) = &item.scalar {
+                    if predicates.equality.contains(&item.index) {
+                        predicates.equality.insert(column.column.index);
+                    }
+                    if predicates.range.contains(&item.index) {
+                        predicates.range.insert(column.column.index);
+                    }
+                }
+            }
+            s_expr
+                .children()
+                .map(|child| estimate_scan_cost(child, metadata, &predicates))
+                .sum()
+        }
+        RelOperator::UnionAll(union) => [(&union.left_outputs, 0), (&union.right_outputs, 1)]
+            .into_iter()
+            .map(|(outputs, child)| {
+                let mut branch = PredicateColumns::default();
+                for (output, (input, cast)) in union.output_indexes.iter().zip(outputs) {
+                    if cast.is_none() {
+                        if predicates.equality.contains(output) {
+                            branch.equality.insert(*input);
+                        }
+                        if predicates.range.contains(output) {
+                            branch.range.insert(*input);
+                        }
+                    }
+                }
+                s_expr
+                    .child(child)
+                    .map(|child| estimate_scan_cost(child, metadata, &branch))
+                    .unwrap_or(UNKNOWN_CARDINALITY_COST)
+            })
             .sum(),
+        // HAVING/TopN/Limit predicates cannot be assumed to prune input scans.
         _ => s_expr
             .children()
-            .map(|child| estimate_scan_cost(child, scan_pruning_factor, stat_context))
+            .map(|child| estimate_scan_cost(child, metadata, &PredicateColumns::default()))
             .sum(),
     }
 }
@@ -485,75 +531,15 @@ fn scan_cost(scan: &Scan, scan_pruning_factor: f64) -> f64 {
         .unwrap_or(UNKNOWN_CARDINALITY_COST)
 }
 
-fn scan_pruning_factor_for_plan(metadata: &Metadata, plan: &SExpr) -> f64 {
-    let predicate_columns = predicate_columns_from_plan(plan);
-    let Some(scan) = find_scan(plan) else {
-        return 1.0;
-    };
-    let table = metadata.table(scan.table_index).table();
-    let score = cluster_prefix_score(table.as_ref(), &predicate_columns);
-    cluster_pruning_factor(score)
-}
-
-fn find_scan(s_expr: &SExpr) -> Option<&Scan> {
-    if let RelOperator::Scan(scan) = s_expr.plan() {
-        return Some(scan);
-    }
-    s_expr.children().find_map(find_scan)
-}
-
-fn predicate_columns_from_plan<'a>(s_expr: &'a SExpr) -> PredicateColumns<'a> {
-    let mut columns = PredicateColumns::default();
-    collect_predicate_columns_for_scan(s_expr, &mut columns);
-    columns
-}
-
-fn collect_predicate_columns_for_scan<'a>(s_expr: &'a SExpr, columns: &mut PredicateColumns<'a>) {
-    match s_expr.plan() {
-        RelOperator::Scan(scan) => {
-            if let Some(predicates) = &scan.push_down_predicates {
-                for predicate in predicates {
-                    collect_predicate_columns_from_scalar(predicate, columns);
-                }
-            }
-        }
-        RelOperator::Filter(filter) => {
-            // A filter above an aggregate cannot prune the aggregate's input
-            // scan. Filters below the aggregate, or directly above the scan,
-            // can still contribute to storage pruning.
-            if s_expr
-                .child(0)
-                .is_ok_and(|child| !contains_aggregate(child))
-            {
-                for predicate in &filter.predicates {
-                    collect_predicate_columns_from_scalar(predicate, columns);
-                }
-            }
-            if let Ok(child) = s_expr.child(0) {
-                collect_predicate_columns_for_scan(child, columns);
-            }
-        }
-        _ => {
-            for child in s_expr.children() {
-                collect_predicate_columns_for_scan(child, columns);
-            }
-        }
-    }
-}
-
-fn contains_aggregate(s_expr: &SExpr) -> bool {
-    matches!(s_expr.plan(), RelOperator::Aggregate(_)) || s_expr.children().any(contains_aggregate)
-}
-
-fn collect_predicate_columns_from_scalar<'a>(
-    expr: &'a ScalarExpr,
-    columns: &mut PredicateColumns<'a>,
-) {
+fn collect_predicate_columns_from_scalar(expr: &ScalarExpr, columns: &mut PredicateColumns) {
     let ScalarExpr::FunctionCall(function) = expr else {
         return;
     };
 
-    if matches!(function.func_name.as_str(), "or" | "or_filters") {
+    if matches!(function.func_name.as_str(), "and" | "and_filters") {
+        for argument in &function.arguments {
+            collect_predicate_columns_from_scalar(argument, columns);
+        }
         return;
     }
     if function.arguments.len() == 2
@@ -565,11 +551,11 @@ fn collect_predicate_columns_from_scalar<'a>(
         let column = match (&function.arguments[0], &function.arguments[1]) {
             (ScalarExpr::BoundColumnRef(column), ScalarExpr::ConstantExpr(_))
             | (ScalarExpr::BoundColumnRef(column), ScalarExpr::TypedConstantExpr(_, _)) => {
-                Some(column.column.column_name.as_str())
+                Some(column.column.index)
             }
             (ScalarExpr::ConstantExpr(_), ScalarExpr::BoundColumnRef(column))
             | (ScalarExpr::TypedConstantExpr(_, _), ScalarExpr::BoundColumnRef(column)) => {
-                Some(column.column.column_name.as_str())
+                Some(column.column.index)
             }
             _ => None,
         };
@@ -585,42 +571,70 @@ fn collect_predicate_columns_from_scalar<'a>(
             }
         }
     }
-
-    for argument in &function.arguments {
-        collect_predicate_columns_from_scalar(argument, columns);
-    }
 }
 
-fn cluster_prefix_score(
-    table: &dyn Table,
-    predicate_columns: &PredicateColumns<'_>,
-) -> PrefixRouteScore {
-    let Some(cluster_keys) = table.resolve_cluster_keys() else {
-        return PrefixRouteScore::default();
-    };
-
-    let mut score = PrefixRouteScore::default();
-    for cluster_key in &cluster_keys {
-        let Some(column) = simple_cluster_key_column(cluster_key) else {
-            return PrefixRouteScore::default();
+/// Block min/max pruning is not a B-tree prefix lookup: later keys can help
+/// without a constraint on the first key. Recognize only direct columns and
+/// order-preserving string prefixes, not arbitrary functions of a column.
+fn cluster_key_score(
+    keys: &[ast::Expr],
+    predicate: impl Fn(&str) -> (bool, bool),
+) -> ClusterRouteScore {
+    let mut score = ClusterRouteScore::default();
+    let mut seen = HashSet::new();
+    for key in keys {
+        let Some(column) = cluster_key_column(key) else {
+            continue;
         };
-        if predicate_columns.equality.contains(column) {
-            score.matched_prefix += 1;
-            score.equality_prefix += 1;
-        } else if predicate_columns.range.contains(column) {
-            score.matched_prefix += 1;
-            break;
-        } else {
-            break;
+        if !seen.insert(column) {
+            continue;
+        }
+        let (equality, range) = predicate(column);
+        if equality {
+            score.equality_keys += 1;
+        } else if range {
+            score.range_keys += 1;
         }
     }
     score
 }
 
-fn simple_cluster_key_column(expr: &ast::Expr) -> Option<&str> {
+fn cluster_key_column(expr: &ast::Expr) -> Option<&str> {
+    fn positive_integer(expr: &ast::Expr) -> Option<u64> {
+        match expr {
+            ast::Expr::Literal {
+                value: ast::Literal::UInt64(value),
+                ..
+            } if *value > 0 => Some(*value),
+            _ => None,
+        }
+    }
+    fn column(expr: &ast::Expr) -> Option<&str> {
+        match expr {
+            ast::Expr::ColumnRef { column, .. } if column.table.is_none() => {
+                Some(column.column.name())
+            }
+            _ => None,
+        }
+    }
     match expr {
-        ast::Expr::ColumnRef { column, .. } if column.table.is_none() => Some(column.column.name()),
-        _ => None,
+        ast::Expr::Substring {
+            expr,
+            substring_from,
+            substring_for: Some(length),
+            ..
+        } if positive_integer(substring_from) == Some(1) && positive_integer(length).is_some() => {
+            column(expr)
+        }
+        ast::Expr::FunctionCall { func, .. }
+            if func.name.name.eq_ignore_ascii_case("substring")
+                && func.args.len() == 3
+                && positive_integer(&func.args[1]) == Some(1)
+                && positive_integer(&func.args[2]).is_some() =>
+        {
+            column(&func.args[0])
+        }
+        _ => column(expr),
     }
 }
 
@@ -881,28 +895,120 @@ mod tests {
     }
 
     #[test]
-    fn cluster_prefix_is_part_of_scan_cost() {
-        let scan = scan_with_rows(Some(100));
-        let unpruned = estimate_rewrite_cost(&scan, 1.0, &StatContext::default());
-        let equality_pruned = estimate_rewrite_cost(
-            &scan,
-            cluster_pruning_factor(PrefixRouteScore {
-                matched_prefix: 1,
-                equality_prefix: 1,
+    fn cluster_keys_are_part_of_scan_cost() {
+        let expr = scan_with_rows(Some(100));
+        let scan = expr.plan().as_scan().unwrap();
+        let unpruned = scan_cost(scan, 1.0);
+        let equality_pruned = scan_cost(
+            scan,
+            cluster_pruning_factor(ClusterRouteScore {
+                equality_keys: 1,
+                range_keys: 0,
             }),
-            &StatContext::default(),
         );
-        let range_pruned = estimate_rewrite_cost(
-            &scan,
-            cluster_pruning_factor(PrefixRouteScore {
-                matched_prefix: 1,
-                equality_prefix: 0,
+        let range_pruned = scan_cost(
+            scan,
+            cluster_pruning_factor(ClusterRouteScore {
+                equality_keys: 0,
+                range_keys: 1,
             }),
-            &StatContext::default(),
         );
 
         assert!(equality_pruned < range_pruned);
         assert!(range_pruned < unpruned);
+    }
+
+    fn parse_key(sql: &str) -> ast::Expr {
+        use databend_common_ast::parser::Dialect;
+        use databend_common_ast::parser::parse_expr;
+        use databend_common_ast::parser::tokenize_sql;
+        parse_expr(&tokenize_sql(sql).unwrap(), Dialect::PostgreSQL).unwrap()
+    }
+
+    #[test]
+    fn non_leading_prefix_key_contributes_without_leading_predicate() {
+        for key in [
+            "contract_no",
+            "substring(contract_no from 1 for 32)",
+            "substring(contract_no, 1, 32)",
+        ] {
+            let keys = [parse_key("notify_date"), parse_key(key)];
+            let score = cluster_key_score(&keys, |name| (name == "contract_no", false));
+            assert_eq!(score, ClusterRouteScore {
+                equality_keys: 1,
+                range_keys: 0
+            });
+        }
+    }
+
+    #[test]
+    fn unsupported_expressions_do_not_hide_other_keys() {
+        for key in [
+            "substring(contract_no, 2, 32)",
+            "substring(contract_no, 1, 0)",
+            "lower(contract_no)",
+        ] {
+            let keys = [parse_key(key), parse_key("user_id")];
+            assert_eq!(cluster_key_score(&keys, |_| (true, false)).equality_keys, 1);
+        }
+        let keys = [
+            parse_key("contract_no"),
+            parse_key("substring(contract_no, 1, 32)"),
+        ];
+        assert_eq!(cluster_key_score(&keys, |_| (true, false)).equality_keys, 1);
+    }
+
+    #[test]
+    fn only_conjunctive_comparisons_contribute_to_pruning() {
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+
+        use crate::plans::ConstantExpr;
+        use crate::plans::FunctionCall;
+
+        fn function(name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: name.to_string(),
+                params: vec![],
+                arguments,
+                return_type: Box::new(DataType::Boolean),
+            })
+        }
+
+        let symbol = Symbol::new(42);
+        let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "contract_no".to_string(),
+                symbol,
+                Box::new(DataType::String),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        let value = ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::String("contract".to_string()),
+        });
+        let equality = function("eq", vec![value, column]);
+        for name in ["not", "or", "or_filters", "is_null"] {
+            let mut columns = PredicateColumns::default();
+            collect_predicate_columns_from_scalar(
+                &function(name, vec![equality.clone()]),
+                &mut columns,
+            );
+            assert!(columns.equality.is_empty(), "{name}");
+            assert!(columns.range.is_empty(), "{name}");
+        }
+        for name in ["and", "and_filters"] {
+            let mut columns = PredicateColumns::default();
+            collect_predicate_columns_from_scalar(
+                &function(name, vec![equality.clone()]),
+                &mut columns,
+            );
+            assert_eq!(columns.equality, HashSet::from([symbol]));
+        }
     }
 
     #[test]
@@ -931,8 +1037,8 @@ mod tests {
 
     #[test]
     fn smaller_scan_is_cheaper_than_larger_scan() {
-        let small = estimate_rewrite_cost(&scan_with_rows(Some(10)), 1.0, &StatContext::default());
-        let large = estimate_rewrite_cost(&scan_with_rows(Some(100)), 1.0, &StatContext::default());
+        let small = scan_cost(scan_with_rows(Some(10)).plan().as_scan().unwrap(), 1.0);
+        let large = scan_cost(scan_with_rows(Some(100)).plan().as_scan().unwrap(), 1.0);
         assert!(small < large);
     }
 
@@ -950,15 +1056,15 @@ mod tests {
             Arc::new(scan.clone()),
         );
         assert!(
-            estimate_rewrite_cost(&scan, 1.0, &StatContext::default())
-                < estimate_rewrite_cost(&with_aggregate, 1.0, &StatContext::default())
+            estimate_compute_cost(&scan, &StatContext::default())
+                < estimate_compute_cost(&with_aggregate, &StatContext::default())
         );
     }
 
     #[test]
     fn unknown_scan_stats_are_more_expensive_than_known_small_scan() {
-        let unknown = estimate_rewrite_cost(&scan_with_rows(None), 1.0, &StatContext::default());
-        let known = estimate_rewrite_cost(&scan_with_rows(Some(1)), 1.0, &StatContext::default());
+        let unknown = scan_cost(scan_with_rows(None).plan().as_scan().unwrap(), 1.0);
+        let known = scan_cost(scan_with_rows(Some(1)).plan().as_scan().unwrap(), 1.0);
         assert!(known < unknown);
     }
 }

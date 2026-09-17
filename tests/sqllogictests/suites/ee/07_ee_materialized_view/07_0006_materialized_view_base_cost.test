@@ -1,0 +1,61 @@
+# A matching detail MV must compete with the source, including pruning from
+# a non-leading string-prefix cluster key. Neither query constrains notify_date.
+statement ok
+drop database if exists test_materialized_view_base_cost
+
+statement ok
+create database test_materialized_view_base_cost
+
+statement ok
+use test_materialized_view_base_cost
+
+statement ok
+create table loans (notify_date date, contract_no string, user_id string)
+cluster by linear(notify_date, substring(contract_no from 1 for 32))
+
+statement ok
+insert into loans values
+    ('2024-05-08', '20240508003088609102099707120130', 'u1'),
+    ('2024-05-08', '20240508003088609102099707120131', 'u2'),
+    ('2024-05-09', '20240508003088609102099707120130', 'u2'),
+    ('2024-05-09', '20240509003088609102099707120132', 'u3')
+
+statement ok
+create materialized view mv_by_user (notify_date, contract_no, user_id)
+cluster by (user_id) as select notify_date, contract_no, user_id from loans
+
+statement ok
+refresh materialized view mv_by_user
+
+# The sole MV is semantically eligible, but has no relevant clustering.
+query T
+explain select * from loans where contract_no = '20240508003088609102099707120130'
+----
+<slt:ignore>table: default.test_materialized_view_base_cost.loans<slt:ignore>
+
+query TTT rowsort
+select * from loans where contract_no = '20240508003088609102099707120130'
+----
+2024-05-08 20240508003088609102099707120130 u1
+2024-05-09 20240508003088609102099707120130 u2
+
+# The same MV is still useful for its own cluster key.
+query T
+explain select * from loans where user_id = 'u2'
+----
+<slt:ignore>table: default.test_materialized_view_base_cost.mv_by_user<slt:ignore>
+
+query TTT rowsort
+select * from loans where user_id = 'u2'
+----
+2024-05-08 20240508003088609102099707120131 u2
+2024-05-09 20240508003088609102099707120130 u2
+
+# With no pruning or row-count advantage, retain the source.
+query T
+explain select * from loans
+----
+<slt:ignore>table: default.test_materialized_view_base_cost.loans<slt:ignore>
+
+statement ok
+drop database test_materialized_view_base_cost

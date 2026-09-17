@@ -83,12 +83,13 @@ from base_table where user_id = 'missing'
 ----
 0 0 NULL
 
-# GROUP BY, HAVING and final expressions must stay above the replacement input.
+# With no scan advantage the equally large detail MV should lose to the source.
+# HAVING and final expressions still produce the same results.
 query T
 explain select user_id, sum(amount * 2) + 1 as total
 from base_table group by user_id having count(*) > 1 order by total
 ----
-<slt:ignore>table: default.mv_detail_aggregate.mv_by_user<slt:ignore>
+<slt:ignore>table: default.mv_detail_aggregate.base_table<slt:ignore>
 
 query TI
 select user_id, sum(amount * 2) + 1 as total
@@ -99,7 +100,7 @@ from base_table group by user_id having count(*) > 1 order by total
 query T
 explain select distinct user_id from base_table
 ----
-<slt:ignore>table: default.mv_detail_aggregate.mv_by_user<slt:ignore>
+<slt:ignore>table: default.mv_detail_aggregate.base_table<slt:ignore>
 
 query T rowsort
 select distinct user_id from base_table
@@ -107,7 +108,7 @@ select distinct user_id from base_table
 2088822517322514
 other
 
-# Computed grouping keys and aggregate arguments use remapped input symbols.
+# Computed grouping keys alone do not make an equally large detail MV cheaper.
 query T
 explain raw select id % 2, sum(amount + 1) from base_table group by id % 2
 ----
@@ -136,9 +137,9 @@ EvalScalar
         ├── group items: [modulo(base_table.id (#0), 2) AS (#7)]
         ├── aggregate functions: [sum(base_table.amount (#2)) AS (#8), count(base_table.amount (#2)) AS (#9)]
         └── EvalScalar
-            ├── scalars: [mv_by_user.id (#19) AS (#0), mv_by_user.amount (#21) AS (#2), modulo(mv_by_user.id (#19), 2) AS (#7), mv_by_user.id (#19) AS (#23), mv_by_user.user_id (#20) AS (#24), mv_by_user.amount (#21) AS (#25)]
+            ├── scalars: [base_table.amount (#2) AS (#2), modulo(base_table.id (#0), 2) AS (#7)]
             └── Scan
-                ├── table: mv_detail_aggregate.mv_by_user (#2)
+                ├── table: mv_detail_aggregate.base_table (#0)
                 ├── filters: []
                 ├── order by: []
                 └── limit: NONE
@@ -165,15 +166,15 @@ explain select count(*) from base_table where note = 'first'
 ----
 <slt:ignore>table: default.mv_detail_aggregate.base_table<slt:ignore>
 
-# Hybrid rows must be combined before aggregating, so duplicate values across
-# the checkpoint are counted once by COUNT(DISTINCT), but twice by COUNT(*).
+# On this tiny table the hybrid union overhead outweighs pruning. Keep the
+# source and still count duplicates once for COUNT(DISTINCT), twice for COUNT(*).
 statement ok
 insert into base_table values (5, '2088822517322514', 10, 'fifth')
 
 query T
 explain select count(*) from base_table where user_id = '2088822517322514'
 ----
-<slt:ignore>AggregateFinal<slt:ignore>UnionAll<slt:ignore>table: default.mv_detail_aggregate.mv_by_user<slt:ignore>table: default.mv_detail_aggregate.base_table<slt:ignore>
+<slt:ignore>AggregateFinal<slt:ignore>table: default.mv_detail_aggregate.base_table<slt:ignore>
 
 query IIII
 select count(*), count(amount), count(distinct amount), sum(amount * 2) + 1
@@ -217,6 +218,60 @@ query I
 select count(*) from base_table where amount > 10
 ----
 2
+
+# Restore positive coverage for computed grouping, HAVING and hybrid detail
+# rewrites using an MV that really excludes most of the source rows.
+statement ok
+create table selective_source (id int, user_id string, amount int, active boolean)
+
+statement ok
+insert into selective_source values (1, 'u1', 10, true), (2, 'u1', 20, true)
+
+statement ok
+insert into selective_source select number + 100, 'other', 0, false from numbers(1000)
+
+statement ok
+create materialized view selective_mv (id, user_id, amount) as
+select id, user_id, amount from selective_source where active
+
+statement ok
+refresh materialized view selective_mv
+
+query T
+explain select id % 2, sum(amount + 1) from selective_source where active group by id % 2
+----
+<slt:ignore>table: default.mv_detail_aggregate.selective_mv<slt:ignore>
+
+query II rowsort
+select id % 2, sum(amount + 1) from selective_source where active group by id % 2
+----
+0 21
+1 11
+
+query T
+explain select user_id, sum(amount * 2) + 1 as total from selective_source
+where active group by user_id having count(*) > 1 order by total
+----
+<slt:ignore>table: default.mv_detail_aggregate.selective_mv<slt:ignore>
+
+query TI
+select user_id, sum(amount * 2) + 1 as total from selective_source
+where active group by user_id having count(*) > 1 order by total
+----
+u1 61
+
+statement ok
+insert into selective_source values (3, 'u1', 10, true)
+
+query T
+explain select count(*), count(distinct amount) from selective_source where active
+----
+<slt:ignore>AggregateFinal<slt:ignore>UnionAll<slt:ignore>table: default.mv_detail_aggregate.selective_mv<slt:ignore>table: default.mv_detail_aggregate.selective_source<slt:ignore>
+
+query II
+select count(*), count(distinct amount) from selective_source where active
+----
+3 2
 
 statement ok
 drop database mv_detail_aggregate
