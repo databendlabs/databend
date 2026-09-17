@@ -414,7 +414,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_drop_table_infos(
         &self,
         _req: ListDroppedTableReq,
-    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+    ) -> Result<(Vec<TableInfo>, Vec<DroppedId>)> {
         Err(ErrorCode::Unimplemented(
             "'get_drop_table_infos' not implemented",
         ))

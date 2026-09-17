@@ -13,16 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
-use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
@@ -38,8 +38,12 @@ pub async fn do_vacuum_drop_table(
     for (table_info, operator) in tables {
         let result =
             vacuum_drop_single_table(&table_info, operator, dry_run_limit, &mut list_files).await;
-        if result.is_err() {
+        if let Err(err) = result {
             let table_id = table_info.ident.table_id;
+            error!(
+                "failed to vacuum dropped table {} (id:{}): {}",
+                table_info.desc, table_id, err
+            );
             failed_tables.insert(table_id);
         }
     }
@@ -72,9 +76,7 @@ async fn vacuum_drop_single_table(
 
     match dry_run_limit {
         None => {
-            operator.remove_all(&dir).await.inspect_err(|err| {
-                error!("failed to remove all in directory {}: {}", dir, err);
-            })?;
+            operator.remove_all(&dir).await?;
         }
         Some(dry_run_limit) => {
             let mut ds = operator.lister_with(&dir).recursive(true).await?;
@@ -203,28 +205,45 @@ pub async fn vacuum_drop_tables_by_table_info(
 #[async_backtrace::framed]
 pub async fn vacuum_drop_tables(
     threads_nums: usize,
-    tables: Vec<Arc<dyn Table>>,
+    tables: Vec<TableInfo>,
     dry_run_limit: Option<usize>,
 ) -> VacuumDropTablesResult {
     let num_tables = tables.len();
     info!("vacuum_drop_tables {} tables", num_tables);
 
     let mut table_infos = Vec::with_capacity(num_tables);
-    for table in tables {
-        let (table_info, operator) =
-            if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
-                (fuse_table.get_table_info(), fuse_table.get_operator())
-            } else {
-                info!(
-                    "ignore table {}, which is not of FUSE engine. Table engine {}",
-                    table.get_table_info().name,
-                    table.engine()
+    let mut failed_tables = HashSet::new();
+    for table_info in tables {
+        // Attached/shared tables do not own their physical data. Materialized
+        // views and dynamic tables do, even though they reject user mutations.
+        if table_info.is_shared()
+            || (table_info.meta.storage_params.is_some()
+                && FuseTable::is_table_attached(table_info.options()))
+        {
+            continue;
+        }
+        let operator = if is_fuse_backed_engine(table_info.engine()) {
+            FuseTable::create_storage_operator(&table_info, None)
+        } else {
+            Err(ErrorCode::UnknownTableEngine(format!(
+                "Cannot vacuum physical data for table engine {}",
+                table_info.engine()
+            )))
+        };
+        match operator {
+            Ok(operator) => table_infos.push((table_info, operator)),
+            Err(err) => {
+                error!(
+                    "failed to initialize storage for dropped table {} (id:{}): {}",
+                    table_info.desc, table_info.ident.table_id, err
                 );
-                continue;
-            };
-
-        table_infos.push((table_info.clone(), operator));
+                failed_tables.insert(table_info.ident.table_id);
+            }
+        }
     }
 
-    vacuum_drop_tables_by_table_info(threads_nums, table_infos, dry_run_limit).await
+    let (files, failed) =
+        vacuum_drop_tables_by_table_info(threads_nums, table_infos, dry_run_limit).await?;
+    failed_tables.extend(failed);
+    Ok((files, failed_tables))
 }
