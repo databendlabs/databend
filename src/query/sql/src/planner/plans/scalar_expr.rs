@@ -1195,6 +1195,16 @@ pub struct LambdaFunc {
 }
 
 impl LambdaFunc {
+    fn degenerate_return_type(&self, collection_type: &DataType) -> Option<DataType> {
+        match collection_type {
+            DataType::Null => Some(DataType::Null),
+            DataType::EmptyArray if self.func_name == "array_reduce" => Some(DataType::Null),
+            DataType::EmptyArray => Some(DataType::EmptyArray),
+            DataType::EmptyMap => Some(DataType::EmptyMap),
+            _ => None,
+        }
+    }
+
     fn sync_return_type_nullability(&mut self, is_nullable: bool) {
         if self.return_type.is_nullable() == is_nullable {
             return;
@@ -1240,18 +1250,8 @@ impl LambdaFunc {
             .data_type();
         let is_nullable = collection_type.is_nullable_or_null();
         let collection_type = collection_type.remove_nullable();
-        if collection_type == DataType::Null {
-            return Ok(DataType::Null);
-        }
-        if collection_type == DataType::EmptyArray {
-            return Ok(if self.func_name == "array_reduce" {
-                DataType::Null
-            } else {
-                DataType::EmptyArray
-            });
-        }
-        if collection_type == DataType::EmptyMap {
-            return Ok(DataType::EmptyMap);
+        if let Some(return_type) = self.degenerate_return_type(&collection_type) {
+            return Ok(return_type);
         }
 
         let lambda_type = || self.lambda_expr.data_type().clone();
@@ -1335,20 +1335,10 @@ impl LambdaFunc {
 
         // Degenerate collection types can be introduced by a rewrite even
         // though the binder folds them before constructing a LambdaFunc.
-        match collection_type {
-            DataType::Null => self.return_type = Box::new(DataType::Null),
-            DataType::EmptyArray => {
-                self.return_type = Box::new(if self.func_name == "array_reduce" {
-                    DataType::Null
-                } else {
-                    DataType::EmptyArray
-                });
-            }
-            DataType::EmptyMap => self.return_type = Box::new(DataType::EmptyMap),
-            _ if self.func_name != "array_reduce" => {
-                self.sync_return_type_nullability(is_nullable);
-            }
-            _ => {}
+        if let Some(return_type) = self.degenerate_return_type(&collection_type) {
+            self.return_type = Box::new(return_type);
+        } else if self.func_name != "array_reduce" {
+            self.sync_return_type_nullability(is_nullable);
         }
         Ok(())
     }
