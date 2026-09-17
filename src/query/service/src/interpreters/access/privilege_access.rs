@@ -2319,7 +2319,27 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?
             }
             Plan::CreateDynamicTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                self.validate_db_access(
+                    &plan.table_plan.catalog,
+                    &plan.table_plan.database,
+                    UserPrivilegeType::Create,
+                    false,
+                )
+                .await?;
+                if let Some(select_plan) = &plan.table_plan.as_select {
+                    self.check(ctx, select_plan).await?;
+                }
+            }
+            Plan::RefreshDynamicTable(plan) => {
+                self.validate_table_access(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await?;
             }
             Plan::CreateUser(_) => {
                 self.validate_access(

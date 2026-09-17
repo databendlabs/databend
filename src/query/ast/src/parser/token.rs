@@ -217,7 +217,7 @@ pub enum TokenKind {
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
-    #[regex(r#"`[^`]*`"#)]
+    #[regex(r#"`([^`]|``)*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     LiteralString,
