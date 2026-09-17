@@ -169,44 +169,34 @@ where
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
         let state = input.state.get::<AggregateQuantileTDigestState>();
-        match input.validity {
-            Some(validity) => {
-                for ((value, weight), valid) in
-                    values.iter().zip(weights.iter()).zip(validity.iter())
-                {
-                    if valid {
-                        state.add_weighted_value(
-                            V::to_owned_scalar(value).as_(),
-                            W::to_owned_scalar(weight).as_(),
-                        );
-                    }
-                }
-            }
-            None => {
-                for (value, weight) in values.iter().zip(weights.iter()) {
-                    state.add_weighted_value(
-                        V::to_owned_scalar(value).as_(),
-                        W::to_owned_scalar(weight).as_(),
-                    );
-                }
-            }
-        }
+        for_each_selected(
+            values.iter().zip(weights.iter()),
+            input.validity,
+            |(value, weight)| {
+                state.add_weighted_value(
+                    V::to_owned_scalar(value).as_(),
+                    W::to_owned_scalar(weight).as_(),
+                );
+            },
+        );
         Ok(())
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
-        for (row, state) in input.states.iter().enumerate() {
-            let value = unsafe { values.index_unchecked(row) };
-            let weight = unsafe { weights.index_unchecked(row) };
-            state
-                .get::<AggregateQuantileTDigestState>()
-                .add_weighted_value(
-                    V::to_owned_scalar(value).as_(),
-                    W::to_owned_scalar(weight).as_(),
-                );
-        }
+        for_each_selected(
+            values.iter().zip(weights.iter()).zip(input.states.iter()),
+            input.validity,
+            |((value, weight), state)| {
+                state
+                    .get::<AggregateQuantileTDigestState>()
+                    .add_weighted_value(
+                        V::to_owned_scalar(value).as_(),
+                        W::to_owned_scalar(weight).as_(),
+                    );
+            },
+        );
         Ok(())
     }
 
@@ -236,19 +226,19 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
-                unreachable!()
-            };
-            let mut rhs = AggregateQuantileTDigestState::deserialize_reader(&mut data)?;
-            state
-                .get::<AggregateQuantileTDigestState>()
-                .merge_state(&mut rhs)?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
+                    unreachable!()
+                };
+                let mut rhs = AggregateQuantileTDigestState::deserialize_reader(&mut data)?;
+                state
+                    .get::<AggregateQuantileTDigestState>()
+                    .merge_state(&mut rhs)
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

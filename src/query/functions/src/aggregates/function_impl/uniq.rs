@@ -168,17 +168,10 @@ pub(super) trait UniqSet: Send + Sync + 'static {
             return self.insert(view.index(0).unwrap());
         }
         let mut changed = false;
-        if let Some(validity) = validity {
-            for (value, valid) in view.iter().zip(validity.iter()) {
-                if valid {
-                    changed |= self.insert(value)?;
-                }
-            }
-        } else {
-            for value in view.iter() {
-                changed |= self.insert(value)?;
-            }
-        }
+        try_for_each_selected(view.iter(), validity, |value| {
+            changed |= self.insert(value)?;
+            Ok(())
+        })?;
         Ok(changed)
     }
 }
@@ -455,10 +448,11 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let view = input.columns[0].downcast::<S::Type>().unwrap();
-        for (value, state) in view.iter().zip(input.states.iter()) {
-            state.get::<S>().insert(value)?;
-        }
-        Ok(())
+        try_for_each_selected(
+            view.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| state.get::<S>().insert(value).map(|_| ()),
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -477,14 +471,16 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
         Ok(())
     }
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_none_or(|v| v.get(row).unwrap()) {
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
                 state
                     .get::<S>()
-                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))?;
-            }
-        }
-        Ok(())
+                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+                    .map(|_| ())
+            },
+        )
     }
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input.state.get::<S>().merge(input.rhs.get::<S>());

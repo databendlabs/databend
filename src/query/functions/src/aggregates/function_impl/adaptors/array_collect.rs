@@ -76,14 +76,7 @@ where
         // as they are in accumulate_row and accumulate_keys.
         if entry.data_type().is_nullable() {
             let values = entry.downcast::<NullableType<T>>().unwrap();
-            for (row, value) in values.iter().enumerate() {
-                if input
-                    .validity
-                    .is_none_or(|validity| validity.get(row).unwrap())
-                {
-                    state.add(value);
-                }
-            }
+            for_each_selected(values.iter(), input.validity, |value| state.add(value));
             return Ok(());
         }
         let column = entry.downcast::<T>().unwrap();
@@ -107,16 +100,20 @@ where
         );
         if entry.data_type().is_nullable() {
             let values = entry.downcast::<NullableType<T>>().unwrap();
-            for (value, state) in values.iter().zip(input.states.iter()) {
-                state.get::<State>().add(value);
-            }
+            for_each_selected(
+                values.iter().zip(input.states.iter()),
+                input.validity,
+                |(value, state)| state.get::<State>().add(value),
+            );
             return Ok(());
         }
 
         let values = entry.downcast::<T>().unwrap();
-        for (value, state) in values.iter().zip(input.states.iter()) {
-            state.get::<State>().add(Some(value));
-        }
+        for_each_selected(
+            values.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| state.get::<State>().add(Some(value)),
+        );
         Ok(())
     }
 
@@ -146,15 +143,15 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            state
-                .get::<State>()
-                .merge_serialized(super::serialized_scalar_at(input.state, row, 0))?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                state
+                    .get::<State>()
+                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
@@ -285,27 +282,19 @@ mod tests {
                 let owner = AggregateStateOwner::new(vec![function.clone()])?;
                 let entries = [entry.clone()];
                 match mode {
-                    0 => function.accumulate(AccumulateInput {
-                        state: owner.state(0),
-                        columns: (&entries).into(),
-                        validity: None,
-                    })?,
+                    0 => function.accumulate(owner.state(0), (&entries).into())?,
                     1 => {
                         for row in 0..3 {
-                            function.accumulate_row(AccumulateRowInput {
-                                state: owner.state(0),
-                                columns: (&entries).into(),
-                                row,
-                            })?;
+                            function.accumulate_row(owner.state(0), (&entries).into(), row)?;
                         }
                     }
                     _ => {
                         let state = owner.state(0);
                         let places = vec![state.addr; 3];
-                        function.accumulate_keys(AccumulateKeysInput {
-                            states: AggregateStateSet::new(&places, state.loc),
-                            columns: (&entries).into(),
-                        })?;
+                        function.accumulate_keys(
+                            AggregateStateSet::new(&places, state.loc),
+                            (&entries).into(),
+                        )?;
                     }
                 }
                 assert_eq!(owner.state(0).get::<Probe>().0, expected);
@@ -332,7 +321,7 @@ mod tests {
                     .filter_map(|(value, selected)| selected.then_some(value))
                     .collect::<Vec<_>>();
                 let validity: Bitmap = selection.into_iter().collect();
-                function.accumulate(AccumulateInput {
+                ArrayCollectEval::<UInt64Type, Probe>::default().accumulate(AccumulateInput {
                     state: owner.state(0),
                     columns: std::slice::from_ref(&entry).into(),
                     validity: Some(&validity),

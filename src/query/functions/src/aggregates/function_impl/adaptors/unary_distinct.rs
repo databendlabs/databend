@@ -173,18 +173,19 @@ impl<S: DistinctSet, const SKIP_NULLS: bool> AggregateEval for UnaryDistinctEval
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (entry, validity) = Self::prepare_column(&input.columns[0], None);
+        let (entry, validity) = Self::prepare_column(&input.columns[0], input.validity.cloned());
         let view = entry.downcast::<S::Type>().unwrap();
-        for ((row, value), state) in view.iter().enumerate().zip(input.states.iter()) {
-            if validity.as_ref().is_some_and(|v| !v.get(row).unwrap()) {
-                continue;
-            }
-            let state = Self::state(state);
-            if state.keys.insert(value)? {
-                state.replayed = false;
-            }
-        }
-        Ok(())
+        try_for_each_selected(
+            view.iter().zip(input.states.iter()),
+            validity.as_ref(),
+            |(value, state)| {
+                let state = Self::state(state);
+                if state.keys.insert(value)? {
+                    state.replayed = false;
+                }
+                Ok(())
+            },
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -211,19 +212,20 @@ impl<S: DistinctSet, const SKIP_NULLS: bool> AggregateEval for UnaryDistinctEval
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let state = Self::state(state);
-            if state
-                .keys
-                .merge_serialized(serialized_scalar_at(input.state, row, 0))?
-            {
-                state.replayed = false;
-            }
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let state = Self::state(state);
+                if state
+                    .keys
+                    .merge_serialized(serialized_scalar_at(input.state, row, 0))?
+                {
+                    state.replayed = false;
+                }
+                Ok(())
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

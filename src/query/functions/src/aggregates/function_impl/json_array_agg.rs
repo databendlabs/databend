@@ -124,17 +124,9 @@ where
         if column.is_empty() {
             return Ok(());
         }
-        if let Some(validity) = validity {
-            for (value, valid) in column.iter().zip(validity.iter()) {
-                if valid {
-                    self.values.push(T::to_owned_scalar(value));
-                }
-            }
-        } else {
-            for value in column.iter() {
-                self.values.push(T::to_owned_scalar(value));
-            }
-        }
+        for_each_selected(column.iter(), validity, |value| {
+            self.values.push(T::to_owned_scalar(value));
+        });
         Ok(())
     }
 

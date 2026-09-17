@@ -128,39 +128,22 @@ where I: AggregateEval
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (columns, validity) = Self::strip_nullable_columns(input.columns, None);
+        let (columns, validity) =
+            Self::strip_nullable_columns(input.columns, input.validity.cloned());
         let columns: ProjectedBlock<'_> = (&columns).into();
-        if let Some(validity) = validity {
-            for (row, state) in input.states.iter().enumerate() {
-                if validity.get(row).unwrap() {
-                    if RESULT_NULL {
-                        Self::mark_seen(state);
-                    }
-                    self.nested.accumulate_row(AccumulateRowInput {
-                        state: Self::inner_state(state),
-                        columns,
-                        row,
-                    })?;
-                }
-            }
-            return Ok(());
+        if RESULT_NULL {
+            for_each_selected(input.states.iter(), validity.as_ref(), Self::mark_seen);
         }
 
-        if RESULT_NULL {
-            self.nested.accumulate_keys(AccumulateKeysInput {
-                states: input.states.without_last_loc(),
-                columns,
-            })?;
-            for state in input.states.iter() {
-                Self::mark_seen(state);
-            }
-            Ok(())
-        } else {
-            self.nested.accumulate_keys(AccumulateKeysInput {
-                states: input.states,
-                columns,
-            })
-        }
+        self.nested.accumulate_keys(AccumulateKeysInput {
+            states: if RESULT_NULL {
+                input.states.without_last_loc()
+            } else {
+                input.states
+            },
+            columns,
+            validity: validity.as_ref(),
+        })
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -241,14 +224,7 @@ where I: AggregateEval
             let flag_field = field_count - 1;
             let flag_filter =
                 combined_serialized_flag_filter(input.state, input.filter, flag_field);
-            for (row, state) in input.states.iter().enumerate() {
-                if flag_filter
-                    .as_ref()
-                    .is_none_or(|filter| filter.get(row).unwrap())
-                {
-                    Self::mark_seen(state);
-                }
-            }
+            for_each_selected(input.states.iter(), flag_filter.as_ref(), Self::mark_seen);
             let inner_state = project_serialized_fields(input.state, 0, flag_field);
             self.nested.merge_serialized(MergeSerializedInput {
                 states: input.states.without_last_loc(),

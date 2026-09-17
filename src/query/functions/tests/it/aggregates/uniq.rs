@@ -109,16 +109,13 @@ fn test_uniq_finalize_then_accumulate_and_merge() -> databend_common_exception::
     })?;
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
     let places = vec![owner.state(0).addr; 3];
-    function.accumulate_keys(AccumulateKeysInput {
-        states: AggregateStateSet::new(&places, owner.state(0).loc),
-        columns: entries.as_slice().into(),
-    })?;
+    function.accumulate_keys(
+        AggregateStateSet::new(&places, owner.state(0).loc),
+        entries.as_slice().into(),
+    )?;
     let result = |state| -> databend_common_exception::Result<Scalar> {
         let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-        function.merge_result_read_only(MergeResultInput {
-            state,
-            builder: &mut builder,
-        })?;
+        function.merge_result_read_only(state, &mut builder)?;
         Ok(builder.build().index(0).unwrap().to_owned())
     };
     assert_eq!(
@@ -131,28 +128,14 @@ fn test_uniq_finalize_then_accumulate_and_merge() -> databend_common_exception::
     );
     let entries = [BlockEntry::from(StringType::from_data(vec!["b", "c"]))];
     for row in 0..2 {
-        function.accumulate_row(AccumulateRowInput {
-            state: owner.state(0),
-            columns: entries.as_slice().into(),
-            row,
-        })?;
+        function.accumulate_row(owner.state(0), entries.as_slice().into(), row)?;
     }
-    let mut builder = ColumnBuilder::with_capacity(&function.state_data_type(), 1);
-    function.serialize(SerializeInput {
-        states: owner.state_set(0),
-        builders: builder.as_tuple_mut().unwrap(),
-    })?;
+    let mut builder = ColumnBuilder::with_capacity(&function.state().data_type(), 1);
+    function.serialize(owner.state_set(0), builder.as_tuple_mut().unwrap())?;
     let serialized: BlockEntry = builder.build().into();
     let merged = AggregateStateOwner::new(vec![function.clone()])?;
-    function.merge_serialized(MergeSerializedInput {
-        states: merged.state_set(0),
-        state: &serialized,
-        filter: None,
-    })?;
-    function.merge_states(MergeStatesInput {
-        state: merged.state(0),
-        rhs: owner.state(0),
-    })?;
+    function.merge_serialized(merged.state_set(0), &serialized)?;
+    function.merge_states(merged.state(0), owner.state(0))?;
     assert_eq!(
         result(merged.state(0))?.as_ref(),
         ScalarRef::Number(NumberScalar::UInt64(3))

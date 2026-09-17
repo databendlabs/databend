@@ -304,14 +304,16 @@ where
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let left = input.columns[0].downcast::<L>().unwrap();
         let right = input.columns[1].downcast::<R>().unwrap();
-        for (row, state) in input.states.iter().enumerate() {
-            let left = unsafe { left.index_unchecked(row) };
-            let right = unsafe { right.index_unchecked(row) };
-            state.get::<AggregateCovarianceState<TYPE>>().add_value(
-                L::to_owned_scalar(left).as_(),
-                R::to_owned_scalar(right).as_(),
-            );
-        }
+        for_each_selected(
+            left.iter().zip(right.iter()).zip(input.states.iter()),
+            input.validity,
+            |((left, right), state)| {
+                state.get::<AggregateCovarianceState<TYPE>>().add_value(
+                    L::to_owned_scalar(left).as_(),
+                    R::to_owned_scalar(right).as_(),
+                );
+            },
+        );
         Ok(())
     }
 
@@ -341,19 +343,20 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
-                unreachable!()
-            };
-            let rhs = AggregateCovarianceState::<TYPE>::deserialize_reader(&mut data)?;
-            state
-                .get::<AggregateCovarianceState<TYPE>>()
-                .merge_state(&rhs);
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
+                    unreachable!()
+                };
+                let rhs = AggregateCovarianceState::<TYPE>::deserialize_reader(&mut data)?;
+                state
+                    .get::<AggregateCovarianceState<TYPE>>()
+                    .merge_state(&rhs);
+                Ok(())
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
@@ -387,24 +390,10 @@ fn add_batch<const TYPE: u8, L, R>(
     R: AccessType,
     R::Scalar: AsPrimitive<f64>,
 {
-    match validity {
-        Some(validity) => {
-            for ((left, right), valid) in left.iter().zip(right.iter()).zip(validity.iter()) {
-                if valid {
-                    state.add_value(
-                        L::to_owned_scalar(left).as_(),
-                        R::to_owned_scalar(right).as_(),
-                    );
-                }
-            }
-        }
-        None => {
-            for (left, right) in left.iter().zip(right.iter()) {
-                state.add_value(
-                    L::to_owned_scalar(left).as_(),
-                    R::to_owned_scalar(right).as_(),
-                );
-            }
-        }
-    }
+    for_each_selected(left.iter().zip(right.iter()), validity, |(left, right)| {
+        state.add_value(
+            L::to_owned_scalar(left).as_(),
+            R::to_owned_scalar(right).as_(),
+        );
+    });
 }

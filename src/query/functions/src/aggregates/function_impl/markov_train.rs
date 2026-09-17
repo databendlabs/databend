@@ -270,33 +270,26 @@ impl UnaryEval<StringType, AnyType> for MarkovTrainEval {
         let state = input.state.get::<AggregateMarkovTrainState>();
         let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
-        match input.validity {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        state.consume(self.params.order, value.as_bytes(), &mut code_points);
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    state.consume(self.params.order, value.as_bytes(), &mut code_points);
-                }
-            }
-        }
+        for_each_selected(values.iter(), input.validity, |value| {
+            state.consume(self.params.order, value.as_bytes(), &mut code_points);
+        });
         Ok(())
     }
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
         let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
-        for (row, state) in input.states.iter().enumerate() {
-            state.get::<AggregateMarkovTrainState>().consume(
-                self.params.order,
-                values.index(row).unwrap().as_bytes(),
-                &mut code_points,
-            );
-        }
+        for_each_selected(
+            values.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| {
+                state.get::<AggregateMarkovTrainState>().consume(
+                    self.params.order,
+                    value.as_bytes(),
+                    &mut code_points,
+                );
+            },
+        );
         Ok(())
     }
 
@@ -323,18 +316,19 @@ impl UnaryEval<StringType, AnyType> for MarkovTrainEval {
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let ScalarRef::Binary(mut data) = super::serialized_scalar_at(input.state, row, 0)
-            else {
-                unreachable!()
-            };
-            let mut rhs = AggregateMarkovTrainState::deserialize_reader(&mut data)?;
-            state.get::<AggregateMarkovTrainState>().merge(&mut rhs);
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let ScalarRef::Binary(mut data) = super::serialized_scalar_at(input.state, row, 0)
+                else {
+                    unreachable!()
+                };
+                let mut rhs = AggregateMarkovTrainState::deserialize_reader(&mut data)?;
+                state.get::<AggregateMarkovTrainState>().merge(&mut rhs);
+                Ok(())
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

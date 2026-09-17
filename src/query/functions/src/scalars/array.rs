@@ -40,9 +40,7 @@ use databend_common_expression::Value;
 use databend_common_expression::aggregate::AggrState;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
-use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
-use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::domain_evaluator;
@@ -1261,13 +1259,8 @@ impl<'a> ArrayAggEvaluator<'a> {
         }
         self.func.init_state(state);
         let entries = &[entry];
-        self.func.accumulate(AccumulateInput {
-            state,
-            columns: entries.into(),
-            validity: None,
-        })?;
-        self.func
-            .merge_result(MergeResultInput { state, builder })?;
+        self.func.accumulate(state, entries.into())?;
+        self.func.merge_result(state, builder)?;
         Ok(())
     }
 }

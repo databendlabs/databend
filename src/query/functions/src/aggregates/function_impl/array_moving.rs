@@ -352,27 +352,59 @@ where
         let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
-            for _ in 0..input.columns.num_rows() {
+            let rows = input
+                .validity
+                .map(|validity| validity.true_count())
+                .unwrap_or_else(|| input.columns.num_rows());
+            for _ in 0..rows {
                 state.add_default();
             }
             return Ok(());
         }
 
+        // Selection excludes rows; accepted NULL values retain their position
+        // in the moving sequence as the default value.
         let (not_null, nulls) = entry.clone().split_nullable();
         let values = not_null.downcast::<I>().unwrap();
-        match nulls.and_bitmap(input.validity) {
-            ColumnView::Const(false, _) => {
-                for _ in 0..input.columns.num_rows() {
+        match (nulls, input.validity) {
+            (ColumnView::Const(false, _), validity) => {
+                let rows = validity
+                    .map(|validity| validity.true_count())
+                    .unwrap_or_else(|| input.columns.num_rows());
+                for _ in 0..rows {
                     state.add_default();
                 }
             }
-            ColumnView::Const(true, _) => {
+            (ColumnView::Const(true, _), None) => {
                 for value in values.iter() {
                     state.add(value);
                 }
             }
-            ColumnView::Column(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
+            (ColumnView::Const(true, _), Some(validity)) => {
+                for (value, selected) in values.iter().zip(validity.iter()) {
+                    if selected {
+                        state.add(value);
+                    }
+                }
+            }
+            (ColumnView::Column(column_validity), None) => {
+                for (value, valid) in values.iter().zip(column_validity.iter()) {
+                    if valid {
+                        state.add(value);
+                    } else {
+                        state.add_default();
+                    }
+                }
+            }
+            (ColumnView::Column(column_validity), Some(validity)) => {
+                for ((value, valid), selected) in values
+                    .iter()
+                    .zip(column_validity.iter())
+                    .zip(validity.iter())
+                {
+                    if !selected {
+                        continue;
+                    }
                     if valid {
                         state.add(value);
                     } else {
@@ -387,11 +419,11 @@ where
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
-            for state in input.states.iter() {
+            for_each_selected(input.states.iter(), input.validity, |state| {
                 state
                     .get::<AggregateNumberArrayMovingState<I, S>>()
                     .add_default();
-            }
+            });
             return Ok(());
         }
 
@@ -399,28 +431,36 @@ where
         let values = not_null.downcast::<I>()?;
         match nulls {
             ColumnView::Const(false, _) => {
-                for state in input.states.iter() {
+                for_each_selected(input.states.iter(), input.validity, |state| {
                     state
                         .get::<AggregateNumberArrayMovingState<I, S>>()
                         .add_default();
-                }
+                });
             }
             ColumnView::Const(true, _) => {
-                for (row, state) in input.states.iter().enumerate() {
-                    state
-                        .get::<AggregateNumberArrayMovingState<I, S>>()
-                        .add(values.index(row).unwrap());
-                }
+                for_each_selected(
+                    input.states.iter().enumerate(),
+                    input.validity,
+                    |(row, state)| {
+                        state
+                            .get::<AggregateNumberArrayMovingState<I, S>>()
+                            .add(values.index(row).unwrap());
+                    },
+                );
             }
-            ColumnView::Column(validity) => {
-                for (row, state) in input.states.iter().enumerate() {
-                    let state = state.get::<AggregateNumberArrayMovingState<I, S>>();
-                    if validity.get(row).unwrap() {
-                        state.add(values.index(row).unwrap());
-                    } else {
-                        state.add_default();
-                    }
-                }
+            ColumnView::Column(column_validity) => {
+                for_each_selected(
+                    input.states.iter().enumerate(),
+                    input.validity,
+                    |(row, state)| {
+                        let state = state.get::<AggregateNumberArrayMovingState<I, S>>();
+                        if column_validity.get(row).unwrap() {
+                            state.add(values.index(row).unwrap());
+                        } else {
+                            state.add_default();
+                        }
+                    },
+                );
             }
         }
         Ok(())
@@ -460,15 +500,15 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            state
-                .get::<AggregateNumberArrayMovingState<I, S>>()
-                .merge_serialized(super::serialized_scalar_at(input.state, row, 0))?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                state
+                    .get::<AggregateNumberArrayMovingState<I, S>>()
+                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
@@ -518,27 +558,59 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         let state = input.state.get::<AggregateDecimalArrayMovingState<T>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
-            for _ in 0..input.columns.num_rows() {
+            let rows = input
+                .validity
+                .map(|validity| validity.true_count())
+                .unwrap_or_else(|| input.columns.num_rows());
+            for _ in 0..rows {
                 state.add_default();
             }
             return Ok(());
         }
 
+        // Selection excludes rows; accepted NULL values retain their position
+        // in the moving sequence as the default value.
         let (not_null, nulls) = entry.clone().split_nullable();
         let values = not_null.downcast::<DecimalType<T>>().unwrap();
-        match nulls.and_bitmap(input.validity) {
-            ColumnView::Const(false, _) => {
-                for _ in 0..input.columns.num_rows() {
+        match (nulls, input.validity) {
+            (ColumnView::Const(false, _), validity) => {
+                let rows = validity
+                    .map(|validity| validity.true_count())
+                    .unwrap_or_else(|| input.columns.num_rows());
+                for _ in 0..rows {
                     state.add_default();
                 }
             }
-            ColumnView::Const(true, _) => {
+            (ColumnView::Const(true, _), None) => {
                 for value in values.iter() {
                     state.add(value);
                 }
             }
-            ColumnView::Column(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
+            (ColumnView::Const(true, _), Some(validity)) => {
+                for (value, selected) in values.iter().zip(validity.iter()) {
+                    if selected {
+                        state.add(value);
+                    }
+                }
+            }
+            (ColumnView::Column(column_validity), None) => {
+                for (value, valid) in values.iter().zip(column_validity.iter()) {
+                    if valid {
+                        state.add(value);
+                    } else {
+                        state.add_default();
+                    }
+                }
+            }
+            (ColumnView::Column(column_validity), Some(validity)) => {
+                for ((value, valid), selected) in values
+                    .iter()
+                    .zip(column_validity.iter())
+                    .zip(validity.iter())
+                {
+                    if !selected {
+                        continue;
+                    }
                     if valid {
                         state.add(value);
                     } else {
@@ -553,11 +625,11 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
-            for state in input.states.iter() {
+            for_each_selected(input.states.iter(), input.validity, |state| {
                 state
                     .get::<AggregateDecimalArrayMovingState<T>>()
                     .add_default();
-            }
+            });
             return Ok(());
         }
 
@@ -565,28 +637,36 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         let values = not_null.downcast::<DecimalType<T>>()?;
         match nulls {
             ColumnView::Const(false, _) => {
-                for state in input.states.iter() {
+                for_each_selected(input.states.iter(), input.validity, |state| {
                     state
                         .get::<AggregateDecimalArrayMovingState<T>>()
                         .add_default();
-                }
+                });
             }
             ColumnView::Const(true, _) => {
-                for (row, state) in input.states.iter().enumerate() {
-                    state
-                        .get::<AggregateDecimalArrayMovingState<T>>()
-                        .add(values.index(row).unwrap());
-                }
+                for_each_selected(
+                    input.states.iter().enumerate(),
+                    input.validity,
+                    |(row, state)| {
+                        state
+                            .get::<AggregateDecimalArrayMovingState<T>>()
+                            .add(values.index(row).unwrap());
+                    },
+                );
             }
-            ColumnView::Column(validity) => {
-                for (row, state) in input.states.iter().enumerate() {
-                    let state = state.get::<AggregateDecimalArrayMovingState<T>>();
-                    if validity.get(row).unwrap() {
-                        state.add(values.index(row).unwrap());
-                    } else {
-                        state.add_default();
-                    }
-                }
+            ColumnView::Column(column_validity) => {
+                for_each_selected(
+                    input.states.iter().enumerate(),
+                    input.validity,
+                    |(row, state)| {
+                        let state = state.get::<AggregateDecimalArrayMovingState<T>>();
+                        if column_validity.get(row).unwrap() {
+                            state.add(values.index(row).unwrap());
+                        } else {
+                            state.add_default();
+                        }
+                    },
+                );
             }
         }
         Ok(())
@@ -626,15 +706,15 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            state
-                .get::<AggregateDecimalArrayMovingState<T>>()
-                .merge_serialized(super::serialized_scalar_at(input.state, row, 0))?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                state
+                    .get::<AggregateDecimalArrayMovingState<T>>()
+                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

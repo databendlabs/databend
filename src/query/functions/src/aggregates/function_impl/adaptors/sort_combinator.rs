@@ -74,11 +74,9 @@ impl<I> SortEval<I> {
         self.init_columns(state, rows);
         match validity {
             Some(validity) if validity.null_count() > 0 => {
-                for row in 0..rows {
-                    if validity.get(row).unwrap() {
-                        Self::append_row_to_builders(&mut state.columns, columns, row);
-                    }
-                }
+                for_each_selected(0..rows, Some(validity), |row| {
+                    Self::append_row_to_builders(&mut state.columns, columns, row);
+                });
             }
             _ => {
                 for (entry, builder) in columns.iter().zip(&mut state.columns) {
@@ -251,11 +249,15 @@ where I: AggregateEval
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            let state = Self::state(state);
-            self.init_columns(state, input.states.len());
-            Self::append_row_to_builders(&mut state.columns, input.columns, row);
-        }
+        for_each_selected(
+            input.states.iter().enumerate(),
+            input.validity,
+            |(row, state)| {
+                let state = Self::state(state);
+                self.init_columns(state, input.states.len());
+                Self::append_row_to_builders(&mut state.columns, input.columns, row);
+            },
+        );
         Ok(())
     }
 
@@ -306,14 +308,16 @@ where I: AggregateEval
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let mut data = serialized_binary_at(input.state, row, 0);
-            let columns = Vec::<Column>::deserialize(&mut data)?;
-            Self::merge_columns(Self::state(state), columns);
-        }
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let mut data = serialized_binary_at(input.state, row, 0);
+                let columns = Vec::<Column>::deserialize(&mut data)?;
+                Self::merge_columns(Self::state(state), columns);
+                Ok(())
+            },
+        )?;
 
         let field_count = serialized_field_count(input.state);
         let inner_state = project_serialized_fields(input.state, 1, field_count);

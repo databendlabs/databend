@@ -107,7 +107,7 @@ impl IPhysicalPlan for AggregatePartial {
                 })
                 .unwrap();
 
-            fields.push(DataField::new(&name, func.state_data_type()))
+            fields.push(DataField::new(&name, func.state().data_type()))
         }
 
         for (idx, field) in self.group_by.iter().zip(

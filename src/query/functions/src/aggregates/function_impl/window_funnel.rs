@@ -348,22 +348,30 @@ where
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let rows = input.columns.num_rows();
         let state = self.window_state(input.state);
-        for row in 0..rows {
-            if input
-                .validity
-                .is_some_and(|validity| !validity.get(row).unwrap())
-            {
-                continue;
-            }
-            self.accumulate_row_into_state(state, input.columns, row)?;
-        }
-        Ok(())
+        try_for_each_selected(0..rows, input.validity, |row| {
+            self.accumulate_row_into_state(state, input.columns, row)
+        })
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            self.accumulate_seen_row(state, input.columns, row)?;
+        let timestamps = input.columns[0].downcast::<T>()?;
+        let mut events = Vec::with_capacity(self.event_size);
+        for index in 0..self.event_size {
+            events.push(input.columns[index + 1].downcast::<BooleanType>()?);
         }
+        for_each_selected(
+            timestamps.iter().enumerate().zip(input.states.iter()),
+            input.validity,
+            |((row, timestamp), state)| {
+                let state = self.window_state(state);
+                let timestamp = T::to_owned_scalar(timestamp);
+                for (index, event) in events.iter().enumerate() {
+                    if event.index(row).unwrap() {
+                        state.add(timestamp, (index + 1) as u8);
+                    }
+                }
+            },
+        );
         Ok(())
     }
 
@@ -386,13 +394,11 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            self.merge_serialized_row(state, input.state, row)?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| self.merge_serialized_row(state, input.state, row),
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

@@ -462,14 +462,16 @@ where
     }
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            self.accumulate_row(UnaryAccumulateRowInput {
-                state,
-                column: input.column,
-                row,
-            })?;
-        }
-        Ok(())
+        let values = input.column.downcast::<T>().unwrap();
+        try_for_each_selected(
+            values.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| {
+                state
+                    .get::<AggregateMinMaxAnyState<T, CMP_TYPE>>()
+                    .add(value, &())
+            },
+        )
     }
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {
@@ -514,33 +516,33 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            if self.nullable_value {
-                let value = serialized_scalar_at(input.state, row, 0);
-                if !value.is_null() {
-                    let value = T::try_downcast_scalar(&value)?;
-                    state
-                        .get::<AggregateMinMaxAnyState<T, CMP_TYPE>>()
-                        .add(value, &())?;
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                if self.nullable_value {
+                    let value = serialized_scalar_at(input.state, row, 0);
+                    if !value.is_null() {
+                        let value = T::try_downcast_scalar(&value)?;
+                        state
+                            .get::<AggregateMinMaxAnyState<T, CMP_TYPE>>()
+                            .add(value, &())?;
+                    }
+                    return Ok(());
                 }
-                continue;
-            }
-            let ScalarRef::Boolean(flag) = serialized_scalar_at(input.state, row, 0) else {
-                unreachable!()
-            };
-            if !flag {
-                continue;
-            }
-            let value = serialized_scalar_at(input.state, row, 1);
-            let value = T::try_downcast_scalar(&value)?;
-            state
-                .get::<AggregateMinMaxAnyState<T, CMP_TYPE>>()
-                .add(value, &())?;
-        }
-        Ok(())
+                let ScalarRef::Boolean(flag) = serialized_scalar_at(input.state, row, 0) else {
+                    unreachable!()
+                };
+                if !flag {
+                    return Ok(());
+                }
+                let value = serialized_scalar_at(input.state, row, 1);
+                let value = T::try_downcast_scalar(&value)?;
+                state
+                    .get::<AggregateMinMaxAnyState<T, CMP_TYPE>>()
+                    .add(value, &())
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

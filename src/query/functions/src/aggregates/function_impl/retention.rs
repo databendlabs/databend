@@ -155,24 +155,22 @@ impl AggregateEval for RetentionEval {
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let state = input.state.get::<AggregateRetentionState>();
         let views = self.boolean_views(input.columns);
-        for row in 0..input.columns.num_rows() {
-            if input
-                .validity
-                .is_some_and(|validity| !validity.get(row).unwrap())
-            {
-                continue;
-            }
+        for_each_selected(0..input.columns.num_rows(), input.validity, |row| {
             self.accumulate_row_into_state(state, &views, row);
-        }
+        });
         Ok(())
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let views = self.boolean_views(input.columns);
-        for (row, state) in input.states.iter().enumerate() {
-            let state = state.get::<AggregateRetentionState>();
-            self.accumulate_row_into_state(state, &views, row);
-        }
+        for_each_selected(
+            input.states.iter().enumerate(),
+            input.validity,
+            |(row, state)| {
+                let state = state.get::<AggregateRetentionState>();
+                self.accumulate_row_into_state(state, &views, row);
+            },
+        );
         Ok(())
     }
 
@@ -192,19 +190,20 @@ impl AggregateEval for RetentionEval {
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let ScalarRef::Number(NumberScalar::UInt32(events)) =
-                super::serialized_scalar_at(input.state, row, 0)
-            else {
-                unreachable!()
-            };
-            state
-                .get::<AggregateRetentionState>()
-                .merge(&AggregateRetentionState { events });
-        }
+        for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let ScalarRef::Number(NumberScalar::UInt32(events)) =
+                    super::serialized_scalar_at(input.state, row, 0)
+                else {
+                    unreachable!()
+                };
+                state
+                    .get::<AggregateRetentionState>()
+                    .merge(&AggregateRetentionState { events });
+            },
+        );
         Ok(())
     }
 

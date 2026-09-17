@@ -299,7 +299,8 @@ where
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (key_column, val_column, validity) = Self::downcast_columns(input.columns, None)?;
+        let (key_column, val_column, validity) =
+            Self::downcast_columns(input.columns, input.validity)?;
         let key_column_iter = key_column.iter();
         let val_column_iter = val_column.iter();
 
@@ -355,18 +356,18 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let ScalarRef::Binary(mut data) = super::serialized_scalar_at(input.state, row, 0)
-            else {
-                unreachable!()
-            };
-            let rhs = State::deserialize_reader(&mut data)?;
-            state.get::<State>().merge(&rhs)?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let ScalarRef::Binary(mut data) = super::serialized_scalar_at(input.state, row, 0)
+                else {
+                    unreachable!()
+                };
+                let rhs = State::deserialize_reader(&mut data)?;
+                state.get::<State>().merge(&rhs)
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

@@ -444,6 +444,10 @@ impl AggregateStateDescription {
     pub fn need_manual_drop(&self) -> bool {
         self.need_manual_drop
     }
+
+    pub fn data_type(&self) -> DataType {
+        StateSerdeType::new(self.serde_items.clone()).data_type()
+    }
 }
 
 pub(crate) fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
@@ -489,6 +493,10 @@ impl<'a> AggregateStateSet<'a> {
         AggregateStateSet::new(self.places, &self.loc[..self.loc.len() - 1])
     }
 
+    pub fn with_places<'b>(&'b self, places: &'b [StateAddr]) -> AggregateStateSet<'b> {
+        AggregateStateSet::new(places, self.loc)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = AggrState<'_>> {
         self.places
             .iter()
@@ -505,6 +513,7 @@ pub struct AccumulateInput<'a> {
 pub struct AccumulateKeysInput<'a> {
     pub states: AggregateStateSet<'a>,
     pub columns: ProjectedBlock<'a>,
+    pub validity: Option<&'a Bitmap>,
 }
 
 pub struct AccumulateRowInput<'a> {
@@ -612,29 +621,40 @@ pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
 
     fn init_state(&self, state: AggrState<'_>);
 
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()>;
+    fn accumulate(&self, state: AggrState<'_>, columns: ProjectedBlock<'_>) -> Result<()>;
 
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()>;
+    fn accumulate_keys(
+        &self,
+        states: AggregateStateSet<'_>,
+        columns: ProjectedBlock<'_>,
+    ) -> Result<()>;
 
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()>;
+    fn accumulate_row(
+        &self,
+        state: AggrState<'_>,
+        columns: ProjectedBlock<'_>,
+        row: usize,
+    ) -> Result<()>;
 
-    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()>;
+    fn accumulate_row_count(&self, state: AggrState<'_>, rows: usize) -> Result<()>;
 
-    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()>;
+    fn serialize(
+        &self,
+        states: AggregateStateSet<'_>,
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()>;
 
-    fn serialize(&self, input: SerializeInput<'_>) -> Result<()>;
+    fn merge_serialized(&self, states: AggregateStateSet<'_>, state: &BlockEntry) -> Result<()>;
 
-    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()>;
+    fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()>;
 
-    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()>;
+    fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()>;
 
-    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()>;
-
-    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()>;
-
-    fn state_data_type(&self) -> DataType {
-        StateSerdeType::new(self.state().serde_items().to_vec()).data_type()
-    }
+    fn merge_result_read_only(
+        &self,
+        state: AggrState<'_>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()>;
 
     /// # Safety
     /// The caller must ensure the state belongs to this function.
@@ -692,44 +712,78 @@ where I: AggregateEval
         self.implementation.init_state(state)
     }
 
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        self.implementation.accumulate(input)
+    fn accumulate(&self, state: AggrState<'_>, columns: ProjectedBlock<'_>) -> Result<()> {
+        self.implementation.accumulate(AccumulateInput {
+            state,
+            columns,
+            validity: None,
+        })
     }
 
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        self.implementation.accumulate_keys(input)
+    fn accumulate_keys(
+        &self,
+        states: AggregateStateSet<'_>,
+        columns: ProjectedBlock<'_>,
+    ) -> Result<()> {
+        self.implementation.accumulate_keys(AccumulateKeysInput {
+            states,
+            columns,
+            validity: None,
+        })
     }
 
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        self.implementation.accumulate_row(input)
+    fn accumulate_row(
+        &self,
+        state: AggrState<'_>,
+        columns: ProjectedBlock<'_>,
+        row: usize,
+    ) -> Result<()> {
+        self.implementation.accumulate_row(AccumulateRowInput {
+            state,
+            columns,
+            row,
+        })
     }
 
-    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
-        self.implementation.accumulate_row_count(input)
+    fn accumulate_row_count(&self, state: AggrState<'_>, rows: usize) -> Result<()> {
+        self.implementation
+            .accumulate_row_count(AccumulateRowCountInput { state, rows })
     }
 
-    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
-        self.implementation.accumulate_row_count_keys(input)
+    fn serialize(
+        &self,
+        states: AggregateStateSet<'_>,
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.implementation
+            .serialize(SerializeInput { states, builders })
     }
 
-    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        self.implementation.serialize(input)
+    fn merge_serialized(&self, states: AggregateStateSet<'_>, state: &BlockEntry) -> Result<()> {
+        self.implementation.merge_serialized(MergeSerializedInput {
+            states,
+            state,
+            filter: None,
+        })
     }
 
-    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        self.implementation.merge_serialized(input)
+    fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()> {
+        self.implementation
+            .merge_states(MergeStatesInput { state, rhs })
     }
 
-    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        self.implementation.merge_states(input)
+    fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()> {
+        self.implementation
+            .merge_result(MergeResultInput { state, builder })
     }
 
-    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.implementation.merge_result(input)
-    }
-
-    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.implementation.merge_result_read_only(input)
+    fn merge_result_read_only(
+        &self,
+        state: AggrState<'_>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.implementation
+            .merge_result_read_only(MergeResultInput { state, builder })
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {

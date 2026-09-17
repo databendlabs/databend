@@ -479,31 +479,18 @@ where
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
         let state = input.state.get::<AggregateBitmapState>();
-        match input.validity {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        state.add::<OP>(value)?;
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    state.add::<OP>(value)?;
-                }
-            }
-        }
-        Ok(())
+        try_for_each_selected(values.iter(), input.validity, |value| {
+            state.add::<OP>(value)
+        })
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
-        for (row, state) in input.states.iter().enumerate() {
-            state
-                .get::<AggregateBitmapState>()
-                .add::<OP>(values.index(row).unwrap())?;
-        }
-        Ok(())
+        try_for_each_selected(
+            values.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| state.get::<AggregateBitmapState>().add::<OP>(value),
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -579,30 +566,36 @@ where
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
         let state = input.state.get::<AggregateBitmapState>();
-        for row in 0..input.columns.num_rows() {
-            if input
-                .validity
-                .is_some_and(|validity| !validity.get(row).unwrap())
-            {
-                continue;
-            }
+        try_for_each_selected(0..input.columns.num_rows(), input.validity, |row| {
             if self.filter_row(&input.columns[1], row) {
                 state.add::<BitmapAndOp>(bitmaps.index(row).unwrap())?;
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
-        for (row, state) in input.states.iter().enumerate() {
-            if self.filter_row(&input.columns[1], row) {
-                state
-                    .get::<AggregateBitmapState>()
-                    .add::<BitmapAndOp>(bitmaps.index(row).unwrap())?;
-            }
-        }
-        Ok(())
+        let filter_values = input.columns[1].downcast::<T>().unwrap();
+        try_for_each_selected(
+            bitmaps
+                .iter()
+                .zip(filter_values.iter())
+                .zip(input.states.iter()),
+            input.validity,
+            |((bitmap, filter_value), state)| {
+                let filter_value = T::to_owned_scalar(filter_value);
+                if self.filter_values.iter().any(|filter| {
+                    T::compare(T::to_scalar_ref(filter), T::to_scalar_ref(&filter_value))
+                        == Ordering::Equal
+                }) {
+                    state
+                        .get::<AggregateBitmapState>()
+                        .add::<BitmapAndOp>(bitmap)?;
+                }
+                Ok(())
+            },
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -673,11 +666,11 @@ where
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
-        for (row, state) in input.states.iter().enumerate() {
-            state
-                .get::<AggregateBitmapState>()
-                .insert(values.index(row).unwrap().as_());
-        }
+        for_each_selected(
+            values.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| state.get::<AggregateBitmapState>().insert(value.as_()),
+        );
         Ok(())
     }
 
@@ -1002,18 +995,18 @@ fn serialize_bitmap_states(input: SerializeInput<'_>) -> Result<()> {
 
 fn merge_serialized_bitmap_states<OP>(input: MergeSerializedInput<'_>) -> Result<()>
 where OP: BitmapOperate {
-    for (row, state) in input.states.iter().enumerate() {
-        if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-            continue;
-        }
-        let ScalarRef::Binary(data) = super::serialized_scalar_at(input.state, row, 0) else {
-            unreachable!()
-        };
-        state
-            .get::<AggregateBitmapState>()
-            .merge_serialized::<OP>(data)?;
-    }
-    Ok(())
+    try_for_each_selected(
+        input.states.iter().enumerate(),
+        input.filter,
+        |(row, state)| {
+            let ScalarRef::Binary(data) = super::serialized_scalar_at(input.state, row, 0) else {
+                unreachable!()
+            };
+            state
+                .get::<AggregateBitmapState>()
+                .merge_serialized::<OP>(data)
+        },
+    )
 }
 
 fn merge_bitmap_states<OP>(input: MergeStatesInput<'_>)

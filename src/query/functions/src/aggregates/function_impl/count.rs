@@ -235,20 +235,21 @@ impl AggregateEval for CountEval {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if !self.has_argument {
+            if let Some(validity) = input.validity {
+                let places = filter_state_places(&input.states, validity);
+                return self.accumulate_row_count_keys(AccumulateRowCountKeysInput {
+                    states: input.states.with_places(&places),
+                });
+            }
             return self.accumulate_row_count_keys(AccumulateRowCountKeysInput {
                 states: input.states,
             });
         }
 
-        let validity = Self::argument_validity(input.columns, None);
-        for (row, state) in input.states.iter().enumerate() {
-            if validity
-                .as_ref()
-                .is_none_or(|validity| validity.get(row).unwrap())
-            {
-                state.get::<AggregateCountState>().count += 1;
-            }
-        }
+        let validity = Self::argument_validity(input.columns, input.validity);
+        for_each_selected(input.states.iter(), validity.as_ref(), |state| {
+            state.get::<AggregateCountState>().count += 1;
+        });
         Ok(())
     }
 
@@ -286,17 +287,18 @@ impl AggregateEval for CountEval {
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let ScalarRef::Number(NumberScalar::UInt64(count)) =
-                super::serialized_scalar_at(input.state, row, 0)
-            else {
-                unreachable!()
-            };
-            state.get::<AggregateCountState>().count += count;
-        }
+        for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                let ScalarRef::Number(NumberScalar::UInt64(count)) =
+                    super::serialized_scalar_at(input.state, row, 0)
+                else {
+                    unreachable!()
+                };
+                state.get::<AggregateCountState>().count += count;
+            },
+        );
         Ok(())
     }
 

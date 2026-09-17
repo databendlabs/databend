@@ -74,6 +74,12 @@ impl AggregateEval for AggregateUdfScript {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         for (row, state) in input.states.iter().enumerate() {
+            if input
+                .validity
+                .is_some_and(|validity| !validity.get(row).unwrap())
+            {
+                continue;
+            }
             self.accumulate_row(AccumulateRowInput {
                 state,
                 columns: input.columns,

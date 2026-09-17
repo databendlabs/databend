@@ -141,25 +141,32 @@ where I: AggregateEval
             return Ok(());
         }
 
-        let (columns, validity) = self.prepare_columns(input.columns, None);
+        let (columns, validity) = self.prepare_columns(input.columns, input.validity.cloned());
         let columns: ProjectedBlock<'_> = (&columns).into();
         let args = self.nested_columns(columns);
-        for (row, state) in input.states.iter().enumerate() {
-            if !self.should_accumulate_row(columns, validity.as_ref(), row) {
-                continue;
-            }
-            if args.is_empty() {
+        let Some(predicate) = self.predicate(columns, validity.as_ref()) else {
+            return Ok(());
+        };
+        if args.is_empty() {
+            let Some(predicate) = predicate else {
                 self.nested
-                    .accumulate_row_count(AccumulateRowCountInput { state, rows: 1 })?;
-            } else {
-                self.nested.accumulate_row(AccumulateRowInput {
-                    state,
-                    columns: args,
-                    row,
-                })?;
-            }
+                    .accumulate_row_count_keys(AccumulateRowCountKeysInput {
+                        states: input.states,
+                    })?;
+                return Ok(());
+            };
+            let places = filter_state_places(&input.states, &predicate);
+            let states = input.states.with_places(&places);
+            return self
+                .nested
+                .accumulate_row_count_keys(AccumulateRowCountKeysInput { states });
         }
-        Ok(())
+
+        self.nested.accumulate_keys(AccumulateKeysInput {
+            states: input.states,
+            columns: args,
+            validity: predicate.as_ref(),
+        })
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {

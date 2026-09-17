@@ -437,21 +437,9 @@ where
         validity: Option<&Bitmap>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        match validity {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        self.add(value, function_info)?;
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    self.add(value, function_info)?;
-                }
-            }
-        }
-        Ok(())
+        try_for_each_selected(values.iter(), validity, |value| {
+            self.add(value, function_info)
+        })
     }
 
     fn merge(&mut self, rhs: &Self, function_info: &Self::FunctionInfo) -> Result<()>;
@@ -527,14 +515,12 @@ where
     }
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            self.accumulate_row(UnaryAccumulateRowInput {
-                state,
-                column: input.column,
-                row,
-            })?;
-        }
-        Ok(())
+        let values = input.column.downcast::<I>().unwrap();
+        try_for_each_selected(
+            values.iter().zip(input.states.iter()),
+            input.validity,
+            |(value, state)| state.get::<S>().add(value, &self.function_info),
+        )
     }
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {
@@ -554,17 +540,17 @@ where
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            state.get::<S>().merge_serialized(
-                super::serialized_scalar_at(input.state, row, 0),
-                super::serialized_scalar_at(input.state, row, 1),
-                &self.function_info,
-            )?;
-        }
-        Ok(())
+        try_for_each_selected(
+            input.states.iter().enumerate(),
+            input.filter,
+            |(row, state)| {
+                state.get::<S>().merge_serialized(
+                    super::serialized_scalar_at(input.state, row, 0),
+                    super::serialized_scalar_at(input.state, row, 1),
+                    &self.function_info,
+                )
+            },
+        )
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
