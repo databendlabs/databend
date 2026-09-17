@@ -111,15 +111,15 @@ impl IPhysicalPlan for AsyncFunction {
         self.input.build_pipeline(builder)?;
 
         let operators = TransformAsyncFunction::init_operators(&self.async_func_descs)?;
-        let sequence_counters =
-            TransformAsyncFunction::create_sequence_counters(self.async_func_descs.len());
+        let async_func_states =
+            TransformAsyncFunction::create_async_func_states(&self.async_func_descs);
 
         builder.main_pipeline.try_add_async_transformer(|| {
             TransformAsyncFunction::new(
                 builder.ctx.clone(),
                 self.async_func_descs.clone(),
                 operators.clone(),
-                sequence_counters.clone(),
+                async_func_states.clone(),
             )
         })?;
 
