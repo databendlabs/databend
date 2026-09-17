@@ -64,21 +64,14 @@ impl InvertedIndexReader {
         index_size: u64,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let start = Instant::now();
-
         if index_format_version != INVERTED_INDEX_FILE_FORMAT_VERSION {
             return Err(ErrorCode::RefreshIndexError(format!(
                 "inverted index `{index_loc}` uses outdated format version {index_format_version}; run `REFRESH INVERTED INDEX` to rebuild it"
             )));
         }
 
-        let matched_rows = self
-            .bundle_search(index_loc, index_size, query, row_count)
-            .await?;
-        metrics_inc_block_inverted_index_search_milliseconds(
-            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-        );
-        Ok(matched_rows)
+        self.bundle_search(index_loc, index_size, query, row_count)
+            .await
     }
 
     async fn bundle_search(
@@ -114,6 +107,7 @@ impl InvertedIndexReader {
         let row_limit = usize::try_from(row_count).map_err(|_| {
             ErrorCode::StorageOther("inverted-index row count exceeds this platform")
         })?;
+        let start = Instant::now();
         let (matched_rows, matched_scores) = if self.has_score {
             let collector = TopDocs::with_limit(row_limit);
             let docs = searcher.search(&query, &collector.order_by_score())?;
@@ -139,6 +133,9 @@ impl InvertedIndexReader {
                 .collect::<Result<Vec<_>>>()?;
             (matched_rows, None)
         };
+        metrics_inc_block_inverted_index_search_milliseconds(
+            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
 
         Ok((!matched_rows.is_empty()).then_some((matched_rows, matched_scores)))
     }

@@ -31,6 +31,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
@@ -381,18 +382,24 @@ impl AsyncTransform for InvertedIndexTransform {
             .meta_location_generator
             .gen_inverted_index_v2_location(&self.index_version);
 
-        let start = Instant::now();
+        let generate_start = Instant::now();
         let mut writer =
             InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
         writer.add_block(&self.source_schema, &data_block)?;
 
         let data = writer.finalize()?;
+        metrics_inc_block_inverted_index_generate_milliseconds(
+            generate_start.elapsed().as_millis() as u64,
+        );
         let index_size = data.len() as u64;
+        let write_start = Instant::now();
         write_data(data, &self.operator, &index_location).await?;
 
         metrics_inc_block_inverted_index_write_nums(1);
         metrics_inc_block_inverted_index_write_bytes(index_size);
-        metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        metrics_inc_block_inverted_index_write_milliseconds(
+            write_start.elapsed().as_millis() as u64
+        );
 
         let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
         let mut index_metas = match new_block_meta.inverted_index_metas.take() {

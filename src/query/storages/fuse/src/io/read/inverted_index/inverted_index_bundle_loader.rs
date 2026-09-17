@@ -22,12 +22,14 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::Weak;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_bytes;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::InvertedIndexLookupCache;
@@ -64,6 +66,13 @@ const MAX_FULL_LOOKUP_CACHE_SIZE: usize = MAX_MERGED_READ_SIZE;
 const LOOKUP_FULL_CACHE_KEY_PREFIX: &str = "ii-lookup-full-v1:";
 const LOOKUP_PAGE_CACHE_KEY_PREFIX: &str = "ii-lookup-page-v1:";
 const PAYLOAD_CACHE_KEY_PREFIX: &str = "ii-payload-page-v1:";
+
+fn record_inverted_index_read(bytes: usize, elapsed: std::time::Duration) {
+    metrics_inc_block_inverted_index_read_bytes(u64::try_from(bytes).unwrap_or(u64::MAX));
+    metrics_inc_block_inverted_index_read_milliseconds(
+        u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+    );
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RangeCachePolicy {
@@ -269,6 +278,7 @@ impl RemoteBundleFileHandle {
             .start
             .checked_add(logical_end)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "bundle range overflow"))?;
+        let start = Instant::now();
         let data = self
             .operator
             .read_with(self.location.as_ref())
@@ -282,7 +292,7 @@ impl RemoteBundleFileHandle {
                 "object storage returned a short inverted-index range",
             ));
         }
-        metrics_inc_block_inverted_index_read_bytes(u64::try_from(data.len()).unwrap_or(u64::MAX));
+        record_inverted_index_read(data.len(), start.elapsed());
         Ok(data)
     }
 
@@ -641,11 +651,12 @@ impl FooterCacheState {
         let initial_read_size = u64::try_from(INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE)
             .map_err(|_| ErrorCode::StorageOther("inverted-index footer read size is invalid"))?;
         let tail_start = self.object_size.saturating_sub(initial_read_size);
+        let start = Instant::now();
         let tail = operator
             .read_with(location)
             .range(tail_start..self.object_size)
             .await?;
-        metrics_inc_block_inverted_index_read_bytes(u64::try_from(tail.len()).unwrap_or(u64::MAX));
+        record_inverted_index_read(tail.len(), start.elapsed());
         let tail_bytes = tail.to_bytes();
         let footer_start = InvertedIndexBundleFooter::footer_start_from_tail(
             tail_bytes.as_ref(),
@@ -671,13 +682,12 @@ impl FooterCacheState {
             })?;
             (Bytes::copy_from_slice(footer_bytes), footer)
         } else {
+            let start = Instant::now();
             let footer_data = operator
                 .read_with(location)
                 .range(footer_start..self.object_size)
                 .await?;
-            metrics_inc_block_inverted_index_read_bytes(
-                u64::try_from(footer_data.len()).unwrap_or(u64::MAX),
-            );
+            record_inverted_index_read(footer_data.len(), start.elapsed());
             let footer_bytes = footer_data.to_bytes();
             let footer = InvertedIndexBundleFooter::open_footer_for_object(
                 footer_bytes.as_ref(),
