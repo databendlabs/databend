@@ -706,6 +706,25 @@ else
     exit 1
 fi
 
+# Task history stores completion times in whole seconds. Wait for all successors
+# to finish and for a later second before triggering another parent run.
+fanout_ready=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SUCCEEDED' AND completed_at IS NOT NULL) = 3 AND max(completed_at) < date_trunc('second', now()) FROM system_task.task_run WHERE task_name IN ('fanout_child_a', 'fanout_child_b', 'fanout_child_c')")
+    check_response_error "$response"
+    fanout_ready=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$fanout_ready" = "1" ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$fanout_ready" != "1" ]; then
+    echo "❌ Expected first fan-out run to finish before testing overlap skips"
+    echo "Actual  : $fanout_ready"
+    exit 1
+fi
+
 response=$(query_sql_with_auth "root:" "UPDATE system_task.task_run SET state = 'SKIPPED', error_code = 0, error_message = 'OVERLAPPING_EXECUTION: test', completed_at = to_timestamp(4102444800) WHERE task_name = 'fanout_root'")
 check_response_error "$response"
 

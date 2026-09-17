@@ -286,7 +286,7 @@ impl DefaultExprBinder {
                     AsyncFunctionArgument::DictGetFunction(_) => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
-                    AsyncFunctionArgument::ReadFile(_) => {
+                    AsyncFunctionArgument::Sleep | AsyncFunctionArgument::ReadFile(_) => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
                 };

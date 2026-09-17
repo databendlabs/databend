@@ -25,6 +25,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::TableIdent;
@@ -68,6 +69,11 @@ impl AsyncSystemTable for FunctionsTable {
             databend_common_ast::ast::Expr::all_function_like_syntaxes()
                 .iter()
                 .map(|name| name.to_lowercase()),
+        );
+        scalar_func_names.extend(
+            ASYNC_FUNCTIONS
+                .iter()
+                .map(|name| name.into_inner().to_string()),
         );
         scalar_func_names.sort();
         let aggregate_function_factory = AggregateFunctionFactory::instance();

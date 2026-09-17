@@ -1082,6 +1082,8 @@ impl ViewMatcher {
         // 4. All columns required to perform further grouping (if necessary) are available in the view output.
         // 5. All columns required to compute output expressions are available in the view output.
 
+        // Whole-query substitution would drop the query's aggregate. Detail MVs
+        // are matched separately against its input, preserving the aggregate.
         if self.query_info.aggregate.is_some() && view_info.query_info.aggregate.is_none() {
             return false;
         }

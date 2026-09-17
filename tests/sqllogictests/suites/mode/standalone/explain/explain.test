@@ -737,7 +737,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t4.a (#0) = 1 and TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx'], limit: NONE]
+├── push downs: [filters: [t4.a (#0) = 1 and TRY_CAST(get(TRY_CAST(t4.b (#1) AS Variant NULL), 'bb') AS String NULL) = 'xx'], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok
@@ -751,7 +751,7 @@ explain select * from v4 where b = 'xx';
 ----
 EvalScalar
 ├── output columns: [t4.a (#0), b (#2)]
-├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
+├── expressions: [TRY_CAST(get(TRY_CAST(t4.b (#1) AS Variant NULL), 'bb') AS String NULL)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t4
@@ -761,7 +761,7 @@ EvalScalar
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+    ├── push downs: [filters: [is_true(TRY_CAST(get(TRY_CAST(t4.b (#1) AS Variant NULL), 'bb') AS String NULL) = 'xx')], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -769,7 +769,7 @@ explain select * from v4 where a > 100;
 ----
 EvalScalar
 ├── output columns: [t4.a (#0), b (#2)]
-├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
+├── expressions: [TRY_CAST(get(TRY_CAST(t4.b (#1) AS Variant NULL), 'bb') AS String NULL)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t4

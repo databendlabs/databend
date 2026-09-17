@@ -31,7 +31,6 @@ databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 goldenfile = { workspace = true }
-jwt-simple = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

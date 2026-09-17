@@ -26,6 +26,7 @@ use databend_storages_common_table_meta::meta::supported_stat_type;
 
 use crate::physical_plans::EvalScalar;
 use crate::physical_plans::Filter;
+use crate::physical_plans::FuseBlockRead;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::TableScan;
 use crate::sessions::QueryContext;
@@ -120,8 +121,14 @@ fn create_runtime_top_n_filter(
     ))
 }
 
+/// A distributed Fuse metadata exchange is part of the scan itself. Above the scan,
+/// only `Filter`/`EvalScalar` may be crossed; other operators stop the traversal.
 #[recursive::recursive]
 fn runtime_scan_data_source(plan: &PhysicalPlan) -> Option<&DataSourcePlan> {
+    if let Some(scan) = plan.as_any().downcast_ref::<FuseBlockRead>() {
+        return Some(&scan.source);
+    }
+
     if let Some(scan) = plan.as_any().downcast_ref::<TableScan>() {
         return Some(&scan.source);
     }
@@ -244,6 +251,44 @@ mod tests {
     }
 
     #[test]
+    fn runtime_scan_filters_support_distributed_fuse_block_read() {
+        let (schema, push_downs) = nullable_int_pushdown();
+        let scan = table_scan_with(7, schema, Some(push_downs), 1000);
+        let scan =
+            FuseBlockRead::create(scan.as_any().downcast_ref::<TableScan>().unwrap().clone());
+        let block_read = scan.as_any().downcast_ref::<FuseBlockRead>().unwrap();
+
+        // The metadata exchange below the reader is not a runtime scan filter target.
+        assert!(runtime_scan_data_source(&block_read.input).is_none());
+        assert_eq!(runtime_scan_data_source(&scan).unwrap().scan_id, 7);
+
+        let filter = PhysicalPlan::new(Filter {
+            meta: PhysicalPlanMeta::new("Filter"),
+            projections: Default::default(),
+            input: scan,
+            predicates: vec![],
+            stat_info: None,
+            is_secure: false,
+        });
+        let eval_scalar =
+            PhysicalPlan::new(EvalScalar::create(filter, vec![], Default::default(), None));
+        assert_eq!(runtime_scan_data_source(&eval_scalar).unwrap().scan_id, 7);
+        let (scan_id, _) = create_runtime_top_n_filter(&eval_scalar, &order_by(), 5).unwrap();
+        assert_eq!(scan_id, 7);
+
+        let exchange = PhysicalPlan::new(crate::physical_plans::Exchange {
+            meta: PhysicalPlanMeta::new("Exchange"),
+            input: eval_scalar,
+            kind: databend_common_sql::executor::physical_plans::FragmentKind::Normal,
+            keys: vec![],
+            ignore_exchange: false,
+            allow_adjust_parallelism: false,
+        });
+        assert!(runtime_scan_data_source(&exchange).is_none());
+        assert!(create_runtime_top_n_filter(&exchange, &order_by(), 5).is_none());
+    }
+
+    #[test]
     fn runtime_top_n_filter_supports_typed_virtual_columns() {
         let query_column_id = 3_000_000_000;
         let name = "v['a']::Int64".to_string();
@@ -287,9 +332,13 @@ mod tests {
             Some(push_downs.clone()),
             1000,
         );
-        let (scan_id, filter) = create_runtime_top_n_filter(&scan, &order_by, 5).unwrap();
-        assert_eq!(scan_id, 9);
-        assert_eq!(filter.preferred_order().unwrap().column_id, query_column_id);
+        let distributed_scan =
+            FuseBlockRead::create(scan.as_any().downcast_ref::<TableScan>().unwrap().clone());
+        for scan in [scan, distributed_scan] {
+            let (scan_id, filter) = create_runtime_top_n_filter(&scan, &order_by, 5).unwrap();
+            assert_eq!(scan_id, 9);
+            assert_eq!(filter.preferred_order().unwrap().column_id, query_column_id);
+        }
 
         let mut variant_field = virtual_field;
         variant_field.name = "v['a']".to_string();
@@ -325,7 +374,11 @@ mod tests {
             Some(variant_push_downs),
             1000,
         );
-        assert!(create_runtime_top_n_filter(&scan, &variant_order_by, 5).is_none());
+        let distributed_scan =
+            FuseBlockRead::create(scan.as_any().downcast_ref::<TableScan>().unwrap().clone());
+        for scan in [scan, distributed_scan] {
+            assert!(create_runtime_top_n_filter(&scan, &variant_order_by, 5).is_none());
+        }
     }
 
     #[test]

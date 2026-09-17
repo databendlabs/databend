@@ -143,6 +143,7 @@ pub(crate) fn try_rewrite(
             candidate,
             &matcher,
             query_aggregate.as_ref(),
+            s_expr,
         )?
         else {
             continue;
@@ -187,6 +188,7 @@ fn try_build_replacement(
     candidate: &MaterializedViewCandidate,
     matcher: &ViewMatcher,
     query_aggregate: Option<&Aggregate>,
+    s_expr: &SExpr,
 ) -> Result<Option<(SExpr, bool)>> {
     let definition_info = QueryInfo::new(
         table_index,
@@ -196,6 +198,16 @@ fn try_build_replacement(
     )?;
     if candidate.definition_output_columns.len() != candidate.read_output_columns.len() {
         return Ok(None);
+    }
+    if query_aggregate.is_some() && definition_info.aggregate.is_none() {
+        return Ok(try_rewrite_aggregate_input(
+            table_index,
+            table_name,
+            metadata,
+            candidate,
+            s_expr,
+        )?
+        .map(|replacement| (replacement, false)));
     }
 
     let mut outputs = HashMap::with_capacity(definition_info.output_cols().len());
@@ -289,6 +301,74 @@ fn try_build_replacement(
     }
     replacement = apply_post_aggregate_filter(replacement, &post_aggregate_predicates);
     Ok(Some((replacement, requires_aggregate_rollup)))
+}
+
+/// A detail MV replaces rows below the aggregate, not the aggregate's results.
+/// Keep the original aggregate and all operators above it (including HAVING and
+/// output expressions), and match only the columns its input must supply.
+fn try_rewrite_aggregate_input(
+    table_index: IndexType,
+    table_name: &str,
+    metadata: &Metadata,
+    candidate: &MaterializedViewCandidate,
+    s_expr: &SExpr,
+) -> Result<Option<SExpr>> {
+    let replacement = if let RelOperator::Aggregate(aggregate) = s_expr.plan() {
+        let mut required = HashSet::new();
+        // Grouping expressions are evaluated below Aggregate; the executor
+        // consumes their output symbols, not just the columns in the expression.
+        required.extend(aggregate.group_items.iter().map(|item| item.index));
+        for item in &aggregate.aggregate_functions {
+            item.scalar.collect_used_columns(&mut required);
+        }
+        let mut required: Vec<_> = required.into_iter().collect();
+        required.sort_unstable();
+        let items = required
+            .into_iter()
+            .map(|index| ScalarItem {
+                index,
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ColumnBindingBuilder::new(
+                        metadata.column(index).name(),
+                        index,
+                        Box::new(metadata.column(index).data_type()),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }),
+            })
+            .collect();
+        let input = SExpr::create_unary(
+            Arc::new(EvalScalar { items }.into()),
+            Arc::new(s_expr.child(0)?.clone()),
+        );
+        let matcher = ViewMatcher::new(QueryInfo::new(
+            table_index,
+            table_name,
+            metadata.columns_by_table_index(table_index),
+            &input,
+        )?);
+        try_build_replacement(
+            table_index,
+            table_name,
+            metadata,
+            candidate,
+            &matcher,
+            None,
+            &input,
+        )?
+        .map(|(replacement, _)| replacement)
+    } else {
+        try_rewrite_aggregate_input(
+            table_index,
+            table_name,
+            metadata,
+            candidate,
+            s_expr.child(0)?,
+        )?
+    };
+    Ok(replacement.map(|replacement| s_expr.replace_children([Arc::new(replacement)])))
 }
 
 fn estimate_rewrite_cost(
