@@ -15,25 +15,44 @@
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
-use bytes::BufMut;
-use bytes::Bytes;
-use bytes::BytesMut;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use parking_lot::Mutex;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tonic::Code;
 use tonic::Status;
 
-use super::outbound_transport::PingPongCallback;
-use super::outbound_transport::PingPongExchange;
-use super::outbound_transport::PingPongResponse;
-use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use super::ping_pong::PingPongCallback;
+use super::ping_pong::PingPongExchange;
+use super::ping_pong::PingPongResponse;
+use super::ping_pong::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
-use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
+use crate::servers::flight::v1::transport::OutboundStream;
+use crate::servers::flight::v1::transport::StreamSendOutcome;
+use crate::servers::flight::v1::transport::batch;
+use crate::servers::flight::v1::transport::frame_lane;
+
+struct PendingFlightData {
+    data: FlightData,
+    _permit: OwnedSemaphorePermit,
+}
+
+impl PendingFlightData {
+    fn new(data: FlightData, permit: OwnedSemaphorePermit) -> Self {
+        Self {
+            data,
+            _permit: permit,
+        }
+    }
+
+    fn into_data(self) -> FlightData {
+        self.data
+    }
+}
 
 /// Configuration for ExchangeSinkBuffer.
 #[derive(Clone)]
@@ -55,7 +74,7 @@ impl Default for ExchangeBufferConfig {
 
 /// Per-sink channel containing its own pending queue.
 struct Channel {
-    pending_queue: ConcurrentQueue<RemoteQueueItem>,
+    pending_queue: ConcurrentQueue<PendingFlightData>,
 }
 
 impl Channel {
@@ -85,43 +104,8 @@ impl Channel {
         match items.len() {
             0 => None,
             1 => Some(items.into_iter().next().unwrap()),
-            _ => {
-                let tid_bytes: [u8; 2] = [items[0].app_metadata[0], items[0].app_metadata[1]];
-                Some(merge_flight_data_batch(tid_bytes, items))
-            }
+            _ => Some(batch::merge(items)),
         }
-    }
-}
-
-const BATCH_MARKER: u8 = 0x02;
-
-fn merge_flight_data_batch(tid_bytes: [u8; 2], items: Vec<FlightData>) -> FlightData {
-    let mut app_metadata = BytesMut::with_capacity(5);
-    app_metadata.put_slice(&tid_bytes);
-    app_metadata.put_u16_le(items.len() as u16);
-    app_metadata.put_u8(BATCH_MARKER);
-
-    let estimated: usize = items
-        .iter()
-        .map(|i| 12 + (i.app_metadata.len() - 2) + i.data_header.len() + i.data_body.len())
-        .sum();
-
-    let mut body = BytesMut::with_capacity(estimated);
-    for item in items {
-        let inner_meta = &item.app_metadata[2..]; // strip tid
-        body.put_u32_le(inner_meta.len() as u32);
-        body.put_slice(inner_meta);
-        body.put_u32_le(item.data_header.len() as u32);
-        body.put_slice(&item.data_header);
-        body.put_u32_le(item.data_body.len() as u32);
-        body.put_slice(&item.data_body);
-    }
-
-    FlightData {
-        flight_descriptor: None,
-        app_metadata: app_metadata.freeze(),
-        data_header: Bytes::new(),
-        data_body: body.freeze(),
     }
 }
 
@@ -279,6 +263,12 @@ pub struct ExchangeSinkBuffer {
     inner: Arc<ExchangeSinkBufferInner>,
 }
 
+struct LegacyPingPongOutbound {
+    semaphore: Arc<Semaphore>,
+    inner: Arc<ExchangeSinkBufferInner>,
+    destination: usize,
+}
+
 impl ExchangeSinkBuffer {
     /// Create a new ExchangeSinkBuffer.
     ///
@@ -322,8 +312,20 @@ impl ExchangeSinkBuffer {
         })
     }
 
-    pub async fn add_data(&self, tid: usize, dest_idx: usize, data: FlightData) -> Result<()> {
-        let remote = &self.inner.state.remotes[dest_idx];
+    pub fn destination(&self, destination: usize) -> Arc<dyn OutboundStream> {
+        Arc::new(LegacyPingPongOutbound {
+            semaphore: self.semaphore.clone(),
+            inner: self.inner.clone(),
+            destination,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl OutboundStream for LegacyPingPongOutbound {
+    async fn send(&self, lane: usize, data: FlightData) -> Result<StreamSendOutcome> {
+        let remote = &self.inner.state.remotes[self.destination];
+        let data = frame_lane(lane, data)?;
 
         {
             let state = remote.state.lock();
@@ -334,7 +336,7 @@ impl ExchangeSinkBuffer {
 
         // Try to send directly first
         let data = match remote.exchange.try_send(data) {
-            Ok(None) => return Ok(()),
+            Ok(None) => return Ok(StreamSendOutcome::Accepted),
             Ok(Some(data)) => data,
             Err(status) => {
                 let error = ExchangeSinkBufferSharedState::status_to_error(
@@ -342,7 +344,7 @@ impl ExchangeSinkBuffer {
                     remote.exchange.local_node_id(),
                     remote.exchange.remote_node_id(),
                 );
-                return Err(self.close_remote(dest_idx, error));
+                return Err(self.close(error));
             }
         };
 
@@ -362,8 +364,8 @@ impl ExchangeSinkBuffer {
             match remote.exchange.try_send(data) {
                 Ok(None) => {}
                 Ok(Some(data)) => {
-                    let item = RemoteQueueItem::new(data, owned_semaphore_permit);
-                    let _ = state.channels[tid].pending_queue.push(item);
+                    let item = PendingFlightData::new(data, owned_semaphore_permit);
+                    let _ = state.channels[lane].pending_queue.push(item);
                 }
                 Err(status) => {
                     let error = ExchangeSinkBufferSharedState::status_to_error(
@@ -377,11 +379,34 @@ impl ExchangeSinkBuffer {
             }
         }
 
+        Ok(StreamSendOutcome::Accepted)
+    }
+
+    async fn finish(&self) -> Result<()> {
+        // Existing ping-pong streams complete when their shared buffer is dropped. Closing an
+        // individual destination here would truncate sibling block producers.
         Ok(())
     }
 
-    fn close_remote(&self, dest_idx: usize, error: ErrorCode) -> ErrorCode {
-        let remote = &self.inner.state.remotes[dest_idx];
+    async fn fail(&self, cause: ErrorCode) {
+        self.close(cause);
+    }
+
+    fn abort(&self) {
+        self.close(ErrorCode::AbortedQuery(
+            "legacy ping-pong stream was cancelled",
+        ));
+    }
+
+    fn is_closed(&self) -> bool {
+        let remote = &self.inner.state.remotes[self.destination];
+        remote.state.lock().last_error.is_some()
+    }
+}
+
+impl LegacyPingPongOutbound {
+    fn close(&self, error: ErrorCode) -> ErrorCode {
+        let remote = &self.inner.state.remotes[self.destination];
         let mut state = remote.state.lock();
 
         if state.last_error.is_none() {
@@ -390,11 +415,19 @@ impl ExchangeSinkBuffer {
 
         state.last_error.clone().unwrap_or(error)
     }
+}
 
-    pub fn is_closed(&self, dest_idx: usize) -> bool {
-        let remote = &self.inner.state.remotes[dest_idx];
-        let state = remote.state.lock();
-        state.last_error.is_some()
+#[cfg(test)]
+impl ExchangeSinkBuffer {
+    async fn add_data(&self, lane: usize, destination: usize, data: FlightData) -> Result<()> {
+        self.destination(destination)
+            .send(lane, data)
+            .await
+            .map(|_| ())
+    }
+
+    fn is_closed(&self, destination: usize) -> bool {
+        self.destination(destination).is_closed()
     }
 }
 
@@ -404,12 +437,16 @@ mod tests {
     use std::time::Duration;
 
     use arrow_flight::FlightData;
+    use bytes::BufMut;
+    use bytes::Bytes;
+    use bytes::BytesMut;
     use databend_common_base::runtime::Runtime;
     use databend_common_base::runtime::spawn;
     use tonic::Status;
 
+    use super::PingPongExchange;
     use super::*;
-    use crate::servers::flight::v1::network::outbound_transport::PingPongExchange;
+    use crate::servers::flight::v1::transport::batch::BATCH_MARKER;
 
     fn test_runtime() -> Arc<Runtime> {
         Arc::new(Runtime::with_worker_threads(2, None).unwrap())
@@ -461,7 +498,7 @@ mod tests {
         let permit = permit.try_acquire_many_owned(1).unwrap();
         let _ = channel
             .pending_queue
-            .push(RemoteQueueItem::new(data, permit));
+            .push(PendingFlightData::new(data, permit));
 
         let result = channel.pop_front(256 * 1024).unwrap();
         // Single item: no batch wrapping, original data returned as-is
@@ -478,7 +515,7 @@ mod tests {
         for i in 0..3 {
             let data = make_flight_data_with_tid(5, &[i, 0x01], 50);
             let p = permit.clone().try_acquire_many_owned(1).unwrap();
-            let _ = channel.pending_queue.push(RemoteQueueItem::new(data, p));
+            let _ = channel.pending_queue.push(PendingFlightData::new(data, p));
         }
 
         let result = channel.pop_front(256 * 1024).unwrap();
@@ -506,7 +543,7 @@ mod tests {
         for _ in 0..10 {
             let data = make_flight_data_with_tid(0, &[0x01], 100);
             let p = permit.clone().try_acquire_many_owned(1).unwrap();
-            let _ = channel.pending_queue.push(RemoteQueueItem::new(data, p));
+            let _ = channel.pending_queue.push(PendingFlightData::new(data, p));
         }
 
         // Budget of 250 bytes: should pop 3 items (100+100+100 >= 250)

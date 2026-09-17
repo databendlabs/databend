@@ -16,13 +16,12 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use arrow_flight::FlightData;
-use async_channel::Receiver;
 use async_channel::Sender;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-use super::inbound_channel::flight_data_size;
-use crate::servers::flight::v1::network::local_channel::LocalQueueItem;
+use super::exchange_packet_receiver::flight_data_size;
+use crate::servers::flight::v1::exchange::local_channel::LocalQueueItem;
 
 /// Item stored in a per-connection sub-queue.
 pub struct RemoteQueueItem {
@@ -56,7 +55,7 @@ impl RemoteQueueItem {
     }
 }
 
-/// Per-connection sub-queue within a NetworkInboundChannel.
+/// Per-connection sub-queue within a ExchangePacketReceiver.
 pub struct SubQueue {
     /// The owning connection's quota (for priority comparison and release).
     pub semaphore: Arc<Semaphore>,
@@ -64,8 +63,6 @@ pub struct SubQueue {
     pub max_bytes_per_connection: usize,
 
     pub sender: Sender<QueueItem>,
-
-    pub receiver: Receiver<QueueItem>,
 
     pub sender_count: Arc<AtomicUsize>,
 }
@@ -91,7 +88,7 @@ impl SubQueue {
         }
 
         let semaphore = self.semaphore.clone();
-        let Ok(x) = semaphore.acquire_many_owned(size as u32).await else {
+        let Ok(x) = async_backtrace::frame!(semaphore.acquire_many_owned(size as u32)).await else {
             log::error!("Logical error, inbound quota semaphore is closed.");
             return Err(());
         };

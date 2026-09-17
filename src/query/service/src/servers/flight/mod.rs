@@ -20,9 +20,8 @@ pub mod v1;
 
 pub use flight_client::DoExchangeParams;
 pub use flight_client::FlightClient;
-pub use flight_client::FlightExchange;
 pub(crate) use flight_client::FlightOperation;
-pub use flight_client::FlightReceiver;
-pub use flight_client::FlightSender;
+pub use flight_client::NewFlightAttachment;
+pub use flight_client::NewFlightStream;
 pub(crate) use flight_client::add_flight_error_context;
 pub use flight_service::FlightService;
