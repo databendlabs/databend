@@ -47,6 +47,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
+use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::binder::validate_constraints_by_schema;
@@ -54,6 +55,7 @@ use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::validate_stored_ttl_expr;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::CachedMetaWriter;
@@ -84,6 +86,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::stored_computed_column_references;
+use crate::interpreters::common::ttl_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::meta_service_error;
@@ -291,7 +294,11 @@ impl ModifyTableColumnInterpreter {
                 let referenced = cluster_key_referenced_columns(&cluster_key)?;
                 if referenced.iter().any(|v| modified_cols.contains(v)) {
                     let tmp_table = fuse_table.with_schema(new_schema.clone());
-                    if let Err(e) = analyze_cluster_keys(self.ctx.clone(), tmp_table, &cluster_key)
+                    // Legacy metadata may contain an unquoted mixed-case key.
+                    // Preserve stored names instead of folding them with this session.
+                    let names = NameResolutionContext::preserve_identifier_case();
+                    if let Err(e) =
+                        analyze_cluster_keys(self.ctx.clone(), tmp_table, &cluster_key, &names)
                     {
                         return Err(ErrorCode::AlterTableError(format!(
                             "Cannot modify column data type, because it is referenced by cluster key '{}': {}",
@@ -308,6 +315,24 @@ impl ModifyTableColumnInterpreter {
                         "Cannot modify column data type because it is referenced by partition key '{}'",
                         partition_key
                     )));
+                }
+            }
+            // A TTL must stay evaluable as a TIMESTAMP/DATE. Re-validate it
+            // against the new schema rather than assuming the old type holds,
+            // otherwise a type change would leave a TTL that can never be
+            // applied.
+            if let Some(ttl) = &table_info.meta.ttl {
+                let referenced = ttl_referenced_columns(ttl)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    if let Err(e) =
+                        validate_stored_ttl_expr(self.ctx.clone(), new_schema.clone(), ttl)
+                    {
+                        return Err(ErrorCode::AlterTableError(format!(
+                            "Cannot modify column data type, because it is referenced by TTL '{}': {}",
+                            ttl,
+                            e.message()
+                        )));
+                    }
                 }
             }
         }

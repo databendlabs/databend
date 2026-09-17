@@ -16,10 +16,13 @@ use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_exception::Result;
 use databend_common_meta_api::SegmentClaimApi;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DeleteSegmentClaimReq;
 use databend_common_meta_app::schema::ListSegmentClaimsReq;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_sql::Planner;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
@@ -29,10 +32,12 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_users::UserApiProvider;
+use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::locks::CoordinationManager;
 use databend_query::sessions::TableContextQueryState;
 use databend_query::sessions::TableContextSettings;
@@ -232,6 +237,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
+        ttl: None,
         table_indexes: None,
         table_constraints: None,
         attached_columns: None,
@@ -288,5 +294,76 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
     assert_eq!(table_info.meta.cluster_key_seq, 1);
     assert!(!table_info.meta.options.contains_key(OPT_KEY_CLUSTER_TYPE));
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_cluster_key_storage_and_legacy_names() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("unquoted_ident_case_sensitive".into(), "1".into())?;
+    ctx.get_settings()
+        .set_setting("quoted_ident_case_sensitive".into(), "0".into())?;
+
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql(
+            "CREATE TABLE default.cluster_default_names (EventTime TIMESTAMP) \
+             CLUSTER BY (EventTime)",
+        )
+        .await?;
+    InterpreterFactory::get(ctx, &plan)
+        .await?
+        .execute2()
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("quoted_ident_case_sensitive".into(), "0".into())?;
+    let catalog = ctx.get_catalog("default").await?;
+    let table = ctx
+        .get_table("default", "default", "cluster_default_names")
+        .await?;
+    let (_, cluster_key) = table.cluster_key_meta().unwrap();
+    assert_eq!(cluster_key, "(\"EventTime\")");
+
+    // Simulate metadata written by an older version, then exercise the real
+    // schema-change revalidation path.
+    let table_info = table.get_table_info().clone();
+    let mut meta = table_info.meta.clone();
+    let Some((_, key)) = meta.cluster_key_v2.as_mut() else {
+        panic!("expected cluster key")
+    };
+    *key = "(EventTime)".to_string();
+    catalog
+        .update_single_table_meta(
+            &fixture.default_tenant(),
+            UpdateTableMetaReq {
+                table_id: table_info.ident.table_id,
+                seq: MatchSeq::Exact(table_info.ident.seq),
+                new_table_meta: meta,
+                base_snapshot_location: FuseTable::try_from_table(table.as_ref())?.snapshot_loc(),
+                lvt_check: None,
+            },
+            &table_info,
+        )
+        .await?;
+    fixture
+        .execute_command("INSERT INTO default.cluster_default_names VALUES ('2020-01-01')")
+        .await?;
+    fixture
+        .execute_command(
+            "ALTER TABLE default.cluster_default_names MODIFY COLUMN \"EventTime\" DATE",
+        )
+        .await?;
+
+    let blocks = fixture
+        .execute_query("SHOW CREATE TABLE default.cluster_default_names")
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let output =
+        databend_common_expression::block_debug::pretty_format_blocks(&blocks)?.to_string();
+    assert!(output.contains("CLUSTER BY (\"EventTime\")"), "{output}");
     Ok(())
 }

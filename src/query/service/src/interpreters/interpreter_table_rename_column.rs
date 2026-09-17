@@ -32,6 +32,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::rename_column_in_cluster_key;
 use crate::interpreters::common::rename_column_in_comma_separated_ident;
+use crate::interpreters::common::rename_column_in_ttl;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::pipelines::PipelineBuildResult;
@@ -131,7 +132,6 @@ impl Interpreter for RenameTableColumnInterpreter {
             }
             if let Some(value) = opts.get_mut(OPT_KEY_PARTITION_BY)
                 && let Some(new_partition_key) = rename_column_in_cluster_key(
-                    self.ctx.as_ref(),
                     value,
                     &self.plan.old_column,
                     &self.plan.new_column,
@@ -151,11 +151,15 @@ impl Interpreter for RenameTableColumnInterpreter {
             let mut new_cluster_key = None;
             if let Some((_, cluster_key)) = table.cluster_key_meta() {
                 new_cluster_key = rename_column_in_cluster_key(
-                    self.ctx.as_ref(),
                     &cluster_key,
                     &self.plan.old_column,
                     &self.plan.new_column,
                 )?;
+            }
+
+            let mut new_ttl = None;
+            if let Some(ttl) = &new_table_meta.ttl {
+                new_ttl = rename_column_in_ttl(ttl, &self.plan.old_column, &self.plan.new_column)?;
             }
 
             commit_table_meta(
@@ -177,6 +181,9 @@ impl Interpreter for RenameTableColumnInterpreter {
                         if let Some((_, ref mut key)) = meta.cluster_key_v2 {
                             *key = cluster_key.clone();
                         }
+                    }
+                    if let Some(ttl) = &new_ttl {
+                        meta.ttl = Some(ttl.clone());
                     }
                 },
             )

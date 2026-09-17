@@ -5074,7 +5074,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-license",
  "databend-common-meta-app",
- "databend-meta-client 260205.13.4",
+ "databend-meta-client 260205.13.5",
 ]
 
 [[package]]

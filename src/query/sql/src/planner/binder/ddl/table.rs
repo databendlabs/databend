@@ -127,15 +127,13 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::BindContext;
-use crate::ClusterKeyNormalizer;
 use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
+use crate::StoredKeyNormalizer;
 use crate::binder::Binder;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::ConstraintExprBinder;
 use crate::binder::StageResolver;
-use crate::binder::Visibility;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
@@ -149,6 +147,7 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTablePartitionByPlan;
+use crate::plans::AlterTableTtlPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -187,6 +186,7 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::validate_ttl_expr;
 
 #[derive(Visitor)]
 #[visitor(FunctionCall(enter))]
@@ -208,6 +208,24 @@ impl PartitionBucketValidator {
                 ] if (1..=u32::MAX as u64).contains(buckets)
             );
         }
+    }
+}
+
+/// Rejects an explicit lambda inside a TTL expression, e.g.
+/// `array_transform(c, v -> v)`.
+///
+/// Only `LambdaArgument::Lambda` is matched here. `LambdaArgument::Ambiguous`
+/// is also a valid JSON arrow expression (`f(payload -> 'a')`), so it can only
+/// be classified after binding; `validate_ttl_expr` covers that case.
+#[derive(Visitor)]
+#[visitor(FunctionCall(enter))]
+struct TtlLambdaValidator {
+    found: bool,
+}
+
+impl TtlLambdaValidator {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        self.found |= func.has_explicit_lambda();
     }
 }
 
@@ -602,6 +620,7 @@ impl Binder {
             source,
             table_options,
             cluster_by,
+            ttl,
             as_query,
             table_type,
             engine,
@@ -1055,6 +1074,11 @@ impl Binder {
             }
         }
 
+        let ttl = match ttl {
+            Some(ttl_expr) => Some(self.analyze_ttl_expr(ttl_expr, schema.clone()).await?),
+            None => None,
+        };
+
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
@@ -1071,6 +1095,7 @@ impl Binder {
             field_comments,
             field_stats_truncate_len,
             cluster_key,
+            ttl,
             as_select: as_query_plan,
             table_indexes,
             table_constraints,
@@ -1145,6 +1170,7 @@ impl Binder {
             field_comments: vec![],
             field_stats_truncate_len: vec![],
             cluster_key: None,
+            ttl: None,
             as_select: None,
             table_indexes: None,
             table_constraints: None,
@@ -1578,6 +1604,37 @@ impl Binder {
                     branch,
                 },
             ))),
+            AlterTableAction::SetTableTtl { .. } | AlterTableAction::RemoveTableTtl => {
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => Some(tbl),
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        None
+                    }
+                    Err(e) => return Err(e),
+                };
+                let ttl = match (action, &tbl) {
+                    (AlterTableAction::SetTableTtl { ttl }, Some(tbl)) => {
+                        Some(self.analyze_ttl_expr(ttl, tbl.schema()).await?)
+                    }
+                    _ => None,
+                };
+                Ok(Plan::AlterTableTtl(Box::new(AlterTableTtlPlan {
+                    catalog,
+                    database,
+                    table,
+                    if_exists: *if_exists,
+                    table_id: tbl.map(|tbl| tbl.get_id()),
+                    ttl,
+                })))
+            }
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
@@ -2465,6 +2522,51 @@ impl Binder {
         }
     }
 
+    /// Validate a row-level TTL expression and normalize it to the text form
+    /// persisted in `TableMeta.ttl`.
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn analyze_ttl_expr(
+        &mut self,
+        ttl_expr: &AstExpr,
+        schema: TableSchemaRef,
+    ) -> Result<String> {
+        let display = format!("{ttl_expr:#}");
+        // A stored TTL is rewritten at the AST level by DROP/RENAME COLUMN,
+        // which cannot tell a lambda parameter from a table column. Reject it
+        // before binding so the error points at the offending syntax.
+        let mut lambda_validator = TtlLambdaValidator { found: false };
+        ttl_expr.drive(&mut lambda_validator);
+        if lambda_validator.found {
+            return Err(ErrorCode::SemanticError(format!(
+                "TTL expression `{display}` must not use a lambda function"
+            )));
+        }
+
+        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
+        let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
+
+        let mut scalar_binder = ScalarBinder::new(
+            &mut bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            metadata,
+            &[],
+        );
+        scalar_binder.forbid_udf();
+        let (scalar, _) = scalar_binder.bind(ttl_expr)?;
+        if scalar.used_columns().is_empty() {
+            return Err(ErrorCode::SemanticError(format!(
+                "TTL expression `{display}` must reference at least one column"
+            )));
+        }
+        validate_ttl_expr(&scalar, &display)?;
+
+        // Resolve names with the defining session, then store them canonically.
+        let mut normalized = ttl_expr.clone();
+        normalized.drive_mut(&mut StoredKeyNormalizer::new(&self.name_resolution_ctx));
+        Ok(format!("{normalized:#}"))
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_cluster_keys(
         &mut self,
@@ -2506,22 +2608,8 @@ impl Binder {
         let expr_len = key_exprs.len();
 
         // Build a temporary BindContext to resolve the expr
-        let mut bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
-        for field in schema.fields().iter() {
-            let column_index = metadata
-                .write()
-                .add_derived_column(field.name().clone(), DataType::from(field.data_type()));
-            let column = ColumnBindingBuilder::new(
-                field.name().clone(),
-                column_index,
-                Box::new(DataType::from(field.data_type())),
-                Visibility::Visible,
-            )
-            .build();
-
-            bind_context.add_column_binding(column);
-        }
+        let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
             self.ctx.clone(),
@@ -2532,12 +2620,7 @@ impl Binder {
         // Table keys cannot be a UDF expression.
         scalar_binder.forbid_udf();
 
-        let mut normalizer = ClusterKeyNormalizer {
-            force_quoted_ident: false,
-            unquoted_ident_case_sensitive: self.name_resolution_ctx.unquoted_ident_case_sensitive,
-            quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
-            sql_dialect: self.dialect,
-        };
+        let mut normalizer = StoredKeyNormalizer::new(&self.name_resolution_ctx);
         let mut table_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
         for key_expr in key_exprs {

@@ -1112,6 +1112,7 @@ async fn test_schema_bound_ddl_preserves_table_version() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     // One representative case for each schema-bound ALTER interpreter.
     let cases = [
+        ("SET TTL ts", "DROP COLUMN ts"),
         ("CLUSTER BY (ts)", "DROP COLUMN ts"),
         ("RENAME COLUMN ts TO renamed_ts", "ADD COLUMN extra INT"),
         ("ADD COLUMN added INT", "ADD COLUMN extra INT"),
