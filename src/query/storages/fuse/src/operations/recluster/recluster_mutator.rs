@@ -414,7 +414,11 @@ impl ReclusterMutator {
         let mut selected_window_positions = vec![false; window_segment_infos.len()];
 
         let dynamic = self.properties.mode == ReclusterMode::Aggressive
-            && self.properties.cluster_key_info.cluster_type == ClusterType::Linear;
+            && self.properties.cluster_key_info.cluster_type == ClusterType::Linear
+            && self
+                .ctx
+                .get_settings()
+                .get_enable_recluster_task_selection_v2()?;
         let tasks = if dynamic {
             match self.build_dynamic_linear_tasks(&blocks, task_budget)? {
                 Some(tasks) => {
