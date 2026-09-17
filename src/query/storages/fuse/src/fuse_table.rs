@@ -1594,15 +1594,13 @@ impl Table for FuseTable {
 
     async fn remove_inverted_index_files(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         index_name: String,
         index_version: String,
     ) -> Result<u64> {
         let prefixes = [
             self.meta_location_generator
                 .gen_specific_inverted_index_prefix(&index_name, &index_version),
-            self.meta_location_generator
-                .gen_specific_inverted_index_legacy_v2_prefix(&index_name, &index_version),
             self.meta_location_generator
                 .gen_specific_inverted_index_v2_prefix(&index_version),
         ];
@@ -1617,11 +1615,11 @@ impl Table for FuseTable {
                 }
             }
         }
+        let files = files.into_iter().collect::<Vec<_>>();
         let len = files.len() as u64;
-        // todo
-        // Files::create(ctx, self.operator.clone())
-        //    .remove_file_in_batch(files.into_iter().collect())
-        //    .await?;
+        Files::create(ctx, self.operator.clone())
+            .remove_file_in_batch(files)
+            .await?;
         Ok(len)
     }
 }

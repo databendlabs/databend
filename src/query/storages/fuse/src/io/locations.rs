@@ -342,21 +342,6 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    // Historical raw bundle prefix retained for cleanup of objects written before the dedicated
-    // `_i_i_v2` namespace was introduced.
-    pub fn gen_specific_inverted_index_legacy_v2_prefix(
-        &self,
-        index_name: &str,
-        index_version: &str,
-    ) -> String {
-        format!(
-            "{}{}/{}/",
-            self.inverted_index_location_prefix(),
-            index_name,
-            index_version,
-        )
-    }
-
     pub fn gen_specific_inverted_index_v2_prefix(&self, index_version: &str) -> String {
         format!(
             "{}{}/",
