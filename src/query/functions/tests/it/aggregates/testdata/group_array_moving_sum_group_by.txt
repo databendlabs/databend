@@ -8,7 +8,7 @@ evaluation (internal):
 +--------+------------------------------------------------------------------+
 
 
-error: AggregateArrayMovingSumFunction does not support type 'String'
+error: Unsupported AggregateFunction signature: group_array_moving_sum([String])
 
 ast: group_array_moving_sum(NULL)
 evaluation (internal):

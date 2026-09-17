@@ -46,7 +46,7 @@ use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 
 use crate::MetadataRef;
@@ -347,7 +347,10 @@ impl Visitor for AggregateFieldCounter {
 
     fn visit_function_call(&mut self, call: &FunctionCall) -> VisitResult {
         let name = call.name.name.to_ascii_lowercase();
-        if AggregateFunctionFactory::instance().contains_base(&name) {
+        if AGGR_REGISTRY
+            .descriptor(&name)
+            .is_some_and(|descriptor| descriptor.features().supports_state)
+        {
             self.count += if name == "avg" { 2 } else { 1 };
             return Ok(VisitControl::SkipChildren);
         }
@@ -484,7 +487,9 @@ impl VisitorMut for AggregateExprRewriter<'_> {
                     && !func.has_explicit_lambda()
                     && func.order_by.is_empty()
                     && func.params.is_empty()
-                    && AggregateFunctionFactory::instance().contains_base(&func.name.name) =>
+                    && AGGR_REGISTRY
+                        .descriptor(&func.name.name)
+                        .is_some_and(|descriptor| descriptor.features().supports_state) =>
             {
                 let original = expr.clone();
                 let Expr::FunctionCall { func, .. } = &original else {
@@ -630,9 +635,10 @@ impl Visitor for MaterializedViewChecker {
         if call.window.is_some() || call.filter.is_some() || !call.order_by.is_empty() {
             self.not_supported = true;
         }
-        if AggregateFunctionFactory::instance().contains_base(&name) {
+        if let Some(descriptor) = AGGR_REGISTRY.descriptor(&name) {
             self.has_aggregate = true;
-            if call.distinct
+            if !descriptor.features().supports_state
+                || call.distinct
                 || call.filter.is_some()
                 || call.window.is_some()
                 || !call.order_by.is_empty()
@@ -752,6 +758,30 @@ mod tests {
         ] {
             let checker = check_query(sql)?;
             assert!(!checker.is_supported(), "should reject: {sql}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_materialized_view_checker_requires_state_capability() -> Result<()> {
+        for expression in [
+            "sum_if(amount, active)",
+            "sum_state(amount)",
+            "count_distinct(amount)",
+        ] {
+            let sql = format!("SELECT {expression} AS result FROM t");
+            assert!(!check_query(&sql)?.is_supported(), "should reject: {sql}");
+        }
+        for expression in [
+            "sum(amount)",
+            "count(amount)",
+            "avg(amount)",
+            "stddev(amount)",
+        ] {
+            let sql = format!("SELECT {expression} AS result FROM t");
+            assert!(check_query(&sql)?.is_supported(), "should support: {sql}");
+            let (query, _) = rewrite(&sql)?;
+            assert!(query.to_string().contains("_state("));
         }
         Ok(())
     }
