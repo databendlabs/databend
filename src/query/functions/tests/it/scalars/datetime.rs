@@ -27,6 +27,7 @@ use databend_common_expression::types::date::DATE_MAX;
 use databend_common_expression::types::date::DATE_MIN;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
@@ -96,6 +97,61 @@ fn test_to_timestamp(file: &mut impl Write) {
         "b",
         StringType::from_data(vec!["2020-01-01", "2020-01-02", "2020-01-03", "2029-01-01"]),
     )]);
+}
+
+#[test]
+fn test_string_to_timestamp_domain() {
+    use std::collections::HashMap;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::expr::Expr;
+    use databend_common_expression::type_check::check_function;
+
+    let expr = check_function(
+        None,
+        "to_timestamp",
+        &[],
+        &[Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::String,
+            display_name: "a".to_string(),
+        })],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    for (min, max) in [
+        // An interior value, "2024-01-01 23:00:00", exceeds both parsed endpoints.
+        ("2024-01-01 00:00:00", Some("2024-01-01T01:00:00")),
+        // Offsets can also reverse the ordering of parsed timestamps.
+        (
+            "2024-01-01 00:00:00-12:00",
+            Some("2024-01-01 01:00:00+14:00"),
+        ),
+        // Valid endpoints do not imply that all interior strings can be parsed.
+        ("2024-01-01", Some("2024-01-03")),
+        // Truncated and unbounded statistics must not yield timestamp bounds.
+        ("2024-01-01", Some("2024-01-03 00:0�")),
+        ("2024-01-01", None),
+    ] {
+        let input = HashMap::from([(
+            0,
+            Domain::String(StringDomain {
+                min: min.to_string(),
+                max: max.map(str::to_string),
+            }),
+        )]);
+        let (folded, domain) = ConstantFolder::fold_with_domain(
+            Cow::Borrowed(&expr),
+            &input,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+        assert_eq!(domain, None, "{min:?}..{max:?} may fail to parse");
+        assert!(!matches!(folded.as_ref(), Expr::Constant(_)));
+    }
 }
 
 fn test_to_date(file: &mut impl Write) {

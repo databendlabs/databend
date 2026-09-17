@@ -255,6 +255,18 @@ fn try_build_replacement(
     };
     let post_aggregate_predicates = matched.post_aggregate_predicates.clone();
     let requires_aggregate_rollup = matched.requires_aggregate_rollup;
+    let rollup_selection_complete = query_aggregate.is_some_and(|query_aggregate| {
+        query_aggregate
+            .group_items
+            .iter()
+            .chain(query_aggregate.aggregate_functions.iter())
+            .all(|required| {
+                matched
+                    .selection
+                    .iter()
+                    .any(|item| item.index == required.index)
+            })
+    });
 
     if requires_aggregate_rollup {
         let Some(query_aggregate) = query_aggregate else {
@@ -294,6 +306,12 @@ fn try_build_replacement(
         let Some(query_aggregate) = query_aggregate else {
             return Ok(None);
         };
+        // The generic rollup reads the finalized MV values through the selected
+        // query symbols. Aggregate expressions such as AVG may be exposed under
+        // a different output symbol, so they cannot use this path.
+        if !rollup_selection_complete {
+            return Ok(None);
+        }
         let Some(aggregate) = build_rollup_aggregate(metadata, query_aggregate)? else {
             return Ok(None);
         };

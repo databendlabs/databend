@@ -299,7 +299,12 @@ impl CreateTableInterpreter {
             },
         };
 
-        let pipeline_result = match InsertInterpreter::try_create(self.ctx.clone(), insert_plan) {
+        let insert_interpreter = if self.plan.engine == Engine::DynamicTable {
+            InsertInterpreter::try_create_refresh(self.ctx.clone(), insert_plan, table_id)
+        } else {
+            InsertInterpreter::try_create(self.ctx.clone(), insert_plan)
+        };
+        let pipeline_result = match insert_interpreter {
             Ok(interpreter) => interpreter.execute2().await,
             Err(e) => Err(e),
         };
@@ -509,7 +514,7 @@ impl CreateTableInterpreter {
             .collect();
         let mut options = self.plan.options.clone();
 
-        if self.plan.engine == Engine::Fuse {
+        if matches!(self.plan.engine, Engine::Fuse | Engine::DynamicTable) {
             let settings = self.ctx.get_settings();
             // change default to 1 when all query server is ready to processing it.
             if settings.get_copy_dedup_full_path_by_default()? {

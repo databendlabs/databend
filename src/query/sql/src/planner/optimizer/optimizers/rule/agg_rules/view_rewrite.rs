@@ -1033,8 +1033,7 @@ impl ViewMatcher {
                     Ok(Some(new_residual_pred)) => {
                         new_predicates.push(new_residual_pred);
                     }
-                    Ok(None) => {}
-                    Err(_) => {
+                    Ok(None) | Err(_) => {
                         return false;
                     }
                 }
@@ -1061,11 +1060,16 @@ impl ViewMatcher {
                     new_selection_set,
                 )
                 .is_err()
+                || !Self::selection_contains(new_selection_set, output_item.index)
             {
                 return false;
             }
         }
         true
+    }
+
+    fn selection_contains(selection: &HashSet<ScalarItem>, index: Symbol) -> bool {
+        selection.iter().any(|item| item.index == index)
     }
 
     fn check_aggregation(
@@ -1143,6 +1147,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1156,6 +1161,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1184,6 +1190,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1208,6 +1215,10 @@ impl ViewMatcher {
                 self.query_info
                     .check_output_cols(predicate, &view_info.output_cols, new_selection_set)
                     .is_ok()
+                    && predicate
+                        .used_columns()
+                        .iter()
+                        .all(|index| Self::selection_contains(new_selection_set, *index))
             })
     }
 }
