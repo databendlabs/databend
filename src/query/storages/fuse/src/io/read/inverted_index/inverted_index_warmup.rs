@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
+use futures_util::future;
 use tantivy::Searcher;
 use tantivy::Term;
 use tantivy::index::SegmentComponent;
@@ -31,8 +32,6 @@ use tantivy::query::Query;
 use tantivy::query::RangeQuery;
 use tantivy::query::TermQuery;
 use tantivy::schema::Field;
-
-const MERGE_POSTINGS_HOLES_UNDER_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
 enum WarmupAction {
@@ -126,10 +125,13 @@ impl InvertedIndexWarmupInfo {
                 }
             }
             for ((field_id, with_positions), terms) in term_groups {
-                segment_reader
-                    .inverted_index(Field::from_field_id(field_id))?
-                    .warm_postings_terms(terms, with_positions, MERGE_POSTINGS_HOLES_UNDER_BYTES)
-                    .await?;
+                let inverted_index =
+                    segment_reader.inverted_index(Field::from_field_id(field_id))?;
+                let warmups = terms.into_iter().map(|term| {
+                    let inverted_index = inverted_index.clone();
+                    async move { inverted_index.warm_postings(term, with_positions).await }
+                });
+                future::try_join_all(warmups).await?;
             }
 
             if has_score {
@@ -174,15 +176,13 @@ fn collect_warmups(
         actions.push(WarmupAction::Range {
             field: range_query.field(),
         });
-    } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
-        collect_warmups(boost_query.inner(), fallback_fields, need_position, actions)?;
-    } else if let Some(const_score_query) = query.downcast_ref::<ConstScoreQuery>() {
-        collect_warmups(
-            const_score_query.inner(),
-            fallback_fields,
-            need_position,
-            actions,
-        )?;
+    } else if query.downcast_ref::<BoostQuery>().is_some()
+        || query.downcast_ref::<ConstScoreQuery>().is_some()
+    {
+        // BoostQuery / ConstScoreQuery wrap a child query. query_terms() is enough for an
+        // exact-term or phrase child; a range/automaton child that yields no terms still needs a
+        // conservative fallback.
+        add_query_term_warmups(query, fallback_fields, need_position, actions);
     } else if query.downcast_ref::<PhrasePrefixQuery>().is_some() {
         // TODO: Replace this paged full-field fallback with Tantivy-native prefix expansion
         // warmup. Databend must not duplicate Tantivy's prefix/range semantics.
@@ -202,6 +202,24 @@ fn collect_warmups(
         add_range_warmups(query, fallback_fields, actions);
     }
     Ok(())
+}
+
+fn add_query_term_warmups(
+    query: &dyn Query,
+    fallback_fields: &[Field],
+    need_position: bool,
+    actions: &mut Vec<WarmupAction>,
+) {
+    let start_len = actions.len();
+    query.query_terms(&mut |term, positions| {
+        actions.push(WarmupAction::Term {
+            term: term.clone(),
+            with_positions: need_position || positions,
+        });
+    });
+    if actions.len() == start_len {
+        add_full_field_warmups(query, fallback_fields, need_position, actions);
+    }
 }
 
 fn add_range_warmups(

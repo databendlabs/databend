@@ -3249,35 +3249,6 @@ pub struct CacheConfig {
     )]
     pub disk_cache_inverted_index_payload_size: u64,
 
-    // ----- deprecated inverted-index cache options -----
-    /// Deprecated total in-memory inverted-index cache budget. It remains parseable for startup
-    /// compatibility, but is ignored in favor of the independent Lookup/Payload settings.
-    #[clap(
-        long = "cache-inverted-index-filter-size",
-        value_name = "VALUE",
-        default_value = "0",
-        hide = true
-    )]
-    pub inverted_index_filter_size: u64,
-
-    /// Deprecated total on-disk inverted-index cache budget.
-    #[clap(
-        long = "disk-cache-inverted-index-data-size",
-        value_name = "VALUE",
-        default_value = "0",
-        hide = true
-    )]
-    pub disk_cache_inverted_index_data_size: u64,
-
-    /// Deprecated percentage-based total in-memory inverted-index cache budget.
-    #[clap(
-        long = "cache-inverted-index-filter-memory-ratio",
-        value_name = "VALUE",
-        default_value = "0",
-        hide = true
-    )]
-    pub inverted_index_filter_memory_ratio: u64,
-
     /// Max number of cached vector index meta objects. Set it to 0 to disable it.
     #[clap(
         long = "cache-vector-index-meta-count",
@@ -3496,9 +3467,6 @@ impl Default for CacheConfig {
             disk_cache_inverted_index_lookup_size: 0,
             inverted_index_payload_size: 8589934592,
             disk_cache_inverted_index_payload_size: 0,
-            inverted_index_filter_size: 0,
-            disk_cache_inverted_index_data_size: 0,
-            inverted_index_filter_memory_ratio: 0,
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,
@@ -3716,7 +3684,7 @@ mod config_converters {
                 meta,
                 storage,
                 catalog,
-                mut cache,
+                cache,
                 spill,
                 telemetry,
                 catalogs: input_catalogs,
@@ -3724,28 +3692,6 @@ mod config_converters {
             } = self;
 
             meta.check_deprecated()?;
-            let deprecated_inverted_index_cache_options = [
-                (cache.inverted_index_filter_size != 0).then_some("inverted_index_filter_size"),
-                (cache.disk_cache_inverted_index_data_size != 0)
-                    .then_some("disk_cache_inverted_index_data_size"),
-                (cache.inverted_index_filter_memory_ratio != 0)
-                    .then_some("inverted_index_filter_memory_ratio"),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-            if !deprecated_inverted_index_cache_options.is_empty() {
-                warn!(
-                    "deprecated inverted-index cache option(s) {} are ignored; configure \
-                     `inverted_index_lookup_size`, `inverted_index_payload_size`, \
-                     `disk_cache_inverted_index_lookup_size`, and \
-                     `disk_cache_inverted_index_payload_size` instead",
-                    deprecated_inverted_index_cache_options.join(", ")
-                );
-            }
-            cache.inverted_index_filter_size = 0;
-            cache.disk_cache_inverted_index_data_size = 0;
-            cache.inverted_index_filter_memory_ratio = 0;
 
             let mut catalogs = input_catalogs;
             for catalog in catalogs.values() {
