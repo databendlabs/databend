@@ -14,7 +14,6 @@
 
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(associated_type_defaults)]
 
 use ctor::ctor;
 use databend_common_expression::FunctionRegistry;
