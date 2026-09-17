@@ -429,7 +429,7 @@ where A: super::TypeCheckAdapter
                     lambda_display,
                     return_type: Box::new(DataType::Null),
                 };
-                lambda_func.refresh_return_type()?;
+                lambda_func.return_type = Box::new(lambda_func.infer_return_type()?);
                 let return_type = lambda_func.return_type.as_ref().clone();
                 (lambda_func.into(), return_type)
             }
@@ -613,7 +613,7 @@ where A: super::TypeCheckAdapter
             lambda_display,
             return_type: Box::new(DataType::Null),
         };
-        lambda_func.refresh_return_type()?;
+        lambda_func.return_type = Box::new(lambda_func.infer_return_type()?);
         let return_type = lambda_func.return_type.as_ref().clone();
 
         Ok(Box::new((lambda_func.into(), return_type)))

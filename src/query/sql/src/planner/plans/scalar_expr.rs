@@ -1195,6 +1195,18 @@ pub struct LambdaFunc {
 }
 
 impl LambdaFunc {
+    fn sync_return_type_nullability(&mut self, is_nullable: bool) {
+        if self.return_type.is_nullable() == is_nullable {
+            return;
+        }
+
+        self.return_type = Box::new(if is_nullable {
+            self.return_type.wrap_nullable()
+        } else {
+            self.return_type.remove_nullable()
+        });
+    }
+
     pub fn with_args(&self, args: Vec<ScalarExpr>) -> Result<Self> {
         let mut lambda = self.clone();
         lambda.args = args;
@@ -1242,9 +1254,6 @@ impl LambdaFunc {
             return Ok(DataType::EmptyMap);
         }
 
-        // Rewrites may change the collection's outer nullability, but must not
-        // change its element/key/value types. The lambda body remains typed
-        // against those original inner types and is not re-bound here.
         let lambda_type = || self.lambda_expr.data_type().clone();
 
         // Keep normalized names here in sync with GENERAL_LAMBDA_FUNCTIONS in
@@ -1263,9 +1272,14 @@ impl LambdaFunc {
                 DataType::Array(Box::new(lambda_type()))
             }
             "map_transform_keys" | "map_transform_values" => {
-                let DataType::Map(box DataType::Tuple(fields)) = collection_type else {
+                let DataType::Map(inner_type) = collection_type else {
                     return Err(ErrorCode::Internal(
                         "map lambda function requires a map argument",
+                    ));
+                };
+                let DataType::Tuple(fields) = *inner_type else {
+                    return Err(ErrorCode::Internal(
+                        "map lambda function requires key and value fields",
                     ));
                 };
                 if fields.len() != 2 {
@@ -1296,7 +1310,44 @@ impl LambdaFunc {
     }
 
     pub fn refresh_return_type(&mut self) -> Result<()> {
-        self.return_type = Box::new(self.infer_return_type()?);
+        if self.func_name == "json_path_transform" {
+            let [json, path, ..] = self.args.as_slice() else {
+                return Err(ErrorCode::Internal(
+                    "json_path_transform requires json and path arguments",
+                ));
+            };
+            let is_nullable =
+                json.data_type().is_nullable_or_null() || path.data_type().is_nullable_or_null();
+            self.sync_return_type_nullability(is_nullable);
+            return Ok(());
+        }
+
+        // Captured columns precede the collection argument. Planner rewrites
+        // may change only the collection's outer nullability; its element, key,
+        // and value types remain those used to type-check the lambda body.
+        let collection_type = self
+            .args
+            .last()
+            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
+            .data_type();
+        let is_nullable = collection_type.is_nullable_or_null();
+        let collection_type = collection_type.remove_nullable();
+
+        // Degenerate collection types can be introduced by a rewrite even
+        // though the binder folds them before constructing a LambdaFunc.
+        if collection_type == DataType::Null {
+            self.return_type = Box::new(DataType::Null);
+        } else if collection_type == DataType::EmptyArray {
+            self.return_type = Box::new(if self.func_name == "array_reduce" {
+                DataType::Null
+            } else {
+                DataType::EmptyArray
+            });
+        } else if collection_type == DataType::EmptyMap {
+            self.return_type = Box::new(DataType::EmptyMap);
+        } else if self.func_name != "array_reduce" {
+            self.sync_return_type_nullability(is_nullable);
+        }
         Ok(())
     }
 }
