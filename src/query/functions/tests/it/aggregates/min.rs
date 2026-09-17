@@ -5,10 +5,10 @@ use databend_common_expression::FromData;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_min_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -73,7 +73,7 @@ fn run_min_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_min() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("min.txt").unwrap();
-    run_min_cases(file, eval_legacy_aggregate);
+    run_min_cases(file, eval_aggregate);
 }
 
 #[test]

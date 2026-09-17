@@ -72,7 +72,6 @@ impl SubqueryDecorrelatorOptimizer {
                             correlated_columns,
                             derived_columns,
                         )?,
-                        is_reuse_index: desc.is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
                     });

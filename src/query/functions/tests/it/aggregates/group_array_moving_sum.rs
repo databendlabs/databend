@@ -9,10 +9,10 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_group_array_moving_sum_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -178,7 +178,7 @@ fn run_group_array_moving_sum_cases(file: &mut impl Write, simulator: impl Aggre
 fn test_group_array_moving_sum() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("group_array_moving_sum.txt").unwrap();
-    run_group_array_moving_sum_cases(file, eval_legacy_aggregate);
+    run_group_array_moving_sum_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -188,4 +188,56 @@ fn test_group_array_moving_sum_group_by() {
         .new_goldenfile("group_array_moving_sum_group_by.txt")
         .unwrap();
     run_group_array_moving_sum_cases(file, simulate_two_groups_group_by);
+}
+
+// array_moving.rs: sum/avg finalize differently; numeric promotion and three
+// decimal widths are distinct. Nullable input is represented once per operation.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["Float64"],
+            result: "Array(Float64)",
+            state: "Tuple(Array(Float64))",
+        },
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["Int64"],
+            result: "Array(Int64)",
+            state: "Tuple(Array(Int64))",
+        },
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["UInt64"],
+            result: "Array(UInt64)",
+            state: "Tuple(Array(UInt64))",
+        },
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["Decimal(15, 2)"],
+            result: "Array(Decimal(18, 2))",
+            state: "Tuple(Array(Decimal(18, 0)))",
+        },
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["Decimal(38, 6)"],
+            result: "Array(Decimal(38, 6))",
+            state: "Tuple(Array(Decimal(38, 0)))",
+        },
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["Decimal(76, 12)"],
+            result: "Array(Decimal(76, 12))",
+            state: "Tuple(Array(Decimal(76, 0)))",
+        },
+        Case::Metadata {
+            expression: "group_array_moving_sum(x0)",
+            arguments: vec!["Nullable(Int64)"],
+            result: "Array(Int64)",
+            state: "Tuple(Array(Int64))",
+        },
+    ]);
 }

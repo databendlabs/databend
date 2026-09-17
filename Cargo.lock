@@ -3835,6 +3835,7 @@ dependencies = [
  "glob",
  "goldenfile",
  "hex",
+ "inventory",
  "itertools 0.13.0",
  "jaq-core",
  "jaq-json",
@@ -4843,15 +4844,12 @@ dependencies = [
  "databend-storages-common-table-meta",
  "encoding_rs",
  "enum-as-inner",
- "futures",
  "jsonb",
  "lexical-core",
  "log",
  "match-template",
  "num-bigint",
  "num-traits",
- "object_store",
- "object_store_opendal",
  "opendal",
  "orc-rust 0.6.0",
  "parking_lot 0.12.3",
@@ -4861,7 +4859,6 @@ dependencies = [
  "simdutf8",
  "tokio",
  "typetag",
- "url",
  "uuid",
 ]
 
@@ -4882,8 +4879,6 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
  "fastrace",
- "futures",
- "log",
 ]
 
 [[package]]
@@ -6245,7 +6240,6 @@ dependencies = [
  "databend-common-cache",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-meta-app",
  "databend-common-pipeline-transforms",
  "databend-common-sql",
