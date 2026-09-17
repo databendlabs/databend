@@ -26,6 +26,16 @@ insert into source values
     (2, 20, 'xxxxxxx', 7),
     (2, 20, 'other', 70)
 
+# Ensure preaggregation has a real cost advantage. NULL t values in existing
+# groups leave MIN/MAX/SUM/COUNT(t)/AVG/approx_count_distinct(t) unchanged.
+statement ok
+insert into source
+select a, b, c, NULL
+from (select distinct a, b, c from source) cross join numbers(1000)
+
+statement ok
+optimize table source compact
+
 statement ok
 create materialized view mv_by_abc (
     a,
