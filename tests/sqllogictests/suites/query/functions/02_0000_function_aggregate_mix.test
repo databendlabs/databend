@@ -699,3 +699,20 @@ group by city;
 ----
 a 123|456
 b aaa|bbb
+
+# Untyped NULL and nullable typed NULL both yield an empty JSON array.
+query TTTT
+SELECT json_array_agg(NULL), json_agg(NULL), json_array_agg(NULL::INT32), json_agg(NULL::INT32) FROM numbers(4);
+----
+[] [] [] []
+
+query ITT rowsort
+SELECT number % 2 AS g, json_array_agg(NULL), json_agg(NULL::INT32) FROM numbers(4) GROUP BY g;
+----
+0 [] []
+1 [] []
+
+query TT
+SELECT json_array_agg(NULL), json_agg(NULL::INT32) FROM numbers(0);
+----
+[] []

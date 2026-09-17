@@ -28,7 +28,15 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------+
 
 
-error: kurtosis does not support type 'Null'
+ast: kurtosis(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 1 }             |
++--------+-----------------------------+
+
 
 ast: kurtosis(x_null)
 evaluation (internal):

@@ -53,3 +53,160 @@ from (values('2024-01-01'::date),
            ('2024-01-02'::date)) t(d);
 ----
 a 2
+
+# Statistical DISTINCT removes value frequency and ignores NULL.
+query IIII
+select quantile(0.5)(distinct x), quantile_disc(0.5)(distinct x),
+       quantile_cont(0.5)(distinct x)::int, median(distinct x)::int
+from (values (1), (1), (1), (3), (5), (null)) t(x);
+----
+3 3 3 3
+
+query IIII
+select std(distinct x)::int, stddev_pop(distinct x)::int,
+       round(stddev(distinct x) * stddev(distinct x))::int,
+       round(stddev_samp(distinct x) * stddev_samp(distinct x))::int
+from (values (1), (1), (1), (3), (null)) t(x);
+----
+1 1 2 2
+
+query IRRR
+select quantile_disc(0.5)(distinct x), median(distinct x),
+       stddev_pop(distinct x), stddev_samp(distinct x)
+from (values (null::int), (null::int)) t(x);
+----
+NULL NULL NULL NULL
+
+# NULL filtering must not change the empty-sample result with DISTINCT.
+query RRRR
+select std(x), std(distinct x), stddev(x), stddev(distinct x)
+from (values (null::int), (null::int)) t(x);
+----
+NULL NULL NULL NULL
+
+query I
+select skewness(distinct x)::int
+from (values (1), (1), (1), (2), (3), (null)) t(x);
+----
+0
+
+query B
+select histogram(2)(distinct x) =
+       (select histogram(2)(x) from (values (1), (2), (3)) u(x))
+from (values (1), (1), (1), (2), (3), (null)) t(x);
+----
+1
+
+query B
+select st_aswkt(st_collect(distinct to_geometry(x))) =
+       (select st_aswkt(st_collect(to_geometry('POINT(1 2)'))) from numbers(1))
+from (values ('POINT(1 2)'), ('POINT(1 2)'), (null)) t(x);
+----
+1
+
+# Type checking normalizes the legacy bucket argument before DISTINCT routing.
+query BB
+select histogram(distinct x, 2) = histogram(2)(distinct x),
+       histogram(x, 2) = histogram(2)(x)
+from (values (1), (1), (1), (2), (3), (null)) t(x);
+----
+1 1
+
+# Explicit DISTINCT names accept the same legacy configuration arguments.
+query TTTB
+select string_agg_distinct(x, '|'), listagg_distinct(x, '|'),
+       group_concat_distinct(x, '|'),
+       histogram_distinct(n, 2) = histogram(2)(distinct n)
+from (values ('a', 1), ('a', 1), ('a', 2)) t(x, n);
+----
+a a a 1
+
+query TT
+select json_agg(distinct x), json_array_agg(distinct x)
+from (values (null::int), (null::int)) t(x);
+----
+[] []
+
+# Uniq DISTINCT is idempotent, including multi-column keys.
+query IIII
+select uniq(x), uniq(distinct x), uniq_distinct(x), uniq_distinct(x, y)
+from (values (1, 1), (1, 1), (1, 2), (3, 1), (null, 1)) t(x, y);
+----
+2 2 2 3
+
+query RRRR
+select quantile_tdigest_distinct(0.5)(x), quantile_tdigest(0.5)(distinct x),
+       median_tdigest_distinct(x), median_tdigest(distinct x)
+from (values (1), (1), (1), (3), (null)) t(x);
+----
+3.0 3.0 3.0 3.0
+
+query IRR
+select uniq_distinct(x), quantile_tdigest_distinct(0.5)(x), median_tdigest_distinct(x)
+from (values (null::int), (null::int)) t(x);
+----
+0 NULL NULL
+
+# DISTINCT applies to the whole pair, including the weight.
+query BBBB
+select abs(covar_pop_distinct(x, y) - covar_pop(distinct x, y)) < 0.000000001,
+       abs(covar_samp_distinct(x, y) - covar_samp(distinct x, y)) < 0.000000001,
+       quantile_tdigest_weighted_distinct(0.5)(x, y) = quantile_tdigest_weighted(0.5)(distinct x, y),
+       median_tdigest_weighted_distinct(x, y) = median_tdigest_weighted(distinct x, y)
+from (values (1, 1::uint64), (1, 1::uint64), (1, 2::uint64), (3, 1::uint64), (null, 1::uint64), (9, null::uint64)) t(x, y);
+----
+1 1 1 1
+
+query BBBB
+select abs(d.cp - u.cp) < 0.000000001, abs(d.cs - u.cs) < 0.000000001,
+       abs(d.q - u.q) < 0.000000001, abs(d.m - u.m) < 0.000000001
+from (
+    select covar_pop_distinct(x, y) cp, covar_samp_distinct(x, y) cs,
+           quantile_tdigest_weighted_distinct(0.5)(x, y) q, median_tdigest_weighted_distinct(x, y) m
+    from (values (1, 1::uint64), (1, 1::uint64), (1, 2::uint64), (3, 1::uint64)) t(x, y)
+) d cross join (
+    select covar_pop(x, y) cp, covar_samp(x, y) cs,
+           quantile_tdigest_weighted(0.5)(x, y) q, median_tdigest_weighted(x, y) m
+    from (values (1, 1::uint64), (1, 2::uint64), (3, 1::uint64)) t(x, y)
+) u;
+----
+1 1 1 1
+
+query RRRR
+select covar_pop_distinct(x, y), covar_samp_distinct(x, y),
+       quantile_tdigest_weighted_distinct(0.5)(x, y), median_tdigest_weighted_distinct(x, y)
+from (values (null::int, 1::uint64), (1, null::uint64)) t(x, y);
+----
+NULL NULL NULL NULL
+
+# DISTINCT is an idempotent alias for JSON object aggregation.
+query BB
+select json_object_agg_distinct(k, v) = json_object_agg(k, v),
+       json_object_agg(distinct k, v) = json_object_agg(k, v)
+from (values ('a', 1), (null, 2), ('b', null), ('c', 3)) t(k, v);
+----
+1 1
+
+statement error .*duplicate key.*
+select json_object_agg_distinct(k, v) from (values ('a', 1), ('a', 1)) t(k, v);
+
+statement error .*duplicate key.*
+select json_object_agg(distinct k, v) from (values ('a', 1), ('a', 2)) t(k, v);
+
+query BB
+select abs(kurtosis_distinct(x) + 1.2) < 0.000000001,
+       abs(kurtosis(distinct x) + 1.2) < 0.000000001
+from (values (1), (1), (1), (2), (3), (4), (null)) t(x);
+----
+1 1
+
+# Repeated events and simultaneous stages do not change the funnel level.
+query IIII
+select window_funnel_distinct(2)(ts, e1, e2, e3),
+       window_funnel(2)(distinct ts, e1, e2, e3),
+       window_funnel_distinct(1)(ts, e1, e2, e3),
+       window_funnel(1)(ts, e1, e2, e3)
+from (values (2::uint64, false, false, true), (2::uint64, false, false, true),
+             (0::uint64, true, true, false), (0::uint64, true, true, false)) t(ts, e1, e2, e3);
+----
+3 3 2 2

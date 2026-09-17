@@ -7,3 +7,87 @@ query TTT
 select list(a), list(b), list(c) from (values(1::decimal(10,0),1::decimal(20,0),1::decimal(40,0))) t(a,b,c), numbers(5);
 ----
 [1,1,1,1,1] [1,1,1,1,1] [1,1,1,1,1]
+
+# DISTINCT is supported through both the canonical name and the list alias.
+# Sort the result because unordered array aggregation does not promise an order.
+query TTTT
+SELECT array_sort(array_agg(DISTINCT v)), array_sort(list(DISTINCT v)), array_sort(array_agg_distinct(v)), array_sort(list_distinct(v))
+FROM (VALUES (2), (1), (2), (NULL), (1)) t(v);
+----
+[1,2] [1,2] [1,2] [1,2]
+
+query TT
+SELECT array_sort(array_agg(DISTINCT v)), array_sort(list(DISTINCT v))
+FROM (VALUES ('b'), ('a'), ('b'), (NULL)) t(v);
+----
+["a","b"] ["a","b"]
+
+query TT
+SELECT array_agg(DISTINCT v), list(DISTINCT v)
+FROM (VALUES (NULL), (NULL)) t(v);
+----
+[] []
+
+query TT
+SELECT array_agg(DISTINCT number), list(DISTINCT number) FROM numbers(0);
+----
+[] []
+
+query ITT rowsort
+SELECT g, array_sort(array_agg(DISTINCT v)), array_sort(list(DISTINCT v))
+FROM (VALUES (1, 2), (1, 1), (1, 2), (2, 3), (2, 3), (2, NULL)) t(g, v)
+GROUP BY g;
+----
+1 [1,2] [1,2]
+2 [3] [3]
+
+query TTT
+SELECT array_agg(NULL), list(NULL), array_agg(DISTINCT NULL) FROM numbers(4);
+----
+[] [] []
+
+query IT rowsort
+SELECT number % 2 AS g, array_agg(NULL) FROM numbers(4) GROUP BY g;
+----
+0 []
+1 []
+
+query TT
+SELECT array_agg(DISTINCT v), list(DISTINCT v)
+FROM (VALUES (NULL::INT32), (NULL::INT32)) t(v);
+----
+[] []
+
+# A statically empty array result does not require sorting.
+query T
+SELECT array_agg(NULL ORDER BY number) FROM numbers(4);
+----
+[]
+
+# SQL type checking rejects ORDER BY on explicit DISTINCT names, including Null input.
+statement error only aggregate functions allowed in within group syntax
+SELECT array_agg_distinct(NULL ORDER BY NULL) FROM numbers(4);
+
+statement error only aggregate functions allowed in within group syntax
+SELECT array_agg_distinct(v ORDER BY v)
+FROM (VALUES (3), (1), (3), (2), (NULL)) t(v);
+
+statement error only aggregate functions allowed in within group syntax
+SELECT list_distinct(v ORDER BY v DESC)
+FROM (VALUES (3), (1), (3), (2), (NULL)) t(v);
+
+# Skip NULL arguments, while preserving NULL elements inside an array value.
+query T
+SELECT array_agg(v) FROM (VALUES (true), (NULL::BOOLEAN)) t(v);
+----
+[1]
+
+query T
+SELECT list(v) FROM (VALUES (NULL::BOOLEAN), (NULL::BOOLEAN)) t(v);
+----
+[]
+
+query T
+SELECT array_agg(if(number = 0, [1, NULL], NULL)) FROM numbers(2);
+----
+[[1,NULL]]
