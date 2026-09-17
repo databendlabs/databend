@@ -171,6 +171,60 @@ group by a, b
 1 10 5 100 114 3 38.0 3
 2 20 7 70 77 2 38.5 2
 
+# Expressions derived from aggregates and finalized AVG values are not MV
+# outputs that can be rolled up. These queries must keep scanning the source
+# instead of producing an MV subtree that misses the required output column.
+query T
+explain select a, b, sum(t) + 1
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query III rowsort
+select a, b, sum(t) + 1
+from source
+where c in ('xxxxxxx', 'other')
+group by a, b
+----
+1 10 115
+2 20 78
+
+query T
+explain select a, b, c, sum(t) + 1
+from source
+group by a, b, c
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query IIII rowsort
+select a, b, c, sum(t) + 1
+from source
+group by a, b, c
+----
+1 10 other 101
+1 10 xxxxxxx 15
+2 20 other 71
+2 20 xxxxxxx 8
+
+query T
+explain select a, avg(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a
+----
+<slt:ignore>table: default.test_materialized_view_rewrite.source<slt:ignore>
+
+query II rowsort
+select a, avg(t)
+from source
+where c in ('xxxxxxx', 'other')
+group by a
+----
+1 38.0
+2 38.5
+
 # ORDER BY and LIMIT remain above the MV roll-up, and HAVING filters the merged
 # aggregate rather than being treated as a source-table predicate.
 query T
