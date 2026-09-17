@@ -374,7 +374,7 @@ async fn purge_inverted_index_v2_objects(
             Ok(None) => continue,
             Err(error) => {
                 warn!(
-                    "skip inverted-index V2 object with unparseable UUID during vacuum: path={}, error={}",
+                    "skip inverted-index V2 object with unparsable UUID during vacuum: path={}, error={}",
                     entry.path(),
                     error
                 );
