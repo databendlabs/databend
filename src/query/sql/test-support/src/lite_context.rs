@@ -79,7 +79,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license::Feature;
-use databend_common_license::license::LicenseInfo;
+use databend_common_license::license::LicenseClaims;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::*;
@@ -120,7 +120,6 @@ use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
-use jwt_simple::claims::JWTClaims;
 
 use crate::ReplayInput;
 use crate::ReplayRowAccessPolicy;
@@ -195,7 +194,7 @@ impl LicenseManager for LiteLicenseManager {
         feature.verify_default("Need Commercial License".to_string())
     }
 
-    fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+    fn parse_license(&self, _raw: &str) -> Result<LicenseClaims> {
         Err(ErrorCode::LicenceDenied(
             "Need Commercial License".to_string(),
         ))

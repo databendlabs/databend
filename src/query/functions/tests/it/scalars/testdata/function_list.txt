@@ -2705,6 +2705,10 @@ Functions overloads:
 1 map(Array(Nothing) NULL, Array(Nothing) NULL) :: Map(Nothing) NULL
 2 map(Array(T0), Array(T1)) :: Map(T0, T1)
 3 map(Array(T0) NULL, Array(T1) NULL) :: Map(T0, T1) NULL
+4 map(Array(Nothing), Array(Nothing), Boolean) :: Map(Nothing)
+5 map(Array(Nothing) NULL, Array(Nothing) NULL, Boolean NULL) :: Map(Nothing) NULL
+6 map(Array(T0), Array(T1), Boolean) :: Map(T0, T1)
+7 map(Array(T0) NULL, Array(T1) NULL, Boolean NULL) :: Map(T0, T1) NULL
 0 map_cat(Map(Nothing), Map(Nothing)) :: Map(Nothing)
 1 map_cat(Map(Nothing) NULL, Map(Nothing) NULL) :: Map(Nothing) NULL
 2 map_cat(Map(T0, T1), Map(T0, T1)) :: Map(T0, T1)

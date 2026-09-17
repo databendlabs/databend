@@ -762,7 +762,7 @@ impl ClusterDiscovery {
 
         let license_info = match license_result {
             Some(claims) => {
-                let expires_at = claims.expires_at.map(|d| d.as_secs()).unwrap_or(0);
+                let expires_at = claims.expires_at.unwrap_or(0);
                 serde_json::json!({
                     "has_license": true,
                     "expires_at": expires_at,

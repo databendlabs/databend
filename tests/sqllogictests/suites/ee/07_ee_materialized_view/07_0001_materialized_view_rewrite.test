@@ -297,8 +297,8 @@ group by a, b, c
 3 30 xxxxxxx 8 1
 
 # Queries with hidden ORDER BY columns keep their TopN/source plan rather than
-# replacing the whole subtree and losing ordering. Aggregate queries are also
-# kept on the source until detail-to-aggregate rebuilding is supported.
+# replacing the whole subtree and losing ordering. DISTINCT retains its
+# aggregate above the detail MV so duplicate rows are still removed.
 statement ok
 create table detail_source (
     id int,

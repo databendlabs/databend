@@ -18,10 +18,9 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use jwt_simple::claims::JWTClaims;
 
 use crate::license::Feature;
-use crate::license::LicenseInfo;
+use crate::license::LicenseClaims;
 
 pub trait LicenseManager: Sync + Send {
     fn init(tenant: String) -> Result<()>
@@ -34,24 +33,24 @@ pub trait LicenseManager: Sync + Send {
     /// This function returns `LicenseKeyInvalid` error if enterprise license key is not valid or expired.
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()>;
 
-    /// Encodes a raw license string as a JWT using the constant public key.
+    /// Verifies and decodes a signed license.
     ///
-    /// This function takes a raw license string and a secret key,
-    /// The function returns a `jwt_simple::Claim` object that represents the
-    /// decoded contents of the JWT  with custom fields `LicenseInfo`
+    /// The returned claims keep `iat`, `exp`, and `nbf` as full-width Unix
+    /// seconds, including values beyond February 2106.
     ///
     /// # Arguments
     ///
-    /// * `raw` - The raw license string to be encoded.
+    /// * `raw` - A compact JWT license string.
     ///
     /// # Returns
     ///
-    /// A `jwt_simple::Claim` object representing the decoded contents of the JWT.
+    /// The verified standard and custom license claims.
     ///
     /// # Errors
     ///
-    /// This function may return `LicenseKeyParseError` error if the encoding or decoding of the JWT fails.
-    fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>>;
+    /// Returns `LicenseKeyParseError` when the token cannot be decoded or its
+    /// signature is invalid, and `LicenseKeyExpired` when it has expired.
+    fn parse_license(&self, raw: &str) -> Result<LicenseClaims>;
 
     fn is_license_valid(&self, license_key: String) -> bool {
         self.check_license(license_key).is_ok()
@@ -103,7 +102,7 @@ impl LicenseManager for OssLicenseManager {
         feature.verify_default("Need Commercial License".to_string())
     }
 
-    fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+    fn parse_license(&self, _raw: &str) -> Result<LicenseClaims> {
         Err(ErrorCode::LicenceDenied(
             "Need Commercial License".to_string(),
         ))
@@ -118,10 +117,11 @@ mod tests {
     use databend_common_exception::Result;
 
     use super::*;
+    use crate::license::LicenseInfo;
 
     // A mock LicenseManager implementation for testing
     struct MockLicenseManager {
-        license_claim: Result<JWTClaims<LicenseInfo>>,
+        license_claim: Result<LicenseClaims>,
     }
 
     struct MockLicenseManagerBuilder;
@@ -146,8 +146,8 @@ mod tests {
         }
     }
 
-    fn new_license_claim() -> JWTClaims<LicenseInfo> {
-        JWTClaims {
+    fn new_license_claim() -> LicenseClaims {
+        LicenseClaims {
             issued_at: None,
             expires_at: None,
             invalid_before: None,
@@ -178,7 +178,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+        fn parse_license(&self, _raw: &str) -> Result<LicenseClaims> {
             self.license_claim.clone()
         }
     }

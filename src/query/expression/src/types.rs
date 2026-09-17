@@ -398,6 +398,13 @@ impl DataType {
         }
     }
 
+    pub fn remove_nullable_ref(&self) -> &Self {
+        match self {
+            DataType::Nullable(deref!(inner)) => inner,
+            _ => self,
+        }
+    }
+
     pub fn unnest(&self) -> Self {
         match self {
             DataType::Array(ty) => ty.unnest(),

@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use dashmap::DashMap;
 use databend_common_base::base::GlobalInstance;
@@ -20,16 +23,19 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_exception::exception::ErrorCode;
 use databend_common_license::license::Feature;
-use databend_common_license::license::LicenseInfo;
+use databend_common_license::license::LicenseClaims;
 use databend_common_license::license::VerifyResult;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_version::DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY;
-use jwt_simple::JWTError;
-use jwt_simple::algorithms::ES256PublicKey;
-use jwt_simple::claims::JWTClaims;
-use jwt_simple::prelude::Clock;
-use jwt_simple::prelude::ECDSAP256PublicKeyLike;
+use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::Validation;
+use jsonwebtoken::decode;
+use jsonwebtoken::errors::ErrorKind;
+use jwt_simple::claims::DEFAULT_TIME_TOLERANCE_SECS;
+use jwt_simple::common::DEFAULT_MAX_TOKEN_LENGTH;
+use jwt_simple::token::Token;
 use log::warn;
 
 const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
@@ -44,31 +50,105 @@ pub struct RealLicenseManager {
     public_keys: Vec<String>,
 
     // cache available settings to get avoid of unneeded license parsing time.
-    pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
+    pub(crate) cache: DashMap<String, LicenseClaims>,
 }
 
 impl RealLicenseManager {
-    fn parse_license_impl(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+    fn current_unix_time() -> Result<Duration> {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err_to_code(
+                ErrorCode::LicenseKeyParseError,
+                || "[LicenseManager] System clock is before the Unix epoch",
+            )
+    }
+
+    fn validate_token_metadata(raw: &str) -> Result<()> {
+        // These limits were applied implicitly by `jwt-simple::verify_token`.
+        if raw.len() > DEFAULT_MAX_TOKEN_LENGTH {
+            return Err(ErrorCode::LicenseKeyParseError(
+                "[LicenseManager] License key is too long",
+            ));
+        }
+
+        let metadata = Token::decode_metadata(raw).map_err_to_code(
+            ErrorCode::LicenseKeyParseError,
+            || "[LicenseManager] JWT header decode failed",
+        )?;
+        if metadata.signature_type().is_some_and(|typ| {
+            let typ = typ.to_uppercase();
+            typ != "JWT" && !typ.ends_with("+JWT")
+        }) {
+            return Err(ErrorCode::LicenseKeyParseError(
+                "[LicenseManager] Invalid JWT type",
+            ));
+        }
+        Ok(())
+    }
+
+    fn license_validation() -> Validation {
+        // Match the policy previously applied by `jwt-simple::verify_token`.
+        // `jsonwebtoken` otherwise uses different defaults for clock tolerance,
+        // required expiry, not-before, and audience validation.
+        let mut validation = Validation::new(Algorithm::ES256);
+        validation.leeway = DEFAULT_TIME_TOLERANCE_SECS;
+        validation.validate_nbf = true;
+        // Check exp once in `validate_claim_times` to retain the previous
+        // verifier's subsecond expiry boundary.
+        validation.validate_exp = false;
+        validation.required_spec_claims.clear();
+        validation.validate_aud = false;
+        validation
+    }
+
+    fn validate_claim_times(claims: &LicenseClaims, now: Duration) -> Result<()> {
+        // `jsonwebtoken` does not validate iat; retain the previous future-iat check.
+        if claims
+            .issued_at
+            .is_some_and(|iat| iat > now.as_secs().saturating_add(DEFAULT_TIME_TOLERANCE_SECS))
+        {
+            return Err(ErrorCode::LicenseKeyParseError(
+                "[LicenseManager] License issued in the future",
+            ));
+        }
+
+        let tolerance = Duration::from_secs(DEFAULT_TIME_TOLERANCE_SECS);
+        if claims
+            .expires_at
+            .is_some_and(|exp| now.saturating_sub(tolerance) > Duration::from_secs(exp))
+        {
+            return Err(ErrorCode::LicenseKeyExpired(
+                "[LicenseManager] License key is expired",
+            ));
+        }
+        Ok(())
+    }
+
+    fn parse_license_impl(&self, raw: &str) -> Result<LicenseClaims> {
+        Self::validate_token_metadata(raw)?;
+        let validation = Self::license_validation();
+
         for public_key in &self.public_keys {
-            let public_key = ES256PublicKey::from_pem(public_key).map_err_to_code(
+            let public_key = DecodingKey::from_ec_pem(public_key.as_bytes()).map_err_to_code(
                 ErrorCode::LicenseKeyParseError,
                 || "[LicenseManager] Public key load failed",
             )?;
 
-            return match public_key.verify_token::<LicenseInfo>(raw, None) {
-                Ok(v) => Ok(v),
-                Err(cause) => match cause.downcast_ref::<JWTError>() {
-                    Some(JWTError::TokenHasExpired) => Err(ErrorCode::LicenseKeyExpired(
-                        "[LicenseManager] License key is expired",
-                    )),
-                    Some(JWTError::InvalidSignature) => {
-                        continue;
+            match decode::<LicenseClaims>(raw, &public_key, &validation) {
+                Ok(token) => {
+                    Self::validate_claim_times(&token.claims, Self::current_unix_time()?)?;
+                    return Ok(token.claims);
+                }
+                Err(cause) => match cause.kind() {
+                    // Public-key rotation requires trying the next trusted key.
+                    ErrorKind::InvalidSignature => continue,
+                    _ => {
+                        return Err(ErrorCode::LicenseKeyParseError(
+                            "[LicenseManager] JWT claim decode failed",
+                        ));
                     }
-                    _ => Err(ErrorCode::LicenseKeyParseError(
-                        "[LicenseManager] JWT claim decode failed",
-                    )),
                 },
-            };
+            }
         }
 
         Err(ErrorCode::LicenseKeyParseError(
@@ -134,7 +214,7 @@ impl LicenseManager for RealLicenseManager {
         }
     }
 
-    fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+    fn parse_license(&self, raw: &str) -> Result<LicenseClaims> {
         if let Some(v) = self.cache.get(raw) {
             // Previously cached valid license might be expired
             let claim = v.value();
@@ -164,17 +244,20 @@ impl RealLicenseManager {
         }
     }
 
-    fn verify_license_expired(l: &JWTClaims<LicenseInfo>) -> Result<bool> {
-        let now = Clock::now_since_epoch();
+    fn verify_license_expired(l: &LicenseClaims) -> Result<bool> {
+        Self::verify_license_expired_at(l, Self::current_unix_time()?)
+    }
+
+    fn verify_license_expired_at(l: &LicenseClaims, now: Duration) -> Result<bool> {
         match l.expires_at {
-            Some(expire_at) => Ok(now > expire_at),
+            Some(expire_at) => Ok(now > Duration::from_secs(expire_at)),
             None => Err(ErrorCode::LicenseKeyInvalid(
                 "[LicenseManager] Cannot find valid expiration time",
             )),
         }
     }
 
-    fn verify_feature(&self, l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
+    fn verify_feature(&self, l: &LicenseClaims, feature: Feature) -> Result<()> {
         if Self::verify_license_expired(l)? {
             return self.verify_if_expired(feature);
         }
@@ -250,9 +333,16 @@ fn embedded_public_keys() -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_license::license::LicenseInfo;
+    use jsonwebtoken::EncodingKey;
+    use jsonwebtoken::Header;
+    use jsonwebtoken::encode;
     use jwt_simple::algorithms::ECDSAP256KeyPairLike;
-    use jwt_simple::prelude::Duration;
+    use jwt_simple::claims::JWTClaims;
+    use jwt_simple::prelude::Clock;
+    use jwt_simple::prelude::Duration as JwtDuration;
     use jwt_simple::prelude::ES256KeyPair;
+    use serde_json::Value;
 
     use super::*;
 
@@ -260,6 +350,7 @@ mod tests {
         // Helper to insert license into cache for testing
         #[cfg(test)]
         pub fn insert_into_cache_for_test(&self, key: &str, claims: JWTClaims<LicenseInfo>) {
+            let claims = serde_json::from_value(serde_json::to_value(claims).unwrap()).unwrap();
             self.cache.insert(key.to_string(), claims);
         }
 
@@ -274,7 +365,7 @@ mod tests {
     fn create_expired_claims() -> JWTClaims<LicenseInfo> {
         JWTClaims {
             issued_at: None,
-            expires_at: Some(Clock::now_since_epoch() - Duration::from_days(1)),
+            expires_at: Some(Clock::now_since_epoch() - JwtDuration::from_days(1)),
             invalid_before: None,
             issuer: None,
             subject: None,
@@ -294,7 +385,7 @@ mod tests {
     fn create_valid_claims() -> JWTClaims<LicenseInfo> {
         JWTClaims {
             issued_at: None,
-            expires_at: Some(Clock::now_since_epoch() + Duration::from_days(30)),
+            expires_at: Some(Clock::now_since_epoch() + JwtDuration::from_days(30)),
             invalid_before: None,
             issuer: Some("Databend".into()),
             subject: Some("test-license".into()),
@@ -308,6 +399,125 @@ mod tests {
                 features: None,
             },
         }
+    }
+
+    fn sign_claims(key_pair: &ES256KeyPair, claims: &Value) -> String {
+        let key = EncodingKey::from_ec_pem(key_pair.to_pem().unwrap().as_bytes()).unwrap();
+        encode(&Header::new(Algorithm::ES256), claims, &key).unwrap()
+    }
+
+    #[test]
+    fn test_full_width_expiry_and_cache() {
+        let key_pair = ES256KeyPair::generate();
+        let mut manager = RealLicenseManager::new(
+            "test-tenant".to_string(),
+            ES256KeyPair::generate().public_key().to_pem().unwrap(),
+        );
+        manager
+            .public_keys
+            .push(key_pair.public_key().to_pem().unwrap());
+        for exp in [u32::MAX as u64, u32::MAX as u64 + 1, 4_891_363_200] {
+            let mut payload = serde_json::to_value(create_valid_claims()).unwrap();
+            payload["exp"] = exp.into();
+            let token = sign_claims(&key_pair, &payload);
+            for _ in 0..2 {
+                let claims = manager.parse_license(&token).unwrap();
+                assert_eq!(claims.expires_at, Some(exp));
+                assert!(manager.is_in_cache(&token));
+                manager
+                    .check_enterprise_enabled(token.clone(), Feature::LicenseInfo)
+                    .unwrap();
+            }
+            let claims = manager.parse_license(&token).unwrap();
+            let at_expiry = Duration::from_secs(exp);
+            assert!(!RealLicenseManager::verify_license_expired_at(&claims, at_expiry).unwrap());
+            assert!(
+                RealLicenseManager::verify_license_expired_at(
+                    &claims,
+                    at_expiry + Duration::from_nanos(1),
+                )
+                .unwrap()
+            );
+            if exp > u32::MAX as u64 {
+                assert!(
+                    !RealLicenseManager::verify_license_expired_at(
+                        &claims,
+                        Duration::from_secs(u32::MAX as u64 + 1),
+                    )
+                    .unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_timestamp_validation_compatibility() {
+        use jwt_simple::prelude::ECDSAP256PublicKeyLike;
+
+        let key_pair = ES256KeyPair::generate();
+        let public_key = key_pair.public_key();
+        let manager =
+            RealLicenseManager::new("test-tenant".to_string(), public_key.to_pem().unwrap());
+        let now = Clock::now_since_epoch().as_secs();
+        for (field, value, valid) in [
+            ("exp", now + 3600, true),
+            ("exp", now - 60, true),
+            ("exp", now - 890, true),
+            ("exp", now - 910, false),
+            ("exp", now - 3600, false),
+            ("nbf", now + 60, true),
+            ("nbf", now + 890, true),
+            ("nbf", now + 910, false),
+            ("nbf", now + 3600, false),
+            ("iat", now + 60, true),
+            ("iat", now + 890, true),
+            ("iat", now + 910, false),
+            ("iat", now + 3600, false),
+        ] {
+            let mut payload = serde_json::to_value(create_valid_claims()).unwrap();
+            payload[field] = value.into();
+            let token = sign_claims(&key_pair, &payload);
+            assert_eq!(
+                public_key.verify_token::<LicenseInfo>(&token, None).is_ok(),
+                valid
+            );
+            let expected = match (field, valid) {
+                (_, true) => Ok(()),
+                ("exp", false) => Err(ErrorCode::LICENSE_KEY_EXPIRED),
+                (_, false) => Err(ErrorCode::LICENSE_KEY_PARSE_ERROR),
+            };
+            assert_eq!(
+                manager
+                    .parse_license_impl(&token)
+                    .map(|_| ())
+                    .map_err(|error| error.code()),
+                expected,
+                "field: {field}, value: {value}"
+            );
+        }
+
+        let mut payload = serde_json::to_value(create_valid_claims()).unwrap();
+        payload.as_object_mut().unwrap().remove("exp");
+        let token = sign_claims(&key_pair, &payload);
+        assert!(public_key.verify_token::<LicenseInfo>(&token, None).is_ok());
+        assert!(manager.parse_license_impl(&token).is_ok());
+        assert!(
+            manager
+                .check_enterprise_enabled(token, Feature::LicenseInfo)
+                .is_err()
+        );
+
+        // The previous verifier accepted and truncated fractional Unix seconds.
+        let mut payload = serde_json::to_value(create_valid_claims()).unwrap();
+        payload["iat"] = serde_json::json!(now as f64 - 0.5);
+        payload["nbf"] = serde_json::json!(now as f64 - 0.5);
+        payload["exp"] = serde_json::json!(now as f64 + 3600.8);
+        let token = sign_claims(&key_pair, &payload);
+        assert!(public_key.verify_token::<LicenseInfo>(&token, None).is_ok());
+        let claims = manager.parse_license_impl(&token).unwrap();
+        assert_eq!(claims.issued_at, Some(now - 1));
+        assert_eq!(claims.invalid_before, Some(now - 1));
+        assert_eq!(claims.expires_at, Some(now + 3600));
     }
 
     #[test]
@@ -342,7 +552,10 @@ mod tests {
         let result = manager.parse_license(license_key);
         assert!(result.is_ok());
         if let Ok(claims) = result {
-            assert_eq!(claims.expires_at, valid_claims.expires_at);
+            assert_eq!(
+                claims.expires_at,
+                valid_claims.expires_at.map(|v| v.as_secs())
+            );
         } else {
             panic!("Expected valid license but got Err result");
         }
@@ -372,7 +585,10 @@ mod tests {
             // Verify non-timestamp fields match exactly
             assert_eq!(claims.issuer, valid_claims.issuer);
             assert_eq!(claims.subject, valid_claims.subject);
-            assert_eq!(claims.audiences, valid_claims.audiences);
+            assert_eq!(
+                serde_json::to_value(&claims).unwrap()["aud"],
+                serde_json::to_value(&valid_claims).unwrap()["aud"]
+            );
             assert_eq!(claims.jwt_id, valid_claims.jwt_id);
 
             // Verify LicenseInfo fields
@@ -382,7 +598,7 @@ mod tests {
 
             // Verify valid expiration
             let now = Clock::now_since_epoch();
-            assert!(claims.expires_at.unwrap() > now);
+            assert!(claims.expires_at.unwrap() > now.as_secs());
         } else {
             panic!("Expected valid license but got Err result");
         }
