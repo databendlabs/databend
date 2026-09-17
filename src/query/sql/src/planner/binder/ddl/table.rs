@@ -211,24 +211,6 @@ impl PartitionBucketValidator {
     }
 }
 
-/// Rejects an explicit lambda inside a TTL expression, e.g.
-/// `array_transform(c, v -> v)`.
-///
-/// Only `LambdaArgument::Lambda` is matched here. `LambdaArgument::Ambiguous`
-/// is also a valid JSON arrow expression (`f(payload -> 'a')`), so it can only
-/// be classified after binding; `validate_ttl_expr` covers that case.
-#[derive(Visitor)]
-#[visitor(FunctionCall(enter))]
-struct TtlLambdaValidator {
-    found: bool,
-}
-
-impl TtlLambdaValidator {
-    fn enter_function_call(&mut self, func: &FunctionCall) {
-        self.found |= func.has_explicit_lambda();
-    }
-}
-
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
     pub(in crate::planner::binder) field_comments: Vec<String>,
@@ -2531,17 +2513,6 @@ impl Binder {
         schema: TableSchemaRef,
     ) -> Result<String> {
         let display = format!("{ttl_expr:#}");
-        // A stored TTL is rewritten at the AST level by DROP/RENAME COLUMN,
-        // which cannot tell a lambda parameter from a table column. Reject it
-        // before binding so the error points at the offending syntax.
-        let mut lambda_validator = TtlLambdaValidator { found: false };
-        ttl_expr.drive(&mut lambda_validator);
-        if lambda_validator.found {
-            return Err(ErrorCode::SemanticError(format!(
-                "TTL expression `{display}` must not use a lambda function"
-            )));
-        }
-
         let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
         let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
 

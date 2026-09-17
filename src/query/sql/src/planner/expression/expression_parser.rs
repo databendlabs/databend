@@ -614,10 +614,9 @@ pub fn analyze_cluster_keys(
 /// apart from table columns. Supporting them would require a second scope
 /// resolution implementation next to the binder's.
 ///
-/// This complements the AST-level check in `analyze_ttl_expr`: the parser also
-/// produces `LambdaArgument::Ambiguous` for a trailing `param -> expr` that is
-/// equally a valid JSON arrow expression, and only semantic analysis decides
-/// which reading applies.
+/// Validate after binding because `LambdaArgument::Ambiguous` may represent
+/// either a lambda or a JSON arrow expression; only semantic analysis can
+/// distinguish them.
 fn reject_ttl_lambda(scalar: &ScalarExpr, display: &str) -> Result<()> {
     struct LambdaRejector<'a> {
         display: &'a str,
@@ -687,7 +686,7 @@ pub fn validate_stored_ttl_expr(
     let ast = parse_expr(&tokenize_sql(sql)?, Dialect::default())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = bind_context_from_schema(&schema, &metadata);
-    let names = NameResolutionContext::default();
+    let names = NameResolutionContext::preserve_identifier_case();
     let mut binder = ScalarBinder::new(&mut bind_context, ctx, &names, metadata, &[]);
     binder.forbid_udf();
     let (scalar, _) = binder.bind(&ast)?;

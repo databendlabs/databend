@@ -220,6 +220,35 @@ async fn test_alter_ttl_does_not_create_snapshot() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_ttl_lambda_validation_after_binding() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let err = Planner::new(ctx.clone())
+        .plan_sql(
+            "CREATE TABLE default.ttl_lambda (times ARRAY(TIMESTAMP)) \
+             TTL array_max(array_transform(times, v -> v + INTERVAL 1 DAY))",
+        )
+        .await
+        .expect_err("TTL lambda must be rejected");
+    assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
+    assert!(
+        err.message().contains("must not use a lambda function"),
+        "{err}"
+    );
+
+    // The parser also represents a JSON arrow in a trailing function argument
+    // as an ambiguous lambda. Semantic binding must retain this valid form.
+    Planner::new(ctx)
+        .plan_sql(
+            "CREATE TABLE default.ttl_json_arrow (payload VARIANT) \
+             TTL try_to_timestamp(payload -> 'expires_at')",
+        )
+        .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_ttl_stored_expression_preserves_json_keys() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     for (sql, expected) in [
@@ -289,9 +318,10 @@ async fn test_ttl_stored_expression_preserves_json_keys() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_ttl_storage_uses_default_name_resolution() -> Result<()> {
+async fn test_ttl_stored_name_resolution_preserves_case() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    // All combinations must produce TTL text that binds under default rules.
+    // All combinations must produce canonical TTL text that binds independently
+    // of the current session's name-resolution settings.
     for (i, (unquoted, quoted, column, input, expected)) in [
         ("0", "0", "EventTime", "EventTime", "eventtime"),
         ("0", "1", "\"EventTime\"", "\"EventTime\"", "\"EventTime\""),
@@ -325,6 +355,17 @@ async fn test_ttl_storage_uses_default_name_resolution() -> Result<()> {
         assert_eq!(ttl, format!("{expected} + INTERVAL 1 DAY"));
         let default_ctx = fixture.new_query_ctx().await?;
         databend_common_sql::validate_stored_ttl_expr(default_ctx, table.schema(), ttl)?;
+
+        // Legacy metadata may contain an unquoted mixed-case expression. Stored
+        // text must resolve against the exact schema name instead of being
+        // folded by the current session's default rules.
+        if table.schema().fields()[0].name() == "EventTime" {
+            databend_common_sql::validate_stored_ttl_expr(
+                fixture.new_query_ctx().await?,
+                table.schema(),
+                "EventTime + INTERVAL 1 DAY",
+            )?;
+        }
 
         // Rename uses an already-resolved new name and must quote it even when
         // quoted identifiers are case-insensitive in the renaming session.

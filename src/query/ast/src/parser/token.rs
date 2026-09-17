@@ -970,8 +970,6 @@ pub enum TokenKind {
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
-    #[token("MATERIALIZE", ignore(ascii_case))]
-    MATERIALIZE,
     #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
     MUST_CHANGE_PASSWORD,
     #[token("NEXT_DAY", ignore(ascii_case))]
