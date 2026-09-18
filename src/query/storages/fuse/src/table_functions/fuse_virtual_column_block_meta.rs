@@ -197,7 +197,7 @@ fn build_virtual_column_metas(
                     .get(source_column_id)
                     .cloned()
                     .unwrap_or_else(|| source_column_id.to_string());
-                format!("{}.{}", &source_name, &path)
+                format!("{}.{}", source_name, path)
             })
             .unwrap_or_else(|| column_id.to_string());
 
@@ -310,7 +310,7 @@ fn build_virtual_path_statistic(
         for (column_id, path_count) in sorted_path_counts {
             let path_name = path_map
                 .get(column_id)
-                .map(|(_, path)| format!("{}.{}", &source_name, &path))
+                .map(|(_, path)| format!("{}.{}", source_name, path))
                 .unwrap_or_else(|| column_id.to_string());
 
             column_ids.push(*column_id);

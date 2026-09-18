@@ -2447,7 +2447,7 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
-                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                for (field, scalar) in fields.iter_mut().zip(value) {
                     field.push(scalar);
                 }
             }

@@ -1127,7 +1127,7 @@ where A: UdfAdapter
             .iter()
             .map(|arg| arg.display_name.as_str())
             .join(", ");
-        let display_name = format!("{}({})", &handler, arg_names);
+        let display_name = format!("{}({})", handler, arg_names);
         let arg_types = table_types_to_data_types(&arg_types);
         let return_type = table_type_to_data_type(&return_type);
 

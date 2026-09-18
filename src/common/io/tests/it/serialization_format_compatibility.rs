@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::assert_matches::assert_matches;
+use std::assert_matches;
 use std::io::Cursor;
 
 use databend_common_io::prelude::bincode_deserialize_from_slice;

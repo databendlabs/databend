@@ -27,6 +27,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::format_runtime_keypaths;
 use databend_common_expression::infer_schema_type;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use jsonb::keypath::OwnedKeyPath;
@@ -44,7 +45,6 @@ use crate::ColumnEntry;
 use crate::binder::NameResolutionResult;
 use crate::binder::VirtualColumnName;
 use crate::binder::wrap_cast;
-use crate::planner::semantic::resolve_type_name;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -642,7 +642,7 @@ where A: super::TypeCheckAdapter
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
-                                name, &fields_name
+                                name, fields_name
                             )));
                         }
                     },
@@ -727,7 +727,7 @@ where A: super::TypeCheckAdapter
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
-                                name, &fields_name
+                                name, fields_name
                             ))
                             .set_span(span));
                         }

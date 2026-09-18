@@ -484,15 +484,13 @@ where A: super::TypeCheckAdapter
                             }
                         }
                     }
-                    "lenient" => {
-                        if lenient.is_none() {
-                            if option_val == "false" {
-                                lenient = Some(false);
-                                continue;
-                            } else if option_val == "true" {
-                                lenient = Some(true);
-                                continue;
-                            }
+                    "lenient" if lenient.is_none() => {
+                        if option_val == "false" {
+                            lenient = Some(false);
+                            continue;
+                        } else if option_val == "true" {
+                            lenient = Some(true);
+                            continue;
                         }
                     }
                     _ => {}

@@ -194,8 +194,7 @@ impl RulePushDownRankLimitAggregate {
 
         let mut sort_items = Vec::with_capacity(agg_limit.group_items.len());
         let mut not_found_sort_items = vec![];
-        for i in 0..agg_limit.group_items.len() {
-            let group_item = &agg_limit.group_items[i];
+        for group_item in &agg_limit.group_items {
             if let Some(sort_item) = order_items.iter().find(|k| k.index == group_item.index) {
                 sort_items.push(SortItem {
                     index: group_item.index,

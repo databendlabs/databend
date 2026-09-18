@@ -101,13 +101,13 @@ fn encode_one(out: &mut [u8], val: &[u8], is_null: bool, asc: bool, nulls_first:
         // Write `2_u8` to demarcate as non-empty, non-null string
         to_write[0] = NON_EMPTY_SENTINEL;
 
-        let chunks = val.chunks_exact(CHUNK_SIZE);
-        let remainder = chunks.remainder();
-        for (input, output) in chunks
-            .clone()
-            .zip(to_write[1..].chunks_exact_mut(CHUNK_SIZE + 1))
-        {
-            let input: &[u8; CHUNK_SIZE] = input.try_into().unwrap();
+        let (chunks, remainder) = val.as_chunks::<CHUNK_SIZE>();
+        for (input, output) in chunks.iter().zip(
+            to_write[1..]
+                .as_chunks_mut::<{ CHUNK_SIZE + 1 }>()
+                .0
+                .iter_mut(),
+        ) {
             let out_chunk: &mut [u8; CHUNK_SIZE] = (&mut output[..CHUNK_SIZE]).try_into().unwrap();
 
             *out_chunk = *input;

@@ -74,11 +74,12 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license::Feature;
-use databend_common_license::license::LicenseInfo;
+use databend_common_license::license::LicenseClaims;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::*;
@@ -95,7 +96,6 @@ use databend_common_sql::normalize_identifier;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::resolve_type_name;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_common_storage::DataOperator;
@@ -122,7 +122,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
-use jwt_simple::claims::JWTClaims;
 
 use crate::ReplayInput;
 use crate::ReplayRowAccessPolicy;
@@ -197,7 +196,7 @@ impl LicenseManager for LiteLicenseManager {
         feature.verify_default("Need Commercial License".to_string())
     }
 
-    fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+    fn parse_license(&self, _raw: &str) -> Result<LicenseClaims> {
         Err(ErrorCode::LicenceDenied(
             "Need Commercial License".to_string(),
         ))

@@ -27,7 +27,7 @@ pub trait PhysicalFormat {
         // explain analyze
         if let Some(prof) = ctx.profs.get(&self.get_meta().plan_id) {
             let mut children = Vec::with_capacity(format_node.children.len() + 10);
-            for (_, desc) in get_statistics_desc().iter() {
+            for desc in get_statistics_desc().values() {
                 if prof.statistics[desc.index] != 0 {
                     children.push(FormatTreeNode::new(format!(
                         "{}: {}",

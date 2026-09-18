@@ -87,6 +87,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogType;
@@ -142,7 +143,6 @@ use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use crate::planner::semantic::normalize_identifier;
-use crate::planner::semantic::resolve_type_name;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
@@ -628,9 +628,9 @@ impl Binder {
         // CREATE TABLE ... ENGINE = MATERIALIZED_VIEW is still parseable via Engine::MaterializedView,
         // but it would bypass CREATE MATERIALIZED VIEW (definition, source binding, generation).
         // Reject here so MV can only be published through bind_create_materialized_view.
-        if engine == Engine::MaterializedView {
+        if matches!(engine, Engine::MaterializedView | Engine::DynamicTable) {
             return Err(ErrorCode::TableEngineNotSupported(
-                "MATERIALIZED_VIEW engine can only be created with CREATE MATERIALIZED VIEW",
+                "MATERIALIZED_VIEW and DYNAMIC_TABLE engines can only be created with their dedicated CREATE statements",
             ));
         }
         let stage_resolver = StageResolver::from_table_context(

@@ -542,9 +542,9 @@ impl Processor for AnalyzeCollectNDVSource {
                 let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
                 for (((new, top_n), count_min_sketch), idx) in new_hlls
                     .into_iter()
-                    .zip(new_top_n.into_iter())
-                    .zip(new_count_min_sketch.into_iter())
-                    .zip(new_indexes.into_iter())
+                    .zip(new_top_n)
+                    .zip(new_count_min_sketch)
+                    .zip(new_indexes)
                 {
                     if let Some(column_hlls) = new {
                         for (column_id, column_hll) in column_hlls.iter() {

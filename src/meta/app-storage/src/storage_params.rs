@@ -280,7 +280,7 @@ impl StorageParams {
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
                 "Cannot apply update from {:?} to {:?}",
-                &s1, &s2
+                s1, s2
             ))),
         }
     }
@@ -539,7 +539,7 @@ impl Display for StorageParams {
                     v.bucket,
                     v.root,
                     v.endpoint_url,
-                    &mask_string(&v.access_key_id, 3),
+                    mask_string(&v.access_key_id, 3),
                     v.role_arn,
                 )
             }

@@ -122,6 +122,7 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -1974,6 +1975,100 @@ impl SchemaApiTestSuite {
         };
         let mv_id = created.table_id;
 
+        // Definition-first listing returns complete target/source facts and applies exact hints.
+        {
+            let listed = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter::default())
+                .await?;
+            let [listed_mv] = listed.as_slice() else {
+                panic!("one materialized view must be listed");
+            };
+            assert_eq!(listed_mv.mv.mv_id, mv_id);
+            assert_eq!(listed_mv.database_name, db_name);
+            assert_eq!(listed_mv.name, mv_name);
+            assert_eq!(listed_mv.source.table_id, source_table_id);
+            assert_eq!(listed_mv.source.database_id, Some(*util.db_id()));
+            assert_eq!(
+                listed_mv.source.database_name.as_deref(),
+                Some(db_name.as_str())
+            );
+            assert_eq!(
+                listed_mv.source.table_name.as_deref(),
+                Some(source_table_name.as_str())
+            );
+            assert!(listed_mv.source.is_active);
+            assert_eq!(listed_mv.source.bound_source_generation, Some(0));
+            assert_eq!(listed_mv.source.current_source_generation, Some(0));
+
+            let renamed_db_name = format!("{db_name}_renamed");
+            mt.rename_database(RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent::new(&tenant, &db_name),
+                new_db_name: renamed_db_name.clone(),
+            })
+            .await?;
+            let renamed = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([mv_id])),
+                    ..Default::default()
+                })
+                .await?;
+            let [renamed] = renamed.as_slice() else {
+                panic!("one materialized view must remain listed after database rename");
+            };
+            assert_eq!(renamed.database_name, renamed_db_name);
+            assert_eq!(renamed.source.database_id, Some(*util.db_id()));
+            assert_eq!(
+                renamed.source.database_name.as_deref(),
+                Some(renamed_db_name.as_str())
+            );
+            mt.rename_database(RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent::new(&tenant, &renamed_db_name),
+                new_db_name: db_name.clone(),
+            })
+            .await?;
+
+            let exact = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([mv_id])),
+                    database_names: Some(BTreeSet::from([db_name.clone()])),
+                    ..Default::default()
+                })
+                .await?;
+            assert_eq!(exact.len(), 1);
+            let missing_id = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([u64::MAX])),
+                    ..Default::default()
+                })
+                .await?;
+            assert!(missing_id.is_empty());
+            let excluded = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    names: Some(BTreeSet::from(["other_mv".to_string()])),
+                    ..Default::default()
+                })
+                .await?;
+            assert!(excluded.is_empty());
+
+            let by_source = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    source_table_ids: Some(BTreeSet::from([source_table_id])),
+                    ..Default::default()
+                })
+                .await?;
+            assert_eq!(by_source.len(), 1);
+
+            let wrong_database = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    database_names: Some(BTreeSet::from(["unknown_database".to_string()])),
+                    ..Default::default()
+                })
+                .await?;
+            assert!(wrong_database.is_empty());
+        }
+
         // ADD COLUMN and ordinary metadata changes preserve existing MV bindings.
         {
             let source_table = mt
@@ -2214,6 +2309,26 @@ impl SchemaApiTestSuite {
             assert!(mt.get_pb(&relationship_ident).await?.is_some());
             assert!(mt.get_pb(&binding_generation_ident).await?.is_some());
 
+            let dropped = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([replacement.table_id])),
+                    ..Default::default()
+                })
+                .await?;
+            let [dropped] = dropped.as_slice() else {
+                panic!("the MV must remain listed while its source is soft-dropped");
+            };
+            assert_eq!(dropped.source.database_id, Some(replacement.db_id));
+            assert_eq!(
+                dropped.source.database_name.as_deref(),
+                Some(db_name.as_str())
+            );
+            assert_eq!(
+                dropped.source.table_name.as_deref(),
+                Some(replacement_source_name)
+            );
+            assert!(!dropped.source.is_active);
+
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),
                 catalog: "default".to_string(),
@@ -2226,6 +2341,23 @@ impl SchemaApiTestSuite {
             .await?;
             assert!(mt.get_pb(&relationship_ident).await?.is_none());
             assert!(mt.get_pb(&binding_generation_ident).await?.is_none());
+
+            let orphan = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([replacement.table_id])),
+                    ..Default::default()
+                })
+                .await?;
+            let [orphan] = orphan.as_slice() else {
+                panic!("definition-first listing must retain an MV after source GC");
+            };
+            assert_eq!(orphan.source.table_id, replacement_source_table_id);
+            assert!(orphan.source.database_id.is_none());
+            assert!(orphan.source.database_name.is_none());
+            assert!(orphan.source.table_name.is_none());
+            assert!(!orphan.source.is_active);
+            assert!(orphan.source.bound_source_generation.is_none());
+            assert!(orphan.source.current_source_generation.is_none());
         }
 
         Ok(())
@@ -5749,7 +5881,7 @@ impl SchemaApiTestSuite {
                     format!(
                         "'{}'.'{}'",
                         db_name_ident.database_name(),
-                        &table_niv.name().table_name
+                        table_niv.name().table_name
                     )
                 })
                 .collect();
@@ -5792,7 +5924,7 @@ impl SchemaApiTestSuite {
                     format!(
                         "'{}'.'{}'",
                         db_name_ident.database_name(),
-                        &table_niv.name().table_name
+                        table_niv.name().table_name
                     )
                 })
                 .collect();

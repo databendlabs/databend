@@ -82,7 +82,7 @@ impl SmallValues<'_> {
             SmallValues::Serialized(bytes) => {
                 let mut values =
                     SmallBitmap::with_capacity(bytes.len() / std::mem::size_of::<u64>());
-                for chunk in bytes.chunks_exact(std::mem::size_of::<u64>()) {
+                for chunk in bytes.as_chunks::<{ std::mem::size_of::<u64>() }>().0 {
                     small_insert(&mut values, read_u64_le(chunk));
                 }
                 values
@@ -100,7 +100,7 @@ impl SmallValues<'_> {
             SmallValues::Serialized(bytes) => {
                 let mut values =
                     SmallBitmap::with_capacity(bytes.len() / std::mem::size_of::<u64>());
-                for chunk in bytes.chunks_exact(std::mem::size_of::<u64>()) {
+                for chunk in bytes.as_chunks::<{ std::mem::size_of::<u64>() }>().0 {
                     let value = read_u64_le(chunk);
                     if small_insert(&mut values, value) {
                         func(value);
@@ -381,7 +381,7 @@ impl HybridBitmap {
         match self {
             HybridBitmap::Large(lhs_tree) => {
                 let mut result = SmallBitmap::with_capacity(rhs.len() / std::mem::size_of::<u64>());
-                for chunk in rhs.chunks_exact(std::mem::size_of::<u64>()) {
+                for chunk in rhs.as_chunks::<{ std::mem::size_of::<u64>() }>().0 {
                     let value = read_u64_le(chunk);
                     if lhs_tree.contains(value) {
                         result.push(value);
@@ -1105,7 +1105,7 @@ fn decode_small_bitmap(payload: &[u8]) -> Result<HybridBitmap> {
 fn decode_small_values(payload: &[u8]) -> Result<SmallBitmap> {
     let (_, bytes) = decode_small_payload(payload)?;
     let mut values = SmallBitmap::with_capacity(bytes.len() / std::mem::size_of::<u64>());
-    for chunk in bytes.chunks_exact(std::mem::size_of::<u64>()) {
+    for chunk in bytes.as_chunks::<{ std::mem::size_of::<u64>() }>().0 {
         small_insert(&mut values, read_u64_le(chunk));
     }
     Ok(values)

@@ -20,6 +20,7 @@ use std::sync::atomic::AtomicU64;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
@@ -36,6 +37,8 @@ use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -59,6 +62,7 @@ use databend_common_users::UserApiProvider;
 use log::LevelFilter;
 use opendal::Operator;
 use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
@@ -127,7 +131,7 @@ impl SequenceCounter {
         #[cfg(test)]
         if self
             .fail_next_reserve
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
                 if v > 0 { Some(v - 1) } else { None }
             })
             .is_ok()
@@ -190,8 +194,18 @@ impl SequenceCounter {
     }
 }
 
-// Shared sequence counters type
-pub type SequenceCounters = Vec<Arc<SequenceCounter>>;
+/// Pipeline-level state of one async function, created once per pipeline and
+/// shared by every transform instance of that pipeline.
+#[derive(Clone)]
+pub enum AsyncFunctionState {
+    Sequence(Arc<SequenceCounter>),
+    /// `sleep` waits only once per pipeline, no matter how many blocks or
+    /// parallel transforms observe it.
+    Sleep(Arc<OnceCell<()>>),
+    Stateless,
+}
+
+pub type AsyncFunctionStates = Vec<AsyncFunctionState>;
 
 enum VisibilityCheckerState {
     Disabled,
@@ -358,7 +372,7 @@ impl ReadFileContext {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &ctx.get_current_user()?.identity().display(),
+                    ctx.get_current_user()?.identity().display(),
                 )));
             }
         }
@@ -694,8 +708,8 @@ pub struct TransformAsyncFunction {
     // key is the index of async_func_desc
     pub(crate) operators: BTreeMap<usize, Arc<DictionaryOperator>>,
     async_func_descs: Vec<AsyncFunctionDesc>,
-    // Shared map of sequence name to sequence counter
-    pub(crate) sequence_counters: SequenceCounters,
+    // Pipeline-level state aligned with async_func_descs.
+    pub(crate) async_func_states: AsyncFunctionStates,
     pub(crate) read_file_ctx: Option<ReadFileContext>,
 }
 
@@ -705,7 +719,7 @@ impl TransformAsyncFunction {
         ctx: Arc<QueryContext>,
         async_func_descs: Vec<AsyncFunctionDesc>,
         operators: BTreeMap<usize, Arc<DictionaryOperator>>,
-        sequence_counters: SequenceCounters,
+        async_func_states: AsyncFunctionStates,
     ) -> Result<Self> {
         let read_file_ctx = if async_func_descs
             .iter()
@@ -719,16 +733,52 @@ impl TransformAsyncFunction {
             ctx,
             async_func_descs,
             operators,
-            sequence_counters,
+            async_func_states,
             read_file_ctx,
         })
     }
 
-    // Create a new shared sequence counters map
-    pub(crate) fn create_sequence_counters(size: usize) -> SequenceCounters {
-        (0..size)
-            .map(|_| Arc::new(SequenceCounter::new()))
+    pub(crate) fn create_async_func_states(
+        async_func_descs: &[AsyncFunctionDesc],
+    ) -> AsyncFunctionStates {
+        async_func_descs
+            .iter()
+            .map(|desc| match desc.func_arg {
+                AsyncFunctionArgument::SequenceFunction(_)
+                | AsyncFunctionArgument::AutoIncrement { .. } => {
+                    AsyncFunctionState::Sequence(Arc::new(SequenceCounter::new()))
+                }
+                AsyncFunctionArgument::Sleep => {
+                    AsyncFunctionState::Sleep(Arc::new(OnceCell::new()))
+                }
+                AsyncFunctionArgument::DictGetFunction(_) | AsyncFunctionArgument::ReadFile(_) => {
+                    AsyncFunctionState::Stateless
+                }
+            })
             .collect()
+    }
+
+    pub async fn transform_sleep(
+        data_block: &mut DataBlock,
+        arg_index: usize,
+        sleep_state: &OnceCell<()>,
+    ) -> Result<()> {
+        let Some(Scalar::Number(NumberScalar::Float64(seconds))) =
+            data_block.get_by_offset(arg_index).as_scalar()
+        else {
+            return Err(ErrorCode::BadArguments("Must be constant value"));
+        };
+        let duration = Duration::try_from_secs_f64((*seconds).into())
+            .map_err(|err| ErrorCode::BadArguments(err.to_string()))?;
+        sleep_state
+            .get_or_init(|| async { tokio::time::sleep(duration).await })
+            .await;
+        data_block.add_entry(BlockEntry::Const(
+            Scalar::Number(NumberScalar::UInt8(0)),
+            DataType::Number(NumberDataType::UInt8),
+            data_block.num_rows(),
+        ));
+        Ok(())
     }
 
     // transform add sequence nextval column.
@@ -948,10 +998,15 @@ impl AsyncTransform for TransformAsyncFunction {
         for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
+                    let AsyncFunctionState::Sequence(counter) = &self.async_func_states[i] else {
+                        return Err(ErrorCode::Internal(
+                            "sequence function state is not initialized",
+                        ));
+                    };
                     Self::transform(
                         self.ctx.clone(),
                         &mut data_block,
-                        self.sequence_counters[i].clone(),
+                        counter.clone(),
                         SequenceNextValFetcher {
                             sequence_ident: SequenceIdent::new(
                                 self.ctx.get_tenant(),
@@ -962,10 +1017,15 @@ impl AsyncTransform for TransformAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::AutoIncrement { key, expr } => {
+                    let AsyncFunctionState::Sequence(counter) = &self.async_func_states[i] else {
+                        return Err(ErrorCode::Internal(
+                            "auto increment function state is not initialized",
+                        ));
+                    };
                     Self::transform(
                         self.ctx.clone(),
                         &mut data_block,
-                        self.sequence_counters[i].clone(),
+                        counter.clone(),
                         AutoIncrementNextValFetcher {
                             key: key.clone(),
                             expr: expr.clone(),
@@ -980,6 +1040,19 @@ impl AsyncTransform for TransformAsyncFunction {
                         dict_arg,
                         &async_func_desc.arg_indices,
                         &async_func_desc.data_type,
+                    )
+                    .await?;
+                }
+                AsyncFunctionArgument::Sleep => {
+                    let AsyncFunctionState::Sleep(sleep_state) = &self.async_func_states[i] else {
+                        return Err(ErrorCode::Internal(
+                            "sleep function state is not initialized",
+                        ));
+                    };
+                    Self::transform_sleep(
+                        &mut data_block,
+                        async_func_desc.arg_indices[0],
+                        sleep_state,
                     )
                     .await?;
                 }
@@ -1016,6 +1089,7 @@ mod tests {
     use databend_common_expression::types::AccessType;
     use databend_common_expression::types::UInt64Type;
     use tokio::sync::Barrier;
+    use tokio::sync::OnceCell;
     use tokio::sync::oneshot;
     use tokio::time::Duration;
     use tokio::time::sleep;
@@ -1023,6 +1097,117 @@ mod tests {
 
     use super::SequenceCounter;
     use super::TransformAsyncFunction;
+
+    #[tokio::test]
+    async fn test_sleep_yields_and_can_be_cancelled() {
+        use databend_common_expression::BlockEntry;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        let mut block = DataBlock::new(
+            vec![BlockEntry::Const(
+                Scalar::Number(NumberScalar::Float64(4.0.into())),
+                DataType::Number(NumberDataType::Float64),
+                1,
+            )],
+            1,
+        );
+        // A duration above the former three-second limit is accepted.
+        // Poll once on the current-thread runtime: blocking sleep would complete
+        // here instead of yielding Pending, and could not be cancelled.
+        {
+            let sleep_state = OnceCell::new();
+            let future = TransformAsyncFunction::transform_sleep(&mut block, 0, &sleep_state);
+            tokio::pin!(future);
+            assert!(futures::poll!(&mut future).is_pending());
+        }
+        assert_eq!(block.num_columns(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_sleep_validation_and_result() {
+        use databend_common_expression::BlockEntry;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        for seconds in [-1.0, f64::NAN, f64::INFINITY, 0.0] {
+            let mut block = DataBlock::new(
+                vec![BlockEntry::Const(
+                    Scalar::Number(NumberScalar::Float64(seconds.into())),
+                    DataType::Number(NumberDataType::Float64),
+                    3,
+                )],
+                3,
+            );
+            let sleep_state = OnceCell::new();
+            let result = TransformAsyncFunction::transform_sleep(&mut block, 0, &sleep_state).await;
+            if seconds == 0.0 {
+                result.unwrap();
+                assert_eq!(block.num_rows(), 3);
+                assert_eq!(
+                    block.get_by_offset(1).as_scalar(),
+                    Some(&Scalar::Number(NumberScalar::UInt8(0)))
+                );
+            } else {
+                assert!(result.is_err());
+                assert_eq!(block.num_columns(), 1);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sleep_runs_once_across_blocks() {
+        use std::task::Poll;
+
+        use databend_common_expression::BlockEntry;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        fn block(seconds: f64) -> DataBlock {
+            DataBlock::new(
+                vec![BlockEntry::Const(
+                    Scalar::Number(NumberScalar::Float64(seconds.into())),
+                    DataType::Number(NumberDataType::Float64),
+                    3,
+                )],
+                3,
+            )
+        }
+
+        let sleep_state = Arc::new(OnceCell::new());
+        let mut first = block(0.0);
+        TransformAsyncFunction::transform_sleep(&mut first, 0, &sleep_state)
+            .await
+            .unwrap();
+
+        // A different transform instance receives a clone of the same pipeline-level state.
+        let sleep_state_from_other_transform = sleep_state.clone();
+        let mut second = block(4.0);
+        {
+            let second_sleep = TransformAsyncFunction::transform_sleep(
+                &mut second,
+                0,
+                &sleep_state_from_other_transform,
+            );
+            tokio::pin!(second_sleep);
+            // The wait already happened for this pipeline, so even a long
+            // duration completes on the first poll without yielding.
+            match futures::poll!(&mut second_sleep) {
+                Poll::Ready(result) => result.unwrap(),
+                Poll::Pending => panic!("sleep should not wait a second time"),
+            }
+        }
+        assert_eq!(
+            second.get_by_offset(1).as_scalar(),
+            Some(&Scalar::Number(NumberScalar::UInt8(0)))
+        );
+    }
 
     #[tokio::test]
     async fn test_no_stall_when_refill_lock_waiting() {

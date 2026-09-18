@@ -14,7 +14,6 @@
 
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(try_blocks)]
 
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;

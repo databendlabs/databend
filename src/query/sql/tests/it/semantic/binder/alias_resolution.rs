@@ -907,7 +907,7 @@ fn assert_main_coordinate(main: &str, matrix: &str) {
         main.len() == 6,
         "alias matrix yaml {matrix} main coordinate must be six characters: {main}"
     );
-    for segment in main.as_bytes().chunks_exact(2) {
+    for segment in main.as_bytes().as_chunks::<2>().0 {
         let segment = std::str::from_utf8(segment).expect("main coordinate should be ASCII");
         assert_coordinate_segment(segment, matrix, "main coordinate");
     }

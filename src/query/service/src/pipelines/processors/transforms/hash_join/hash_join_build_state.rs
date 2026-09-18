@@ -716,19 +716,17 @@ impl HashJoinBuildState {
                     markers,
                 );
             }
-            JoinType::RightMark => {
-                if !_has_null && !keys_entries.is_empty() {
-                    if let Some(validity) = keys_entries[0].as_column().unwrap().validity().1 {
-                        if validity.null_count() > 0 {
-                            _has_null = true;
-                            let mut has_null_ref = self
-                                .hash_join_state
-                                .hash_join_desc
-                                .marker_join_desc
-                                .has_null
-                                .write();
-                            *has_null_ref = true;
-                        }
+            JoinType::RightMark if !_has_null && !keys_entries.is_empty() => {
+                if let Some(validity) = keys_entries[0].as_column().unwrap().validity().1 {
+                    if validity.null_count() > 0 {
+                        _has_null = true;
+                        let mut has_null_ref = self
+                            .hash_join_state
+                            .hash_join_desc
+                            .marker_join_desc
+                            .has_null
+                            .write();
+                        *has_null_ref = true;
                     }
                 }
             }

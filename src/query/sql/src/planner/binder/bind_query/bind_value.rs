@@ -415,7 +415,7 @@ pub fn bind_values(
                         } else {
                             return Err(ErrorCode::SemanticError(format!(
                                 "Can find cache index for {:?}",
-                                &scalar
+                                scalar
                             ))
                             .set_span(span));
                         }
@@ -423,7 +423,7 @@ pub fn bind_values(
                 } else {
                     return Err(ErrorCode::SemanticError(format!(
                         "There is no HashJoinBuildSideInfo for column reference {:?}",
-                        &scalar
+                        scalar
                     ))
                     .set_span(span));
                 }
@@ -611,7 +611,7 @@ pub fn bind_constant_scan(
         .map(|i| format!("col{}", i))
         .collect::<Vec<_>>();
     let mut value_fields = Vec::with_capacity(names.len());
-    for (name, common_type) in names.into_iter().zip(column_common_type.into_iter()) {
+    for (name, common_type) in names.into_iter().zip(column_common_type) {
         let value_field = DataField::new(&name, common_type);
         value_fields.push(value_field);
     }

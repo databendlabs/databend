@@ -142,7 +142,7 @@ impl Interpreter for SetOptionsInterpreter {
             // check storage_format
             let error_str = "invalid opt for fuse table in alter table statement";
             if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-                error!("{}", &error_str);
+                error!("{}", error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "can't change {} for alter table statement",
                     OPT_KEY_STORAGE_FORMAT
@@ -150,28 +150,28 @@ impl Interpreter for SetOptionsInterpreter {
             }
 
             if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
-                error!("{}", &error_str);
+                error!("{}", error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "can't change {} for alter table statement",
                     OPT_KEY_DATABASE_ID
                 )));
             }
             if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
-                error!("{}", &error_str);
+                error!("{}", error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "can't change {} for alter table statement",
                     OPT_KEY_TEMP_PREFIX
                 )));
             }
             if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
-                error!("{}", &error_str);
+                error!("{}", error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "can't change {} for alter table statement",
                     OPT_KEY_CLUSTER_TYPE
                 )));
             }
             if self.plan.set_options.contains_key(OPT_KEY_PARTITION_BY) {
-                error!("{}", &error_str);
+                error!("{}", error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "can't change {} for alter table statement",
                     OPT_KEY_PARTITION_BY
@@ -233,7 +233,7 @@ impl Interpreter for SetOptionsInterpreter {
                     )));
                 }
                 if !is_valid_create_opt(&key, &engine) {
-                    error!("{}", &error_str);
+                    error!("{}", error_str);
                     return Err(ErrorCode::TableOptionInvalid(format!(
                         "table option {key} is invalid for alter table statement",
                     )));

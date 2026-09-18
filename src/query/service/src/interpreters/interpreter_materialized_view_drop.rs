@@ -70,7 +70,7 @@ impl Interpreter for DropMaterializedViewInterpreter {
             if tbl.is_none() && !self.plan.if_exists {
                 return Err(ErrorCode::UnknownTable(format!(
                     "unknown materialized view `{}`.`{}` in catalog '{}'",
-                    db_name, view_name, &catalog_name
+                    db_name, view_name, catalog_name
                 )));
             }
 
@@ -79,8 +79,8 @@ impl Interpreter for DropMaterializedViewInterpreter {
                 if engine != MATERIALIZED_VIEW_ENGINE {
                     return Err(ErrorCode::TableEngineNotSupported(format!(
                         "{}.{} is not MATERIALIZED VIEW, please use `DROP {} {}.{}`",
-                        &self.plan.database,
-                        &self.plan.view_name,
+                        self.plan.database,
+                        self.plan.view_name,
                         if engine == STREAM_ENGINE {
                             "STREAM"
                         } else if engine == VIEW_ENGINE {
@@ -88,8 +88,8 @@ impl Interpreter for DropMaterializedViewInterpreter {
                         } else {
                             "TABLE"
                         },
-                        &self.plan.database,
-                        &self.plan.view_name
+                        self.plan.database,
+                        self.plan.view_name
                     )));
                 }
 

@@ -19,9 +19,7 @@
 #![allow(clippy::collapsible_if)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(type_ascription)]
 #![feature(try_blocks)]
-#![feature(downcast_unchecked)]
 #![feature(likely_unlikely)]
 
 mod arithmetic;

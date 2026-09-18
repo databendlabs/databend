@@ -163,11 +163,11 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260629.5.0"
-databend-meta-test-harness = "260629.5.0"
+databend-meta = "260629.7.0"
+databend-meta-test-harness = "260629.7.0"
 
 # External meta client
-databend-meta-client = "260205.13.4"
+databend-meta-client = "260205.13.5"
 structkey = "0.1.1"
 
 # Crates.io dependencies
@@ -307,6 +307,7 @@ jaq-json = "2.0.1"
 jaq-std = "3.0.1"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.6"
+jsonwebtoken = "9.3.1"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
@@ -601,9 +602,9 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.5.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.4" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.5.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.5" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 lindera-tantivy = { git = "https://github.com/datafuse-extras/lindera-tantivy", rev = "a40ccd7" }
@@ -613,6 +614,8 @@ orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 reqwest-hickory-resolver = { git = "https://github.com/datafuse-extras/reqwest-hickory-resolver", rev = "5ad03257a3c702d34b9643878efb5a3536323d2d" }
+# Explicit unit return type in PromiseFuture::poll is required by never-type fallback.
+rquickjs-core = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "526317e574e1b4ac5dd0b0eb17def3e9f9011381" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }

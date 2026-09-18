@@ -17,10 +17,11 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_functions::aggregates::AggregateCountFunction;
+use databend_common_expression::types::UInt64Type;
 
 use crate::Binder;
 use crate::ColumnBindingBuilder;
@@ -460,7 +461,7 @@ impl SubqueryDecorrelatorOptimizer {
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
                     Box::new(subquery.data_type.wrap_nullable())
-                } else if matches! {result, UnnestResult::MarkJoin {..}} {
+                } else if matches!(result, UnnestResult::MarkJoin { .. }) {
                     Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
                     subquery.data_type.clone()
@@ -591,8 +592,7 @@ impl SubqueryDecorrelatorOptimizer {
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let count_type = AggregateCountFunction::try_create("", vec![], vec![], vec![])?
-                    .return_type()?;
+                let count_type = UInt64Type::data_type();
                 let metadata = self.ctx.get_metadata();
                 let count_func_index = metadata
                     .write()

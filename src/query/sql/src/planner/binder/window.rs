@@ -23,7 +23,6 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use itertools::Itertools;
 
 use super::select::SelectList;
 use crate::BindContext;
@@ -212,7 +211,7 @@ pub struct WindowInfo {
 impl WindowInfo {
     pub fn reorder(&mut self) {
         self.window_functions
-            .sort_by(|a, b| b.order_by_items.len().cmp(&a.order_by_items.len()));
+            .sort_by_key(|a| std::cmp::Reverse(a.order_by_items.len()));
 
         self.window_functions_map.clear();
         for (i, window) in self.window_functions.iter().enumerate() {
@@ -294,11 +293,9 @@ impl<'a> WindowRewriter<'a> {
                     let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
 
                     let index = replaced_expr.column.index;
-                    let is_reuse_index = window_args.iter().map(|item| item.index).contains(&index);
                     window_args.push(ScalarItem { index, scalar });
                     replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
                         expr: replaced_expr.into(),
-                        is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
                     });

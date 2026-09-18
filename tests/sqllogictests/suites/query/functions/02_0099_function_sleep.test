@@ -1,0 +1,52 @@
+query I
+SELECT sleep(0)
+----
+0
+
+query I
+SELECT sleep(0.001)
+----
+0
+
+query I
+SELECT sleep(1 - 1) FROM numbers(3)
+----
+0
+0
+0
+
+query T
+SELECT typeof(sleep(0))
+----
+TINYINT UNSIGNED
+
+statement error Must be constant value
+SELECT sleep(number) FROM numbers(3)
+
+statement error sleep requires one argument
+SELECT sleep()
+
+statement error sleep requires one argument
+SELECT sleep(0, 0)
+
+statement error 1006
+SELECT sleep(-1)
+
+statement error 1006
+SELECT sleep('NaN'::DOUBLE)
+
+statement error 1006
+SELECT sleep('inf'::DOUBLE)
+
+# Durations above the former three-second limit are accepted.
+query I
+SELECT sleep(3.01)
+----
+0
+
+# A scan spanning many blocks and parallel transforms shares one pipeline-level
+# sleep state and still yields one value per row.
+query II
+SELECT count(*), sum(sleep(0.001)) FROM numbers(1000000)
+----
+1000000 0

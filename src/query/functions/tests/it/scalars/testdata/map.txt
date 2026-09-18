@@ -55,6 +55,283 @@ error:
 
 
 
+ast            : map([], [], false)
+raw expr       : map(array(), array(), false)
+checked expr   : map<Array(Nothing), Array(Nothing), Boolean>(array<>(), array<>(), false)
+optimized expr : {} :: Map(Nothing)
+output type    : Map(Nothing)
+output domain  : {}
+output         : {}
+
+
+ast            : map([]::Array(Int64), []::Array(String), false)
+raw expr       : map(CAST(array() AS Array(Int64)), CAST(array() AS Array(String)), false)
+checked expr   : map<T0=Int64, T1=String><Array(T0), Array(T1), Boolean>(CAST<Array(Nothing)>(array<>() AS Array(Int64)), CAST<Array(Nothing)>(array<>() AS Array(String)), false)
+optimized expr : {}
+output type    : Map(Int64, String)
+output domain  : {}
+output         : {}
+
+
+ast            : map(['a'], [1], false)
+raw expr       : map(array('a'), array(1), false)
+checked expr   : map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0>("a"), array<T0=UInt8><T0>(1_u8), false)
+optimized expr : {"a":1_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="a"}], [{1..=1}]}
+output         : {'a':1}
+
+
+ast            : map(['a', 'b'], [1, 2], false)
+raw expr       : map(array('a', 'b'), array(1, 2), false)
+checked expr   : map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8), false)
+optimized expr : {"a":1_u8, "b":2_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="b"}], [{1..=2}]}
+output         : {'a':1, 'b':2}
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['a', 'b', 'a', 'a', 'b'], [1, 2, 3, 4, 5], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(['a', 'b', 'a', 'a', 'b'], [1, 2, 3, 4, 5], false)` in expr `map(array('a', 'b', 'a', 'a', 'b'), array(1, 2, 3, 4, 5), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map([1, 2, 1], ['a', 'b', 'c'], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map([1, 2, 1], ['a', 'b', 'c'], false)` in expr `map(array(1, 2, 1), array('a', 'b', 'c'), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['a', 'a'], [NULL, 2], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(['a', 'a'], [NULL, 2], false)` in expr `map(array('a', 'a'), array(CAST(NULL AS UInt8 NULL), CAST(2 AS UInt8 NULL)), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['a', 'a'], [1, NULL], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(['a', 'a'], [1, NULL], false)` in expr `map(array('a', 'a'), array(CAST(1 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['a', 'a'], [[1], [2, 3]], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(['a', 'a'], [[1], [2, 3]], false)` in expr `map(array('a', 'a'), array(array(1), array(2, 3)), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['a'], [1, 2], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ key list has a different size from value list (1 keys, 2 values) while evaluating function `map(['a'], [1, 2], false)` in expr `map(array('a'), array(1, 2), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map([[1]], [1], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^ map keys can not be Array(UInt8) while evaluating function `map([[1]], [1], false)` in expr `map(array(array(1)), array(1), false)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map([NULL], [1], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^ map keys can not be NULL while evaluating function `map([NULL], [1], false)` in expr `map(array(NULL), array(1), false)`
+
+
+
+ast            : map(NULL::Nullable(Array(String)), [1], false)
+raw expr       : map(CAST(NULL AS Array(String) NULL), array(1), false)
+checked expr   : map<T0=String, T1=UInt8><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<NULL>(NULL AS Array(String) NULL), CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8) NULL), CAST<Boolean>(false AS Boolean NULL))
+optimized expr : NULL
+output type    : Map(String, UInt8) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : map(['a'], NULL::Nullable(Array(Int64)), false)
+raw expr       : map(array('a'), CAST(NULL AS Array(Int64) NULL), false)
+checked expr   : map<T0=String, T1=Int64><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<Array(String)>(array<T0=String><T0>("a") AS Array(String) NULL), CAST<NULL>(NULL AS Array(Int64) NULL), CAST<Boolean>(false AS Boolean NULL))
+optimized expr : NULL
+output type    : Map(String, Int64) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : map([], [], true)
+raw expr       : map(array(), array(), true)
+checked expr   : map<Array(Nothing), Array(Nothing), Boolean>(array<>(), array<>(), true)
+optimized expr : {} :: Map(Nothing)
+output type    : Map(Nothing)
+output domain  : {}
+output         : {}
+
+
+ast            : map([]::Array(Int64), []::Array(String), true)
+raw expr       : map(CAST(array() AS Array(Int64)), CAST(array() AS Array(String)), true)
+checked expr   : map<T0=Int64, T1=String><Array(T0), Array(T1), Boolean>(CAST<Array(Nothing)>(array<>() AS Array(Int64)), CAST<Array(Nothing)>(array<>() AS Array(String)), true)
+optimized expr : {}
+output type    : Map(Int64, String)
+output domain  : {}
+output         : {}
+
+
+ast            : map(['a'], [1], true)
+raw expr       : map(array('a'), array(1), true)
+checked expr   : map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0>("a"), array<T0=UInt8><T0>(1_u8), true)
+optimized expr : {"a":1_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="a"}], [{1..=1}]}
+output         : {'a':1}
+
+
+ast            : map(['a', 'b'], [1, 2], true)
+raw expr       : map(array('a', 'b'), array(1, 2), true)
+checked expr   : map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8), true)
+optimized expr : {"a":1_u8, "b":2_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="b"}], [{1..=2}]}
+output         : {'a':1, 'b':2}
+
+
+ast            : map(['a', 'b', 'a', 'a', 'b'], [1, 2, 3, 4, 5], true)
+raw expr       : map(array('a', 'b', 'a', 'a', 'b'), array(1, 2, 3, 4, 5), true)
+checked expr   : map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "a", "a", "b"), array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8), true)
+optimized expr : {"a":1_u8, "b":2_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="b"}], [{1..=2}]}
+output         : {'a':1, 'b':2}
+
+
+ast            : map([1, 2, 1], ['a', 'b', 'c'], true)
+raw expr       : map(array(1, 2, 1), array('a', 'b', 'c'), true)
+checked expr   : map<T0=UInt8, T1=String><Array(T0), Array(T1), Boolean>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 1_u8), array<T0=String><T0, T0, T0>("a", "b", "c"), true)
+optimized expr : {1_u8:"a", 2_u8:"b"}
+output type    : Map(UInt8, String)
+output domain  : {[{1..=2}], [{"a"..="b"}]}
+output         : {1:'a', 2:'b'}
+
+
+ast            : map(['a', 'a'], [NULL, 2], true)
+raw expr       : map(array('a', 'a'), array(NULL, 2), true)
+checked expr   : map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0>("a", "a"), array<T0=UInt8 NULL><T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(2_u8 AS UInt8 NULL)), true)
+optimized expr : {"a":NULL}
+output type    : Map(String, UInt8 NULL)
+output domain  : {[{"a"..="a"}], [{0..=255} ∪ {NULL}]}
+output         : {'a':NULL}
+
+
+ast            : map(['a', 'a'], [1, NULL], true)
+raw expr       : map(array('a', 'a'), array(1, NULL), true)
+checked expr   : map<T0=String, T1=UInt8 NULL><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0>("a", "a"), array<T0=UInt8 NULL><T0, T0>(CAST<UInt8>(1_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL)), true)
+optimized expr : {"a":1_u8}
+output type    : Map(String, UInt8 NULL)
+output domain  : {[{"a"..="a"}], [{1..=1}]}
+output         : {'a':1}
+
+
+ast            : map(['a', 'a'], [[1], [2, 3]], true)
+raw expr       : map(array('a', 'a'), array(array(1), array(2, 3)), true)
+checked expr   : map<T0=String, T1=Array(UInt8)><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0>("a", "a"), array<T0=Array(UInt8)><T0, T0>(array<T0=UInt8><T0>(1_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8)), true)
+optimized expr : {"a":[1]}
+output type    : Map(String, Array(UInt8))
+output domain  : {[{"a"..="a"}], [[{1..=1}]]}
+output         : {'a':[1]}
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map(['a'], [1, 2], true)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ key list has a different size from value list (1 keys, 2 values) while evaluating function `map(['a'], [1, 2], true)` in expr `map(array('a'), array(1, 2), true)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map([[1]], [1], true)
+  | ^^^^^^^^^^^^^^^^^^^^^ map keys can not be Array(UInt8) while evaluating function `map([[1]], [1], true)` in expr `map(array(array(1)), array(1), true)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map([NULL], [1], true)
+  | ^^^^^^^^^^^^^^^^^^^^^^ map keys can not be NULL while evaluating function `map([NULL], [1], true)` in expr `map(array(NULL), array(1), true)`
+
+
+
+ast            : map(NULL::Nullable(Array(String)), [1], true)
+raw expr       : map(CAST(NULL AS Array(String) NULL), array(1), true)
+checked expr   : map<T0=String, T1=UInt8><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<NULL>(NULL AS Array(String) NULL), CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8) NULL), CAST<Boolean>(true AS Boolean NULL))
+optimized expr : NULL
+output type    : Map(String, UInt8) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : map(['a'], NULL::Nullable(Array(Int64)), true)
+raw expr       : map(array('a'), CAST(NULL AS Array(Int64) NULL), true)
+checked expr   : map<T0=String, T1=Int64><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<Array(String)>(array<T0=String><T0>("a") AS Array(String) NULL), CAST<NULL>(NULL AS Array(Int64) NULL), CAST<Boolean>(true AS Boolean NULL))
+optimized expr : NULL
+output type    : Map(String, Int64) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : map([], [], NULL)
+raw expr       : map(array(), array(), NULL)
+checked expr   : map<Array(Nothing) NULL, Array(Nothing) NULL, Boolean NULL>(CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), CAST<NULL>(NULL AS Boolean NULL))
+optimized expr : NULL
+output type    : Map(Nothing) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : map(['a', 'a'], [1, 2], NULL)
+raw expr       : map(array('a', 'a'), array(1, 2), NULL)
+checked expr   : map<T0=String, T1=UInt8><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<Array(String)>(array<T0=String><T0, T0>("a", "a") AS Array(String) NULL), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8) NULL), CAST<NULL>(NULL AS Boolean NULL))
+optimized expr : NULL
+output type    : Map(String, UInt8) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : map_keys(map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true))
+raw expr       : map_keys(map(array('b', 'a', 'b', 'c', 'a'), array(1, 2, 3, 4, 5), true))
+checked expr   : map_keys<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0, T0, T0, T0>("b", "a", "b", "c", "a"), array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8), true))
+optimized expr : ['b', 'a', 'c']
+output type    : Array(String)
+output domain  : [{"a"..="c"}]
+output         : ['b', 'a', 'c']
+
+
+ast            : map_values(map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true))
+raw expr       : map_values(map(array('b', 'a', 'b', 'c', 'a'), array(1, 2, 3, 4, 5), true))
+checked expr   : map_values<T0=String, T1=UInt8><Map(T0, T1)>(map<T0=String, T1=UInt8><Array(T0), Array(T1), Boolean>(array<T0=String><T0, T0, T0, T0, T0>("b", "a", "b", "c", "a"), array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8), true))
+optimized expr : [1, 2, 4]
+output type    : Array(UInt8)
+output domain  : [{1..=4}]
+output         : [1, 2, 4]
+
+
 ast            : map([a_col, b_col, c_col], [d_col, e_col, f_col])
 raw expr       : map(array(a_col::Int8, b_col::Int8, c_col::Int8), array(d_col::String NULL, e_col::String NULL, f_col::String NULL))
 checked expr   : map<T0=Int8, T1=String NULL><Array(T0), Array(T1)>(array<T0=Int8><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col))
@@ -104,6 +381,242 @@ evaluation (internal):
 | b_col  | Column(Int8([4, 5, 6]))                                                                                                |
 | Output | ArrayColumn { values: Tuple([StringColumn[k1, k2, k1, k2, k1, k2], Int8([1, 4, 2, 5, 3, 6])]), offsets: [0, 2, 4, 6] } |
 +--------+------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([a_col, b_col, a_col], [d_col, e_col, f_col], true)
+raw expr       : map(array(a_col::Int8, b_col::Int8, a_col::Int8), array(d_col::String NULL, e_col::String NULL, f_col::String NULL), true)
+checked expr   : map<T0=Int8, T1=String NULL><Array(T0), Array(T1), Boolean>(array<T0=Int8><T0, T0, T0>(a_col, b_col, a_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col), true)
+evaluation:
++--------+---------+---------+-------------+----------------------+----------------------+------------------------+
+|        | a_col   | b_col   | d_col       | e_col                | f_col                | Output                 |
++--------+---------+---------+-------------+----------------------+----------------------+------------------------+
+| Type   | Int8    | Int8    | String NULL | String NULL          | String NULL          | Map(Int8, String NULL) |
+| Domain | {1..=3} | {4..=6} | {"a"..="c"} | {"d"..="e"} ∪ {NULL} | {"f"..="g"} ∪ {NULL} | Unknown                |
+| Row 0  | 1       | 4       | 'a'         | 'd'                  | 'f'                  | {1:'a', 4:'d'}         |
+| Row 1  | 2       | 5       | 'b'         | 'e'                  | NULL                 | {2:'b', 5:'e'}         |
+| Row 2  | 3       | 6       | 'c'         | NULL                 | 'g'                  | {3:'c', 6:NULL}        |
++--------+---------+---------+-------------+----------------------+----------------------+------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                               |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | Column(Int8([1, 2, 3]))                                                                                                                                            |
+| b_col  | Column(Int8([4, 5, 6]))                                                                                                                                            |
+| d_col  | Column(NullableColumn { column: StringColumn[a, b, c], validity: [0b_____111] })                                                                                   |
+| e_col  | Column(NullableColumn { column: StringColumn[d, e, ], validity: [0b_____011] })                                                                                    |
+| f_col  | Column(NullableColumn { column: StringColumn[f, , g], validity: [0b_____101] })                                                                                    |
+| Output | ArrayColumn { values: Tuple([Int8([1, 4, 2, 5, 3, 6]), NullableColumn { column: StringColumn[a, d, b, e, c, ], validity: [0b__011111] }]), offsets: [0, 2, 4, 6] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([k1, k2], [v1, v2])
+raw expr       : map(array(k1::Int8, k2::Int8), array(v1::Int8, v2::Int8))
+checked expr   : map<T0=Int8, T1=Int8><Array(T0), Array(T1)>(array<T0=Int8><T0, T0>(k1, k2), array<T0=Int8><T0, T0>(v1, v2))
+evaluation:
++--------+---------+---------+-----------+-----------+-----------------+
+|        | k1      | k2      | v1        | v2        | Output          |
++--------+---------+---------+-----------+-----------+-----------------+
+| Type   | Int8    | Int8    | Int8      | Int8      | Map(Int8, Int8) |
+| Domain | {1..=2} | {1..=2} | {10..=40} | {11..=41} | Unknown         |
+| Row 0  | 1       | 2       | 10        | 11        | {1:10, 2:11}    |
+| Row 1  | 2       | 1       | 20        | 21        | {2:20, 1:21}    |
+| Row 2  | 1       | 2       | 30        | 31        | {1:30, 2:31}    |
+| Row 3  | 2       | 1       | 40        | 41        | {2:40, 1:41}    |
++--------+---------+---------+-----------+-----------+-----------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                              |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| k1     | Column(Int8([1, 2, 1, 2]))                                                                                                        |
+| k2     | Column(Int8([2, 1, 2, 1]))                                                                                                        |
+| v1     | Column(Int8([10, 20, 30, 40]))                                                                                                    |
+| v2     | Column(Int8([11, 21, 31, 41]))                                                                                                    |
+| Output | ArrayColumn { values: Tuple([Int8([1, 2, 2, 1, 1, 2, 2, 1]), Int8([10, 11, 20, 21, 30, 31, 40, 41])]), offsets: [0, 2, 4, 6, 8] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([k1, k2], [v1, v2], false)
+raw expr       : map(array(k1::Int8, k2::Int8), array(v1::Int8, v2::Int8), false)
+checked expr   : map<T0=Int8, T1=Int8><Array(T0), Array(T1), Boolean>(array<T0=Int8><T0, T0>(k1, k2), array<T0=Int8><T0, T0>(v1, v2), false)
+evaluation:
++--------+---------+---------+-----------+-----------+-----------------+
+|        | k1      | k2      | v1        | v2        | Output          |
++--------+---------+---------+-----------+-----------+-----------------+
+| Type   | Int8    | Int8    | Int8      | Int8      | Map(Int8, Int8) |
+| Domain | {1..=2} | {1..=2} | {10..=40} | {11..=41} | Unknown         |
+| Row 0  | 1       | 2       | 10        | 11        | {1:10, 2:11}    |
+| Row 1  | 2       | 1       | 20        | 21        | {2:20, 1:21}    |
+| Row 2  | 1       | 2       | 30        | 31        | {1:30, 2:31}    |
+| Row 3  | 2       | 1       | 40        | 41        | {2:40, 1:41}    |
++--------+---------+---------+-----------+-----------+-----------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                              |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| k1     | Column(Int8([1, 2, 1, 2]))                                                                                                        |
+| k2     | Column(Int8([2, 1, 2, 1]))                                                                                                        |
+| v1     | Column(Int8([10, 20, 30, 40]))                                                                                                    |
+| v2     | Column(Int8([11, 21, 31, 41]))                                                                                                    |
+| Output | ArrayColumn { values: Tuple([Int8([1, 2, 2, 1, 1, 2, 2, 1]), Int8([10, 11, 20, 21, 30, 31, 40, 41])]), offsets: [0, 2, 4, 6, 8] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([k1, k2], [v1, v2], true)
+raw expr       : map(array(k1::Int8, k2::Int8), array(v1::Int8, v2::Int8), true)
+checked expr   : map<T0=Int8, T1=Int8><Array(T0), Array(T1), Boolean>(array<T0=Int8><T0, T0>(k1, k2), array<T0=Int8><T0, T0>(v1, v2), true)
+evaluation:
++--------+---------+---------+-----------+-----------+-----------------+
+|        | k1      | k2      | v1        | v2        | Output          |
++--------+---------+---------+-----------+-----------+-----------------+
+| Type   | Int8    | Int8    | Int8      | Int8      | Map(Int8, Int8) |
+| Domain | {1..=2} | {1..=2} | {10..=40} | {11..=41} | Unknown         |
+| Row 0  | 1       | 2       | 10        | 11        | {1:10, 2:11}    |
+| Row 1  | 2       | 1       | 20        | 21        | {2:20, 1:21}    |
+| Row 2  | 1       | 2       | 30        | 31        | {1:30, 2:31}    |
+| Row 3  | 2       | 1       | 40        | 41        | {2:40, 1:41}    |
++--------+---------+---------+-----------+-----------+-----------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                              |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| k1     | Column(Int8([1, 2, 1, 2]))                                                                                                        |
+| k2     | Column(Int8([2, 1, 2, 1]))                                                                                                        |
+| v1     | Column(Int8([10, 20, 30, 40]))                                                                                                    |
+| v2     | Column(Int8([11, 21, 31, 41]))                                                                                                    |
+| Output | ArrayColumn { values: Tuple([Int8([1, 2, 2, 1, 1, 2, 2, 1]), Int8([10, 11, 20, 21, 30, 31, 40, 41])]), offsets: [0, 2, 4, 6, 8] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([k1, k2], [v1, v2], flag)
+raw expr       : map(array(k1::Int8, k2::Int8), array(v1::Int8, v2::Int8), flag::Boolean)
+checked expr   : map<T0=Int8, T1=Int8><Array(T0), Array(T1), Boolean>(array<T0=Int8><T0, T0>(k1, k2), array<T0=Int8><T0, T0>(v1, v2), flag)
+evaluation:
++--------+---------+---------+-----------+-----------+---------------+-----------------+
+|        | k1      | k2      | v1        | v2        | flag          | Output          |
++--------+---------+---------+-----------+-----------+---------------+-----------------+
+| Type   | Int8    | Int8    | Int8      | Int8      | Boolean       | Map(Int8, Int8) |
+| Domain | {1..=2} | {1..=2} | {10..=40} | {11..=41} | {FALSE, TRUE} | Unknown         |
+| Row 0  | 1       | 2       | 10        | 11        | true          | {1:10, 2:11}    |
+| Row 1  | 2       | 1       | 20        | 21        | false         | {2:20, 1:21}    |
+| Row 2  | 1       | 2       | 30        | 31        | true          | {1:30, 2:31}    |
+| Row 3  | 2       | 1       | 40        | 41        | false         | {2:40, 1:41}    |
++--------+---------+---------+-----------+-----------+---------------+-----------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                              |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+| k1     | Column(Int8([1, 2, 1, 2]))                                                                                                        |
+| k2     | Column(Int8([2, 1, 2, 1]))                                                                                                        |
+| v1     | Column(Int8([10, 20, 30, 40]))                                                                                                    |
+| v2     | Column(Int8([11, 21, 31, 41]))                                                                                                    |
+| flag   | Column(Boolean([0b____0101]))                                                                                                     |
+| Output | ArrayColumn { values: Tuple([Int8([1, 2, 2, 1, 1, 2, 2, 1]), Int8([10, 11, 20, 21, 30, 31, 40, 41])]), offsets: [0, 2, 4, 6, 8] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([1, key, 1], ['a', 'b', 'c'], true)
+raw expr       : map(array(1, key::Int8, 1), array('a', 'b', 'c'), true)
+checked expr   : map<T0=Int16, T1=String><Array(T0), Array(T1), Boolean>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(key AS Int16), CAST<UInt8>(1_u8 AS Int16)), array<T0=String><T0, T0, T0>("a", "b", "c"), true)
+optimized expr : map<T0=Int16, T1=String><Array(T0), Array(T1), Boolean>(array<T0=Int16><T0, T0, T0>(1_i16, CAST<Int8>(key AS Int16), 1_i16), ['a', 'b', 'c'], true)
+evaluation:
++--------+---------+--------------------+
+|        | key     | Output             |
++--------+---------+--------------------+
+| Type   | Int8    | Map(Int16, String) |
+| Domain | {1..=2} | Unknown            |
+| Row 0  | 2       | {1:'a', 2:'b'}     |
+| Row 1  | 1       | {1:'a'}            |
+| Row 2  | 1       | {1:'a'}            |
+| Row 3  | 1       | {1:'a'}            |
++--------+---------+--------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                           |
++--------+----------------------------------------------------------------------------------------------------------------+
+| key    | Column(Int8([2, 1, 1, 1]))                                                                                     |
+| Output | ArrayColumn { values: Tuple([Int16([1, 2, 1, 1, 1]), StringColumn[a, b, a, a, a]]), offsets: [0, 2, 3, 4, 5] } |
++--------+----------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([1, key], ['a', 'b'], flag)
+raw expr       : map(array(1, key::Int8), array('a', 'b'), flag::Boolean NULL)
+checked expr   : map<T0=Int16, T1=String><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(key AS Int16)) AS Array(Int16) NULL), CAST<Array(String)>(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL), flag)
+optimized expr : map<T0=Int16, T1=String><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(1_i16, CAST<Int8>(key AS Int16)) AS Array(Int16) NULL), ['a', 'b'], flag)
+evaluation:
++--------+---------+------------------------+-------------------------+
+|        | key     | flag                   | Output                  |
++--------+---------+------------------------+-------------------------+
+| Type   | Int8    | Boolean NULL           | Map(Int16, String) NULL |
+| Domain | {1..=2} | {FALSE, TRUE} ∪ {NULL} | Unknown                 |
+| Row 0  | 2       | false                  | {1:'a', 2:'b'}          |
+| Row 1  | 1       | true                   | {1:'a'}                 |
+| Row 2  | 1       | true                   | {1:'a'}                 |
+| Row 3  | 1       | NULL                   | NULL                    |
++--------+---------+------------------------+-------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                              |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| key    | Column(Int8([2, 1, 1, 1]))                                                                                                                                        |
+| flag   | Column(NullableColumn { column: Boolean([0b____0110]), validity: [0b____0111] })                                                                                  |
+| Output | NullableColumn { column: ArrayColumn { values: Tuple([Int16([1, 2, 1, 1, 1]), StringColumn[a, b, a, a, a]]), offsets: [0, 2, 3, 4, 5] }, validity: [0b____0111] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | map([1, key], ['a', 'b'], false)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map([1, 1], ['a', 'b'], false)` in expr `map(array(CAST(1 AS Int16), CAST(key AS Int16)), array('a', 'b'), false)`
+
+
+
+ast            : map([1, 2], ['a', 'b'], flag)
+raw expr       : map(array(1, 2), array('a', 'b'), flag::Boolean NULL)
+checked expr   : map<T0=UInt8, T1=String><Array(T0) NULL, Array(T1) NULL, Boolean NULL>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8) NULL), CAST<Array(String)>(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL), flag)
+optimized expr : map<T0=UInt8, T1=String><Array(T0) NULL, Array(T1) NULL, Boolean NULL>([1, 2], ['a', 'b'], flag)
+evaluation:
++--------+------------------------+-------------------------+
+|        | flag                   | Output                  |
++--------+------------------------+-------------------------+
+| Type   | Boolean NULL           | Map(UInt8, String) NULL |
+| Domain | {FALSE, TRUE} ∪ {NULL} | Unknown                 |
+| Row 0  | false                  | {1:'a', 2:'b'}          |
+| Row 1  | true                   | {1:'a', 2:'b'}          |
+| Row 2  | true                   | {1:'a', 2:'b'}          |
+| Row 3  | NULL                   | NULL                    |
++--------+------------------------+-------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| flag   | Column(NullableColumn { column: Boolean([0b____0110]), validity: [0b____0111] })                                                                                                    |
+| Output | NullableColumn { column: ArrayColumn { values: Tuple([UInt8([1, 2, 1, 2, 1, 2, 1, 2]), StringColumn[a, b, a, b, a, b, a, b]]), offsets: [0, 2, 4, 6, 8] }, validity: [0b____0111] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map([], [], flag)
+raw expr       : map(array(), array(), flag::Boolean NULL)
+checked expr   : map<Array(Nothing) NULL, Array(Nothing) NULL, Boolean NULL>(CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), CAST<Array(Nothing)>(array<>() AS Array(Nothing) NULL), flag)
+optimized expr : map<Array(Nothing) NULL, Array(Nothing) NULL, Boolean NULL>([] :: Array(Nothing), [] :: Array(Nothing), flag)
+evaluation:
++--------+------------------------+-------------------+
+|        | flag                   | Output            |
++--------+------------------------+-------------------+
+| Type   | Boolean NULL           | Map(Nothing) NULL |
+| Domain | {FALSE, TRUE} ∪ {NULL} | {} ∪ {NULL}       |
+| Row 0  | false                  | {}                |
+| Row 1  | true                   | {}                |
+| Row 2  | true                   | {}                |
+| Row 3  | NULL                   | NULL              |
++--------+------------------------+-------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------+
+| Column | Data                                                                             |
++--------+----------------------------------------------------------------------------------+
+| flag   | Column(NullableColumn { column: Boolean([0b____0110]), validity: [0b____0111] }) |
+| Output | NullableColumn { column: EmptyMap { len: 4 }, validity: [0b____0111] }           |
++--------+----------------------------------------------------------------------------------+
 
 
 ast            : map([],[])[1]

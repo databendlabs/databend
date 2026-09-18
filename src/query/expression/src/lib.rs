@@ -35,7 +35,6 @@
 #![allow(clippy::type_complexity)]
 #![feature(associated_type_defaults)]
 #![feature(anonymous_lifetime_in_impl_trait)]
-#![feature(generic_const_exprs)]
 #![feature(trait_alias)]
 #![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
@@ -43,9 +42,7 @@
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
 #![feature(try_blocks)]
-#![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
-#![feature(never_type)]
 #![feature(iter_map_windows)]
 #![feature(likely_unlikely)]
 #![feature(portable_simd)]
@@ -101,6 +98,8 @@ pub use crate::row_encoding::*;
 pub use crate::schema::*;
 pub use crate::stat_evaluator::*;
 pub use crate::symbol::*;
+pub use crate::types::type_name::resolve_type_name;
+pub use crate::types::type_name::resolve_type_name_by_str;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;

@@ -22,14 +22,13 @@
     clippy::uninlined_format_args
 )]
 #![allow(non_local_definitions)]
-#![feature(never_type)]
+// Recursive async binder futures exceed the default limit under the new trait solver.
+#![recursion_limit = "256"]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![feature(iterator_try_reduce)]
 #![feature(trivial_bounds)]
 #![feature(try_blocks)]
-#![feature(extend_one)]
-#![feature(if_let_guard)]
 #![feature(iter_next_chunk)]
 #![feature(once_cell_try)]
 

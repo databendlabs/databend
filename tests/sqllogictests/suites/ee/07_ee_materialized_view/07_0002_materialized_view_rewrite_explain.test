@@ -28,6 +28,16 @@ insert into source values
     (2, 20, 'xxxxxxx', 7),
     (2, 20, 'other', 70)
 
+# Ensure preaggregation has a real cost advantage without changing aggregates.
+# Compact before refreshing to keep the block-count golden deterministic.
+statement ok
+insert into source
+select a, b, c, NULL
+from (select distinct a, b, c from source) cross join numbers(1000)
+
+statement ok
+optimize table source compact
+
 statement ok
 create materialized view mv_by_abc (
     a,
@@ -208,6 +218,10 @@ insert into detail_source values
     (2, 20, true, 'second'),
     (3, 30, false, 'third')
 
+# Non-active rows are absent from the MV, making its scan genuinely smaller.
+statement ok
+insert into detail_source select number + 100, 0, false, 'inactive' from numbers(1000)
+
 statement ok
 create materialized view mv_active_detail (id, amount, doubled_amount) as
 select id, amount, amount * 2
@@ -245,14 +259,13 @@ limit 1
 ----
 <slt:ignore>TopN(Final)<slt:ignore>table: default.explain_materialized_view_rewrite.detail_source<slt:ignore>
 
-# Aggregation over a detail MV is rejected until the original Aggregate can be
-# rebuilt safely; otherwise DISTINCT would be silently removed.
+# DISTINCT retains its aggregate while the detail MV supplies its input rows.
 query T
 explain select distinct id
 from detail_source
 where active
 ----
-<slt:ignore>table: default.explain_materialized_view_rewrite.detail_source<slt:ignore>
+<slt:ignore>table: default.explain_materialized_view_rewrite.mv_active_detail<slt:ignore>
 
 # The MV only contains active rows, so it cannot answer a wider query that does
 # not include the MV predicate.
@@ -289,6 +302,11 @@ create table range_source (id int, amount int)
 
 statement ok
 insert into range_source values (1, 10), (2, 11), (3, 20), (4, 30)
+
+# Both lower-bound and upper-bound MVs must have a real scan advantage, so
+# endpoint-containment tests still exercise eligible rewrites under costing.
+statement ok
+insert into range_source select number + 100, if(number % 2 = 0, 0, 100) from numbers(1000)
 
 statement ok
 create materialized view mv_amount_gt_10 (id, amount) as

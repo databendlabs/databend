@@ -197,7 +197,7 @@ evaluation (internal):
 | Column | Data                        |
 +--------+-----------------------------+
 | a      | Column(Int64([4, 3, 2, 1])) |
-| Output | UInt64([0, 0])              |
+| Output | Tuple([Null { len: 2 }])    |
 +--------+-----------------------------+
 
 

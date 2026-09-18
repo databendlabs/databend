@@ -403,7 +403,7 @@ impl<E> HTTPSessionEndpoint<E> {
             info!(
                 "got request without session, url={}, headers={:?}",
                 req.uri(),
-                &req.headers()
+                req.headers()
             );
         }
 

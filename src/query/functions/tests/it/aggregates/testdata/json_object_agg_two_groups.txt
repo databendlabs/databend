@@ -22,7 +22,7 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------+
 
 
-error: json_object_agg does not support key type 'Number(Int64)'
+error: Unsupported AggregateFunction signature: json_object_agg([Number(Int64), Number(UInt64)])
 
 ast: json_object_agg(s, dec)
 evaluation (internal):

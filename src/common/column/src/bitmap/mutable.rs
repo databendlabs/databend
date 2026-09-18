@@ -571,10 +571,8 @@ impl MutableBitmap {
             }
             // the iterator will not fill the last byte
             let byte = self.buffer.as_mut_slice().last_mut().unwrap();
-            let mut i = bit_offset;
-            for value in iterator {
+            for (i, value) in (bit_offset..).zip(iterator) {
                 *byte = set(*byte, i, value);
-                i += 1;
             }
             self.length += length;
             return;

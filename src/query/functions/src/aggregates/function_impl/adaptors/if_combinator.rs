@@ -1,0 +1,220 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use databend_common_column::bitmap::Bitmap;
+use databend_common_exception::Result;
+use databend_common_expression::AggrState;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnView;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::utils::column_merge_validity;
+
+use super::*;
+
+pub(crate) struct IfEval<I> {
+    nested: I,
+    condition_index: usize,
+    nested_args_count: usize,
+    always_false: bool,
+    strip_nullable_input: bool,
+}
+
+impl<I> IfEval<I> {
+    pub(crate) fn new(
+        nested: I,
+        condition_index: usize,
+        nested_args_count: usize,
+        always_false: bool,
+        strip_nullable_input: bool,
+    ) -> Self {
+        Self {
+            nested,
+            condition_index,
+            nested_args_count,
+            always_false,
+            strip_nullable_input,
+        }
+    }
+
+    fn nested_columns<'a>(&self, columns: ProjectedBlock<'a>) -> ProjectedBlock<'a> {
+        columns.slice(..self.condition_index)
+    }
+
+    fn prepare_columns(
+        &self,
+        columns: ProjectedBlock<'_>,
+        validity: Option<Bitmap>,
+    ) -> (Vec<BlockEntry>, Option<Bitmap>) {
+        let mut columns = columns.iter().cloned().collect::<Vec<_>>();
+        let mut validity = validity;
+        if self.strip_nullable_input {
+            for entry in &mut columns[..self.nested_args_count] {
+                validity = column_merge_validity(entry, validity);
+                *entry = entry.clone().remove_nullable();
+            }
+        }
+
+        let validity = column_merge_validity(&columns[self.condition_index], validity);
+        columns[self.condition_index] = columns[self.condition_index].clone().remove_nullable();
+        (columns, Bitmap::map_all_sets_to_none(validity))
+    }
+
+    fn predicate(
+        &self,
+        columns: ProjectedBlock<'_>,
+        validity: Option<&Bitmap>,
+    ) -> Option<Option<Bitmap>> {
+        let view = columns[self.condition_index]
+            .downcast::<BooleanType>()
+            .unwrap();
+        match view.and_bitmap(validity) {
+            ColumnView::Const(true, _) => Some(None),
+            ColumnView::Const(false, _) => None,
+            ColumnView::Column(predicate) => Some(Some(predicate)),
+        }
+    }
+
+    fn should_accumulate_row(
+        &self,
+        columns: ProjectedBlock<'_>,
+        validity: Option<&Bitmap>,
+        row: usize,
+    ) -> bool {
+        if validity.is_some_and(|validity| !validity.get(row).unwrap()) {
+            return false;
+        }
+        let predicate = columns[self.condition_index]
+            .downcast::<BooleanType>()
+            .unwrap();
+        predicate.index(row).unwrap()
+    }
+}
+
+impl<I> AggregateEval for IfEval<I>
+where I: AggregateEval
+{
+    fn init_state(&self, state: AggrState<'_>) {
+        self.nested.init_state(state)
+    }
+
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
+        if self.always_false {
+            return Ok(());
+        }
+
+        let rows = input.columns.num_rows();
+        let (columns, validity) = self.prepare_columns(input.columns, input.validity.cloned());
+        let columns: ProjectedBlock<'_> = (&columns).into();
+        let Some(predicate) = self.predicate(columns, validity.as_ref()) else {
+            return Ok(());
+        };
+        let args = self.nested_columns(columns);
+        if args.is_empty() {
+            let rows = predicate.as_ref().map(Bitmap::true_count).unwrap_or(rows);
+            return self.nested.accumulate_row_count(AccumulateRowCountInput {
+                state: input.state,
+                rows,
+            });
+        }
+
+        self.nested.accumulate(AccumulateInput {
+            state: input.state,
+            columns: args,
+            validity: predicate.as_ref(),
+        })
+    }
+
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
+        if self.always_false {
+            return Ok(());
+        }
+
+        let (columns, validity) = self.prepare_columns(input.columns, None);
+        let columns: ProjectedBlock<'_> = (&columns).into();
+        let args = self.nested_columns(columns);
+        for (row, state) in input.states.iter().enumerate() {
+            if !self.should_accumulate_row(columns, validity.as_ref(), row) {
+                continue;
+            }
+            if args.is_empty() {
+                self.nested
+                    .accumulate_row_count(AccumulateRowCountInput { state, rows: 1 })?;
+            } else {
+                self.nested.accumulate_row(AccumulateRowInput {
+                    state,
+                    columns: args,
+                    row,
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
+        if self.always_false {
+            return Ok(());
+        }
+
+        let (columns, validity) = self.prepare_columns(input.columns, None);
+        let columns: ProjectedBlock<'_> = (&columns).into();
+        if !self.should_accumulate_row(columns, validity.as_ref(), input.row) {
+            return Ok(());
+        }
+        let args = self.nested_columns(columns);
+        if args.is_empty() {
+            return self.nested.accumulate_row_count(AccumulateRowCountInput {
+                state: input.state,
+                rows: 1,
+            });
+        }
+        self.nested.accumulate_row(AccumulateRowInput {
+            state: input.state,
+            columns: args,
+            row: input.row,
+        })
+    }
+
+    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
+        self.nested.accumulate_row_count(input)
+    }
+
+    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
+        self.nested.accumulate_row_count_keys(input)
+    }
+
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        self.nested.serialize(input)
+    }
+
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
+        self.nested.merge_serialized(input)
+    }
+
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
+        self.nested.merge_states(input)
+    }
+
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+        self.nested.merge_result(input)
+    }
+
+    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
+        self.nested.merge_result_read_only(input)
+    }
+
+    unsafe fn drop_state(&self, state: AggrState<'_>) {
+        unsafe { self.nested.drop_state(state) };
+    }
+}

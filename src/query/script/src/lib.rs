@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(never_type)]
-
 pub mod ir;
 
 mod compiler;

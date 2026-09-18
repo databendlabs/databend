@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::assert_matches::debug_assert_matches;
+use std::debug_assert_matches;
 use std::fmt::Display;
 
 use databend_common_catalog::plan::DataSourcePlan;

@@ -805,7 +805,7 @@ impl SubqueryDecorrelatorOptimizer {
                             .ok_or_else(|| {
                                 ErrorCode::IllegalDataType(format!(
                                     "Cannot find common type for inlist subquery value {:?} and expr {:?}",
-                                    &array_value, &child_expr
+                                    array_value, child_expr
                                 ))
                             })?;
 

@@ -405,8 +405,8 @@ impl DataSchema {
 
     #[inline]
     pub fn has_field(&self, name: &str) -> bool {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name() == name {
+        for field in &self.fields {
+            if field.name() == name {
                 return true;
             }
         }
@@ -798,8 +798,8 @@ impl TableSchema {
 
     #[inline]
     pub fn has_field(&self, name: &str) -> bool {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name == name {
+        for field in &self.fields {
+            if field.name == name {
                 return true;
             }
         }
@@ -829,8 +829,8 @@ impl TableSchema {
 
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<FieldIndex> {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name == name {
+        for (i, field) in self.fields.iter().enumerate() {
+            if field.name == name {
                 return Ok(i);
             }
         }
