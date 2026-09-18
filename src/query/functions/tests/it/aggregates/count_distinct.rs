@@ -266,23 +266,16 @@ fn test_count_distinct_merges_v1_states() -> Result<()> {
             )
         };
         assert_eq!(
-            function.state_data_type(),
+            function.state().data_type(),
             DataType::Tuple(vec![field_type.clone()])
         );
         let owner = AggregateStateOwner::new(vec![function.clone()])?;
         let state = BlockEntry::new_const_column(field_type.clone(), legacy, 1);
         for _ in 0..2 {
-            function.merge_serialized(MergeSerializedInput {
-                states: owner.state_set(0),
-                state: &state,
-                filter: None,
-            })?;
+            function.merge_serialized(owner.state_set(0), &state)?;
         }
         let mut builders = [ColumnBuilder::with_capacity(&field_type, 1)];
-        function.serialize(SerializeInput {
-            states: owner.state_set(0),
-            builders: &mut builders,
-        })?;
+        function.serialize(owner.state_set(0), &mut builders)?;
         let [builder] = builders;
         assert_eq!(builder.build_scalar().as_ref(), state.index(0).unwrap());
         let entries = new
@@ -290,19 +283,12 @@ fn test_count_distinct_merges_v1_states() -> Result<()> {
             .zip(args_type)
             .map(|(value, ty)| BlockEntry::new_const_column(ty, value, 2))
             .collect::<Vec<_>>();
-        function.accumulate(AccumulateInput {
-            state: owner.state(0),
-            columns: entries.as_slice().into(),
-            validity: None,
-        })?;
+        function.accumulate(owner.state(0), entries.as_slice().into())?;
         let mut builder = ColumnBuilder::with_capacity(
             &DataType::Number(databend_common_expression::types::NumberDataType::UInt64),
             1,
         );
-        function.merge_result(MergeResultInput {
-            state: owner.state(0),
-            builder: &mut builder,
-        })?;
+        function.merge_result(owner.state(0), &mut builder)?;
         assert_eq!(
             builder.build_scalar().as_ref(),
             ScalarRef::Number(NumberScalar::UInt64(2))

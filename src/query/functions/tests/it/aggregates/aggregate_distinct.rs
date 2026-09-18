@@ -620,51 +620,27 @@ fn test_multi_arg_distinct_merge_and_replay() -> Result<()> {
         for serialized in [false, true] {
             let owner = AggregateStateOwner::new(vec![function.clone()])?;
             let rhs = AggregateStateOwner::new(vec![function.clone()])?;
-            function.accumulate(AccumulateInput {
-                state: owner.state(0),
-                columns: left.as_slice().into(),
-                validity: None,
-            })?;
-            function.accumulate(AccumulateInput {
-                state: rhs.state(0),
-                columns: right.as_slice().into(),
-                validity: None,
-            })?;
+            function.accumulate(owner.state(0), left.as_slice().into())?;
+            function.accumulate(rhs.state(0), right.as_slice().into())?;
             // Finalizing before a merge must not make the nested cache authoritative.
             let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-            function.merge_result(MergeResultInput {
-                state: owner.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(owner.state(0), &mut builder)?;
             for _ in 0..2 {
                 if serialized {
-                    let mut builder = ColumnBuilder::with_capacity(&function.state_data_type(), 1);
-                    function.serialize(SerializeInput {
-                        states: rhs.state_set(0),
-                        builders: builder.as_tuple_mut().unwrap(),
-                    })?;
-                    function.merge_serialized(MergeSerializedInput {
-                        states: owner.state_set(0),
-                        state: &builder.build().into(),
-                        filter: None,
-                    })?;
+                    let mut builder =
+                        ColumnBuilder::with_capacity(&function.state().data_type(), 1);
+                    function.serialize(rhs.state_set(0), builder.as_tuple_mut().unwrap())?;
+                    function.merge_serialized(owner.state_set(0), &builder.build().into())?;
                 } else {
-                    function.merge_states(MergeStatesInput {
-                        state: owner.state(0),
-                        rhs: rhs.state(0),
-                    })?;
+                    function.merge_states(owner.state(0), rhs.state(0))?;
                 }
                 for read_only in [true, false, true] {
                     let mut builder =
                         ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-                    let input = MergeResultInput {
-                        state: owner.state(0),
-                        builder: &mut builder,
-                    };
                     if read_only {
-                        function.merge_result_read_only(input)?;
+                        function.merge_result_read_only(owner.state(0), &mut builder)?;
                     } else {
-                        function.merge_result(input)?;
+                        function.merge_result(owner.state(0), &mut builder)?;
                     }
                     let actual = builder.build();
                     let ScalarRef::Number(NumberScalar::Float64(actual)) = actual.index(0).unwrap()
@@ -683,16 +659,9 @@ fn test_multi_arg_distinct_merge_and_replay() -> Result<()> {
                 }
             }
             // New input after finalization must also rebuild without double counting.
-            function.accumulate(AccumulateInput {
-                state: owner.state(0),
-                columns: right.as_slice().into(),
-                validity: None,
-            })?;
+            function.accumulate(owner.state(0), right.as_slice().into())?;
             let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-            function.merge_result(MergeResultInput {
-                state: owner.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(owner.state(0), &mut builder)?;
             let result = builder.build();
             let ScalarRef::Number(NumberScalar::Float64(actual)) = result.index(0).unwrap() else {
                 panic!("expected float")

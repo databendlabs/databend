@@ -123,37 +123,19 @@ where
     }
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
-        let (column, validity) = Self::strip_nullable_column(input.column, None);
-        if let Some(validity) = validity {
-            for (row, state) in input.states.iter().enumerate() {
-                if validity.get(row).unwrap() {
-                    if RESULT_NULL {
-                        *Self::flag(state) = 1;
-                    }
-                    self.nested.accumulate_row(UnaryAccumulateRowInput {
-                        state: Self::inner_state(state),
-                        column: &column,
-                        row,
-                    })?;
-                }
-            }
-            return Ok(());
-        }
-
+        let (column, validity) = Self::strip_nullable_column(input.column, input.validity.cloned());
         if RESULT_NULL {
-            self.nested.accumulate_keys(UnaryAccumulateKeysInput {
-                states: input.states.without_last_loc(),
-                column: &column,
-            })?;
-            for state in input.states.iter() {
-                *Self::flag(state) = 1;
-            }
-            return Ok(());
+            input.states.mark_last_flag(validity.as_ref())?;
         }
 
         self.nested.accumulate_keys(UnaryAccumulateKeysInput {
-            states: input.states,
+            states: if RESULT_NULL {
+                input.states.without_last_loc()
+            } else {
+                input.states
+            },
             column: &column,
+            validity: validity.as_ref(),
         })
     }
 
@@ -181,9 +163,7 @@ where
             return self.nested.serialize(input);
         }
         let (inner_builders, flag_builder) = input.builders.split_at_mut(input.builders.len() - 1);
-        for state in input.states.iter() {
-            flag_builder[0].push(ScalarRef::Boolean(*Self::flag(state) != 0));
-        }
+        input.states.serialize_last_flag(&mut flag_builder[0])?;
         self.nested.serialize(SerializeInput {
             states: input.states.without_last_loc(),
             builders: inner_builders,
@@ -197,14 +177,7 @@ where
         let field_count = serialized_field_count(input.state);
         let flag_field = field_count - 1;
         let flag_filter = combined_serialized_flag_filter(input.state, input.filter, flag_field);
-        for (row, state) in input.states.iter().enumerate() {
-            if flag_filter
-                .as_ref()
-                .is_none_or(|filter| filter.get(row).unwrap())
-            {
-                *Self::flag(state) = 1;
-            }
-        }
+        input.states.mark_last_flag(flag_filter.as_ref())?;
         let inner_state = project_serialized_fields(input.state, 0, flag_field);
         self.nested.merge_serialized(MergeSerializedInput {
             states: input.states.without_last_loc(),

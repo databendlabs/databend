@@ -38,7 +38,7 @@ use super::adaptors::*;
 use super::uniq::UniqBuilder;
 
 #[derive(Default)]
-pub struct AggregateCountState {
+pub struct CountState {
     count: u64,
 }
 
@@ -197,7 +197,7 @@ impl CountEval {
 
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(
-            vec![AggrStateType::Custom(Layout::new::<AggregateCountState>())],
+            vec![AggrStateType::Custom(Layout::new::<CountState>())],
             vec![StateSerdeItem::DataType(UInt64Type::data_type())],
         )
     }
@@ -219,7 +219,7 @@ impl CountEval {
 
 impl AggregateEval for CountEval {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateCountState::default);
+        state.write(CountState::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
@@ -228,33 +228,35 @@ impl AggregateEval for CountEval {
         }
 
         let validity = Self::argument_validity(input.columns, input.validity);
-        input.state.get::<AggregateCountState>().count +=
+        input.state.get::<CountState>().count +=
             Self::count_valid_rows(input.columns.num_rows(), validity.as_ref());
         Ok(())
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if !self.has_argument {
+            if let Some(validity) = input.validity {
+                let places = filter_state_places(&input.states, validity);
+                return self.accumulate_row_count_keys(AccumulateRowCountKeysInput {
+                    states: input.states.with_places(&places),
+                });
+            }
             return self.accumulate_row_count_keys(AccumulateRowCountKeysInput {
                 states: input.states,
             });
         }
 
-        let validity = Self::argument_validity(input.columns, None);
-        for (row, state) in input.states.iter().enumerate() {
-            if validity
-                .as_ref()
-                .is_none_or(|validity| validity.get(row).unwrap())
-            {
-                state.get::<AggregateCountState>().count += 1;
-            }
-        }
-        Ok(())
+        let validity = Self::argument_validity(input.columns, input.validity);
+        input
+            .states
+            .for_each_state::<CountState>(validity.as_ref(), |state| {
+                state.count += 1;
+            })
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         if !self.has_argument || Self::row_is_valid(input.columns, input.row) {
-            input.state.get::<AggregateCountState>().count += 1;
+            input.state.get::<CountState>().count += 1;
         }
         Ok(())
     }
@@ -263,7 +265,7 @@ impl AggregateEval for CountEval {
         if self.has_argument {
             return Err(ErrorCode::BadArguments("count(expr) expects column input"));
         }
-        input.state.get::<AggregateCountState>().count += input.rows as u64;
+        input.state.get::<CountState>().count += input.rows as u64;
         Ok(())
     }
 
@@ -271,54 +273,46 @@ impl AggregateEval for CountEval {
         if self.has_argument {
             return Err(ErrorCode::BadArguments("count(expr) expects column input"));
         }
-        for state in input.states.iter() {
-            state.get::<AggregateCountState>().count += 1;
-        }
-        Ok(())
+        input.states.for_each_state::<CountState>(None, |state| {
+            state.count += 1;
+        })
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            let state = state.get::<AggregateCountState>();
+        input.states.for_each_state::<CountState>(None, |state| {
             input.builders[0].push(ScalarRef::Number(NumberScalar::UInt64(state.count)));
-        }
-        Ok(())
+        })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
+        input.for_each_state::<CountState>(|state, row| {
             let ScalarRef::Number(NumberScalar::UInt64(count)) =
                 super::serialized_scalar_at(input.state, row, 0)
             else {
                 unreachable!()
             };
-            state.get::<AggregateCountState>().count += count;
-        }
-        Ok(())
+            state.count += count;
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        input.state.get::<AggregateCountState>().count +=
-            input.rhs.get::<AggregateCountState>().count;
+        input.state.get::<CountState>().count += input.rhs.get::<CountState>().count;
         Ok(())
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         input.builder.push(ScalarRef::Number(NumberScalar::UInt64(
-            input.state.get::<AggregateCountState>().count,
+            input.state.get::<CountState>().count,
         )));
         Ok(())
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { std::ptr::drop_in_place(state.get::<AggregateCountState>()) };
+        unsafe { std::ptr::drop_in_place(state.get::<CountState>()) };
     }
 }
 
-impl<T> UnaryState<T, UInt64Type> for AggregateCountState
+impl<T> UnaryState<T, UInt64Type> for CountState
 where T: ValueType
 {
     type FunctionInfo = ();

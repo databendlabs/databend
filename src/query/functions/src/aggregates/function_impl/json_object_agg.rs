@@ -299,29 +299,30 @@ where
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (key_column, val_column, validity) = Self::downcast_columns(input.columns, None)?;
-        let key_column_iter = key_column.iter();
-        let val_column_iter = val_column.iter();
-
+        let (key_column, val_column, validity) =
+            Self::downcast_columns(input.columns, input.validity)?;
         if let Some(validity) = validity {
-            for (k, (v, (valid, state))) in
-                key_column_iter.zip(val_column_iter.zip(validity.iter().zip(input.states.iter())))
-            {
-                let state = state.get::<State>();
-                if valid {
-                    state.add(Some((k, v.clone())))?;
-                } else {
-                    state.add(None)?;
-                }
-            }
+            input.states.try_for_each_state_value::<State, _>(
+                key_column
+                    .iter()
+                    .zip(val_column.iter())
+                    .zip(validity.iter()),
+                None,
+                |state, ((key, value), valid)| {
+                    if valid {
+                        state.add(Some((key, value.clone())))
+                    } else {
+                        state.add(None)
+                    }
+                },
+            )
         } else {
-            for (k, (v, state)) in key_column_iter.zip(val_column_iter.zip(input.states.iter())) {
-                let state = state.get::<State>();
-                state.add(Some((k, v.clone())))?;
-            }
+            input.states.try_for_each_state_value::<State, _>(
+                key_column.iter().zip(val_column.iter()),
+                None,
+                |state, (key, value)| state.add(Some((key, value.clone()))),
+            )
         }
-
-        Ok(())
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -346,27 +347,22 @@ where
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
-        for state in input.states.iter() {
-            let state = state.get::<State>();
+        input.states.try_for_each_state::<State>(None, |state| {
             state.serialize(&mut binary_builder.data)?;
             binary_builder.commit_row();
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
+        input.try_for_each_state::<State>(|state, row| {
             let ScalarRef::Binary(mut data) = super::serialized_scalar_at(input.state, row, 0)
             else {
                 unreachable!()
             };
             let rhs = State::deserialize_reader(&mut data)?;
-            state.get::<State>().merge(&rhs)?;
-        }
-        Ok(())
+            state.merge(&rhs)
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

@@ -45,6 +45,7 @@ use super::MergeSerializedInput;
 use super::MergeStatesInput;
 use super::RawAggregateCall;
 use super::SerializeInput;
+use super::combine_validity;
 use super::state_combinator::aggregate_state_data_type;
 
 type MergeBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateCallRef> + 'a;
@@ -467,6 +468,7 @@ impl<I: AggregateEval> AggregateEval for MergeEval<I> {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let (state, validity) = Self::physical_input(&input.columns[0]);
+        let validity = combine_validity(validity, input.validity);
         self.nested.merge_serialized(MergeSerializedInput {
             states: input.states,
             state: &state,

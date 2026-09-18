@@ -652,7 +652,7 @@ fn test_distinct_state_uses_native_columns() -> Result<()> {
             order_by: &[],
         })?;
         assert_eq!(
-            function.state_data_type(),
+            function.state().data_type(),
             DataType::Tuple(vec![DataType::Array(Box::new(element))])
         );
     }

@@ -102,11 +102,11 @@ fn check_metadata(case: &PreparedCall, result_type: DataType) {
                         "result: expected {result:?}, got {:?}",
                         function.signature().return_type
                     ))
-                } else if route == name && function.state_data_type() != case.state {
+                } else if route == name && function.state().data_type() != case.state {
                     Some(format!(
                         "state: expected {:?}, got {:?}",
                         case.state,
-                        function.state_data_type()
+                        function.state().data_type()
                     ))
                 } else {
                     None
@@ -175,30 +175,18 @@ fn read_states(case: &PreparedCall, samples: &[Sample]) {
                     order_by: &[],
                 })
                 .unwrap();
-            assert_eq!(function.state_data_type(), case.state);
+            assert_eq!(function.state().data_type(), case.state);
             let owner = AggregateStateOwner::new(vec![function.clone()]).unwrap();
             let old =
-                BlockEntry::new_const_column(function.state_data_type(), old_state.clone(), 1);
-            function
-                .merge_serialized(MergeSerializedInput {
-                    states: owner.state_set(0),
-                    state: &old,
-                    filter: None,
-                })
-                .unwrap();
+                BlockEntry::new_const_column(function.state().data_type(), old_state.clone(), 1);
+            function.merge_serialized(owner.state_set(0), &old).unwrap();
             let merged = AggregateStateOwner::new(vec![function.clone()]).unwrap();
             function
-                .merge_states(MergeStatesInput {
-                    state: merged.state(0),
-                    rhs: owner.state(0),
-                })
+                .merge_states(merged.state(0), owner.state(0))
                 .unwrap();
             let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
             function
-                .merge_result(MergeResultInput {
-                    state: merged.state(0),
-                    builder: &mut builder,
-                })
+                .merge_result(merged.state(0), &mut builder)
                 .unwrap();
             assert_eq!(builder.build().index(0).unwrap().to_owned(), expected);
             let merge_result = match &sample.merge_result {
@@ -212,32 +200,15 @@ fn read_states(case: &PreparedCall, samples: &[Sample]) {
                 let expected = expected.clone();
                 let fresh = AggregateStateOwner::new(vec![function.clone()]).unwrap();
                 let new = BlockEntry::new_const_column(
-                    function.state_data_type(),
+                    function.state().data_type(),
                     new_state.index(0).unwrap().to_owned(),
                     1,
                 );
-                function
-                    .merge_serialized(MergeSerializedInput {
-                        states: fresh.state_set(0),
-                        state: &new,
-                        filter: None,
-                    })
-                    .unwrap();
-                function
-                    .merge_serialized(MergeSerializedInput {
-                        states: fresh.state_set(0),
-                        state: &old,
-                        filter: None,
-                    })
-                    .unwrap();
+                function.merge_serialized(fresh.state_set(0), &new).unwrap();
+                function.merge_serialized(fresh.state_set(0), &old).unwrap();
                 let mut builder =
                     ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-                function
-                    .merge_result(MergeResultInput {
-                        state: fresh.state(0),
-                        builder: &mut builder,
-                    })
-                    .unwrap();
+                function.merge_result(fresh.state(0), &mut builder).unwrap();
                 assert_eq!(
                     builder.build().index(0).unwrap().to_owned(),
                     expected,
