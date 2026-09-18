@@ -119,7 +119,7 @@ impl CovarianceBuilder {
 }
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
-pub struct AggregateCovarianceState<const TYPE: u8> {
+pub struct CovarianceState<const TYPE: u8> {
     count: u64,
     co_moments: f64,
     left_mean: f64,
@@ -129,7 +129,7 @@ pub struct AggregateCovarianceState<const TYPE: u8> {
 // Source: "Numerically Stable, Single-Pass, Parallel Statistics Algorithms"
 // (J. Bennett et al., Sandia National Laboratories,
 // 2009 IEEE International Conference on Cluster Computing)
-impl<const TYPE: u8> AggregateCovarianceState<TYPE> {
+impl<const TYPE: u8> CovarianceState<TYPE> {
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
             StateSerdeItem::Binary(None),
@@ -258,7 +258,7 @@ impl CovarianceBuilder {
     {
         let eval = CovarianceEval::<TYPE, L, R>::new();
         let return_type = Float64Type::data_type();
-        let state = AggregateCovarianceState::<TYPE>::state_description();
+        let state = CovarianceState::<TYPE>::state_description();
 
         build.create_multi_arg_or_null(return_type.wrap_nullable(), state, eval)
     }
@@ -290,13 +290,13 @@ where
     R::Scalar: AsPrimitive<f64>,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateCovarianceState::<TYPE>::default);
+        state.write(CovarianceState::<TYPE>::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let left = input.columns[0].downcast::<L>().unwrap();
         let right = input.columns[1].downcast::<R>().unwrap();
-        let state = input.state.get::<AggregateCovarianceState<TYPE>>();
+        let state = input.state.get::<CovarianceState<TYPE>>();
         add_batch::<TYPE, L, R>(state, left, right, input.validity);
         Ok(())
     }
@@ -304,17 +304,18 @@ where
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let left = input.columns[0].downcast::<L>().unwrap();
         let right = input.columns[1].downcast::<R>().unwrap();
-        for_each_selected(
-            left.iter().zip(right.iter()).zip(input.states.iter()),
-            input.validity,
-            |((left, right), state)| {
-                state.get::<AggregateCovarianceState<TYPE>>().add_value(
-                    L::to_owned_scalar(left).as_(),
-                    R::to_owned_scalar(right).as_(),
-                );
-            },
-        );
-        Ok(())
+        input
+            .states
+            .for_each_state_value::<CovarianceState<TYPE>, _>(
+                left.iter().zip(right.iter()),
+                input.validity,
+                |state, (left, right)| {
+                    state.add_value(
+                        L::to_owned_scalar(left).as_(),
+                        R::to_owned_scalar(right).as_(),
+                    );
+                },
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -322,65 +323,57 @@ where
         let right = input.columns[1].downcast::<R>().unwrap();
         let left = unsafe { left.index_unchecked(input.row) };
         let right = unsafe { right.index_unchecked(input.row) };
-        input
-            .state
-            .get::<AggregateCovarianceState<TYPE>>()
-            .add_value(
-                L::to_owned_scalar(left).as_(),
-                R::to_owned_scalar(right).as_(),
-            );
+        input.state.get::<CovarianceState<TYPE>>().add_value(
+            L::to_owned_scalar(left).as_(),
+            R::to_owned_scalar(right).as_(),
+        );
         Ok(())
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
-        for state in input.states.iter() {
-            let state = state.get::<AggregateCovarianceState<TYPE>>();
-            BorshSerialize::serialize(state, &mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<CovarianceState<TYPE>>(None, |state| {
+                BorshSerialize::serialize(state, &mut binary_builder.data)?;
+                binary_builder.commit_row();
+                Ok(())
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
-                    unreachable!()
-                };
-                let rhs = AggregateCovarianceState::<TYPE>::deserialize_reader(&mut data)?;
-                state
-                    .get::<AggregateCovarianceState<TYPE>>()
-                    .merge_state(&rhs);
-                Ok(())
-            },
-        )
+        input.try_for_each_state::<CovarianceState<TYPE>>(|state, row| {
+            let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
+                unreachable!()
+            };
+            let rhs = CovarianceState::<TYPE>::deserialize_reader(&mut data)?;
+            state.merge_state(&rhs);
+            Ok(())
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateCovarianceState<TYPE>>();
-        let rhs = input.rhs.get::<AggregateCovarianceState<TYPE>>();
+        let state = input.state.get::<CovarianceState<TYPE>>();
+        let rhs = input.rhs.get::<CovarianceState<TYPE>>();
         state.merge_state(rhs);
         Ok(())
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateCovarianceState<TYPE>>();
+        let state = input.state.get::<CovarianceState<TYPE>>();
         let mut builder = Float64Type::downcast_builder(input.builder);
         builder.push_item(F64::from(state.result_value()));
         Ok(())
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        let state = state.get::<AggregateCovarianceState<TYPE>>();
+        let state = state.get::<CovarianceState<TYPE>>();
         unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
 fn add_batch<const TYPE: u8, L, R>(
-    state: &mut AggregateCovarianceState<TYPE>,
+    state: &mut CovarianceState<TYPE>,
     left: ColumnView<L>,
     right: ColumnView<R>,
     validity: Option<&Bitmap>,

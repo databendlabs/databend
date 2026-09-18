@@ -271,7 +271,7 @@ impl AggregateEval for NullJsonArrayAggEval {
         Ok(())
     }
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for _ in input.states.iter() {
+        for _ in 0..input.states.len() {
             JsonArrayAggState::<AnyType>::default().serialize(&mut input.builders[0])?;
         }
         Ok(())

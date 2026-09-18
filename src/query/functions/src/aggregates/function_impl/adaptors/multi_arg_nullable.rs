@@ -132,7 +132,7 @@ where I: AggregateEval
             Self::strip_nullable_columns(input.columns, input.validity.cloned());
         let columns: ProjectedBlock<'_> = (&columns).into();
         if RESULT_NULL {
-            for_each_selected(input.states.iter(), validity.as_ref(), Self::mark_seen);
+            input.states.mark_last_flag(validity.as_ref())?;
         }
 
         self.nested.accumulate_keys(AccumulateKeysInput {
@@ -191,9 +191,7 @@ where I: AggregateEval
                 .accumulate_row_count_keys(AccumulateRowCountKeysInput {
                     states: input.states.without_last_loc(),
                 })?;
-            for state in input.states.iter() {
-                Self::mark_seen(state);
-            }
+            input.states.mark_last_flag(None)?;
         } else {
             for state in input.states.iter() {
                 self.accumulate_row_count(AccumulateRowCountInput { state, rows: 1 })?;
@@ -206,9 +204,7 @@ where I: AggregateEval
         if RESULT_NULL {
             let (inner_builders, flag_builder) =
                 input.builders.split_at_mut(input.builders.len() - 1);
-            for state in input.states.iter() {
-                flag_builder[0].push(ScalarRef::Boolean(Self::seen(state)));
-            }
+            input.states.serialize_last_flag(&mut flag_builder[0])?;
             self.nested.serialize(SerializeInput {
                 states: input.states.without_last_loc(),
                 builders: inner_builders,
@@ -224,7 +220,7 @@ where I: AggregateEval
             let flag_field = field_count - 1;
             let flag_filter =
                 combined_serialized_flag_filter(input.state, input.filter, flag_field);
-            for_each_selected(input.states.iter(), flag_filter.as_ref(), Self::mark_seen);
+            input.states.mark_last_flag(flag_filter.as_ref())?;
             let inner_state = project_serialized_fields(input.state, 0, flag_field);
             self.nested.merge_serialized(MergeSerializedInput {
                 states: input.states.without_last_loc(),

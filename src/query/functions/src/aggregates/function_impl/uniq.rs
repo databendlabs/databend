@@ -448,10 +448,10 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let view = input.columns[0].downcast::<S::Type>().unwrap();
-        try_for_each_selected(
-            view.iter().zip(input.states.iter()),
+        input.states.try_for_each_state_value::<S, _>(
+            view.iter(),
             input.validity,
-            |(value, state)| state.get::<S>().insert(value).map(|_| ()),
+            |state, value| state.insert(value).map(|_| ()),
         )
     }
 
@@ -465,22 +465,16 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            state.get::<S>().serialize(&mut input.builders[0])?;
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<S>(None, |state| state.serialize(&mut input.builders[0]))
     }
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                state
-                    .get::<S>()
-                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
-                    .map(|_| ())
-            },
-        )
+        input.try_for_each_state::<S>(|state, row| {
+            state
+                .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+                .map(|_| ())
+        })
     }
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input.state.get::<S>().merge(input.rhs.get::<S>());

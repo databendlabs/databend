@@ -275,11 +275,11 @@ macro_rules! with_bitmap_result_mapped_type {
 }
 
 #[derive(Default)]
-pub struct AggregateBitmapState {
+pub struct BitmapState {
     rb: Option<HybridBitmap>,
 }
 
-impl AggregateBitmapState {
+impl BitmapState {
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
             StateSerdeItem::Binary(None),
@@ -424,7 +424,7 @@ impl BitmapOperate for BitmapNotOp {
 trait BitmapResult: Send + Sync + 'static {
     fn return_type() -> DataType;
 
-    fn push_result(state: &AggregateBitmapState, builder: &mut ColumnBuilder) -> Result<()>;
+    fn push_result(state: &BitmapState, builder: &mut ColumnBuilder) -> Result<()>;
 }
 
 struct BitmapCountResult;
@@ -435,7 +435,7 @@ impl BitmapResult for BitmapCountResult {
         UInt64Type::data_type()
     }
 
-    fn push_result(state: &AggregateBitmapState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn push_result(state: &BitmapState, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = UInt64Type::downcast_builder(builder);
         builder.push_item(state.rb.as_ref().map(|rb| rb.len()).unwrap_or(0));
         Ok(())
@@ -447,7 +447,7 @@ impl BitmapResult for BitmapRawResult {
         BitmapType::data_type()
     }
 
-    fn push_result(state: &AggregateBitmapState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn push_result(state: &BitmapState, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = BitmapType::downcast_builder(builder);
         if let Some(rb) = &state.rb {
             rb.serialize_into(&mut builder.data)?;
@@ -473,12 +473,12 @@ where
     R: BitmapResult,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateBitmapState::default);
+        state.write(BitmapState::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
-        let state = input.state.get::<AggregateBitmapState>();
+        let state = input.state.get::<BitmapState>();
         try_for_each_selected(values.iter(), input.validity, |value| {
             state.add::<OP>(value)
         })
@@ -486,10 +486,10 @@ where
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
-        try_for_each_selected(
-            values.iter().zip(input.states.iter()),
+        input.states.try_for_each_state_value::<BitmapState, _>(
+            values.iter(),
             input.validity,
-            |(value, state)| state.get::<AggregateBitmapState>().add::<OP>(value),
+            |state, value| state.add::<OP>(value),
         )
     }
 
@@ -497,7 +497,7 @@ where
         let values = input.columns[0].downcast::<BitmapType>().unwrap();
         input
             .state
-            .get::<AggregateBitmapState>()
+            .get::<BitmapState>()
             .add::<OP>(values.index(input.row).unwrap())?;
         Ok(())
     }
@@ -516,7 +516,7 @@ where
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        R::push_result(input.state.get::<AggregateBitmapState>(), input.builder)
+        R::push_result(input.state.get::<BitmapState>(), input.builder)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
@@ -560,12 +560,12 @@ where
     T::Scalar: Send + Sync,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateBitmapState::default);
+        state.write(BitmapState::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
-        let state = input.state.get::<AggregateBitmapState>();
+        let state = input.state.get::<BitmapState>();
         try_for_each_selected(0..input.columns.num_rows(), input.validity, |row| {
             if self.filter_row(&input.columns[1], row) {
                 state.add::<BitmapAndOp>(bitmaps.index(row).unwrap())?;
@@ -577,21 +577,16 @@ where
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
         let filter_values = input.columns[1].downcast::<T>().unwrap();
-        try_for_each_selected(
-            bitmaps
-                .iter()
-                .zip(filter_values.iter())
-                .zip(input.states.iter()),
+        input.states.try_for_each_state_value::<BitmapState, _>(
+            bitmaps.iter().zip(filter_values.iter()),
             input.validity,
-            |((bitmap, filter_value), state)| {
+            |state, (bitmap, filter_value)| {
                 let filter_value = T::to_owned_scalar(filter_value);
                 if self.filter_values.iter().any(|filter| {
                     T::compare(T::to_scalar_ref(filter), T::to_scalar_ref(&filter_value))
                         == Ordering::Equal
                 }) {
-                    state
-                        .get::<AggregateBitmapState>()
-                        .add::<BitmapAndOp>(bitmap)?;
+                    state.add::<BitmapAndOp>(bitmap)?;
                 }
                 Ok(())
             },
@@ -603,7 +598,7 @@ where
             let bitmaps = input.columns[0].downcast::<BitmapType>().unwrap();
             input
                 .state
-                .get::<AggregateBitmapState>()
+                .get::<BitmapState>()
                 .add::<BitmapAndOp>(bitmaps.index(input.row).unwrap())?;
         }
         Ok(())
@@ -623,7 +618,7 @@ where
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        BitmapCountResult::push_result(input.state.get::<AggregateBitmapState>(), input.builder)
+        BitmapCountResult::push_result(input.state.get::<BitmapState>(), input.builder)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
@@ -643,12 +638,12 @@ where
     R: BitmapResult,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateBitmapState::default);
+        state.write(BitmapState::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
-        let state = input.state.get::<AggregateBitmapState>();
+        let state = input.state.get::<BitmapState>();
         match input.validity {
             Some(validity) => {
                 for (value, valid) in values.iter().zip(validity.iter()) {
@@ -666,19 +661,20 @@ where
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
-        for_each_selected(
-            values.iter().zip(input.states.iter()),
+        input.states.for_each_state_value::<BitmapState, _>(
+            values.iter(),
             input.validity,
-            |(value, state)| state.get::<AggregateBitmapState>().insert(value.as_()),
-        );
-        Ok(())
+            |state, value| {
+                state.insert(value.as_());
+            },
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<NumberType<N>>().unwrap();
         input
             .state
-            .get::<AggregateBitmapState>()
+            .get::<BitmapState>()
             .insert(values.index(input.row).unwrap().as_());
         Ok(())
     }
@@ -697,7 +693,7 @@ where
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        R::push_result(input.state.get::<AggregateBitmapState>(), input.builder)
+        R::push_result(input.state.get::<BitmapState>(), input.builder)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
@@ -907,7 +903,7 @@ impl BitmapBuilder {
         let return_type = R::return_type().wrap_nullable();
         let eval = I::default();
 
-        build.create_multi_arg_or_null(return_type, AggregateBitmapState::state_description(), eval)
+        build.create_multi_arg_or_null(return_type, BitmapState::state_description(), eval)
     }
 
     fn create_raw_instance<I, R>(
@@ -922,15 +918,11 @@ impl BitmapBuilder {
         if has_nullable_input {
             return build.create(
                 R::return_type(),
-                AggregateBitmapState::state_description(),
+                BitmapState::state_description(),
                 MultiArgSkipNullEval::new(eval),
             );
         }
-        build.create(
-            R::return_type(),
-            AggregateBitmapState::state_description(),
-            eval,
-        )
+        build.create(R::return_type(), BitmapState::state_description(), eval)
     }
 
     fn create_intersect_count_instance<T>(
@@ -943,7 +935,7 @@ impl BitmapBuilder {
     {
         build.create_multi_arg_or_null(
             UInt64Type::data_type().wrap_nullable(),
-            AggregateBitmapState::state_description(),
+            BitmapState::state_description(),
             BitmapIntersectCountEval::<T>::new(filter_values),
         )
     }
@@ -985,38 +977,29 @@ where N: Number {
 }
 
 fn serialize_bitmap_states(input: SerializeInput<'_>) -> Result<()> {
-    for state in input.states.iter() {
-        state
-            .get::<AggregateBitmapState>()
-            .serialize(&mut input.builders[0])?;
-    }
-    Ok(())
+    input
+        .states
+        .try_for_each_state::<BitmapState>(None, |state| state.serialize(&mut input.builders[0]))
 }
 
 fn merge_serialized_bitmap_states<OP>(input: MergeSerializedInput<'_>) -> Result<()>
 where OP: BitmapOperate {
-    try_for_each_selected(
-        input.states.iter().enumerate(),
-        input.filter,
-        |(row, state)| {
-            let ScalarRef::Binary(data) = super::serialized_scalar_at(input.state, row, 0) else {
-                unreachable!()
-            };
-            state
-                .get::<AggregateBitmapState>()
-                .merge_serialized::<OP>(data)
-        },
-    )
+    input.try_for_each_state::<BitmapState>(|state, row| {
+        let ScalarRef::Binary(data) = super::serialized_scalar_at(input.state, row, 0) else {
+            unreachable!()
+        };
+        state.merge_serialized::<OP>(data)
+    })
 }
 
 fn merge_bitmap_states<OP>(input: MergeStatesInput<'_>)
 where OP: BitmapOperate {
     input
         .state
-        .get::<AggregateBitmapState>()
-        .merge_owned::<OP>(input.rhs.get::<AggregateBitmapState>());
+        .get::<BitmapState>()
+        .merge_owned::<OP>(input.rhs.get::<BitmapState>());
 }
 
 unsafe fn drop_bitmap_state(state: AggrState<'_>) {
-    unsafe { std::ptr::drop_in_place(state.get::<AggregateBitmapState>()) };
+    unsafe { std::ptr::drop_in_place(state.get::<BitmapState>()) };
 }

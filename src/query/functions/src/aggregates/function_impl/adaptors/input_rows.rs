@@ -44,12 +44,6 @@ fn input_rows_flag(state: AggrState<'_>) -> &mut u8 {
     state_at(state, state.loc.len() - 1)
 }
 
-fn serialize_input_rows(states: &AggregateStateSet<'_>, builder: &mut ColumnBuilder) {
-    for state in states.iter() {
-        builder.push(ScalarRef::Boolean(*input_rows_flag(state) != 0));
-    }
-}
-
 impl<I> InputRowsEval<I> {
     pub(super) fn new(nested: I, enabled: bool) -> Self {
         Self { nested, enabled }
@@ -93,9 +87,7 @@ impl<I: AggregateEval> AggregateEval for InputRowsEval<I> {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if self.enabled {
-            for_each_selected(input.states.iter(), input.validity, |state| {
-                *input_rows_flag(state) = 1;
-            });
+            input.states.mark_last_flag(input.validity)?;
         }
         self.nested.accumulate_keys(AccumulateKeysInput {
             states: self.inner_states(input.states),
@@ -118,7 +110,7 @@ impl<I: AggregateEval> AggregateEval for InputRowsEval<I> {
             return self.nested.serialize(input);
         }
         let (builders, flag) = input.builders.split_at_mut(input.builders.len() - 1);
-        serialize_input_rows(&input.states, &mut flag[0]);
+        input.states.serialize_last_flag(&mut flag[0])?;
         self.nested.serialize(SerializeInput {
             states: self.inner_states(input.states),
             builders,
@@ -131,9 +123,7 @@ impl<I: AggregateEval> AggregateEval for InputRowsEval<I> {
         }
         let flag_field = serialized_field_count(input.state) - 1;
         let filter = combined_serialized_flag_filter(input.state, input.filter, flag_field);
-        for_each_selected(input.states.iter(), filter.as_ref(), |state| {
-            *input_rows_flag(state) = 1;
-        });
+        input.states.mark_last_flag(filter.as_ref())?;
         let state = project_serialized_fields(input.state, 0, flag_field);
         self.nested.merge_serialized(MergeSerializedInput {
             states: self.inner_states(input.states),

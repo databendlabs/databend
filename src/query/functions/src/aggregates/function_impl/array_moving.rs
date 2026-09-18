@@ -86,7 +86,7 @@ struct ArrayMovingInfo {
     kind: ArrayMovingKind,
 }
 
-pub struct AggregateNumberArrayMovingState<I, S>
+pub struct NumberArrayMovingState<I, S>
 where
     I: ValueType,
     S: ValueType,
@@ -95,7 +95,7 @@ where
     _p: PhantomData<fn(S)>,
 }
 
-impl<I, S> Default for AggregateNumberArrayMovingState<I, S>
+impl<I, S> Default for NumberArrayMovingState<I, S>
 where
     I: ValueType,
     S: ValueType,
@@ -108,7 +108,7 @@ where
     }
 }
 
-impl<I, S> AggregateNumberArrayMovingState<I, S>
+impl<I, S> NumberArrayMovingState<I, S>
 where
     I: ValueType,
     S: ValueType,
@@ -121,7 +121,7 @@ where
     }
 }
 
-impl<I, S> AggregateNumberArrayMovingState<I, S>
+impl<I, S> NumberArrayMovingState<I, S>
 where
     I: ValueType + AccessType + ArgType,
     S: ValueType + AccessType + ArgType,
@@ -337,7 +337,7 @@ impl<State> ArrayMovingEval<State> {
     }
 }
 
-impl<I, S> AggregateEval for ArrayMovingEval<AggregateNumberArrayMovingState<I, S>>
+impl<I, S> AggregateEval for ArrayMovingEval<NumberArrayMovingState<I, S>>
 where
     I: ValueType + AccessType + ArgType,
     S: ValueType + AccessType + ArgType,
@@ -345,11 +345,11 @@ where
     S::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign + std::ops::SubAssign,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateNumberArrayMovingState::<I, S>::default);
+        state.write(NumberArrayMovingState::<I, S>::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
+        let state = input.state.get::<NumberArrayMovingState<I, S>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
             let rows = input
@@ -419,55 +419,46 @@ where
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
-            for_each_selected(input.states.iter(), input.validity, |state| {
-                state
-                    .get::<AggregateNumberArrayMovingState<I, S>>()
-                    .add_default();
-            });
-            return Ok(());
+            return input
+                .states
+                .for_each_state::<NumberArrayMovingState<I, S>>(input.validity, |state| {
+                    state.add_default()
+                });
         }
 
         let (not_null, nulls) = entry.clone().split_nullable();
         let values = not_null.downcast::<I>()?;
         match nulls {
-            ColumnView::Const(false, _) => {
-                for_each_selected(input.states.iter(), input.validity, |state| {
-                    state
-                        .get::<AggregateNumberArrayMovingState<I, S>>()
-                        .add_default();
-                });
-            }
-            ColumnView::Const(true, _) => {
-                for_each_selected(
-                    input.states.iter().enumerate(),
+            ColumnView::Const(false, _) => input
+                .states
+                .for_each_state::<NumberArrayMovingState<I, S>>(input.validity, |state| {
+                    state.add_default()
+                }),
+            ColumnView::Const(true, _) => input
+                .states
+                .for_each_state_value::<NumberArrayMovingState<I, S>, _>(
+                    values.iter(),
                     input.validity,
-                    |(row, state)| {
-                        state
-                            .get::<AggregateNumberArrayMovingState<I, S>>()
-                            .add(values.index(row).unwrap());
-                    },
-                );
-            }
-            ColumnView::Column(column_validity) => {
-                for_each_selected(
-                    input.states.iter().enumerate(),
+                    |state, value| state.add(value),
+                ),
+            ColumnView::Column(column_validity) => input
+                .states
+                .for_each_state_value::<NumberArrayMovingState<I, S>, _>(
+                    values.iter().zip(column_validity.iter()),
                     input.validity,
-                    |(row, state)| {
-                        let state = state.get::<AggregateNumberArrayMovingState<I, S>>();
-                        if column_validity.get(row).unwrap() {
-                            state.add(values.index(row).unwrap());
+                    |state, (value, valid)| {
+                        if valid {
+                            state.add(value);
                         } else {
                             state.add_default();
                         }
                     },
-                );
-            }
+                ),
         }
-        Ok(())
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
+        let state = input.state.get::<NumberArrayMovingState<I, S>>();
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
             state.add_default();
@@ -491,36 +482,29 @@ where
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            state
-                .get::<AggregateNumberArrayMovingState<I, S>>()
-                .serialize(&mut input.builders[0]);
-        }
-        Ok(())
+        input
+            .states
+            .for_each_state::<NumberArrayMovingState<I, S>>(None, |state| {
+                state.serialize(&mut input.builders[0]);
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                state
-                    .get::<AggregateNumberArrayMovingState<I, S>>()
-                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
-            },
-        )
+        input.try_for_each_state::<NumberArrayMovingState<I, S>>(|state, row| {
+            state.merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
-            .get::<AggregateNumberArrayMovingState<I, S>>()
-            .append(input.rhs.get::<AggregateNumberArrayMovingState<I, S>>());
+            .get::<NumberArrayMovingState<I, S>>()
+            .append(input.rhs.get::<NumberArrayMovingState<I, S>>());
         Ok(())
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
+        let state = input.state.get::<NumberArrayMovingState<I, S>>();
         let window_size = self.info.window_size.unwrap_or(state.values.len());
         match self.info.kind {
             ArrayMovingKind::Avg => state.merge_avg_result(input.builder, window_size),
@@ -531,7 +515,7 @@ where
     }
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateNumberArrayMovingState<I, S>>();
+        let state = input.state.get::<NumberArrayMovingState<I, S>>();
         let window_size = self.info.window_size.unwrap_or(state.values.len());
         match self.info.kind {
             ArrayMovingKind::Avg => state.merge_avg_result(input.builder, window_size),
@@ -542,7 +526,7 @@ where
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
         unsafe {
-            std::ptr::drop_in_place(state.get::<AggregateNumberArrayMovingState<I, S>>());
+            std::ptr::drop_in_place(state.get::<NumberArrayMovingState<I, S>>());
         }
     }
 }
@@ -625,51 +609,42 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
         if entry.data_type().is_null() {
-            for_each_selected(input.states.iter(), input.validity, |state| {
-                state
-                    .get::<AggregateDecimalArrayMovingState<T>>()
-                    .add_default();
-            });
-            return Ok(());
+            return input
+                .states
+                .for_each_state::<AggregateDecimalArrayMovingState<T>>(input.validity, |state| {
+                    state.add_default()
+                });
         }
 
         let (not_null, nulls) = entry.clone().split_nullable();
         let values = not_null.downcast::<DecimalType<T>>()?;
         match nulls {
-            ColumnView::Const(false, _) => {
-                for_each_selected(input.states.iter(), input.validity, |state| {
-                    state
-                        .get::<AggregateDecimalArrayMovingState<T>>()
-                        .add_default();
-                });
-            }
-            ColumnView::Const(true, _) => {
-                for_each_selected(
-                    input.states.iter().enumerate(),
+            ColumnView::Const(false, _) => input
+                .states
+                .for_each_state::<AggregateDecimalArrayMovingState<T>>(input.validity, |state| {
+                    state.add_default()
+                }),
+            ColumnView::Const(true, _) => input
+                .states
+                .for_each_state_value::<AggregateDecimalArrayMovingState<T>, _>(
+                    values.iter(),
                     input.validity,
-                    |(row, state)| {
-                        state
-                            .get::<AggregateDecimalArrayMovingState<T>>()
-                            .add(values.index(row).unwrap());
-                    },
-                );
-            }
-            ColumnView::Column(column_validity) => {
-                for_each_selected(
-                    input.states.iter().enumerate(),
+                    |state, value| state.add(value),
+                ),
+            ColumnView::Column(column_validity) => input
+                .states
+                .for_each_state_value::<AggregateDecimalArrayMovingState<T>, _>(
+                    values.iter().zip(column_validity.iter()),
                     input.validity,
-                    |(row, state)| {
-                        let state = state.get::<AggregateDecimalArrayMovingState<T>>();
-                        if column_validity.get(row).unwrap() {
-                            state.add(values.index(row).unwrap());
+                    |state, (value, valid)| {
+                        if valid {
+                            state.add(value);
                         } else {
                             state.add_default();
                         }
                     },
-                );
-            }
+                ),
         }
-        Ok(())
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -697,24 +672,17 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            state
-                .get::<AggregateDecimalArrayMovingState<T>>()
-                .serialize(&mut input.builders[0]);
-        }
-        Ok(())
+        input
+            .states
+            .for_each_state::<AggregateDecimalArrayMovingState<T>>(None, |state| {
+                state.serialize(&mut input.builders[0]);
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                state
-                    .get::<AggregateDecimalArrayMovingState<T>>()
-                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
-            },
-        )
+        input.try_for_each_state::<AggregateDecimalArrayMovingState<T>>(|state, row| {
+            state.merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
@@ -875,7 +843,7 @@ impl ArrayMovingBuilder {
             ArrayMovingKind::Sum => DataType::Array(Box::new(S::data_type())),
         };
         let serialized_type = DataType::Array(Box::new(I::data_type()));
-        Self::create_instance::<AggregateNumberArrayMovingState<I, S>>(
+        Self::create_instance::<NumberArrayMovingState<I, S>>(
             build,
             ArrayMovingInfo {
                 window_size,
@@ -939,13 +907,13 @@ trait ArrayMovingStateDescription {
     fn state_description(serialized_type: DataType) -> AggregateStateDescription;
 }
 
-impl<I, S> ArrayMovingStateDescription for AggregateNumberArrayMovingState<I, S>
+impl<I, S> ArrayMovingStateDescription for NumberArrayMovingState<I, S>
 where
     I: ValueType,
     S: ValueType,
 {
     fn state_description(serialized_type: DataType) -> AggregateStateDescription {
-        AggregateNumberArrayMovingState::<I, S>::state_description(serialized_type)
+        NumberArrayMovingState::<I, S>::state_description(serialized_type)
     }
 }
 

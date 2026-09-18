@@ -100,21 +100,19 @@ where
         );
         if entry.data_type().is_nullable() {
             let values = entry.downcast::<NullableType<T>>().unwrap();
-            for_each_selected(
-                values.iter().zip(input.states.iter()),
+            return input.states.for_each_state_value::<State, _>(
+                values.iter(),
                 input.validity,
-                |(value, state)| state.get::<State>().add(value),
+                |state, value| state.add(value),
             );
-            return Ok(());
         }
 
         let values = entry.downcast::<T>().unwrap();
-        for_each_selected(
-            values.iter().zip(input.states.iter()),
+        input.states.for_each_state_value::<State, _>(
+            values.iter(),
             input.validity,
-            |(value, state)| state.get::<State>().add(Some(value)),
-        );
-        Ok(())
+            |state, value| state.add(Some(value)),
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -136,22 +134,15 @@ where
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            state.get::<State>().serialize(&mut input.builders[0])?;
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<State>(None, |state| state.serialize(&mut input.builders[0]))
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                state
-                    .get::<State>()
-                    .merge_serialized(super::serialized_scalar_at(input.state, row, 0))
-            },
-        )
+        input.try_for_each_state::<State>(|state, row| {
+            state.merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

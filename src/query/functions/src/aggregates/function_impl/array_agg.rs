@@ -728,7 +728,7 @@ impl AggregateEval for NullArrayAggEval {
         Ok(())
     }
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for _ in input.states.iter() {
+        for _ in 0..input.states.len() {
             input.builders[0].push(ScalarRef::Array(Column::Boolean(Bitmap::new())));
         }
         Ok(())

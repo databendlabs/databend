@@ -175,17 +175,18 @@ impl<S: DistinctSet, const SKIP_NULLS: bool> AggregateEval for UnaryDistinctEval
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let (entry, validity) = Self::prepare_column(&input.columns[0], input.validity.cloned());
         let view = entry.downcast::<S::Type>().unwrap();
-        try_for_each_selected(
-            view.iter().zip(input.states.iter()),
-            validity.as_ref(),
-            |(value, state)| {
-                let state = Self::state(state);
-                if state.keys.insert(value)? {
-                    state.replayed = false;
-                }
-                Ok(())
-            },
-        )
+        input
+            .states
+            .try_for_each_first_state_value::<UnaryDistinctState<S>, _>(
+                view.iter(),
+                validity.as_ref(),
+                |state, value| {
+                    if state.keys.insert(value)? {
+                        state.replayed = false;
+                    }
+                    Ok(())
+                },
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -205,27 +206,23 @@ impl<S: DistinctSet, const SKIP_NULLS: bool> AggregateEval for UnaryDistinctEval
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            Self::state(state).keys.serialize(&mut input.builders[0])?;
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_first_state::<UnaryDistinctState<S>>(None, |state| {
+                state.keys.serialize(&mut input.builders[0])
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                let state = Self::state(state);
-                if state
-                    .keys
-                    .merge_serialized(serialized_scalar_at(input.state, row, 0))?
-                {
-                    state.replayed = false;
-                }
-                Ok(())
-            },
-        )
+        input.try_for_each_first_state::<UnaryDistinctState<S>>(|state, row| {
+            if state
+                .keys
+                .merge_serialized(serialized_scalar_at(input.state, row, 0))?
+            {
+                state.replayed = false;
+            }
+            Ok(())
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

@@ -38,7 +38,7 @@ use num_traits::AsPrimitive;
 use super::super::common::get_levels;
 use super::AggregateRegistration;
 use super::adaptors::*;
-use super::quantile_tdigest::AggregateQuantileTDigestState;
+use super::quantile_tdigest::QuantileTDigestState;
 use super::serialized_scalar_at;
 
 struct QuantileTDigestWeightedBuilder;
@@ -158,17 +158,17 @@ where
     W: AccessType,
     W::Scalar: Number + AsPrimitive<u64>,
     R: ValueType,
-    AggregateQuantileTDigestState:
+    QuantileTDigestState:
         QuantileTDigestWeightedResult<R, FunctionInfo = QuantileTDigestWeightedData>,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateQuantileTDigestState::new);
+        state.write(QuantileTDigestState::new);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
-        let state = input.state.get::<AggregateQuantileTDigestState>();
+        let state = input.state.get::<QuantileTDigestState>();
         for_each_selected(
             values.iter().zip(weights.iter()),
             input.validity,
@@ -185,19 +185,18 @@ where
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let values = input.columns[0].downcast::<V>().unwrap();
         let weights = input.columns[1].downcast::<W>().unwrap();
-        for_each_selected(
-            values.iter().zip(weights.iter()).zip(input.states.iter()),
-            input.validity,
-            |((value, weight), state)| {
-                state
-                    .get::<AggregateQuantileTDigestState>()
-                    .add_weighted_value(
+        input
+            .states
+            .for_each_state_value::<QuantileTDigestState, _>(
+                values.iter().zip(weights.iter()),
+                input.validity,
+                |state, (value, weight)| {
+                    state.add_weighted_value(
                         V::to_owned_scalar(value).as_(),
                         W::to_owned_scalar(weight).as_(),
                     );
-            },
-        );
-        Ok(())
+                },
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -207,7 +206,7 @@ where
         let weight = unsafe { weights.index_unchecked(input.row) };
         input
             .state
-            .get::<AggregateQuantileTDigestState>()
+            .get::<QuantileTDigestState>()
             .add_weighted_value(
                 V::to_owned_scalar(value).as_(),
                 W::to_owned_scalar(weight).as_(),
@@ -217,44 +216,39 @@ where
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
-        for state in input.states.iter() {
-            let state = state.get::<AggregateQuantileTDigestState>();
-            BorshSerialize::serialize(state, &mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<QuantileTDigestState>(None, |state| {
+                BorshSerialize::serialize(state, &mut binary_builder.data)?;
+                binary_builder.commit_row();
+                Ok(())
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| {
-                let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
-                    unreachable!()
-                };
-                let mut rhs = AggregateQuantileTDigestState::deserialize_reader(&mut data)?;
-                state
-                    .get::<AggregateQuantileTDigestState>()
-                    .merge_state(&mut rhs)
-            },
-        )
+        input.try_for_each_state::<QuantileTDigestState>(|state, row| {
+            let ScalarRef::Binary(mut data) = serialized_scalar_at(input.state, row, 0) else {
+                unreachable!()
+            };
+            let mut rhs = QuantileTDigestState::deserialize_reader(&mut data)?;
+            state.merge_state(&mut rhs)
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateQuantileTDigestState>();
-        let rhs = input.rhs.get::<AggregateQuantileTDigestState>();
+        let state = input.state.get::<QuantileTDigestState>();
+        let rhs = input.rhs.get::<QuantileTDigestState>();
         let mut rhs = rhs.clone_for_merge();
         state.merge_state(&mut rhs)
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateQuantileTDigestState>();
+        let state = input.state.get::<QuantileTDigestState>();
         state.write_result(input.builder, &self.function_info)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        let state = state.get::<AggregateQuantileTDigestState>();
+        let state = state.get::<QuantileTDigestState>();
         unsafe { std::ptr::drop_in_place(state) };
     }
 }
@@ -271,7 +265,7 @@ where R: ValueType
     ) -> Result<()>;
 }
 
-impl QuantileTDigestWeightedResult<Float64Type> for AggregateQuantileTDigestState {
+impl QuantileTDigestWeightedResult<Float64Type> for QuantileTDigestState {
     type FunctionInfo = QuantileTDigestWeightedData;
 
     fn write_result(
@@ -285,7 +279,7 @@ impl QuantileTDigestWeightedResult<Float64Type> for AggregateQuantileTDigestStat
     }
 }
 
-impl QuantileTDigestWeightedResult<ArrayType<Float64Type>> for AggregateQuantileTDigestState {
+impl QuantileTDigestWeightedResult<ArrayType<Float64Type>> for QuantileTDigestState {
     type FunctionInfo = QuantileTDigestWeightedData;
 
     fn write_result(
@@ -360,10 +354,10 @@ impl QuantileTDigestWeightedBuilder {
         W: AccessType,
         W::Scalar: Number + AsPrimitive<u64>,
         R: ValueType,
-        AggregateQuantileTDigestState:
+        QuantileTDigestState:
             QuantileTDigestWeightedResult<R, FunctionInfo = QuantileTDigestWeightedData>,
     {
-        let state = AggregateQuantileTDigestState::state_description();
+        let state = QuantileTDigestState::state_description();
         let eval =
             QuantileTDigestWeightedEval::<V, W, R>::new(QuantileTDigestWeightedData { levels });
         build.create_multi_arg_or_null(return_type.wrap_nullable(), state, eval)

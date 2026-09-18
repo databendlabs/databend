@@ -82,12 +82,12 @@ impl WindowFunnelBuilder {
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
-pub struct AggregateWindowFunnelState<T> {
+pub struct WindowFunnelState<T> {
     events_list: Vec<(T, u8)>,
     sorted: bool,
 }
 
-impl<T> AggregateWindowFunnelState<T>
+impl<T> WindowFunnelState<T>
 where T: Copy + Ord
 {
     fn new() -> Self {
@@ -246,7 +246,7 @@ where
     fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(
             vec![AggrStateType::Custom(Layout::new::<
-                AggregateWindowFunnelState<T::Scalar>,
+                WindowFunnelState<T::Scalar>,
             >())],
             vec![StateSerdeItem::Binary(None)],
         )
@@ -255,7 +255,7 @@ where
 
     fn accumulate_row_into_state(
         &self,
-        state: &mut AggregateWindowFunnelState<T::Scalar>,
+        state: &mut WindowFunnelState<T::Scalar>,
         columns: ProjectedBlock<'_>,
         row: usize,
     ) -> Result<()> {
@@ -269,7 +269,7 @@ where
         Ok(())
     }
 
-    fn event_level(&self, state: &mut AggregateWindowFunnelState<T::Scalar>) -> u8 {
+    fn event_level(&self, state: &mut WindowFunnelState<T::Scalar>) -> u8 {
         if state.events_list.is_empty() {
             return 0;
         }
@@ -299,11 +299,8 @@ where
         0
     }
 
-    fn window_state<'a>(
-        &self,
-        state: AggrState<'a>,
-    ) -> &'a mut AggregateWindowFunnelState<T::Scalar> {
-        state.get::<AggregateWindowFunnelState<T::Scalar>>()
+    fn window_state<'a>(&self, state: AggrState<'a>) -> &'a mut WindowFunnelState<T::Scalar> {
+        state.get::<WindowFunnelState<T::Scalar>>()
     }
 
     fn accumulate_seen_row(
@@ -317,15 +314,15 @@ where
 
     fn merge_serialized_row(
         &self,
-        state: AggrState<'_>,
+        state: &mut WindowFunnelState<T::Scalar>,
         serialized_state: &BlockEntry,
         row: usize,
     ) -> Result<()> {
         let ScalarRef::Binary(mut data) = serialized_scalar_at(serialized_state, row, 0) else {
             unreachable!()
         };
-        let mut rhs = AggregateWindowFunnelState::<T::Scalar>::deserialize_reader(&mut data)?;
-        self.window_state(state).merge_owned(&mut rhs);
+        let mut rhs = WindowFunnelState::<T::Scalar>::deserialize_reader(&mut data)?;
+        state.merge_owned(&mut rhs);
         Ok(())
     }
 }
@@ -342,7 +339,7 @@ where
         + BorshDeserialize,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateWindowFunnelState::<T::Scalar>::new);
+        state.write(WindowFunnelState::<T::Scalar>::new);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
@@ -359,20 +356,20 @@ where
         for index in 0..self.event_size {
             events.push(input.columns[index + 1].downcast::<BooleanType>()?);
         }
-        for_each_selected(
-            timestamps.iter().enumerate().zip(input.states.iter()),
-            input.validity,
-            |((row, timestamp), state)| {
-                let state = self.window_state(state);
-                let timestamp = T::to_owned_scalar(timestamp);
-                for (index, event) in events.iter().enumerate() {
-                    if event.index(row).unwrap() {
-                        state.add(timestamp, (index + 1) as u8);
+        input
+            .states
+            .for_each_state_value::<WindowFunnelState<T::Scalar>, _>(
+                timestamps.iter().enumerate(),
+                input.validity,
+                |state, (row, timestamp)| {
+                    let timestamp = T::to_owned_scalar(timestamp);
+                    for (index, event) in events.iter().enumerate() {
+                        if event.index(row).unwrap() {
+                            state.add(timestamp, (index + 1) as u8);
+                        }
                     }
-                }
-            },
-        );
-        Ok(())
+                },
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -385,20 +382,19 @@ where
             unreachable!()
         };
         let state_builder = state_builder.as_binary_mut().unwrap();
-        for state in input.states.iter() {
-            let state = self.window_state(state);
-            BorshSerialize::serialize(state, &mut state_builder.data)?;
-            state_builder.commit_row();
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<WindowFunnelState<T::Scalar>>(None, |state| {
+                BorshSerialize::serialize(state, &mut state_builder.data)?;
+                state_builder.commit_row();
+                Ok(())
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        try_for_each_selected(
-            input.states.iter().enumerate(),
-            input.filter,
-            |(row, state)| self.merge_serialized_row(state, input.state, row),
-        )
+        input.try_for_each_state::<WindowFunnelState<T::Scalar>>(|state, row| {
+            self.merge_serialized_row(state, input.state, row)
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
