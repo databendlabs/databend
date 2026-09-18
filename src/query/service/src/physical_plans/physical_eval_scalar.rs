@@ -36,6 +36,7 @@ use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::Matcher;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Filter;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::ProjectSet;
@@ -384,6 +385,7 @@ impl PhysicalPlanBuilder {
                     let mut visitor = FlattenColumnsVisitor {
                         params: BTreeSet::new(),
                         column_index: srf_item.index,
+                        column_referenced: false,
                     };
                     // Collect columns required by the parent plan in params.
                     for item in scalar_items {
@@ -393,6 +395,11 @@ impl PhysicalPlanBuilder {
                         for pred in &filter.predicates {
                             visitor.visit(pred).unwrap();
                         }
+                    }
+                    // The whole tuple is referenced by the parent plan (e.g. `SELECT srf, get(5)(srf)`),
+                    // so every inner column is still needed and nothing can be eliminated.
+                    if visitor.column_referenced || visitor.params.is_empty() {
+                        continue;
                     }
 
                     let function = FunctionCall {
@@ -413,9 +420,19 @@ impl PhysicalPlanBuilder {
 struct FlattenColumnsVisitor {
     params: BTreeSet<Scalar>,
     column_index: Symbol,
+    // Whether the flatten column is referenced other than through `get(N)(col)`,
+    // in which case the whole tuple is required and no inner column can be eliminated.
+    column_referenced: bool,
 }
 
 impl<'a> Visitor<'a> for FlattenColumnsVisitor {
+    fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+        if col.column.index == self.column_index {
+            self.column_referenced = true;
+        }
+        Ok(())
+    }
+
     // Collect the params in get function which is used to extract the inner column of flatten function.
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
         if func.func_name == "get" && !func.arguments.is_empty() {
