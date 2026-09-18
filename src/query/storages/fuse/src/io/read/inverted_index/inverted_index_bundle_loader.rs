@@ -61,6 +61,7 @@ use tantivy::directory::error::OpenWriteError;
 
 const CACHE_PAGE_SIZE: usize = 64 * 1024;
 const MAX_MERGED_READ_SIZE: usize = 1024 * 1024;
+const MAX_MERGED_PAGES: usize = MAX_MERGED_READ_SIZE / CACHE_PAGE_SIZE;
 const MAX_FULL_LOOKUP_CACHE_SIZE: usize = MAX_MERGED_READ_SIZE;
 const LOOKUP_FULL_CACHE_KEY_PREFIX: &str = "ii-lookup-full-v1:";
 const LOOKUP_PAGE_CACHE_KEY_PREFIX: &str = "ii-lookup-page-v1:";
@@ -135,6 +136,10 @@ fn page_fetch_lock(
         RangeCachePolicy::PayloadPages => "payload",
     };
     fetch_lock(format!("page:{location}:{domain}:{file_id}:{page_no}"))
+}
+
+fn full_payload_fetch_lock(location: &str, file_id: usize) -> Arc<FetchLock> {
+    fetch_lock(format!("full-payload:{location}:{file_id}"))
 }
 
 fn footer_fetch_lock(location: &str) -> Arc<FetchLock> {
@@ -326,6 +331,58 @@ impl RemoteBundleFileHandle {
         Ok(pages)
     }
 
+    fn is_full_postings_read(&self, range: &Range<usize>) -> bool {
+        range.start == 0
+            && range.end == self.len()
+            && matches!(component_name(&self.path), "idx" | "pos")
+    }
+
+    fn assemble_cached_pages(
+        &self,
+        first_page: usize,
+        last_page: usize,
+    ) -> io::Result<Option<OwnedBytes>> {
+        let mut pages = Vec::with_capacity(last_page - first_page + 1);
+        let mut output_len = 0usize;
+        for page_no in first_page..=last_page {
+            let Some(page) = self.cached_page(page_no)? else {
+                return Ok(None);
+            };
+            output_len += page.len();
+            pages.push(page);
+        }
+
+        let mut output = Vec::with_capacity(output_len);
+        for page in pages {
+            output.extend_from_slice(&page);
+        }
+        Ok(Some(OwnedBytes::new(output)))
+    }
+
+    async fn read_full_postings_file(&self) -> io::Result<OwnedBytes> {
+        // Full `.idx` / `.pos` warmups already need every byte. Preserve one full-read
+        // singleflight per immutable component instead of translating the logical read into many
+        // page-sized object requests.
+        let fetch_lock = full_payload_fetch_lock(&self.location, self.file_id);
+        let _guard = fetch_lock.lock().await;
+        let last_page = (self.len() - 1) / CACHE_PAGE_SIZE;
+        if let Some(data) = self.assemble_cached_pages(0, last_page)? {
+            return Ok(data);
+        }
+
+        let data = self.fetch_range(0..self.len()).await?;
+        for page_no in 0..=last_page {
+            let page_range = self.page_range(page_no)?;
+            // Keep cache entries independently owned. Otherwise one surviving 64 KiB page would
+            // retain the complete postings file allocation after the search-scoped pin is dropped.
+            self.insert_page(
+                page_no,
+                Bytes::copy_from_slice(&data[page_range.start..page_range.end]),
+            );
+        }
+        Ok(OwnedBytes::new(Vec::<u8>::from(data)))
+    }
+
     async fn read_cached_lookup_file(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
         let key = self.whole_lookup_key();
         let mut data = self.lookup_cache.get(&key).map(|value| value.data.clone());
@@ -386,6 +443,9 @@ impl RemoteBundleFileHandle {
         if self.cache_policy == RangeCachePolicy::LookupWhole {
             return self.read_cached_lookup_file(range).await;
         }
+        if self.is_full_postings_read(&range) {
+            return self.read_full_postings_file().await;
+        }
 
         let first_page = range.start / CACHE_PAGE_SIZE;
         let last_page = (range.end - 1) / CACHE_PAGE_SIZE;
@@ -407,26 +467,55 @@ impl RemoteBundleFileHandle {
                     page_no += 1;
                     continue;
                 }
-                let fetch_lock =
-                    page_fetch_lock(&self.location, self.file_id, self.cache_policy, page_no);
-                let _guard = fetch_lock.lock().await;
-                if let Some(page) = self.cached_page(page_no)? {
-                    request_pages.insert(page_no, page);
+                // Group adjacent misses into one object-storage range read. Acquire every page
+                // lock in ascending order before fetching so overlapping requests retain per-page
+                // singleflight without introducing lock-order inversion.
+                let missing_start = page_no;
+                while page_no < last_page
+                    && page_no - missing_start + 1 < MAX_MERGED_PAGES
+                    && !request_pages.contains_key(&(page_no + 1))
+                    && self.cached_page(page_no + 1)?.is_none()
+                {
                     page_no += 1;
-                    continue;
                 }
-                let (fetched_page_no, page) = self
-                    .fetch_page_group(page_no, page_no)
-                    .await?
-                    .pop()
-                    .ok_or_else(|| {
-                        io::Error::new(
-                            io::ErrorKind::NotFound,
-                            "inverted-index page was not available after fetch",
-                        )
-                    })?;
-                request_pages.insert(fetched_page_no, page);
-                page_no += 1;
+                let missing_end = page_no;
+
+                let mut _guards = Vec::with_capacity(missing_end - missing_start + 1);
+                for locked_page_no in missing_start..=missing_end {
+                    let fetch_lock = page_fetch_lock(
+                        &self.location,
+                        self.file_id,
+                        self.cache_policy,
+                        locked_page_no,
+                    );
+                    _guards.push(fetch_lock.lock_owned().await);
+                }
+
+                // Another request may have populated all or part of the run while the locks were
+                // being acquired. Recheck under the locks and fetch only the remaining contiguous
+                // sub-runs.
+                let mut missing_page_no = missing_start;
+                while missing_page_no <= missing_end {
+                    if let Some(page) = self.cached_page(missing_page_no)? {
+                        request_pages.insert(missing_page_no, page);
+                        missing_page_no += 1;
+                        continue;
+                    }
+
+                    let fetch_start = missing_page_no;
+                    while missing_page_no < missing_end
+                        && self.cached_page(missing_page_no + 1)?.is_none()
+                    {
+                        missing_page_no += 1;
+                    }
+                    for (fetched_page_no, page) in
+                        self.fetch_page_group(fetch_start, missing_page_no).await?
+                    {
+                        request_pages.insert(fetched_page_no, page);
+                    }
+                    missing_page_no += 1;
+                }
+                page_no = missing_end + 1;
             }
         }
 
@@ -756,9 +845,115 @@ mod tests {
     use databend_storages_common_cache::HybridCache;
     use databend_storages_common_cache::InMemoryLruCache;
     use databend_storages_common_index::BundleOpenSlice;
+    use opendal::raw::Access;
+    use opendal::raw::Layer;
+    use opendal::raw::LayeredAccess;
+    use opendal::raw::OpList;
+    use opendal::raw::OpRead;
+    use opendal::raw::OpWrite;
+    use opendal::raw::RpDelete;
+    use opendal::raw::RpList;
+    use opendal::raw::RpRead;
+    use opendal::raw::RpWrite;
     use opendal::services::Memory;
 
     use super::*;
+
+    #[derive(Clone, Debug, Default)]
+    struct RecordingLayer {
+        ranges: Arc<Mutex<Vec<Range<u64>>>>,
+    }
+
+    impl<A: Access> Layer<A> for RecordingLayer {
+        type LayeredAccess = RecordingAccessor<A>;
+
+        fn layer(&self, inner: A) -> Self::LayeredAccess {
+            RecordingAccessor {
+                inner,
+                ranges: self.ranges.clone(),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct RecordingAccessor<A: Access> {
+        inner: A,
+        ranges: Arc<Mutex<Vec<Range<u64>>>>,
+    }
+
+    impl<A: Access> LayeredAccess for RecordingAccessor<A> {
+        type Inner = A;
+        type Reader = A::Reader;
+        type Writer = A::Writer;
+        type Lister = A::Lister;
+        type Deleter = A::Deleter;
+
+        fn inner(&self) -> &Self::Inner {
+            &self.inner
+        }
+
+        async fn read(&self, path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+            let range = args.range();
+            if let Some(size) = range.size() {
+                self.ranges
+                    .lock()
+                    .unwrap()
+                    .push(range.offset()..range.offset() + size);
+            }
+            self.inner.read(path, args).await
+        }
+
+        async fn write(
+            &self,
+            path: &str,
+            args: OpWrite,
+        ) -> opendal::Result<(RpWrite, Self::Writer)> {
+            self.inner.write(path, args).await
+        }
+
+        async fn list(&self, path: &str, args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+            self.inner.list(path, args).await
+        }
+
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            self.inner.delete().await
+        }
+    }
+
+    fn payload_cache(capacity: usize) -> Option<InvertedIndexPayloadCache> {
+        HybridCache::new(
+            "payload".to_string(),
+            Some(InMemoryLruCache::with_bytes_capacity(
+                "memory_payload".to_string(),
+                capacity,
+            )),
+            None,
+        )
+    }
+
+    async fn payload_file_handle(
+        location: &str,
+        data: Vec<u8>,
+    ) -> Result<(RemoteBundleFileHandle, Arc<Mutex<Vec<Range<u64>>>>)> {
+        let layer = RecordingLayer::default();
+        let ranges = layer.ranges.clone();
+        let operator = Operator::new(Memory::default())?.layer(layer).finish();
+        operator.write(location, data.clone()).await?;
+        Ok((
+            RemoteBundleFileHandle {
+                operator,
+                location: Arc::from(location),
+                file_range: 0..u64::try_from(data.len()).unwrap(),
+                file_len: data.len(),
+                file_id: 0,
+                cache_policy: RangeCachePolicy::PayloadPages,
+                lookup_cache: None,
+                payload_cache: payload_cache(data.len() * 2),
+                path: PathBuf::from("segment.idx"),
+            },
+            ranges,
+        ))
+    }
 
     fn footer_fixture() -> (Vec<u8>, u64, InvertedIndexBundleFooter) {
         let object = InvertedIndexBundleFooter::build(
@@ -798,6 +993,67 @@ mod tests {
 
     fn persisted_footer(object: &[u8], footer: &InvertedIndexBundleFooter) -> Bytes {
         Bytes::copy_from_slice(&object[usize::try_from(footer.footer_start).unwrap()..])
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cold_pages_are_fetched_in_merged_groups() -> Result<()> {
+        let requested_page_count = MAX_MERGED_PAGES * 2 + 1;
+        let data = (0..(requested_page_count + 1) * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let requested_len = requested_page_count * CACHE_PAGE_SIZE;
+        let (file, ranges) = payload_file_handle("merged-pages", data.clone()).await?;
+
+        let actual = file.read_cached_pages(0..requested_len).await?;
+
+        assert_eq!(actual.as_ref(), &data[..requested_len]);
+        assert_eq!(*ranges.lock().unwrap(), vec![
+            0..MAX_MERGED_READ_SIZE as u64,
+            MAX_MERGED_READ_SIZE as u64..(2 * MAX_MERGED_READ_SIZE) as u64,
+            (2 * MAX_MERGED_READ_SIZE) as u64..(2 * MAX_MERGED_READ_SIZE + CACHE_PAGE_SIZE) as u64,
+        ]);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_postings_read_uses_one_object_request() -> Result<()> {
+        let data = (0..(MAX_MERGED_PAGES * 2 + 1) * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let (file, ranges) = payload_file_handle("full-postings", data.clone()).await?;
+
+        let first = file.read_cached_pages(0..data.len()).await?;
+        let second = file.read_cached_pages(0..data.len()).await?;
+
+        assert_eq!(first.as_ref(), data);
+        assert_eq!(second.as_ref(), data);
+        assert_eq!(*ranges.lock().unwrap(), vec![0..data.len() as u64]);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_overlapping_reads_share_page_fetches() -> Result<()> {
+        let page_count = MAX_MERGED_PAGES + 8;
+        let data = (0..page_count * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let (file, ranges) = payload_file_handle("overlapping-pages", data.clone()).await?;
+        let left_end = MAX_MERGED_PAGES * CACHE_PAGE_SIZE;
+        let right_start = 8 * CACHE_PAGE_SIZE;
+        let right_end = page_count * CACHE_PAGE_SIZE;
+
+        let (left, right) = tokio::try_join!(
+            file.read_cached_pages(0..left_end),
+            file.read_cached_pages(right_start..right_end),
+        )?;
+
+        assert_eq!(left.as_ref(), &data[..left_end]);
+        assert_eq!(right.as_ref(), &data[right_start..right_end]);
+        assert_eq!(*ranges.lock().unwrap(), vec![
+            0..MAX_MERGED_READ_SIZE as u64,
+            MAX_MERGED_READ_SIZE as u64..right_end as u64,
+        ]);
+        Ok(())
     }
 
     #[test]
