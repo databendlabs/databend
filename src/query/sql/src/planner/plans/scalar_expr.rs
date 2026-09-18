@@ -1195,16 +1195,6 @@ pub struct LambdaFunc {
 }
 
 impl LambdaFunc {
-    fn degenerate_return_type(&self, collection_type: &DataType) -> Option<DataType> {
-        match collection_type {
-            DataType::Null => Some(DataType::Null),
-            DataType::EmptyArray if self.func_name == "array_reduce" => Some(DataType::Null),
-            DataType::EmptyArray => Some(DataType::EmptyArray),
-            DataType::EmptyMap => Some(DataType::EmptyMap),
-            _ => None,
-        }
-    }
-
     fn sync_return_type_nullability(&mut self, is_nullable: bool) {
         if self.return_type.is_nullable() == is_nullable {
             return;
@@ -1222,91 +1212,6 @@ impl LambdaFunc {
         lambda.args = args;
         lambda.refresh_return_type()?;
         Ok(lambda)
-    }
-
-    pub fn infer_return_type(&self) -> Result<DataType> {
-        if self.func_name == "json_path_transform" {
-            let [json, path, ..] = self.args.as_slice() else {
-                return Err(ErrorCode::Internal(
-                    "json_path_transform requires json and path arguments",
-                ));
-            };
-            let return_type = DataType::Variant;
-            return Ok(
-                if json.data_type().is_nullable_or_null() || path.data_type().is_nullable_or_null()
-                {
-                    return_type.wrap_nullable()
-                } else {
-                    return_type
-                },
-            );
-        }
-
-        // Captured columns precede the collection argument.
-        let collection_type = self
-            .args
-            .last()
-            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
-            .data_type();
-        let is_nullable = collection_type.is_nullable_or_null();
-        let collection_type = collection_type.remove_nullable();
-        if let Some(return_type) = self.degenerate_return_type(&collection_type) {
-            return Ok(return_type);
-        }
-
-        let lambda_type = || self.lambda_expr.data_type().clone();
-
-        // Keep normalized names here in sync with GENERAL_LAMBDA_FUNCTIONS in
-        // databend-common-functions. The binder strips the json_ prefix.
-        let return_type = match self.func_name.as_str() {
-            "array_filter" | "map_filter" => collection_type,
-            "array_reduce" => match collection_type {
-                DataType::Array(inner_type) => inner_type.wrap_nullable(),
-                _ => {
-                    return Err(ErrorCode::Internal(
-                        "array_reduce requires an array argument",
-                    ));
-                }
-            },
-            "array_transform" | "array_apply" | "array_map" => {
-                DataType::Array(Box::new(lambda_type()))
-            }
-            "map_transform_keys" | "map_transform_values" => {
-                let DataType::Map(inner_type) = collection_type else {
-                    return Err(ErrorCode::Internal(
-                        "map lambda function requires a map argument",
-                    ));
-                };
-                let DataType::Tuple(fields) = *inner_type else {
-                    return Err(ErrorCode::Internal(
-                        "map lambda function requires key and value fields",
-                    ));
-                };
-                if fields.len() != 2 {
-                    return Err(ErrorCode::Internal(
-                        "map lambda function requires key and value fields",
-                    ));
-                }
-                let fields = if self.func_name == "map_transform_keys" {
-                    vec![lambda_type(), fields[1].clone()]
-                } else {
-                    vec![fields[0].clone(), lambda_type()]
-                };
-                DataType::Map(Box::new(DataType::Tuple(fields)))
-            }
-            _ => {
-                return Err(ErrorCode::Internal(format!(
-                    "unsupported lambda function {}",
-                    self.func_name
-                )));
-            }
-        };
-
-        Ok(if is_nullable {
-            return_type.wrap_nullable()
-        } else {
-            return_type
-        })
     }
 
     pub fn refresh_return_type(&mut self) -> Result<()> {
@@ -1330,15 +1235,8 @@ impl LambdaFunc {
             .last()
             .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
             .data_type();
-        let is_nullable = collection_type.is_nullable_or_null();
-        let collection_type = collection_type.remove_nullable();
-
-        // Degenerate collection types can be introduced by a rewrite even
-        // though the binder folds them before constructing a LambdaFunc.
-        if let Some(return_type) = self.degenerate_return_type(&collection_type) {
-            self.return_type = Box::new(return_type);
-        } else if self.func_name != "array_reduce" {
-            self.sync_return_type_nullability(is_nullable);
+        if self.func_name != "array_reduce" {
+            self.sync_return_type_nullability(collection_type.is_nullable_or_null());
         }
         Ok(())
     }

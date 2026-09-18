@@ -238,11 +238,12 @@ impl ScalarTypeValidator<'_> {
     }
 
     fn validate_lambda_function(&mut self, function: &LambdaFunc) -> Result<()> {
-        let inferred = function.infer_return_type()?;
-        if inferred != *function.return_type {
+        let mut refreshed = function.clone();
+        refreshed.refresh_return_type()?;
+        if refreshed.return_type != function.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr lambda return type mismatch for {}: stored {:?}, inferred {inferred:?}",
-                function.func_name, function.return_type
+                "SExpr lambda return type mismatch for {}: stored {:?}, expected {:?}",
+                function.func_name, function.return_type, refreshed.return_type
             )));
         }
         Ok(())
