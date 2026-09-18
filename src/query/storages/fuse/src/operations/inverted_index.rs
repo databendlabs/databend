@@ -427,4 +427,3 @@ impl AsyncTransform for InvertedIndexTransform {
         })))
     }
 }
-
