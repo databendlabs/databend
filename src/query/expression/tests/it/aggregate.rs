@@ -159,6 +159,7 @@ impl AggregateCall for TrackedHeapAggregateFunction {
             supports_state: false,
             sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
             distinct_policy: databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Unsupported,
+            hide_doc: false,
             category: "",
             description: "",
             definition: "",

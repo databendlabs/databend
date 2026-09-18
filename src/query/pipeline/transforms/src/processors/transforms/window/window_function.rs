@@ -377,6 +377,7 @@ mod tests {
                 description: "",
                 definition: "",
                 example: "",
+                hide_doc: false,
             };
             &FEATURES
         }
