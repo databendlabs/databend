@@ -43,7 +43,9 @@ pub(crate) use block::parquet::ArrayCacheContext;
 #[cfg(test)]
 pub(crate) use block::parquet::deserialize_column_chunks;
 pub use bloom::BloomBlockFilterReader;
+pub use inverted_index::InvertedIndexFilterResult;
 pub use inverted_index::InvertedIndexReader;
+pub use inverted_index::InvertedIndexWarmupInfo;
 pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;

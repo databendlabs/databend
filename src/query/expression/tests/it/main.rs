@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(try_blocks)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;

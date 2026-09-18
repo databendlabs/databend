@@ -72,7 +72,7 @@ use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
-use crate::share::ShareMgr;
+use crate::share::share_mgr;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -424,7 +424,7 @@ impl PrivilegeAccess {
                                 privileges,
                                 catalog_name,
                                 db_name,
-                                &current_user.identity().display(),
+                                current_user.identity().display(),
                                 roles_name,
                             )));
                         }
@@ -541,7 +541,7 @@ impl PrivilegeAccess {
                                         catalog_name,
                                         db_name,
                                         table_name,
-                                        &current_user.identity().display(),
+                                        current_user.identity().display(),
                                         roles_name,
                                     )));
                                 }
@@ -777,7 +777,7 @@ impl PrivilegeAccess {
                                     catalog_name,
                                     db_name,
                                     table_name,
-                                    &current_user.identity().display(),
+                                    current_user.identity().display(),
                                     roles_name,
                                 )))
                             }
@@ -1157,7 +1157,7 @@ impl PrivilegeAccess {
                         "Permission denied: privilege [{:?}] is required on PROCEDURE for user {} with roles [{}]. \
                         Note: Please ensure that your current role have the appropriate permissions to create a new Object",
                         privilege,
-                        &current_user.identity().display(),
+                        current_user.identity().display(),
                         roles_name,
                     ))),
                     GrantObject::Global
@@ -1174,7 +1174,7 @@ impl PrivilegeAccess {
                         Note: Please ensure that your current role have the appropriate permissions to create a new Object",
                         privilege,
                         grant_object,
-                        &current_user.identity().display(),
+                        current_user.identity().display(),
                         roles_name,
                     ))),
                 }
@@ -1487,7 +1487,7 @@ impl PrivilegeAccess {
                         "Permission denied: privilege [{:?}] is required to invoke table function [{}] for user {} with roles [{}]",
                         privilege,
                         table_func_name,
-                        &current_user.identity().display(),
+                        current_user.identity().display(),
                         role_name,
                     ))
                 }
@@ -1561,6 +1561,19 @@ impl PrivilegeAccess {
 impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
+        if matches!(
+            plan,
+            Plan::CreateShare(_)
+                | Plan::DropShare(_)
+                | Plan::AlterShare(_)
+                | Plan::ShowShares(_)
+                | Plan::DescShare(_)
+                | Plan::GrantShare(_)
+                | Plan::RevokeShare(_)
+                | Plan::CreateDatabaseFromShare(_)
+        ) {
+            share_mgr(ctx)?;
+        }
         let user = self.ctx.get_current_user()?;
         if let Plan::AlterUser(plan) = plan {
             // Alter current user's password do not need to check privileges.
@@ -1607,9 +1620,8 @@ impl AccessChecker for PrivilegeAccess {
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowUserFunctions)
-                    | Some(RewriteKind::ShowDictionaries(_)) => {
-                        return Ok(());
-                    }
+                    | Some(RewriteKind::ShowDictionaries(_))
+                    | Some(RewriteKind::ShowMaterializedViews)
                     | Some(RewriteKind::ShowTableFunctions) => {
                         return Ok(());
                     }
@@ -1744,8 +1756,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::CreateShare(plan) => {
                 self.validate_share_management_access(None).await?;
-                let manager =
-                    ShareMgr::create(UserApiProvider::instance().get_meta_store_client());
+                let manager = share_mgr(ctx)?;
                 let is_no_op = plan.create_option.if_not_exist()
                     && manager.exists(&plan.tenant, &plan.name).await?;
                 if !is_no_op {
@@ -1763,8 +1774,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::AlterShare(plan) => {
                 self.validate_share_management_access(None).await?;
-                let manager =
-                    ShareMgr::create(UserApiProvider::instance().get_meta_store_client());
+                let manager = share_mgr(ctx)?;
                 let is_no_op =
                     plan.if_exists && !manager.exists(&plan.tenant, &plan.name).await?;
                 if !is_no_op {
@@ -1799,9 +1809,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_share_management_access(None).await?;
                 self.validate_share_object_access(&plan.object).await?;
                 if matches!(plan.object, ShareGrantObject::Table { .. }) {
-                    let manager = ShareMgr::create(
-                        UserApiProvider::instance().get_meta_store_client(),
-                    );
+                    let manager = share_mgr(ctx)?;
                     let connection = manager
                         .get_connection_name(&plan.tenant, &plan.share)
                         .await?;
@@ -2310,7 +2318,27 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?
             }
             Plan::CreateDynamicTable(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                self.validate_db_access(
+                    &plan.table_plan.catalog,
+                    &plan.table_plan.database,
+                    UserPrivilegeType::Create,
+                    false,
+                )
+                .await?;
+                if let Some(select_plan) = &plan.table_plan.as_select {
+                    self.check(ctx, select_plan).await?;
+                }
+            }
+            Plan::RefreshDynamicTable(plan) => {
+                self.validate_table_access(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await?;
             }
             Plan::CreateUser(_) => {
                 self.validate_access(

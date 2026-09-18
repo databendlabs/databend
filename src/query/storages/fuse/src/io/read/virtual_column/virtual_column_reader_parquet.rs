@@ -20,10 +20,14 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
@@ -32,7 +36,9 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::eval_function;
+use databend_common_expression::format_runtime_keypaths;
 use databend_common_expression::infer_schema_type;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumn;
@@ -48,10 +54,13 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
-use databend_storages_common_pruner::VirtualColumnReadPlan;
+use databend_storages_common_pruner::VirtualFieldReadPlan;
+use databend_storages_common_pruner::VirtualReadSlot;
+use databend_storages_common_pruner::VirtualReadSlotId;
 use databend_storages_common_table_meta::meta::Compression;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
+use log::warn;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
@@ -60,68 +69,83 @@ use crate::io::read::block::parquet::ArrayCacheContext;
 use crate::io::read::block::parquet::deserialize_column_chunks;
 
 pub struct VirtualBlockReadResult {
+    pub virtual_block_location: String,
     pub num_rows: usize,
     pub compression: Compression,
     pub data: BlockReadResult,
     pub schema: TableSchemaRef,
-    pub virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+    pub fields: BTreeMap<ColumnId, VirtualFieldReadPlan>,
+    pub read_slots: Vec<VirtualReadSlot>,
     // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
 }
 
 impl VirtualBlockReadResult {
     pub fn create(
+        virtual_block_location: String,
         num_rows: usize,
         compression: Compression,
         data: BlockReadResult,
         schema: TableSchemaRef,
-        virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+        fields: BTreeMap<ColumnId, VirtualFieldReadPlan>,
+        read_slots: Vec<VirtualReadSlot>,
         ignore_column_ids: Option<HashSet<ColumnId>>,
     ) -> VirtualBlockReadResult {
         VirtualBlockReadResult {
+            virtual_block_location,
             num_rows,
             compression,
             data,
             schema,
-            virtual_column_read_plan,
+            fields,
+            read_slots,
             ignore_column_ids,
         }
     }
 }
 
 impl VirtualColumnReader {
-    pub(crate) fn read_schema(virtual_block_meta: &VirtualBlockMetaIndex) -> TableSchemaRef {
+    /// Physical read schema of the sidecar: one field per read slot, keyed by slot id.
+    ///
+    /// A shared key slot becomes a `Map<UInt32, T>` whose value slot is folded in as the map
+    /// value, so the value slot itself contributes no top-level field. Returns `None` when a slot
+    /// type has no parquet representation; callers fall back to the source column.
+    pub(crate) fn read_schema(
+        virtual_block_meta: &VirtualBlockMetaIndex,
+    ) -> Option<TableSchemaRef> {
         let mut schema = TableSchema::empty();
-        let mut shared_value_ids = HashSet::new();
-        let mut base_id_to_shared = HashMap::new();
-        for ((source_column_id, data_type), base_id) in
-            &virtual_block_meta.shared_virtual_column_ids
-        {
-            shared_value_ids.insert(*base_id + 1);
-            base_id_to_shared.insert(*base_id, (*source_column_id, *data_type));
+        let mut shared_slots = HashMap::new();
+        for plan in virtual_block_meta.fields.values() {
+            collect_shared_slots(plan, &mut shared_slots);
         }
-        for (column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
-            if shared_value_ids.contains(column_id) {
+        let shared_value_slots: HashSet<_> = shared_slots.values().copied().collect();
+
+        for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
+            let slot_id = VirtualReadSlotId(slot_index as u32);
+            if shared_value_slots.contains(&slot_id) {
                 continue;
             }
-            if let Some((source_column_id, shared_data_type)) = base_id_to_shared.get(column_id) {
-                let name = shared_internal_name(*source_column_id, *shared_data_type);
+            if let Some(value_slot_id) = shared_slots.get(&slot_id) {
+                let value_slot = virtual_block_meta
+                    .read_slots
+                    .get(value_slot_id.as_usize())?;
                 let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
                     fields_name: vec!["key".to_string(), "value".to_string()],
                     fields_type: vec![
                         TableDataType::Number(NumberDataType::UInt32),
-                        infer_schema_type(&shared_value_data_type(*shared_data_type)).unwrap(),
+                        infer_schema_type(&value_slot.data_type.remove_nullable()).ok()?,
                     ],
                 }));
-                schema.add_internal_field(&name, data_type, *column_id);
+                schema.add_internal_field(&slot_id.0.to_string(), data_type, slot_id.0);
             } else {
-                let name = column_id.to_string();
-                let data_type = virtual_column_meta.data_type();
-                schema.add_internal_field(&name, data_type, *column_id);
+                schema.add_internal_field(
+                    &slot_id.0.to_string(),
+                    infer_schema_type(&slot.data_type).ok()?,
+                    slot_id.0,
+                );
             }
         }
-
-        Arc::new(schema)
+        Some(Arc::new(schema))
     }
 
     pub async fn read_parquet_data_by_merge_io(
@@ -130,35 +154,65 @@ impl VirtualColumnReader {
         virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
         num_rows: usize,
     ) -> Option<VirtualBlockReadResult> {
-        let virtual_block_meta = (*virtual_block_meta)?;
-        let schema = Self::read_schema(virtual_block_meta);
+        let Some(virtual_block_meta) = virtual_block_meta else {
+            return None;
+        };
+        // A stats-only index intentionally carries no sidecar read plan. Keep
+        // the source column authoritative and avoid issuing an empty sidecar read.
+        if virtual_block_meta.fields.is_empty() {
+            return None;
+        }
+
         let virtual_loc = &virtual_block_meta.virtual_block_location;
+        if !virtual_block_meta
+            .fields
+            .values()
+            .all(|plan| validate_read_plan(plan, &virtual_block_meta.read_slots))
+        {
+            warn!(
+                "failed to prepare virtual sidecar read, fallback to source columns: stage=validate_plan, location={}, query_column_ids={:?}, slot_count={}",
+                virtual_loc,
+                virtual_block_meta.fields.keys().collect::<Vec<_>>(),
+                virtual_block_meta.read_slots.len()
+            );
+            return None;
+        }
+
+        let schema = Self::read_schema(virtual_block_meta)?;
+        // Only scalar top-level fields are admitted to the decoded-array cache; nested map
+        // slots are always decoded from raw bytes.
         let cache = CacheManager::instance().get_table_data_array_cache();
-        let mut cached_arrays = Vec::new();
-        let mut column_ranges = HashMap::new();
-        let column_types: HashMap<_, _> = schema
-            .leaf_fields()
-            .into_iter()
+        let scalar_types: HashMap<ColumnId, String> = schema
+            .fields()
+            .iter()
+            .filter(|field| !field.is_nested())
             .map(|field| {
                 let data_type = DataType::from(field.data_type()).to_string();
                 (field.column_id, data_type)
             })
             .collect();
-        let mut ranges = Vec::new();
-        for (id, meta) in &virtual_block_meta.virtual_column_metas {
-            let (offset, len) = meta.offset_length();
-            let key = TableDataCacheKey::new(virtual_loc, *id, offset, len, &column_types[id]);
-            let cached = cache
-                .get_sized(&key, len)
-                .filter(|array| array.0.len() == num_rows);
+        let mut cached_arrays = Vec::new();
+        let mut column_ranges = HashMap::new();
+        let mut ranges = Vec::with_capacity(virtual_block_meta.read_slots.len());
+        for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
+            let slot_id = slot_index as ColumnId;
+            let range = slot.offset..(slot.offset + slot.len);
+            let cached = scalar_types.get(&slot_id).and_then(|data_type| {
+                let key =
+                    TableDataCacheKey::new(virtual_loc, slot_id, slot.offset, slot.len, data_type);
+                cache
+                    .get_sized(&key, slot.len)
+                    .filter(|array| array.0.len() == num_rows)
+            });
             match cached {
-                Some(array) => cached_arrays.push((*id, array)),
+                Some(array) => cached_arrays.push((slot_id, array)),
                 None => {
-                    column_ranges.insert(*id, offset..offset + len);
-                    ranges.push((*id, offset..offset + len));
+                    column_ranges.insert(slot_id, range.clone());
+                    ranges.push((slot_id, range));
                 }
             }
         }
+
         let merge_io_result = if ranges.is_empty() {
             MergeIOReadResult::create(
                 OwnerMemory::create(vec![]),
@@ -166,9 +220,25 @@ impl VirtualColumnReader {
                 virtual_loc.clone(),
             )
         } else {
-            MergeIOReader::merge_io_read(read_settings, self.dal.clone(), virtual_loc, &ranges)
-                .await
-                .ok()?
+            match MergeIOReader::merge_io_read(
+                read_settings,
+                self.dal.clone(),
+                virtual_loc,
+                &ranges,
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(error) => {
+                    warn!(
+                        "failed to read virtual sidecar, fallback to source columns: stage=merge_io, location={}, range_count={}, error={}",
+                        virtual_loc,
+                        ranges.len(),
+                        error
+                    );
+                    return None;
+                }
+            }
         };
 
         let block_read_res = BlockReadResult::create_with_row_range(
@@ -181,11 +251,13 @@ impl VirtualColumnReader {
             self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
 
         Some(VirtualBlockReadResult::create(
+            virtual_loc.clone(),
             num_rows,
             self.compression.into(),
             block_read_res,
             schema,
-            virtual_block_meta.virtual_column_read_plan.clone(),
+            virtual_block_meta.fields.clone(),
+            virtual_block_meta.read_slots.clone(),
             ignore_column_ids,
         ))
     }
@@ -200,9 +272,13 @@ impl VirtualColumnReader {
             .as_ref()
             .map(|virtual_data| virtual_data.schema.clone())
             .unwrap_or_default();
-        let virtual_column_read_plan = virtual_data
+        let virtual_fields = virtual_data
             .as_ref()
-            .map(|virtual_data| virtual_data.virtual_column_read_plan.clone())
+            .map(|virtual_data| virtual_data.fields.clone())
+            .unwrap_or_default();
+        let virtual_read_slots = virtual_data
+            .as_ref()
+            .map(|virtual_data| virtual_data.read_slots.clone())
             .unwrap_or_default();
         let record_batch = virtual_data
             .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
@@ -227,136 +303,57 @@ impl VirtualColumnReader {
             .transpose()?;
 
         // If the virtual column has already generated, add it directly,
-        // otherwise extract it from the source column
+        // otherwise extract it from the source column.
+        // Stored virtual columns carry a concrete type (bool/uint64/int64/float64/string/jsonb);
+        // when it differs from the type requested by the user, cast to the target type via
+        // `check_cast` (handles Decimal params and try/strict cast semantics).
         let func_ctx = self.ctx.get_function_context()?;
         for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
-            if let Some(plans) = virtual_column_read_plan.get(&virtual_column_field.query_column_id)
-            {
-                let target_type: DataType = virtual_column_field.data_type.as_ref().into();
-                let cast_func_name = format!(
-                    "to_{}",
-                    target_type.remove_nullable().to_string().to_lowercase()
-                );
-                let mut args = Vec::new();
-                for plan in plans {
-                    let (value, data_type) = match plan {
-                        VirtualColumnReadPlan::Missing => {
-                            (Value::Scalar(Scalar::Null), target_type.wrap_nullable())
-                        }
-                        _ => {
-                            let Some(record_batch) = record_batch.as_ref() else {
-                                continue;
-                            };
-                            let Some((value, data_type)) = eval_read_plan(
-                                plan,
-                                record_batch,
-                                &orig_schema,
-                                &func_ctx,
-                                data_block.num_rows(),
-                            )?
-                            else {
-                                continue;
-                            };
-                            (value, data_type)
-                        }
-                    };
-                    let (value, data_type) =
-                        if data_type.remove_nullable() != target_type.remove_nullable() {
-                            eval_function(
-                                None,
-                                &cast_func_name,
-                                [(value, data_type)],
-                                &func_ctx,
-                                data_block.num_rows(),
-                                &BUILTIN_FUNCTIONS,
-                            )?
-                        } else {
-                            (value, data_type)
-                        };
-                    args.push((value, data_type));
-                }
+            let target_type: DataType = virtual_column_field.data_type.as_ref().into();
+            let is_try = virtual_column_field.is_try;
 
-                if !args.is_empty() {
-                    let (value, data_type) = if args.len() == 1 {
-                        args.pop().unwrap()
-                    } else {
-                        let mut if_args = Vec::with_capacity(args.len() * 2 - 1);
-                        let last_index = args.len() - 1;
-                        for (idx, (value, data_type)) in args.into_iter().enumerate() {
-                            if idx == last_index {
-                                if_args.push((value, data_type));
-                                break;
-                            }
-                            let (cond, cond_type) = eval_function(
-                                None,
-                                "is_not_null",
-                                [(value.clone(), data_type.clone())],
-                                &func_ctx,
-                                data_block.num_rows(),
-                                &BUILTIN_FUNCTIONS,
-                            )?;
-                            let (nonnull_value, nonnull_type) = eval_function(
-                                None,
-                                "assume_not_null",
-                                [(value, data_type)],
-                                &func_ctx,
-                                data_block.num_rows(),
-                                &BUILTIN_FUNCTIONS,
-                            )?;
-                            if_args.push((cond, cond_type));
-                            if_args.push((nonnull_value, nonnull_type));
-                        }
-                        eval_function(
-                            None,
-                            "if",
-                            if_args,
+            if let Some(plan) = virtual_fields.get(&virtual_column_field.query_column_id) {
+                let (value, data_type) = match plan {
+                    VirtualFieldReadPlan::Missing => {
+                        (Value::Scalar(Scalar::Null), target_type.wrap_nullable())
+                    }
+                    _ => {
+                        let record_batch = record_batch.as_ref().ok_or_else(|| {
+                            ErrorCode::Internal(
+                                "virtual sidecar record batch is missing for a read plan",
+                            )
+                        })?;
+                        eval_read_plan(
+                            plan,
+                            record_batch,
+                            &orig_schema,
+                            &virtual_read_slots,
                             &func_ctx,
                             data_block.num_rows(),
-                            &BUILTIN_FUNCTIONS,
                         )?
-                    };
-                    data_block.add_value(value, data_type);
-                    continue;
-                }
-            }
-
-            let name = format!("{}", virtual_column_field.query_column_id);
-            if let Some(arrow_array) = record_batch
-                .as_ref()
-                .and_then(|r| r.column_by_name(&name).cloned())
-            {
-                let orig_field = orig_schema.field_with_name(&name).unwrap();
-                let orig_type: DataType = orig_field.data_type().into();
-                let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
-                let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                if orig_type != data_type {
-                    let cast_func_name = format!(
-                        "to_{}",
-                        data_type.remove_nullable().to_string().to_lowercase()
-                    );
-                    let (cast_value, cast_data_type) = eval_function(
-                        None,
-                        &cast_func_name,
-                        [(Value::Column(column), orig_type)],
-                        &func_ctx,
-                        data_block.num_rows(),
-                        &BUILTIN_FUNCTIONS,
-                    )?;
-                    data_block.add_value(cast_value, cast_data_type);
-                } else {
-                    data_block.add_column(column);
+                    }
                 };
+                let (value, data_type) = cast_to_target_type(
+                    value,
+                    data_type,
+                    &target_type,
+                    is_try,
+                    &func_ctx,
+                    data_block.num_rows(),
+                )?;
+                data_block.add_value(value, data_type);
                 continue;
             }
 
             let src_index = self
                 .source_schema
-                .index_of(&virtual_column_field.source_name)
-                .unwrap();
+                .index_of(&virtual_column_field.source_name)?;
             let source = data_block.get_by_offset(src_index);
             let src_arg = (source.value(), source.data_type());
             let path_arg = (
-                Value::Scalar(Scalar::String(virtual_column_field.key_paths.to_string())),
+                Value::Scalar(Scalar::String(format_runtime_keypaths(
+                    &virtual_column_field.key_paths,
+                ))),
                 DataType::String,
             );
 
@@ -369,23 +366,76 @@ impl VirtualColumnReader {
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            if let Some(cast_func_name) = &virtual_column_field.cast_func_name {
-                let (cast_value, cast_data_type) = eval_function(
-                    None,
-                    cast_func_name,
-                    [(value, data_type)],
-                    &func_ctx,
-                    data_block.num_rows(),
-                    &BUILTIN_FUNCTIONS,
-                )?;
-                data_block.add_value(cast_value, cast_data_type);
-            } else {
-                data_block.add_value(value, data_type);
-            };
+            // `get_by_keypath` returns Variant; cast to the user-requested type when needed.
+            let (value, data_type) = cast_to_target_type(
+                value,
+                data_type,
+                &target_type,
+                is_try,
+                &func_ctx,
+                data_block.num_rows(),
+            )?;
+            data_block.add_value(value, data_type);
         }
 
         Ok(data_block)
     }
+}
+
+/// Cast a virtual-column value to the user-requested target type when the stored type differs.
+///
+/// Uses `check_cast` + `Evaluator` so that:
+/// - Decimal targets get the required precision/scale params via the cast machinery
+/// - `is_try` controls try_cast vs cast semantics (NULL on failure vs error)
+///
+/// Special case: casting *to* Variant always goes through `to_variant` / `try_to_variant`.
+/// The generic cast path maps `String → Variant` to `parse_json`, which treats the stored
+/// string as JSON text. Virtual-column storage keeps the raw scalar value (e.g. `smith`),
+/// not a JSON document, so `parse_json` would fail and yield NULL under try semantics.
+fn cast_to_target_type(
+    value: Value<AnyType>,
+    data_type: DataType,
+    target_type: &DataType,
+    is_try: bool,
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    if data_type.remove_nullable() == target_type.remove_nullable() {
+        return Ok((value, data_type));
+    }
+
+    // Prefer to_variant for Variant targets so stored scalars (string/number/bool)
+    // are encoded as jsonb values rather than parsed as JSON text.
+    if target_type.remove_nullable() == DataType::Variant {
+        let func_name = if is_try {
+            "try_to_variant"
+        } else {
+            "to_variant"
+        };
+        return eval_function(
+            None,
+            func_name,
+            [(value, data_type)],
+            func_ctx,
+            num_rows,
+            &BUILTIN_FUNCTIONS,
+        );
+    }
+
+    let src_expr = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: data_type.clone(),
+        display_name: String::new(),
+    });
+    let cast_expr = check_cast(None, is_try, src_expr, target_type, &BUILTIN_FUNCTIONS)?;
+    let block = DataBlock::new(
+        vec![BlockEntry::new(value, || (data_type, num_rows))],
+        num_rows,
+    );
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+    let cast_value = evaluator.run(&cast_expr)?;
+    Ok((cast_value, cast_expr.data_type().clone()))
 }
 
 fn column_from_record_batch(
@@ -404,43 +454,120 @@ fn column_from_record_batch(
     Ok(Some((column, orig_type)))
 }
 
+fn validate_read_plan(plan: &VirtualFieldReadPlan, read_slots: &[VirtualReadSlot]) -> bool {
+    match plan {
+        VirtualFieldReadPlan::Missing => true,
+        VirtualFieldReadPlan::Direct { slot } => slot.as_usize() < read_slots.len(),
+        VirtualFieldReadPlan::Shared {
+            key_slot,
+            value_slot,
+            ..
+        } => {
+            let Some(key) = read_slots.get(key_slot.as_usize()) else {
+                return false;
+            };
+            let Some(value) = read_slots.get(value_slot.as_usize()) else {
+                return false;
+            };
+            value_slot.0 == key_slot.0 + 1
+                && key.data_type.remove_nullable() == DataType::Number(NumberDataType::UInt32)
+                && key.num_values == value.num_values
+                && shared_data_type_from_physical(&value.data_type).is_ok()
+        }
+        VirtualFieldReadPlan::FromParent { parent, .. } => validate_read_plan(parent, read_slots),
+        VirtualFieldReadPlan::Coalesce { plans } => {
+            !plans.is_empty()
+                && plans
+                    .iter()
+                    .all(|plan| validate_read_plan(plan, read_slots))
+        }
+        VirtualFieldReadPlan::Object { entries } => {
+            !entries.is_empty()
+                && entries
+                    .iter()
+                    .all(|(_, plan)| validate_read_plan(plan, read_slots))
+        }
+    }
+}
+
+fn collect_shared_slots(
+    plan: &VirtualFieldReadPlan,
+    shared_slots: &mut HashMap<VirtualReadSlotId, VirtualReadSlotId>,
+) {
+    match plan {
+        VirtualFieldReadPlan::Shared {
+            key_slot,
+            value_slot,
+            ..
+        } => {
+            shared_slots.insert(*key_slot, *value_slot);
+        }
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
+            collect_shared_slots(parent, shared_slots);
+        }
+        VirtualFieldReadPlan::Coalesce { plans } => {
+            for plan in plans {
+                collect_shared_slots(plan, shared_slots);
+            }
+        }
+        VirtualFieldReadPlan::Object { entries } => {
+            for (_, plan) in entries {
+                collect_shared_slots(plan, shared_slots);
+            }
+        }
+        VirtualFieldReadPlan::Missing | VirtualFieldReadPlan::Direct { .. } => {}
+    }
+}
+
+fn shared_data_type_from_physical(data_type: &DataType) -> Result<VirtualColumnSharedDataType> {
+    match data_type.remove_nullable() {
+        DataType::Boolean => Ok(VirtualColumnSharedDataType::Boolean),
+        DataType::Number(NumberDataType::UInt64) => Ok(VirtualColumnSharedDataType::UInt64),
+        DataType::Number(NumberDataType::Int64) => Ok(VirtualColumnSharedDataType::Int64),
+        DataType::Number(NumberDataType::Float64) => Ok(VirtualColumnSharedDataType::Float64),
+        DataType::String => Ok(VirtualColumnSharedDataType::String),
+        DataType::Variant => Ok(VirtualColumnSharedDataType::Jsonb),
+        other => Err(ErrorCode::Internal(format!(
+            "unsupported virtual shared slot type: {other:?}"
+        ))),
+    }
+}
+
 fn eval_read_plan(
-    plan: &VirtualColumnReadPlan,
+    plan: &VirtualFieldReadPlan,
     record_batch: &RecordBatch,
     orig_schema: &TableSchema,
+    read_slots: &[VirtualReadSlot],
     func_ctx: &FunctionContext,
     num_rows: usize,
-) -> Result<Option<(Value<AnyType>, DataType)>> {
+) -> Result<(Value<AnyType>, DataType)> {
     match plan {
-        VirtualColumnReadPlan::Missing => Ok(Some((Value::Scalar(Scalar::Null), DataType::Null))),
-        VirtualColumnReadPlan::Direct { name } => {
-            let Some((column, data_type)) =
-                column_from_record_batch(record_batch, orig_schema, name)?
-            else {
-                return Ok(None);
-            };
-            Ok(Some((Value::Column(column), data_type)))
+        VirtualFieldReadPlan::Missing => Ok((Value::Scalar(Scalar::Null), DataType::Null)),
+        VirtualFieldReadPlan::Direct { slot } => {
+            let (column, data_type) =
+                column_from_record_batch(record_batch, orig_schema, &slot.0.to_string())?
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "virtual read slot {} is missing from the sidecar record batch",
+                            slot.0
+                        ))
+                    })?;
+            Ok((Value::Column(column), data_type))
         }
-        VirtualColumnReadPlan::BlockMetaDirect { column_id } => {
-            let name = column_id.to_string();
-            let Some((column, data_type)) =
-                column_from_record_batch(record_batch, orig_schema, &name)?
-            else {
-                return Ok(None);
-            };
-            Ok(Some((Value::Column(column), data_type)))
-        }
-        VirtualColumnReadPlan::FromParent {
+        VirtualFieldReadPlan::FromParent {
             parent,
             suffix_path,
         } => {
-            let Some((value, data_type)) =
-                eval_read_plan(parent, record_batch, orig_schema, func_ctx, num_rows)?
-            else {
-                return Ok(None);
-            };
+            let (value, data_type) = eval_read_plan(
+                parent,
+                record_batch,
+                orig_schema,
+                read_slots,
+                func_ctx,
+                num_rows,
+            )?;
             if suffix_path.is_empty() {
-                return Ok(Some((value, data_type)));
+                return Ok((value, data_type));
             }
             let (value, value_type) = eval_function(
                 None,
@@ -456,66 +583,74 @@ fn eval_read_plan(
                 num_rows,
                 &BUILTIN_FUNCTIONS,
             )?;
-            Ok(Some((value, value_type)))
+            Ok((value, value_type))
         }
-        VirtualColumnReadPlan::Shared {
-            source_column_id,
-            data_type: shared_data_type,
+        VirtualFieldReadPlan::Shared {
+            key_slot,
+            value_slot,
             index,
         } => {
-            let name = shared_internal_name(*source_column_id, *shared_data_type);
-            let Some((column, data_type)) =
-                column_from_record_batch(record_batch, orig_schema, &name)?
-            else {
-                return Ok(None);
-            };
-            Ok(Some(materialize_shared_map_value(
-                column,
-                data_type,
-                *shared_data_type,
-                *index,
-                num_rows,
-            )?))
+            let value_slot = read_slots
+                .get(value_slot.as_usize())
+                .ok_or_else(|| ErrorCode::Internal("virtual shared value slot is out of bounds"))?;
+            let shared_data_type = shared_data_type_from_physical(&value_slot.data_type)?;
+            let (column, data_type) =
+                column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "virtual shared key slot {} is missing from the sidecar record batch",
+                            key_slot.0
+                        ))
+                    })?;
+            materialize_shared_map_value(column, data_type, shared_data_type, *index, num_rows)
         }
-        VirtualColumnReadPlan::Coalesce { plans } => {
-            materialize_coalesce_read_plan(plans, record_batch, orig_schema, func_ctx, num_rows)
-        }
-        VirtualColumnReadPlan::Object { entries } => {
-            if entries.is_empty() {
-                return Ok(None);
-            }
-            materialize_object_read_plan(entries, record_batch, orig_schema, func_ctx, num_rows)
-        }
+        VirtualFieldReadPlan::Coalesce { plans } => materialize_coalesce_read_plan(
+            plans,
+            record_batch,
+            orig_schema,
+            read_slots,
+            func_ctx,
+            num_rows,
+        ),
+        VirtualFieldReadPlan::Object { entries } => materialize_object_read_plan(
+            entries,
+            record_batch,
+            orig_schema,
+            read_slots,
+            func_ctx,
+            num_rows,
+        ),
     }
 }
 
 fn materialize_coalesce_read_plan(
-    plans: &[VirtualColumnReadPlan],
+    plans: &[VirtualFieldReadPlan],
     record_batch: &RecordBatch,
     orig_schema: &TableSchema,
+    read_slots: &[VirtualReadSlot],
     func_ctx: &FunctionContext,
     num_rows: usize,
-) -> Result<Option<(Value<AnyType>, DataType)>> {
+) -> Result<(Value<AnyType>, DataType)> {
+    if plans.is_empty() {
+        return Err(ErrorCode::Internal("virtual coalesce read plan is empty"));
+    }
     let mut args = Vec::with_capacity(plans.len());
     for plan in plans {
-        let Some((value, data_type)) =
-            eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
-        else {
-            continue;
-        };
-        args.push((value, data_type));
+        args.push(eval_read_plan(
+            plan,
+            record_batch,
+            orig_schema,
+            read_slots,
+            func_ctx,
+            num_rows,
+        )?);
     }
 
-    if args.is_empty() {
-        return Ok(None);
-    }
     if args.len() == 1 {
-        return Ok(Some(args.pop().unwrap()));
+        return Ok(args.pop().unwrap());
     }
 
-    Ok(Some(materialize_coalesce_values(
-        &args, func_ctx, num_rows,
-    )?))
+    materialize_coalesce_values(&args, func_ctx, num_rows)
 }
 
 fn materialize_coalesce_values(
@@ -548,45 +683,55 @@ fn materialize_coalesce_values(
 }
 
 fn materialize_object_read_plan(
-    entries: &[(String, VirtualColumnReadPlan)],
+    entries: &[(String, VirtualFieldReadPlan)],
     record_batch: &RecordBatch,
     orig_schema: &TableSchema,
+    read_slots: &[VirtualReadSlot],
     func_ctx: &FunctionContext,
     num_rows: usize,
-) -> Result<Option<(Value<AnyType>, DataType)>> {
+) -> Result<(Value<AnyType>, DataType)> {
+    if entries.is_empty() {
+        return Err(ErrorCode::Internal("virtual object read plan is empty"));
+    }
     let mut child_values = Vec::with_capacity(entries.len());
-    let mut shared_groups: BTreeMap<(ColumnId, VirtualColumnSharedDataType), Vec<(usize, u32)>> =
+    let mut shared_groups: BTreeMap<(VirtualReadSlotId, VirtualReadSlotId), Vec<(usize, u32)>> =
         BTreeMap::new();
 
     for (entry_idx, (_key, plan)) in entries.iter().enumerate() {
-        if let VirtualColumnReadPlan::Shared {
-            source_column_id,
-            data_type,
+        if let VirtualFieldReadPlan::Shared {
+            key_slot,
+            value_slot,
             index,
         } = plan
         {
             shared_groups
-                .entry((*source_column_id, *data_type))
+                .entry((*key_slot, *value_slot))
                 .or_default()
                 .push((entry_idx, *index));
             continue;
         }
 
-        let Some((value, _data_type)) =
-            eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
-        else {
-            return Ok(None);
-        };
+        let (value, _data_type) = eval_read_plan(
+            plan,
+            record_batch,
+            orig_schema,
+            read_slots,
+            func_ctx,
+            num_rows,
+        )?;
         child_values.push((entries[entry_idx].0.as_str(), value));
     }
 
     let mut shared_object_groups = Vec::with_capacity(shared_groups.len());
-    for ((source_column_id, shared_data_type), requests) in shared_groups {
-        let name = shared_internal_name(source_column_id, shared_data_type);
-        let Some((column, data_type)) = column_from_record_batch(record_batch, orig_schema, &name)?
-        else {
-            return Ok(None);
-        };
+    for ((key_slot, _value_slot), requests) in shared_groups {
+        let (column, data_type) =
+            column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "virtual shared key slot {} is missing from the sidecar record batch",
+                        key_slot.0
+                    ))
+                })?;
         validate_shared_map_column(&column, &data_type, num_rows)?;
 
         let mut keys_by_index: HashMap<u32, Vec<&str>> = HashMap::with_capacity(requests.len());
@@ -602,12 +747,7 @@ fn materialize_object_read_plan(
         });
     }
 
-    Ok(Some(build_object_column(
-        &child_values,
-        &shared_object_groups,
-        func_ctx,
-        num_rows,
-    )?))
+    build_object_column(&child_values, &shared_object_groups, func_ctx, num_rows)
 }
 
 struct SharedObjectGroup<'a> {
@@ -850,20 +990,6 @@ fn validate_shared_map_column(
     };
 
     Ok(())
-}
-
-fn shared_internal_name(
-    source_column_id: ColumnId,
-    data_type: VirtualColumnSharedDataType,
-) -> String {
-    match data_type {
-        VirtualColumnSharedDataType::Jsonb => format!("{source_column_id}__shared__"),
-        VirtualColumnSharedDataType::Boolean => format!("{source_column_id}__shared_bool__"),
-        VirtualColumnSharedDataType::UInt64 => format!("{source_column_id}__shared_uint64__"),
-        VirtualColumnSharedDataType::Int64 => format!("{source_column_id}__shared_int64__"),
-        VirtualColumnSharedDataType::Float64 => format!("{source_column_id}__shared_float64__"),
-        VirtualColumnSharedDataType::String => format!("{source_column_id}__shared_string__"),
-    }
 }
 
 fn shared_value_data_type(data_type: VirtualColumnSharedDataType) -> DataType {

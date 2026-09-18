@@ -18,6 +18,7 @@ mod snapshot;
 pub mod statistics;
 mod table_snapshot_statistics;
 
+pub use segment::BlockIndexMeta;
 pub use segment::BlockMeta;
 pub use segment::BytesRange;
 pub use segment::ColumnMeta;

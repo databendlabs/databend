@@ -678,13 +678,8 @@ pub trait Decimal:
         let multiplier = Self::e(size.scale());
         let min_for_precision = Self::min_for_precision(size.precision());
         let max_for_precision = Self::max_for_precision(size.precision());
-        self.checked_mul(multiplier).and_then(|v| {
-            if v > max_for_precision || v < min_for_precision {
-                None
-            } else {
-                Some(v)
-            }
-        })
+        self.checked_mul(multiplier)
+            .filter(|&v| !(v > max_for_precision || v < min_for_precision))
     }
 }
 
@@ -1605,7 +1600,7 @@ impl DecimalDataType {
             Value::Column(Column::Decimal(column)) => with_decimal_type!(|T| match column {
                 DecimalColumn::T(_, size) => Some((DecimalDataType::T(*size), false)),
             }),
-            Value::Column(Column::Nullable(box column)) => {
+            Value::Column(Column::Nullable(deref!(column))) => {
                 with_decimal_type!(|T| match &column.column {
                     Column::Decimal(DecimalColumn::T(_, size)) =>
                         Some((DecimalDataType::T(*size), true)),

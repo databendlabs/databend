@@ -522,6 +522,8 @@ impl FuseTable {
                                 window_idx,
                                 task_idx,
                                 base_level = task.base_level,
+                                candidate_kind :? = task.kind,
+                                task_kind :? = task.task_kind,
                                 repack_only = task.is_repack_only(),
                                 max_depth = task.score.max_depth,
                                 avg_depth = task.score.average_depth,
@@ -691,6 +693,7 @@ impl FuseTable {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_catalog::plan::ReclusterTaskKind;
     use databend_storages_common_table_meta::meta::SegmentInfo;
     use databend_storages_common_table_meta::meta::Statistics;
 
@@ -714,8 +717,8 @@ mod tests {
                 .collect(),
             base_level: 0,
             input_level_stats: Vec::new(),
-            all_ordered: false,
             kind: ReclusterCandidateKind::Depth,
+            task_kind: ReclusterTaskKind::SortBlocks,
             vertical_kind: None,
         }
     }

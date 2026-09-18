@@ -48,42 +48,44 @@ impl Interpreter for RenameTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // TODO check privileges
-        // You must have ALTER and DROP privileges for the original table,
-        // and CREATE and INSERT privileges for the new table.
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let table = match catalog
-            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.table)
-            .await
-        {
-            Ok(table) => table,
-            Err(error) => {
-                if (error.code() == ErrorCode::UNKNOWN_TABLE
-                    || error.code() == ErrorCode::UNKNOWN_DATABASE
-                    || error.code() == ErrorCode::UNKNOWN_CATALOG)
-                    && self.plan.if_exists
-                {
-                    return Ok(PipelineBuildResult::create());
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // TODO check privileges
+            // You must have ALTER and DROP privileges for the original table,
+            // and CREATE and INSERT privileges for the new table.
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let table = match catalog
+                .get_table(&self.plan.tenant, &self.plan.database, &self.plan.table)
+                .await
+            {
+                Ok(table) => table,
+                Err(error) => {
+                    if (error.code() == ErrorCode::UNKNOWN_TABLE
+                        || error.code() == ErrorCode::UNKNOWN_DATABASE
+                        || error.code() == ErrorCode::UNKNOWN_CATALOG)
+                        && self.plan.if_exists
+                    {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    return Err(error);
                 }
-                return Err(error);
-            }
-        };
-        table.check_mutable()?;
+            };
+            table.check_mutable()?;
 
-        let _resp = catalog
-            .rename_table(RenameTableReq {
-                if_exists: self.plan.if_exists,
-                name_ident: TableNameIdent {
-                    tenant: self.plan.tenant.clone(),
-                    db_name: self.plan.database.clone(),
-                    table_name: self.plan.table.clone(),
-                },
-                new_db_name: self.plan.new_database.clone(),
-                new_table_name: self.plan.new_table.clone(),
-            })
-            .await?;
+            let _resp = catalog
+                .rename_table(RenameTableReq {
+                    if_exists: self.plan.if_exists,
+                    name_ident: TableNameIdent {
+                        tenant: self.plan.tenant.clone(),
+                        db_name: self.plan.database.clone(),
+                        table_name: self.plan.table.clone(),
+                    },
+                    new_db_name: self.plan.new_database.clone(),
+                    new_table_name: self.plan.new_table.clone(),
+                })
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

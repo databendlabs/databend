@@ -16,8 +16,11 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,13 +44,20 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
 
+/// Turns pruned partitions into block read sources.
+///
+/// Partitions that only need a subset of their granules are emitted synchronously as granule
+/// reads. Every other partition is read one at a time in `async_process` and emitted before the
+/// next read starts, so downstream backpressure bounds both the read concurrency and the amount
+/// of buffered block data.
 pub struct ReadDataTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     pending_output: VecDeque<DataBlock>,
-    remaining_parts: Vec<PartInfoPtr>,
+    remaining_parts: VecDeque<PartInfoPtr>,
     async_output: Option<DataBlock>,
+    expr_runtime_pruner: Option<ExprRuntimePruner>,
 
     func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
@@ -56,6 +66,7 @@ pub struct ReadDataTransform {
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
     runtime_scan_filters: RuntimeScanFilters,
+    record_partitions: bool,
 }
 
 impl ReadDataTransform {
@@ -66,6 +77,7 @@ impl ReadDataTransform {
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
+        record_partitions: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
@@ -75,8 +87,9 @@ impl ReadDataTransform {
             input,
             output,
             pending_output: VecDeque::new(),
-            remaining_parts: Vec::new(),
+            remaining_parts: VecDeque::new(),
             async_output: None,
+            expr_runtime_pruner: None,
             func_ctx,
             block_reader,
             read_block_context,
@@ -84,6 +97,7 @@ impl ReadDataTransform {
             scan_id,
             context: ctx,
             runtime_scan_filters,
+            record_partitions,
         })))
     }
 
@@ -107,17 +121,31 @@ impl ReadDataTransform {
         ))
     }
 
+    /// Runtime scan statistics of a partition, including typed virtual column statistics.
+    fn scan_statistics(part_info: &FuseBlockPartInfo) -> RuntimeScanStatistics<'_> {
+        let virtual_stats = part_info
+            .block_meta_index
+            .as_ref()
+            .and_then(|index| index.virtual_block_meta.as_ref())
+            .map(|meta| &meta.virtual_column_stats);
+        RuntimeScanStatistics::new(part_info.columns_stat.as_ref(), virtual_stats)
+    }
+
     fn classify_parts(&mut self, parts: Vec<PartInfoPtr>) -> Result<()> {
+        if self.record_partitions {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, parts.len());
+        }
         for part in parts {
             let part_info = FuseBlockPartInfo::from_part(&part)?;
-            let columns_stat = part_info.columns_stat.as_ref();
-
-            if self.runtime_scan_filters.should_prune(columns_stat) {
+            if self
+                .runtime_scan_filters
+                .should_prune(Self::scan_statistics(part_info))
+            {
                 continue;
             }
 
             let Some(groups) = self.read_block_context.granule_groups_if_subset(&part)? else {
-                self.remaining_parts.push(part);
+                self.remaining_parts.push_back(part);
                 continue;
             };
 
@@ -130,85 +158,57 @@ impl ReadDataTransform {
         Ok(())
     }
 
-    async fn read_remaining_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
-        let mut parts_to_read = Vec::with_capacity(parts.len());
-        let mut sources = Vec::with_capacity(parts.len());
-        let mut full_reads = Vec::new();
-        let expr_runtime_pruner = self.create_runtime_pruners()?;
+    /// Read the next remaining partition that survives runtime pruning, or `None` once the
+    /// current batch is exhausted.
+    async fn read_next_remaining_part(&mut self) -> Result<Option<DataBlock>> {
+        let expr_runtime_pruner = match self.expr_runtime_pruner.as_ref() {
+            Some(pruner) => pruner,
+            None => self
+                .expr_runtime_pruner
+                .insert(self.create_runtime_pruners()?),
+        };
 
-        for part in parts {
+        'parts: while let Some(part) = self.remaining_parts.pop_front() {
+            let part_info = FuseBlockPartInfo::from_part(&part)?;
+            let stats = Self::scan_statistics(part_info);
+            if self.runtime_scan_filters.should_prune(stats)
+                || expr_runtime_pruner.prune(&part).await?
             {
-                let part_info = FuseBlockPartInfo::from_part(&part)?;
-                let columns_stat = part_info.columns_stat.as_ref();
-
-                if self.runtime_scan_filters.should_prune(columns_stat) {
-                    continue;
-                }
-            }
-
-            if expr_runtime_pruner.prune(&part).await? {
                 continue;
             }
 
-            let index = parts_to_read.len();
-            let groups = self.read_block_context.granule_groups(&part, None)?;
-
-            parts_to_read.push(part.clone());
-            sources.push(groups.map(ParquetDataSource::Granule));
-
-            if sources[index].is_none() {
-                let filters = self.runtime_scan_filters.clone();
-                let read_block_context = self.read_block_context.clone();
-
-                full_reads.push(async move {
-                    databend_common_base::runtime::spawn(async move {
-                        if filters.is_empty() {
-                            let source = read_block_context.read_full_data(part.clone()).await?;
-                            return Ok::<_, ErrorCode>((index, Some(source)));
+            let source = match self.read_block_context.granule_groups(&part, None)? {
+                Some(groups) => ParquetDataSource::Granule(groups),
+                None if self.runtime_scan_filters.is_empty() => {
+                    self.read_block_context.read_full_data(part.clone()).await?
+                }
+                None => {
+                    let read = self.read_block_context.read_full_data(part.clone());
+                    tokio::pin!(read);
+                    loop {
+                        // Subscribe before checking so a boundary update cannot be missed.
+                        let rechecks = self.runtime_scan_filters.recheck_notified();
+                        // `select_all` panics on empty input.
+                        debug_assert!(!rechecks.is_empty());
+                        if self.runtime_scan_filters.should_prune(stats) {
+                            continue 'parts;
                         }
 
-                        let read = read_block_context.read_full_data(part.clone());
-                        tokio::pin!(read);
-                        loop {
-                            // Subscribe before checking so a boundary update cannot be missed.
-                            let rechecks = filters.recheck_notified();
-                            // `select_all` panics on empty input.
-                            debug_assert!(!rechecks.is_empty());
-                            let part_info = FuseBlockPartInfo::from_part(&part)?;
-                            if filters.should_prune(part_info.columns_stat.as_ref()) {
-                                return Ok::<_, ErrorCode>((index, None));
-                            }
-
-                            tokio::select! {
-                                result = &mut read => {
-                                    let source = result?;
-                                    return Ok::<_, ErrorCode>((index, Some(source)));
-                                }
-                                _ = futures::future::select_all(rechecks) => {}
-                            }
+                        tokio::select! {
+                            result = &mut read => break result?,
+                            _ = futures::future::select_all(rechecks) => {}
                         }
-                    })
-                    .await?
-                });
-            }
+                    }
+                }
+            };
+
+            return Ok(Some(DataBlock::empty_with_meta(
+                DataSourceWithMeta::create(vec![part], vec![source]),
+            )));
         }
 
-        let completed_reads = futures::future::try_join_all(full_reads).await?;
-        for (index, source) in completed_reads {
-            sources[index] = source;
-        }
-
-        let mut retained_parts = Vec::with_capacity(parts_to_read.len());
-        let mut retained_sources = Vec::with_capacity(sources.len());
-        for (part, source) in parts_to_read.into_iter().zip(sources) {
-            if let Some(source) = source {
-                retained_parts.push(part);
-                retained_sources.push(source);
-            }
-        }
-
-        let meta = DataSourceWithMeta::create(retained_parts, retained_sources);
-        Ok(DataBlock::empty_with_meta(meta))
+        self.expr_runtime_pruner = None;
+        Ok(None)
     }
 }
 
@@ -279,8 +279,7 @@ impl Processor for ReadDataTransform {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let parts = std::mem::take(&mut self.remaining_parts);
-        self.async_output = Some(self.read_remaining_parts(parts).await?);
+        self.async_output = self.read_next_remaining_part().await?;
         Ok(())
     }
 }

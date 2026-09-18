@@ -496,14 +496,13 @@ impl AggregateInfo {
                 let name = format!("{}_sort_desc_{}", func_name, i);
                 let expr = &desc.expr;
 
-                let (is_reuse_index, column) = if let ScalarExpr::BoundColumnRef(column_ref) = expr
-                {
+                let column = if let ScalarExpr::BoundColumnRef(column_ref) = expr {
                     let index = column_ref.column.index;
                     self.aggregate_sort_descs.push(ScalarItem {
                         index,
                         scalar: expr.clone(),
                     });
-                    (true, column_ref.clone())
+                    column_ref.clone()
                 } else if let Some(item) = self
                     .aggregate_arguments
                     .iter()
@@ -519,10 +518,10 @@ impl AggregateInfo {
                     )
                     .build();
 
-                    (true, BoundColumnRef {
+                    BoundColumnRef {
                         span: expr.span(),
                         column: column_binding,
-                    })
+                    }
                 } else {
                     let data_type = expr.data_type().into_owned();
                     let index = metadata
@@ -542,14 +541,13 @@ impl AggregateInfo {
                         scalar: expr.clone(),
                     });
 
-                    (false, BoundColumnRef {
+                    BoundColumnRef {
                         span: expr.span(),
                         column: column_binding.clone(),
-                    })
+                    }
                 };
                 Ok(AggregateFunctionScalarSortDesc {
                     expr: column.into(),
-                    is_reuse_index,
                     nulls_first: desc.nulls_first,
                     asc: desc.asc,
                 })
@@ -568,7 +566,7 @@ impl AggregateInfo {
             let expr = &desc.expr;
 
             let replaced = if let ScalarExpr::BoundColumnRef(column_ref) = expr {
-                Some((true, column_ref.clone()))
+                Some(column_ref.clone())
             } else if let Some(item) = self
                 .aggregate_arguments
                 .iter()
@@ -585,21 +583,20 @@ impl AggregateInfo {
                 )
                 .build();
 
-                Some((true, BoundColumnRef {
+                Some(BoundColumnRef {
                     span: expr.span(),
                     column: column_binding,
-                }))
+                })
             } else {
                 None
             };
 
-            let Some((is_reuse_index, column)) = replaced else {
+            let Some(column) = replaced else {
                 return Ok(None);
             };
 
             replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
                 expr: column.into(),
-                is_reuse_index,
                 nulls_first: desc.nulls_first,
                 asc: desc.asc,
             });

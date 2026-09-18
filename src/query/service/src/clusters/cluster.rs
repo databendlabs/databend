@@ -762,7 +762,7 @@ impl ClusterDiscovery {
 
         let license_info = match license_result {
             Some(claims) => {
-                let expires_at = claims.expires_at.map(|d| d.as_secs()).unwrap_or(0);
+                let expires_at = claims.expires_at.unwrap_or(0);
                 serde_json::json!({
                     "has_license": true,
                     "expires_at": expires_at,
@@ -826,7 +826,8 @@ impl ClusterDiscovery {
                 "granule_index_file_bytes": cfg.cache.granule_index_file_bytes,
                 "table_prune_partitions_count": cfg.cache.table_prune_partitions_count,
                 "inverted_index_meta_count": cfg.cache.inverted_index_meta_count,
-                "inverted_index_filter_size": cfg.cache.inverted_index_filter_size,
+                "inverted_index_lookup_size": cfg.cache.inverted_index_lookup_size,
+                "inverted_index_payload_size": cfg.cache.inverted_index_payload_size,
                 "vector_index_meta_count": cfg.cache.vector_index_meta_count,
                 "vector_index_filter_size": cfg.cache.vector_index_filter_size,
                 "data_cache_in_memory_bytes": cfg.cache.data_cache_in_memory_bytes,

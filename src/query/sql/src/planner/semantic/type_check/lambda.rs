@@ -235,7 +235,7 @@ where A: super::TypeCheckAdapter
             ))
             .set_span(span));
         }
-        let box (arg, arg_type) = self.resolve_core(arena, args[0])?;
+        let deref!((arg, arg_type)) = self.resolve_core(arena, args[0])?;
         self.resolve_lambda_function_arg(
             arena,
             span,
@@ -296,8 +296,8 @@ where A: super::TypeCheckAdapter
         self.check_lambda_param_count(func_name, params.len(), span)?;
 
         let inner_ty = match arg_type.remove_nullable() {
-            DataType::Array(box inner_ty) => inner_ty.clone(),
-            DataType::Map(box inner_ty) => inner_ty.clone(),
+            DataType::Array(deref!(inner_ty)) => inner_ty.clone(),
+            DataType::Map(deref!(inner_ty)) => inner_ty.clone(),
             DataType::Null | DataType::EmptyArray | DataType::EmptyMap => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
@@ -333,7 +333,7 @@ where A: super::TypeCheckAdapter
             .collect::<Vec<_>>();
 
         let mut lambda_context = self.bind_context.clone();
-        let box (lambda_expr, lambda_type) = self.resolve_core_lambda_expr(
+        let deref!((lambda_expr, lambda_type)) = self.resolve_core_lambda_expr(
             arena,
             &mut lambda_context,
             &lambda_columns,
@@ -547,8 +547,8 @@ where A: super::TypeCheckAdapter
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let func_name = "json_path_transform";
-        let box (json_arg, json_type) = self.resolve_core(arena, args[0])?;
-        let box (path_arg, path_type) = self.resolve_core(arena, args[1])?;
+        let deref!((json_arg, json_type)) = self.resolve_core(arena, args[0])?;
+        let deref!((path_arg, path_type)) = self.resolve_core(arena, args[1])?;
 
         if lambda_params.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
@@ -583,7 +583,7 @@ where A: super::TypeCheckAdapter
         let lambda_columns = vec![(params[0].clone(), param_type.clone())];
 
         let mut lambda_context = self.bind_context.clone();
-        let box (lambda_scalar, lambda_type) = self.resolve_core_lambda_expr(
+        let deref!((lambda_scalar, lambda_type)) = self.resolve_core_lambda_expr(
             arena,
             &mut lambda_context,
             &lambda_columns,

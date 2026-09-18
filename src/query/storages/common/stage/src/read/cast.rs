@@ -60,12 +60,12 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
 
         // ====  remove null first, all trivial
         (Null, Nullable(_)) => true,
-        (Nullable(box from_ty), Nullable(box to_ty))
-        | (from_ty, Nullable(box to_ty))
-        | (Nullable(box from_ty), to_ty) => load_can_auto_cast_to(from_ty, to_ty),
+        (Nullable(deref!(from_ty)), Nullable(deref!(to_ty)))
+        | (from_ty, Nullable(deref!(to_ty)))
+        | (Nullable(deref!(from_ty)), to_ty) => load_can_auto_cast_to(from_ty, to_ty),
 
         // ==== dive into nested types, must from the same out type, all trivial
-        (Map(box from_ty), Map(box to_ty)) => match (from_ty, to_ty) {
+        (Map(deref!(from_ty)), Map(deref!(to_ty))) => match (from_ty, to_ty) {
             (Tuple(_), Tuple(_)) => load_can_auto_cast_to(from_ty, to_ty),
             (_, _) => unreachable!(),
         },
@@ -81,8 +81,8 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         }
         (_, Tuple(_)) | (Tuple(_), _) => false,
 
-        (Array(box from_ty), Array(box to_ty)) => load_can_auto_cast_to(from_ty, to_ty),
-        (Array(box from_ty), Vector(VectorDataType::Float32(_))) => {
+        (Array(deref!(from_ty)), Array(deref!(to_ty))) => load_can_auto_cast_to(from_ty, to_ty),
+        (Array(deref!(from_ty)), Vector(VectorDataType::Float32(_))) => {
             matches!(from_ty.remove_nullable(), Number(_) | Decimal(_))
         }
         (EmptyArray, Array(_)) => true,

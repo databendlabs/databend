@@ -54,6 +54,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::is_dynamic_table_engine;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::NullTable;
@@ -1092,6 +1093,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     "VIEW".to_string()
                 } else if is_materialized_view_engine(v.engine()) {
                     "MATERIALIZED VIEW".to_string()
+                } else if is_dynamic_table_engine(v.engine()) {
+                    "DYNAMIC TABLE".to_string()
                 } else {
                     "BASE TABLE".to_string()
                 }
@@ -1171,6 +1174,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let (is_externals, storage_params): (Vec<bool>, Vec<String>) = database_tables
             .iter()
             .map(|v| {
+                if v.get_table_info().is_shared() {
+                    return (false, String::new());
+                }
                 let storage_params = &v.get_table_info().meta.storage_params;
                 storage_params
                     .as_ref()

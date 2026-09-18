@@ -151,6 +151,40 @@ pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::
     }
 }
 
+/// Extracts the creation timestamp encoded in a UUID v7 object name.
+///
+/// Non-v7 UUIDs return `None`; malformed UUIDs are rejected so callers do not accidentally apply
+/// timestamp-based deletion rules to an unknown object naming scheme.
+pub fn try_extract_uuid_v7_timestamp_from_path(path: &str) -> Result<Option<DateTime<Utc>>> {
+    let uuid_str = try_extract_uuid_str_from_path(path)?;
+    let uuid = Uuid::parse_str(uuid_str).map_err(|error| {
+        ErrorCode::StorageOther(format!("invalid UUID in object path '{}': {error}", path))
+    })?;
+    if !is_uuid_v7(&uuid) {
+        return Ok(None);
+    }
+    let timestamp = uuid.get_timestamp().ok_or_else(|| {
+        ErrorCode::StorageOther(format!(
+            "UUID v7 in object path '{}' has no timestamp",
+            path
+        ))
+    })?;
+    let (seconds, nanos) = timestamp.to_unix();
+    let seconds = i64::try_from(seconds).map_err(|_| {
+        ErrorCode::StorageOther(format!(
+            "UUID timestamp in object path '{}' is out of range",
+            path
+        ))
+    })?;
+    let timestamp = DateTime::from_timestamp(seconds, nanos).ok_or_else(|| {
+        ErrorCode::StorageOther(format!(
+            "UUID timestamp in object path '{}' is invalid",
+            path
+        ))
+    })?;
+    Ok(Some(timestamp))
+}
+
 pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -> Result<String> {
     // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
     if let Some(prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {

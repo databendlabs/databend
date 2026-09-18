@@ -34,6 +34,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -63,7 +64,6 @@ use crate::plans::ExecuteImmediatePlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
-use crate::resolve_type_name;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -199,7 +199,7 @@ impl Binder {
         )?;
         let mut arg_types = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let box (arg, mut arg_type) = type_checker.resolve(argument)?;
+            let deref!((arg, mut arg_type)) = type_checker.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
                 if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
                     arg_type = arg_type.wrap_nullable();
@@ -265,7 +265,7 @@ impl Binder {
 
         let args = arguments
             .iter()
-            .zip(casts_to_apply.into_iter())
+            .zip(casts_to_apply)
             .map(|(expr, cast)| match cast {
                 Some(target_type) => Expr::Cast {
                     span: expr.span(),

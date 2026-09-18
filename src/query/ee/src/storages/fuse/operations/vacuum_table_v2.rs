@@ -15,8 +15,8 @@
 // Logs from this module will show up as "[FUSE-VACUUM2] ...".
 databend_common_tracing::register_module_tag!("[FUSE-VACUUM2]");
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -24,7 +24,6 @@ use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
@@ -32,14 +31,19 @@ use databend_common_storages_fuse::io::granule_index::GranuleIndexSpec;
 use databend_common_storages_fuse::io::granule_index::build_granule_index_specs;
 use databend_common_storages_fuse::io::granule_index::collect_granule_index_payload_locations;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
+use databend_common_storages_fuse::operations::protected_block_id;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
 use opendal::Operator;
+use siphasher::sip128::Hasher128;
+use siphasher::sip128::SipHasher24;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
@@ -80,10 +84,9 @@ struct BlockGcContext<'a> {
     /// GC-root object metadata timestamp used by the common vacuum safety helper
     /// for legacy object-key handling.
     gc_root_meta_ts: DateTime<Utc>,
-    /// Protected data block paths that are still referenced by the gc root or refs.
-    gc_root_blocks: &'a HashSet<String>,
-    /// Inverted index metadata used to derive index object paths from data blocks.
-    inverted_indexes: &'a BTreeMap<String, TableIndex>,
+    /// Hashes of data block paths still referenced by the gc root or refs.
+    gc_root_blocks: &'a HashSet<u128>,
+    /// Granule index specs used to derive index payload paths from data blocks.
     granule_index_specs: &'a [Arc<dyn GranuleIndexSpec>],
     /// Start time of the block GC phase, used only for status reporting.
     start: std::time::Instant,
@@ -186,6 +189,9 @@ pub async fn do_vacuum2(
         .len()
         .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
     let mut gc_root_blocks = HashSet::new();
+    // Granule payloads are keyed by block UUID rather than full path, so protect them by id.
+    let mut gc_root_block_ids = HashSet::new();
+    let mut protected_inverted_index_locations = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
         .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
         .enumerate()
@@ -203,7 +209,19 @@ pub async fn do_vacuum2(
             .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
             .await?;
         for segment in segments {
-            gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+            let blocks = segment?.block_metas()?;
+            for block in &blocks {
+                gc_root_blocks.insert(block_path_hash(&block.location.0));
+                gc_root_block_ids.insert(protected_block_id(&block.location.0)?);
+                protected_inverted_index_locations.extend(
+                    block
+                        .inverted_index_metas
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|meta| meta.location.0.clone()),
+                );
+            }
         }
         ctx.set_status_info(&format!(
             "Read protected segment chunk for table {}, elapsed: {:?}, segment chunk: {}/{}, segments in chunk: {}, total protected blocks: {}",
@@ -216,19 +234,40 @@ pub async fn do_vacuum2(
         ));
     }
     ctx.set_status_info(&format!(
-        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
+        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}, protected inverted indexes: {}",
         table_info.desc,
         start.elapsed(),
-        gc_root_blocks.len()
+        gc_root_blocks.len(),
+        protected_inverted_index_locations.len(),
     ));
 
     let start = std::time::Instant::now();
-    let inverted_indexes = &table_info.meta.indexes;
+    let removed_inverted_index_v2 = purge_inverted_index_v2_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        fuse_table
+            .meta_location_generator()
+            .inverted_index_v2_location_prefix(),
+        &protected_inverted_index_locations,
+        gc_root_timestamp,
+        gc_root_meta_ts,
+    )
+    .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index V2 objects for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_inverted_index_v2,
+    ));
 
-    // order is important
-    // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
+    let start = std::time::Instant::now();
+
+    // Bloom indexes are still derived from data-block paths. Current `_i_i_v2` objects are deleted
+    // by the reference-aware scan above. Historical `_i_i` objects stay on the old block-addressed
+    // path: they are not vacuumed here.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
-    let granule_index_specs = build_granule_index_specs(inverted_indexes, &fuse_table.schema())?;
+    let granule_index_specs =
+        build_granule_index_specs(&table_info.meta.indexes, &fuse_table.schema())?;
     let block_gc_ctx = BlockGcContext {
         dal: fuse_table.get_operator_ref(),
         ctx: &ctx,
@@ -238,14 +277,13 @@ pub async fn do_vacuum2(
         gc_root_timestamp,
         gc_root_meta_ts,
         gc_root_blocks: &gc_root_blocks,
-        inverted_indexes,
         granule_index_specs: &granule_index_specs,
         start,
     };
     let orphan_granule_files = fuse_table
         .vacuum_orphan_granule_index_payloads(
             ctx.clone(),
-            &gc_root_blocks,
+            &gc_root_block_ids,
             gc_root_timestamp,
             gc_root_meta_ts,
         )
@@ -295,7 +333,8 @@ pub async fn do_vacuum2(
         .ref_snapshot_location_prefix();
     let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
-    let removed_files = block_gc_stats.removed_files
+    let removed_files = removed_inverted_index_v2
+        + block_gc_stats.removed_files
         + orphan_granule_files
         + stats_to_gc.len()
         + segments_to_gc.len()
@@ -308,6 +347,70 @@ pub async fn do_vacuum2(
     ));
 
     Ok(())
+}
+
+async fn purge_inverted_index_v2_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index V2 objects under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+            Ok(Some(timestamp)) => timestamp,
+            Ok(None) => continue,
+            Err(error) => {
+                warn!(
+                    "skip inverted-index V2 object with unparsable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
+        };
+        if object_timestamp >= gc_root_timestamp {
+            continue;
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
+}
+
+/// Hash the full path, including legacy names, prefixes and format versions.
+/// Keeping only 16 bytes per path avoids retaining a String and its heap allocation
+/// for every protected block. A collision can only retain garbage, never delete a
+/// protected block.
+fn block_path_hash(path: &str) -> u128 {
+    let mut hasher = SipHasher24::new();
+    hasher.write(path.as_bytes());
+    hasher.finish128().into()
 }
 
 async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
@@ -347,7 +450,10 @@ async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result
     };
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     for block_path in blocks_before_gc_root {
-        if !block_gc.gc_root_blocks.contains(&block_path) {
+        if !block_gc
+            .gc_root_blocks
+            .contains(&block_path_hash(&block_path))
+        {
             block_chunk.push(block_path);
             if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
                 purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
@@ -395,7 +501,7 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
         }
 
         stats.scanned_blocks += 1;
-        if block_gc.gc_root_blocks.contains(path) {
+        if block_gc.gc_root_blocks.contains(&block_path_hash(path)) {
             continue;
         }
 
@@ -457,11 +563,7 @@ async fn purge_block_chunk(
     }
 
     let chunk_idx = stats.removed_blocks / VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 1;
-    let indexes_to_gc = collect_block_index_locations(
-        block_chunk,
-        block_gc.inverted_indexes,
-        block_gc.granule_index_specs,
-    );
+    let indexes_to_gc = collect_block_index_locations(block_chunk, block_gc.granule_index_specs);
     block_gc.ctx.set_status_info(&format!(
         "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}, blocks in chunk: {}, indexes_to_gc: {:?}",
         block_gc.table_desc,
@@ -495,20 +597,12 @@ async fn purge_block_chunk(
 
 fn collect_block_index_locations(
     blocks_to_gc: &[String],
-    inverted_indexes: &BTreeMap<String, TableIndex>,
     granule_index_specs: &[Arc<dyn GranuleIndexSpec>],
 ) -> Vec<String> {
-    let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len() * (inverted_indexes.len() + 1));
+    // Bloom, granule mins and granule offsets per block, plus one payload per granule spec.
+    let mut indexes_to_gc =
+        Vec::with_capacity(blocks_to_gc.len() * (granule_index_specs.len() + 3));
     for loc in blocks_to_gc {
-        for idx in inverted_indexes.values() {
-            indexes_to_gc.push(
-                TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                    loc,
-                    idx.name.as_str(),
-                    idx.version.as_str(),
-                ),
-            );
-        }
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
         indexes_to_gc.extend(collect_granule_index_payload_locations(
@@ -579,7 +673,6 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use databend_common_meta_app::schema::TableIndexType;
     use databend_query::test_kits::TestFixture;
     use futures_util::StreamExt;
     use opendal::services::Memory;
@@ -593,35 +686,15 @@ mod tests {
             "1/2/_b/g0123456789abcdef0123456789abcdef_v2.parquet".to_string(),
             "1/2/_b/hfedcba9876543210fedcba9876543210_v2.parquet".to_string(),
         ];
-        let mut inverted_indexes = BTreeMap::new();
-        inverted_indexes.insert("idx".to_string(), TableIndex {
-            index_type: TableIndexType::Inverted,
-            name: "idx".to_string(),
-            column_ids: vec![0],
-            sync_creation: true,
-            version: "123456789".to_string(),
-            options: BTreeMap::new(),
-        });
-
-        let indexes = collect_block_index_locations(&blocks, &inverted_indexes, &[]);
+        let indexes = collect_block_index_locations(&blocks, &[]);
 
         assert_eq!(indexes, vec![
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &blocks[0],
-                "idx",
-                "123456789",
-            ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
             TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(&blocks[0]).0,
             TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
                 &blocks[0]
             )
             .0,
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &blocks[1],
-                "idx",
-                "123456789",
-            ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
             TableMetaLocationGenerator::gen_granule_mins_location_from_block_location(&blocks[1]).0,
             TableMetaLocationGenerator::gen_granule_offsets_location_from_block_location(
@@ -635,6 +708,60 @@ mod tests {
         use opendal::Scheme;
 
         use super::*;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_v2_gc_keeps_protected_objects() -> anyhow::Result<()> {
+            const PREFIX: &str = "1/2/_i_i_v2/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+
+            let gc_root_timestamp = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+            let old_uuid =
+                databend_storages_common_table_meta::meta::uuid_from_date_time(old_timestamp);
+            let orphan_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                old_timestamp + chrono::Duration::milliseconds(1),
+            );
+            let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                gc_root_timestamp + chrono::Duration::seconds(1),
+            );
+
+            let protected = format!("{PREFIX}generation/h{}.index", old_uuid.simple());
+            let orphan = format!("{PREFIX}generation/h{}.index", orphan_uuid.simple());
+            let after_cutoff = format!("{PREFIX}generation/h{}.index", after_cutoff_uuid.simple());
+            let stray = format!("{PREFIX}generation/not-a-uuid.index");
+            let outside = "1/2/_b/outside.parquet".to_string();
+            dal.write(&protected, vec![1]).await?;
+            dal.write(&orphan, vec![2]).await?;
+            dal.write(&after_cutoff, vec![3]).await?;
+            dal.write(&stray, vec![4]).await?;
+            dal.write(&outside, vec![5]).await?;
+
+            let protected_locations = HashSet::from([protected.clone()]);
+            let removed = purge_inverted_index_v2_objects(
+                &dal,
+                &ctx,
+                PREFIX,
+                &protected_locations,
+                gc_root_timestamp,
+                Utc::now() + chrono::Duration::days(4),
+            )
+            .await?;
+
+            assert_eq!(removed, 1);
+            assert!(dal.exists(&protected).await?);
+            assert!(!dal.exists(&orphan).await?);
+            assert!(dal.exists(&after_cutoff).await?);
+            assert!(dal.exists(&stray).await?);
+            assert!(dal.exists(&outside).await?);
+            Ok(())
+        }
 
         #[tokio::test(flavor = "multi_thread")]
         async fn streaming_block_gc_keeps_protected_and_cutoff_blocks() -> anyhow::Result<()> {
@@ -662,6 +789,10 @@ mod tests {
             }
 
             let protected_block = candidates[0].clone();
+            // Keep the referenced v1 block, but delete the unreferenced v2 block
+            // with the same UUID in the same directory.
+            let protected_other_version = candidates[1].replace("_v2.parquet", "_v1.parquet");
+            dal.write(&protected_other_version, vec![1]).await?;
             let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
                 gc_root_timestamp + chrono::Duration::seconds(1),
             );
@@ -669,8 +800,10 @@ mod tests {
                 format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
             dal.write(&after_cutoff_block, vec![1]).await?;
 
-            let protected_blocks = HashSet::from([protected_block.clone()]);
-            let inverted_indexes = BTreeMap::new();
+            let protected_blocks = HashSet::from([
+                block_path_hash(&protected_block),
+                block_path_hash(&protected_other_version),
+            ]);
             let block_gc = BlockGcContext {
                 dal: &dal,
                 ctx: &ctx,
@@ -680,7 +813,6 @@ mod tests {
                 gc_root_timestamp,
                 gc_root_meta_ts: gc_root_timestamp,
                 gc_root_blocks: &protected_blocks,
-                inverted_indexes: &inverted_indexes,
                 granule_index_specs: &[],
                 start: std::time::Instant::now(),
             };
@@ -688,11 +820,12 @@ mod tests {
 
             let stats = purge_blocks_before_gc_root(&block_gc).await?;
 
-            assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS);
+            assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS + 1);
             assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
             // Each removed block contributes bloom, mins and offsets paths.
             assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 4);
             assert!(dal.exists(&protected_block).await?);
+            assert!(dal.exists(&protected_other_version).await?);
             assert!(dal.exists(&after_cutoff_block).await?);
             for path in candidates.iter().skip(1) {
                 assert!(!dal.exists(path).await?, "garbage block survived: {path}");
@@ -776,8 +909,7 @@ mod tests {
                     format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
                 dal.write(&after_cutoff_block, vec![1]).await?;
 
-                let protected_blocks = HashSet::from([protected_block.clone()]);
-                let inverted_indexes = BTreeMap::new();
+                let protected_blocks = HashSet::from([block_path_hash(&protected_block)]);
                 let block_gc = BlockGcContext {
                     dal: &dal,
                     ctx: &ctx,
@@ -787,7 +919,6 @@ mod tests {
                     gc_root_timestamp,
                     gc_root_meta_ts: gc_root_timestamp,
                     gc_root_blocks: &protected_blocks,
-                    inverted_indexes: &inverted_indexes,
                     granule_index_specs: &[],
                     start: std::time::Instant::now(),
                 };

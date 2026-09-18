@@ -20,13 +20,13 @@ use std::fmt;
 use std::io;
 use std::io::IoSlice;
 use std::io::Write;
+use std::mem;
 use std::ops::Range;
 use std::os::fd::AsFd;
 use std::os::fd::BorrowedFd;
 use std::os::fd::OwnedFd;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::ptr;
 use std::ptr::NonNull;
 
 use bytes::Bytes;
@@ -37,14 +37,14 @@ use crate::runtime::spawn_blocking;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 
-pub struct Alignment(ptr::Alignment);
+pub struct Alignment(mem::Alignment);
 
 impl Alignment {
-    pub const MIN: Self = Self(ptr::Alignment::MIN);
+    pub const MIN: Self = Self(mem::Alignment::MIN);
 
     #[inline]
     pub const fn new(align: usize) -> Option<Self> {
-        match ptr::Alignment::new(align) {
+        match mem::Alignment::new(align) {
             Some(a) => Some(Alignment(a)),
             None => None,
         }
@@ -184,7 +184,7 @@ pub fn dma_buffer_to_bytes(buf: DmaBuffer) -> Bytes {
     if buf.is_empty() {
         return Bytes::new();
     }
-    let (ptr, len, cap, alloc) = buf.into_raw_parts_with_alloc();
+    let (ptr, len, cap, alloc) = buf.into_raw_parts_with_allocator();
     // Memory fitting
     let old_layout = Layout::from_size_align(cap, alloc.0.as_usize()).unwrap();
     let new_layout = Layout::from_size_align(len, std::mem::align_of::<u8>()).unwrap();

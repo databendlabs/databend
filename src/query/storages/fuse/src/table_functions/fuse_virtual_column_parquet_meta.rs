@@ -405,7 +405,7 @@ fn collect_virtual_column_leaves(
 ) {
     if let Some(leaf) = node.leaf.as_ref() {
         let canonical_path = key_paths.to_canonical_path();
-        let column_name = format!("{}.{}", source_column_name, &canonical_path);
+        let column_name = format!("{}.{}", source_column_name, canonical_path);
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
                 if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {

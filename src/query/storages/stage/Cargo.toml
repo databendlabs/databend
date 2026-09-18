@@ -37,20 +37,12 @@ databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 encoding_rs = { workspace = true }
 enum-as-inner = { workspace = true }
-futures = { workspace = true }
 jsonb = { workspace = true }
-lance-core = { workspace = true }
-lance-encoding = { workspace = true }
-lance-file = { workspace = true, features = ["protoc"] }
-lance-io = { workspace = true }
-lance-table = { workspace = true, features = ["protoc"] }
 lexical-core = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
-object_store = { workspace = true }
-object_store_opendal = { workspace = true }
 opendal = { workspace = true }
 orc-rust = { workspace = true }
 parking_lot = { workspace = true }
@@ -60,7 +52,6 @@ serde_json = { workspace = true }
 simdutf8 = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
-url = { workspace = true }
 uuid = { workspace = true }
 
 [lints]
@@ -70,4 +61,4 @@ workspace = true
 bytes = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["match-template", "lance-encoding"]
+ignored = ["match-template"]

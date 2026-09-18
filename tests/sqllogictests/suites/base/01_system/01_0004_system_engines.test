@@ -1,5 +1,5 @@
 query TT
 SELECT * FROM system.engines ORDER BY "Engine" LIMIT 1,2
 ----
+DYNAMIC_TABLE Dynamic Table (Fuse-backed)
 FUSE FUSE Storage Engine
-ICEBERG ICEBERG Storage Engine

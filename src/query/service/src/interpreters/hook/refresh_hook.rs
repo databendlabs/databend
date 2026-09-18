@@ -199,7 +199,7 @@ async fn generate_refresh_table_index_plan(
     let mut plans = vec![];
 
     let table_meta = &table.get_table_info().meta;
-    for (_, index) in table_meta.indexes.iter() {
+    for index in table_meta.indexes.values() {
         if index.sync_creation {
             continue;
         }

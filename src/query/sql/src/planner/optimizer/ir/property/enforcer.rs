@@ -154,7 +154,7 @@ impl PropertyEnforcer {
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(
                             "Cannot find common type for probe key {:?} and build key {:?}",
-                            &probe_key, &build_key
+                            probe_key, build_key
                         ))
                     })?;
                     for (key, data_type) in [

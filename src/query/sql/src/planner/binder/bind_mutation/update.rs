@@ -124,7 +124,11 @@ impl Binder {
     }
 
     fn rewrite_nondeterministic_update(&mut self, plan: Plan) -> Result<Plan> {
-        let Plan::DataMutation { box s_expr, .. } = &plan else {
+        let Plan::DataMutation {
+            s_expr: deref!(s_expr),
+            ..
+        } = &plan
+        else {
             return Ok(plan);
         };
         let RelOperator::Mutation(mutation) = s_expr.plan() else {
@@ -304,7 +308,7 @@ impl Binder {
             }
 
             if let Some(update) = &mut eval.update {
-                for (_, expr) in update.iter_mut() {
+                for expr in update.values_mut() {
                     for col in &any_columns {
                         expr.replace_column(col.old, col.new)?
                     }
@@ -312,7 +316,7 @@ impl Binder {
             }
         }
 
-        for (_, column) in mutation.field_index_map.iter_mut() {
+        for column in mutation.field_index_map.values_mut() {
             if let Some(col) = any_columns.iter().find(|c| c.old.to_string() == *column) {
                 *column = col.new.to_string()
             };

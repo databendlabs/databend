@@ -243,7 +243,7 @@ impl GlobalHistoryLog {
         let create_stage = if let Some(connection) = &self.connection {
             connection.to_create_stage_sql(&self.stage_name)
         } else {
-            format!("CREATE STAGE IF NOT EXISTS {}", &self.stage_name)
+            format!("CREATE STAGE IF NOT EXISTS {}", self.stage_name)
         };
         self.execute_sql(&create_stage).await?;
 
@@ -509,7 +509,7 @@ impl GlobalHistoryLog {
 
         let cluster_id = dummy_cluster.get_cluster_id()?;
         let session = create_session(&self.tenant_id, &cluster_id).await?;
-        session.create_query_context_with_cluster(dummy_cluster, self.version)
+        session.create_query_context_with_cluster(dummy_cluster, self.version, None)
     }
 }
 

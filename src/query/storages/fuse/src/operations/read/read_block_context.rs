@@ -19,6 +19,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -133,9 +134,9 @@ impl ReadBlockContext {
         if let (Some(_), Some(meta)) = (self.virtual_reader.as_ref(), virtual_meta) {
             // Old files and refreshed virtual columns may have no matching marks.
             // The presence of virtual columns alone must not disable granule reads.
-            for column in meta.virtual_column_metas.values() {
+            for slot in &meta.read_slots {
                 let mark =
-                    crate::io::virtual_offset_mark(&meta.virtual_block_location, column.offset);
+                    crate::io::virtual_offset_mark(&meta.virtual_block_location, slot.offset);
                 if !granule_index.offsets.columns.contains_key(&mark) {
                     return Ok(None);
                 }
@@ -218,16 +219,19 @@ impl ReadBlockContext {
             .granule_index
             .as_ref()
             .ok_or_else(|| ErrorCode::Internal("missing granule index"))?;
+        // Sidecar read slots are addressed by slot index, which is also the column id of the
+        // corresponding field in `VirtualColumnReader::read_schema`.
         let columns = meta
-            .virtual_column_metas
+            .read_slots
             .iter()
-            .map(|(id, column)| {
+            .enumerate()
+            .map(|(slot_index, slot)| {
                 (
-                    *id,
+                    slot_index as ColumnId,
                     ColumnMeta::Parquet(SingleColumnMeta {
-                        offset: column.offset,
-                        len: column.len,
-                        num_values: column.num_values,
+                        offset: slot.offset,
+                        len: slot.len,
+                        num_values: slot.num_values,
                     }),
                 )
             })
@@ -239,12 +243,15 @@ impl ReadBlockContext {
             layout.granule_rows as usize,
             part.nums_rows,
             &columns,
-            meta.virtual_column_metas.iter().map(|(id, column)| {
-                (
-                    *id,
-                    crate::io::virtual_offset_mark(&meta.virtual_block_location, column.offset),
-                )
-            }),
+            meta.read_slots
+                .iter()
+                .enumerate()
+                .map(|(slot_index, slot)| {
+                    (
+                        slot_index as ColumnId,
+                        crate::io::virtual_offset_mark(&meta.virtual_block_location, slot.offset),
+                    )
+                }),
             Some(lock_stats.clone()),
         )?;
         // The largest projected chunk end is sufficient: readers never request footer bytes.
@@ -256,7 +263,12 @@ impl ReadBlockContext {
             })
             .max()
             .unwrap_or(0);
-        let schema = VirtualColumnReader::read_schema(meta);
+        let schema = VirtualColumnReader::read_schema(meta).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "virtual sidecar {} has a read slot without a parquet type",
+                meta.virtual_block_location
+            ))
+        })?;
         let column_types = schema.leaf_fields().into_iter().map(|field| {
             let data_type = databend_common_expression::types::DataType::from(field.data_type());
             (field.column_id, data_type.to_string())

@@ -404,7 +404,7 @@ impl KeysVec {
 
 fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Result<()> {
     let (column, bitmap) = match column {
-        Column::Nullable(box column) => (&column.column, Some(&column.validity)),
+        Column::Nullable(deref!(column)) => (&column.column, Some(&column.validity)),
         column => (column, None),
     };
 

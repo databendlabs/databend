@@ -173,7 +173,7 @@ impl Partitions {
                     .into_iter()
                     .map(|p| (p.hash() % num_executors as u64, p.clone()))
                     .collect::<Vec<_>>();
-                parts.sort_by(|a, b| a.0.cmp(&b.0));
+                parts.sort_by_key(|a| a.0);
                 parts.into_iter().map(|x| x.1).collect()
             }
             PartitionsShuffleKind::ConsistentHash => {
@@ -209,7 +209,7 @@ impl Partitions {
                     })
                     .collect::<Vec<_>>();
 
-                ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
+                ring.sort_by_key(|&(_, a)| a);
 
                 for p in &regular_partitions {
                     let k = p.hash();
@@ -461,6 +461,21 @@ impl ClusterLevelLogStats {
     }
 }
 
+/// Work performed by the row-sort stage of a recluster task.
+///
+/// Task plans are exchanged only between query processes running the same version;
+/// this enum is not part of persisted FUSE metadata.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ReclusterTaskKind {
+    /// Establish row order. For ordinary linear FUSE tasks, the inputs are one
+    /// unordered block or a size-bounded group of small blocks. Other layouts
+    /// retain their layout-specific sorting and re-aggregation semantics.
+    SortBlocks,
+    /// Merge blocks already ordered by the current linear cluster key, without
+    /// sorting their rows again.
+    MergeBlocks,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterTask {
     pub parts: Partitions,
@@ -473,9 +488,7 @@ pub struct ReclusterTask {
     /// Effective input levels under the current cluster key, not historical stored levels.
     #[serde(default)]
     pub input_level_stats: Vec<ClusterLevelLogStats>,
-    // All input blocks in this task are already ordered by the current cluster key.
-    #[serde(default)]
-    pub all_ordered: bool,
+    pub kind: ReclusterTaskKind,
     /// Absent preserves the existing horizontal pipeline and wire compatibility.
     #[serde(default)]
     pub vertical_kind: Option<VerticalReclusterKind>,
@@ -526,7 +539,7 @@ mod tests {
             level: 3,
             input_level_stats: vec![],
             virtual_column_layout: None,
-            all_ordered: true,
+            kind: ReclusterTaskKind::MergeBlocks,
             vertical_kind: Some(VerticalReclusterKind::MergeBlocks),
             memory_budget: 64 * 1024 * 1024,
         };
@@ -534,6 +547,7 @@ mod tests {
         let encoded = serde_json::to_vec(&task).unwrap();
         let decoded: ReclusterTask = serde_json::from_slice(&encoded).unwrap();
 
+        assert_eq!(decoded.kind, task.kind);
         assert_eq!(decoded.vertical_kind, task.vertical_kind);
         assert_eq!(decoded.memory_budget, task.memory_budget);
     }
@@ -547,7 +561,7 @@ mod tests {
             "total_bytes": 0,
             "total_compressed": 0,
             "level": 0,
-            "all_ordered": false
+            "kind": "SortBlocks"
         });
         let decoded: ReclusterTask = serde_json::from_value(encoded).unwrap();
 

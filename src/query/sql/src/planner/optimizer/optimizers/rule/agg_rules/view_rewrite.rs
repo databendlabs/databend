@@ -802,7 +802,7 @@ impl ResidualClasses {
     // Residual subsumption test.
     fn check(&self, view_residual_classes: &ResidualClasses) -> (bool, Option<Vec<ScalarExpr>>) {
         let mut extra_residual_preds = Vec::new();
-        for (view_residual_key, _) in view_residual_classes.residual_preds.iter() {
+        for view_residual_key in view_residual_classes.residual_preds.keys() {
             if !self.residual_preds.contains_key(view_residual_key) {
                 return (false, None);
             }
@@ -1033,8 +1033,7 @@ impl ViewMatcher {
                     Ok(Some(new_residual_pred)) => {
                         new_predicates.push(new_residual_pred);
                     }
-                    Ok(None) => {}
-                    Err(_) => {
+                    Ok(None) | Err(_) => {
                         return false;
                     }
                 }
@@ -1061,11 +1060,16 @@ impl ViewMatcher {
                     new_selection_set,
                 )
                 .is_err()
+                || !Self::selection_contains(new_selection_set, output_item.index)
             {
                 return false;
             }
         }
         true
+    }
+
+    fn selection_contains(selection: &HashSet<ScalarItem>, index: Symbol) -> bool {
+        selection.iter().any(|item| item.index == index)
     }
 
     fn check_aggregation(
@@ -1082,6 +1086,8 @@ impl ViewMatcher {
         // 4. All columns required to perform further grouping (if necessary) are available in the view output.
         // 5. All columns required to compute output expressions are available in the view output.
 
+        // Whole-query substitution would drop the query's aggregate. Detail MVs
+        // are matched separately against its input, preserving the aggregate.
         if self.query_info.aggregate.is_some() && view_info.query_info.aggregate.is_none() {
             return false;
         }
@@ -1141,6 +1147,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1154,6 +1161,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1182,6 +1190,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1206,6 +1215,10 @@ impl ViewMatcher {
                 self.query_info
                     .check_output_cols(predicate, &view_info.output_cols, new_selection_set)
                     .is_ok()
+                    && predicate
+                        .used_columns()
+                        .iter()
+                        .all(|index| Self::selection_contains(new_selection_set, *index))
             })
     }
 }
@@ -1263,9 +1276,9 @@ pub(crate) fn format_scalar(
                 .map(|arg| format_scalar(arg, column_map))
                 .join(", ");
             if !params.is_empty() {
-                format!("{}({})({})", &func.func_name, params, args)
+                format!("{}({})({})", func.func_name, params, args)
             } else {
-                format!("{}({})", &func.func_name, args)
+                format!("{}({})", func.func_name, args)
             }
         }
         ScalarExpr::CastExpr(cast) => {
@@ -1291,9 +1304,9 @@ pub(crate) fn format_scalar(
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut scalar = if !params.is_empty() {
-                format!("{}<{}>({})", &agg.func_name, params, args)
+                format!("{}<{}>({})", agg.func_name, params, args)
             } else {
-                format!("{}({})", &agg.func_name, args)
+                format!("{}({})", agg.func_name, args)
             };
             if !agg.sort_descs.is_empty() {
                 let sort_descs = agg
@@ -1312,11 +1325,11 @@ pub(crate) fn format_scalar(
                 .map(|arg| format_scalar(arg, column_map))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}({})", &udaf.name, args)
+            format!("{}({})", udaf.name, args)
         }
         ScalarExpr::UDFCall(udf) => format!(
             "{}({})",
-            &udf.handler,
+            udf.handler,
             udf.arguments
                 .iter()
                 .map(|arg| { format_scalar(arg, column_map) })

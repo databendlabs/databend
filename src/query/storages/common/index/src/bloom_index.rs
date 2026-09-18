@@ -507,7 +507,7 @@ impl BloomIndex {
 
     fn calculate_nullable_column_digests<T: ValueType>(column: &Column) -> Result<Vec<u64>>
     where for<'a> T::ScalarRef<'a>: DFHash {
-        let (column, validity) = if let Column::Nullable(box inner) = column {
+        let (column, validity) = if let Column::Nullable(deref!(inner)) = column {
             let validity = if inner.validity.null_count() == 0 {
                 None
             } else {
@@ -1008,7 +1008,7 @@ impl BloomIndexBuilder {
                 .convert_to_full_column(field_type, 1);
 
             let (column, data_type) = match field_type.remove_nullable() {
-                DataType::Map(box inner_ty) => {
+                DataType::Map(deref!(inner_ty)) => {
                     // Add bloom filter for the value of map type
                     let map_column = if field_type.is_nullable() {
                         let nullable_column =
@@ -1104,7 +1104,7 @@ impl BloomIndexBuilder {
             }
 
             let (column, data_type) = match field_type.remove_nullable() {
-                DataType::Map(box inner_ty) => {
+                DataType::Map(deref!(inner_ty)) => {
                     let input = column.clone();
                     let map_column = if field_type.is_nullable() {
                         NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(&input)
@@ -1383,12 +1383,12 @@ where T: EqVisitor
                 [
                     Expr::Cast(Cast {
                         expr:
-                            box Expr::FunctionCall(FunctionCall {
+                            deref!(Expr::FunctionCall(FunctionCall {
                                 id,
                                 args,
                                 return_type,
                                 ..
-                            }),
+                            })),
                         dest_type,
                         ..
                     }),
@@ -1406,12 +1406,12 @@ where T: EqVisitor
                     }),
                     Expr::Cast(Cast {
                         expr:
-                            box Expr::FunctionCall(FunctionCall {
+                            deref!(Expr::FunctionCall(FunctionCall {
                                 id,
                                 args,
                                 return_type,
                                 ..
-                            }),
+                            })),
                         dest_type,
                         ..
                     }),
@@ -1515,10 +1515,10 @@ trait EqVisitor {
         match &args[0] {
             Expr::ColumnRef(ColumnRef { id, data_type, .. })
             | Expr::Cast(Cast {
-                expr: box Expr::ColumnRef(ColumnRef { id, data_type, .. }),
+                expr: deref!(Expr::ColumnRef(ColumnRef { id, data_type, .. })),
                 ..
             }) => {
-                if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+                if let DataType::Map(deref!(inner_ty)) = data_type.remove_nullable() {
                     let val_type = match inner_ty {
                         DataType::Tuple(kv_tys) => kv_tys[1].clone(),
                         _ => unreachable!(),
@@ -1649,11 +1649,11 @@ impl EqVisitor for RewriteVisitor<'_> {
             span,
             is_try: false,
             expr:
-                box Expr::ColumnRef(ColumnRef {
+                deref!(Expr::ColumnRef(ColumnRef {
                     id,
                     data_type: src_type,
                     ..
-                }),
+                })),
             dest_type,
             ..
         }) = cast
@@ -1764,11 +1764,11 @@ impl EqVisitor for ShortListVisitor {
         let Expr::Cast(Cast {
             is_try: false,
             expr:
-                box Expr::ColumnRef(ColumnRef {
+                deref!(Expr::ColumnRef(ColumnRef {
                     id,
                     data_type: src_type,
                     ..
-                }),
+                })),
             dest_type,
             ..
         }) = cast

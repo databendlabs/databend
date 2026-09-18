@@ -22,11 +22,9 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]
-#![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
 #![feature(core_intrinsics)]
-#![feature(int_roundings)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 

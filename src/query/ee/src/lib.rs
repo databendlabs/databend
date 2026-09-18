@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Query futures contain deeply nested async binder and executor calls.
+#![recursion_limit = "256"]
 #![allow(
     clippy::collapsible_if,
     clippy::let_and_return,
@@ -20,6 +22,7 @@
 
 pub mod attach_table;
 pub mod data_mask;
+pub mod data_sharing;
 pub mod enterprise_services;
 pub mod fail_safe;
 pub mod license;

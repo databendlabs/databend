@@ -221,28 +221,33 @@ fn granule_payload_block_id(path: &str) -> Option<Uuid> {
         .and_then(|block_id| Uuid::parse_str(block_id).ok())
 }
 
+/// Extracts the block UUID that granule-index payload names are keyed by.
+///
+/// Callers collect these while scanning protected segments so the payload vacuum only has to
+/// retain 16 bytes per protected block instead of the full object key.
+pub fn protected_block_id(block_location: &str) -> Result<Uuid> {
+    granule_payload_block_id(block_location).ok_or_else(|| {
+        ErrorCode::StorageOther(format!(
+            "Failed to extract protected block UUID from object key '{}'",
+            block_location
+        ))
+    })
+}
+
 impl FuseTable {
     /// Remove old orphan granule payloads in bounded batches, including payloads
     /// from dropped index specs and interrupted writes. The index-first layout
     /// requires one recursive scan rather than one LIST request per block.
+    ///
+    /// `protected_block_ids` holds the UUIDs of every data block still referenced by the gc
+    /// root or refs; see [`protected_block_id`].
     pub async fn vacuum_orphan_granule_index_payloads(
         &self,
         ctx: Arc<dyn TableContext>,
-        protected_block_locations: &HashSet<String>,
+        protected_block_ids: &HashSet<Uuid>,
         gc_root_timestamp: DateTime<Utc>,
         gc_root_meta_ts: DateTime<Utc>,
     ) -> Result<usize> {
-        let protected_block_ids = protected_block_locations
-            .iter()
-            .map(|location| {
-                granule_payload_block_id(location).ok_or_else(|| {
-                    ErrorCode::StorageOther(format!(
-                        "Failed to extract protected block UUID from object key '{}'",
-                        location
-                    ))
-                })
-            })
-            .collect::<Result<HashSet<_>>>()?;
         let prefix = self
             .meta_location_generator()
             .block_granule_bloom_index_prefix();

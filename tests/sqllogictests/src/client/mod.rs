@@ -23,7 +23,6 @@ use std::fmt;
 pub use http_client::HttpClient;
 pub use mysql_client::MySQLClient;
 use rand::Rng;
-use rand::distributions::Alphanumeric;
 use regex::Regex;
 use sqllogictest::DBOutput;
 pub use ttc_client::TTCClient;
@@ -82,13 +81,9 @@ impl Client {
         }
     }
 
-    // Create sandbox tenant and create default database for the tenant
-    pub async fn create_sandbox(&mut self) -> Result<()> {
-        let sandbox_name: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
+    // Join the runner-selected sandbox and initialize its default database.
+    // Connections in one file share a tenant, not session or transaction state.
+    pub async fn init_sandbox(&mut self, sandbox_name: &str) -> Result<()> {
         self.query(format!("set sandbox_tenant = \'{sandbox_name}\'").as_str())
             .await?;
         self.query("create database if not exists default").await?;

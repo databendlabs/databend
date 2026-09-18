@@ -146,176 +146,180 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let ctx = self.ctx.clone();
-        let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let ctx = self.ctx.clone();
+            let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 
-        let mut rounds = 0;
-        let mut push_downs = None;
-        // FINAL carry is scoped to this fixed-scan statement loop.
-        // A new FINAL statement starts from the table head again.
-        let mut linear_final_carry = ReclusterFinalCarry::default();
-        let is_vertical = ctx.get_settings().get_recluster_method()?
-            == databend_common_settings::ReclusterMethod::Vertical;
-        let vertical_max_tasks = if is_vertical {
-            self.vertical_max_tasks()?
-        } else {
-            1
-        };
-        let mut vertical_round = VerticalRound::MergeBlocks;
-        let mut vertical_cycle_progress = false;
-        let start = SystemTime::now();
-        let timeout = Duration::from_secs(recluster_timeout_secs);
-        let is_final = self.plan.is_final;
-        let mut committed_rounds = 0;
-        let (result, stop_reason) = loop {
-            if let Err(err) = ctx.check_aborting() {
-                error!(
-                    event = "recluster.aborted",
-                    rounds;
-                    "Recluster aborted before next round"
-                );
-                break (Err(err.with_context("failed to execute")), "aborted");
-            }
+            let mut rounds = 0;
+            let mut push_downs = None;
+            // FINAL carry is scoped to this fixed-scan statement loop.
+            // A new FINAL statement starts from the table head again.
+            let mut linear_final_carry = ReclusterFinalCarry::default();
+            let is_vertical = ctx.get_settings().get_recluster_method()?
+                == databend_common_settings::ReclusterMethod::Vertical;
+            let vertical_max_tasks = if is_vertical {
+                self.vertical_max_tasks()?
+            } else {
+                1
+            };
+            let mut vertical_round = VerticalRound::MergeBlocks;
+            let mut vertical_cycle_progress = false;
+            let start = SystemTime::now();
+            let timeout = Duration::from_secs(recluster_timeout_secs);
+            let is_final = self.plan.is_final;
+            let mut committed_rounds = 0;
+            let (result, stop_reason) = loop {
+                if let Err(err) = ctx.check_aborting() {
+                    error!(
+                        event = "recluster.aborted",
+                        rounds;
+                        "Recluster aborted before next round"
+                    );
+                    break (Err(err.with_context("failed to execute")), "aborted");
+                }
 
-            // A successful commit advances this phase. On retryable conflicts,
-            // keep the phase unchanged and rebuild it against the fresh snapshot.
-            rounds += 1;
-            let res = self
-                .execute_recluster(
-                    &mut push_downs,
-                    &mut linear_final_carry,
-                    vertical_round,
-                    vertical_max_tasks,
-                )
-                .await;
+                // A successful commit advances this phase. On retryable conflicts,
+                // keep the phase unchanged and rebuild it against the fresh snapshot.
+                rounds += 1;
+                let res = self
+                    .execute_recluster(
+                        &mut push_downs,
+                        &mut linear_final_carry,
+                        vertical_round,
+                        vertical_max_tasks,
+                    )
+                    .await;
 
-            let mut continue_vertical_phase = false;
-            match res {
-                Ok(outcome) => {
-                    if outcome == ReclusterRoundOutcome::ClaimRetriesExhausted {
-                        break (Ok(()), outcome.stop_reason().unwrap());
-                    }
-                    let task_count = match outcome {
-                        ReclusterRoundOutcome::Committed(count) => Some(count),
-                        _ => None,
-                    };
-                    if task_count.is_some() {
-                        committed_rounds += 1;
-                    }
-                    if is_vertical {
-                        match vertical_round {
-                            VerticalRound::MergeBlocks => {
-                                if let Some(task_count) = task_count {
-                                    vertical_cycle_progress = true;
-                                    let task_budget = vertical_max_tasks.saturating_sub(task_count);
-                                    if task_budget > 0 {
-                                        vertical_round = VerticalRound::SortBlocks { task_budget };
+                let mut continue_vertical_phase = false;
+                match res {
+                    Ok(outcome) => {
+                        if outcome == ReclusterRoundOutcome::ClaimRetriesExhausted {
+                            break (Ok(()), outcome.stop_reason().unwrap());
+                        }
+                        let task_count = match outcome {
+                            ReclusterRoundOutcome::Committed(count) => Some(count),
+                            _ => None,
+                        };
+                        if task_count.is_some() {
+                            committed_rounds += 1;
+                        }
+                        if is_vertical {
+                            match vertical_round {
+                                VerticalRound::MergeBlocks => {
+                                    if let Some(task_count) = task_count {
+                                        vertical_cycle_progress = true;
+                                        let task_budget =
+                                            vertical_max_tasks.saturating_sub(task_count);
+                                        if task_budget > 0 {
+                                            vertical_round =
+                                                VerticalRound::SortBlocks { task_budget };
+                                            continue_vertical_phase = true;
+                                        }
+                                    } else {
+                                        vertical_round = VerticalRound::SortBlocks {
+                                            task_budget: vertical_max_tasks,
+                                        };
                                         continue_vertical_phase = true;
                                     }
-                                } else {
-                                    vertical_round = VerticalRound::SortBlocks {
-                                        task_budget: vertical_max_tasks,
-                                    };
-                                    continue_vertical_phase = true;
+                                }
+                                VerticalRound::SortBlocks { .. } => {
+                                    vertical_cycle_progress |= task_count.is_some();
+                                    vertical_round = VerticalRound::MergeBlocks;
                                 }
                             }
-                            VerticalRound::SortBlocks { .. } => {
-                                vertical_cycle_progress |= task_count.is_some();
-                                vertical_round = VerticalRound::MergeBlocks;
+                            linear_final_carry = ReclusterFinalCarry::default();
+                        }
+                        if task_count.is_none() && !continue_vertical_phase {
+                            if !is_final || !vertical_cycle_progress {
+                                break (Ok(()), "no_recluster_parts");
                             }
                         }
-                        linear_final_carry = ReclusterFinalCarry::default();
                     }
-                    if task_count.is_none() && !continue_vertical_phase {
-                        if !is_final || !vertical_cycle_progress {
-                            break (Ok(()), "no_recluster_parts");
+                    Err(e) => {
+                        if is_final
+                            && matches!(
+                                e.code(),
+                                ErrorCode::LEASE_EXPIRED
+                                    | ErrorCode::TABLE_ALREADY_LOCKED
+                                    | ErrorCode::TABLE_VERSION_MISMATCHED
+                                    | ErrorCode::UNRESOLVABLE_CONFLICT
+                            )
+                        {
+                            // Keep FINAL carry across retryable conflicts. FINAL is
+                            // a bounded fixed scan and does not restart from table
+                            // head to chase concurrent snapshot drift.
+                            warn!(
+                                event = "recluster.retry",
+                                reason = "retryable_conflict",
+                                round = rounds,
+                                code = e.code(),
+                                error :? = e;
+                                "Recluster round failed with retryable conflict"
+                            );
+                        } else {
+                            error!(
+                                event = "recluster.failed",
+                                round = rounds,
+                                code = e.code(),
+                                error :? = e;
+                                "Recluster round failed"
+                            );
+                            break (Err(e), "error");
                         }
                     }
                 }
-                Err(e) => {
-                    if is_final
-                        && matches!(
-                            e.code(),
-                            ErrorCode::LEASE_EXPIRED
-                                | ErrorCode::TABLE_ALREADY_LOCKED
-                                | ErrorCode::TABLE_VERSION_MISMATCHED
-                                | ErrorCode::UNRESOLVABLE_CONFLICT
-                        )
-                    {
-                        // Keep FINAL carry across retryable conflicts. FINAL is
-                        // a bounded fixed scan and does not restart from table
-                        // head to chase concurrent snapshot drift.
-                        warn!(
-                            event = "recluster.retry",
-                            reason = "retryable_conflict",
-                            round = rounds,
-                            code = e.code(),
-                            error :? = e;
-                            "Recluster round failed with retryable conflict"
-                        );
-                    } else {
-                        error!(
-                            event = "recluster.failed",
-                            round = rounds,
-                            code = e.code(),
-                            error :? = e;
-                            "Recluster round failed"
-                        );
-                        break (Err(e), "error");
-                    }
+
+                let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
+                ctx.set_status_info(&format!(
+                    "[FUSE-RECLUSTER] Executed rounds={} committed_rounds={} elapsed={:?}",
+                    rounds, committed_rounds, elapsed_time,
+                ));
+
+                if continue_vertical_phase {
+                    continue;
                 }
+
+                if !is_final {
+                    break (Ok(()), "single_round_completed");
+                }
+
+                if is_vertical && vertical_round == VerticalRound::MergeBlocks {
+                    vertical_cycle_progress = false;
+                }
+
+                if elapsed_time >= timeout {
+                    warn!(
+                        event = "recluster.timeout",
+                        rounds,
+                        timeout_secs = recluster_timeout_secs;
+                        "Recluster stopped at time limit"
+                    );
+                    break (Ok(()), "timeout");
+                }
+            };
+
+            info!(
+                event = "recluster.finished",
+                catalog = self.plan.catalog.as_str(),
+                database = self.plan.database.as_str(),
+                table = self.plan.table.as_str(),
+                is_final,
+                rounds,
+                committed_rounds,
+                stop_reason,
+                success = result.is_ok(),
+                elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
+                "Recluster finished"
+            );
+
+            if committed_rounds > 0 {
+                self.vacuum_table_history().await;
             }
 
-            let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
-            ctx.set_status_info(&format!(
-                "[FUSE-RECLUSTER] Executed rounds={} committed_rounds={} elapsed={:?}",
-                rounds, committed_rounds, elapsed_time,
-            ));
-
-            if continue_vertical_phase {
-                continue;
-            }
-
-            if !is_final {
-                break (Ok(()), "single_round_completed");
-            }
-
-            if is_vertical && vertical_round == VerticalRound::MergeBlocks {
-                vertical_cycle_progress = false;
-            }
-
-            if elapsed_time >= timeout {
-                warn!(
-                    event = "recluster.timeout",
-                    rounds,
-                    timeout_secs = recluster_timeout_secs;
-                    "Recluster stopped at time limit"
-                );
-                break (Ok(()), "timeout");
-            }
-        };
-
-        info!(
-            event = "recluster.finished",
-            catalog = self.plan.catalog.as_str(),
-            database = self.plan.database.as_str(),
-            table = self.plan.table.as_str(),
-            is_final,
-            rounds,
-            committed_rounds,
-            stop_reason,
-            success = result.is_ok(),
-            elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
-            "Recluster finished"
-        );
-
-        if committed_rounds > 0 {
-            self.vacuum_table_history().await;
-        }
-
-        result?;
-        Ok(PipelineBuildResult::create())
+            result?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

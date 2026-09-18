@@ -53,28 +53,30 @@ impl Interpreter for DropDataMaskInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_datamask_handler();
-        let tenant = self.plan.tenant.clone();
-        if let Some(policy_id) = handler
-            .drop_data_mask(meta_api.clone(), self.plan.clone().into())
-            .await?
-        {
-            SecurityPolicyCacheManager::instance().invalidate(
-                PolicyType::DataMask,
-                &tenant,
-                policy_id,
-            );
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .revoke_ownership(&OwnershipObject::MaskingPolicy { policy_id })
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            let handler = get_datamask_handler();
+            let tenant = self.plan.tenant.clone();
+            if let Some(policy_id) = handler
+                .drop_data_mask(meta_api.clone(), self.plan.clone().into())
+                .await?
+            {
+                SecurityPolicyCacheManager::instance().invalidate(
+                    PolicyType::DataMask,
+                    &tenant,
+                    policy_id,
+                );
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .revoke_ownership(&OwnershipObject::MaskingPolicy { policy_id })
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

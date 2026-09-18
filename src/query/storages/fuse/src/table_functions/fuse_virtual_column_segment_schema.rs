@@ -134,7 +134,7 @@ fn build_segment_schema(
             .unwrap_or_else(|| column_paths.source_column_id.to_string());
         for path in &column_paths.paths {
             column_ids.push(path.column_id);
-            let path_name = format!("{}.{}", &source_name, &path.path);
+            let path_name = format!("{}.{}", source_name, path.path);
             path_names.push(path_name);
         }
     }

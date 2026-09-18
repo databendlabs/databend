@@ -28,6 +28,7 @@ use databend_common_expression::Expr as EExpr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -57,7 +58,6 @@ use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
 use crate::binder::AliasLookup;
 use crate::binder::NameResolutionResult;
-use crate::planner::semantic::resolve_type_name;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -161,7 +161,11 @@ where A: TypeCheckAdapter
         let all_funcs = BUILTIN_FUNCTIONS
             .all_function_names()
             .into_iter()
-            .chain(self.adapter.aggregate_function_factory().registered_names())
+            .chain(
+                self.adapter
+                    .aggregate_function_registry()
+                    .registered_names(),
+            )
             .chain(
                 GENERAL_WINDOW_FUNCTIONS
                     .iter()
@@ -291,16 +295,19 @@ where A: TypeCheckAdapter
             )));
         }
 
-        if let Some(rewritten_get_expr) =
-            self.try_resolve_get_function_chain(arena, span, func_name, args)
+        // Variant access must be rewritten before resolving arguments. Otherwise a nested
+        // `get(get(v, ...), ...)` chain binds intermediate virtual columns before the complete
+        // path gets a chance to bind as one virtual column.
+        if let Some(rewritten_variant_expr) =
+            self.try_resolve_variant_function(arena, span, func_name, args)
         {
-            return rewritten_get_expr;
+            return rewritten_variant_expr;
         }
 
         let is_grouping = func_name.eq_ignore_ascii_case("grouping");
         let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
         for arg in args {
-            let box (mut scalar, _) = self.resolve_core(arena, *arg)?;
+            let deref!((mut scalar, _)) = self.resolve_core(arena, *arg)?;
             if is_grouping
                 && let Some(group_item) = self.grouping_argument_group_item(arena, *arg, &scalar)
             {
@@ -309,20 +316,13 @@ where A: TypeCheckAdapter
             scalars.push(scalar);
         }
 
-        if self.should_try_rewrite_variant_function(func_name) {
-            if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars)
-            {
-                return rewritten_variant_expr;
-            }
-        }
-        if Self::is_vector_function(func_name)
-            && let Some(rewritten_vector_expr) =
-                self.try_rewrite_vector_function(span, func_name, &scalars)
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &scalars)
         {
             return rewritten_vector_expr;
         }
-        let box (scalar, data_type) =
+
+        let deref!((scalar, data_type)) =
             self.resolve_scalar_function_call(span, func_name, vec![], scalars.into_vec())?;
         if func_name == "eq" || func_name == "noteq" {
             self.rewrite_variant_compare_constant(scalar, data_type)
@@ -340,6 +340,13 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
+
+        if let Some(rewritten_variant_expr) =
+            self.try_resolve_variant_function(arena, span, func_name, args)
+        {
+            return rewritten_variant_expr;
+        }
+
         let (mut scalars, _) = self.resolve_expr_args(arena, args)?;
 
         // `grouping<...>(...)` with explicit params is the internal rewritten
@@ -352,16 +359,8 @@ where A: TypeCheckAdapter
             }
         }
 
-        if self.should_try_rewrite_variant_function(func_name) {
-            if let Some(rewritten_variant_expr) =
-                self.try_rewrite_variant_function(span, func_name, &scalars)
-            {
-                return rewritten_variant_expr;
-            }
-        }
-        if Self::is_vector_function(func_name)
-            && let Some(rewritten_vector_expr) =
-                self.try_rewrite_vector_function(span, func_name, &scalars)
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &scalars)
         {
             return rewritten_vector_expr;
         }
@@ -629,7 +628,15 @@ where A: TypeCheckAdapter
         };
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        let expr = type_check::rewrite_function_to_cast(expr);
+        if let [argument] = args.as_slice()
+            && expr == argument.as_expr()?
+        {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                self.adapter.set_result_cache_uncacheable();
+            }
+            return Ok(Box::new((argument.clone(), expr.data_type().clone())));
+        }
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
         let is_top_level_cast = matches!(&expr, expr::Expr::Cast(_));
 
         // Run constant folding for arguments of the scalar function.
@@ -658,7 +665,7 @@ where A: TypeCheckAdapter
                         return arg;
                     }
                     match self.try_fold_constant(checked_arg.clone()) {
-                        Ok(box (constant, _)) => constant,
+                        Ok(deref!((constant, _))) => constant,
                         Err(_) => arg,
                     }
                 })

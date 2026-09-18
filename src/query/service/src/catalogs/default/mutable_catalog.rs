@@ -95,10 +95,12 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -186,7 +188,7 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig, _version: BuildInfoRef) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
@@ -216,7 +218,7 @@ impl MutableCatalog {
         let storage_factory = StorageFactory::create(conf.clone());
 
         // Database factory.
-        let database_factory = DatabaseFactory::create(conf.clone());
+        let database_factory = DatabaseFactory::create(version);
 
         let ctx = CatalogContext {
             meta,
@@ -355,7 +357,7 @@ impl Catalog for MutableCatalog {
         info!(
             "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
-            &req.meta.engine
+            req.meta.engine
         );
 
         // Initial the database after creating.
@@ -484,6 +486,18 @@ impl Catalog for MutableCatalog {
         self.ctx
             .meta
             .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    async fn list_materialized_views(
+        &self,
+        tenant: &Tenant,
+        filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        self.ctx
+            .meta
+            .list_materialized_views(tenant, filter)
             .await
             .map_err(meta_service_error)
     }
@@ -764,12 +778,12 @@ impl Catalog for MutableCatalog {
         tenant: &Tenant,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        // deal with share table
-        {
-            if req.update_table_metas.len() == 1 {
-                match req.update_table_metas[0].1.db_type.clone() {
-                    DatabaseType::NormalDB => {}
-                }
+        for (_, table_info) in &req.update_table_metas {
+            if table_info.is_shared() {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "Cannot modify shared table {}: table is READ ONLY",
+                    table_info.desc
+                )));
             }
         }
 
@@ -853,6 +867,10 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
+            DatabaseType::SharedDB => Err(ErrorCode::InvalidOperation(format!(
+                "Cannot truncate shared table {}: table is READ ONLY",
+                table_info.desc
+            ))),
         }
     }
 

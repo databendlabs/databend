@@ -33,6 +33,7 @@ use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_GRANULE_BLOOM_INDEX_PREFIX;
 use crate::FUSE_TBL_GRANULE_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
+use crate::FUSE_TBL_INVERTED_INDEX_PREFIX_V2;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
@@ -45,8 +46,9 @@ use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
-use crate::index::InvertedIndexFile;
 use crate::index::filters::BlockFilter;
+
+const LEGACY_INVERTED_INDEX_FILE_FORMAT_VERSION: u64 = 0;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
@@ -74,6 +76,7 @@ pub struct TableMetaLocationGenerator {
     snapshot_location_prefix: String,
     agg_index_location_prefix: String,
     inverted_index_location_prefix: String,
+    inverted_index_v2_location_prefix: String,
     vector_index_location_prefix: String,
     spatial_index_location_prefix: String,
     granule_index_location_prefix: String,
@@ -84,22 +87,24 @@ pub struct TableMetaLocationGenerator {
 
 impl TableMetaLocationGenerator {
     pub fn new(prefix: String) -> Self {
-        let block_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_BLOCK_PREFIX,);
+        let block_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_BLOCK_PREFIX,);
         let bloom_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
-        let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
-        let snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SNAPSHOT_PREFIX);
-        let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
+        let segment_info_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_PREFIX);
+        let snapshot_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_SNAPSHOT_PREFIX);
+        let agg_index_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_AGG_INDEX_PREFIX);
         let inverted_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
-        let vector_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
+        let inverted_index_v2_location_prefix =
+            format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_PREFIX_V2);
+        let vector_index_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
         let spatial_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
         let granule_index_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_GRANULE_INDEX_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_GRANULE_INDEX_PREFIX);
         let segment_statistics_location_prefix =
-            format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
-        let ref_snapshot_location_prefix = format!("{}/{}/", &prefix, LEGACY_FUSE_TBL_REF_PREFIX);
+            format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
+        let ref_snapshot_location_prefix = format!("{}/{}/", prefix, LEGACY_FUSE_TBL_REF_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -108,6 +113,7 @@ impl TableMetaLocationGenerator {
             snapshot_location_prefix,
             agg_index_location_prefix,
             inverted_index_location_prefix,
+            inverted_index_v2_location_prefix,
             vector_index_location_prefix,
             spatial_index_location_prefix,
             granule_index_location_prefix,
@@ -280,13 +286,13 @@ impl TableMetaLocationGenerator {
         match is_column_oriented {
             true => format!(
                 "{}{}{}.col",
-                &self.segment_location_prefix(),
+                self.segment_location_prefix(),
                 VACUUM2_OBJECT_KEY_PREFIX,
                 segment_uuid.as_simple(),
             ),
             false => format!(
                 "{}{}{}_v{}.mpk",
-                &self.segment_location_prefix(),
+                self.segment_location_prefix(),
                 VACUUM2_OBJECT_KEY_PREFIX,
                 segment_uuid.as_simple(),
                 SegmentInfo::VERSION,
@@ -324,7 +330,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
-        format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2)
+        format!("{}/{}", self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2)
     }
 
     /// Generates an immutable location for one virtual-column sidecar generation.
@@ -388,6 +394,11 @@ impl TableMetaLocationGenerator {
         &self.inverted_index_location_prefix
     }
 
+    pub fn inverted_index_v2_location_prefix(&self) -> &str {
+        &self.inverted_index_v2_location_prefix
+    }
+
+    // Historical V1 prefix retained for cleanup of pre-V2 index objects.
     pub fn gen_specific_inverted_index_prefix(
         &self,
         index_name: &str,
@@ -395,13 +406,23 @@ impl TableMetaLocationGenerator {
     ) -> String {
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
-            "{}/{}/{}",
+            "{}{}/{}/",
             self.inverted_index_location_prefix(),
             index_name,
             short_ver,
         )
     }
 
+    pub fn gen_specific_inverted_index_v2_prefix(&self, index_version: &str) -> String {
+        format!(
+            "{}{}/",
+            self.inverted_index_v2_location_prefix(),
+            index_version,
+        )
+    }
+
+    // Historical V1 container location. New indexes use
+    // `gen_inverted_index_v2_location`.
     pub fn gen_inverted_index_location_from_block_location(
         loc: &str,
         index_name: &str,
@@ -420,7 +441,22 @@ impl TableMetaLocationGenerator {
             index_name,
             short_ver,
             id,
-            InvertedIndexFile::VERSION,
+            LEGACY_INVERTED_INDEX_FILE_FORMAT_VERSION,
+        )
+    }
+
+    /// Generates a new immutable inverted-index object location for one index build.
+    ///
+    /// The `h`-prefixed object UUID is independent from the data block UUID, so rebuilding the
+    /// same index generation never overwrites an object still referenced by an older snapshot.
+    pub fn gen_inverted_index_v2_location(&self, index_version: &str) -> String {
+        let index_object_id = Uuid::now_v7();
+        format!(
+            "{}{}/{}{}.index",
+            self.inverted_index_v2_location_prefix(),
+            index_version,
+            VACUUM2_OBJECT_KEY_PREFIX,
+            index_object_id.as_simple(),
         )
     }
 

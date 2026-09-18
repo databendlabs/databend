@@ -310,12 +310,6 @@ async fn read_multi_part(
     tx: Sender<Result<DataBlock>>,
     input_read_buffer_size: usize,
 ) -> poem::Result<()> {
-    if matches!(file_format, FileFormatParams::Lance(_)) {
-        return Err(poem::Error::from_string(
-            "Streaming load does not support LANCE file format",
-            StatusCode::BAD_REQUEST,
-        ));
-    }
     loop {
         match multipart.next_field().await {
             Err(cause) => {
@@ -343,7 +337,7 @@ async fn read_multi_part(
                     ));
                 }
                 let filename = require_upload_filename(name, field.file_name())?;
-                debug!("Started reading file: {}", &filename);
+                debug!("Started reading file: {}", filename);
                 let mut reader = field.into_async_read();
                 match file_format {
                     FileFormatParams::Parquet(_)
@@ -404,7 +398,7 @@ async fn read_multi_part(
                             if n == 0 {
                                 debug!(
                                     "Finished reading file: {}, total size: {} bytes",
-                                    &filename, offset
+                                    filename, offset
                                 );
                                 break;
                             }

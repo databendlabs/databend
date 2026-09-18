@@ -360,7 +360,7 @@ impl Executor {
             Running(r) => {
                 info!(
                     "Query {} state transitioning from Running to Stopped, reason: {:?}",
-                    &guard.query_id, reason,
+                    guard.query_id, reason,
                 );
                 if let Err(e) = &reason {
                     if e.code() != ErrorCode::CLOSED_QUERY {
@@ -383,14 +383,14 @@ impl Executor {
             Stopped(s) => {
                 debug!(
                     "Query {} already in Stopped state, original reason: {:?}, new reason: {:?}",
-                    &guard.query_id, s.reason, reason
+                    guard.query_id, s.reason, reason
                 );
                 return;
             }
         };
         info!(
             "Query {} state changed to Stopped, reason: {:?}",
-            &guard.query_id, reason
+            guard.query_id, reason
         );
         guard.state = Stopped(Box::new(state));
     }

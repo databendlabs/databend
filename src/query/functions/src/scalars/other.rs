@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::convert_byte_size;
@@ -56,7 +55,6 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::types::number::Float32Type;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::vectorize_2_arg;
@@ -118,37 +116,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ))
         .register();
-
-    registry.register_1_arg_core::<Float64Type, UInt8Type, _, _>(
-        "sleep",
-        |_, _| FunctionDomain::MayThrow,
-        |a, ctx| {
-            if let Some(val) = a.as_scalar() {
-                let duration =
-                    Duration::try_from_secs_f64((*val).into()).map_err(|x| x.to_string());
-                match duration {
-                    Ok(duration) => {
-                        // Note!!!: Don't increase the sleep time to a large value, it'll block the thread.
-                        if duration.gt(&Duration::from_secs(3)) {
-                            let err = format!(
-                                "The maximum sleep time is 3 seconds. Requested: {:?}",
-                                duration
-                            );
-                            ctx.set_error(0, err);
-                        } else {
-                            std::thread::sleep(duration);
-                        }
-                    }
-                    Err(e) => {
-                        ctx.set_error(0, e);
-                    }
-                }
-            } else {
-                ctx.set_error(0, "Must be constant value");
-            }
-            Value::Scalar(0_u8)
-        },
-    );
 
     registry
         .scalar_builder("rand")

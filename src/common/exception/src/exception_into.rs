@@ -177,7 +177,7 @@ impl From<serde_json::Error> for ErrorCode {
 
 impl From<std::convert::Infallible> for ErrorCode {
     fn from(v: std::convert::Infallible) -> Self {
-        ErrorCode::from_std_error(v)
+        match v {}
     }
 }
 
@@ -203,7 +203,7 @@ impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
         use std::io::ErrorKind;
 
-        let msg = format!("{} ({})", error.kind(), &error);
+        let msg = format!("{} ({})", error.kind(), error);
 
         match error.kind() {
             ErrorKind::NotFound => ErrorCode::StorageNotFound(msg),
@@ -450,11 +450,5 @@ impl From<tokio::task::JoinError> for ErrorCode {
         } else {
             ErrorCode::TokioError("Tokio task is cancelled")
         }
-    }
-}
-
-impl From<!> for ErrorCode {
-    fn from(_: !) -> Self {
-        unreachable!()
     }
 }

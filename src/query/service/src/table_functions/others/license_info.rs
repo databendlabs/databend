@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::ops::Sub;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use chrono::DateTime;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -33,10 +34,12 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_license::license::Feature;
-use databend_common_license::license::LicenseInfo;
+use databend_common_license::license::LicenseClaims;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -48,8 +51,6 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_factory::Table;
 use humantime::Duration as HumanDuration;
-use jwt_simple::claims::JWTClaims;
-use jwt_simple::prelude::Clock;
 
 use crate::sessions::TableContext;
 
@@ -68,6 +69,8 @@ impl LicenseInfoTable {
             // formatted string calculate the available time from now to expiry of license
             TableField::new("available_time_until_expiry", TableDataType::String),
             TableField::new("features", TableDataType::String),
+            // JWT nbf is independent of issued_at; append to preserve existing column positions.
+            TableField::new("valid_from", TableDataType::Timestamp.wrap_nullable()),
         ])
     }
 
@@ -147,11 +150,22 @@ impl LicenseInfoSource {
         })
     }
 
-    fn to_block(&self, info: &JWTClaims<LicenseInfo>) -> Result<DataBlock> {
-        let now = Clock::now_since_epoch();
-        let available_time = info.expires_at.unwrap_or_default().sub(now).as_micros();
-        let human_readable_available_time =
-            HumanDuration::from(Duration::from_micros(available_time)).to_string();
+    fn to_block(info: &LicenseClaims, now: Duration) -> Result<DataBlock> {
+        let issued_at = license_timestamp_micros(info.issued_at.unwrap_or_default())?;
+        let expires_at = license_timestamp_micros(info.expires_at.unwrap_or_default())?;
+        // Missing nbf means no explicit not-before constraint, not the issuance time or epoch.
+        let valid_from = info
+            .invalid_before
+            .map(license_timestamp_micros)
+            .transpose()?;
+        let available_time =
+            Duration::from_secs(info.expires_at.unwrap_or_default()).saturating_sub(now);
+        // Preserve the microsecond precision of the previous license output.
+        let available_time = Duration::new(
+            available_time.as_secs(),
+            available_time.subsec_micros() * 1_000,
+        );
+        let human_readable_available_time = HumanDuration::from(available_time).to_string();
 
         let feature_str = info.custom.display_features();
         Ok(DataBlock::new(
@@ -168,16 +182,11 @@ impl LicenseInfoSource {
                     info.custom.org.clone().unwrap_or("".to_string()),
                     1,
                 ),
-                BlockEntry::new_const_column_arg::<TimestampType>(
-                    info.issued_at.unwrap_or_default().as_micros() as i64,
-                    1,
-                ),
-                BlockEntry::new_const_column_arg::<TimestampType>(
-                    info.expires_at.unwrap_or_default().as_micros() as i64,
-                    1,
-                ),
+                BlockEntry::new_const_column_arg::<TimestampType>(issued_at, 1),
+                BlockEntry::new_const_column_arg::<TimestampType>(expires_at, 1),
                 BlockEntry::new_const_column_arg::<StringType>(human_readable_available_time, 1),
                 BlockEntry::new_const_column_arg::<StringType>(feature_str.to_string(), 1),
+                BlockEntry::new_const_column_arg::<NullableType<TimestampType>>(valid_from, 1),
             ],
             1,
         ))
@@ -211,8 +220,22 @@ impl AsyncSource for LicenseInfoSource {
                     self.ctx.get_tenant().display()
                 )
             })?;
-        Ok(Some(self.to_block(&info)?))
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err_to_code(
+                ErrorCode::LicenseKeyInvalid,
+                || "System clock is before the Unix epoch",
+            )?;
+        Ok(Some(Self::to_block(&info, now)?))
     }
+}
+
+fn license_timestamp_micros(seconds: u64) -> Result<i64> {
+    let micros = seconds
+        .checked_mul(1_000_000)
+        .and_then(|value| i64::try_from(value).ok())
+        .ok_or_else(|| ErrorCode::LicenseKeyInvalid("License timestamp is out of range"))?;
+    check_timestamp(micros).map_err(ErrorCode::LicenseKeyInvalid)
 }
 
 impl TableFunction for LicenseInfoTable {

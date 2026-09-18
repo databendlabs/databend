@@ -54,33 +54,36 @@ impl Interpreter for CreateCatalogInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_catalog_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_catalog_execute");
 
-        let catalog_manager = CatalogManager::instance();
+            let catalog_manager = CatalogManager::instance();
 
-        // Build and check if catalog is valid.
-        let ctl_info = CatalogInfo {
-            id: CatalogIdIdent::new(Tenant::new_literal("dummy"), 0).into(),
-            name_ident: CatalogNameIdent::new(self.plan.tenant.clone(), &self.plan.catalog).into(),
-            meta: CatalogMeta {
-                catalog_option: self.plan.meta.catalog_option.clone(),
-                created_on: chrono::Utc::now(),
-            },
-        };
-        let ctl = catalog_manager
-            .build_catalog(Arc::new(ctl_info), self.ctx.session_state()?)
-            .map_err(|err| err.add_message("Error creating catalog."))?;
+            // Build and check if catalog is valid.
+            let ctl_info = CatalogInfo {
+                id: CatalogIdIdent::new(Tenant::new_literal("dummy"), 0).into(),
+                name_ident: CatalogNameIdent::new(self.plan.tenant.clone(), &self.plan.catalog)
+                    .into(),
+                meta: CatalogMeta {
+                    catalog_option: self.plan.meta.catalog_option.clone(),
+                    created_on: chrono::Utc::now(),
+                },
+            };
+            let ctl = catalog_manager
+                .build_catalog(Arc::new(ctl_info), self.ctx.session_state()?)
+                .map_err(|err| err.add_message("Error creating catalog."))?;
 
-        // list databases to check if the catalog is valid.
-        ctl.list_databases(&self.plan.tenant).await.map_err(|err| {
-            err.add_message("Catalog creation failed. Check your parameter values.")
-        })?;
+            // list databases to check if the catalog is valid.
+            ctl.list_databases(&self.plan.tenant).await.map_err(|err| {
+                err.add_message("Catalog creation failed. Check your parameter values.")
+            })?;
 
-        catalog_manager
-            .create_catalog(self.plan.clone().into())
-            .await?;
+            catalog_manager
+                .create_catalog(self.plan.clone().into())
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

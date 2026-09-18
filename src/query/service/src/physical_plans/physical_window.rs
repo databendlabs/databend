@@ -714,7 +714,7 @@ impl PhysicalPlanBuilder {
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(
                             "Cannot find common type for {:?} and {:?}",
-                            &common_ty, &ty
+                            common_ty, ty
                         ))
                     })?;
                 }
@@ -802,11 +802,7 @@ impl PhysicalPlanBuilder {
                             .map(|s| s.data_type().into_owned())
                             .collect(),
                         params: agg.params.clone(),
-                        sort_descs: agg
-                            .sort_descs
-                            .iter()
-                            .map(|d| d.try_into())
-                            .collect::<Result<_>>()?,
+                        order_by: agg.bound_order_by()?,
                     },
                     output_column: w.index,
                     arg_indices: agg
@@ -823,20 +819,6 @@ impl PhysicalPlanBuilder {
                             }
                         })
                         .collect::<Result<_>>()?,
-                    sort_desc_indices: agg
-                        .sort_descs
-                        .iter()
-                        .map(|desc| {
-                            if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                                Ok(col.column.index)
-                            } else {
-                                Err(ErrorCode::Internal(
-                                    "Aggregate function sort description must be a BoundColumnRef"
-                                        .to_string(),
-                                ))
-                            }
-                        })
-                        .collect::<Result<_>>()?,
                     display: ScalarExpr::AggregateFunction(agg.clone())
                         .as_expr()?
                         .sql_display(),
@@ -846,7 +828,7 @@ impl PhysicalPlanBuilder {
                 let new_default = match &lag_lead.default {
                     None => LagLeadDefault::Null,
                     Some(d) => match d {
-                        box ScalarExpr::BoundColumnRef(col) => {
+                        deref!(ScalarExpr::BoundColumnRef(col)) => {
                             LagLeadDefault::Index(col.column.index)
                         }
                         _ => unreachable!(),

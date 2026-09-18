@@ -3,11 +3,11 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_fixtures as fixtures;
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::bitmap_column;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_bitmap_count_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -16,7 +16,7 @@ fn run_bitmap_count_cases(file: &mut impl Write, simulator: impl AggregationSimu
             databend_common_expression::types::number::UInt64Type::from_data(vec![1u64, 2, 3, 4])
                 .into(),
         ),
-        ("bm", fixtures::bitmap_column().into()),
+        ("bm", bitmap_column().into()),
     ];
     let columns = columns.as_slice();
 
@@ -65,7 +65,7 @@ fn run_bitmap_count_cases(file: &mut impl Write, simulator: impl AggregationSimu
 fn test_bitmap_count() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("bitmap_count.txt").unwrap();
-    run_bitmap_count_cases(file, eval_legacy_aggregate);
+    run_bitmap_count_cases(file, eval_aggregate);
 }
 
 #[test]

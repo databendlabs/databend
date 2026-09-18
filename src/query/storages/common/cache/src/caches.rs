@@ -58,8 +58,13 @@ pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
+/// Count-limited cache of complete persisted raw-bundle footers.
 pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
-pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
+/// Byte-limited cache of term dictionaries and small fieldnorm/fast components.
+/// Large `.fieldnorm` / `.fast` files are stored as payload pages instead.
+pub type InvertedIndexLookupCache = HybridCache<InvertedIndexLookupBytes>;
+/// Byte-limited cache of postings, positions, store, and other payload pages.
+pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
 
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
@@ -334,20 +339,6 @@ impl CachedObject<ParquetMetaData> for ParquetMetaData {
     }
 }
 
-impl CachedObject<InvertedIndexFile> for InvertedIndexFile {
-    type Cache = InvertedIndexFileCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_inverted_index_file_cache()
-    }
-}
-
-impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
-    type Cache = InvertedIndexMetaCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_inverted_index_meta_cache()
-    }
-}
-
 impl CachedObject<VirtualColumnFileMeta> for VirtualColumnFileMeta {
     type Cache = VirtualColumnMetaCache;
     fn cache() -> Option<Self::Cache> {
@@ -476,16 +467,25 @@ impl From<ColumnData> for CacheValue<ColumnData> {
 impl From<InvertedIndexMeta> for CacheValue<InvertedIndexMeta> {
     fn from(value: InvertedIndexMeta) -> Self {
         CacheValue {
+            mem_bytes: value.memory_size(),
             inner: Arc::new(value),
-            mem_bytes: 0,
         }
     }
 }
 
-impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
-    fn from(value: InvertedIndexFile) -> Self {
+impl From<InvertedIndexLookupBytes> for CacheValue<InvertedIndexLookupBytes> {
+    fn from(value: InvertedIndexLookupBytes) -> Self {
         CacheValue {
-            mem_bytes: std::mem::size_of::<InvertedIndexFile>() + value.data.len(),
+            mem_bytes: std::mem::size_of::<InvertedIndexLookupBytes>() + value.data.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<InvertedIndexPayloadBytes> for CacheValue<InvertedIndexPayloadBytes> {
+    fn from(value: InvertedIndexPayloadBytes) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<InvertedIndexPayloadBytes>() + value.data.len(),
             inner: Arc::new(value),
         }
     }

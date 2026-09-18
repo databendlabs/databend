@@ -25,6 +25,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -169,7 +170,7 @@ impl VerticalReclusterSource {
                 )?
             }
             VerticalReclusterKind::MergeBlocks => {
-                if !self.task.all_ordered {
+                if self.task.kind != ReclusterTaskKind::MergeBlocks {
                     return Err(ErrorCode::Internal(
                         "MergeBlocks requires planner-verified ordered sources",
                     ));
@@ -236,6 +237,7 @@ impl VerticalReclusterSource {
                 bloom_filter_index_location: part.bloom_filter_index_location.clone(),
                 bloom_filter_index_size: part.bloom_filter_index_size,
                 inverted_index_size: None,
+                inverted_index_metas: None,
                 ngram_filter_index_size: None,
                 vector_index_size: None,
                 vector_index_location: None,

@@ -328,7 +328,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
 
                 *chunk = Some(Arc::new(ColumnChunkData::Sparse {
                     length: self.metadata.meta().column(idx).byte_range().1 as usize,
-                    data: offsets.into_iter().zip(chunks.into_iter()).collect(),
+                    data: offsets.into_iter().zip(chunks).collect(),
                 }))
             }
         }

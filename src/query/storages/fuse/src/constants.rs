@@ -60,7 +60,10 @@ pub const FUSE_TBL_LAST_SNAPSHOT_HINT_V2: &str = "last_snapshot_location_hint_v2
 pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX: &str = "_vb_v2";
 pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1: &str = "_vb";
 pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
+/// Legacy inverted-index container prefix.
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
+/// Raw Tantivy bundle prefix.
+pub const FUSE_TBL_INVERTED_INDEX_PREFIX_V2: &str = "_i_i_v2";
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
 pub const FUSE_TBL_GRANULE_INDEX_PREFIX: &str = "_i_p";

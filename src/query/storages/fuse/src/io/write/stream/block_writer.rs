@@ -76,6 +76,8 @@ use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingInvertedIndex;
+use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
@@ -145,7 +147,8 @@ impl FuseBlockWriter {
             )
             .new_writer(index_context.clone())?,
         ];
-        for spec in &properties.inverted_index_builders {
+        for builder in &properties.inverted_index_builders {
+            let spec = builder.clone().into_write_spec(&properties.meta_locations);
             block_index_writers.push(spec.new_writer(index_context.clone())?);
         }
         if let Some(builder) = properties.vector_index_builder.clone() {
@@ -410,6 +413,12 @@ impl FuseBlockWriter {
             .map(|index| index.file.size())
             .sum::<u64>();
         let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
+        let inverted_index_metas = collect_inverted_index_metas(
+            block_indexes
+                .inverted
+                .iter()
+                .map(PendingInvertedIndex::to_block_index_meta),
+        );
         let perfect = self.properties.block_thresholds.check_perfect_block(
             self.row_count,
             self.block_size,
@@ -442,6 +451,7 @@ impl FuseBlockWriter {
             bloom_filter_index_size,
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
+            inverted_index_metas: Some(inverted_index_metas),
             vector_index_size,
             vector_index_location,
             spatial_index_size,
@@ -768,7 +778,7 @@ impl FuseBlockWriteOptions {
         if let Some((columns, size)) = &self.top_n {
             options.set_top_n_columns(columns.clone(), *size);
         }
-        options.set_inverted_indexes(self.inverted_index_builders.clone());
+        options.set_inverted_indexes(&self.meta_locations, self.inverted_index_builders.clone());
         options.set_virtual_columns(self.virtual_column_builder.clone());
         if let Some(builder) = self.vector_index_builder.clone() {
             options.set_vector_index(self.meta_locations.block_vector_index_location(), builder);

@@ -85,21 +85,23 @@ impl Interpreter for SetObjectTagsInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if let Some(object) =
-            resolve_taggable_object(&self.ctx, &self.plan.tenant, &self.plan.object).await?
-        {
-            let tag_pairs = resolve_tag_assignments(&self.plan.tenant, &self.plan.tags).await?;
-            set_tags(&self.plan.tenant, object.clone(), tag_pairs).await?;
-            let tag_assignments: Vec<_> = self
-                .plan
-                .tags
-                .iter()
-                .map(|t| format!("{}='{}'", t.name, t.value))
-                .collect();
-            info!("set tags on {}: {}", object, tag_assignments.join(", "));
-        }
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if let Some(object) =
+                resolve_taggable_object(&self.ctx, &self.plan.tenant, &self.plan.object).await?
+            {
+                let tag_pairs = resolve_tag_assignments(&self.plan.tenant, &self.plan.tags).await?;
+                set_tags(&self.plan.tenant, object.clone(), tag_pairs).await?;
+                let tag_assignments: Vec<_> = self
+                    .plan
+                    .tags
+                    .iter()
+                    .map(|t| format!("{}='{}'", t.name, t.value))
+                    .collect();
+                info!("set tags on {}: {}", object, tag_assignments.join(", "));
+            }
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 
@@ -114,15 +116,17 @@ impl Interpreter for UnsetObjectTagsInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if let Some(object) =
-            resolve_taggable_object(&self.ctx, &self.plan.tenant, &self.plan.object).await?
-        {
-            let tag_ids = resolve_tag_ids(&self.plan.tenant, &self.plan.tags).await?;
-            unset_tags(&self.plan.tenant, object.clone(), tag_ids).await?;
-            info!("unset tags from {}: {}", object, self.plan.tags.join(", "));
-        }
-        Ok(PipelineBuildResult::create())
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            if let Some(object) =
+                resolve_taggable_object(&self.ctx, &self.plan.tenant, &self.plan.object).await?
+            {
+                let tag_ids = resolve_tag_ids(&self.plan.tenant, &self.plan.tags).await?;
+                unset_tags(&self.plan.tenant, object.clone(), tag_ids).await?;
+                info!("unset tags from {}: {}", object, self.plan.tags.join(", "));
+            }
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 

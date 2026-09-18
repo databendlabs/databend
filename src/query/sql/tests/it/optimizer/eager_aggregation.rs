@@ -17,10 +17,13 @@ use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
+use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::plans::Plan;
 
+use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::setup_context;
@@ -81,6 +84,60 @@ FROM lineitem, orders
 WHERE o_orderkey = l_orderkey
 GROUP BY o_orderkey",
         },
+        SqlTestCase {
+            name: "sum_distinct_is_not_eager",
+            description: "Distinct sums cannot combine finalized local sums.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, sum_distinct(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "count_distinct_is_not_eager",
+            description: "Distinct counts cannot combine finalized local counts.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, count_distinct(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "semantic_distinct_is_not_eager",
+            description: "Semantic DISTINCT must resolve to an unsupported eager strategy.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, sum(DISTINCT l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "stddev_is_not_eager",
+            description: "Mergeable variance state does not make finalized standard deviations composable.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, stddev_pop(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "uniq_is_not_eager",
+            description: "Distinct counts with a dedicated name must not be eager.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, uniq(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "min_max_can_preaggregate",
+            description: "Extrema combine finalized local extrema without multiplicity compensation.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, min(l_extendedprice), max(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
     ];
 
     for case in &cases {
@@ -114,6 +171,49 @@ GROUP BY ss_store_sk",
     let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;
     rewritten.validate_types(&metadata)?;
 
+    Ok(())
+}
+
+// Exercise candidate generation directly as well as the production-plan goldens:
+// the cost model may discard a legal candidate, hiding an eligibility regression.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eager_aggregation_strategy_candidates() -> Result<()> {
+    for (aggregate, eligible) in [
+        ("sum", true),
+        ("count", true),
+        ("min", true),
+        ("max", true),
+        ("min_distinct", true),
+        ("sum_distinct", false),
+        ("count_distinct", false),
+        ("uniq", false),
+        ("stddev_pop", false),
+    ] {
+        let sql = format!(
+            "SELECT ss_store_sk, {aggregate}(ss_ext_sales_price) + 1
+FROM store_sales CROSS JOIN date_dim
+GROUP BY ss_store_sk"
+        );
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_setup_sql(DECIMAL_SALES_TABLE).await?;
+        ctx.register_setup_sql(DATE_DIM_TABLE).await?;
+        let Plan::Query {
+            s_expr, metadata, ..
+        } = ctx.bind_sql(&sql).await?
+        else {
+            unreachable!("test query should bind to Plan::Query")
+        };
+        let opt_ctx =
+            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
+        let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
+            .optimize_sync(*s_expr)?;
+        let mut results = TransformResult::new();
+        RuleEagerAggregation::new(metadata.clone()).apply(&split, &mut results)?;
+        assert_eq!(!results.results().is_empty(), eligible, "{aggregate}");
+        for result in results.results() {
+            result.validate_types(&metadata)?;
+        }
+    }
     Ok(())
 }
 

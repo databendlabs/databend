@@ -20,6 +20,7 @@ use chrono::DateTime;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -116,6 +117,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
         let bloom_pruner = &self.block_pruner.pruning_ctx.bloom_pruner;
+        let inverted_index_pruner = &self.block_pruner.pruning_ctx.inverted_index_pruner;
         let runtime_stats_pruner = match self.runtime_filter_prune_context.as_ref() {
             Some(context) => context.runtime_stats_pruner().await?,
             None => None,
@@ -150,6 +152,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let segment_location = segment_location.clone();
             let range_pruner = range_pruner.clone();
             let bloom_pruner = bloom_pruner.clone();
+            let inverted_index_pruner = inverted_index_pruner.clone();
+            let inverted_index_metas = segment.inverted_index_metas(block_idx)?;
             let sender = self.sender.as_ref().unwrap().clone();
             let location_path = location_path.clone();
             let compression_col = compression_col.clone();
@@ -199,9 +203,10 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                     let row_count = row_count_col[block_idx];
                     let range_input = RangeIndexInput::from_columns(&columns_stat);
                     if !range_pruner.should_keep(&range_input, None)
-                        || runtime_scan_filters.should_prune(Some(&columns_stat))
+                        || runtime_scan_filters
+                            .should_prune(RuntimeScanStatistics::from_columns(Some(&columns_stat)))
                     {
-                        return Ok::<_, ()>(());
+                        return Ok::<_, ErrorCode>(());
                     }
 
                     if let Some(pruner) = runtime_stats_pruner.as_ref() {
@@ -253,6 +258,23 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
+                    let (matched_rows, matched_scores) = if let Some(inverted_index_pruner) =
+                        inverted_index_pruner
+                    {
+                        match inverted_index_pruner
+                            .should_keep(&location_path, inverted_index_metas.as_deref(), row_count)
+                            .await
+                        {
+                            Ok(Some((rows, scores))) => (Some(rows), scores),
+                            Ok(None) => return Ok(()),
+                            Err(error) => {
+                                return Err(error);
+                            }
+                        }
+                    } else {
+                        (None, None)
+                    };
+
                     // Get create_on value
                     let create_on = create_on_col.index(block_idx).unwrap();
                     let create_on = match create_on {
@@ -274,8 +296,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         block_location: location_path.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows: None,
-                        matched_scores: None,
+                        matched_rows,
+                        matched_scores,
                         vector_scores: None,
                         virtual_block_meta: None,
                     };
@@ -326,10 +348,13 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 .await
                 .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
-            // Wait for all tasks to complete
-            let _ = future::try_join_all(join_handlers)
+            // Wait for all tasks to complete and propagate both join errors and pruning errors.
+            let results = future::try_join_all(join_handlers)
                 .await
                 .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
+            for result in results {
+                result?;
+            }
         }
         Ok(false)
     }

@@ -129,7 +129,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 })
             }
             ExplainKind::Memo(_) => {
-                if let box Plan::Query { ref s_expr, .. } = plan {
+                if let deref!( Plan::Query { ref s_expr, .. }) = plan {
                     let memo = get_optimized_memo(opt_ctx.clone(), *s_expr.clone()).await?;
                     Ok(Plan::Explain {
                         config,
@@ -229,6 +229,12 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             }
 
             Ok(Plan::CreateTable(plan))
+        }
+        Plan::CreateDynamicTable(mut plan) => {
+            if let Some(p) = plan.table_plan.as_select.take() {
+                plan.table_plan.as_select = Some(Box::new(optimize(opt_ctx.clone(), *p).await?));
+            }
+            Ok(Plan::CreateDynamicTable(plan))
         }
         Plan::CreateView(mut plan) => {
             if let Some(p) = &plan.query_plan {

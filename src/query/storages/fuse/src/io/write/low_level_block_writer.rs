@@ -58,6 +58,7 @@ use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -88,8 +89,11 @@ use super::block_index::BlockIndexLowLevelWriteContext;
 use super::block_index::BlockIndexLowLevelWriter;
 use super::block_index::BlockIndexSpec;
 use super::block_index::WrittenBlockIndexOutput;
+use super::block_index::WrittenInvertedIndex;
+use super::block_index::collect_inverted_index_metas;
 use super::stream::ColumnStatisticsState;
 use crate::FuseStorageFormat;
+use crate::io::TableMetaLocationGenerator;
 use crate::io::granule_index::GranuleIndexLowLevelColumnWriter;
 use crate::io::granule_index::GranuleIndexLowLevelOutput;
 use crate::io::granule_index::GranuleIndexLowLevelWriter;
@@ -247,12 +251,15 @@ impl FuseLowLevelBlockWriteOptions {
         self.top_n = Some((columns, size));
     }
 
-    pub fn set_inverted_indexes(&mut self, builders: Vec<InvertedIndexBuilder>) {
-        self.block_indexes.extend(
-            builders
-                .into_iter()
-                .map(|builder| Box::new(builder) as Box<dyn BlockIndexSpec>),
-        );
+    pub fn set_inverted_indexes(
+        &mut self,
+        meta_locations: &TableMetaLocationGenerator,
+        builders: Vec<InvertedIndexBuilder>,
+    ) {
+        self.block_indexes
+            .extend(builders.into_iter().map(|builder| {
+                Box::new(builder.into_write_spec(meta_locations)) as Box<dyn BlockIndexSpec>
+            }));
     }
 
     pub fn set_virtual_columns(&mut self, builder: Option<VirtualColumnBuilder>) {
@@ -390,6 +397,7 @@ struct FuseBlockDataResult {
     bloom_index_size: u64,
     ngram_index_size: Option<u64>,
     inverted_index_size: Option<u64>,
+    inverted_index_metas: Vec<BlockIndexMeta>,
     vector_index_size: Option<u64>,
     vector_index_location: Option<Location>,
     vector_stats: Option<StatisticsOfVectorColumns>,
@@ -651,6 +659,7 @@ impl FuseLowLevelBlockWriter {
             bloom_filter_index_location: data.bloom_index_location,
             bloom_filter_index_size: data.bloom_index_size,
             inverted_index_size: data.inverted_index_size,
+            inverted_index_metas: Some(data.inverted_index_metas),
             ngram_filter_index_size: data.ngram_index_size,
             vector_index_size: data.vector_index_size,
             vector_index_location: data.vector_index_location,
@@ -956,6 +965,12 @@ impl FuseLowLevelDataWriter {
             inverted_index_size += index.file.size;
         }
         let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
+        let inverted_index_metas = collect_inverted_index_metas(
+            block_indexes
+                .inverted
+                .iter()
+                .map(WrittenInvertedIndex::to_block_index_meta),
+        );
 
         let mut virtual_marks = Vec::new();
         let draft_virtual_block_meta = match self.virtual_columns.as_mut() {
@@ -1026,6 +1041,7 @@ impl FuseLowLevelDataWriter {
             bloom_index_size,
             ngram_index_size,
             inverted_index_size,
+            inverted_index_metas,
             vector_index_size,
             vector_index_location,
             vector_stats,
@@ -2029,14 +2045,11 @@ mod tests {
                 options: BTreeMap::new(),
             },
         ];
+        let meta_locations = TableMetaLocationGenerator::new("root".to_string());
         let block_location = (
             "root/_b/0123456789abcdef0123456789abcdef_v0.parquet".to_string(),
             0,
         );
-        let locations = builders
-            .iter()
-            .map(|builder| builder.gen_inverted_index_location(&block_location))
-            .collect::<Vec<_>>();
         let mut write_options = options(operator.clone(), schema);
         write_options.block_location = block_location;
         write_options.write_settings.index_granularity = None;
@@ -2044,7 +2057,7 @@ mod tests {
         write_options.granule_offsets_location = None;
         write_options.granule_index_writers.clear();
         write_options.cluster_keys = None;
-        write_options.set_inverted_indexes(builders);
+        write_options.set_inverted_indexes(&meta_locations, builders);
 
         let text = StringType::from_data(vec!["one", "two", "three"]);
         let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
@@ -2055,13 +2068,31 @@ mod tests {
         data = column.finish().unwrap();
         let result = data.finish().unwrap().finish().unwrap();
 
+        let metas = result
+            .block_meta
+            .inverted_index_metas
+            .clone()
+            .expect("low-level writer records inverted index metas");
+        assert_eq!(
+            metas
+                .iter()
+                .map(|meta| meta.index_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["first", "second"]
+        );
+        assert!(metas.iter().all(|meta| meta.index_version == "v1"));
+        assert!(
+            metas
+                .iter()
+                .all(|meta| meta.location.0.starts_with("root/_i_i_v2/v1/"))
+        );
         let sizes = GlobalIORuntime::instance()
             .block_on(async {
-                let mut sizes = Vec::with_capacity(locations.len());
-                for location in &locations {
+                let mut sizes = Vec::with_capacity(metas.len());
+                for meta in &metas {
                     sizes.push(
                         operator
-                            .stat(location)
+                            .stat(&meta.location.0)
                             .await
                             .map_err(ErrorCode::from)?
                             .content_length(),
@@ -2071,6 +2102,10 @@ mod tests {
             })
             .unwrap();
         assert!(sizes.iter().all(|size| *size > 0));
+        assert_eq!(
+            metas.iter().map(|meta| meta.size).collect::<Vec<_>>(),
+            sizes
+        );
         assert_eq!(
             result.block_meta.inverted_index_size,
             Some(sizes.iter().sum())

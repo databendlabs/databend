@@ -28,7 +28,6 @@ use arrow_flight::PutResult;
 use arrow_flight::SchemaAsIpc;
 use arrow_flight::Ticket;
 use arrow_flight::flight_descriptor::DescriptorType;
-use arrow_flight::flight_service_server::FlightService;
 use arrow_flight::sql::ActionBeginSavepointRequest;
 use arrow_flight::sql::ActionBeginSavepointResult;
 use arrow_flight::sql::ActionBeginTransactionRequest;
@@ -77,6 +76,7 @@ use tonic::metadata::MetadataValue;
 use tonic::server::NamedService;
 use uuid::Uuid;
 
+use super::DoGetStream;
 use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 
@@ -184,7 +184,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         request: Request<Ticket>,
         message: Any,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         let session = self.get_session(&request)?;
         let fetch_results: FetchResults = try_unpack_any(message)?;
 
@@ -379,7 +379,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         ticket: TicketStatementQuery,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_statement({ticket:?}");
         Err(Status::unimplemented("do_get_statement not implemented"))
     }
@@ -389,7 +389,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandPreparedStatementQuery,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_prepared_statement({query:?}");
         Err(Status::unimplemented(
             "do_get_prepared_statement not implemented",
@@ -401,7 +401,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetCatalogs,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_catalogs()");
         Err(Status::unimplemented("do_get_catalogs not implemented"))
     }
@@ -411,7 +411,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetDbSchemas,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_schemas({query:?}");
         Err(Status::unimplemented("do_get_schemas not implemented"))
     }
@@ -421,7 +421,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetTables,
         request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_tables({query:?})");
         let session = self.get_session(&request)?;
         let context = session
@@ -439,7 +439,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetTableTypes,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_table_types()");
         Err(Status::unimplemented("do_get_table_types not implemented"))
     }
@@ -449,7 +449,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetSqlInfo,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_sql_info({query:?})");
         Ok(Response::new(super::SqlInfoProvider::all_info()?))
     }
@@ -459,7 +459,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetPrimaryKeys,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_primary_keys({query:?})");
         Err(Status::unimplemented("do_get_primary_keys not implemented"))
     }
@@ -469,7 +469,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetExportedKeys,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_exported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_exported_keys not implemented",
@@ -481,7 +481,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetImportedKeys,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_imported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_imported_keys not implemented",
@@ -493,7 +493,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandGetCrossReference,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         info!("do_get_cross_reference({query:?})");
         Err(Status::unimplemented(
             "do_get_cross_reference not implemented",
@@ -660,7 +660,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         _query: CommandGetXdbcTypeInfo,
         _request: Request<Ticket>,
-    ) -> std::result::Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+    ) -> std::result::Result<Response<DoGetStream>, Status> {
         unimplemented!()
     }
 

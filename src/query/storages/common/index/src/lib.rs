@@ -19,8 +19,8 @@
     clippy::needless_range_loop,
     clippy::uninlined_format_args
 )]
-#![feature(box_patterns)]
-#![feature(never_type)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 
 mod bloom_index;
 mod eliminate_cast;
@@ -34,6 +34,7 @@ mod kmeans;
 mod range_index;
 mod spatial_index;
 mod spatial_predicate;
+mod statistics_cast;
 mod vector;
 mod virtual_column;
 
@@ -58,14 +59,23 @@ pub use hnsw_index::VectorIndexMeta;
 pub use index::Index;
 pub use index_common::IndexFile;
 pub use index_common::IndexMeta;
-pub use inverted_index::DocIdsCollector;
-pub use inverted_index::InvertedIndexDirectory;
-pub use inverted_index::InvertedIndexFile;
+pub use inverted_index::BundleFileRanges;
+pub use inverted_index::BundleOpenSlice;
+pub use inverted_index::FooterDirectory;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_MAX_FOOTER_SIZE;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_TRAILER_LEN;
+pub use inverted_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+pub use inverted_index::InvertedIndexBundleFooter;
+pub use inverted_index::InvertedIndexBundleVersion;
+pub use inverted_index::InvertedIndexLookupBytes;
 pub use inverted_index::InvertedIndexMeta;
-pub use inverted_index::TermReader;
-pub use inverted_index::build_tantivy_footer;
-pub use inverted_index::extract_component_fields;
-pub use inverted_index::extract_fsts;
+pub use inverted_index::InvertedIndexPayloadBytes;
+pub use inverted_index::MANAGED_JSON_PATH;
+pub use inverted_index::META_JSON_PATH;
+pub use inverted_index::SearchPinDirectory;
+pub use inverted_index::collect_index_open_slices;
+pub use inverted_index::inverted_index_meta_cache_key;
 pub use kmeans::KMeans;
 pub use kmeans::KMeansResult;
 pub use range_index::RangeIndex;
@@ -80,6 +90,7 @@ pub use spatial_predicate::SpatialPredicate;
 pub use spatial_predicate::SpatialPredicateOp;
 pub use spatial_predicate::SpatialPredicateResult;
 pub use spatial_predicate::collect_spatial_predicates;
+pub use statistics_cast::cast_virtual_column_statistics;
 pub use vector::normalize_vector;
 pub use vector::vector_stat_distance;
 pub use virtual_column::VIRTUAL_COLUMN_NODES_KEY;

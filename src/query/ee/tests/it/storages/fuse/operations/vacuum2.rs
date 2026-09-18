@@ -30,6 +30,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::protected_block_id;
 use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::Interpreter;
@@ -153,7 +154,7 @@ async fn test_vacuum_orphan_granule_payloads_preserves_safety_boundaries() -> an
             .set_modified(old.into())?;
     }
     op.write(&recent_payload, vec![1]).await?;
-    let protected = HashSet::from([protected_block]);
+    let protected = HashSet::from([protected_block_id(&protected_block)?]);
     let ctx: Arc<dyn TableContext> = ctx;
     assert_eq!(
         table

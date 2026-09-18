@@ -1337,7 +1337,7 @@ impl QueryCoordinator {
                 }
 
                 pipelines.push(build_res.main_pipeline);
-                pipelines.extend(build_res.sources_pipelines.into_iter());
+                pipelines.extend(build_res.sources_pipelines);
             }
         }
 

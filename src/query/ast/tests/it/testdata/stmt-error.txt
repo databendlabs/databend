@@ -21,6 +21,24 @@ error:
 
 
 ---------- Input ----------
+CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a
+---------- Output ---------
+error: 
+  --> SQL:1:25
+  |
+1 | CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a
+  | ------                  ^^^^^^^^^^^^ unexpected `REFRESH_MODE`, expecting `AS`
+  | |                        
+  | while parsing `CREATE [OR REPLACE] [TRANSIENT] DYNAMIC TABLE [ IF NOT EXISTS ] [<database>.]<table> [<source>]
+  [ CLUSTER BY <expr> ]
+  [ TARGET_LAG = { <num> { SECOND | MINUTE | HOUR | DAY } | DOWNSTREAM} ]
+  [ { WAREHOUSE = <string> } ]
+  [ COMMENT = '<string_literal>' ]
+AS
+  <sql>`
+
+
+---------- Input ----------
 create table a (c float(10))
 ---------- Output ---------
 error: 

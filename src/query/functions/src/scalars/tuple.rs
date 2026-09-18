@@ -121,7 +121,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         // Tuple index starts from 1
         let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
         let fields_ty = match args_type.first()? {
-            DataType::Nullable(box DataType::Tuple(tys)) => tys,
+            DataType::Nullable(deref!(DataType::Tuple(tys))) => tys,
             _ => return None,
         };
         if idx >= fields_ty.len() {
@@ -161,10 +161,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, _| match &args[0] {
                     Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
                     Value::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
-                    Value::Column(Column::Nullable(box NullableColumn {
-                        column: Column::Tuple(fields),
-                        validity,
-                    })) => {
+                    Value::Column(Column::Nullable(
+                        deref!(NullableColumn {
+                            column: Column::Tuple(fields),
+                            validity,
+                        }),
+                    )) => {
                         let field_col = fields[idx].as_nullable().unwrap();
                         Value::Column(NullableColumn::new_column(
                             field_col.column.clone(),
@@ -183,7 +185,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         // Tuple index starts from 1
         let idx = usize::try_from(params.first()?.get_i64()? - 1).ok()?;
         let fields_ty = match args_type.first()? {
-            DataType::Nullable(box DataType::Tuple(tys)) => tys,
+            DataType::Nullable(deref!(DataType::Tuple(tys))) => tys,
             _ => return None,
         };
         if idx >= fields_ty.len() {

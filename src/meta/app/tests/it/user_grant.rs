@@ -112,9 +112,9 @@ fn test_grant_object_contains() -> anyhow::Result<()> {
             t.lhs.contains(&t.rhs),
             t.expect,
             "{} contains {} expect {}",
-            &t.lhs,
-            &t.rhs,
-            &t.expect,
+            t.lhs,
+            t.rhs,
+            t.expect,
         );
     }
     Ok(())

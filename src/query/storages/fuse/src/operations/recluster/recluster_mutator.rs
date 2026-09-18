@@ -23,6 +23,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -463,7 +464,7 @@ impl ReclusterMutator {
                     selected_blocks: Vec::new(),
                     base_level: 0,
                     input_level_stats: Vec::new(),
-                    all_ordered: false,
+                    task_kind: ReclusterTaskKind::SortBlocks,
                     vertical_kind: None,
                 });
             } else {
@@ -815,6 +816,35 @@ impl ReclusterMutator {
                     }
                 }
 
+                if self.properties.split_sort_tasks {
+                    match candidate.task_kind {
+                        ReclusterTaskKind::MergeBlocks => {
+                            if block_metas.iter().any(|(_, meta)| {
+                                !meta.cluster_stats.as_ref().is_some_and(|stats| {
+                                    self.strategy
+                                        .can_reuse_cluster_stats(&self.properties, stats)
+                                })
+                            }) {
+                                return Err(ErrorCode::Internal(
+                                    "MergeBlocks requires sources ordered by the current cluster key",
+                                ));
+                            }
+                        }
+                        ReclusterTaskKind::SortBlocks => {
+                            if block_metas.len() > 1
+                                && !self
+                                    .properties
+                                    .block_thresholds
+                                    .check_for_compact(total_rows, total_bytes)
+                            {
+                                return Err(ErrorCode::Internal(
+                                    "multi-source SortBlocks exceeds the small-block group limits",
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 let (stats, parts) = FuseTable::to_partitions(
                     Some(&self.schema),
                     &block_metas,
@@ -842,7 +872,7 @@ impl ReclusterMutator {
                     total_compressed,
                     level: candidate.base_level,
                     input_level_stats: candidate.input_level_stats.clone(),
-                    all_ordered: candidate.all_ordered,
+                    kind: candidate.task_kind,
                     vertical_kind: candidate.vertical_kind,
                     memory_budget: self.properties.memory_threshold,
                     virtual_column_layout,
@@ -926,7 +956,7 @@ impl ReclusterMutator {
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
         let block_count = indices.len();
-        if block_count < 2 {
+        if block_count < 2 && !self.properties.split_sort_tasks {
             return Ok(Vec::new());
         }
         if block_count == 2
@@ -952,7 +982,8 @@ impl ReclusterMutator {
         // is below the recluster threshold, so RECLUSTER also converges fragmented layouts.
         // When the optional independent block-reduction selector is enabled, that selector
         // emits compaction candidates instead, so the shortcut is disabled here.
-        if !self.properties.enable_block_reduction
+        if block_count >= 2
+            && !self.properties.enable_block_reduction
             && self
                 .properties
                 .block_thresholds
@@ -974,6 +1005,56 @@ impl ReclusterMutator {
             )]);
         }
 
+        if self.properties.split_sort_tasks
+            && indices
+                .iter()
+                .any(|idx| matches!(blocks[*idx].stats, ReclusterBlockStats::Normalized(_)))
+        {
+            // A large mixed group is not a full-sort task. Establish order in each
+            // unordered block independently; only ordered blocks enter merge selection.
+            let (ordered, unordered): (Vec<usize>, Vec<usize>) = indices
+                .iter()
+                .copied()
+                .partition(|idx| matches!(blocks[*idx].stats, ReclusterBlockStats::Original));
+            let mut candidates = match ordered.len() {
+                0 | 1 => Vec::new(),
+                _ => {
+                    // Reapply the small-group and level gates to the ordered subset.
+                    // All inputs are now ordered, so the helper cannot split again.
+                    self.build_recluster_task_candidates_for_indices(
+                        group,
+                        &ordered,
+                        blocks,
+                        task_budget,
+                    )?
+                }
+            };
+            for idx in unordered {
+                let bytes = blocks[idx].meta.block_size as usize;
+                if bytes > self.properties.memory_threshold {
+                    continue;
+                }
+                candidates.push(task_candidate(
+                    &self.properties,
+                    ReclusterCandidateKind::Depth,
+                    group,
+                    CandidateScore {
+                        selected_total_bytes: bytes,
+                        max_depth: 1,
+                        average_depth: 1.0,
+                    },
+                    &[idx],
+                    blocks,
+                ));
+            }
+            candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
+            candidates.truncate(task_budget);
+            return Ok(candidates);
+        }
+
+        if block_count < 2 {
+            return Ok(Vec::new());
+        }
         self.strategy
             .fetch_task_candidates(&self.properties, group, indices, blocks, task_budget)
     }

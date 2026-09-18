@@ -513,13 +513,10 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
 (abs(a)) linear {"average_depth":2.75,"average_overlaps":2.0,"block_depth_histogram":{"00002":1,"00003":3},"constant_block_count":1,"max_depth":3,"p95_depth":3,"p99_depth":3,"total_block_count":4}
 
+# The pre-cluster-key block needs SortBlocks, while newer blocks can use
+# MergeBlocks. Ordinary RECLUSTER performs one round, not full convergence.
 statement ok
 alter table t10 recluster
-
-query T
-select info:average_depth from clustering_information('db_09_0008','t10')
-----
-1.0
 
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
@@ -527,9 +524,40 @@ select count() from fuse_snapshot('db_09_0008', 't10')
 6
 
 query I
-select count() from t10
+select a from t10 order by a
 ----
-9
+-8
+-7
+-6
+0
+1
+2
+3
+4
+5
+
+# FINAL continues with the remaining sort/merge work. Its number of commits
+# depends on task selection, so the single-round snapshot assertion is above.
+statement ok
+alter table t10 recluster final
+
+query T
+select info:average_depth from clustering_information('db_09_0008','t10')
+----
+1.0
+
+query I
+select a from t10 order by a
+----
+-8
+-7
+-6
+0
+1
+2
+3
+4
+5
 
 
 

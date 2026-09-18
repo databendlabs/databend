@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_config::InnerConfig;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseInfo;
@@ -24,11 +24,13 @@ use crate::databases::DatabaseContext;
 use crate::databases::SharedDatabase;
 use crate::databases::default::DefaultDatabase;
 
-pub struct DatabaseFactory {}
+pub struct DatabaseFactory {
+    version: BuildInfoRef,
+}
 
 impl DatabaseFactory {
-    pub fn create(_: InnerConfig) -> Self {
-        DatabaseFactory {}
+    pub fn create(version: BuildInfoRef) -> Self {
+        DatabaseFactory { version }
     }
 
     pub fn build_database_by_engine(
@@ -46,7 +48,7 @@ impl DatabaseFactory {
 
         let db = match engine.as_str() {
             DefaultDatabase::NAME => DefaultDatabase::try_create(ctx, db_info.clone())?,
-            SharedDatabase::NAME => SharedDatabase::try_create(ctx, db_info.clone())?,
+            SharedDatabase::NAME => SharedDatabase::try_create(ctx, db_info.clone(), self.version)?,
 
             _ => {
                 let err =

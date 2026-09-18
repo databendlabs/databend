@@ -131,7 +131,13 @@ pub struct QueryContextShared {
     pub(super) data_operator: DataOperator,
     executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
+    /// Local context creation time.
     pub(super) created_time: SystemTime,
+    /// Query creation time on the coordinator, propagated unchanged to workers.
+    /// On workers, this is query metadata independent of the local wall clock.
+    /// Do not combine it with worker-local wall-clock timestamps to calculate
+    /// elapsed time; use `created_time` for local context timing instead.
+    pub(super) query_created_time: SystemTime,
     // now it is only set in query_log::log_query_finished
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
@@ -199,7 +205,10 @@ impl QueryContextShared {
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
         version: BuildInfoRef,
+        query_created_time: Option<SystemTime>,
     ) -> Result<Arc<QueryContextShared>> {
+        let created_time = SystemTime::now();
+        let query_created_time = query_created_time.unwrap_or(created_time);
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
@@ -228,7 +237,8 @@ impl QueryContextShared {
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
-            created_time: SystemTime::now(),
+            created_time,
+            query_created_time,
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
@@ -497,7 +507,9 @@ impl QueryContextShared {
         }
 
         let stream = StreamTable::try_from_table(table.as_ref())?;
-        let source_database_name = stream.source_database_name(catalog.as_ref()).await?;
+        let source_database_name = stream
+            .source_database_name(catalog.as_ref(), &self.get_tenant())
+            .await?;
         let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
         let meta_key = (
             catalog.name(),
@@ -710,8 +722,8 @@ impl QueryContextShared {
         *stage_attachment = Some(attachment);
     }
 
-    pub fn get_created_time(&self) -> SystemTime {
-        self.created_time
+    pub fn get_query_created_time(&self) -> SystemTime {
+        self.query_created_time
     }
 
     pub fn get_status_info(&self) -> String {
@@ -808,7 +820,7 @@ impl QueryContextShared {
             }
         };
 
-        for (_, node_memory_updater) in self.node_memory_usage.read().iter() {
+        for node_memory_updater in self.node_memory_usage.read().values() {
             memory_usage += node_memory_updater.memory_usage.load(Ordering::Relaxed);
         }
 

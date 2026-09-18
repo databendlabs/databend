@@ -48,8 +48,7 @@ impl Binder {
         if let Some(alias) = alias {
             result_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             // Reset column name as alias column name
-            for i in 0..alias.columns.len() {
-                let column = &result_bind_context.columns[i];
+            for column in &result_bind_context.columns[..alias.columns.len()] {
                 self.metadata
                     .write()
                     .change_derived_column_alias(column.index, column.column_name.clone());

@@ -79,7 +79,7 @@ pub(crate) fn add_data_block_meta(
                     debug_assert_eq!(rows.len(), scores.len());
                     let mut filtered_rows = Vec::with_capacity(rows.len());
                     let mut filtered_scores = Vec::with_capacity(scores.len());
-                    for (idx, score) in rows.into_iter().zip(scores.into_iter()) {
+                    for (idx, score) in rows.into_iter().zip(scores) {
                         if offsets.contains(idx as u64) {
                             let rank = offsets.rank(idx as u64);
                             debug_assert!(rank > 0);

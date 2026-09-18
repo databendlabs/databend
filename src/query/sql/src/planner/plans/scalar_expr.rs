@@ -36,13 +36,13 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
-use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -114,6 +114,9 @@ impl PartialEq for ScalarExpr {
                 l.column.index == r.column.index && l.column.table_index == r.column.table_index
             }
             (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
+            (ScalarExpr::TypedConstantExpr(l, lt), ScalarExpr::TypedConstantExpr(r, rt)) => {
+                l.eq(r) && lt.eq(rt)
+            }
             (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
             (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
             (ScalarExpr::LambdaFunction(l), ScalarExpr::LambdaFunction(r)) => l.eq(r),
@@ -138,7 +141,10 @@ impl Hash for ScalarExpr {
                 v.column.table_index.hash(state);
             }
             ScalarExpr::ConstantExpr(v) => v.hash(state),
-            ScalarExpr::TypedConstantExpr(v, _) => v.hash(state),
+            ScalarExpr::TypedConstantExpr(v, dt) => {
+                v.hash(state);
+                dt.hash(state);
+            }
             ScalarExpr::WindowFunction(v) => v.hash(state),
             ScalarExpr::AggregateFunction(v) => v.hash(state),
             ScalarExpr::LambdaFunction(v) => v.hash(state),
@@ -1055,30 +1061,8 @@ impl<'a> TryFrom<&'a BinaryOperator> for SubqueryComparisonOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunctionScalarSortDesc {
     pub expr: ScalarExpr,
-    pub is_reuse_index: bool,
     pub nulls_first: bool,
     pub asc: bool,
-}
-
-impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
-        let expr = &self.expr;
-        let ScalarExpr::BoundColumnRef(col) = expr else {
-            return Err(ErrorCode::Internal(
-                "Aggregate function sort description must be a BoundColumnRef".to_string(),
-            ));
-        };
-
-        Ok(AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Symbol(col.column.index),
-            is_reuse_index: self.is_reuse_index,
-            data_type: expr.data_type().into_owned(),
-            nulls_first: self.nulls_first,
-            asc: self.asc,
-        })
-    }
 }
 
 #[derive(Clone, Debug, Educe)]
@@ -1097,6 +1081,44 @@ pub struct AggregateFunction {
 }
 
 impl AggregateFunction {
+    pub fn bound_order_by(&self) -> Result<Vec<AggregateBoundOrderByItem>> {
+        let mut input_symbols = self
+            .args
+            .iter()
+            .map(|arg| match arg {
+                ScalarExpr::BoundColumnRef(column) => Ok(column.column.index),
+                _ => Err(ErrorCode::Internal(
+                    "Aggregate function argument must be a BoundColumnRef".to_string(),
+                )),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.sort_descs
+            .iter()
+            .map(|desc| {
+                let ScalarExpr::BoundColumnRef(sort_column) = &desc.expr else {
+                    return Err(ErrorCode::Internal(
+                        "Aggregate function sort description must be a BoundColumnRef".to_string(),
+                    ));
+                };
+                let index = sort_column.column.index;
+                let source = match input_symbols.iter().position(|i| *i == index) {
+                    Some(index) => AggregateBoundOrderBySource::Argument { index },
+                    None => {
+                        input_symbols.push(index);
+                        AggregateBoundOrderBySource::Derived
+                    }
+                };
+                Ok(AggregateBoundOrderByItem {
+                    index,
+                    source,
+                    data_type: desc.expr.data_type().into_owned(),
+                    nulls_first: desc.nulls_first,
+                    asc: desc.asc,
+                })
+            })
+            .collect()
+    }
+
     pub fn exprs(&self) -> impl Iterator<Item = &ScalarExpr> {
         self.args
             .iter()
@@ -1382,6 +1404,7 @@ pub enum AsyncFunctionArgument {
     DictGetFunction(DictGetFunctionArgument),
     // Used by `read_file` function to read stage files.
     ReadFile(ReadFileFunctionArgument),
+    Sleep,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
@@ -1496,6 +1519,9 @@ impl AsyncFunctionCall {
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))
+            }
+            AsyncFunctionArgument::Sleep => {
+                Err(ErrorCode::Internal("Cannot generate sleep function"))
             }
             AsyncFunctionArgument::ReadFile(_) => {
                 Err(ErrorCode::Internal("Cannot generate read_file function"))

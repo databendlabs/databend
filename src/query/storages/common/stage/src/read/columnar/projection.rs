@@ -94,18 +94,18 @@ pub fn project_columnar(
                         to_field.data_type.remove_nullable(),
                     ) {
                         (
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
+                            TableDataType::Array(
+                                deref!(TableDataType::Nullable(deref!(TableDataType::Tuple {
                                     fields_name: from_fields_name,
                                     fields_type: from_fields_type,
-                                },
-                            )),
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
+                                }),)),
+                            ),
+                            TableDataType::Array(
+                                deref!(TableDataType::Nullable(deref!(TableDataType::Tuple {
                                     fields_name: to_fields_name,
                                     fields_type: to_fields_type,
-                                },
-                            )),
+                                }),)),
+                            ),
                         ) => project_array_tuple(
                             expr,
                             to_field,

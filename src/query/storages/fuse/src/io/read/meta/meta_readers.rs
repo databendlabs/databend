@@ -14,7 +14,6 @@
 
 use std::io::SeekFrom;
 
-use arrow_ipc::convert::try_schema_from_ipc_buffer;
 use bytes::Buf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,7 +25,6 @@ use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
-use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::VirtualColumnFileMeta;
@@ -34,7 +32,6 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SegmentStatisticsVersion;
-use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -55,7 +52,6 @@ pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<
 pub type TableSnapshotReader = InMemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
-pub type InvertedIndexMetaReader = HybridCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
 pub type SpatialIndexMetaReader = HybridCacheReader<SpatialIndexMeta, LoaderWrapper<Operator>>;
 pub type VirtualColumnMetaReader =
@@ -107,13 +103,6 @@ impl MetaReaders {
     pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
         BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn inverted_index_meta_reader(dal: Operator) -> InvertedIndexMetaReader {
-        InvertedIndexMetaReader::new(
-            CacheManager::instance().get_inverted_index_meta_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -204,118 +193,6 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 }
 
 #[async_trait::async_trait]
-impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<InvertedIndexMeta> {
-        let operator = &self.0;
-        let file_size = if let Some(len) = params.len_hint {
-            len
-        } else {
-            let meta = operator.stat(&params.location).await.map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read inverted index file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
-            meta.content_length()
-        };
-
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        if let Ok(meta) =
-            read_thrift_file_metadata(operator.clone(), &params.location, params.len_hint).await
-        {
-            return InvertedIndexMeta::try_from(meta);
-        }
-
-        // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
-        let end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
-
-        // read the end of the file
-        let buffer = operator
-            .read_with(&params.location)
-            .range(file_size - end_len as u64..file_size)
-            .await
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read inverted index file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?
-            .to_vec();
-
-        let meta_len =
-            u32::from_le_bytes(buffer[end_len - 4..end_len].try_into().unwrap()) as usize;
-
-        // read legacy index file format
-        if meta_len == 8 {
-            let column_names = vec![
-                "fast".to_string(),
-                "store".to_string(),
-                "fieldnorm".to_string(),
-                "pos".to_string(),
-                "idx".to_string(),
-                "term".to_string(),
-                "meta.json".to_string(),
-                ".managed.json".to_string(),
-            ];
-
-            let mut prev_offset = 0;
-            let mut column_range = end_len - 36;
-            let mut columns = Vec::with_capacity(column_names.len());
-            for name in column_names {
-                let offset =
-                    u32::from_le_bytes(buffer[column_range..column_range + 4].try_into().unwrap())
-                        as u64;
-                column_range += 4;
-
-                let column_meta = SingleColumnMeta {
-                    offset: prev_offset,
-                    len: offset - prev_offset,
-                    num_values: 1,
-                };
-                prev_offset = offset;
-                columns.push((name, column_meta));
-            }
-            return Ok(InvertedIndexMeta {
-                version: 1,
-                columns,
-            });
-        }
-
-        let schema_len =
-            u32::from_le_bytes(buffer[end_len - 8..end_len - 4].try_into().unwrap()) as usize;
-
-        let schema_range_start = end_len - meta_len;
-        let schema_range_end = schema_range_start + schema_len;
-        let index_schema =
-            try_schema_from_ipc_buffer(&buffer[schema_range_start..schema_range_end])?;
-
-        let mut prev_offset = 0;
-        let mut column_range = schema_range_end;
-        let mut columns = Vec::with_capacity(index_schema.fields.len());
-        for field in &index_schema.fields {
-            let offset =
-                u32::from_le_bytes(buffer[column_range..column_range + 4].try_into().unwrap())
-                    as u64;
-            column_range += 4;
-
-            let column_meta = SingleColumnMeta {
-                offset: prev_offset,
-                len: offset - prev_offset,
-                num_values: 1,
-            };
-            prev_offset = offset;
-            columns.push((field.name().clone(), column_meta));
-        }
-
-        Ok(InvertedIndexMeta {
-            version: 2,
-            columns,
-        })
-    }
-}
-
-#[async_trait::async_trait]
 impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<VectorIndexMeta> {
@@ -367,7 +244,7 @@ mod thrift_file_meta_read {
 
     const HEADER_SIZE: u64 = PARQUET_MAGIC.len() as u64;
     const FOOTER_SIZE: u64 = 8;
-    const PARQUET_MAGIC: [u8; 4] = [b'P', b'A', b'R', b'1'];
+    const PARQUET_MAGIC: [u8; 4] = *b"PAR1";
 
     #[async_backtrace::framed]
     async fn stream_len(

@@ -3,10 +3,10 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_aggregate_if_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -70,16 +70,13 @@ fn run_aggregate_if_cases(file: &mut impl Write, simulator: impl AggregationSimu
         vec![],
     );
     write_aggregate_expr_case(file, "sum_if(b, cond_nullable)", columns, simulator, vec![]);
-    // `sum_if(b, false)` and `sum_if(b, NULL)` are intentionally not covered
-    // by this legacy-backed golden yet: old batch evaluation returns NULL, but
-    // old per-row evaluation returns nullable 0 for the all-rejected case.
 }
 
 #[test]
 fn test_aggregate_if() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("aggregate_if.txt").unwrap();
-    run_aggregate_if_cases(file, eval_legacy_aggregate);
+    run_aggregate_if_cases(file, eval_aggregate);
 }
 
 #[test]

@@ -471,7 +471,7 @@ impl HashJoin {
         let stage_sync_barrier = Arc::new(barrier);
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
-        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
+        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks) {
             join_sinks.push(build_sink);
             join_sinks.push(probe_sink);
 
@@ -680,7 +680,7 @@ impl PhysicalPlanBuilder {
             .ok_or_else(|| {
                 ErrorCode::IllegalDataType(format!(
                     "Cannot find common type for probe key {:?} and build key {:?}",
-                    &probe_expr, &build_expr
+                    probe_expr, build_expr
                 ))
             })?;
             *probe_key = check_cast(

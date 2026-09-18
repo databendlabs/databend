@@ -47,27 +47,29 @@ impl Interpreter for ShowNetworkPoliciesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
-        let network_policies = user_mgr.get_network_policies(&tenant).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
+            let network_policies = user_mgr.get_network_policies(&tenant).await?;
 
-        let mut names = Vec::with_capacity(network_policies.len());
-        let mut allowed_ip_lists = Vec::with_capacity(network_policies.len());
-        let mut blocked_ip_lists = Vec::with_capacity(network_policies.len());
-        let mut comments = Vec::with_capacity(network_policies.len());
-        for network_policy in network_policies {
-            names.push(network_policy.name.clone());
-            allowed_ip_lists.push(network_policy.allowed_ip_list.join(",").clone());
-            blocked_ip_lists.push(network_policy.blocked_ip_list.join(",").clone());
-            comments.push(network_policy.comment.clone());
-        }
+            let mut names = Vec::with_capacity(network_policies.len());
+            let mut allowed_ip_lists = Vec::with_capacity(network_policies.len());
+            let mut blocked_ip_lists = Vec::with_capacity(network_policies.len());
+            let mut comments = Vec::with_capacity(network_policies.len());
+            for network_policy in network_policies {
+                names.push(network_policy.name.clone());
+                allowed_ip_lists.push(network_policy.allowed_ip_list.join(",").clone());
+                blocked_ip_lists.push(network_policy.blocked_ip_list.join(",").clone());
+                comments.push(network_policy.comment.clone());
+            }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
-            StringType::from_data(allowed_ip_lists),
-            StringType::from_data(blocked_ip_lists),
-            StringType::from_data(comments),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                StringType::from_data(names),
+                StringType::from_data(allowed_ip_lists),
+                StringType::from_data(blocked_ip_lists),
+                StringType::from_data(comments),
+            ])])
+        })
     }
 }

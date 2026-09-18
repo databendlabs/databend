@@ -173,7 +173,7 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
         let domain = match &stat.domain {
             Domain::Nullable(NullableDomain { value: None, .. }) => None,
             Domain::Nullable(NullableDomain {
-                value: Some(box domain),
+                value: Some(deref!(domain)),
                 ..
             })
             | domain => match A::domain(domain) {

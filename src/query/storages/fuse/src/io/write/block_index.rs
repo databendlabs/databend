@@ -35,6 +35,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
@@ -116,13 +117,46 @@ pub struct WrittenBloomIndex {
 #[derive(Debug)]
 pub struct PendingInvertedIndex {
     pub index_name: String,
+    pub index_version: String,
     pub file: PendingIndexFile,
+}
+
+impl PendingInvertedIndex {
+    pub fn to_block_index_meta(&self) -> BlockIndexMeta {
+        BlockIndexMeta {
+            index_name: self.index_name.clone(),
+            location: self.file.location.clone(),
+            size: self.file.size(),
+            index_version: self.index_version.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct WrittenInvertedIndex {
     pub index_name: String,
+    pub index_version: String,
     pub file: WrittenIndexFile,
+}
+
+impl WrittenInvertedIndex {
+    pub fn to_block_index_meta(&self) -> BlockIndexMeta {
+        BlockIndexMeta {
+            index_name: self.index_name.clone(),
+            location: self.file.location.clone(),
+            size: self.file.size,
+            index_version: self.index_version.clone(),
+        }
+    }
+}
+
+/// Builds the per-block inverted index metas in the deterministic order `BlockMeta` expects.
+pub fn collect_inverted_index_metas(
+    metas: impl IntoIterator<Item = BlockIndexMeta>,
+) -> Vec<BlockIndexMeta> {
+    let mut metas = metas.into_iter().collect::<Vec<_>>();
+    metas.sort_unstable_by(|left, right| left.index_name.cmp(&right.index_name));
+    metas
 }
 
 #[derive(Debug)]
@@ -267,6 +301,7 @@ mod tests {
     fn test_outputs_reject_duplicate_inverted_names() {
         let pending = |location: &str| PendingInvertedIndex {
             index_name: "duplicate".to_string(),
+            index_version: "v1".to_string(),
             file: PendingIndexFile {
                 location: (location.to_string(), 0),
                 data: Buffer::new(),

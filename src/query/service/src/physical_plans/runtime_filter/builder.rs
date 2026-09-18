@@ -130,8 +130,8 @@ pub async fn build_runtime_filter(
     // Process each probe key that has runtime filter information
     for (build_key, probe, build_table_index) in build_keys
         .iter()
-        .zip(probe_keys.into_iter())
-        .zip(build_table_indexes.into_iter())
+        .zip(probe_keys)
+        .zip(build_table_indexes)
         .filter_map(|((build_key, probe), table_index)| {
             probe.map(|probe| (build_key, probe, table_index))
         })

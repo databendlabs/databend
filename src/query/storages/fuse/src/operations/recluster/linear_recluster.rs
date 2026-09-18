@@ -41,6 +41,10 @@ use crate::statistics::RangeMaxTree;
 pub(crate) struct LinearReclusterStrategy;
 
 impl ReclusterStrategy for LinearReclusterStrategy {
+    fn supports_ordered_merge(&self) -> bool {
+        true
+    }
+
     fn select_segments(
         &self,
         properties: &ReclusterProperties,

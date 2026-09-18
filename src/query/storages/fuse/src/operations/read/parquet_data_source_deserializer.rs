@@ -261,13 +261,25 @@ impl DeserializeDataTransform {
             .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
 
         if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-            block = virtual_reader.deserialize_virtual_columns(
-                block,
-                virtual_data,
-                row_selection
-                    .as_ref()
-                    .map(|selection| selection.selection.clone()),
-            )?;
+            let virtual_block_location = virtual_data
+                .as_ref()
+                .map(|data| data.virtual_block_location.clone());
+            block = virtual_reader
+                .deserialize_virtual_columns(
+                    block,
+                    virtual_data,
+                    row_selection
+                        .as_ref()
+                        .map(|selection| selection.selection.clone()),
+                )
+                .inspect_err(|error| {
+                    log::warn!(
+                        "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
+                        part.location,
+                        virtual_block_location,
+                        error
+                    );
+                })?;
         }
 
         block = block.resort(&self.src_schema, &self.output_schema)?;
@@ -409,12 +421,20 @@ impl DeserializeDataTransform {
                     .block_meta_index()
                     .and_then(|index| index.virtual_block_meta.as_ref())
                     .ok_or_else(|| ErrorCode::Internal("virtual granule metadata is missing"))?;
+                let schema = VirtualColumnReader::read_schema(meta).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "virtual sidecar {} has a read slot without a parquet type",
+                        meta.virtual_block_location
+                    ))
+                })?;
                 Some(VirtualBlockReadResult::create(
+                    meta.virtual_block_location.clone(),
                     read.data.row_range().unwrap().len(),
                     fuse_part.compression,
                     read.data,
-                    VirtualColumnReader::read_schema(meta),
-                    meta.virtual_column_read_plan.clone(),
+                    schema,
+                    meta.fields.clone(),
+                    meta.read_slots.clone(),
                     None,
                 ))
             } else {

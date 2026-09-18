@@ -18,13 +18,16 @@ use std::fmt;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::ClusterLevelLogStats;
+use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::plan::VerticalReclusterKind;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::ClusterKeys;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -64,6 +67,12 @@ pub(crate) struct ReclusterProperties {
     pub(crate) cluster_key_info: ClusterKeyInfo,
     pub(crate) partition_key_count: usize,
     pub(crate) memory_threshold: usize,
+    /// Mirrors `ReclusterStrategy::supports_ordered_merge` so candidate builders can classify
+    /// tasks without holding the strategy.
+    pub(crate) supports_ordered_merge: bool,
+    /// Split unordered linear inputs before overlap-based merge selection.
+    /// Materialized views retain their re-aggregation selection semantics.
+    pub(crate) split_sort_tasks: bool,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
     pub(crate) vertical_kind: Option<VerticalReclusterKind>,
@@ -126,6 +135,9 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
+            supports_ordered_merge: strategy.supports_ordered_merge(),
+            split_sort_tasks: strategy.supports_ordered_merge()
+                && !is_materialized_view_engine(table.engine()),
             cluster_key_info,
             partition_key_count: table.partition_key_count(),
             memory_threshold,
@@ -173,6 +185,8 @@ impl ReclusterProperties {
             mode,
             depth_threshold,
             block_thresholds,
+            supports_ordered_merge: strategy.supports_ordered_merge(),
+            split_sort_tasks: strategy.supports_ordered_merge(),
             cluster_key_info,
             partition_key_count,
             memory_threshold,
@@ -187,6 +201,13 @@ impl ReclusterProperties {
 
 /// Algorithm-specific behavior used by the recluster workflow.
 pub(crate) trait ReclusterStrategy: Send + Sync {
+    /// Only scalar linear clustering preserves source row order during merging.
+    /// The persisted ClusterType::Linear also covers vector clustering and is
+    /// not sufficient to select the merge-only execution path.
+    fn supports_ordered_merge(&self) -> bool {
+        false
+    }
+
     /// Select windows from a partition-local segment slice. ReclusterMutator performs partition
     /// grouping and filters segments without exact partition metadata before calling strategies.
     fn select_segments(
@@ -361,7 +382,9 @@ pub(crate) struct ReclusterTaskCandidate {
     pub(crate) selected_blocks: Vec<(usize, Vec<usize>)>,
     pub(crate) base_level: i32,
     pub(crate) input_level_stats: Vec<ClusterLevelLogStats>,
-    pub(crate) all_ordered: bool,
+    /// Row-sort stage work for the horizontal pipeline; `MergeBlocks` implies every input is
+    /// already ordered by the current linear cluster key.
+    pub(crate) task_kind: ReclusterTaskKind,
     pub(crate) vertical_kind: Option<VerticalReclusterKind>,
 }
 
@@ -392,10 +415,11 @@ impl fmt::Display for ReclusterTaskCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "requested_output_level={} repack_only={} candidate_kind={} executor_kind={:?} max_depth={} avg_depth={} block_count={} block_size={}",
+            "requested_output_level={} repack_only={} candidate_kind={} task_kind={:?} executor_kind={:?} max_depth={} avg_depth={} block_count={} block_size={}",
             self.requested_output_level(),
             self.is_repack_only(),
             self.kind,
+            self.task_kind,
             self.vertical_kind,
             self.score.max_depth,
             self.score.average_depth,
@@ -477,16 +501,21 @@ pub(crate) fn task_candidate(
         stats.block_size = stats.block_size.saturating_add(block.meta.block_size);
         stats.file_size = stats.file_size.saturating_add(block.meta.file_size);
     }
-    let all_ordered = task_indices
-        .iter()
-        .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original));
+    let task_kind = match properties.supports_ordered_merge
+        && task_indices
+            .iter()
+            .all(|idx| matches!(&blocks[*idx].stats, ReclusterBlockStats::Original))
+    {
+        true => ReclusterTaskKind::MergeBlocks,
+        false => ReclusterTaskKind::SortBlocks,
+    };
     ReclusterTaskCandidate {
         score,
         kind,
         selected_blocks,
         base_level,
         input_level_stats: stats_by_level.into_values().collect(),
-        all_ordered,
+        task_kind,
         vertical_kind: properties.vertical_kind,
     }
 }

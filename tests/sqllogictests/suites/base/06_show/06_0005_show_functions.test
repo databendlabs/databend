@@ -21,5 +21,17 @@ SHOW FUNCTIONS WHERE name='to_day_of_year' LIMIT 1
 ----
 to_day_of_year 0 (empty)
 
+query TBT
+SHOW FUNCTIONS LIKE 'sleep'
+----
+sleep 0 (empty)
+
+query TBT
+SHOW FUNCTIONS WHERE name IN ('dict_get', 'nextval', 'read_file')
+----
+dict_get 0 (empty)
+nextval 0 (empty)
+read_file 0 (empty)
+
 statement error
 SHOW FUNCTIONS WHERE mu='err' LIMIT 1

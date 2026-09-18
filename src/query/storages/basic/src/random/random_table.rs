@@ -196,9 +196,9 @@ impl Table for RandomTable {
 
         let mut builder = SourcePipeBuilder::create();
 
-        for index in 0..plan.parts.len() {
+        for part in &plan.parts.partitions {
             let output = OutputPort::create();
-            let parts = RandomPartInfo::from_part(&plan.parts.partitions[index])?;
+            let parts = RandomPartInfo::from_part(part)?;
             builder.add_source(
                 output.clone(),
                 RandomSource::create(

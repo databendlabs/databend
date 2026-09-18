@@ -67,6 +67,9 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
@@ -191,6 +194,14 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
+    fn check_data_sharing_license(&self, ctx: &dyn TableContext) -> Result<()> {
+        if self.table_info.is_shared() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
+        }
+        Ok(())
+    }
+
     pub fn create_and_refresh_table_info(
         table_info: TableInfo,
         s3storage_class: S3StorageClass,
@@ -211,8 +222,13 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
+        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
+            return Err(ErrorCode::Internal(
+                "Shared table requires resolved provider storage parameters",
+            ));
+        }
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
+            DatabaseType::NormalDB | DatabaseType::SharedDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
@@ -1078,7 +1094,7 @@ impl Table for FuseTable {
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        true
+        !self.table_info.is_shared()
     }
 
     fn support_column_projection(&self) -> bool {
@@ -1135,6 +1151,7 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
@@ -1148,6 +1165,7 @@ impl Table for FuseTable {
         dry_run: bool,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
         self.do_read_partitions_with_reusable_pruned_metas(
             ctx,
@@ -1166,6 +1184,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
@@ -1187,6 +1206,7 @@ impl Table for FuseTable {
         source_pipeline: &mut Pipeline,
         plan_id: u32,
     ) -> Result<Option<Pipeline>> {
+        self.check_data_sharing_license(table_ctx.as_ref())?;
         self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, plan_id)
     }
 
@@ -1560,11 +1580,24 @@ impl Table for FuseTable {
     }
 
     fn result_can_be_cached(&self) -> bool {
-        true
+        !self.table_info.is_shared()
+    }
+
+    fn plan_can_be_cached(&self) -> bool {
+        // A new statement or transaction must resolve the share again, even
+        // when the provider's snapshot has not changed.
+        !self.table_info.is_shared()
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly() || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+        self.table_info.is_shared()
+            || self.table_type.is_readonly()
+            || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+            || self.table_info.meta.engine == DYNAMIC_TABLE_ENGINE
+    }
+
+    fn is_read_only_for_maintenance(&self) -> bool {
+        self.table_info.is_shared() || self.table_type.is_readonly()
     }
 
     fn use_own_sample_block(&self) -> bool {
@@ -1599,22 +1632,28 @@ impl Table for FuseTable {
         index_name: String,
         index_version: String,
     ) -> Result<u64> {
-        let prefix = self
-            .meta_location_generator
-            .gen_specific_inverted_index_prefix(&index_name, &index_version);
+        let prefixes = [
+            self.meta_location_generator
+                .gen_specific_inverted_index_prefix(&index_name, &index_version),
+            self.meta_location_generator
+                .gen_specific_inverted_index_v2_prefix(&index_version),
+        ];
         let op = &self.operator;
-        info!("remove_inverted_index_files: {}", prefix);
-        let mut lister = op.lister_with(&prefix).recursive(true).await?;
-        let mut files = Vec::new();
-        while let Some(entry) = lister.try_next().await? {
-            if entry.metadata().is_dir() {
-                continue;
+        let mut files = std::collections::HashSet::new();
+        for prefix in prefixes {
+            info!("remove_inverted_index_files: {}", prefix);
+            let mut lister = op.lister_with(&prefix).recursive(true).await?;
+            while let Some(entry) = lister.try_next().await? {
+                if !entry.metadata().is_dir() {
+                    files.insert(entry.path().to_string());
+                }
             }
-            files.push(entry.path().to_string());
         }
-        let op = Files::create(ctx, self.operator.clone());
+        let files = files.into_iter().collect::<Vec<_>>();
         let len = files.len() as u64;
-        op.remove_file_in_batch(files).await?;
+        Files::create(ctx, self.operator.clone())
+            .remove_file_in_batch(files)
+            .await?;
         Ok(len)
     }
 }

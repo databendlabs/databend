@@ -871,7 +871,7 @@ impl VirtualColumnBuilder {
         // It stays aligned with the VirtualColumnNameIndex used by the trie.
         let mut leaf_index: u32 = 0;
         for (source_field, field_virtual_paths) in
-            self.variant_fields.iter().zip(virtual_paths.into_iter())
+            self.variant_fields.iter().zip(virtual_paths)
         {
             let sorted_virtual_paths: BTreeMap<_, _> = field_virtual_paths.into_iter().collect();
             let mut shared_values_by_type: BTreeMap<

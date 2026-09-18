@@ -1884,7 +1884,6 @@ impl_float_const!(NotNan, |x| unsafe { NotNan::new_unchecked(x) });
 
 mod impl_serde {
     extern crate serde;
-    use core::f64;
 
     use num_traits::float::FloatCore;
     use serde::de::IntoDeserializer;

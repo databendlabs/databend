@@ -53,44 +53,48 @@ impl Interpreter for ShowWarehousesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        let warehouses = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .list_warehouses()
-            .await?;
-        let mut warehouses_name = ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
-        let mut warehouses_type = ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
-        let mut warehouses_status =
-            ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
+            let warehouses = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .list_warehouses()
+                .await?;
+            let mut warehouses_name =
+                ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
+            let mut warehouses_type =
+                ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
+            let mut warehouses_status =
+                ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
 
-        let visibility_checker = self
-            .ctx
-            .get_visibility_checker(false, Object::Warehouse)
-            .await?;
-        for warehouse in warehouses {
-            match warehouse {
-                WarehouseInfo::SelfManaged(name) => {
-                    warehouses_name.push(Scalar::String(name).as_ref());
-                    warehouses_type.push(Scalar::String(String::from("Self-Managed")).as_ref());
-                    warehouses_status.push(Scalar::String(String::from("Running")).as_ref());
-                }
-                WarehouseInfo::SystemManaged(v) => {
-                    if visibility_checker.check_warehouse_visibility(&v.role_id) {
-                        warehouses_name.push(Scalar::String(v.id.clone()).as_ref());
-                        warehouses_type
-                            .push(Scalar::String(String::from("System-Managed")).as_ref());
-                        warehouses_status.push(Scalar::String(v.status.clone()).as_ref());
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Warehouse)
+                .await?;
+            for warehouse in warehouses {
+                match warehouse {
+                    WarehouseInfo::SelfManaged(name) => {
+                        warehouses_name.push(Scalar::String(name).as_ref());
+                        warehouses_type.push(Scalar::String(String::from("Self-Managed")).as_ref());
+                        warehouses_status.push(Scalar::String(String::from("Running")).as_ref());
+                    }
+                    WarehouseInfo::SystemManaged(v) => {
+                        if visibility_checker.check_warehouse_visibility(&v.role_id) {
+                            warehouses_name.push(Scalar::String(v.id.clone()).as_ref());
+                            warehouses_type
+                                .push(Scalar::String(String::from("System-Managed")).as_ref());
+                            warehouses_status.push(Scalar::String(v.status.clone()).as_ref());
+                        }
                     }
                 }
             }
-        }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            warehouses_name.build(),
-            warehouses_type.build(),
-            warehouses_status.build(),
-        ])])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                warehouses_name.build(),
+                warehouses_type.build(),
+                warehouses_status.build(),
+            ])])
+        })
     }
 }

@@ -332,7 +332,7 @@ where
             self.in_memory_size += column.memory_size(false);
         }
         let (column, validity) = match column {
-            Column::Nullable(box inner) => {
+            Column::Nullable(deref!(inner)) => {
                 let validity = if inner.validity.null_count() == 0 {
                     None
                 } else {

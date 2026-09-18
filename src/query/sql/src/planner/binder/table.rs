@@ -705,7 +705,7 @@ impl Binder {
             &[],
             false,
         )?;
-        let box (scalar, _) = type_checker.resolve(expr)?;
+        let deref!((scalar, _)) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;
         let (new_expr, _) = ConstantFolder::fold(
             Cow::Owned(scalar_expr),

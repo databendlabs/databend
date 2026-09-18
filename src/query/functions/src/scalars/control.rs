@@ -62,10 +62,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                             Domain::Nullable(NullableDomain {
                                 has_null,
                                 value:
-                                    Some(box Domain::Boolean(BooleanDomain {
-                                        has_true,
-                                        has_false,
-                                    })),
+                                    Some(
+                                        deref!(Domain::Boolean(BooleanDomain {
+                                            has_true,
+                                            has_false,
+                                        })),
+                                    ),
                             }) => (*has_true, *has_null || *has_false),
                             Domain::Nullable(NullableDomain { value: None, .. }) => (false, true),
                             _ => unreachable!(),

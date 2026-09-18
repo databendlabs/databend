@@ -1,0 +1,129 @@
+statement ok
+create or replace database fuse_pruned_block_meta_shuffle;
+
+statement ok
+use fuse_pruned_block_meta_shuffle;
+
+statement ok
+set enable_prune_pipeline = 1;
+
+statement ok
+set enable_distributed_pruning = 1;
+
+# One block per segment makes the lazy segment count comfortably larger than the cluster size.
+statement ok
+create or replace table target (id int, value int) row_per_block = 10 block_per_segment = 1;
+
+statement ok
+insert into target select number, number * 2 from numbers(200);
+
+query II
+select count(*), sum(value) from target where id between 37 and 83;
+----
+47 5640
+
+query II rowsort
+select id, value from target where id % 31 = 0 order by id limit 4;
+----
+0 0
+31 62
+62 124
+93 186
+
+query I
+select count(*) from target where id < 0;
+----
+0
+
+query II rowsort
+select id % 4, count(*) from target where id < 40 group by id % 4;
+----
+0 10
+1 10
+2 10
+3 10
+
+# Disabling distributed pruning keeps the original eager/local scan path.
+statement ok
+set enable_distributed_pruning = 0;
+
+query II
+select count(*), sum(value) from target where id between 37 and 83;
+----
+47 5640
+
+statement ok
+set enable_distributed_pruning = 1;
+
+statement ok
+set enable_prune_pipeline = 0;
+
+query II
+select count(*), sum(value) from target where id between 37 and 83;
+----
+47 5640
+
+statement ok
+set enable_prune_pipeline = 1;
+
+# Force one large, many-block segment plus several tiny segments. Static segment/block pruning
+# leaves the large segment's owner with most metadata before the post-prune shuffle.
+statement ok
+set max_threads = 1;
+
+statement ok
+create or replace table merge_target (id int, value int)
+row_per_block = 10 block_per_segment = 1000;
+
+statement ok
+insert into merge_target select number, number * 2 from numbers(1000);
+
+statement ok
+insert into merge_target select number + 10000, number from numbers(10);
+
+statement ok
+insert into merge_target select number + 11000, number from numbers(10);
+
+statement ok
+insert into merge_target select number + 12000, number from numbers(10);
+
+statement ok
+insert into merge_target select number + 13000, number from numbers(10);
+
+statement ok
+set max_threads = 4;
+
+statement ok
+create or replace table merge_source (id int, value int);
+
+statement ok
+insert into merge_source select number, number + 20000 from numbers(500);
+
+statement ok
+insert into merge_source values (5000, 25000);
+
+query II
+merge into merge_target
+using merge_source
+on merge_target.id = merge_source.id
+when matched then update set merge_target.value = merge_source.value
+when not matched then insert (id, value) values (merge_source.id, merge_source.value);
+----
+1 500
+
+query I
+select count(*) from merge_target;
+----
+1041
+
+query II
+select id, value from merge_target where id in (0, 499, 500, 5000, 10000) order by id;
+----
+0 20000
+499 20499
+500 1000
+5000 25000
+10000 0
+
+statement ok
+drop database fuse_pruned_block_meta_shuffle;

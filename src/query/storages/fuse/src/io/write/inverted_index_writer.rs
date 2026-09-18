@@ -14,33 +14,33 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
-use databend_storages_common_blocks::block_to_parquet_with_writer;
-use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_blocks::BlockingWrite;
+use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_index::InvertedIndexBundleFooter;
+use databend_storages_common_index::MANAGED_JSON_PATH;
+use databend_storages_common_index::META_JSON_PATH;
+use databend_storages_common_index::collect_index_open_slices;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::table::TableCompression;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
 use lindera::dictionary::Dictionary;
@@ -57,7 +57,7 @@ use tantivy::Directory;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
 use tantivy::IndexWriter;
-use tantivy::index::SegmentComponent;
+use tantivy::directory::RamDirectory;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -76,7 +76,6 @@ use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
 use tantivy_jieba::JiebaTokenizer;
 
-use crate::index::build_tantivy_footer;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
 use crate::io::write::block_index::BlockIndexLowLevelWriteContext;
@@ -104,23 +103,48 @@ pub struct InvertedIndexBuilder {
 }
 
 impl InvertedIndexBuilder {
-    pub fn gen_inverted_index_location(&self, block_location: &Location) -> String {
-        TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-            &block_location.0,
-            &self.name,
-            &self.version,
-        )
+    pub fn gen_inverted_index_location(
+        &self,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> String {
+        location_generator.gen_inverted_index_v2_location(&self.version)
+    }
+
+    /// Binds this index definition to a freshly generated immutable object location.
+    ///
+    /// Inverted index object keys are independent from the block key, so the location is
+    /// resolved once per block write and carried by the spec, matching the other index specs.
+    pub(crate) fn into_write_spec(
+        self,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> InvertedIndexWriteSpec {
+        let location = (
+            self.gen_inverted_index_location(location_generator),
+            INVERTED_INDEX_FILE_FORMAT_VERSION,
+        );
+        InvertedIndexWriteSpec {
+            builder: self,
+            location,
+        }
     }
 }
 
-impl BlockIndexSpec for InvertedIndexBuilder {
+pub(crate) struct InvertedIndexWriteSpec {
+    builder: InvertedIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexSpec for InvertedIndexWriteSpec {
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
-        let location = self.gen_inverted_index_location(&context.block_location);
         Ok(Box::new(InvertedIndexBlockWriter {
-            index_name: self.name.clone(),
-            location: (location, 0),
+            index_name: self.builder.name.clone(),
+            index_version: self.builder.version.clone(),
+            location: self.location.clone(),
             source_schema: context.physical_schema,
-            writer: InvertedIndexWriter::try_create(Arc::new(self.schema.clone()), &self.options)?,
+            writer: InvertedIndexWriter::try_create(
+                Arc::new(self.builder.schema.clone()),
+                &self.builder.options,
+            )?,
         }))
     }
 
@@ -128,9 +152,10 @@ impl BlockIndexSpec for InvertedIndexBuilder {
         &self,
         context: BlockIndexLowLevelWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let location = (self.gen_inverted_index_location(&context.block_location), 0);
+        let location = self.location.clone();
         let write = context.create_write(&location);
         let field_indexes = self
+            .builder
             .schema
             .fields()
             .iter()
@@ -138,13 +163,14 @@ impl BlockIndexSpec for InvertedIndexBuilder {
             .collect::<Result<Vec<_>>>()?;
         let num_fields = context.physical_schema.num_fields();
         Ok(Box::new(InvertedIndexLowLevelWriter {
-            index_name: self.name.clone(),
+            index_name: self.builder.name.clone(),
+            index_version: self.builder.version.clone(),
             location,
             field_indexes,
             columns: vec![None; num_fields],
             writer: Some(InvertedIndexWriter::try_create(
-                Arc::new(self.schema.clone()),
-                &self.options,
+                Arc::new(self.builder.schema.clone()),
+                &self.builder.options,
             )?),
             write: Some(write),
             next_field: 0,
@@ -155,6 +181,7 @@ impl BlockIndexSpec for InvertedIndexBuilder {
 
 struct InvertedIndexBlockWriter {
     index_name: String,
+    index_version: String,
     location: Location,
     source_schema: TableSchemaRef,
     writer: InvertedIndexWriter,
@@ -170,6 +197,7 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
         Ok(PendingBlockIndexOutput {
             inverted: vec![PendingInvertedIndex {
                 index_name: self.index_name,
+                index_version: self.index_version,
                 file: PendingIndexFile {
                     location: self.location,
                     data,
@@ -182,6 +210,7 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
 
 struct InvertedIndexLowLevelWriter {
     index_name: String,
+    index_version: String,
     location: Location,
     field_indexes: Vec<usize>,
     columns: Vec<Option<Vec<Column>>>,
@@ -242,6 +271,7 @@ impl BlockIndexLowLevelWriter for InvertedIndexLowLevelWriter {
         Ok(WrittenBlockIndexOutput {
             inverted: vec![WrittenInvertedIndex {
                 index_name: self.index_name,
+                index_version: self.index_version,
                 file: WrittenIndexFile {
                     location: self.location,
                     size,
@@ -317,6 +347,7 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
 
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
+    directory: RamDirectory,
     index_writer: IndexWriter,
     operations: Vec<UserOperation>,
 }
@@ -339,12 +370,14 @@ impl InvertedIndexWriter {
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let index = index_builder.create_in_ram()?;
+        let directory = RamDirectory::default();
+        let index = index_builder.open_or_create(directory.clone())?;
         let index_writer = index.writer(DEFAULT_BLOCK_BUFFER_SIZE)?;
         let operations = Vec::new();
 
         Ok(Self {
             schema,
+            directory,
             index_writer,
             operations,
         })
@@ -416,106 +449,90 @@ impl InvertedIndexWriter {
         Ok(())
     }
 
+    /// Streams the finished index bundle through a lazily opened blocking upload.
+    ///
+    /// The bundle footer must observe the whole raw region before it can be built, so the
+    /// bundle is assembled in memory first and then handed to `write` in chunks.
     #[async_backtrace::framed]
-    pub fn finalize_to_writer(mut self, write: OpenDalBlockingWrite) -> Result<u64> {
-        let _ = self.index_writer.run(self.operations);
-        let _ = self.index_writer.commit()?;
-        let index = self.index_writer.index();
-        let directory = index.directory();
-        let (index_schema, index_block) = build_inverted_index_block(index, directory)?;
-        let (_, write) = block_to_parquet_with_writer(
-            index_schema.as_ref(),
-            index_block,
-            TableCompression::Zstd,
-            false,
-            None,
-            write,
-        )?;
+    pub fn finalize_to_writer(self, mut write: OpenDalBlockingWrite) -> Result<u64> {
+        let bundle = self.finalize()?;
+        for chunk in bundle {
+            write.write_all(&chunk)?;
+        }
+        write.close()?;
         Ok(write.bytes_written())
     }
 
     #[async_backtrace::framed]
     pub fn finalize(mut self) -> Result<Buffer> {
-        let _ = self.index_writer.run(self.operations);
-        let _ = self.index_writer.commit()?;
+        self.index_writer.run(self.operations)?;
+        self.index_writer.commit()?;
+        let raw_directory = self.directory.clone();
         let index = self.index_writer.index();
-        let directory = index.directory();
+        let index_meta = index.load_metas()?;
+        if index_meta.segments.len() != 1 {
+            return Err(ErrorCode::StorageOther(format!(
+                "inverted index bundle expects one Tantivy segment, got {}",
+                index_meta.segments.len()
+            )));
+        }
 
-        let (index_schema, index_block) = build_inverted_index_block(index, directory)?;
-        let serialized = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for inverted index
-            false,
-            None,
-        )?;
+        // Observe the opaque segment ranges Tantivy reads while synchronously opening the index.
+        // Databend stores these bytes in the footer without interpreting component internals.
+        let open_slices = collect_index_open_slices(raw_directory.clone())?;
 
-        Ok(Buffer::from(serialized.payload))
+        let managed_json = raw_directory.atomic_read(Path::new(MANAGED_JSON_PATH))?;
+        let meta_json = raw_directory.atomic_read(Path::new(META_JSON_PATH))?;
+
+        // Preserve every managed segment/plugin file byte-for-byte in the raw region. The two
+        // frequently read index-level JSON files live in the footer instead. ManagedDirectory can
+        // briefly retain stale paths, so only include files that still exist after the commit.
+        let mut paths: Vec<PathBuf> = index
+            .directory()
+            .list_managed_files()
+            .into_iter()
+            .filter(|path| {
+                path != Path::new(MANAGED_JSON_PATH) && path != Path::new(META_JSON_PATH)
+            })
+            .collect();
+        // Keep small, high-reuse lookup components next to the footer so the normal 1 MiB tail
+        // read can populate them without another object request. Preserve deterministic ordering
+        // within each component priority.
+        sort_bundle_paths(&mut paths);
+
+        let mut files = Vec::with_capacity(paths.len());
+        for path in paths {
+            if raw_directory.exists(&path)? {
+                let bytes = raw_directory.atomic_read(&path)?;
+                files.push((path, bytes));
+            }
+        }
+
+        let bundle_bytes =
+            InvertedIndexBundleFooter::build(files, open_slices, managed_json, meta_json)?;
+        Ok(Buffer::from(bundle_bytes))
     }
 }
 
-fn build_inverted_index_block(
-    index: &tantivy::Index,
-    directory: &dyn Directory,
-) -> Result<(TableSchemaRef, DataBlock)> {
-    let mut index_columns = Vec::with_capacity(8);
-
-    let managed_filepath = Path::new(".managed.json");
-    let managed_bytes = directory.atomic_read(managed_filepath)?;
-    let managed_scalar = Scalar::Binary(managed_bytes);
-    let managed_block_entry = BlockEntry::new_const_column(DataType::Binary, managed_scalar, 1);
-    index_columns.push(managed_block_entry);
-
-    let meta_filepath = Path::new("meta.json");
-    let meta_data = directory.atomic_read(meta_filepath)?;
-    let meta_string = std::str::from_utf8(&meta_data)?;
-    let meta_val: serde_json::Value = serde_json::from_str(meta_string)?;
-    let meta_json: String = serde_json::to_string(&meta_val)?;
-    let meta_scalar = Scalar::Binary(meta_json.into_bytes());
-    let meta_block_entry = BlockEntry::new_const_column(DataType::Binary, meta_scalar, 1);
-    index_columns.push(meta_block_entry);
-
-    let segments = index.searchable_segments()?;
-    let segment = &segments[0];
-    let components = vec![
-        SegmentComponent::FastFields,
-        SegmentComponent::Store,
-        SegmentComponent::FieldNorms,
-        SegmentComponent::Positions,
-        SegmentComponent::Postings,
-        SegmentComponent::Terms,
-    ];
-    for component in components {
-        let component_field = segment.open_read(component)?;
-        let bytes = component_field.read_bytes()?;
-        let mut value = bytes.as_slice().to_vec();
-        let footer = build_tantivy_footer(&value)?;
-        value.extend_from_slice(&footer);
-
-        let scalar = Scalar::Binary(value);
-        let block_entry = BlockEntry::new_const_column(DataType::Binary, scalar, 1);
-        index_columns.push(block_entry);
+fn bundle_path_priority(path: &Path) -> u8 {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("store") => 1,
+        Some("fast") => 2,
+        Some("fieldnorm") => 3,
+        Some("term") => 4,
+        _ => 0,
     }
-
-    let index_fields = vec![
-        TableField::new(".managed.json", TableDataType::Binary),
-        TableField::new("meta.json", TableDataType::Binary),
-        TableField::new("fast", TableDataType::Binary),
-        TableField::new("store", TableDataType::Binary),
-        TableField::new("fieldnorm", TableDataType::Binary),
-        TableField::new("pos", TableDataType::Binary),
-        TableField::new("idx", TableDataType::Binary),
-        TableField::new("term", TableDataType::Binary),
-    ];
-
-    let index_schema = TableSchemaRefExt::create(index_fields);
-    let index_block = DataBlock::new(index_columns, 1);
-    Ok((index_schema, index_block))
 }
 
-// Create tokenizers for the supported languages.
+fn sort_bundle_paths(paths: &mut [PathBuf]) {
+    paths.sort_unstable_by(|left, right| {
+        bundle_path_priority(left)
+            .cmp(&bundle_path_priority(right))
+            .then_with(|| left.cmp(right))
+    });
+}
+
+// Create tokenizers for English, Chinese, and Japanese.
 pub(crate) fn create_tokenizer_manager(
     index_options: &BTreeMap<String, String>,
 ) -> TokenizerManager {
@@ -667,9 +684,11 @@ pub(crate) fn create_index_schema(
         .set_tokenizer(&tokenizer_name)
         .set_index_option(index_record);
     let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
+    // Tantivy executes JSON range queries over fast fields. The remote reader warms the segment's
+    // `.fast` file asynchronously before starting synchronous search.
     let json_options = JsonObjectOptions::default()
         .set_indexing_options(text_field_indexing)
-        .set_fast("raw");
+        .set_fast(Some("raw"));
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());
@@ -689,4 +708,36 @@ pub(crate) fn create_index_schema(
     let index_schema = schema_builder.build();
 
     Ok((index_schema, index_fields))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::sort_bundle_paths;
+
+    #[test]
+    fn test_sort_bundle_paths_places_lookup_components_near_footer() {
+        let mut paths = vec![
+            PathBuf::from("segment.term"),
+            PathBuf::from("segment.pos"),
+            PathBuf::from("segment.store"),
+            PathBuf::from("segment.idx"),
+            PathBuf::from("segment.fieldnorm"),
+            PathBuf::from("segment.custom"),
+            PathBuf::from("segment.fast"),
+        ];
+
+        sort_bundle_paths(&mut paths);
+
+        assert_eq!(paths, vec![
+            PathBuf::from("segment.custom"),
+            PathBuf::from("segment.idx"),
+            PathBuf::from("segment.pos"),
+            PathBuf::from("segment.store"),
+            PathBuf::from("segment.fast"),
+            PathBuf::from("segment.fieldnorm"),
+            PathBuf::from("segment.term"),
+        ]);
+    }
 }

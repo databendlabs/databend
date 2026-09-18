@@ -540,7 +540,6 @@ def test_suites(session):
         "pytest-asyncio",
         "pyarrow",
         "databend-driver",
-        "pylance",
         "PyJWT",
         "cryptography",
     )

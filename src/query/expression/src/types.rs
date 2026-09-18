@@ -37,6 +37,7 @@ pub mod string;
 pub mod timestamp;
 pub mod timestamp_tz;
 pub mod tuple;
+pub mod type_name;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
@@ -360,11 +361,11 @@ impl DataType {
     pub fn nest_wrap_nullable(&self) -> Self {
         match self {
             DataType::Null => self.clone(),
-            DataType::Nullable(box inner_ty) => inner_ty.nest_wrap_nullable(),
-            DataType::Array(box inner_ty) => Self::Nullable(Box::new(Self::Array(Box::new(
+            DataType::Nullable(deref!(inner_ty)) => inner_ty.nest_wrap_nullable(),
+            DataType::Array(deref!(inner_ty)) => Self::Nullable(Box::new(Self::Array(Box::new(
                 inner_ty.nest_wrap_nullable(),
             )))),
-            DataType::Map(box DataType::Tuple(inner_tys)) if inner_tys.len() == 2 => {
+            DataType::Map(deref!(DataType::Tuple(inner_tys))) if inner_tys.len() == 2 => {
                 let key_ty = inner_tys[0].clone();
                 let val_ty = inner_tys[1].nest_wrap_nullable();
                 Self::Nullable(Box::new(Self::Map(Box::new(Self::Tuple(vec![
@@ -394,6 +395,13 @@ impl DataType {
         match self {
             DataType::Nullable(ty) => (**ty).clone(),
             _ => self.clone(),
+        }
+    }
+
+    pub fn remove_nullable_ref(&self) -> &Self {
+        match self {
+            DataType::Nullable(deref!(inner)) => inner,
+            _ => self,
         }
     }
 
@@ -500,7 +508,7 @@ impl DataType {
             | DataType::Geography
             | DataType::Vector(_)
             | DataType::Generic(_) => false,
-            DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
+            DataType::Nullable(deref!(DataType::Nullable(_)) | deref!(DataType::Null)) => true,
             DataType::Nullable(ty) => ty.has_nested_nullable(),
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
@@ -750,9 +758,9 @@ impl DataType {
     // Returns the number of leaf columns of the DataType
     pub fn num_leaf_columns(&self) -> usize {
         match self {
-            DataType::Nullable(box inner_ty)
-            | DataType::Array(box inner_ty)
-            | DataType::Map(box inner_ty) => inner_ty.num_leaf_columns(),
+            DataType::Nullable(deref!(inner_ty))
+            | DataType::Array(deref!(inner_ty))
+            | DataType::Map(deref!(inner_ty)) => inner_ty.num_leaf_columns(),
             DataType::Tuple(inner_tys) => inner_tys
                 .iter()
                 .map(|inner_ty| inner_ty.num_leaf_columns())
@@ -806,11 +814,13 @@ pub fn convert_to_type_name(ty: &DataType) -> TypeName {
         DataType::Variant => TypeName::Variant,
         DataType::Binary => TypeName::Binary,
         DataType::Geometry => TypeName::Geometry,
-        DataType::Nullable(box inner_ty) => {
+        DataType::Nullable(deref!(inner_ty)) => {
             TypeName::Nullable(Box::new(convert_to_type_name(inner_ty)))
         }
-        DataType::Array(box inner_ty) => TypeName::Array(Box::new(convert_to_type_name(inner_ty))),
-        DataType::Map(box inner_ty) => match inner_ty {
+        DataType::Array(deref!(inner_ty)) => {
+            TypeName::Array(Box::new(convert_to_type_name(inner_ty)))
+        }
+        DataType::Map(deref!(inner_ty)) => match inner_ty {
             DataType::Tuple(inner_tys) => TypeName::Map {
                 key_type: Box::new(convert_to_type_name(&inner_tys[0])),
                 val_type: Box::new(convert_to_type_name(&inner_tys[1])),

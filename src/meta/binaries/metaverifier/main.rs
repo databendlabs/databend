@@ -26,6 +26,7 @@ use std::time::Instant;
 use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
+use databend_common_meta_control::grpc_client_auth::GrpcClientAuthArgs;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
@@ -72,11 +73,15 @@ struct Config {
 
     #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
     pub grpc_api_address: String,
+
+    #[clap(flatten)]
+    pub grpc_auth: GrpcClientAuthArgs,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = Config::parse();
+    let grpc_auth = config.grpc_auth.load()?;
 
     let log_config = databend_common_tracing::Config {
         file: FileConfig {
@@ -125,13 +130,14 @@ async fn main() -> Result<()> {
             .split(',')
             .map(|addr| addr.to_string())
             .collect();
+        let grpc_auth = grpc_auth.clone();
 
         let handle = DatabendRuntime::spawn(
             async move {
                 let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                     addrs.clone(),
-                    "root",
-                    "xxx",
+                    grpc_auth.username(),
+                    grpc_auth.expose_password(),
                     None,
                     None,
                     None,

@@ -53,30 +53,32 @@ impl Interpreter for CreateUserUDFScript {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_udf_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "create_user_udf_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let udf = plan.udf;
-        let _ = UserApiProvider::instance()
-            .add_udf(&tenant, udf, &plan.create_option)
-            .await?;
-
-        // Grant ownership as the current role
-        if let Some(current_role) = self.ctx.get_current_role() {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::UDF {
-                        name: self.plan.udf.name.clone(),
-                    },
-                    &current_role.name,
-                )
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let udf = plan.udf;
+            UserApiProvider::instance()
+                .add_udf(&tenant, udf, &plan.create_option)
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
 
-        Ok(PipelineBuildResult::create())
+            // Grant ownership as the current role
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::UDF {
+                            name: self.plan.udf.name.clone(),
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

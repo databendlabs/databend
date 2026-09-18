@@ -14,6 +14,7 @@
 
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v2::AdditionalStatsMeta;
+pub use v2::BlockIndexMeta;
 pub use v2::BlockMeta;
 pub use v2::BytesRange;
 pub use v2::ClusterStatistics;
@@ -42,6 +43,7 @@ pub use v2::VirtualSegmentSchema;
 pub use v2::validate_segment_partition_statistics;
 pub use v2::widen_decimal_scalar;
 pub use v4::CompactSegmentInfo;
+pub use v4::LogicalChangeCounters;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;

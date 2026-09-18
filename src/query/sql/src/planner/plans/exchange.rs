@@ -50,7 +50,18 @@ impl Operator for Exchange {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        rel_expr.derive_relational_prop_child(0)
+        let child_prop = rel_expr.derive_relational_prop_child(0)?;
+        let outer_columns =
+            self.derive_outer_columns(child_prop.outer_columns.clone(), &child_prop.output_columns);
+        let mut used_columns = child_prop.used_columns.clone();
+        used_columns.extend(self.scalar_expr_iter().flat_map(ScalarExpr::used_columns));
+        Ok(Arc::new(RelationalProperty {
+            output_columns: child_prop.output_columns.clone(),
+            outer_columns,
+            used_columns,
+            orderings: child_prop.orderings.clone(),
+            partition_orderings: child_prop.partition_orderings.clone(),
+        }))
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {

@@ -49,44 +49,51 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let db = catalog.get_database(&tenant, &self.plan.database).await?;
-        let name = db.name();
-        let mut info = format!("CREATE DATABASE `{}`", name);
-        if !db.engine().is_empty() {
-            let engine = format!(" ENGINE={}", db.engine().to_uppercase());
-            let engine_options = db
-                .engine_options()
-                .iter()
-                .map(|(k, v)| format!("{}='{}'", k, v))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if !engine_options.is_empty() {
-                write!(info, "{}({})", engine, engine_options)
-                    .expect("write to string must succeed");
-            } else {
-                info.push_str(&engine);
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let db = catalog.get_database(&tenant, &self.plan.database).await?;
+            let name = db.name();
+            let mut info = format!("CREATE DATABASE `{}`", name);
+            if !db.engine().is_empty() {
+                let engine = format!(" ENGINE={}", db.engine().to_uppercase());
+                let engine_options = db
+                    .engine_options()
+                    .iter()
+                    .map(|(k, v)| format!("{}='{}'", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if !engine_options.is_empty() {
+                    write!(info, "{}({})", engine, engine_options)
+                        .expect("write to string must succeed");
+                } else {
+                    info.push_str(&engine);
+                }
+
+                let options = db
+                    .options()
+                    .iter()
+                    .map(|(k, v)| format!("{}='{}'", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if !db.options().is_empty() {
+                    write!(info, " OPTIONS ({})", options)
+                        .expect("failed to format database options");
+                }
             }
 
-            let options = db
-                .options()
-                .iter()
-                .map(|(k, v)| format!("{}='{}'", k, v))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if !db.options().is_empty() {
-                write!(info, " OPTIONS ({})", options).expect("failed to format database options");
-            }
-        }
-
-        PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![
-                BlockEntry::new_const_column(DataType::String, Scalar::String(name.to_string()), 1),
-                BlockEntry::new_const_column(DataType::String, Scalar::String(info.clone()), 1),
-            ],
-            1,
-        )])
+            PipelineBuildResult::from_blocks(vec![DataBlock::new(
+                vec![
+                    BlockEntry::new_const_column(
+                        DataType::String,
+                        Scalar::String(name.to_string()),
+                        1,
+                    ),
+                    BlockEntry::new_const_column(DataType::String, Scalar::String(info.clone()), 1),
+                ],
+                1,
+            )])
+        })
     }
 }

@@ -451,6 +451,28 @@ impl Join {
             && !ctx.get_cluster().is_empty()
             && self.spatial_join_candidate(rel_expr)?.is_some())
     }
+
+    fn broadcast_build_is_preferred(ctx: &dyn TableContext, rel_expr: &RelExpr) -> Result<bool> {
+        let settings = ctx.get_settings();
+        if settings.get_enforce_shuffle_join()? {
+            return Ok(false);
+        }
+
+        let stat_ctx = StatContext::new(ctx.get_function_context()?);
+        let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
+        let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
+        let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
+            ctx.get_cluster().nodes.len().saturating_sub(1) as f64
+        } else {
+            // Use a very large value to prevent broadcast join.
+            1000.0
+        };
+
+        Ok(
+            right_cardinality * broadcast_join_threshold < left_cardinality
+                || settings.get_enforce_broadcast_join()?,
+        )
+    }
 }
 
 impl Operator for Join {
@@ -490,6 +512,9 @@ impl Operator for Join {
         for condition in &self.equi_conditions {
             condition.left.collect_used_columns(&mut outer_columns);
             condition.right.collect_used_columns(&mut outer_columns);
+        }
+        for condition in &self.non_equi_conditions {
+            condition.collect_used_columns(&mut outer_columns);
         }
         outer_columns.retain(|column| !output_columns.contains(column));
 
@@ -607,7 +632,41 @@ impl Operator for Join {
             return Ok(required);
         }
 
-        // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
+        // A Serial build can still be redistributed. Broadcasting a small build
+        // keeps the probe distributed instead of propagating Serial to both sides.
+        let has_only_non_equi_conditions =
+            self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty();
+        if ctx.get_cluster().nodes.len() > 1
+            && build_physical_prop.distribution == Distribution::Serial
+            && probe_physical_prop.distribution != Distribution::Serial
+            && !has_only_non_equi_conditions
+            && !matches!(
+                self.join_type,
+                JoinType::Right
+                    | JoinType::Full
+                    | JoinType::RightAnti
+                    | JoinType::RightSemi
+                    | JoinType::LeftMark
+                    | JoinType::RightSingle
+                    | JoinType::InnerAny
+                    | JoinType::LeftAny
+                    | JoinType::RightAny
+                    | JoinType::Asof
+                    | JoinType::LeftAsof
+                    | JoinType::RightAsof
+                    | JoinType::FullAsof
+            )
+            && Self::broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
+        {
+            required.distribution = if child_index == 1 {
+                Distribution::Broadcast
+            } else {
+                Distribution::Any
+            };
+            return Ok(required);
+        }
+
+        // If either side remains Serial or this is a non-equi join, use Serial distribution.
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
             || (self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty())
@@ -618,7 +677,6 @@ impl Operator for Join {
         }
 
         // Try to use broadcast join
-        let settings = ctx.get_settings();
         if !matches!(
             self.join_type,
             JoinType::Right
@@ -633,30 +691,14 @@ impl Operator for Join {
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
                 | JoinType::FullAsof
-        ) {
-            let stat_ctx = StatContext::new(ctx.get_function_context()?);
-            let left_stat_info = rel_expr.derive_cardinality_child(0, &stat_ctx)?;
-            let right_stat_info = rel_expr.derive_cardinality_child(1, &stat_ctx)?;
-            // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
-            // where n is the number of servers in the cluster.
-            let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
-                (ctx.get_cluster().nodes.len() - 1) as f64
+        ) && Self::broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
+        {
+            required.distribution = if child_index == 1 {
+                Distribution::Broadcast
             } else {
-                // Use a very large value to prevent broadcast join.
-                1000.0
+                Distribution::Any
             };
-            if !settings.get_enforce_shuffle_join()?
-                && (right_stat_info.cardinality * broadcast_join_threshold
-                    < left_stat_info.cardinality
-                    || settings.get_enforce_broadcast_join()?)
-            {
-                if child_index == 1 {
-                    required.distribution = Distribution::Broadcast;
-                } else {
-                    required.distribution = Distribution::Any;
-                }
-                return Ok(required);
-            }
+            return Ok(required);
         }
 
         // Otherwise, use hash shuffle
@@ -925,6 +967,39 @@ mod tests {
         let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, right_distribution);
+        Ok(())
+    }
+
+    #[test]
+    fn test_non_equi_join_predicate_tracks_outer_columns() -> Result<()> {
+        let join = Join {
+            // `#2 = #0`, where #0 comes from an enclosing query block.
+            non_equi_conditions: vec![function_call(
+                "eq",
+                vec![
+                    column(2, DataType::Number(NumberDataType::Int32)),
+                    column(0, DataType::Number(NumberDataType::Int32)),
+                ],
+                DataType::Boolean,
+            )],
+            join_type: JoinType::Inner,
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_binary(
+            join,
+            SExpr::create_leaf(Scan {
+                columns: column_set(&[2]),
+                ..Default::default()
+            }),
+            SExpr::create_leaf(Scan {
+                columns: column_set(&[4]),
+                ..Default::default()
+            }),
+        );
+
+        let prop = RelExpr::with_s_expr(&s_expr).derive_relational_prop()?;
+
+        assert_eq!(prop.outer_columns, column_set(&[0]));
         Ok(())
     }
 

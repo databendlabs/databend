@@ -263,9 +263,7 @@ fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
             if let Statement::CreateTag(stmt) = stmt
                 && let Some(allowed_values) = &mut stmt.allowed_values
             {
-                for value in allowed_values {
-                    *value = Literal::Null;
-                }
+                allowed_values.fill(Literal::Null);
             }
             Ok(VisitControl::Continue)
         }

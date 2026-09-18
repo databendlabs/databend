@@ -9,13 +9,13 @@ error: ⚠️  BREAKING CHANGE DETECTED: 'Application' modified (or its FrozenAP
    |
    = note: this error originates in the attribute macro `frozen_api` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0599]: no associated item named `__FROZEN_API_HASH` found for struct `BadService` in the current scope
+error[E0599]: no associated function or constant named `__FROZEN_API_HASH` found for struct `BadService` in the current scope
   --> tests/ui/errors/missing_derive.rs:31:1
    |
 25 | struct BadService {
-   | ----------------- associated item `__FROZEN_API_HASH` not found for this struct
+   | ----------------- associated function or constant `__FROZEN_API_HASH` not found for this struct
 ...
 31 | #[frozen_api("dummy")]
-   | ^^^^^^^^^^^^^^^^^^^^^^ associated item not found in `BadService`
+   | ^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `BadService`
    |
    = note: this error originates in the attribute macro `frozen_api` (in Nightly builds, run with -Z macro-backtrace for more info)

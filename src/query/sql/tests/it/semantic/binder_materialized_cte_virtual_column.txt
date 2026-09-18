@@ -78,9 +78,9 @@ sql:
 
 status: ok
 EvalScalar
-├── scalars: [user_id (#8) AS (#8), trace_id (#9) AS (#9), level (#10) AS (#10), status_code (#11) AS (#11), error_message (#12) AS (#12)]
+├── scalars: [default.t.v['message']['attribute']['user_id']::Int32 (#3) AS (#3), default.t.v['message']['attribute']['trace_id']::Int32 (#4) AS (#4), default.t.v['message']['attribute']['level']::String (#5) AS (#5), default.t.v['response']['status_code']::Int64 (#6) AS (#6), default.t.v['response']['error_message']::String (#7) AS (#7)]
 └── EvalScalar
-    ├── scalars: [CAST(default.t.v['message']['attribute']['user_id'] (#3) AS Int32 NULL) AS (#8), CAST(default.t.v['message']['attribute']['trace_id'] (#4) AS Int32 NULL) AS (#9), CAST(default.t.v['message']['attribute']['level'] (#5) AS String NULL) AS (#10), CAST(default.t.v['response']['status_code'] (#6) AS Int64 NULL) AS (#11), CAST(default.t.v['response']['error_message'] (#7) AS String NULL) AS (#12)]
+    ├── scalars: [default.t.v['message']['attribute']['user_id']::Int32 (#3) AS (#3), default.t.v['message']['attribute']['trace_id']::Int32 (#4) AS (#4), default.t.v['message']['attribute']['level']::String (#5) AS (#5), default.t.v['response']['status_code']::Int64 (#6) AS (#6), default.t.v['response']['error_message']::String (#7) AS (#7)]
     └── EvalScalar
         ├── scalars: [default.t.v['message'] (#1) AS (#1), default.t.v['response'] (#2) AS (#2)]
         └── Scan

@@ -16,8 +16,6 @@ use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::CreateDynamicTableStmt;
-use crate::ast::InitializeMode;
-use crate::ast::RefreshMode;
 use crate::ast::Statement;
 use crate::ast::TargetLag;
 use crate::ast::WarehouseOptions;
@@ -39,10 +37,8 @@ pub fn dynamic_table(i: Input) -> IResult<Statement> {
     rule!(
         #create_dynamic_table : "`CREATE [OR REPLACE] [TRANSIENT] DYNAMIC TABLE [ IF NOT EXISTS ] [<database>.]<table> [<source>]
   [ CLUSTER BY <expr> ]
-  TARGET_LAG = { <num> { SECOND | MINUTE | HOUR | DAY } | DOWNSTREAM}
+  [ TARGET_LAG = { <num> { SECOND | MINUTE | HOUR | DAY } | DOWNSTREAM} ]
   [ { WAREHOUSE = <string> } ]
-  [ REFRESH_MODE = { AUTO | FULL | INCREMENTAL } ]
-  [ INITIALIZE = { ON_CREATE | ON_SCHEDULE } ]
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
@@ -70,7 +66,7 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
             (catalog, database, table),
             source,
             opt_cluster_by,
-            (target_lag, warehouse_opts, refresh_mode_opt, initialize_opt),
+            (target_lag, warehouse_opts),
             opt_table_options,
             (_, query),
         )| {
@@ -86,8 +82,6 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
                 cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
                 target_lag,
                 warehouse_opts,
-                refresh_mode: refresh_mode_opt.unwrap_or(RefreshMode::Auto),
-                initialize: initialize_opt.unwrap_or(InitializeMode::OnCreate),
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: Box::new(query),
             }))
@@ -95,51 +89,31 @@ fn create_dynamic_table(i: Input) -> IResult<Statement> {
     )(i)
 }
 
-fn dynamic_table_options(
-    i: Input,
-) -> IResult<(
-    TargetLag,
-    WarehouseOptions,
-    Option<RefreshMode>,
-    Option<InitializeMode>,
-)> {
-    let target_lag = map(
-        rule! {
-            TARGET_LAG ~ "=" ~ #target_lag
-        },
-        |(_, _, target_lag)| target_lag,
-    );
-
-    let refresh_mode = alt((
-        value(RefreshMode::Auto, rule! { AUTO }),
-        value(RefreshMode::Full, rule! { FULL }),
-        value(RefreshMode::Incremental, rule! { INCREMENTAL }),
-    ));
-    let refresh_mode_opt = map(
-        rule! {
-            (REFRESH_MODE ~ "=" ~ #refresh_mode)?
-        },
-        |v| v.map(|v| v.2),
-    );
-
-    let initialize_mode = alt((
-        value(InitializeMode::OnCreate, rule! { ON_CREATE }),
-        value(InitializeMode::OnSchedule, rule! { ON_SCHEDULE }),
-    ));
-    let initialize_opt = map(
-        rule! {
-            (INITIALIZE ~ "=" ~ #initialize_mode)?
-        },
-        |v| v.map(|v| v.2),
-    );
-
-    permutation((
-        target_lag,
-        task_warehouse_option,
-        refresh_mode_opt,
-        initialize_opt,
+fn dynamic_table_options(i: Input) -> IResult<(TargetLag, WarehouseOptions)> {
+    alt((
+        |i| dynamic_table_options_with_mode(i, false),
+        |i| dynamic_table_options_with_mode(i, true),
     ))
     .parse(i)
+}
+
+fn dynamic_table_options_with_mode(
+    i: Input,
+    manual: bool,
+) -> IResult<(TargetLag, WarehouseOptions)> {
+    let target_lag = move |i| {
+        if manual {
+            Ok((i, TargetLag::Manual))
+        } else {
+            map(
+                rule! { TARGET_LAG ~ "=" ~ #target_lag },
+                |(_, _, target_lag)| target_lag,
+            )
+            .parse(i)
+        }
+    };
+
+    permutation((target_lag, task_warehouse_option)).parse(i)
 }
 
 fn target_lag(i: Input) -> IResult<TargetLag> {
