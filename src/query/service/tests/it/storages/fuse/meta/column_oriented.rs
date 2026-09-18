@@ -390,7 +390,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     )
     .await?;
     let cached = cache.get(&location).unwrap();
-    assert_eq!(cached.segment_schema.fields.len(), 10);
+    assert_eq!(cached.segment_schema.fields.len(), 11);
     assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
@@ -403,7 +403,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let _column_oriented_segment =
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
-    assert_eq!(cached.segment_schema.fields.len(), 12);
+    assert_eq!(cached.segment_schema.fields.len(), 13);
 
     let column_1 = table_schema.field_of_column_id(col_id).unwrap();
     let stat_1 = column_oriented_segment
@@ -427,7 +427,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
-    assert_eq!(cached.segment_schema.fields.len(), 13);
+    assert_eq!(cached.segment_schema.fields.len(), 14);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
     check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
@@ -441,7 +441,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
-    assert_eq!(cached.segment_schema.fields.len(), 13);
+    assert_eq!(cached.segment_schema.fields.len(), 14);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
     check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);

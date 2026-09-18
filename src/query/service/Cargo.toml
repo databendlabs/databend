@@ -199,7 +199,6 @@ paimon = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }
 serde_yaml = { workspace = true }
-tantivy = { workspace = true }
 temp-env = { workspace = true }
 tower = { workspace = true }
 wiremock = { workspace = true }

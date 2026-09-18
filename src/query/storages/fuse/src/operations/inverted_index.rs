@@ -14,37 +14,42 @@
 
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::time::Instant;
 
-use async_trait::async_trait;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
-use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline::sinks::AsyncSink;
-use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
+use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
@@ -53,7 +58,14 @@ use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::read::read_segment_stats;
 use crate::io::write_data;
+use crate::operations::BlockMetaIndex;
+use crate::operations::CommitSink;
+use crate::operations::MutationGenerator;
+use crate::operations::MutationLogEntry;
+use crate::operations::MutationLogs;
+use crate::operations::TableMutationAggregator;
 
 impl FuseTable {
     // The big picture of refresh inverted index into pipeline:
@@ -101,24 +113,27 @@ impl FuseTable {
 
         let segment_reader = MetaReaders::segment_info_reader(self.get_operator(), table_schema);
 
-        // If no segment locations are specified, iterates through all segments
-        let segment_locs = if let Some(segment_locs) = segment_locs {
-            segment_locs
+        let target_segments = segment_locs.map(|locations| {
+            locations
                 .into_iter()
-                .filter(|s| snapshot.segments.contains(s))
-                .collect()
-        } else {
-            snapshot.segments.clone()
-        };
-
-        if segment_locs.is_empty() {
+                .filter(|location| snapshot.segments.contains(location))
+                .collect::<std::collections::HashSet<_>>()
+        });
+        if snapshot.segments.is_empty() {
             return Ok(0);
         }
+
         let operator = self.get_operator_ref();
 
-        // Read the segment infos and collect the block metas that need to generate the index.
+        // Rebuild only when the block has no explicit metadata, no location, or a different generation.
         let mut block_metas = VecDeque::new();
-        for (segment_loc, ver) in &segment_locs {
+        for (segment_idx, (segment_loc, ver)) in snapshot.segments.iter().enumerate() {
+            if target_segments
+                .as_ref()
+                .is_some_and(|segments| !segments.contains(&(segment_loc.clone(), *ver)))
+            {
+                continue;
+            }
             let segment_info = segment_reader
                 .read(&LoadParams {
                     location: segment_loc.to_string(),
@@ -127,17 +142,31 @@ impl FuseTable {
                     put_cache: false,
                 })
                 .await?;
+            let stats = match segment_info.summary.additional_stats_loc() {
+                Some(location) => Some(read_segment_stats(operator.clone(), location).await?),
+                None => None,
+            };
 
-            for block_meta in segment_info.block_metas()? {
-                let index_location =
-                    TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                        &block_meta.location.0,
-                        &index_name,
-                        &index_version,
-                    );
-                // only generate inverted index if it is not exist.
-                if (operator.stat(&index_location).await).is_err() {
-                    block_metas.push_back(block_meta);
+            for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
+                let generated = block_meta
+                    .inverted_index_meta(&index_name)
+                    .is_some_and(|meta| {
+                        !meta.location.0.is_empty()
+                            && meta.index_version == index_version
+                            && meta.location.1 == INVERTED_INDEX_FILE_FORMAT_VERSION
+                    });
+                if !generated {
+                    block_metas.push_back(RefreshInvertedIndexMeta {
+                        index: BlockMetaIndex {
+                            segment_idx,
+                            block_idx,
+                        },
+                        column_hlls: stats
+                            .as_ref()
+                            .and_then(|stats| stats.block_hlls.get(block_idx))
+                            .cloned(),
+                        block_meta,
+                    });
                 }
             }
         }
@@ -167,6 +196,7 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
+        let meta_location_generator = self.meta_location_generator.clone();
         pipeline.add_async_transformer(|| {
             InvertedIndexTransform::new(
                 index_name.clone(),
@@ -175,31 +205,81 @@ impl FuseTable {
                 data_schema.clone(),
                 index_schema.clone(),
                 operator.clone(),
+                meta_location_generator.clone(),
             )
         });
 
         pipeline.try_resize(1)?;
-        pipeline.add_sink(|input| InvertedIndexSink::try_create(input, block_nums))?;
+        let table_meta_timestamps = ctx.get_table_meta_timestamps(self, Some(snapshot.clone()))?;
+        pipeline.add_async_accumulating_transformer(|| {
+            TableMutationAggregator::create(
+                self,
+                ctx.clone(),
+                snapshot.segments.clone(),
+                Default::default(),
+                vec![],
+                Statistics::default(),
+                MutationKind::Refresh,
+                table_meta_timestamps,
+            )
+        });
+
+        let prev_snapshot_id = snapshot.snapshot_id;
+        let snapshot_gen = MutationGenerator::new(Some(snapshot), MutationKind::Refresh);
+        pipeline.add_sink(|input| {
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                Default::default(),
+                snapshot_gen.clone(),
+                input,
+                None,
+                Some(prev_snapshot_id),
+                None,
+                table_meta_timestamps,
+                false,
+            )
+        })?;
 
         Ok(block_nums as u64)
     }
 }
+
+/// Metadata carried between the refresh source and transform.
+#[derive(Clone)]
+struct RefreshInvertedIndexMeta {
+    index: BlockMetaIndex,
+    block_meta: Arc<BlockMeta>,
+    column_hlls: Option<RawBlockHLL>,
+}
+
+impl Debug for RefreshInvertedIndexMeta {
+    fn fmt(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.debug_struct("RefreshInvertedIndexMeta").finish()
+    }
+}
+
+local_block_meta_serde!(RefreshInvertedIndexMeta);
+
+#[typetag::serde(name = "refresh_inverted_index")]
+impl BlockMetaInfo for RefreshInvertedIndexMeta {}
 
 /// `InvertedIndexSource` is used to read data blocks that need generate inverted indexes.
 pub struct InvertedIndexSource {
     settings: ReadSettings,
     storage_format: FuseStorageFormat,
     block_reader: Arc<BlockReader>,
-    block_metas: VecDeque<Arc<BlockMeta>>,
+    block_metas: VecDeque<RefreshInvertedIndexMeta>,
     is_finished: bool,
 }
 
 impl InvertedIndexSource {
-    pub fn new(
+    fn new(
         settings: ReadSettings,
         storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
-        block_metas: VecDeque<Arc<BlockMeta>>,
+        block_metas: VecDeque<RefreshInvertedIndexMeta>,
     ) -> Self {
         Self {
             settings,
@@ -222,12 +302,16 @@ impl AsyncSource for InvertedIndexSource {
         }
 
         match self.block_metas.pop_front() {
-            Some(block_meta) => {
+            Some(refresh_meta) => {
                 let block = self
                     .block_reader
-                    .read_by_meta(&self.settings, &block_meta, &self.storage_format)
+                    .read_by_meta(
+                        &self.settings,
+                        &refresh_meta.block_meta,
+                        &self.storage_format,
+                    )
                     .await?;
-                let block = block.add_meta(Some(Box::new(Arc::unwrap_or_clone(block_meta))))?;
+                let block = block.add_meta(Some(Box::new(refresh_meta)))?;
                 Ok(Some(block))
             }
             None => {
@@ -246,6 +330,7 @@ pub struct InvertedIndexTransform {
     data_schema: DataSchemaRef,
     source_schema: TableSchemaRef,
     operator: Operator,
+    meta_location_generator: TableMetaLocationGenerator,
 }
 
 impl InvertedIndexTransform {
@@ -256,6 +341,7 @@ impl InvertedIndexTransform {
         data_schema: DataSchemaRef,
         source_schema: TableSchemaRef,
         operator: Operator,
+        meta_location_generator: TableMetaLocationGenerator,
     ) -> Self {
         Self {
             index_name,
@@ -264,6 +350,7 @@ impl InvertedIndexTransform {
             data_schema,
             source_schema,
             operator,
+            meta_location_generator,
         }
     }
 }
@@ -274,60 +361,69 @@ impl AsyncTransform for InvertedIndexTransform {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let block_meta = data_block
+        let refresh_meta = data_block
             .get_meta()
-            .and_then(BlockMeta::downcast_ref_from)
+            .and_then(RefreshInvertedIndexMeta::downcast_ref_from)
             .unwrap();
+        let block_meta = &refresh_meta.block_meta;
 
-        let index_location =
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &block_meta.location.0,
-                &self.index_name,
-                &self.index_version,
-            );
+        let index_location = self
+            .meta_location_generator
+            .gen_inverted_index_v2_location(&self.index_version);
 
-        let start = Instant::now();
+        let generate_start = Instant::now();
         let mut writer =
             InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
         writer.add_block(&self.source_schema, &data_block)?;
 
         let data = writer.finalize()?;
+        metrics_inc_block_inverted_index_generate_milliseconds(
+            generate_start.elapsed().as_millis() as u64,
+        );
         let index_size = data.len() as u64;
+        let write_start = Instant::now();
         write_data(data, &self.operator, &index_location).await?;
 
-        // Perf.
-        {
-            metrics_inc_block_inverted_index_write_nums(1);
-            metrics_inc_block_inverted_index_write_bytes(index_size);
-            metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        metrics_inc_block_inverted_index_write_nums(1);
+        metrics_inc_block_inverted_index_write_bytes(index_size);
+        metrics_inc_block_inverted_index_write_milliseconds(
+            write_start.elapsed().as_millis() as u64
+        );
+
+        let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
+        let mut index_metas = new_block_meta
+            .inverted_index_metas
+            .take()
+            .unwrap_or_default();
+        let new_meta = BlockIndexMeta {
+            index_name: self.index_name.clone(),
+            location: (index_location, INVERTED_INDEX_FILE_FORMAT_VERSION),
+            size: index_size,
+            index_version: self.index_version.clone(),
+        };
+        match index_metas.binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name)) {
+            Ok(index) => index_metas[index] = new_meta,
+            Err(index) => index_metas.insert(index, new_meta),
         }
+        new_block_meta.inverted_index_size = Some(index_metas.iter().map(|meta| meta.size).sum());
+        new_block_meta.inverted_index_metas = Some(index_metas);
 
-        let new_block = DataBlock::new(vec![], 0);
-        Ok(new_block)
-    }
-}
-
-/// `InvertedIndexSink` is used to build inverted index.
-pub struct InvertedIndexSink {
-    block_nums: AtomicUsize,
-}
-
-impl InvertedIndexSink {
-    pub fn try_create(input: Arc<InputPort>, block_nums: usize) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, InvertedIndexSink {
-            block_nums: AtomicUsize::new(block_nums),
-        });
-        Ok(ProcessorPtr::create(sinker))
-    }
-}
-
-#[async_trait]
-impl AsyncSink for InvertedIndexSink {
-    const NAME: &'static str = "InvertedIndexSink";
-
-    #[async_backtrace::framed]
-    async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
-        let num = self.block_nums.fetch_sub(1, Ordering::SeqCst);
-        Ok(num <= 1)
+        let extended_block_meta = ExtendedBlockMeta {
+            block_meta: new_block_meta,
+            draft_virtual_block_meta: None,
+            column_hlls: refresh_meta
+                .column_hlls
+                .clone()
+                .map(BlockHLLState::Serialized),
+            column_top_n: None,
+        };
+        let entry = MutationLogEntry::ReplacedBlock {
+            index: refresh_meta.index.clone(),
+            block_meta: Arc::new(extended_block_meta),
+        };
+        Ok(DataBlock::empty_with_meta(Box::new(MutationLogs {
+            entries: vec![entry],
+            ..Default::default()
+        })))
     }
 }

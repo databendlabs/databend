@@ -218,7 +218,7 @@ impl PruningContext {
         let inverted_index_pruner = if lightweight_pruning {
             None
         } else {
-            InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?
+            InvertedIndexPruner::try_create(dal.clone(), push_down)?
         };
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
