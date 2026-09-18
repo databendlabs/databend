@@ -471,12 +471,11 @@ pub fn sort_by_cluster_stats(
     v2: Option<&ClusterStatistics>,
     default_cluster_key: u32,
 ) -> Ordering {
+    // Stats without the current cluster key are not comparable; sort them last as one group.
+    let v1 = v1.filter(|v| v.cluster_key_id == default_cluster_key);
+    let v2 = v2.filter(|v| v.cluster_key_id == default_cluster_key);
     match (v1, v2) {
         (Some(a), Some(b)) => {
-            if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
-                return Ordering::Equal;
-            }
-
             let ord_min = a
                 .min()
                 .iter()
@@ -490,7 +489,9 @@ pub fn sort_by_cluster_stats(
                 .map(Scalar::as_ref)
                 .cmp(b.max().iter().map(Scalar::as_ref))
         }
-        _ => Ordering::Equal,
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
     }
 }
 
@@ -876,6 +877,85 @@ mod tests {
             layout,
             BlockThresholds::new(1_000_000, 125 * 1024 * 1024, 16 * 1024 * 1024, 1000),
         )
+    }
+
+    #[test]
+    fn test_sort_by_cluster_stats_is_total_order_with_mixed_stats() {
+        const KEY: u32 = 7;
+        let matched = |min: i32, max: i32| {
+            Some(ClusterStatistics::new(
+                KEY,
+                vec![int32_scalar(min)],
+                vec![int32_scalar(max)],
+                0,
+            ))
+        };
+        let stale = |min: i32, max: i32| {
+            Some(ClusterStatistics::new(
+                KEY + 1,
+                vec![int32_scalar(min)],
+                vec![int32_scalar(max)],
+                0,
+            ))
+        };
+
+        let mut stats: Vec<Option<ClusterStatistics>> = vec![
+            matched(9, 10),
+            None,
+            matched(1, 2),
+            stale(0, 0),
+            matched(5, 6),
+            None,
+            matched(1, 3),
+            stale(100, 200),
+            matched(0, 1),
+        ];
+        let cmp = |a: &Option<ClusterStatistics>, b: &Option<ClusterStatistics>| {
+            sort_by_cluster_stats(a.as_ref(), b.as_ref(), KEY)
+        };
+
+        for a in &stats {
+            for b in &stats {
+                assert_eq!(cmp(a, b), cmp(b, a).reverse());
+                for c in &stats {
+                    let ab = cmp(a, b);
+                    let bc = cmp(b, c);
+                    if ab == bc {
+                        assert_eq!(cmp(a, c), ab, "{a:?} {b:?} {c:?}");
+                    }
+                    if ab == Ordering::Equal {
+                        assert_eq!(cmp(a, c), cmp(b, c), "{a:?} {b:?} {c:?}");
+                    }
+                }
+            }
+        }
+
+        stats.sort_by(cmp);
+        let ordered: Vec<Option<(i32, i32)>> = stats
+            .iter()
+            .map(|s| {
+                s.as_ref().filter(|s| s.cluster_key_id == KEY).map(|s| {
+                    match (&s.min[0], &s.max[0]) {
+                        (
+                            Scalar::Number(NumberScalar::Int32(min)),
+                            Scalar::Number(NumberScalar::Int32(max)),
+                        ) => (*min, *max),
+                        _ => unreachable!(),
+                    }
+                })
+            })
+            .collect();
+        assert_eq!(ordered, vec![
+            Some((0, 1)),
+            Some((1, 2)),
+            Some((1, 3)),
+            Some((5, 6)),
+            Some((9, 10)),
+            None,
+            None,
+            None,
+            None,
+        ]);
     }
 
     #[test]
