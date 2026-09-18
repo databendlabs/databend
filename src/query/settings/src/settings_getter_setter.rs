@@ -928,6 +928,10 @@ impl Settings {
         Ok(self.try_get_u64("disable_variant_check")? != 0)
     }
 
+    pub fn get_enable_parse_json_variant_reparse(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parse_json_variant_reparse")? != 0)
+    }
+
     pub fn get_cost_factor_hash_table_per_row(&self) -> Result<u64> {
         self.try_get_u64("cost_factor_hash_table_per_row")
     }

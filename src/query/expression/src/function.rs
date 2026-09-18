@@ -141,6 +141,8 @@ pub struct FunctionContext {
     pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
+    /// Re-serialize and re-parse VARIANT inputs of `parse_json` to repair legacy invalid JSONB.
+    pub enable_parse_json_variant_reparse: bool,
     pub enable_selector_executor: bool,
 
     pub geometry_output_format: GeometryDataType,
@@ -161,6 +163,7 @@ impl Default for FunctionContext {
             now: DateTime::UNIX_EPOCH,
             rounding_mode: false,
             disable_variant_check: false,
+            enable_parse_json_variant_reparse: true,
             enable_selector_executor: true,
 
             geometry_output_format: Default::default(),
