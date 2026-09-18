@@ -20,6 +20,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::AggrState;
 pub use databend_common_expression::aggregate::aggregate_function::*;
@@ -59,6 +60,54 @@ pub(super) use null_argument_result::try_create_null_argument_result_function;
 pub(super) use unary::*;
 pub(super) use unary_distinct::create_unary_distinct;
 pub(super) use unary_nullable::UnaryOrNull;
+
+/// Visits only items selected by `validity`, while keeping the no-validity
+/// path as a direct iteration.
+#[inline]
+pub(super) fn for_each_selected<T>(
+    items: impl IntoIterator<Item = T>,
+    validity: Option<&Bitmap>,
+    mut f: impl FnMut(T),
+) {
+    match validity {
+        Some(validity) => {
+            for (item, selected) in items.into_iter().zip(validity.iter()) {
+                if selected {
+                    f(item);
+                }
+            }
+        }
+        None => {
+            for item in items {
+                f(item);
+            }
+        }
+    }
+}
+
+/// Fallible variant of [`for_each_selected`].
+#[inline]
+pub(super) fn try_for_each_selected<T>(
+    items: impl IntoIterator<Item = T>,
+    validity: Option<&Bitmap>,
+    mut f: impl FnMut(T) -> Result<()>,
+) -> Result<()> {
+    match validity {
+        Some(validity) => {
+            for (item, selected) in items.into_iter().zip(validity.iter()) {
+                if selected {
+                    f(item)?;
+                }
+            }
+        }
+        None => {
+            for item in items {
+                f(item)?;
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Builds an implementation while retaining the complete external call contract.
 pub(super) struct UnaryBuildContext<'a, C> {
@@ -110,6 +159,26 @@ pub(super) type DirectBuildFn<C> =
 fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
 where T: Send + 'static {
     state.addr.next(state.loc[index].offset()).get::<T>()
+}
+
+pub(super) fn filter_state_places(
+    states: &AggregateStateSet<'_>,
+    filter: &Bitmap,
+) -> Vec<StateAddr> {
+    states
+        .iter()
+        .zip(filter.iter())
+        .filter_map(|(state, valid)| valid.then_some(state.addr))
+        .collect()
+}
+
+pub(super) fn combine_validity(left: Option<Bitmap>, right: Option<&Bitmap>) -> Option<Bitmap> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(&left & right),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right.clone()),
+        (None, None) => None,
+    }
 }
 
 fn write_state_at<T>(state: AggrState<'_>, index: usize, value: T)
@@ -270,27 +339,24 @@ mod tests {
         fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
             let state = input.state.get::<SumState>();
             let values = input.columns[0].downcast::<UInt64Type>().unwrap();
-            for row in 0..input.columns.num_rows() {
-                if input
-                    .validity
-                    .is_some_and(|validity| !validity.get(row).unwrap())
-                {
-                    continue;
-                }
+            for_each_selected(0..input.columns.num_rows(), input.validity, |row| {
                 state.value += values.index(row).unwrap();
-            }
+            });
             Ok(())
         }
 
         fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-            for (row, state) in input.states.iter().enumerate() {
-                self.accumulate_row(AccumulateRowInput {
-                    state,
-                    columns: input.columns,
-                    row,
-                })?;
-            }
-            Ok(())
+            try_for_each_selected(
+                input.states.iter().enumerate(),
+                input.validity,
+                |(row, state)| {
+                    self.accumulate_row(AccumulateRowInput {
+                        state,
+                        columns: input.columns,
+                        row,
+                    })
+                },
+            )
         }
 
         fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -309,15 +375,16 @@ mod tests {
         }
 
         fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-            for (row, state) in input.states.iter().enumerate() {
-                if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                    continue;
-                }
-                Self::add_value(
-                    state.get::<SumState>(),
-                    serialized_scalar_at(input.state, row, 0),
-                );
-            }
+            for_each_selected(
+                input.states.iter().enumerate(),
+                input.filter,
+                |(row, state)| {
+                    Self::add_value(
+                        state.get::<SumState>(),
+                        serialized_scalar_at(input.state, row, 0),
+                    );
+                },
+            );
             Ok(())
         }
 
@@ -432,10 +499,7 @@ mod tests {
             .iter()
             .map(|data_type| ColumnBuilder::with_capacity(data_type, 1))
             .collect::<Vec<_>>();
-        function.serialize(SerializeInput {
-            states: owner.state_set(0),
-            builders: &mut builders,
-        })?;
+        function.serialize(owner.state_set(0), &mut builders)?;
         let columns = builders
             .into_iter()
             .map(ColumnBuilder::build)
@@ -495,6 +559,54 @@ mod tests {
     }
 
     #[test]
+    fn test_internal_accumulate_keys_honors_validity() -> Result<()> {
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let function: AggregateCallRef = Arc::new(AggregateCallInstance::new(
+            AggregateSignature {
+                name: "sum_probe_keyed_validity".to_string(),
+                params: vec![],
+                args_type: vec![UInt64Type::data_type()],
+                distinct: false,
+                order_by: vec![],
+                return_type: UInt64Type::data_type(),
+            },
+            FunctionInputLayout::Identity,
+            AggregateFeatures::default(),
+            AggregateStateDescription::new(
+                vec![AggrStateType::Custom(Layout::new::<SumState>())],
+                vec![StateSerdeItem::DataType(UInt64Type::data_type())],
+            )
+            .with_manual_drop(true),
+            plain_sum(drop_count.clone()),
+        ));
+        let owners = (0..3)
+            .map(|_| AggregateStateOwner::new(vec![function.clone()]))
+            .collect::<Result<Vec<_>>>()?;
+        let places = owners
+            .iter()
+            .map(|owner| owner.state(0).addr)
+            .collect::<Vec<_>>();
+        let entries = [UInt64Type::from_data(vec![10, 20, 30]).into()];
+        let validity = Bitmap::from([true, false, true]);
+
+        plain_sum(Arc::new(AtomicUsize::new(0))).accumulate_keys(AccumulateKeysInput {
+            states: AggregateStateSet::new(&places, owners[0].state(0).loc),
+            columns: (&entries).into(),
+            validity: Some(&validity),
+        })?;
+
+        let values = owners
+            .iter()
+            .map(|owner| owner.state(0).get::<SumState>().value)
+            .collect::<Vec<_>>();
+        assert_eq!(values, vec![10, 0, 30]);
+
+        drop(owners);
+        assert_eq!(drop_count.load(Ordering::SeqCst), 3);
+        Ok(())
+    }
+
+    #[test]
     fn test_or_null_emits_null_without_input_rows() -> Result<()> {
         let drop_count = Arc::new(AtomicUsize::new(0));
         let function: AggregateCallRef = Arc::new(AggregateCallInstance::new(
@@ -516,10 +628,7 @@ mod tests {
             let owner = AggregateStateOwner::new(vec![function.clone()])?;
             let mut builder =
                 ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-            function.merge_result(MergeResultInput {
-                state: owner.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(owner.state(0), &mut builder)?;
             let column = builder.build();
             assert_eq!(unsafe { column.index_unchecked(0) }, ScalarRef::Null);
         }
@@ -552,31 +661,17 @@ mod tests {
         {
             let source_owner = AggregateStateOwner::new(vec![function.clone()])?;
             let entries = [UInt64Type::from_data(vec![2, 2, 5]).into()];
-            function.accumulate(AccumulateInput {
-                state: source_owner.state(0),
-                columns: (&entries).into(),
-                validity: None,
-            })?;
+            function.accumulate(source_owner.state(0), (&entries).into())?;
             let mut snapshot = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
-            function.merge_result_read_only(MergeResultInput {
-                state: source_owner.state(0),
-                builder: &mut snapshot,
-            })?;
+            function.merge_result_read_only(source_owner.state(0), &mut snapshot)?;
             assert_eq!(
                 snapshot.build().index(0).unwrap(),
                 ScalarRef::Number(NumberScalar::UInt64(7))
             );
             let more = [UInt64Type::from_data(vec![5, 3]).into()];
-            function.accumulate(AccumulateInput {
-                state: source_owner.state(0),
-                columns: (&more).into(),
-                validity: None,
-            })?;
+            function.accumulate(source_owner.state(0), (&more).into())?;
             let mut snapshot = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
-            function.merge_result_read_only(MergeResultInput {
-                state: source_owner.state(0),
-                builder: &mut snapshot,
-            })?;
+            function.merge_result_read_only(source_owner.state(0), &mut snapshot)?;
             assert_eq!(
                 snapshot.build().index(0).unwrap(),
                 ScalarRef::Number(NumberScalar::UInt64(10))
@@ -584,17 +679,10 @@ mod tests {
             let serialized_state = serialize_state(&function, &source_owner)?;
 
             let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
-            function.merge_serialized(MergeSerializedInput {
-                states: serialized_owner.state_set(0),
-                state: &serialized_state,
-                filter: None,
-            })?;
+            function.merge_serialized(serialized_owner.state_set(0), &serialized_state)?;
 
             let mut builder = ColumnBuilder::with_capacity(&UInt64Type::data_type(), 1);
-            function.merge_result(MergeResultInput {
-                state: serialized_owner.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(serialized_owner.state(0), &mut builder)?;
             let column = builder.build();
             assert_eq!(
                 unsafe { column.index_unchecked(0) },
@@ -615,18 +703,11 @@ mod tests {
             let owner = AggregateStateOwner::new(vec![function.clone()])?;
             let entries = full_modifier_entries();
 
-            function.accumulate(AccumulateInput {
-                state: owner.state(0),
-                columns: (&entries).into(),
-                validity: None,
-            })?;
+            function.accumulate(owner.state(0), (&entries).into())?;
 
             let mut builder =
                 ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-            function.merge_result(MergeResultInput {
-                state: owner.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(owner.state(0), &mut builder)?;
             let column = builder.build();
             assert_eq!(
                 unsafe { column.index_unchecked(0) },
@@ -641,33 +722,19 @@ mod tests {
                 UInt64Type::from_data(vec![2, 5]).into(),
                 UInt64Type::from_data(vec![1, 2]).into(),
             ];
-            function.accumulate(AccumulateInput {
-                state: left.state(0),
-                columns: (&left_entries).into(),
-                validity: None,
-            })?;
+            function.accumulate(left.state(0), (&left_entries).into())?;
 
             let right_entries: Vec<BlockEntry> = vec![
                 UInt64Type::from_data(vec![2, 1]).into(),
                 UInt64Type::from_data(vec![0, 3]).into(),
             ];
-            function.accumulate(AccumulateInput {
-                state: right.state(0),
-                columns: (&right_entries).into(),
-                validity: None,
-            })?;
+            function.accumulate(right.state(0), (&right_entries).into())?;
 
-            function.merge_states(MergeStatesInput {
-                state: left.state(0),
-                rhs: right.state(0),
-            })?;
+            function.merge_states(left.state(0), right.state(0))?;
 
             let mut builder =
                 ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-            function.merge_result(MergeResultInput {
-                state: left.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(left.state(0), &mut builder)?;
             let column = builder.build();
             assert_eq!(
                 unsafe { column.index_unchecked(0) },
@@ -682,26 +749,15 @@ mod tests {
                 UInt64Type::from_data(vec![3, 1, 2, 0, 4, 5]).into(),
             ];
 
-            function.accumulate(AccumulateInput {
-                state: source_owner.state(0),
-                columns: (&entries).into(),
-                validity: None,
-            })?;
+            function.accumulate(source_owner.state(0), (&entries).into())?;
             let serialized_state = serialize_state(&function, &source_owner)?;
 
             let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
-            function.merge_serialized(MergeSerializedInput {
-                states: serialized_owner.state_set(0),
-                state: &serialized_state,
-                filter: None,
-            })?;
+            function.merge_serialized(serialized_owner.state_set(0), &serialized_state)?;
 
             let mut builder =
                 ColumnBuilder::with_capacity(&UInt64Type::data_type().wrap_nullable(), 1);
-            function.merge_result(MergeResultInput {
-                state: serialized_owner.state(0),
-                builder: &mut builder,
-            })?;
+            function.merge_result(serialized_owner.state(0), &mut builder)?;
             let column = builder.build();
             assert_eq!(
                 unsafe { column.index_unchecked(0) },
@@ -724,18 +780,11 @@ mod tests {
 
         let expected = [2, 2, 7, 16, 16, 17];
         for (row, expected) in expected.into_iter().enumerate() {
-            function.accumulate_row(AccumulateRowInput {
-                state: owner.state(0),
-                columns: (&entries).into(),
-                row,
-            })?;
+            function.accumulate_row(owner.state(0), (&entries).into(), row)?;
             // Repeated reads must preserve the sort buffer while releasing each
             // previous inner state, including the initial empty state.
             for read in 0..2 {
-                function.merge_result_read_only(MergeResultInput {
-                    state: owner.state(0),
-                    builder: &mut builder,
-                })?;
+                function.merge_result_read_only(owner.state(0), &mut builder)?;
                 assert_eq!(drop_count.load(Ordering::SeqCst), row * 2 + read + 1);
             }
             let column = builder.clone().build();

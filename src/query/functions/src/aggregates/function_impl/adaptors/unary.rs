@@ -46,21 +46,9 @@ where
         validity: Option<&Bitmap>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        match validity {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        self.add(value, function_info)?;
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    self.add(value, function_info)?;
-                }
-            }
-        }
-        Ok(())
+        try_for_each_selected(values.iter(), validity, |value| {
+            self.add(value, function_info)
+        })
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
@@ -114,6 +102,7 @@ pub(crate) struct UnaryAccumulateInput<'a> {
 pub(crate) struct UnaryAccumulateKeysInput<'a> {
     pub(crate) states: AggregateStateSet<'a>,
     pub(crate) column: &'a BlockEntry,
+    pub(crate) validity: Option<&'a Bitmap>,
 }
 
 pub(crate) struct UnaryAccumulateRowInput<'a> {
@@ -254,6 +243,7 @@ where
         self.nested.accumulate_keys(UnaryAccumulateKeysInput {
             states: input.states,
             column: &input.columns[0],
+            validity: input.validity,
         })
     }
 
@@ -319,14 +309,25 @@ where
     }
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            self.accumulate_row(UnaryAccumulateRowInput {
-                state,
-                column: input.column,
-                row,
-            })?;
+        let entry = input.column;
+        let validity = if MAYBE_NULL {
+            Bitmap::map_all_sets_to_none(column_merge_validity(entry, input.validity.cloned()))
+        } else {
+            input.validity.cloned()
+        };
+        let values = if MAYBE_NULL {
+            entry.clone().remove_nullable()
+        } else {
+            entry.clone()
         }
-        Ok(())
+        .downcast::<I>()
+        .unwrap();
+
+        input.states.try_for_each_state_value::<S, _>(
+            values.iter(),
+            validity.as_ref(),
+            |state, value| state.add(value, &self.function_info),
+        )
     }
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {
@@ -354,25 +355,18 @@ where
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            let state = state.get::<S>();
-            state.serialize(&mut input.builders[0], &self.function_info)?;
-        }
-        Ok(())
+        input.states.try_for_each_state::<S>(None, |state| {
+            state.serialize(&mut input.builders[0], &self.function_info)
+        })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            let state = state.get::<S>();
+        input.try_for_each_state::<S>(|state, row| {
             state.merge_serialized(
                 super::serialized_scalar_at(input.state, row, 0),
                 &self.function_info,
-            )?;
-        }
-        Ok(())
+            )
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {

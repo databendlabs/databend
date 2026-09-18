@@ -10,14 +10,11 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::Symbol;
-use databend_common_expression::aggregate_function::AccumulateInput;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::aggregate_function::AggregateStateOwner;
 use databend_common_expression::aggregate_function::FunctionInputLayout;
-use databend_common_expression::aggregate_function::MergeResultInput;
 use databend_common_expression::aggregate_function::RawAggregateCall;
-use databend_common_expression::aggregate_function::SerializeInput;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal64Type;
@@ -199,11 +196,7 @@ fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
         &FunctionInputLayout::Projection(vec![0, 2, 1])
     );
     let columns = input_layout.project(&columns)?;
-    function.accumulate(AccumulateInput {
-        state: owner.state(0),
-        columns: columns.as_ref().into(),
-        validity: None,
-    })?;
+    function.accumulate(owner.state(0), columns.as_ref().into())?;
 
     let mut state_builders = function
         .state()
@@ -217,10 +210,7 @@ fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
             ),
         })
         .collect::<Vec<_>>();
-    function.serialize(SerializeInput {
-        states: owner.state_set(0),
-        builders: &mut state_builders,
-    })?;
+    function.serialize(owner.state_set(0), &mut state_builders)?;
     let sort_state = state_builders.remove(0).build();
     let ScalarRef::Binary(mut sort_state) = sort_state.index(0).unwrap() else {
         unreachable!("sort state must serialize as binary")
@@ -230,10 +220,7 @@ fn test_ordered_listagg_if_filters_before_sorting() -> Result<()> {
     assert!(buffered_columns.iter().all(|column| column.len() == 2));
 
     let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-    function.merge_result(MergeResultInput {
-        state: owner.state(0),
-        builder: &mut builder,
-    })?;
+    function.merge_result(owner.state(0), &mut builder)?;
     let result = builder.build();
     assert_eq!(
         unsafe { result.index_unchecked(0) },

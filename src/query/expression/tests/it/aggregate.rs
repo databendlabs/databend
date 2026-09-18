@@ -28,6 +28,7 @@ use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
@@ -194,45 +195,49 @@ impl AggregateCall for TrackedHeapAggregateFunction {
         });
     }
 
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        let state = input.state.get::<TrackedHeapState>();
-        for row in 0..input.columns.num_rows() {
-            state.append_row(
-                self.bytes_per_row,
-                tracked_heap_row_trigger(input.columns, row),
-            )?;
+    fn accumulate(&self, state: AggrState<'_>, columns: ProjectedBlock<'_>) -> Result<()> {
+        let state = state.get::<TrackedHeapState>();
+        for row in 0..columns.num_rows() {
+            state.append_row(self.bytes_per_row, tracked_heap_row_trigger(columns, row))?;
         }
         Ok(())
     }
 
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            state.get::<TrackedHeapState>().append_row(
-                self.bytes_per_row,
-                tracked_heap_row_trigger(input.columns, row),
-            )?;
+    fn accumulate_keys(
+        &self,
+        states: AggregateStateSet<'_>,
+        columns: ProjectedBlock<'_>,
+    ) -> Result<()> {
+        for (row, state) in states.iter().enumerate() {
+            state
+                .get::<TrackedHeapState>()
+                .append_row(self.bytes_per_row, tracked_heap_row_trigger(columns, row))?;
         }
         Ok(())
     }
 
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        input.state.get::<TrackedHeapState>().append_row(
-            self.bytes_per_row,
-            tracked_heap_row_trigger(input.columns, input.row),
-        )
+    fn accumulate_row(
+        &self,
+        state: AggrState<'_>,
+        columns: ProjectedBlock<'_>,
+        row: usize,
+    ) -> Result<()> {
+        state
+            .get::<TrackedHeapState>()
+            .append_row(self.bytes_per_row, tracked_heap_row_trigger(columns, row))
     }
 
-    fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
+    fn accumulate_row_count(&self, _state: AggrState<'_>, _rows: usize) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
-        Ok(())
-    }
-
-    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        let builder = &mut input.builders[0];
-        for state in input.states.iter() {
+    fn serialize(
+        &self,
+        states: AggregateStateSet<'_>,
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let builder = &mut builders[0];
+        for state in states.iter() {
             let state = state.get::<TrackedHeapState>();
             if state.failures.serialize {
                 return Err(ErrorCode::Internal(
@@ -246,13 +251,17 @@ impl AggregateCall for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
+    fn merge_serialized(
+        &self,
+        states: AggregateStateSet<'_>,
+        serialized: &BlockEntry,
+    ) -> Result<()> {
+        for (row, state) in states.iter().enumerate() {
             let target = state.get::<TrackedHeapState>();
-            let trigger = tracked_heap_trigger_from_entry(input.state, row);
+            let trigger = tracked_heap_trigger_from_entry(serialized, row);
             let bytes = match trigger {
                 TrackedHeapFailureTrigger::BatchMerge => self.bytes_per_row,
-                _ => tracked_heap_bytes_from_scalar(unsafe { input.state.index_unchecked(row) })
+                _ => tracked_heap_bytes_from_scalar(unsafe { serialized.index_unchecked(row) })
                     .unwrap_or(0),
             };
             target.append(bytes);
@@ -266,9 +275,9 @@ impl AggregateCall for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        let state = input.state.get::<TrackedHeapState>();
-        let rhs = input.rhs.get::<TrackedHeapState>();
+    fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()> {
+        let state = state.get::<TrackedHeapState>();
+        let rhs = rhs.get::<TrackedHeapState>();
         state.bytes.extend_from_slice(&rhs.bytes);
         state
             .live_bytes
@@ -282,21 +291,25 @@ impl AggregateCall for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let state = input.state.get::<TrackedHeapState>();
+    fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()> {
+        let state = state.get::<TrackedHeapState>();
         if state.failures.merge_result {
             return Err(ErrorCode::Internal(
                 "injected tracked_heap merge_result failure",
             ));
         }
-        input.builder.push(ScalarRef::Number(NumberScalar::UInt64(
+        builder.push(ScalarRef::Number(NumberScalar::UInt64(
             state.bytes.len() as u64
         )));
         Ok(())
     }
 
-    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.merge_result(input)
+    fn merge_result_read_only(
+        &self,
+        state: AggrState<'_>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.merge_result(state, builder)
     }
 
     unsafe fn drop_state(&self, state: AggrState) {

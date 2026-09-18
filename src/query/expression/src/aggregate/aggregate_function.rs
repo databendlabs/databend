@@ -35,6 +35,7 @@ use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::Scalar;
+use crate::ScalarRef;
 use crate::StateSerdeItem;
 use crate::Symbol;
 use crate::types::DataType;
@@ -444,6 +445,10 @@ impl AggregateStateDescription {
     pub fn need_manual_drop(&self) -> bool {
         self.need_manual_drop
     }
+
+    pub fn data_type(&self) -> DataType {
+        StateSerdeType::new(self.serde_items.clone()).data_type()
+    }
 }
 
 pub(crate) fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
@@ -464,6 +469,51 @@ pub struct AggregateStateSet<'a> {
     loc: &'a [AggrStateLoc],
 }
 
+#[inline(always)]
+fn for_each_selected_item<T>(
+    items: impl IntoIterator<Item = T>,
+    selection: Option<&Bitmap>,
+    mut f: impl FnMut(T),
+) {
+    match selection {
+        Some(selection) => {
+            for (item, selected) in items.into_iter().zip(selection.iter()) {
+                if selected {
+                    f(item);
+                }
+            }
+        }
+        None => {
+            for item in items {
+                f(item);
+            }
+        }
+    }
+}
+
+#[inline(always)]
+fn try_for_each_selected_item<T>(
+    items: impl IntoIterator<Item = T>,
+    selection: Option<&Bitmap>,
+    mut f: impl FnMut(T) -> Result<()>,
+) -> Result<()> {
+    match selection {
+        Some(selection) => {
+            for (item, selected) in items.into_iter().zip(selection.iter()) {
+                if selected {
+                    f(item)?;
+                }
+            }
+        }
+        None => {
+            for item in items {
+                f(item)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl<'a> AggregateStateSet<'a> {
     pub fn new(places: &'a [StateAddr], loc: &'a [AggrStateLoc]) -> Self {
         Self { places, loc }
@@ -481,12 +531,209 @@ impl<'a> AggregateStateSet<'a> {
         AggrState::new(self.places[index], self.loc)
     }
 
+    fn typed_state_offset(&self) -> Result<usize> {
+        if self.loc.len() != 1 {
+            return Err(ErrorCode::Internal(
+                "typed state iteration requires exactly one custom state field",
+            ));
+        }
+        self.first_state_offset()
+    }
+
+    fn first_state_offset(&self) -> Result<usize> {
+        match self.loc.first() {
+            Some(AggrStateLoc::Custom(_, offset)) => Ok(*offset),
+            _ => Err(ErrorCode::Internal(
+                "aggregate state does not start with a custom state field",
+            )),
+        }
+    }
+
+    fn last_flag_offset(&self) -> Result<usize> {
+        match self.loc.last() {
+            Some(AggrStateLoc::Bool(_, offset)) => Ok(*offset),
+            _ => Err(ErrorCode::Internal(
+                "aggregate state does not end with a boolean flag",
+            )),
+        }
+    }
+
+    /// Visits typed aggregate states selected by `selection`.
+    pub fn for_each_state<T>(
+        &self,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T),
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.typed_state_offset()?;
+        for_each_selected_item(self.places.iter(), selection, |place| {
+            f(place.next(offset).get::<T>());
+        });
+        Ok(())
+    }
+
+    /// Visits typed aggregate states selected by `selection` with a fallible callback.
+    ///
+    /// The state offset is resolved once per batch. The row loop traverses raw
+    /// places directly instead of constructing an `AggrState` with a slice fat
+    /// pointer for every row.
+    pub fn try_for_each_state<T>(
+        &self,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T) -> Result<()>,
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.typed_state_offset()?;
+        try_for_each_selected_item(self.places.iter(), selection, |place| {
+            f(place.next(offset).get::<T>())
+        })
+    }
+
+    /// Visits the leading custom state field selected by `selection`.
+    pub fn for_each_first_state<T>(
+        &self,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T),
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.first_state_offset()?;
+        for_each_selected_item(self.places.iter(), selection, |place| {
+            f(place.next(offset).get::<T>());
+        });
+        Ok(())
+    }
+
+    /// Visits the leading custom state field with a fallible callback.
+    pub fn try_for_each_first_state<T>(
+        &self,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T) -> Result<()>,
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.first_state_offset()?;
+        try_for_each_selected_item(self.places.iter(), selection, |place| {
+            f(place.next(offset).get::<T>())
+        })
+    }
+
+    /// Visits the leading custom state field with its corresponding input values.
+    pub fn for_each_first_state_value<T, V>(
+        &self,
+        values: impl IntoIterator<Item = V>,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T, V),
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.first_state_offset()?;
+        for_each_selected_item(
+            self.places.iter().zip(values),
+            selection,
+            |(place, value)| {
+                f(place.next(offset).get::<T>(), value);
+            },
+        );
+        Ok(())
+    }
+
+    /// Visits the leading custom state field with a fallible callback.
+    pub fn try_for_each_first_state_value<T, V>(
+        &self,
+        values: impl IntoIterator<Item = V>,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T, V) -> Result<()>,
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.first_state_offset()?;
+        try_for_each_selected_item(
+            self.places.iter().zip(values),
+            selection,
+            |(place, value)| f(place.next(offset).get::<T>(), value),
+        )
+    }
+
+    /// Marks the trailing boolean flag for states selected by `selection`.
+    pub fn mark_last_flag(&self, selection: Option<&Bitmap>) -> Result<()> {
+        let offset = self.last_flag_offset()?;
+        try_for_each_selected_item(self.places.iter(), selection, |place| {
+            *place.next(offset).get::<u8>() = 1;
+            Ok(())
+        })
+    }
+
+    /// Serializes the trailing boolean flag for every state.
+    pub fn serialize_last_flag(&self, builder: &mut ColumnBuilder) -> Result<()> {
+        let offset = self.last_flag_offset()?;
+        for place in self.places {
+            builder.push(ScalarRef::Boolean(*place.next(offset).get::<u8>() != 0));
+        }
+        Ok(())
+    }
+
+    /// Visits typed aggregate states together with their corresponding input values.
+    pub fn for_each_state_value<T, V>(
+        &self,
+        values: impl IntoIterator<Item = V>,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T, V),
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.typed_state_offset()?;
+        for_each_selected_item(
+            self.places.iter().zip(values),
+            selection,
+            |(place, value)| {
+                f(place.next(offset).get::<T>(), value);
+            },
+        );
+        Ok(())
+    }
+
+    /// Visits typed aggregate states with a fallible callback.
+    ///
+    /// Keeping the state offset and raw place traversal inside this method lets the
+    /// compiler keep the offset loop-invariant and avoids constructing an `AggrState`
+    /// containing a slice fat pointer for every row.
+    pub fn try_for_each_state_value<T, V>(
+        &self,
+        values: impl IntoIterator<Item = V>,
+        selection: Option<&Bitmap>,
+        mut f: impl FnMut(&mut T, V) -> Result<()>,
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        let offset = self.typed_state_offset()?;
+        try_for_each_selected_item(
+            self.places.iter().zip(values),
+            selection,
+            |(place, value)| f(place.next(offset).get::<T>(), value),
+        )
+    }
+
     pub fn without_first_loc(&self) -> AggregateStateSet<'a> {
         AggregateStateSet::new(self.places, &self.loc[1..])
     }
 
     pub fn without_last_loc(&self) -> AggregateStateSet<'a> {
         AggregateStateSet::new(self.places, &self.loc[..self.loc.len() - 1])
+    }
+
+    pub fn with_places<'b>(&'b self, places: &'b [StateAddr]) -> AggregateStateSet<'b> {
+        AggregateStateSet::new(places, self.loc)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = AggrState<'_>> {
@@ -505,6 +752,7 @@ pub struct AccumulateInput<'a> {
 pub struct AccumulateKeysInput<'a> {
     pub states: AggregateStateSet<'a>,
     pub columns: ProjectedBlock<'a>,
+    pub validity: Option<&'a Bitmap>,
 }
 
 pub struct AccumulateRowInput<'a> {
@@ -531,6 +779,37 @@ pub struct MergeSerializedInput<'a> {
     pub states: AggregateStateSet<'a>,
     pub state: &'a BlockEntry,
     pub filter: Option<&'a Bitmap>,
+}
+
+impl MergeSerializedInput<'_> {
+    pub fn for_each_state<T>(&self, f: impl FnMut(&mut T, usize)) -> Result<()>
+    where T: Send + 'static {
+        self.states
+            .for_each_state_value(0..self.state.len(), self.filter, f)
+    }
+
+    pub fn try_for_each_state<T>(&self, f: impl FnMut(&mut T, usize) -> Result<()>) -> Result<()>
+    where T: Send + 'static {
+        self.states
+            .try_for_each_state_value(0..self.state.len(), self.filter, f)
+    }
+
+    pub fn for_each_first_state<T>(&self, f: impl FnMut(&mut T, usize)) -> Result<()>
+    where T: Send + 'static {
+        self.states
+            .for_each_first_state_value(0..self.state.len(), self.filter, f)
+    }
+
+    pub fn try_for_each_first_state<T>(
+        &self,
+        f: impl FnMut(&mut T, usize) -> Result<()>,
+    ) -> Result<()>
+    where
+        T: Send + 'static,
+    {
+        self.states
+            .try_for_each_first_state_value(0..self.state.len(), self.filter, f)
+    }
 }
 
 pub struct MergeStatesInput<'a> {
@@ -612,29 +891,40 @@ pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
 
     fn init_state(&self, state: AggrState<'_>);
 
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()>;
+    fn accumulate(&self, state: AggrState<'_>, columns: ProjectedBlock<'_>) -> Result<()>;
 
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()>;
+    fn accumulate_keys(
+        &self,
+        states: AggregateStateSet<'_>,
+        columns: ProjectedBlock<'_>,
+    ) -> Result<()>;
 
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()>;
+    fn accumulate_row(
+        &self,
+        state: AggrState<'_>,
+        columns: ProjectedBlock<'_>,
+        row: usize,
+    ) -> Result<()>;
 
-    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()>;
+    fn accumulate_row_count(&self, state: AggrState<'_>, rows: usize) -> Result<()>;
 
-    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()>;
+    fn serialize(
+        &self,
+        states: AggregateStateSet<'_>,
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()>;
 
-    fn serialize(&self, input: SerializeInput<'_>) -> Result<()>;
+    fn merge_serialized(&self, states: AggregateStateSet<'_>, state: &BlockEntry) -> Result<()>;
 
-    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()>;
+    fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()>;
 
-    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()>;
+    fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()>;
 
-    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()>;
-
-    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()>;
-
-    fn state_data_type(&self) -> DataType {
-        StateSerdeType::new(self.state().serde_items().to_vec()).data_type()
-    }
+    fn merge_result_read_only(
+        &self,
+        state: AggrState<'_>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()>;
 
     /// # Safety
     /// The caller must ensure the state belongs to this function.
@@ -692,44 +982,78 @@ where I: AggregateEval
         self.implementation.init_state(state)
     }
 
-    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        self.implementation.accumulate(input)
+    fn accumulate(&self, state: AggrState<'_>, columns: ProjectedBlock<'_>) -> Result<()> {
+        self.implementation.accumulate(AccumulateInput {
+            state,
+            columns,
+            validity: None,
+        })
     }
 
-    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        self.implementation.accumulate_keys(input)
+    fn accumulate_keys(
+        &self,
+        states: AggregateStateSet<'_>,
+        columns: ProjectedBlock<'_>,
+    ) -> Result<()> {
+        self.implementation.accumulate_keys(AccumulateKeysInput {
+            states,
+            columns,
+            validity: None,
+        })
     }
 
-    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        self.implementation.accumulate_row(input)
+    fn accumulate_row(
+        &self,
+        state: AggrState<'_>,
+        columns: ProjectedBlock<'_>,
+        row: usize,
+    ) -> Result<()> {
+        self.implementation.accumulate_row(AccumulateRowInput {
+            state,
+            columns,
+            row,
+        })
     }
 
-    fn accumulate_row_count(&self, input: AccumulateRowCountInput<'_>) -> Result<()> {
-        self.implementation.accumulate_row_count(input)
+    fn accumulate_row_count(&self, state: AggrState<'_>, rows: usize) -> Result<()> {
+        self.implementation
+            .accumulate_row_count(AccumulateRowCountInput { state, rows })
     }
 
-    fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
-        self.implementation.accumulate_row_count_keys(input)
+    fn serialize(
+        &self,
+        states: AggregateStateSet<'_>,
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.implementation
+            .serialize(SerializeInput { states, builders })
     }
 
-    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        self.implementation.serialize(input)
+    fn merge_serialized(&self, states: AggregateStateSet<'_>, state: &BlockEntry) -> Result<()> {
+        self.implementation.merge_serialized(MergeSerializedInput {
+            states,
+            state,
+            filter: None,
+        })
     }
 
-    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        self.implementation.merge_serialized(input)
+    fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()> {
+        self.implementation
+            .merge_states(MergeStatesInput { state, rhs })
     }
 
-    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        self.implementation.merge_states(input)
+    fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()> {
+        self.implementation
+            .merge_result(MergeResultInput { state, builder })
     }
 
-    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.implementation.merge_result(input)
-    }
-
-    fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        self.implementation.merge_result_read_only(input)
+    fn merge_result_read_only(
+        &self,
+        state: AggrState<'_>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.implementation
+            .merge_result_read_only(MergeResultInput { state, builder })
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
@@ -1129,6 +1453,86 @@ mod tests {
             locs.iter().map(AggrStateLoc::index).collect::<Vec<_>>(),
             vec![0, 1, 2]
         );
+    }
+
+    #[test]
+    fn test_state_set_visits_typed_values_with_selection() -> Result<()> {
+        let (layout, locs) = sort_states(vec![
+            AggrStateType::Custom(Layout::new::<u64>()),
+            AggrStateType::Custom(Layout::new::<u64>()),
+        ]);
+        let arena = Bump::new();
+        let first: StateAddr = arena.alloc_layout(layout).into();
+        let second: StateAddr = arena.alloc_layout(layout).into();
+        let state_loc = std::slice::from_ref(&locs[1]);
+        let offset = state_loc[0].offset();
+        let first_offset = locs[0].offset();
+        first.next(first_offset).write_state(0_u64);
+        second.next(first_offset).write_state(0_u64);
+        first.next(offset).write_state(0_u64);
+        second.next(offset).write_state(0_u64);
+
+        let places = [first, second, first];
+        let selection = Bitmap::from([true, false, true]);
+        AggregateStateSet::new(&places, state_loc).try_for_each_state_value::<u64, _>(
+            [1_u64, 2, 3],
+            Some(&selection),
+            |state, value| {
+                *state += value;
+                Ok(())
+            },
+        )?;
+        assert_eq!(*first.next(offset).get::<u64>(), 4);
+        assert_eq!(*second.next(offset).get::<u64>(), 0);
+
+        AggregateStateSet::new(&[first, second], state_loc).for_each_state_value::<u64, _>(
+            [5_u64, 6],
+            None,
+            |state, value| *state += value,
+        )?;
+        assert_eq!(*first.next(offset).get::<u64>(), 9);
+        assert_eq!(*second.next(offset).get::<u64>(), 6);
+
+        let selection = Bitmap::from([false, true]);
+        AggregateStateSet::new(&[first, second], state_loc)
+            .for_each_state::<u64>(Some(&selection), |state| *state += 10)?;
+        assert_eq!(*first.next(offset).get::<u64>(), 9);
+        assert_eq!(*second.next(offset).get::<u64>(), 16);
+
+        AggregateStateSet::new(&[first], &locs).for_each_first_state_value::<u64, _>(
+            [7_u64],
+            None,
+            |state, value| *state += value,
+        )?;
+        AggregateStateSet::new(&[first], &locs)
+            .for_each_first_state::<u64>(None, |state| *state += 1)?;
+        assert_eq!(*first.next(first_offset).get::<u64>(), 8);
+        assert_eq!(*first.next(offset).get::<u64>(), 9);
+
+        let (flag_layout, flag_locs) = sort_states(vec![
+            AggrStateType::Custom(Layout::new::<u64>()),
+            AggrStateType::Bool,
+        ]);
+        let flag_state: StateAddr = arena.alloc_layout(flag_layout).into();
+        let flag_offset = flag_locs[1].offset();
+        flag_state.next(flag_offset).write_state(0_u8);
+        let flag_places = [flag_state];
+        let flag_states = AggregateStateSet::new(&flag_places, &flag_locs);
+        flag_states.mark_last_flag(None)?;
+        assert_eq!(*flag_state.next(flag_offset).get::<u8>(), 1);
+        let mut flag_builder = ColumnBuilder::with_capacity(&DataType::Boolean, 1);
+        flag_states.serialize_last_flag(&mut flag_builder)?;
+        assert_eq!(
+            flag_builder.build().index(0),
+            Some(ScalarRef::Boolean(true))
+        );
+
+        assert!(
+            AggregateStateSet::new(&[first], &locs)
+                .try_for_each_state_value::<u64, _>([1_u64], None, |_, _| Ok(()))
+                .is_err()
+        );
+        Ok(())
     }
 
     #[test]

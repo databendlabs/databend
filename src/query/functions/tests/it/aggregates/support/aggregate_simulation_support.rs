@@ -264,26 +264,11 @@ pub fn simulate_two_groups_group_by(
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    if entries.is_empty() {
-        func.accumulate_row_count_keys(v2::AccumulateRowCountKeysInput {
-            states: v2::AggregateStateSet::new(&places, &loc),
-        })?;
-    } else {
-        func.accumulate_keys(v2::AccumulateKeysInput {
-            states: v2::AggregateStateSet::new(&places, &loc),
-            columns: entries.into(),
-        })?;
-    }
+    func.accumulate_keys(v2::AggregateStateSet::new(&places, &loc), entries.into())?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(v2::MergeResultInput {
-        state: state1,
-        builder: &mut builder,
-    })?;
-    func.merge_result(v2::MergeResultInput {
-        state: state2,
-        builder: &mut builder,
-    })?;
+    func.merge_result(state1, &mut builder)?;
+    func.merge_result(state2, &mut builder)?;
 
     Ok((builder.build(), data_type))
 }
@@ -315,43 +300,31 @@ pub fn eval_aggregate_for_test(
 
     if each_row {
         for row in 0..rows {
-            func.accumulate_row(v2::AccumulateRowInput {
-                state,
-                columns: entries.into(),
-                row,
-            })?;
+            func.accumulate_row(state, entries.into(), row)?;
         }
     } else if entries.is_empty() {
-        func.accumulate_row_count(v2::AccumulateRowCountInput { state, rows })?;
+        func.accumulate_row_count(state, rows)?;
     } else {
-        func.accumulate(v2::AccumulateInput {
-            state,
-            columns: entries.into(),
-            validity: None,
-        })?;
+        func.accumulate(state, entries.into())?;
     }
 
     if with_serialize {
-        let data_type = func.state_data_type();
+        let data_type = func.state().data_type();
         let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
         let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-        func.serialize(v2::SerializeInput {
-            states: v2::AggregateStateSet::new(std::slice::from_ref(&eval.addr), state.loc),
+        func.serialize(
+            v2::AggregateStateSet::new(std::slice::from_ref(&eval.addr), state.loc),
             builders,
-        })?;
+        )?;
         func.init_state(state);
         let column = builder.build();
-        func.merge_serialized(v2::MergeSerializedInput {
-            states: v2::AggregateStateSet::new(std::slice::from_ref(&eval.addr), state.loc),
-            state: &column.into(),
-            filter: None,
-        })?;
+        func.merge_serialized(
+            v2::AggregateStateSet::new(std::slice::from_ref(&eval.addr), state.loc),
+            &column.into(),
+        )?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(v2::MergeResultInput {
-        state,
-        builder: &mut builder,
-    })?;
+    func.merge_result(state, &mut builder)?;
     Ok((builder.build(), data_type))
 }
 

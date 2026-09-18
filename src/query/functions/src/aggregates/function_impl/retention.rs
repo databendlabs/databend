@@ -32,11 +32,11 @@ use super::AggregateRegistration;
 use super::adaptors::*;
 
 #[derive(Default)]
-pub struct AggregateRetentionState {
+pub struct RetentionState {
     events: u32,
 }
 
-impl AggregateRetentionState {
+impl RetentionState {
     fn add(&mut self, event: usize) {
         self.events |= 1 << event;
     }
@@ -119,9 +119,7 @@ impl RetentionEval {
 
     fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(
-            vec![AggrStateType::Custom(
-                Layout::new::<AggregateRetentionState>(),
-            )],
+            vec![AggrStateType::Custom(Layout::new::<RetentionState>())],
             vec![StateSerdeItem::DataType(UInt32Type::data_type())],
         )
     }
@@ -135,7 +133,7 @@ impl RetentionEval {
 
     fn accumulate_row_into_state(
         &self,
-        state: &mut AggregateRetentionState,
+        state: &mut RetentionState,
         views: &[ColumnView<BooleanType>],
         row: usize,
     ) {
@@ -149,73 +147,63 @@ impl RetentionEval {
 
 impl AggregateEval for RetentionEval {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateRetentionState::default);
+        state.write(RetentionState::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateRetentionState>();
+        let state = input.state.get::<RetentionState>();
         let views = self.boolean_views(input.columns);
-        for row in 0..input.columns.num_rows() {
-            if input
-                .validity
-                .is_some_and(|validity| !validity.get(row).unwrap())
-            {
-                continue;
-            }
+        for_each_selected(0..input.columns.num_rows(), input.validity, |row| {
             self.accumulate_row_into_state(state, &views, row);
-        }
+        });
         Ok(())
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let views = self.boolean_views(input.columns);
-        for (row, state) in input.states.iter().enumerate() {
-            let state = state.get::<AggregateRetentionState>();
-            self.accumulate_row_into_state(state, &views, row);
-        }
-        Ok(())
+        input.states.for_each_state_value::<RetentionState, _>(
+            0..input.columns.num_rows(),
+            input.validity,
+            |state, row| {
+                self.accumulate_row_into_state(state, &views, row);
+            },
+        )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateRetentionState>();
+        let state = input.state.get::<RetentionState>();
         let views = self.boolean_views(input.columns);
         self.accumulate_row_into_state(state, &views, input.row);
         Ok(())
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            let state = state.get::<AggregateRetentionState>();
-            input.builders[0].push(ScalarRef::Number(NumberScalar::UInt32(state.events)));
-        }
-        Ok(())
+        input
+            .states
+            .for_each_state::<RetentionState>(None, |state| {
+                input.builders[0].push(ScalarRef::Number(NumberScalar::UInt32(state.events)));
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
+        input.for_each_state::<RetentionState>(|state, row| {
             let ScalarRef::Number(NumberScalar::UInt32(events)) =
                 super::serialized_scalar_at(input.state, row, 0)
             else {
                 unreachable!()
             };
-            state
-                .get::<AggregateRetentionState>()
-                .merge(&AggregateRetentionState { events });
-        }
-        Ok(())
+            state.merge(&RetentionState { events });
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        let rhs = input.rhs.get::<AggregateRetentionState>();
-        input.state.get::<AggregateRetentionState>().merge(rhs);
+        let rhs = input.rhs.get::<RetentionState>();
+        input.state.get::<RetentionState>().merge(rhs);
         Ok(())
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateRetentionState>();
+        let state = input.state.get::<RetentionState>();
         let builder = input.builder.as_array_mut().unwrap();
         let inner = builder
             .builder
@@ -240,7 +228,7 @@ impl AggregateEval for RetentionEval {
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { std::ptr::drop_in_place(state.get::<AggregateRetentionState>()) };
+        unsafe { std::ptr::drop_in_place(state.get::<RetentionState>()) };
     }
 }
 

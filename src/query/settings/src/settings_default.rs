@@ -1283,6 +1283,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_parse_json_variant_reparse", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Re-serialize and re-parse VARIANT inputs of parse_json/try_parse_json to repair legacy invalid JSONB values. Set to 0 to return the VARIANT value as is.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("cost_factor_hash_table_per_row", DefaultSettingValue {
                     value: UserSettingValue::UInt64(COST_FACTOR_HASH_TABLE_PER_ROW),
                     desc: "Cost factor of building hash table for a data row",

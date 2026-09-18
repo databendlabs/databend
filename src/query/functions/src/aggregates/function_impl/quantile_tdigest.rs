@@ -128,7 +128,7 @@ pub struct QuantileTDigestData {
 }
 
 #[derive(Clone, BorshSerialize, BorshDeserialize)]
-pub enum AggregateQuantileTDigestState {
+pub enum QuantileTDigestState {
     Normal(TDigestData),
     Nan,
 }
@@ -150,7 +150,7 @@ struct Centroid {
     weight: f64,
 }
 
-impl AggregateQuantileTDigestState {
+impl QuantileTDigestState {
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
             StateSerdeItem::Binary(None),
@@ -370,7 +370,7 @@ impl TDigestData {
     }
 }
 
-impl<I> UnaryState<I, ArrayType<Float64Type>> for AggregateQuantileTDigestState
+impl<I> UnaryState<I, ArrayType<Float64Type>> for QuantileTDigestState
 where for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     type FunctionInfo = QuantileTDigestData;
@@ -429,7 +429,7 @@ where for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>
     }
 }
 
-impl<I> UnaryState<I, Float64Type> for AggregateQuantileTDigestState
+impl<I> UnaryState<I, Float64Type> for QuantileTDigestState
 where for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     type FunctionInfo = QuantileTDigestData;
@@ -537,11 +537,11 @@ impl QuantileTDigestBuilder {
     where
         for<'a> I: AccessType<Scalar = F64, ScalarRef<'a> = F64>,
         R: ValueType,
-        AggregateQuantileTDigestState: UnaryState<I, R, FunctionInfo = QuantileTDigestData>,
+        QuantileTDigestState: UnaryState<I, R, FunctionInfo = QuantileTDigestData>,
     {
-        let state = AggregateQuantileTDigestState::state_description();
+        let state = QuantileTDigestState::state_description();
 
-        build.create_unary_or_null::<AggregateQuantileTDigestState, I, R>(
+        build.create_unary_or_null::<QuantileTDigestState, I, R>(
             return_type.wrap_nullable(),
             state,
             QuantileTDigestData { levels },

@@ -313,17 +313,10 @@ fn eval_v2_state_merge_entry(
     let return_type = function.signature().return_type.clone();
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
     let entries = [state];
-    function.accumulate(AccumulateInput {
-        state: owner.state(0),
-        columns: (&entries).into(),
-        validity: None,
-    })?;
+    function.accumulate(owner.state(0), (&entries).into())?;
 
     let mut builder = ColumnBuilder::with_capacity(&return_type, 1);
-    function.merge_result(MergeResultInput {
-        state: owner.state(0),
-        builder: &mut builder,
-    })?;
+    function.merge_result(owner.state(0), &mut builder)?;
     Ok((builder.build(), return_type))
 }
 
@@ -442,17 +435,14 @@ fn test_v2_sum_merge_keys_skips_nullable_states() -> Result<()> {
     let second = AggregateStateOwner::new(vec![function.clone()])?;
     let places = [first.state(0).addr, second.state(0).addr];
     let entries = [BlockEntry::from(states)];
-    function.accumulate_keys(AccumulateKeysInput {
-        states: AggregateStateSet::new(&places, first.state(0).loc),
-        columns: (&entries).into(),
-    })?;
+    function.accumulate_keys(
+        AggregateStateSet::new(&places, first.state(0).loc),
+        (&entries).into(),
+    )?;
 
     for (owner, expected) in [(&first, Some(3)), (&second, None)] {
         let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, 1);
-        function.merge_result(MergeResultInput {
-            state: owner.state(0),
-            builder: &mut builder,
-        })?;
+        function.merge_result(owner.state(0), &mut builder)?;
         let result = builder.build();
         let expected = expected.map_or(ScalarRef::Null, |value| {
             ScalarRef::Number(NumberScalar::UInt64(value))

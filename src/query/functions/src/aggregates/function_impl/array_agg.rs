@@ -324,21 +324,11 @@ where T: ArgType + Debug + Send
             return Ok(());
         }
 
-        if let Some(validity) = validity {
-            for (value, valid) in column.iter().zip(validity.iter()) {
-                if valid {
-                    let value = T::upcast_scalar(T::to_owned_scalar(value));
-                    self.builder.put_slice(value.as_bytes().unwrap());
-                    self.builder.commit_row();
-                }
-            }
-        } else {
-            for value in column.iter() {
-                let value = T::upcast_scalar(T::to_owned_scalar(value));
-                self.builder.put_slice(value.as_bytes().unwrap());
-                self.builder.commit_row();
-            }
-        }
+        for_each_selected(column.iter(), validity, |value| {
+            let value = T::upcast_scalar(T::to_owned_scalar(value));
+            self.builder.put_slice(value.as_bytes().unwrap());
+            self.builder.commit_row();
+        });
         Ok(())
     }
 
@@ -738,7 +728,7 @@ impl AggregateEval for NullArrayAggEval {
         Ok(())
     }
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for _ in input.states.iter() {
+        for _ in 0..input.states.len() {
             input.builders[0].push(ScalarRef::Array(Column::Boolean(Bitmap::new())));
         }
         Ok(())
