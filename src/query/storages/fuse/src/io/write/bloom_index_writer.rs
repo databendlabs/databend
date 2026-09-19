@@ -45,7 +45,6 @@ use opendal::Operator;
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;
 use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
-use crate::io::write::block_index::BlockIndexLowLevelWriteContext;
 use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
@@ -223,7 +222,7 @@ impl BlockIndexSpec for BloomIndexWriteSpec {
 
     fn new_low_level_writer(
         &self,
-        context: BlockIndexLowLevelWriteContext,
+        context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
         let write = context.create_write(&self.location);
         Ok(Box::new(BloomIndexLowLevelWriter {

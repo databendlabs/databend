@@ -80,7 +80,6 @@ use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
-use crate::io::write::block_index::BlockIndexLowLevelWriteContext;
 use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
@@ -152,7 +151,7 @@ impl BlockIndexSpec for InvertedIndexWriteSpec {
 
     fn new_low_level_writer(
         &self,
-        context: BlockIndexLowLevelWriteContext,
+        context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
         let location = self.location.clone();
         let write = context.create_write(&location);

@@ -53,7 +53,6 @@ use parquet::file::metadata::KeyValue;
 
 use crate::io::read::load_vector_index_files;
 use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
-use crate::io::write::block_index::BlockIndexLowLevelWriteContext;
 use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
@@ -598,7 +597,7 @@ impl BlockIndexSpec for VectorIndexWriteSpec {
 
     fn new_low_level_writer(
         &self,
-        context: BlockIndexLowLevelWriteContext,
+        context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
         let write = context.create_write(&self.location);
         Ok(Box::new(VectorIndexLowLevelWriter {

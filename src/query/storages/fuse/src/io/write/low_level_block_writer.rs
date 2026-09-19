@@ -85,9 +85,9 @@ use super::SpatialIndexBuilder;
 use super::VectorIndexBuilder;
 use super::VirtualColumnBuilder;
 use super::WriteSettings;
-use super::block_index::BlockIndexLowLevelWriteContext;
 use super::block_index::BlockIndexLowLevelWriter;
 use super::block_index::BlockIndexSpec;
+use super::block_index::BlockIndexWriteContext;
 use super::block_index::WrittenBlockIndexOutput;
 use super::block_index::WrittenInvertedIndex;
 use super::block_index::collect_inverted_index_metas;
@@ -528,7 +528,7 @@ impl FuseLowLevelBlockWriter {
             &self.options.distinct_columns,
             &write_settings.col_stats_truncate_lens,
         );
-        let index_context = BlockIndexLowLevelWriteContext {
+        let index_context = BlockIndexWriteContext {
             func_ctx: self.options.func_ctx.clone(),
             physical_schema: schema.clone(),
             block_location: self.options.block_location.clone(),

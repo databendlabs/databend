@@ -240,6 +240,7 @@ impl BlockBuilder {
         };
         let options = FuseBlockWriteOptions::from_block_builder_parts(
             self.ctx.clone(),
+            self.operator.clone(),
             self.meta_locations.clone(),
             self.source_schema.clone(),
             self.write_settings.clone(),

@@ -134,6 +134,7 @@ impl FuseBlockWriter {
             func_ctx,
             physical_schema: properties.source_schema.clone(),
             block_location: block_location.clone(),
+            operator: properties.operator.clone(),
             write_settings: properties.write_settings.clone(),
         };
         let bloom_location = properties
@@ -518,6 +519,8 @@ fn sample_granule_cluster_keys(columns: Vec<Column>, granule_rows: usize) -> Res
 
 pub struct FuseBlockWriteOptions {
     pub(crate) ctx: Arc<dyn TableContext>,
+    /// Table data operator; index writers receive it through `BlockIndexWriteContext`.
+    operator: Operator,
     pub(crate) write_settings: WriteSettings,
     pub(crate) block_thresholds: BlockThresholds,
 
@@ -655,6 +658,7 @@ impl FuseBlockWriteOptions {
         );
         Ok(Arc::new(FuseBlockWriteOptions {
             ctx,
+            operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             block_thresholds: table.get_block_thresholds(),
             source_schema,
@@ -820,6 +824,7 @@ impl FuseBlockWriteOptions {
     #[allow(clippy::too_many_arguments)]
     pub fn from_block_builder_parts(
         ctx: Arc<dyn TableContext>,
+        operator: Operator,
         meta_locations: TableMetaLocationGenerator,
         source_schema: TableSchemaRef,
         write_settings: WriteSettings,
@@ -860,6 +865,7 @@ impl FuseBlockWriteOptions {
         let granule_rows = write_settings.index_granularity;
         Ok(Arc::new(Self {
             ctx,
+            operator,
             write_settings,
             block_thresholds,
             meta_locations,

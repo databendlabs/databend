@@ -44,16 +44,13 @@ use opendal::Operator;
 
 use super::WriteSettings;
 
+/// Shared construction context for every block-index write protocol.
+///
+/// `operator` is only for writers that stream payloads directly (the low-level protocol).
+/// `new_writer` implementations must not perform IO: their contract is to retain serialized
+/// payloads in memory and return them as a `PendingBlockIndexOutput` for asynchronous upload.
 #[derive(Clone)]
 pub struct BlockIndexWriteContext {
-    pub func_ctx: FunctionContext,
-    pub physical_schema: TableSchemaRef,
-    pub block_location: Location,
-    pub write_settings: WriteSettings,
-}
-
-#[derive(Clone)]
-pub struct BlockIndexLowLevelWriteContext {
     pub func_ctx: FunctionContext,
     pub physical_schema: TableSchemaRef,
     pub block_location: Location,
@@ -61,7 +58,7 @@ pub struct BlockIndexLowLevelWriteContext {
     pub write_settings: WriteSettings,
 }
 
-impl BlockIndexLowLevelWriteContext {
+impl BlockIndexWriteContext {
     /// Low-level component writers create their lazy blocking outputs at construction time.
     pub fn create_write(&self, location: &Location) -> OpenDalBlockingWrite {
         create_blocking_write(
@@ -268,7 +265,7 @@ pub trait BlockIndexSpec: Send + Sync {
 
     fn new_low_level_writer(
         &self,
-        context: BlockIndexLowLevelWriteContext,
+        context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>>;
 }
 
