@@ -19,6 +19,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +34,7 @@ use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_storages_common_blocks::BlockingWrite;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
@@ -193,7 +195,10 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
     }
 
     fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        // Documents are buffered until here; `finalize` runs the Tantivy indexing pass.
+        let start = Instant::now();
         let data = self.writer.finalize()?;
+        metrics_inc_block_inverted_index_generate_milliseconds(start.elapsed().as_millis() as u64);
         Ok(PendingBlockIndexOutput {
             inverted: vec![PendingInvertedIndex {
                 index_name: self.index_name,
@@ -267,7 +272,9 @@ impl BlockIndexLowLevelWriter for InvertedIndexLowLevelWriter {
             .write
             .take()
             .ok_or_else(|| ErrorCode::Internal("inverted index blocking output was consumed"))?;
+        let start = Instant::now();
         let size = writer.finalize_to_writer(write)?;
+        metrics_inc_block_inverted_index_generate_milliseconds(start.elapsed().as_millis() as u64);
         Ok(WrittenBlockIndexOutput {
             inverted: vec![WrittenInvertedIndex {
                 index_name: self.index_name,

@@ -162,6 +162,12 @@ impl FusePruningStatistics {
         self.granules_pruning_after.fetch_add(v, Ordering::Relaxed);
     }
 
+    /// Retract granules that a later block-level index removed after the granule stage had
+    /// already counted them as survivors.
+    pub fn sub_granules_pruning_after(&self, v: u64) {
+        self.granules_pruning_after.fetch_sub(v, Ordering::Relaxed);
+    }
+
     pub fn get_granules_pruning_after(&self) -> u64 {
         self.granules_pruning_after.load(Ordering::Relaxed)
     }

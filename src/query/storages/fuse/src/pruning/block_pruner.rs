@@ -42,6 +42,7 @@ use super::SegmentLocation;
 use crate::io::GranulePruningReadContext;
 use crate::io::granule_index::GRANULE_BLOOM_INDEX_NAME;
 use crate::io::num_granules_of;
+use crate::pruning::FusePruningStatistics;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
 use crate::pruning::RuntimeStatsPruner;
@@ -91,10 +92,13 @@ struct GranulePruneDiagnostics {
     bloom_prune: std::time::Duration,
     other_index_prunes: usize,
     other_index_prune: std::time::Duration,
+    /// Granules dropped after the granule stage because no inverted index hit fell inside them.
+    inverted_granules_pruned: usize,
 }
 
 impl GranulePruneDiagnostics {
     fn add(&mut self, other: &Self) {
+        self.inverted_granules_pruned += other.inverted_granules_pruned;
         self.blocks += other.blocks;
         self.granules_before += other.granules_before;
         self.granules_after += other.granules_after;
@@ -451,7 +455,7 @@ impl BlockPruner {
         let unaccounted = elapsed_duration.saturating_sub(accounted);
         let lock_stats = cache_lock_stats.snapshot();
         info!(
-            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us=0 granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} memory_cache_lock_wait_ns={} memory_cache_lock_hold_ns={} memory_cache_lock_acquires={} disk_cache_lock_wait_ns={} disk_cache_lock_hold_ns={} disk_cache_lock_acquires={} block_index_us={}",
+            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us=0 granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} inverted_granules_pruned={} memory_cache_lock_wait_ns={} memory_cache_lock_hold_ns={} memory_cache_lock_acquires={} disk_cache_lock_wait_ns={} disk_cache_lock_hold_ns={} disk_cache_lock_acquires={} block_index_us={}",
             segment_location.segment_idx,
             duration_us(elapsed_duration),
             duration_us(unaccounted),
@@ -476,6 +480,7 @@ impl BlockPruner {
             duration_us(granule_diagnostics.bloom_prune),
             granule_diagnostics.other_index_prunes,
             duration_us(granule_diagnostics.other_index_prune),
+            granule_diagnostics.inverted_granules_pruned,
             lock_stats.memory_wait_ns,
             lock_stats.memory_hold_ns,
             lock_stats.memory_acquires,
@@ -1077,8 +1082,7 @@ impl BlockPruner {
                     .await?;
 
                 if let Some((rows, scores)) = matched_rows {
-                    prune_result.matched_rows = Some(rows);
-                    prune_result.matched_scores = scores;
+                    prune_result.apply_matched_rows(block_meta, rows, scores, &pruning_stats);
                 } else {
                     prune_result.keep = false;
                 }
@@ -1291,6 +1295,99 @@ impl BlockPruneResult {
         }
     }
 
+    /// Record inverted index hits and, when the block carries a granule index, keep only the
+    /// surviving granules that hold a hit.
+    ///
+    /// Tantivy documents are appended in row order into a single segment, so a hit's `doc_id` is
+    /// the block-relative row and `row / granule_rows` is its granule. The search already covered
+    /// the whole block; this only narrows the byte ranges the block read has to fetch.
+    fn apply_matched_rows(
+        &mut self,
+        block_meta: &BlockMeta,
+        rows: Vec<usize>,
+        scores: Option<Vec<F32>>,
+        pruning_stats: &FusePruningStatistics,
+    ) {
+        let granule_rows = match &block_meta.granule_index {
+            Some(granule_index) if granule_index.granule_rows > 0 => {
+                granule_index.granule_rows as usize
+            }
+            _ => {
+                self.matched_rows = Some(rows);
+                self.matched_scores = scores;
+                return;
+            }
+        };
+        let num_granules = num_granules_of(block_meta.row_count as usize, granule_rows);
+
+        let mut survivors = vec![false; num_granules];
+        let mut granules_before = 0;
+        match &self.granule_ranges {
+            Some(ranges) => {
+                for range in ranges {
+                    let end = range.end.min(num_granules);
+                    if range.start < end {
+                        survivors[range.start..end].fill(true);
+                        granules_before += end - range.start;
+                    }
+                }
+            }
+            None => {
+                survivors.fill(true);
+                granules_before = num_granules;
+            }
+        }
+
+        // Drop hits outside the surviving granules (or beyond the block) while keeping scores
+        // aligned, and mark the granules that still hold a hit.
+        let mut hit = vec![false; num_granules];
+        let mut kept_rows = Vec::with_capacity(rows.len());
+        let mut kept_scores = Vec::new();
+        for (index, row) in rows.into_iter().enumerate() {
+            let granule = row / granule_rows;
+            if granule >= num_granules || !survivors[granule] {
+                continue;
+            }
+            hit[granule] = true;
+            kept_rows.push(row);
+            if let Some(scores) = &scores {
+                kept_scores.push(scores[index]);
+            }
+        }
+
+        let mut ranges: Vec<Range<usize>> = Vec::new();
+        let mut granules_after = 0;
+        for (granule, hit) in hit.iter().enumerate() {
+            if !hit {
+                continue;
+            }
+            granules_after += 1;
+            match ranges.last_mut() {
+                Some(last) if last.end == granule => last.end = granule + 1,
+                _ => ranges.push(granule..granule + 1),
+            }
+        }
+
+        let pruned = granules_before - granules_after;
+        // The granule stage already reported this block's before/after counts when it produced
+        // `granule_ranges`; only retract the extra narrowing so the two stay comparable.
+        if self.granule_ranges.is_some() {
+            pruning_stats.sub_granules_pruning_after(pruned as u64);
+        } else {
+            pruning_stats.add_granules_pruning_before(granules_before as u64);
+            pruning_stats.add_granules_pruning_after(granules_after as u64);
+        }
+        self.granule_diagnostics.inverted_granules_pruned += pruned;
+        self.keep = !ranges.is_empty();
+        self.granule_ranges = Some(ranges);
+        self.matched_rows = Some(kept_rows);
+        self.matched_scores = if scores.is_some() {
+            Some(kept_scores)
+        } else {
+            None
+        };
+    }
+
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
         block_meta_index.granule_ranges = self.granule_ranges;
@@ -1298,5 +1395,138 @@ impl BlockPruneResult {
         block_meta_index.matched_scores = self.matched_scores;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;
         block_meta_index
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::single_range_in_vec_init)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::GranuleIndexFileLayout;
+    use databend_storages_common_table_meta::meta::GranuleIndexLayout;
+
+    use super::*;
+
+    fn block_meta(row_count: u64, granule_rows: Option<u32>) -> BlockMeta {
+        let mut meta = BlockMeta::new(
+            row_count,
+            0,
+            0,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            ("block".to_string(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::None,
+            None,
+        );
+        meta.granule_index = granule_rows.map(|granule_rows| GranuleIndexLayout {
+            granule_rows,
+            mins: None,
+            offsets: GranuleIndexFileLayout {
+                location: ("offsets".to_string(), 0),
+                size: 0,
+                columns: HashMap::new(),
+            },
+        });
+        meta
+    }
+
+    fn prune_result(granule_ranges: Option<Vec<Range<usize>>>) -> BlockPruneResult {
+        let mut result = BlockPruneResult::new(0, "block".to_string());
+        result.keep = true;
+        result.granule_ranges = granule_ranges;
+        result
+    }
+
+    #[test]
+    fn test_matched_rows_without_granule_index_keep_block_unchanged() {
+        let mut result = prune_result(None);
+        let stats = FusePruningStatistics::default();
+        result.apply_matched_rows(&block_meta(1000, None), vec![3, 999], None, &stats);
+        assert!(result.keep);
+        assert!(result.granule_ranges.is_none());
+        assert_eq!(result.matched_rows, Some(vec![3, 999]));
+    }
+
+    #[test]
+    fn test_matched_rows_select_coalesced_granules_of_whole_block() {
+        // 10 granules of 100 rows; hits in granules 0, 1, 1, 5 and the partial last granule.
+        let mut result = prune_result(None);
+        let stats = FusePruningStatistics::default();
+        result.apply_matched_rows(
+            &block_meta(950, Some(100)),
+            vec![0, 150, 199, 500, 949],
+            None,
+            &stats,
+        );
+        assert!(result.keep);
+        assert_eq!(result.granule_ranges, Some(vec![0..2, 5..6, 9..10]));
+        assert_eq!(result.matched_rows, Some(vec![0, 150, 199, 500, 949]));
+        assert_eq!(result.granule_diagnostics.inverted_granules_pruned, 6);
+        // No granule stage ran for this block, so both counters are reported here.
+        assert_eq!(stats.get_granules_pruning_before(), 10);
+        assert_eq!(stats.get_granules_pruning_after(), 4);
+    }
+
+    #[test]
+    fn test_matched_rows_intersect_survivors_and_keep_scores_aligned() {
+        let mut result = prune_result(Some(vec![2..5, 8..10]));
+        // The granule stage already reported 10 -> 5 for this block.
+        let stats = FusePruningStatistics::default();
+        stats.add_granules_pruning_before(10);
+        stats.add_granules_pruning_after(5);
+        result.apply_matched_rows(
+            &block_meta(1000, Some(100)),
+            vec![50, 250, 450, 850],
+            Some(vec![
+                F32::from(0.5),
+                F32::from(0.4),
+                F32::from(0.3),
+                F32::from(0.2),
+            ]),
+            &stats,
+        );
+        assert!(result.keep);
+        assert_eq!(result.granule_ranges, Some(vec![2..3, 4..5, 8..9]));
+        assert_eq!(result.matched_rows, Some(vec![250, 450, 850]));
+        assert_eq!(
+            result.matched_scores,
+            Some(vec![F32::from(0.4), F32::from(0.3), F32::from(0.2)])
+        );
+        assert_eq!(result.granule_diagnostics.inverted_granules_pruned, 2);
+        assert_eq!(stats.get_granules_pruning_before(), 10);
+        assert_eq!(stats.get_granules_pruning_after(), 3);
+    }
+
+    #[test]
+    fn test_matched_rows_outside_survivors_drop_block() {
+        let mut result = prune_result(Some(vec![0..2]));
+        let stats = FusePruningStatistics::default();
+        result.apply_matched_rows(&block_meta(1000, Some(100)), vec![500, 900], None, &stats);
+        assert!(!result.keep);
+        assert_eq!(result.granule_ranges, Some(Vec::new()));
+        assert_eq!(result.matched_rows, Some(Vec::new()));
+    }
+
+    #[test]
+    fn test_matched_rows_beyond_block_and_oversized_survivors_are_clamped() {
+        let mut result = prune_result(Some(vec![9..20]));
+        let stats = FusePruningStatistics::default();
+        result.apply_matched_rows(&block_meta(1000, Some(100)), vec![999, 1000], None, &stats);
+        assert!(result.keep);
+        assert_eq!(result.granule_ranges, Some(vec![9..10]));
+        assert_eq!(result.matched_rows, Some(vec![999]));
     }
 }
